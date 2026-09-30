@@ -24,6 +24,7 @@ import { AndroidBackNavigator } from "@/components/AndroidBackNavigator";
 import { TutorialBoundary, TutorialRunner } from "@/components/tutorial/TutorialRunner";
 import { TutorialOffer } from "@/components/tutorial/TutorialOffer";
 import { scheduleDailyBackup } from "@/features/backup/lifecycle";
+import { installDictationFieldTracker } from "@/features/dictation/field-target";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { installAuthKeepAlive } from "@/features/sync/auth-keep-alive";
 import { installAutoSync } from "@/features/sync/auto-sync";
@@ -38,6 +39,10 @@ import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
 function App() {
   const { pathname } = useLocation();
   const embedMode = isEmbedPath(pathname);
+
+  // Plain text fields register as Dictation targets while focused, for the app
+  // lifetime, independent of whatever else mounts.
+  useEffect(() => installDictationFieldTracker(), []);
 
   useEffect(() => {
     if (embedMode) return;

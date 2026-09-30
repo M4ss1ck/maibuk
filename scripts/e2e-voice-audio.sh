@@ -45,10 +45,15 @@ PHRASES=(
 # Command, a spoken gap, then a dictated sentence, played once per browser
 # launch. `name|voice|command_text|gap_seconds|sentence_text|pre|post` (the
 # silence paddings default to 45|30 like the focus-key entries, so the model
-# download and keyboard setup finish before the command speaks).
+# download and keyboard setup finish before the command speaks). A three-part
+# entry appends a second gap and a closing command:
+# `name|voice|command_text|gap_seconds|sentence_text|gap2_seconds|third_text|pre|post`
+# (issue #313: the dictated sentence lands in a plain text field, then a focus
+# Voice Command submits its dialog).
 COMPOUND_PHRASES=(
   "go-to-ephemeral-handoff|en_US-lessac-medium|Go to Ephemeral.|2|The sea was calm.|45|30"
   "click-bold-then-one|en_US-lessac-medium|Click Bold.|3|Click one.|70|30"
+  "go-to-projects-new-book|en_US-lessac-medium|Go to Books.|5|The silent harbor.|4|Press enter key.|45|30"
 )
 
 # The voices the phrase list references.
@@ -100,6 +105,41 @@ for entry in "${PHRASES[@]}"; do
 done
 
 for entry in "${COMPOUND_PHRASES[@]}"; do
+  # Three-part entries carry a second gap and a closing command; two-part
+  # entries keep their exact parsing and synthesis below.
+  IFS='|' read -ra compound_parts <<<"$entry"
+  if [ "${#compound_parts[@]}" -eq 9 ]; then
+    IFS='|' read -r name voice command_text gap_seconds sentence_text gap2_seconds third_text pre_seconds post_seconds <<<"$entry"
+    pre_seconds="${pre_seconds:-45}"
+    post_seconds="${post_seconds:-30}"
+    out="$OUT_DIR/$name.wav"
+    if [ -f "$out" ]; then
+      echo "Keeping $out"
+      continue
+    fi
+    echo "Synthesizing $out (\"$command_text\" +${gap_seconds}s \"$sentence_text\" +${gap2_seconds}s \"$third_text\", +${pre_seconds}s/+${post_seconds}s)"
+    raw_command="$(mktemp --suffix=.wav)"
+    raw_sentence="$(mktemp --suffix=.wav)"
+    raw_third="$(mktemp --suffix=.wav)"
+    printf '%s\n' "$command_text" |
+      "$python_bin" -m piper -m "$voice" --data-dir "$VOICES_DIR" -f "$raw_command"
+    printf '%s\n' "$sentence_text" |
+      "$python_bin" -m piper -m "$voice" --data-dir "$VOICES_DIR" -f "$raw_sentence"
+    printf '%s\n' "$third_text" |
+      "$python_bin" -m piper -m "$voice" --data-dir "$VOICES_DIR" -f "$raw_third"
+    # One take: the command, a spoken gap of silence (the recognizer closes
+    # the command's line in it), then the sentence, another gap, then the
+    # closing command, with leading silence for the setup and trailing
+    # silence so the looping fake mic never repeats a phrase inside a test.
+    pre_ms="$(python3 -c "print(int(float('$pre_seconds') * 1000))")"
+    ffmpeg -y -loglevel error -i "$raw_command" -i "$raw_sentence" -i "$raw_third" \
+      -f lavfi -i "anullsrc=r=16000:cl=mono:d=${gap_seconds}" \
+      -f lavfi -i "anullsrc=r=16000:cl=mono:d=${gap2_seconds}" \
+      -filter_complex "[0:a]aresample=16000[a0];[1:a]aresample=16000[a1];[2:a]aresample=16000[a2];[3:a]aresample=16000[g1];[4:a]aresample=16000[g2];[a0][g1][a1][g2][a2]concat=n=5:v=0:a=1,adelay=${pre_ms},apad=pad_dur=${post_seconds}[out]" \
+      -map "[out]" -ar 16000 -ac 1 "$out"
+    rm -f "$raw_command" "$raw_sentence" "$raw_third"
+    continue
+  fi
   IFS='|' read -r name voice command_text gap_seconds sentence_text pre_seconds post_seconds <<<"$entry"
   pre_seconds="${pre_seconds:-45}"
   post_seconds="${post_seconds:-30}"

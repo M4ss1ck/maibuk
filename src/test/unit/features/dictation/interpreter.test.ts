@@ -933,3 +933,80 @@ describe("interpret() Click by Name", () => {
     expect(result.kind).toBe("edits");
   });
 });
+
+describe("interpret() verbatim (#313)", () => {
+  const caps = { casing: false, punctuation: false, streaming: true } as const;
+  const enTable = () => buildPhraseTable("en", { capabilities: caps });
+  const esTable = () => buildPhraseTable("es", { capabilities: caps });
+  const run = (
+    line: string,
+    table: ReturnType<typeof buildPhraseTable>,
+    verbatim?: boolean,
+    before = ""
+  ) =>
+    interpret({
+      line,
+      before,
+      capabilities: caps,
+      table,
+      state: INITIAL_INTERPRETER_STATE,
+      ...(verbatim === undefined ? {} : { verbatim }),
+    });
+
+  it("takes comma as text in verbatim, as a mark otherwise", () => {
+    expect(run("comma", enTable(), true).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "comma" }],
+    });
+    expect(run("comma", enTable(), false).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "," }],
+    });
+    expect(run("comma", enTable()).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "," }],
+    });
+  });
+
+  it("does not apply the Vocabulary in verbatim", () => {
+    const table = buildPhraseTable("en", {
+      capabilities: caps,
+      vocabulary: [{ heard: "a reliano", written: "Aureliano" }],
+    });
+    expect(run("a reliano", table, true).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "a reliano" }],
+    });
+    expect(run("a reliano", table).result).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "Aureliano" }],
+    });
+  });
+
+  it("still matches a whole-line Voice Command in verbatim", () => {
+    expect(run("poner negrita", esTable(), true).result).toEqual({
+      kind: "voice_command",
+      id: "editor.bold",
+      polarity: "on",
+    });
+  });
+
+  it("still scratches in verbatim", () => {
+    expect(run("borra eso", esTable(), true).result).toEqual({ kind: "scratch" });
+  });
+
+  it("returns no edits for a blank line in verbatim and keeps the state", () => {
+    const state = { capitalizeNext: true, noSpaceNext: false, allCaps: true };
+    const out = interpret({
+      line: "   ",
+      before: "",
+      capabilities: caps,
+      table: enTable(),
+      state,
+      verbatim: true,
+    });
+    expect(out.result).toEqual({ kind: "edits", edits: [] });
+    expect(out.state).toBe(state);
+    expect(out.spokenPunctuationCount).toBe(0);
+  });
+});

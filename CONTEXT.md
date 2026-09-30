@@ -376,19 +376,19 @@ The rules that reshape pasted text before it lands in a Chapter or Note, such as
 _UI_: en "Paste cleanup" / es "Limpieza al pegar"
 
 **Dictation**:
-Turning the author's speech into text in the editor that has the caret, offline, with a downloaded Dictation Model.
+Turning the author's speech into text in the editor or text field that has the caret, offline, with a downloaded Dictation Model.
 _UI_: en "Dictation" / es "Dictado"
 _Avoid_: voice typing, speech-to-text (in UI copy)
 
 **Dictation Session**:
-The span from starting Dictation to stopping it. One per app at a time; it follows the caret across the editors on the page. A Voice Command that changes screen keeps it listening: it goes on in the editor that takes the caret there, or stops and says so when none does. (ADR 0016)
+The span from starting Dictation to stopping it. One per app at a time; it follows the caret across the editors and text fields on the page, and never types behind an open dialog. A Voice Command that changes screen or opens a dialog keeps it listening: it goes on in the editor or text field that takes the caret there, or stops and says so when none does. (ADR 0016)
 
 **Dictation Model**:
 A downloaded speech model for one language and tier (Fast or Accurate), kept on this device.
 _Avoid_: voice pack
 
 **Dictation Language**:
-The language a Dictation Session listens for: the language of the editor it types into (Auto), unless the author picked one for the Session.
+The language a Dictation Session listens for: the language of the editor it types into, or the app language in a text field (Auto), unless the author picked one for the Session.
 
 **Dictation Command Interpreter**:
 The step between a finished spoken line and the editor that turns it into text, Spoken Punctuation, or a Voice Command, by fixed rules that do not depend on the Dictation Model. (ADR 0015)
@@ -513,7 +513,7 @@ Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widen
 - Open editors **Flush** before a **Sync** reads the **Library**.
 - A **Command** has zero or more **Shortcuts**: its **Fixed Shortcuts**, plus its **Custom Shortcuts** or else its **Default Shortcuts**.
 - The **Tutorial** runs in a **Tutorial Library**, never in the author's **Library**; ending it brings back the author's own.
-- A **Dictation Session** uses one **Dictation Model** and inserts into whichever editor has the caret.
+- A **Dictation Session** uses one **Dictation Model** and inserts into whichever editor or text field has the caret.
 - A **Command** may also have **Voice Commands**; **Spoken Punctuation** and the **Dictation Vocabulary** are not Commands, and all three are kept per **Dictation Language**.
 
 ## Anticipated

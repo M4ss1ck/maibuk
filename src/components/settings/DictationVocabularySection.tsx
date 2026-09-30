@@ -151,6 +151,7 @@ export function DictationVocabularySection({ language }: DictationVocabularySect
             }}
             label={t("dictation.vocabulary.heardLabel")}
             placeholder={t("dictation.vocabulary.heardPlaceholder")}
+            data-dictation="verbatim"
             aria-invalid={addRefusal ? true : undefined}
             aria-describedby={addRefusal ? addRefusalId : undefined}
           />
@@ -164,6 +165,7 @@ export function DictationVocabularySection({ language }: DictationVocabularySect
             }}
             label={t("dictation.vocabulary.writtenLabel")}
             placeholder={t("dictation.vocabulary.writtenPlaceholder")}
+            data-dictation="verbatim"
           />
         </div>
         <Button
@@ -208,6 +210,7 @@ export function DictationVocabularySection({ language }: DictationVocabularySect
                         setEditRefusal(null);
                       }}
                       label={t("dictation.vocabulary.heardLabel")}
+                      data-dictation="verbatim"
                       aria-invalid={editRefusal ? true : undefined}
                       aria-describedby={editRefusal ? editRefusalId : undefined}
                     />
@@ -220,6 +223,7 @@ export function DictationVocabularySection({ language }: DictationVocabularySect
                         setEditRefusal(null);
                       }}
                       label={t("dictation.vocabulary.writtenLabel")}
+                      data-dictation="verbatim"
                     />
                   </div>
                   <Button

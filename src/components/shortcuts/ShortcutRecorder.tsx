@@ -112,6 +112,7 @@ export function ShortcutRecorder({
       </Label>
       <Input
         inputMode="none"
+        data-dictation="off"
         onKeyDown={onKeyDown}
         placeholder={t("shortcutEditor.recorder.placeholder")}
         className="rounded-lg border border-primary bg-background px-2 py-1 font-mono text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"

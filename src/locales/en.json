@@ -1858,6 +1858,8 @@
     "orphanCopied": "Dictation stopped. The last phrase was copied to the clipboard.",
     "orphanLost": "Dictation stopped. Copy the last phrase: {{text}}",
     "handoffNoEditor": "No editor here, so Dictation stopped.",
+    "fieldSecretRefused": "Dictation does not type into password fields.",
+    "fieldNoLineBreaks": "No line breaks in this field.",
     "section": {
       "title": "Dictation",
       "models": "Models",

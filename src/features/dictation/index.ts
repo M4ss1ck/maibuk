@@ -59,3 +59,7 @@ export {
   type DictationRuntime,
 } from "@/features/dictation/runtime";
 export { attachSession, dictationHub, resetDictationHubForTests } from "@/features/dictation/hub";
+export {
+  createFieldTarget,
+  installDictationFieldTracker,
+} from "@/features/dictation/field-target";

@@ -17,11 +17,19 @@ export type RouteResult =
   | { kind: "click_number"; n: number }
   | { kind: "scratch" };
 
-export type Interpreter = (text: string, before: string) => RouteResult | null;
+export interface RouteOptions {
+  verbatim?: boolean;
+}
+
+export type Interpreter = (
+  text: string,
+  before: string,
+  options?: RouteOptions
+) => RouteResult | null;
 
 export function createRouter(
   interpreter?: Interpreter
-): (text: string, before: string) => RouteResult {
-  return (text, before) =>
-    interpreter?.(text, before) ?? { kind: "edits", edits: [{ kind: "text", text }] };
+): (text: string, before: string, options?: RouteOptions) => RouteResult {
+  return (text, before, options) =>
+    interpreter?.(text, before, options) ?? { kind: "edits", edits: [{ kind: "text", text }] };
 }

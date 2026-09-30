@@ -76,6 +76,10 @@ export function noticeMessage(
     }
     case "handoff_no_editor":
       return { announce: t("dictation.handoffNoEditor") };
+    case "field_secret_refused":
+      return { announce: t("dictation.fieldSecretRefused") };
+    case "field_layout_ignored":
+      return { announce: t("dictation.fieldNoLineBreaks") };
     case "error": {
       const text = t(`dictation.errors.${notice.code}`, {
         language: notice.language

@@ -55,6 +55,8 @@ export interface CommandDef {
   voice?: VoiceCommandSpec;
   /** The runner changes the route: with a dialog open it closes dialogs first. */
   navigates?: true;
+  /** The runner opens a dialog whose text field takes the caret: a Voice Command waits for that field like a navigating one (the Dictation hand-off window). */
+  opensDialog?: true;
 }
 
 const FIXED_UNDO = "shortcuts.fixed.undo";
@@ -266,6 +268,7 @@ export const COMMANDS = {
     defaults: [["Mod+n"]],
     // Chromium and Firefox keep Ctrl+N for a new window in a browser tab.
     web: [["Alt+n"]],
+    opensDialog: true,
   },
   "bookList.importEpub": { labelKey: "books.importEpub", contexts: ["bookList"], defaults: [] },
   "bookList.downloadApp": { labelKey: "nav.downloadApp", contexts: ["bookList"], defaults: [] },

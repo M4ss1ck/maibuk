@@ -176,6 +176,7 @@ function EntryRow({
               }}
               aria-label={t("dictation.spokenPunctuation.aliasLabel", { entry: entryName })}
               placeholder={t("dictation.spokenPunctuation.aliasPlaceholder")}
+              data-dictation="verbatim"
               aria-invalid={refusal ? true : undefined}
               aria-describedby={refusal ? refusalId : undefined}
             />

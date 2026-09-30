@@ -34,4 +34,23 @@ describe("createRouter()", () => {
     })("borra eso", "última frase");
     expect(seen).toEqual(["última frase"]);
   });
+
+  it("passes route options through to the interpreter", () => {
+    const seen: unknown[] = [];
+    const route = createRouter((_text, _before, options) => {
+      seen.push(options);
+      return null;
+    });
+    route("hello", "", { verbatim: true });
+    route("hello", "", { verbatim: false });
+    route("hello", "");
+    expect(seen).toEqual([{ verbatim: true }, { verbatim: false }, undefined]);
+  });
+
+  it("still inserts every line without an interpreter, ignoring options", () => {
+    expect(createRouter()("hola mundo", "", { verbatim: true })).toEqual({
+      kind: "edits",
+      edits: [{ kind: "text", text: "hola mundo" }],
+    });
+  });
 });

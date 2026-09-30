@@ -82,6 +82,8 @@ export interface InterpretInput {
   capabilities: ModelSpec["capabilities"];
   table: PhraseTable;
   state: InterpreterState;
+  /** Phrase editors take the line as heard: no Spoken Punctuation, no Vocabulary. */
+  verbatim?: boolean;
 }
 
 export interface InterpretResult {
@@ -299,15 +301,16 @@ function endsWithOpening(text: string): boolean {
 }
 
 export function interpret(input: InterpretInput): InterpretResult {
-  const { line, before, capabilities, table, state } = input;
+  const { line, before, capabilities, table, state, verbatim } = input;
   const rawTokens = tokenize(line);
   if (rawTokens.length === 0) {
     return { result: { kind: "edits", edits: [] }, state, spokenPunctuationCount: 0 };
   }
 
-  // The Dictation Vocabulary runs first (ADR 0015): the rest of the pipeline
-  // sees its written forms as protected literal text.
-  const tokens = applyVocabulary(rawTokens, table.vocabularyTrie);
+  // Verbatim targets take the line as heard: the Vocabulary is skipped (the
+  // raw tokens are used), Voice Command, Click by Name, and scratch checks
+  // run as usual, then the rest is plain text with no Spoken Punctuation.
+  const tokens = verbatim ? rawTokens : applyVocabulary(rawTokens, table.vocabularyTrie);
 
   // A whole-line Voice Command runs a registry Command instead of inserting
   // (ADR 0015 order: after the Vocabulary, before scratch that). A written
@@ -349,6 +352,15 @@ export function interpret(input: InterpretInput): InterpretResult {
   // prose, and never matches words the Vocabulary replacement wrote.
   if (isScratchTokens(tokens, table)) {
     return { result: { kind: "scratch" }, state, spokenPunctuationCount: 0 };
+  }
+
+  if (verbatim) {
+    const trimmed = line.trim();
+    return {
+      result: { kind: "edits", edits: trimmed === "" ? [] : [{ kind: "text", text: trimmed }] },
+      state,
+      spokenPunctuationCount: 0,
+    };
   }
 
   // The table already holds the entries that act; capabilities only decide
