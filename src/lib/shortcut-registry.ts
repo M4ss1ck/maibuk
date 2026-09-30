@@ -188,6 +188,13 @@ export const COMMANDS = {
     contexts: ["global"],
     defaults: [],
   },
+  // Live only while a phrase field holds the caret; it runs over the Voice
+  // Commands dialog because it is global and never navigates.
+  "dictation.recordPhrase": {
+    labelKey: "dictation.recordPhrase",
+    contexts: ["global"],
+    defaults: [],
+  },
   "dictation.stop": {
     labelKey: "dictation.stop",
     contexts: ["editor"],

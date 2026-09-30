@@ -4,10 +4,12 @@ import { Button as AriaButton, GridList, GridListItem } from "react-aria-compone
 import { PencilLine, RotateCcw, X } from "lucide-react";
 import { Button, Input, Modal } from "@/components/ui";
 import { DictationLanguageTabs } from "@/components/dictation/DictationLanguageTabs";
+import { PhraseRecordingStatus, RecordPhraseButton } from "@/components/dictation/PhraseRecording";
 import { phraseConflictMessage } from "@/components/dictation/phrase-conflict-message";
 import { normalizePhrase } from "@/features/dictation/normalize";
 import { findPhraseConflict, type PhraseConflict } from "@/features/dictation/phrase-conflicts";
 import { useDictationStore } from "@/features/dictation/store";
+import { usePhraseRecording } from "@/features/dictation/usePhraseRecording";
 import type { DictationLanguage } from "@/features/dictation/types";
 import {
   VOICE_LANGUAGES,
@@ -66,6 +68,16 @@ function VoiceCommandsDialogContent({
   const [announcement, setAnnouncement] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const refusalId = useId();
+  // A recorded phrase replaces the draft (a new phrase or the one being
+  // edited); Add or Save still decides, through the conflict check.
+  const recorder = usePhraseRecording({
+    language,
+    fieldRef: inputRef,
+    onHeard: (text) => {
+      setDraft(text);
+      setRefusal(null);
+    },
+  });
 
   const command = t((COMMANDS[id] as CommandDef).labelKey);
   const languageName = t(`dictation.languageNames.${language}`);
@@ -255,6 +267,7 @@ function VoiceCommandsDialogContent({
                     onChange={(event) => {
                       setDraft(event.target.value);
                       setRefusal(null);
+                      recorder.clearMessage();
                     }}
                     onKeyDown={onFieldKeyDown}
                     aria-label={
@@ -263,6 +276,9 @@ function VoiceCommandsDialogContent({
                         : t("shortcutEditor.voice.editLabel", { phrase: editing })
                     }
                     placeholder={t("shortcutEditor.voice.placeholder")}
+                    endAdornment={
+                      recorder.available ? <RecordPhraseButton recording={recorder} /> : undefined
+                    }
                     data-dictation="verbatim"
                     aria-invalid={refusal ? true : undefined}
                     aria-describedby={refusal ? refusalId : undefined}
@@ -277,6 +293,8 @@ function VoiceCommandsDialogContent({
                   </Button>
                 )}
               </form>
+
+              <PhraseRecordingStatus recording={recorder} />
 
               {refusal && (
                 <div

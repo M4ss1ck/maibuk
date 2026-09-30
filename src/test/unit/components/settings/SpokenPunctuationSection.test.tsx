@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   catalogCapabilities,
   defaultSpokenPunctuationSettings,
@@ -9,6 +9,11 @@ import {
 import type { ModelSpec } from "@/features/dictation/types";
 import i18n from "@/i18n";
 import "@/i18n";
+
+const rec = vi.hoisted(() => ({ recordPhrase: vi.fn() }));
+vi.mock("@/features/dictation/runtime", () => ({
+  getDictation: async () => ({ session: { recordPhrase: rec.recordPhrase } }),
+}));
 
 const { SpokenPunctuationSection } = await import("@/components/settings/SpokenPunctuationSection");
 const { useDictationStore } = await import("@/features/dictation/store");
@@ -418,5 +423,34 @@ describe("SpokenPunctuationSection", () => {
       expect(master).not.toBeChecked();
       expect(commaSwitch).toBeDisabled();
     });
+  });
+});
+
+describe("SpokenPunctuationSection Phrase Recording (#270)", () => {
+  beforeEach(() => {
+    rec.recordPhrase.mockReset();
+    useDictationStore.setState({ support: { supported: true } });
+  });
+
+  afterEach(() => {
+    useDictationStore.setState({ support: null });
+  });
+
+  it("fills one entry's alias field from a recording, leaving the others empty", async () => {
+    rec.recordPhrase.mockResolvedValue({ kind: "heard", text: "comma please" });
+    const user = userEvent.setup();
+    renderSection();
+
+    const comma = screen.getByRole("group", { name: "comma" });
+    const commaField = within(comma).getByRole("textbox", { name: "Add a phrase to comma" });
+    const record = within(comma).getByRole("button", { name: "Record a phrase for comma" });
+    record.focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(commaField).toHaveValue("comma please"));
+    // The recording belongs to this entry's field, and nothing was submitted.
+    const period = screen.getByRole("group", { name: "period" });
+    expect(within(period).getByRole("textbox", { name: "Add a phrase to period" })).toHaveValue("");
+    expect(settingsFor("en").aliases?.comma).toBeUndefined();
   });
 });

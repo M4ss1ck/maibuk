@@ -93,6 +93,7 @@ export const useDictationStore = create<DictationStoreState>()(
         modelId: null,
         level: 0,
         hasTarget: false,
+        recording: false,
       },
       support: null,
       installed: [],

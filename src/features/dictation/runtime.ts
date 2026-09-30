@@ -102,9 +102,14 @@ async function build(): Promise<DictationRuntime> {
     host,
     modelFor: (language) => {
       const { installed, preferredTier } = useDictationStore.getState();
+      const picked = pickModel(language, models.available(), installed, preferredTier);
+      // A Phrase Recording asks before it pauses anything: a language with no
+      // model must leave the running Session's model and tables alone.
+      if (!picked) return null;
       selectedLanguage = language;
-      selectedModel = pickModel(language, models.available(), installed, preferredTier);
-      interpreterState = INITIAL_INTERPRETER_STATE;
+      selectedModel = picked;
+      // No state reset here: a stop resets it through its notice, and a
+      // recording's pause is silent, so the all-caps lock outlives it.
       phraseTables = { ...phraseTables, [language]: buildTable(language) };
       return selectedModel;
     },

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Switch } from "@/components/ui/Switch";
 import { phraseConflictMessage } from "@/components/dictation/phrase-conflict-message";
+import { PhraseRecordingStatus, RecordPhraseButton } from "@/components/dictation/PhraseRecording";
 import { findPhraseConflict, type PhraseConflict } from "@/features/dictation/phrase-conflicts";
 import {
   entriesFor,
@@ -16,6 +17,7 @@ import {
   type SpokenPunctuationLanguageSettings,
 } from "@/features/dictation/spoken-punctuation";
 import { useDictationStore } from "@/features/dictation/store";
+import { usePhraseRecording } from "@/features/dictation/usePhraseRecording";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
 
@@ -72,6 +74,14 @@ function EntryRow({
   const voice = useShortcutSettingsStore((state) => state.shortcuts.voice);
   const inputRef = useRef<HTMLInputElement>(null);
   const refusalId = useId();
+  const recorder = usePhraseRecording({
+    language,
+    fieldRef: inputRef,
+    onHeard: (text) => {
+      setPhrase(text);
+      setRefusal(null);
+    },
+  });
 
   const entryName = entry.phrases[0];
   const enabled = isEntryEnabled(entry, settings, capabilities);
@@ -173,9 +183,18 @@ function EntryRow({
               onChange={(event) => {
                 setPhrase(event.target.value);
                 setRefusal(null);
+                recorder.clearMessage();
               }}
               aria-label={t("dictation.spokenPunctuation.aliasLabel", { entry: entryName })}
               placeholder={t("dictation.spokenPunctuation.aliasPlaceholder")}
+              endAdornment={
+                recorder.available ? (
+                  <RecordPhraseButton
+                    recording={recorder}
+                    label={t("dictation.phraseRecording.recordAlias", { entry: entryName })}
+                  />
+                ) : undefined
+              }
               data-dictation="verbatim"
               aria-invalid={refusal ? true : undefined}
               aria-describedby={refusal ? refusalId : undefined}
@@ -207,6 +226,8 @@ function EntryRow({
             </Button>
           )}
         </form>
+
+        <PhraseRecordingStatus recording={recorder} className="mt-2" />
 
         {refusal && (
           <div

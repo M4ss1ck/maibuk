@@ -54,6 +54,7 @@ beforeEach(() => {
       modelId: null,
       level: 0,
       hasTarget: true,
+      recording: false,
     },
   });
 });
@@ -93,6 +94,7 @@ describe("DictationControl", () => {
         modelId: esFast,
         level: 0.2,
         hasTarget: true,
+        recording: false,
       },
     });
     renderControl();

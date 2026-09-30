@@ -48,3 +48,15 @@ export function phraseWords(text: string): string[] {
 export function normalizePhrase(text: string): string {
   return phraseWords(text).join(" ");
 }
+
+/**
+ * A Phrase Recording's line as the author reads it back: the words the model
+ * heard, in order, lowercased with their accents kept, without the model's own
+ * punctuation. Matching folds it further through `normalizePhrase`.
+ */
+export function heardPhrase(line: string, language: string): string {
+  return tokenize(line)
+    .filter((token) => !token.mark)
+    .map((token) => token.surface.toLocaleLowerCase(language))
+    .join(" ");
+}

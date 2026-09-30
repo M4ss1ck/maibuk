@@ -22,6 +22,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const showNumberControls = type === "number" && !endAdornment;
 
     const setInputRef = (node: HTMLInputElement | null) => {
+      const previous = inputRef.current;
       inputRef.current = node;
 
       if (typeof ref === "function") {
@@ -29,7 +30,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         return;
       }
 
-      if (ref) {
+      // A shared ref can pass from this Input to its replacement (a tab panel
+      // swap mounts the new one first): detaching must not clear the new node.
+      if (ref && (node !== null || ref.current === previous)) {
         ref.current = node;
       }
     };

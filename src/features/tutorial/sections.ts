@@ -135,7 +135,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
       step("dictation.language", ["Dictation Language"]),
       step("dictation.punctuation", ["Spoken Punctuation"]),
       step("dictation.vocabulary", ["Dictation Vocabulary"]),
-      step("dictation.voice-commands", ["Voice Command", "Click by Name"]),
+      step("dictation.voice-commands", ["Voice Command", "Click by Name", "Phrase Recording"]),
     ],
   },
   {

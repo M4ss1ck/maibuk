@@ -223,6 +223,50 @@ describe("getDictation()", () => {
     expect(createRecognizerHost).toHaveBeenCalledTimes(2);
   });
 
+  it("asking for a missing language leaves the selected model's interpreter in place", async () => {
+    const control: { listener: ((event: DictationEvent) => void) | null } = { listener: null };
+    const host = {
+      ...createUnsupportedHost("platform"),
+      load: vi.fn(async () => {}),
+      start: vi.fn(async (listener: (event: DictationEvent) => void) => {
+        control.listener = listener;
+      }),
+      stop: vi.fn(async () => {}),
+    };
+    createRecognizerHost.mockResolvedValue(host);
+    const { session } = await getDictation();
+    const enFast = MODEL_CATALOG.find((m) => m.languages[0] === "en" && m.tier === "fast");
+    if (!enFast) throw new Error("no English model in the catalog");
+    useDictationStore.setState({ installed: [enFast.id] });
+    const applied: string[] = [];
+    session.register({
+      id: "chapter",
+      language: () => "en",
+      showPartial() {},
+      before: () => "",
+      apply: (edits) =>
+        void applied.push(edits.map((edit) => (edit.kind === "text" ? edit.text : "\n")).join("")),
+    });
+    session.focus("chapter");
+    await session.start();
+
+    control.listener?.({ type: "final", text: "all caps on hello", latencyMs: 5 });
+    expect(applied).toEqual(["HELLO"]);
+
+    // Spanish has no installed model: the recording is refused before anything pauses.
+    await expect(session.recordPhrase("es")).resolves.toEqual({
+      kind: "error",
+      code: "model_missing",
+      language: "es",
+    });
+
+    // The next line still runs through the selected English model's
+    // interpreter (caps lock on): raw text would have kept its casing.
+    control.listener?.({ type: "final", text: "world", latencyMs: 5 });
+    expect(applied).toEqual(["HELLO", "WORLD"]);
+    await session.stop();
+  });
+
   it("notifies and rethrows when a model install fails", async () => {
     createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
     getModelFiles.mockResolvedValue({

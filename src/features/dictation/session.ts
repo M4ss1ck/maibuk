@@ -4,6 +4,7 @@
 import type { LineStats } from "@/features/dictation/stats";
 import type { DictationEdit, RouteOptions, RouteResult } from "@/features/dictation/router";
 import { findSentenceStartOffset } from "@/features/dictation/interpreter";
+import { heardPhrase } from "@/features/dictation/normalize";
 import type { VoiceCommandRun, VoiceOutcome } from "@/features/dictation/voice-commands";
 import {
   toDictationError,
@@ -101,7 +102,17 @@ export interface SessionSnapshot {
   modelId: string | null;
   level: number;
   hasTarget: boolean;
+  /** A Phrase Recording is under way: the next finished line goes to it, not to a target. */
+  recording: boolean;
 }
+
+/** How a Phrase Recording ended. `heard` carries the line as the model heard it. */
+export type PhraseRecordingResult =
+  | { kind: "heard"; text: string }
+  | { kind: "cancelled" }
+  // Another field's recording holds the microphone: nothing was recorded.
+  | { kind: "busy" }
+  | { kind: "error"; code: DictationErrorCode; language?: DictationLanguage };
 
 export interface DictationSession {
   getSnapshot(): SessionSnapshot;
@@ -113,6 +124,15 @@ export interface DictationSession {
   stop(): Promise<void>;
   setLanguage(language: DictationLanguage | null): Promise<void>;
   languageOverride(): DictationLanguage | null;
+  /**
+   * One Phrase Recording: pauses a running Session, takes the next finished
+   * line in `language` as heard (no Interpreter, no Voice Command, no target),
+   * then resumes the Session as it was. Resolves when the line arrives, the
+   * recording is cancelled, or it fails.
+   */
+  recordPhrase(language: DictationLanguage): Promise<PhraseRecordingResult>;
+  /** Ends a Phrase Recording with `cancelled`; a paused Session resumes. */
+  cancelRecording(): Promise<void>;
 }
 
 /**
@@ -181,12 +201,37 @@ export function createDictationSession(deps: {
     modelId: null,
     level: 0,
     hasTarget: false,
+    recording: false,
   };
   let override: DictationLanguage | null = null;
   let partial = "";
   let stopRequested = false;
   let starting: Promise<void> | null = null;
   let stopping: Promise<void> | null = null;
+  // A Phrase Recording owns the host while it runs. `resume` is whether a
+  // Session was listening when it began; a stop during the recording clears it.
+  interface Recording {
+    language: DictationLanguage;
+    /** A Session was listening when the recording began; false once the author stops it. */
+    paused: boolean;
+    resume: boolean;
+    settle: (result: PhraseRecordingResult) => void;
+    /** Settles true once the host listens for this recording, false when it never did. */
+    startup: Promise<boolean>;
+  }
+  let recording: Recording | null = null;
+  // From the moment a recording settles until its host has stopped, whatever the
+  // host still emits (the flush of a line in progress) is the recording's
+  // audio: it must never reach the Session's target.
+  let draining = false;
+  /** Releasing the host and resuming after a recording; the next start waits for it. */
+  let ending: Promise<void> | null = null;
+  /** A recording between its call and owning the host (pausing the Session). */
+  let claiming: Promise<void> | null = null;
+  // The Session's own started/stopped notices stay silent around a recording:
+  // the recording's field says what happened, and a resumed Session is the one
+  // the author already had.
+  let quiet = false;
 
   const set = (patch: Partial<SessionSnapshot>) => {
     let changed = false;
@@ -419,6 +464,11 @@ export function createDictationSession(deps: {
   };
 
   const onEvent = (event: DictationEvent) => {
+    if (recording) {
+      onRecordingEvent(recording, event);
+      return;
+    }
+    if (draining) return;
     switch (event.type) {
       case "level":
         set({ level: event.rms });
@@ -449,6 +499,8 @@ export function createDictationSession(deps: {
   async function start(): Promise<void> {
     if (deps.isEnabled?.() === false) return;
     if (starting) return starting;
+    // A recording that is pausing the Session will decide whether it resumes.
+    if (claiming) return;
     if (snapshot.status !== "idle") return;
     const target = active();
     if (!target) {
@@ -479,7 +531,7 @@ export function createDictationSession(deps: {
           return;
         }
         set({ status: "listening" });
-        deps.notify({ kind: "started", language });
+        if (!quiet) deps.notify({ kind: "started", language });
       } catch (error) {
         set({ status: "idle", level: 0 });
         deps.notify({
@@ -496,6 +548,17 @@ export function createDictationSession(deps: {
   }
 
   async function stop(): Promise<void> {
+    if (claiming) await claiming;
+    // Stopping the Session during a recording ends both: nothing resumes.
+    if (recording) {
+      const wasRunning = recording.paused;
+      recording.resume = false;
+      recording.paused = false;
+      await endRecording(recording, { kind: "cancelled" });
+      if (wasRunning) deps.notify({ kind: "stopped" });
+      return;
+    }
+    if (ending) await ending;
     // Stopping (Escape, the toggle, an error) drops the hand-off wait: the
     // timer and whatever queued behind the route change go with it.
     if (handoff) closeHandoff();
@@ -518,7 +581,7 @@ export function createDictationSession(deps: {
       } finally {
         showPartial("");
         set({ status: "idle", level: 0 });
-        deps.notify({ kind: "stopped" });
+        if (!quiet) deps.notify({ kind: "stopped" });
       }
     })();
     try {
@@ -526,6 +589,138 @@ export function createDictationSession(deps: {
     } finally {
       stopping = null;
     }
+  }
+
+  const onRecordingEvent = (current: Recording, event: DictationEvent) => {
+    switch (event.type) {
+      case "level":
+        set({ level: event.rms });
+        return;
+      case "partial":
+        return;
+      case "final": {
+        // A line with no words (a cough the model wrote as ".") is not the phrase.
+        const text = heardPhrase(event.text, current.language);
+        if (text === "") return;
+        void endRecording(current, { kind: "heard", text });
+        return;
+      }
+      case "error":
+        void endRecording(current, { kind: "error", code: event.code });
+        return;
+    }
+  };
+
+  // Settles the recording first, so the field fills at once, then releases the
+  // host once its own start has settled and resumes the paused Session.
+  const endRecording = (current: Recording, result: PhraseRecordingResult): Promise<void> => {
+    if (recording !== current) return ending ?? Promise.resolve();
+    recording = null;
+    draining = true;
+    set({ recording: false });
+    current.settle(result);
+    const run = (async () => {
+      quiet = true;
+      try {
+        const hostStarted = await current.startup;
+        if (hostStarted) {
+          set({ status: "stopping" });
+          try {
+            await deps.host.stop();
+          } catch {
+            // The recording is over either way; a resume reports its own failure.
+          }
+        }
+        draining = false;
+        set({ status: "idle", level: 0, language: null, modelId: null });
+        if (current.resume && deps.isEnabled?.() !== false && active()) {
+          await start();
+        } else if (current.paused) {
+          // The Session was listening and cannot come back: say it stopped.
+          quiet = false;
+          deps.notify({ kind: "stopped" });
+        }
+      } finally {
+        draining = false;
+        quiet = false;
+      }
+    })();
+    ending = run;
+    void run.finally(() => {
+      if (ending === run) ending = null;
+    });
+    return run;
+  };
+
+  async function recordPhrase(language: DictationLanguage): Promise<PhraseRecordingResult> {
+    // One recording at a time, counted from the call: a second field asking
+    // while one is pausing the Session or listening is refused.
+    if (recording || claiming) return { kind: "busy" };
+    if (deps.isEnabled?.() === false) return { kind: "error", code: "unsupported" };
+    let release: () => void = () => {};
+    claiming = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let settle: (result: PhraseRecordingResult) => void = () => {};
+    const result = new Promise<PhraseRecordingResult>((resolve) => {
+      settle = resolve;
+    });
+    let spec: ModelSpec | null;
+    let current: Recording;
+    try {
+      if (ending) await ending;
+      // A missing model is refused before anything pauses.
+      spec = deps.modelFor(language);
+      if (!spec) return { kind: "error", code: "model_missing", language };
+      if (starting) await starting;
+      if (stopping) await stopping;
+      const resume = snapshot.status === "listening";
+      if (handoff) closeHandoff();
+      if (resume) {
+        set({ status: "stopping" });
+        // A line the author was dictating flushes here, before the recording
+        // owns the host: it lands in their editor like any finished line.
+        try {
+          await deps.host.stop();
+        } catch {
+          // The host is released or broken; the recording's own start decides.
+        }
+        showPartial("");
+      }
+      current = { language, paused: resume, resume, settle, startup: Promise.resolve(false) };
+      recording = current;
+      set({ recording: true, status: "loading", language, modelId: spec.id, level: 0 });
+    } finally {
+      // A stop or cancel asked for during the pause waits for this, then ends
+      // the recording through the one path every end takes.
+      claiming = null;
+      release();
+    }
+    let failure: unknown = null;
+    const loaded = spec;
+    current.startup = (async () => {
+      try {
+        await deps.host.load(loaded);
+        if (recording !== current) return false;
+        await deps.host.start(onEvent);
+        return true;
+      } catch (error) {
+        failure = error;
+        return false;
+      }
+    })();
+    void current.startup.then((hostStarted) => {
+      if (recording !== current) return;
+      if (failure !== null) {
+        void endRecording(current, {
+          kind: "error",
+          code: toDictationError(failure, "engine_crashed").code,
+        });
+      } else if (hostStarted) {
+        set({ status: "listening" });
+      }
+    });
+    return result;
   }
 
   return {
@@ -550,6 +745,8 @@ export function createDictationSession(deps: {
         // old editor leaving does not stop the Session, which waits for the
         // next editor to take the caret instead.
         else if (handoff) return;
+        // The recording keeps listening; with no target left there is nothing to resume into.
+        else if (recording) recording.resume = false;
         else if (snapshot.status === "listening" || snapshot.status === "loading") void stop();
       };
     },
@@ -603,5 +800,10 @@ export function createDictationSession(deps: {
       await start();
     },
     languageOverride: () => override,
+    recordPhrase,
+    async cancelRecording() {
+      if (claiming) await claiming;
+      if (recording) await endRecording(recording, { kind: "cancelled" });
+    },
   };
 }

@@ -1687,7 +1687,7 @@
         },
         "voice-commands": {
           "title": "Comandos de voz",
-          "body": "Una frase corta dicha sola, como «poner negrita», ejecuta un comando igual que su atajo. En el Editor de atajos, cada comando que puedes decir tiene una lista de voz donde agregas tus propias frases. Di «pulsar» y el nombre de un botón para pulsarlo; si dos se llaman igual, aparecen números y dices «pulsar 2»."
+          "body": "Una frase corta dicha sola, como «poner negrita», ejecuta un comando igual que su atajo. En el Editor de atajos, cada comando que puedes decir tiene una lista de voz donde agregas tus propias frases. Di «pulsar» y el nombre de un botón para pulsarlo; si dos se llaman igual, aparecen números y dices «pulsar 2». Si el dictado oye mal una frase una y otra vez, grábala con el micrófono junto al campo: Maibuk guarda lo que oyó y la frase funciona aunque se oiga mal."
         }
       },
       "settings": {
@@ -1810,6 +1810,15 @@
   },
   "dictation": {
     "toggle": "Iniciar o detener el dictado",
+    "recordPhrase": "Grabar frase",
+    "phraseRecording": {
+      "listening": "Escuchando en {{language}}. Di la frase una vez; Escape cancela.",
+      "heard": "Se oyó: {{phrase}}",
+      "cancelled": "Grabación cancelada.",
+      "busy": "Otro campo está grabando una frase. Detenla primero.",
+      "recordHeard": "Grabar lo que oye Dictado",
+      "recordAlias": "Grabar una frase para {{entry}}"
+    },
     "cycleLanguage": "Cambiar idioma del dictado",
     "stop": "Detener dictado",
     "start": "Iniciar dictado",

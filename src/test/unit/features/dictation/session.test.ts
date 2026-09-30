@@ -1583,3 +1583,387 @@ describe("Dictation Session field targets (#313)", () => {
     }
   });
 });
+
+describe("Dictation Session recordPhrase() (Phrase Recording, #270)", () => {
+  const editsRoute = (text: string): RouteResult => ({
+    kind: "edits",
+    edits: [{ kind: "text", text }],
+  });
+
+  /** A session like makeSession() but with spies on route and runCommand. */
+  function spySession() {
+    const routeSpy = vi.fn(editsRoute);
+    const runCommandSpy = vi.fn(async (_id: CommandId): Promise<CommandRunOutcome> => "ran");
+    const session = createDictationSession({
+      host,
+      modelFor: (lang) => models[lang] ?? null,
+      route: routeSpy,
+      runCommand: (...args) => runCommandSpy(...args),
+      isEditorCommand: () => false,
+      notify: (n) => void notices.push(n),
+      copyText: (t) => copyText(t),
+      stats: createLineStats(),
+      isEnabled: () => enabled,
+    });
+    return { session, routeSpy, runCommandSpy };
+  }
+
+  async function startListening(
+    session: ReturnType<typeof makeSession>,
+    target: DictationTarget & { commits?: string[] }
+  ) {
+    session.register(target);
+    session.focus(target.id);
+    await session.start();
+    expect(session.getSnapshot().status).toBe("listening");
+  }
+
+  async function waitForRecording(session: ReturnType<typeof makeSession>) {
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({ recording: true, status: "listening" })
+    );
+  }
+
+  it("a. records one line with no Session running and ends idle and silent", async () => {
+    const { session, routeSpy } = spySession();
+    const recording = session.recordPhrase("es");
+    await waitForRecording(session);
+    expect(host.loads).toEqual(["m-es"]);
+    host.emit({ type: "final", text: "Press tab.", latencyMs: 5 });
+    await expect(recording).resolves.toEqual({ kind: "heard", text: "press tab" });
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({ status: "idle", recording: false })
+    );
+    expect(host.stop).toHaveBeenCalled();
+    expect(notices.filter((n) => n.kind === "started" || n.kind === "stopped")).toEqual([]);
+    expect(routeSpy).not.toHaveBeenCalled();
+  });
+
+  it("b. pauses a listening Session, records in the phrase language, and resumes silently", async () => {
+    const { session, routeSpy } = spySession();
+    const applySpy = vi.fn(() => {});
+    const target = { ...fakeTarget("chapter", "en"), apply: applySpy };
+    await startListening(session, target);
+    notices.length = 0;
+    const recording = session.recordPhrase("es");
+    await waitForRecording(session);
+    // The pause stops the host before the recording loads its own model, and
+    // the line it flushes is the author's own dictation: it lands in the target.
+    await vi.waitFor(() => expect(host.loads).toEqual(["m-en", "m-es"]));
+    expect(routeSpy).toHaveBeenCalledTimes(1);
+    expect(routeSpy).toHaveBeenCalledWith("flushed", "", { verbatim: false });
+    expect(applySpy).toHaveBeenCalledTimes(1);
+    expect(applySpy).toHaveBeenCalledWith([{ kind: "text", text: "flushed" }]);
+    expect(session.getSnapshot()).toMatchObject({ language: "es" });
+    host.emit({ type: "final", text: "Press tab.", latencyMs: 5 });
+    await expect(recording).resolves.toEqual({ kind: "heard", text: "press tab" });
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({
+        status: "listening",
+        language: "en",
+        recording: false,
+      })
+    );
+    expect(host.loads).toEqual(["m-en", "m-es", "m-en"]);
+    expect(host.starts).toBe(3);
+    expect(notices.filter((n) => n.kind === "started" || n.kind === "stopped")).toEqual([]);
+    // Neither the recorded line nor the flush the recording's host emits on
+    // stop ever routes or applies: only the pause flush did.
+    expect(routeSpy).toHaveBeenCalledTimes(1);
+    expect(applySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("c. never consults the route or runs a Voice Command for the recorded line", async () => {
+    const { session, routeSpy, runCommandSpy } = spySession();
+    const voice = vi.fn(() => "ran" as const);
+    const target = { ...fakeTarget("chapter", "es"), voice };
+    session.register(target);
+    session.focus(target.id);
+    const recording = session.recordPhrase("es");
+    await waitForRecording(session);
+    host.emit({ type: "final", text: "deshacer eso", latencyMs: 5 });
+    await expect(recording).resolves.toEqual({ kind: "heard", text: "deshacer eso" });
+    expect(routeSpy).not.toHaveBeenCalled();
+    expect(runCommandSpy).not.toHaveBeenCalled();
+    expect(voice).not.toHaveBeenCalled();
+  });
+
+  it("d. refuses a language with no model before pausing the listening Session", async () => {
+    const session = makeSession();
+    await startListening(session, fakeTarget("chapter", "en"));
+    models.es = null;
+    const stops = host.stop.mock.calls.length;
+    await expect(session.recordPhrase("es")).resolves.toEqual({
+      kind: "error",
+      code: "model_missing",
+      language: "es",
+    });
+    expect(host.stop.mock.calls.length).toBe(stops);
+    expect(session.getSnapshot()).toMatchObject({ status: "listening", recording: false });
+  });
+
+  it("e. cancelRecording() ends the recording and the listening Session resumes", async () => {
+    const session = makeSession();
+    await startListening(session, fakeTarget("chapter", "en"));
+    const recording = session.recordPhrase("es");
+    await waitForRecording(session);
+    await session.cancelRecording();
+    await expect(recording).resolves.toEqual({ kind: "cancelled" });
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({
+        status: "listening",
+        language: "en",
+        recording: false,
+      })
+    );
+  });
+
+  it("f. stop() during a recording ends both without resuming", async () => {
+    const session = makeSession();
+    await startListening(session, fakeTarget("chapter", "en"));
+    const recording = session.recordPhrase("es");
+    await waitForRecording(session);
+    await session.stop();
+    await expect(recording).resolves.toEqual({ kind: "cancelled" });
+    expect(session.getSnapshot()).toMatchObject({ status: "idle", recording: false });
+    expect(notices.filter((n) => n.kind === "stopped")).toHaveLength(1);
+  });
+
+  it("g. ignores a final with no words and takes the next one", async () => {
+    const session = makeSession();
+    const recording = session.recordPhrase("en");
+    await waitForRecording(session);
+    host.emit({ type: "final", text: ".", latencyMs: 5 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(session.getSnapshot().recording).toBe(true);
+    host.emit({ type: "final", text: "hola", latencyMs: 5 });
+    await expect(recording).resolves.toEqual({ kind: "heard", text: "hola" });
+  });
+
+  it("h. reports a microphone denial as an error", async () => {
+    host.start.mockRejectedValueOnce(new DictationError("mic_denied"));
+    const session = makeSession();
+    await expect(session.recordPhrase("es")).resolves.toEqual({
+      kind: "error",
+      code: "mic_denied",
+    });
+    expect(session.getSnapshot().recording).toBe(false);
+  });
+
+  it("i. refuses a second recording while one runs, without disturbing the first", async () => {
+    const session = makeSession();
+    const first = session.recordPhrase("es");
+    await waitForRecording(session);
+    await expect(session.recordPhrase("es")).resolves.toEqual({
+      kind: "busy",
+    });
+    expect(host.loads).toEqual(["m-es"]);
+    host.emit({ type: "final", text: "Press tab.", latencyMs: 5 });
+    await expect(first).resolves.toEqual({ kind: "heard", text: "press tab" });
+  });
+
+  it("j. cancelling while the model loads never opens the microphone", async () => {
+    host.holdLoad = true;
+    const session = makeSession();
+    const recording = session.recordPhrase("es");
+    await vi.waitFor(() => expect(host.load).toHaveBeenCalled());
+    const cancelling = session.cancelRecording();
+    host.holdLoad = false;
+    host.finishLoad();
+    await cancelling;
+    await expect(recording).resolves.toEqual({ kind: "cancelled" });
+    expect(host.start).not.toHaveBeenCalled();
+  });
+
+  it("k. unregistering the last target keeps the heard line but the Session stays stopped", async () => {
+    const session = makeSession();
+    const unregister = session.register(fakeTarget("chapter", "en"));
+    session.focus("chapter");
+    await session.start();
+    const recording = session.recordPhrase("es");
+    await waitForRecording(session);
+    unregister();
+    host.emit({ type: "final", text: "hola", latencyMs: 5 });
+    await expect(recording).resolves.toEqual({ kind: "heard", text: "hola" });
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({ status: "idle", recording: false })
+    );
+    expect(notices.filter((n) => n.kind === "stopped")).toHaveLength(1);
+  });
+
+  it("l. refuses while Dictation is off without touching the host", async () => {
+    enabled = false;
+    const session = makeSession();
+    await expect(session.recordPhrase("es")).resolves.toEqual({
+      kind: "error",
+      code: "unsupported",
+    });
+    expect(host.load).not.toHaveBeenCalled();
+    expect(host.start).not.toHaveBeenCalled();
+  });
+
+  it("m. a second recording while the first is still pausing is busy at once", async () => {
+    const session = makeSession();
+    await startListening(session, fakeTarget("chapter", "en"));
+    expect(host.loads).toEqual(["m-en"]);
+    let releaseStop!: () => void;
+    host.stop.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (releaseStop = resolve))
+    );
+    const first = session.recordPhrase("es");
+    await vi.waitFor(() => expect(host.stop).toHaveBeenCalledTimes(1));
+    await expect(session.recordPhrase("en")).resolves.toEqual({ kind: "busy" });
+    expect(host.loads).toEqual(["m-en"]);
+    releaseStop();
+    await waitForRecording(session);
+    expect(host.loads).toEqual(["m-en", "m-es"]);
+    host.emit({ type: "final", text: "Press tab.", latencyMs: 5 });
+    await expect(first).resolves.toEqual({ kind: "heard", text: "press tab" });
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({
+        status: "listening",
+        language: "en",
+        recording: false,
+      })
+    );
+    expect(host.loads.filter((id) => id === "m-es")).toHaveLength(1);
+  });
+
+  it("n. stop() during the pause ends the recording idle with one stopped notice", async () => {
+    const session = makeSession();
+    await startListening(session, fakeTarget("chapter", "en"));
+    notices.length = 0;
+    const startsBefore = host.starts;
+    let releaseStop!: () => void;
+    host.stop.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (releaseStop = resolve))
+    );
+    const recording = session.recordPhrase("es");
+    await vi.waitFor(() => expect(host.stop).toHaveBeenCalledTimes(1));
+    const stopping = session.stop();
+    releaseStop();
+    await expect(recording).resolves.toEqual({ kind: "cancelled" });
+    await stopping;
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({ status: "idle", recording: false })
+    );
+    expect(notices.filter((n) => n.kind === "stopped")).toHaveLength(1);
+    if (host.starts !== startsBefore) {
+      const startOrder = host.start.mock.invocationCallOrder;
+      const stopOrder = host.stop.mock.invocationCallOrder;
+      expect(stopOrder[stopOrder.length - 1]).toBeGreaterThan(
+        startOrder[startOrder.length - 1]
+      );
+    } else {
+      expect(host.starts).toBe(startsBefore);
+    }
+  });
+
+  it("o. cancelRecording() during the pause resumes the old Session silently", async () => {
+    const session = makeSession();
+    await startListening(session, fakeTarget("chapter", "en"));
+    notices.length = 0;
+    let releaseStop!: () => void;
+    host.stop.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (releaseStop = resolve))
+    );
+    const recording = session.recordPhrase("es");
+    await vi.waitFor(() => expect(host.stop).toHaveBeenCalledTimes(1));
+    const cancelling = session.cancelRecording();
+    releaseStop();
+    await expect(recording).resolves.toEqual({ kind: "cancelled" });
+    await cancelling;
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({
+        status: "listening",
+        language: "en",
+        recording: false,
+      })
+    );
+    expect(notices.filter((n) => n.kind === "started" || n.kind === "stopped")).toEqual(
+      []
+    );
+  });
+
+  it("p. recordPhrase uses its own language despite the Session override", async () => {
+    const session = makeSession();
+    const target = fakeTarget("chapter", "es");
+    session.register(target);
+    session.focus(target.id);
+    await session.start();
+    expect(session.getSnapshot()).toMatchObject({ language: "es" });
+    await session.setLanguage("en");
+    expect(session.getSnapshot()).toMatchObject({ language: "en" });
+    const loadsBefore = [...host.loads];
+    expect(loadsBefore).toEqual(["m-es", "m-en"]);
+    const recording = session.recordPhrase("es");
+    await waitForRecording(session);
+    expect(host.loads[loadsBefore.length]).toBe("m-es");
+    host.emit({ type: "final", text: "hola", latencyMs: 5 });
+    await expect(recording).resolves.toEqual({ kind: "heard", text: "hola" });
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({
+        status: "listening",
+        language: "en",
+        recording: false,
+      })
+    );
+  });
+
+  it("q. cancelRecording() while the microphone is opening releases it", async () => {
+    const session = makeSession();
+    let releaseStart!: () => void;
+    host.start.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (releaseStart = resolve))
+    );
+    const recording = session.recordPhrase("es");
+    await vi.waitFor(() => expect(host.start).toHaveBeenCalledTimes(1));
+    const cancelling = session.cancelRecording();
+    releaseStart();
+    await expect(recording).resolves.toEqual({ kind: "cancelled" });
+    await cancelling;
+    expect(host.stop).toHaveBeenCalled();
+    await vi.waitFor(() => expect(session.getSnapshot().recording).toBe(false));
+    expect(["idle", "listening"]).toContain(session.getSnapshot().status);
+  });
+
+  it("r. recordPhrase waits for a start in flight, then pauses and resumes", async () => {
+    host.holdLoad = true;
+    const session = makeSession();
+    const target = fakeTarget("chapter", "en");
+    session.register(target);
+    session.focus(target.id);
+    const starting = session.start();
+    expect(session.getSnapshot().status).toBe("loading");
+    const recording = session.recordPhrase("es");
+    host.holdLoad = false;
+    host.finishLoad();
+    await starting;
+    await waitForRecording(session);
+    host.emit({ type: "final", text: "Press tab.", latencyMs: 5 });
+    await expect(recording).resolves.toEqual({ kind: "heard", text: "press tab" });
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({
+        status: "listening",
+        language: "en",
+        recording: false,
+      })
+    );
+  });
+
+  it("s. Dictation off mid-recording ends cancelled with no resume", async () => {
+    const session = makeSession();
+    await startListening(session, fakeTarget("chapter", "en"));
+    const recording = session.recordPhrase("es");
+    await waitForRecording(session);
+    enabled = false;
+    await session.stop();
+    await expect(recording).resolves.toEqual({ kind: "cancelled" });
+    await vi.waitFor(() =>
+      expect(session.getSnapshot()).toMatchObject({ status: "idle", recording: false })
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(session.getSnapshot().status).toBe("idle");
+    expect(host.loads).toEqual(["m-en", "m-es"]);
+  });
+});

@@ -1687,7 +1687,7 @@
         },
         "voice-commands": {
           "title": "Voice commands",
-          "body": "A short phrase said on its own, like “undo that”, runs a command just as its shortcut does. In the Shortcut Editor, each command you can say has a Voice list where you add your own phrases. Say “click” and a button's name to press it; when two share a name, numbers appear and you say “click 2”."
+          "body": "A short phrase said on its own, like “undo that”, runs a command just as its shortcut does. In the Shortcut Editor, each command you can say has a Voice list where you add your own phrases. Say “click” and a button's name to press it; when two share a name, numbers appear and you say “click 2”. If dictation keeps mishearing a phrase, record it with the microphone beside the field: Maibuk stores what it heard, so the mishearing works too."
         }
       },
       "settings": {
@@ -1810,6 +1810,15 @@
   },
   "dictation": {
     "toggle": "Start or stop dictation",
+    "recordPhrase": "Record phrase",
+    "phraseRecording": {
+      "listening": "Listening in {{language}}. Say the phrase once; Escape cancels.",
+      "heard": "Heard: {{phrase}}",
+      "cancelled": "Recording cancelled.",
+      "busy": "Another field is recording a phrase. Stop it first.",
+      "recordHeard": "Record what Dictation hears",
+      "recordAlias": "Record a phrase for {{entry}}"
+    },
     "cycleLanguage": "Cycle Dictation language",
     "stop": "Stop dictation",
     "start": "Start dictation",
