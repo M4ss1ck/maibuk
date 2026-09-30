@@ -2232,6 +2232,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "voice-commands-app",
+    area: "shell",
+    workflow:
+      'A Chapter is open and Dictation is listening; the microphone says a Command\'s label ("Dark theme"); asserts: the html element takes the dark class, the Dictation live region announces "Voice command: Dark", and the Chapter text never holds the spoken words',
+    edges: [],
+    terms: ["Voice Command", "Dictation"],
+    shortcuts: ["dictation.toggle"],
+    routes: ["/settings", "/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "dictation-spoken-punctuation",
     area: "settings",
     workflow:

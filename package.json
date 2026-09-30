@@ -37,7 +37,8 @@
     "record:dictation-phrases": "tsx scripts/dictation-phrases/record.ts",
     "conformance:dictation:phrases": "cd src-tauri && cargo test --release dictation::runner::tests::phrase_transcripts -- --ignored --nocapture && cd .. && tsx scripts/dictation-phrases/score.ts",
     "bench:dictation": "vitest bench --run src/test/bench --outputJson .bench/dictation.json && node scripts/dictation-bench-budget.mjs .bench/dictation.json",
-    "bench:dictation:android": "node scripts/dictation-bench/android.mjs .bench/dictation-android.json"
+    "bench:dictation:android": "node scripts/dictation-bench/android.mjs .bench/dictation-android.json",
+    "e2e:voice-audio": "bash scripts/e2e-voice-audio.sh"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",

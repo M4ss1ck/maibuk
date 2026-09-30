@@ -51,7 +51,7 @@ export interface CommandDef {
   /** Replaces `defaults` on the web build, where the browser keeps some keys. */
   web?: readonly Shortcut[];
   source?: ShortcutSource;
-  /** Declares Voice Commands for this Command; absent means it takes none (ADR 0014). */
+  /** Declares Voice Commands for this Command; absent means its label answers (ADR 0016). */
   voice?: VoiceCommandSpec;
 }
 
@@ -99,9 +99,24 @@ export const COMMANDS = {
     contexts: ["global"],
     defaults: [["g", "t"]],
   },
-  "global.themeLight": { labelKey: "settings.light", contexts: ["global"], defaults: [] },
-  "global.themeDark": { labelKey: "settings.dark", contexts: ["global"], defaults: [] },
-  "global.themeSystem": { labelKey: "settings.system", contexts: ["global"], defaults: [] },
+  "global.themeLight": {
+    labelKey: "settings.light",
+    contexts: ["global"],
+    defaults: [],
+    voice: { phrases: { en: ["light theme"], es: ["tema claro"] } },
+  },
+  "global.themeDark": {
+    labelKey: "settings.dark",
+    contexts: ["global"],
+    defaults: [],
+    voice: { phrases: { en: ["dark theme"], es: ["tema oscuro"] } },
+  },
+  "global.themeSystem": {
+    labelKey: "settings.system",
+    contexts: ["global"],
+    defaults: [],
+    voice: { phrases: { en: ["system theme"], es: ["tema del sistema"] } },
+  },
   "global.toggleShortcutHints": {
     labelKey: "shortcuts.toggleShortcutHints",
     contexts: ["global"],
@@ -167,6 +182,7 @@ export const COMMANDS = {
     labelKey: "shortcuts.save",
     contexts: ["bookEditor", "notes", "coverDesigner"],
     defaults: [["Mod+s"]],
+    voice: { phrases: { en: ["save now"], es: ["guardar ahora"] } },
   },
   "common.undo": {
     labelKey: "editor.undo",
@@ -190,11 +206,13 @@ export const COMMANDS = {
     labelKey: "shortcuts.zoomIn",
     contexts: ["editor", "canvas"],
     defaults: [["Mod++"], ["Mod+="]],
+    voice: { phrases: { en: ["zoom in"], es: ["acercar vista"] } },
   },
   "common.zoomOut": {
     labelKey: "shortcuts.zoomOut",
     contexts: ["editor", "canvas"],
     defaults: [["Mod+-"]],
+    voice: { phrases: { en: ["zoom out"], es: ["alejar vista"] } },
   },
   "common.delete": {
     labelKey: "shortcuts.deleteSelection",
@@ -211,6 +229,7 @@ export const COMMANDS = {
     labelKey: "shortcuts.find",
     contexts: ["editor", "notes"],
     defaults: [["Mod+f"]],
+    voice: { phrases: { en: ["find text"], es: ["buscar texto"] } },
   },
 
   "bookList.newBook": {
@@ -293,6 +312,7 @@ export const COMMANDS = {
     labelKey: "chapters.addChapter",
     contexts: ["bookEditor"],
     defaults: [],
+    voice: { phrases: { en: ["add chapter"], es: ["añadir capítulo"] } },
   },
   "bookEditor.importFiles": {
     labelKey: "chapters.importFiles",
@@ -316,15 +336,36 @@ export const COMMANDS = {
     defaults: [["Mod+0"]],
   },
   // Text transforms and editor actions reachable from the toolbar and its menus.
-  "editor.uppercase": { labelKey: "editor.uppercase", contexts: ["editor"], defaults: [] },
-  "editor.lowercase": { labelKey: "editor.lowercase", contexts: ["editor"], defaults: [] },
+  "editor.uppercase": {
+    labelKey: "editor.uppercase",
+    contexts: ["editor"],
+    defaults: [],
+    voice: { phrases: { en: ["uppercase text"], es: ["poner en mayúsculas"] } },
+  },
+  "editor.lowercase": {
+    labelKey: "editor.lowercase",
+    contexts: ["editor"],
+    defaults: [],
+    voice: { phrases: { en: ["lowercase text"], es: ["poner en minúsculas"] } },
+  },
   "editor.alternatingCase": {
     labelKey: "editor.alternatingCase",
     contexts: ["editor"],
     defaults: [],
+    voice: { phrases: { en: ["alternating case"], es: ["mayúsculas alternas"] } },
   },
-  "editor.sentenceCase": { labelKey: "editor.sentenceCase", contexts: ["editor"], defaults: [] },
-  "editor.titleCase": { labelKey: "editor.titleCase", contexts: ["editor"], defaults: [] },
+  "editor.sentenceCase": {
+    labelKey: "editor.sentenceCase",
+    contexts: ["editor"],
+    defaults: [],
+    voice: { phrases: { en: ["sentence case"], es: ["tipo oración"] } },
+  },
+  "editor.titleCase": {
+    labelKey: "editor.titleCase",
+    contexts: ["editor"],
+    defaults: [],
+    voice: { phrases: { en: ["title case"], es: ["tipo título"] } },
+  },
   "editor.horizontalMirror": {
     labelKey: "editor.horizontalMirror",
     contexts: ["editor"],
@@ -332,7 +373,12 @@ export const COMMANDS = {
   },
   "editor.upsideDown": { labelKey: "editor.upsideDown", contexts: ["editor"], defaults: [] },
   "editor.reverseText": { labelKey: "editor.reverseText", contexts: ["editor"], defaults: [] },
-  "editor.leetspeak": { labelKey: "editor.leetspeak", contexts: ["editor"], defaults: [] },
+  "editor.leetspeak": {
+    labelKey: "editor.leetspeak",
+    contexts: ["editor"],
+    defaults: [],
+    voice: { phrases: { en: ["leetspeak text"], es: ["texto leetspeak"] } },
+  },
   "editor.textColor": { labelKey: "editor.textColor", contexts: ["editor"], defaults: [] },
   "editor.pasteWithoutFormatting": {
     labelKey: "editor.pasteWithoutFormatting",
@@ -344,13 +390,23 @@ export const COMMANDS = {
     contexts: ["editor"],
     defaults: [],
   },
-  "editor.inspectInHtml": { labelKey: "editor.inspectInHtml", contexts: ["editor"], defaults: [] },
+  "editor.inspectInHtml": {
+    labelKey: "editor.inspectInHtml",
+    contexts: ["editor"],
+    defaults: [],
+    voice: { phrases: { en: ["inspect html"], es: ["ver código"] } },
+  },
   "editor.addToDictionary": {
     labelKey: "editor.addToDictionary",
     contexts: ["editor"],
     defaults: [],
   },
-  "editor.lookUp": { labelKey: "editor.lookUp", contexts: ["editor"], defaults: [] },
+  "editor.lookUp": {
+    labelKey: "editor.lookUp",
+    contexts: ["editor"],
+    defaults: [],
+    voice: { phrases: { en: ["look up word"], es: ["buscar palabra"] } },
+  },
   "editor.increaseFirstLineIndent": {
     labelKey: "editor.increaseFirstLineIndent",
     contexts: ["editor"],
@@ -427,18 +483,21 @@ export const COMMANDS = {
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+Shift+h"]],
+    voice: { phrases: { en: ["highlight text"], es: ["resaltar texto"] } },
   },
   "editor.subscript": {
     labelKey: "editor.subscript",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+,"]],
+    voice: { phrases: { en: ["subscript text"], es: ["texto subíndice"] } },
   },
   "editor.superscript": {
     labelKey: "editor.superscript",
     contexts: ["editor"],
     source: "editor-keymap",
     defaults: [["Mod+."]],
+    voice: { phrases: { en: ["superscript text"], es: ["texto superíndice"] } },
   },
   "editor.code": {
     labelKey: "editor.code",
@@ -595,6 +654,7 @@ export const COMMANDS = {
     labelKey: "editor.dictionary",
     contexts: ["editor"],
     defaults: [["Mod+Shift+d"]],
+    voice: { phrases: { en: ["open dictionary"], es: ["abrir diccionario"] } },
   },
   "editor.insertSymbol": {
     labelKey: "shortcuts.insertSymbol",
@@ -631,24 +691,55 @@ export const COMMANDS = {
     defaults: [],
     fixed: [["Escape"]],
     fixedReasonKey: FIXED_FIELD,
+    voice: { phrases: { en: ["close find"], es: ["cerrar búsqueda"] } },
   },
 
   "image.editAlt": { labelKey: "editor.imageEditAlt", contexts: ["image"], defaults: [] },
   "image.copy": { labelKey: "editor.imageCopy", contexts: ["image"], defaults: [] },
   "image.save": { labelKey: "editor.imageSave", contexts: ["image"], defaults: [] },
-  "image.alignLeft": { labelKey: "editor.alignLeft", contexts: ["image"], defaults: [] },
-  "image.alignCenter": { labelKey: "editor.alignCenter", contexts: ["image"], defaults: [] },
-  "image.alignRight": { labelKey: "editor.alignRight", contexts: ["image"], defaults: [] },
-  "image.delete": { labelKey: "common.delete", contexts: ["image"], defaults: [] },
+  "image.alignLeft": {
+    labelKey: "editor.alignLeft",
+    contexts: ["image"],
+    defaults: [],
+    voice: { phrases: { en: ["align image left"], es: ["alinear imagen a la izquierda"] } },
+  },
+  "image.alignCenter": {
+    labelKey: "editor.alignCenter",
+    contexts: ["image"],
+    defaults: [],
+    voice: { phrases: { en: ["center image"], es: ["centrar imagen"] } },
+  },
+  "image.alignRight": {
+    labelKey: "editor.alignRight",
+    contexts: ["image"],
+    defaults: [],
+    voice: { phrases: { en: ["align image right"], es: ["alinear imagen a la derecha"] } },
+  },
+  "image.delete": {
+    labelKey: "common.delete",
+    contexts: ["image"],
+    defaults: [],
+    voice: { phrases: { en: ["delete image"], es: ["eliminar imagen"] } },
+  },
 
-  "noteItem.rename": { labelKey: "common.rename", contexts: ["noteItem"], defaults: [] },
+  "noteItem.rename": {
+    labelKey: "common.rename",
+    contexts: ["noteItem"],
+    defaults: [],
+    voice: { phrases: { en: ["rename note"], es: ["renombrar nota"] } },
+  },
   "noteItem.togglePinned": {
     labelKey: "commands.noteItem.togglePinned",
     contexts: ["noteItem"],
     defaults: [],
   },
   "noteItem.duplicate": { labelKey: "notes.duplicate", contexts: ["noteItem"], defaults: [] },
-  "noteItem.delete": { labelKey: "common.delete", contexts: ["noteItem"], defaults: [] },
+  "noteItem.delete": {
+    labelKey: "common.delete",
+    contexts: ["noteItem"],
+    defaults: [],
+    voice: { phrases: { en: ["delete note"], es: ["eliminar nota"] } },
+  },
 
   "chapterItem.edit": { labelKey: "chapters.editChapter", contexts: ["chapterItem"], defaults: [] },
   "chapterItem.delete": {
@@ -684,12 +775,18 @@ export const COMMANDS = {
   },
 
   "canvasNode.connect": { labelKey: "canvas.connectTo", contexts: ["canvasNode"], defaults: [] },
-  "canvasNode.delete": { labelKey: "common.delete", contexts: ["canvasNode"], defaults: [] },
+  "canvasNode.delete": {
+    labelKey: "common.delete",
+    contexts: ["canvasNode"],
+    defaults: [],
+    voice: { phrases: { en: ["delete from canvas"], es: ["eliminar del lienzo"] } },
+  },
 
   "notes.advancedFilters": {
     labelKey: "notes.advancedFilters",
     contexts: ["notes"],
     defaults: [["Mod+Shift+f"]],
+    voice: { phrases: { en: ["advanced filters"], es: ["filtros avanzados"] } },
   },
   "notes.enterList": {
     labelKey: "shortcuts.enterNotesList",
@@ -703,9 +800,24 @@ export const COMMANDS = {
   "notes.addNoteToBook": { labelKey: "notes.addNoteToBook", contexts: ["notes"], defaults: [] },
   "notes.clearFilters": { labelKey: "notes.clearFilters", contexts: ["notes"], defaults: [] },
 
-  "canvas.toolSelect": { labelKey: "canvas.toolSelect", contexts: ["canvas"], defaults: [["v"]] },
-  "canvas.toolPen": { labelKey: "canvas.toolPen", contexts: ["canvas"], defaults: [["p"]] },
-  "canvas.toolEraser": { labelKey: "canvas.toolEraser", contexts: ["canvas"], defaults: [["e"]] },
+  "canvas.toolSelect": {
+    labelKey: "canvas.toolSelect",
+    contexts: ["canvas"],
+    defaults: [["v"]],
+    voice: { phrases: { en: ["select tool"], es: ["herramienta de selección"] } },
+  },
+  "canvas.toolPen": {
+    labelKey: "canvas.toolPen",
+    contexts: ["canvas"],
+    defaults: [["p"]],
+    voice: { phrases: { en: ["pen tool"], es: ["herramienta de lápiz"] } },
+  },
+  "canvas.toolEraser": {
+    labelKey: "canvas.toolEraser",
+    contexts: ["canvas"],
+    defaults: [["e"]],
+    voice: { phrases: { en: ["eraser tool"], es: ["herramienta de borrador"] } },
+  },
   "canvas.addTextNode": { labelKey: "canvas.addTextNode", contexts: ["canvas"], defaults: [["t"]] },
   "canvas.addNoteRef": { labelKey: "canvas.addNoteRef", contexts: ["canvas"], defaults: [["n"]] },
   "canvas.editTextNode": {
@@ -721,6 +833,7 @@ export const COMMANDS = {
     defaults: [],
     fixed: [["Escape"]],
     fixedReasonKey: FIXED_ESCAPE,
+    voice: { phrases: { en: ["clear canvas selection"], es: ["quitar selección del lienzo"] } },
   },
   "canvas.backToGallery": {
     labelKey: "shortcuts.backToCanvasGallery",
@@ -729,7 +842,12 @@ export const COMMANDS = {
   },
   "canvas.newCanvas": { labelKey: "canvas.newCanvas", contexts: ["canvas"], defaults: [] },
 
-  "ephemeral.clear": { labelKey: "ephemeral.clear", contexts: ["ephemeral"], defaults: [] },
+  "ephemeral.clear": {
+    labelKey: "ephemeral.clear",
+    contexts: ["ephemeral"],
+    defaults: [],
+    voice: { phrases: { en: ["clear ephemeral"], es: ["vaciar efímero"] } },
+  },
   "ephemeral.createNote": {
     labelKey: "ephemeral.createNote",
     contexts: ["ephemeral"],
@@ -740,6 +858,7 @@ export const COMMANDS = {
     labelKey: "cover.duplicate",
     contexts: ["coverDesigner"],
     defaults: [["Mod+d"]],
+    voice: { phrases: { en: ["duplicate object"], es: ["duplicar objeto"] } },
   },
   "coverDesigner.sendBackward": {
     labelKey: "shortcuts.sendBackward",
@@ -757,6 +876,7 @@ export const COMMANDS = {
     defaults: [],
     fixed: [["Escape"]],
     fixedReasonKey: FIXED_ESCAPE,
+    voice: { phrases: { en: ["clear cover selection"], es: ["quitar selección de la portada"] } },
   },
   "coverDesigner.nudgeUp": {
     labelKey: "shortcuts.nudgeUp",
@@ -854,6 +974,7 @@ export const COMMANDS = {
     labelKey: "cover.align.left",
     contexts: ["coverDesigner"],
     defaults: [],
+    voice: { phrases: { en: ["align object left"], es: ["alinear objeto a la izquierda"] } },
   },
   "coverDesigner.alignHCenter": {
     labelKey: "cover.align.hcenter",
@@ -864,6 +985,7 @@ export const COMMANDS = {
     labelKey: "cover.align.right",
     contexts: ["coverDesigner"],
     defaults: [],
+    voice: { phrases: { en: ["align object right"], es: ["alinear objeto a la derecha"] } },
   },
   "coverDesigner.alignTop": {
     labelKey: "cover.align.top",

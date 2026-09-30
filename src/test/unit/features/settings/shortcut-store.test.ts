@@ -149,10 +149,11 @@ describe("useShortcutSettingsStore", () => {
     });
   });
 
-  it("ignores Commands that take no Voice Commands", () => {
-    const before = useShortcutSettingsStore.getState().shortcuts;
+  it("stores Voice Commands for any Command now that every Command is eligible", () => {
     useShortcutSettingsStore.getState().setCommandVoicePhrases("common.save", "en", ["save it"]);
-    expect(useShortcutSettingsStore.getState().shortcuts).toBe(before);
+    expect(useShortcutSettingsStore.getState().shortcuts.voice).toEqual({
+      "common.save": { en: ["save it"] },
+    });
   });
 
   it("resetCommandVoicePhrases deletes one language's entry", () => {

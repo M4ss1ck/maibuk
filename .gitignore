@@ -44,3 +44,6 @@ vendor/
 
 # Dictation Interpreter bench output (pnpm bench:dictation)
 .bench/
+
+# Local E2E voice audio build (pnpm e2e:voice-audio)
+.cache/

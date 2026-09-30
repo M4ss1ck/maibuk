@@ -16,7 +16,13 @@ spec. Playwright itself stays a local command and never runs in CI.
 pnpm install
 pnpm exec playwright install chromium webkit
 pnpm fetch:dictation --test-assets   # the Dictation specs' models and test audio
+pnpm e2e:voice-audio                 # Piper TTS audio for the Voice Command spec
 ```
+
+`pnpm e2e:voice-audio` records nothing of the author: it installs Piper in
+`.cache/piper-venv` and synthesizes the Voice Command phrases the fake
+microphone plays (`vendor/moonshine/e2e-voice/<name>.wav`, 16 kHz mono). Run it
+once before `specs/voice-commands-app.spec.ts`; it skips files that exist.
 
 `@playwright/test` is pinned to an exact version; the browsers must match it.
 After bumping it, run the install command again.

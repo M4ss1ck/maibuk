@@ -8,7 +8,7 @@ import {
   interpret,
 } from "@/features/dictation/interpreter";
 import { normalizePhrase, tokenize, tokenWords } from "@/features/dictation/normalize";
-import { VOICE_VOCABULARY } from "@/features/dictation/voice-commands";
+import { VOICE_VOCABULARY, defaultWholeLinePhrases } from "@/features/dictation/voice-commands";
 import {
   BENCH_ALIAS_COUNT,
   BENCH_VOCABULARY_COUNT,
@@ -123,5 +123,13 @@ describe.each(["en", "es"] as const)("interpreter bench fixtures (%s)", (languag
     const thirdNode = secondNode?.children.get(normalizePhrase(third));
     expect(thirdNode).toBeDefined();
     expect(thirdNode?.children.size).toBeGreaterThan(0);
+  });
+
+  it("carries a label-derived whole-line phrase in the exact map (ADR 0016)", () => {
+    const derived = defaultWholeLinePhrases("global.gotoNotes", language);
+    expect(derived.length).toBeGreaterThan(0);
+    for (const phrase of derived) {
+      expect(table.voice.exact.has(normalizePhrase(phrase)), phrase).toBe(true);
+    }
   });
 });
