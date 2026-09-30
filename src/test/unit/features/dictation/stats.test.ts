@@ -11,6 +11,8 @@ const summary = (
   spokenPunctuationCount: 0,
   scratchCount: 0,
   voiceCommandCount: 0,
+  voiceCommandUnavailableCount: 0,
+  voiceCommandRefusedCount: 0,
   ...overrides,
 });
 
@@ -122,5 +124,24 @@ describe("createLineStats()", () => {
     expect(result.voiceCommandCount).toBe(2);
     expect(result.spokenPunctuationCount).toBe(2);
     expect(result.scratchCount).toBe(1);
+  });
+
+  it("sums unavailable and refused voice commands across every interpreted line", () => {
+    const stats = createLineStats();
+    stats.recordInterpreter(8, 0, 0, 0, 1, 0);
+    stats.recordInterpreter(9, 0, 0, 0, 0, 1);
+    stats.recordInterpreter(7, 0, 0, 1, 2, 3);
+    const result = stats.summary();
+    expect(result.voiceCommandUnavailableCount).toBe(3);
+    expect(result.voiceCommandRefusedCount).toBe(4);
+    expect(result.voiceCommandCount).toBe(1);
+  });
+
+  it("defaults unavailable and refused voice commands to zero for older callers", () => {
+    const stats = createLineStats();
+    stats.recordInterpreter(8, 2);
+    expect(stats.summary()).toEqual(
+      summary({ medianInterpreterMs: 8, maxInterpreterMs: 8, spokenPunctuationCount: 2 })
+    );
   });
 });

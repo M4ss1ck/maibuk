@@ -137,7 +137,7 @@ export function Home() {
       id: "bookList.moveSelectionNext",
       preventDefault: false,
       onTrigger: (event) => {
-        if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        if (event && (event.key === "ArrowDown" || event.key === "ArrowRight")) {
           moveSelectionFromBody(event);
           return;
         }
@@ -147,7 +147,7 @@ export function Home() {
           currentIndex < 0 ? 0 : Math.min(currentIndex + 1, visibleBooks.length - 1);
         const target = visibleBooks[targetIndex];
         if (target) focusBook(target.id);
-        event.preventDefault();
+        event?.preventDefault();
       },
       enabled: !isNewBookOpen && visibleBooks.length > 0,
     },
@@ -155,7 +155,7 @@ export function Home() {
       id: "bookList.moveSelectionPrevious",
       preventDefault: false,
       onTrigger: (event) => {
-        if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        if (event && (event.key === "ArrowUp" || event.key === "ArrowLeft")) {
           moveSelectionFromBody(event);
           return;
         }
@@ -165,13 +165,14 @@ export function Home() {
           currentIndex < 0 ? visibleBooks.length - 1 : Math.max(currentIndex - 1, 0);
         const target = visibleBooks[targetIndex];
         if (target) focusBook(target.id);
-        event.preventDefault();
+        event?.preventDefault();
       },
       enabled: !isNewBookOpen && visibleBooks.length > 0,
     },
     {
       id: "bookList.jumpBooks",
       onTrigger: (event) => {
+        if (!event) return;
         const digit = /^Digit([1-9])$/.exec(event.code)?.[1] ?? event.key;
         const index = Number(digit) - 1;
         if (Number.isInteger(index) && index >= 0 && index < 9) {
@@ -184,7 +185,7 @@ export function Home() {
     {
       id: "bookList.newBook",
       onTrigger: (event) => {
-        if (isTypingTarget(event.target)) return;
+        if (event && isTypingTarget(event.target)) return;
         setIsNewBookOpen(true);
       },
       allowInInput: true,

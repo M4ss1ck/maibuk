@@ -4,6 +4,8 @@ import {
   type DictationTarget,
   type SessionNotice,
 } from "@/features/dictation/session";
+import type { CommandRunOutcome } from "@/lib/command-runner";
+import type { CommandId } from "@/lib/shortcut-registry";
 import { createRouter } from "@/features/dictation/router";
 import { createLineStats } from "@/features/dictation/stats";
 import {
@@ -450,7 +452,13 @@ describe("Dictation Session", () => {
     expect(voice).not.toHaveBeenCalled();
     expect(target.commits).toEqual([]);
     expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_command" }));
+    expect(notices).toContainEqual({
+      kind: "voice_command_refused",
+      id: "editor.bold",
+      reason: "tutorial",
+    });
     expect(stats.summary().voiceCommandCount).toBe(0);
+    expect(stats.summary().voiceCommandRefusedCount).toBe(1);
   });
 
   it("does not apply a scratch request", async () => {
@@ -706,8 +714,187 @@ describe("Dictation Session", () => {
   });
 });
 
-describe("Dictation Session all-caps lock (#271)", () => {
-  it("notifies when a line turns the lock on", async () => {
+describe("Dictation Session Command Runner voice commands (#316)", () => {
+  function runnerSession({
+    runCommand,
+    isEditorCommand,
+    voiceCommandsAllowed,
+  }: {
+    runCommand?: (id: CommandId) => CommandRunOutcome;
+    isEditorCommand?: (id: CommandId) => boolean;
+    voiceCommandsAllowed?: () => boolean;
+  }) {
+    const voice = vi.fn(() => "ran" as const);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "voice_command", id: "bookList.newBook", polarity: null })),
+      voiceCommandsAllowed,
+      runCommand,
+      isEditorCommand,
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    return { session, target, voice, stats, runCommand };
+  }
+
+  it("runs a non-editor voice command through runCommand and announces it", async () => {
+    const stub = vi.fn(() => "ran" as const);
+    const { session, target, voice, stats } = runnerSession({
+      runCommand: stub,
+      isEditorCommand: () => false,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "new book", latencyMs: 5 });
+    expect(stub).toHaveBeenCalledWith("bookList.newBook");
+    expect(voice).not.toHaveBeenCalled();
+    expect(target.commits).toEqual([]);
+    expect(notices).toContainEqual({
+      kind: "voice_command",
+      id: "bookList.newBook",
+      polarity: null,
+    });
+    expect(stats.summary().voiceCommandCount).toBe(1);
+  });
+
+  it("announces an unavailable voice command and counts it without inserting", async () => {
+    const stub = vi.fn(() => "unavailable" as const);
+    const { session, target, stats } = runnerSession({
+      runCommand: stub,
+      isEditorCommand: () => false,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "new book", latencyMs: 5 });
+    expect(target.commits).toEqual([]);
+    expect(notices).toContainEqual({ kind: "voice_command_unavailable", id: "bookList.newBook" });
+    expect(stats.summary().voiceCommandCount).toBe(0);
+    expect(stats.summary().voiceCommandUnavailableCount).toBe(1);
+  });
+
+  it("announces a dialog-refused voice command and counts it without inserting", async () => {
+    const stub = vi.fn(() => "refused-dialog" as const);
+    const { session, target, stats } = runnerSession({
+      runCommand: stub,
+      isEditorCommand: () => false,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "new book", latencyMs: 5 });
+    expect(target.commits).toEqual([]);
+    expect(notices).toContainEqual({
+      kind: "voice_command_refused",
+      id: "bookList.newBook",
+      reason: "dialog",
+    });
+    expect(stats.summary().voiceCommandRefusedCount).toBe(1);
+  });
+
+  it("announces a tutorial-refused voice command and counts it without inserting", async () => {
+    const stub = vi.fn(() => "refused-tutorial" as const);
+    const { session, target, stats } = runnerSession({
+      runCommand: stub,
+      isEditorCommand: () => false,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "new book", latencyMs: 5 });
+    expect(target.commits).toEqual([]);
+    expect(notices).toContainEqual({
+      kind: "voice_command_refused",
+      id: "bookList.newBook",
+      reason: "tutorial",
+    });
+    expect(stats.summary().voiceCommandRefusedCount).toBe(1);
+  });
+
+  it("still runs an editor-keymap command on the target instead of runCommand", async () => {
+    const stub = vi.fn(() => "ran" as const);
+    const voice = vi.fn(() => "ran" as const);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "voice_command", id: "common.undo", polarity: null })),
+      runCommand: stub,
+      isEditorCommand: () => true,
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "deshacer eso", latencyMs: 5 });
+    expect(stub).not.toHaveBeenCalled();
+    expect(voice).toHaveBeenCalledWith({ id: "common.undo", polarity: null });
+    expect(notices).toContainEqual({
+      kind: "voice_command",
+      id: "common.undo",
+      polarity: null,
+    });
+  });
+
+  it("announces a tutorial refusal for an editor command while the Tutorial blocks", async () => {
+    const voice = vi.fn(() => "ran" as const);
+    const target = { ...fakeTarget("a"), voice };
+    const stats = createLineStats();
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "voice_command", id: "common.undo", polarity: null })),
+      voiceCommandsAllowed: () => false,
+      isEditorCommand: () => true,
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "deshacer eso", latencyMs: 5 });
+    expect(voice).not.toHaveBeenCalled();
+    expect(target.commits).toEqual([]);
+    expect(notices).toContainEqual({
+      kind: "voice_command_refused",
+      id: "common.undo",
+      reason: "tutorial",
+    });
+    expect(stats.summary().voiceCommandRefusedCount).toBe(1);
+  });
+
+  it("announces unavailable when the editor target has no voice runner", async () => {
+    const stats = createLineStats();
+    const target = fakeTarget("a");
+    const session = createDictationSession({
+      host,
+      modelFor: (l) => models[l] ?? null,
+      route: createRouter(() => ({ kind: "voice_command", id: "common.undo", polarity: null })),
+      isEditorCommand: () => true,
+      notify: (n) => void notices.push(n),
+      copyText: async () => {},
+      stats,
+    });
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    host.emit({ type: "final", text: "deshacer eso", latencyMs: 5 });
+    expect(target.commits).toEqual([]);
+    expect(notices).toContainEqual({ kind: "voice_command_unavailable", id: "common.undo" });
+    expect(stats.summary().voiceCommandUnavailableCount).toBe(1);
+  });
+});
+
+describe("Dictation Session all-caps lock (#271)", () => {  it("notifies when a line turns the lock on", async () => {
     const session = createDictationSession({
       host,
       modelFor: (l) => models[l] ?? null,

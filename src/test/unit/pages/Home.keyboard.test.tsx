@@ -74,6 +74,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { Home } from "@/pages/Home";
+import { runCommand } from "@/lib/command-runner";
 
 const books = [
   buildBook({ id: "alpha", title: "Alpha", authorName: "A" }),
@@ -245,6 +246,25 @@ describe("Home keyboard navigation", () => {
     expect(screen.getByText("No books")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Create a book/ })).toBeInTheDocument();
     expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+  });
+
+  it("runs newBook through runCommand and opens the dialog", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    expect(runCommand("bookList.newBook", { source: "voice" })).toBe("ran");
+    expect(await screen.findByRole("dialog", { name: "New Book" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("runs moveSelectionNext through runCommand and focuses the first book", () => {
+    render(<Home />);
+
+    expect(document.body).toHaveFocus();
+    expect(runCommand("bookList.moveSelectionNext", { source: "voice" })).toBe("ran");
+    expect(screen.getAllByRole("row")[0]).toHaveFocus();
   });
 
   it("separates the page scroll owner from the responsive query container", () => {
