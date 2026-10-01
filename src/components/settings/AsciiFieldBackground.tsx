@@ -25,13 +25,12 @@ const FIELD_ALPHA = 0.13;
 // an idle Settings page still costs nothing once it has faded).
 const HOLD_MS = 250;
 const FADE_MS = 800;
-// Over an element marked `data-ascii-quiet` (the Settings outline) the field
-// dims and the cursor effect is off, so text drawn on it stays legible without
-// a solid backdrop. The zone reaches QUIET_PAD px past the element, then
-// feathers out over QUIET_FEATHER px; a cursor inside it lights nothing.
+// Over an element marked `data-ascii-quiet` (the Settings outline) the glyphs
+// stay as they are but the cursor effect is off, so text drawn there stays
+// legible. The zone reaches QUIET_PAD px past the element, then feathers out
+// over QUIET_FEATHER px; a cursor inside it lights nothing.
 const QUIET_PAD = 16;
 const QUIET_FEATHER = 48;
-const QUIET_DIM = 0.75;
 
 interface QuietRect {
   left: number;
@@ -79,19 +78,16 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
     let running = false;
 
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-    const colorString = (intensity: number, quiet = 0) => {
+    const colorString = (intensity: number) => {
       const r = Math.round(lerp(base.r, 255, intensity * 0.6));
       const g = Math.round(lerp(base.g, 255, intensity * 0.6));
       const b = Math.round(lerp(base.b, 255, intensity * 0.6));
-      const a = lerp(FIELD_ALPHA * (1 - QUIET_DIM * quiet), 1, intensity);
+      const a = lerp(FIELD_ALPHA, 1, intensity);
       return `rgba(${r},${g},${b},${a})`;
     };
 
     let quietRects: QuietRect[] = [];
-    const quietObserver = new ResizeObserver(() => {
-      readQuietRects();
-      if (!running) drawStatic();
-    });
+    const quietObserver = new ResizeObserver(() => readQuietRects());
     const readQuietRects = () => {
       const origin = canvas.getBoundingClientRect();
       quietRects = Array.from(
@@ -145,14 +141,10 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
 
     const drawStatic = () => {
       ctx.clearRect(0, 0, cssWidth, cssHeight);
-      const plain = colorString(0);
+      ctx.fillStyle = colorString(0);
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const x = c * cellWidth;
-          const y = r * rowHeight;
-          const quiet = quietness(x + cellWidth / 2, y + rowHeight / 2);
-          ctx.fillStyle = quiet > 0 ? colorString(0, quiet) : plain;
-          ctx.fillText(glyphs[r][c], x, y);
+          ctx.fillText(glyphs[r][c], c * cellWidth, r * rowHeight);
         }
       }
     };
@@ -197,7 +189,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
             }
           }
 
-          ctx.fillStyle = colorString(intensity, quiet);
+          ctx.fillStyle = colorString(intensity);
           ctx.fillText(glyph, x + ox, y + oy);
         }
       }
