@@ -3,7 +3,13 @@
 //! The path is fixed in Rust so no webview path ever reaches SQLite, and the
 //! plugin has no connect hook, so setup builds the pool and injects it into
 //! the plugin's public `DbInstances` under `LIBRARY_DB_KEY`.
+//! Every pooled connection installs a SQLite authorizer and turns on
+//! SQLITE_DBCONFIG_DEFENSIVE. Plain VACUUM attaches the empty filename ''
+//! internally, so ATTACH '' is allowed while every other ATTACH target is
+//! denied (#196, ADR 0017).
 
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int, c_void};
 use std::path::{Path, PathBuf};
 
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
@@ -21,8 +27,76 @@ fn connect_options(path: &Path) -> SqliteConnectOptions {
         .create_if_missing(true)
 }
 
+fn attach_allowed(filename: Option<&CStr>) -> bool {
+    match filename {
+        Some(name) => name.to_bytes().is_empty(),
+        None => false,
+    }
+}
+
+extern "C" fn authorize(
+    _user: *mut c_void,
+    action: c_int,
+    arg1: *const c_char,
+    _arg2: *const c_char,
+    _db: *const c_char,
+    _trigger: *const c_char,
+) -> c_int {
+    if action == libsqlite3_sys::SQLITE_ATTACH {
+        let filename = if arg1.is_null() {
+            None
+        } else {
+            // SAFETY: SQLite passes a valid null-terminated string or null
+            // for the filename argument of SQLITE_ATTACH.
+            Some(unsafe { CStr::from_ptr(arg1) })
+        };
+        if attach_allowed(filename) {
+            libsqlite3_sys::SQLITE_OK
+        } else {
+            libsqlite3_sys::SQLITE_DENY
+        }
+    } else {
+        // DETACH and every other action stay allowed.
+        libsqlite3_sys::SQLITE_OK
+    }
+}
+
+async fn guard_connection(conn: &mut sqlx::SqliteConnection) -> Result<(), sqlx::Error> {
+    let mut handle = conn.lock_handle().await?;
+    let db = handle.as_raw_handle().as_ptr();
+    unsafe {
+        // SAFETY: db is a live open SQLite handle borrowed from the locked
+        // connection guard, which outlives this block. Both calls only set
+        // per-connection guards and transfer no ownership.
+        let auth_rc = libsqlite3_sys::sqlite3_set_authorizer(
+            db,
+            Some(authorize),
+            std::ptr::null_mut(),
+        );
+        if auth_rc != libsqlite3_sys::SQLITE_OK {
+            return Err(sqlx::Error::Configuration(
+                "failed to install the Library SQLite authorizer".into(),
+            ));
+        }
+        let defensive_rc = libsqlite3_sys::sqlite3_db_config(
+            db,
+            libsqlite3_sys::SQLITE_DBCONFIG_DEFENSIVE,
+            1 as c_int,
+            std::ptr::null_mut::<c_int>(),
+        );
+        if defensive_rc != libsqlite3_sys::SQLITE_OK {
+            return Err(sqlx::Error::Configuration(
+                "failed to enable SQLITE_DBCONFIG_DEFENSIVE on the Library connection".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn build_library_pool(path: &Path) -> SqlitePool {
-    SqlitePoolOptions::new().connect_lazy_with(connect_options(path))
+    SqlitePoolOptions::new()
+        .after_connect(|conn, _meta| Box::pin(async move { guard_connection(conn).await }))
+        .connect_lazy_with(connect_options(path))
 }
 
 pub fn install_at<R: Runtime>(
@@ -84,6 +158,10 @@ mod tests {
         {
             tauri_plugin_sql::DbPool::Sqlite(pool) => pool.clone(),
         }
+    }
+
+    fn outside_is_empty(outside: &Path) -> bool {
+        std::fs::read_dir(outside).map(|mut d| d.next().is_none()).unwrap_or(false)
     }
 
     #[test]
@@ -160,5 +238,190 @@ mod tests {
             .unwrap();
         installed_pool(app.handle());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn attach_variants_and_vacuum_into_are_denied() {
+        let dir = temp_dir("guard-attach");
+        let outside = temp_dir("guard-attach-outside");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&outside).unwrap();
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            let direct = format!("ATTACH '{}' AS x", outside.join("x.db").display());
+            assert!(sqlx::query(&direct).execute(&pool).await.is_err());
+
+            let bound_path = outside.join("p.db").to_string_lossy().to_string();
+            assert!(
+                sqlx::query("ATTACH ? AS x")
+                    .bind(bound_path)
+                    .execute(&pool)
+                    .await
+                    .is_err()
+            );
+
+            let concat = format!("ATTACH '{}' || '.db' AS x", outside.join("c").display());
+            assert!(sqlx::query(&concat).execute(&pool).await.is_err());
+
+            let uri = format!("ATTACH 'file:{}?mode=rwc' AS x", outside.join("u.db").display());
+            assert!(sqlx::query(&uri).execute(&pool).await.is_err());
+
+            assert!(
+                sqlx::query("ATTACH ':memory:' AS m")
+                    .execute(&pool)
+                    .await
+                    .is_err()
+            );
+
+            let vacuum_into = format!("VACUUM INTO '{}'", outside.join("y.db").display());
+            assert!(sqlx::query(&vacuum_into).execute(&pool).await.is_err());
+        });
+        assert!(outside_is_empty(&outside));
+        std::fs::remove_dir_all(&dir).unwrap();
+        std::fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn vacuum_and_wal_checkpoint_succeed() {
+        let dir = temp_dir("guard-compact");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            sqlx::query("CREATE TABLE t (id INTEGER PRIMARY KEY, body TEXT)")
+                .execute(&pool)
+                .await
+                .unwrap();
+            for i in 0..10 {
+                sqlx::query("INSERT INTO t (body) VALUES (?)")
+                    .bind(format!("row {i}"))
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+            }
+            sqlx::query("DELETE FROM t WHERE id <= 5")
+                .execute(&pool)
+                .await
+                .unwrap();
+            sqlx::query("VACUUM").execute(&pool).await.unwrap();
+            // The compactLibrary() sequence ends with a WAL checkpoint.
+            sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn empty_attach_and_detach_succeed_and_vacuum_still_works() {
+        let dir = temp_dir("guard-empty-attach");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            // ATTACH and DETACH must share one connection: the pool may hand
+            // consecutive statements to different connections.
+            let mut conn = pool.acquire().await.unwrap();
+            sqlx::query("ATTACH '' AS e")
+                .execute(&mut *conn)
+                .await
+                .unwrap();
+            sqlx::query("DETACH e").execute(&mut *conn).await.unwrap();
+            sqlx::query("VACUUM").execute(&pool).await.unwrap();
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn every_pooled_connection_denies_attach() {
+        let dir = temp_dir("guard-pool");
+        let outside = temp_dir("guard-pool-outside");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&outside).unwrap();
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            let mut first = pool.acquire().await.unwrap();
+            let mut second = pool.acquire().await.unwrap();
+            let mut third = pool.acquire().await.unwrap();
+            let attack = format!("ATTACH '{}' AS x", outside.join("x.db").display());
+            assert!(
+                sqlx::query(&attack)
+                    .execute(&mut *first)
+                    .await
+                    .is_err()
+            );
+            assert!(
+                sqlx::query(&attack)
+                    .execute(&mut *second)
+                    .await
+                    .is_err()
+            );
+            assert!(
+                sqlx::query(&attack)
+                    .execute(&mut *third)
+                    .await
+                    .is_err()
+            );
+        });
+        assert!(outside_is_empty(&outside));
+        std::fs::remove_dir_all(&dir).unwrap();
+        std::fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn database_file_import_stops_at_attach_without_applying_later_statements() {
+        let dir = temp_dir("guard-import");
+        let outside = temp_dir("guard-import-outside");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&outside).unwrap();
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            // Mirrors the TS adapter importData loop: one statement at a
+            // time, stopping at the first error. Loading is non-atomic
+            // until #344, so earlier statements stay applied.
+            let statements = [
+                "CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)".to_string(),
+                "INSERT INTO notes (title) VALUES ('a')".to_string(),
+                "INSERT INTO notes (title) VALUES ('b')".to_string(),
+                format!("ATTACH '{}' AS x", outside.join("i.db").display()),
+                "INSERT INTO notes (title) VALUES ('c')".to_string(),
+            ];
+            let mut stopped_at: Option<usize> = None;
+            for (index, statement) in statements.iter().enumerate() {
+                if sqlx::query(statement).execute(&pool).await.is_err() {
+                    stopped_at = Some(index);
+                    break;
+                }
+            }
+            assert_eq!(stopped_at, Some(3));
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM notes")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(count, 2);
+        });
+        assert!(outside_is_empty(&outside));
+        std::fs::remove_dir_all(&dir).unwrap();
+        std::fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn attach_allowed_matches_the_authorizer_rule() {
+        assert!(!attach_allowed(None));
+        assert!(attach_allowed(Some(c"")));
+        assert!(!attach_allowed(Some(c"x.db")));
+        assert!(!attach_allowed(Some(c":memory:")));
     }
 }
