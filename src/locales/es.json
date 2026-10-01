@@ -1129,6 +1129,7 @@
     "toggleTheme": "Cambiar tema",
     "toggleShortcutHints": "Alternar atajos visuales",
     "toggleAlwaysOnTop": "Alternar siempre visible",
+    "openCommandPalette": "Abrir paleta de comandos",
     "syncNow": "Sincronizar ahora",
     "newBook": "Crear libro nuevo",
     "jumpBooks": "Ir al libro por número",
@@ -1199,6 +1200,7 @@
       "canvas": "Lienzo",
       "editor": "Editor",
       "ephemeral": "Efímero",
+      "commandPalette": "Paleta de comandos",
       "focus": "Foco"
     },
     "onThisScreen": "En esta pantalla",

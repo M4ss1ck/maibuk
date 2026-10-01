@@ -1129,6 +1129,7 @@
     "toggleTheme": "Cycle theme",
     "toggleShortcutHints": "Toggle shortcut hints",
     "toggleAlwaysOnTop": "Toggle always on top",
+    "openCommandPalette": "Open command palette",
     "syncNow": "Sync now",
     "newBook": "Create new book",
     "jumpBooks": "Jump to book by number",
@@ -1199,6 +1200,7 @@
       "canvas": "Canvas",
       "editor": "Editor",
       "ephemeral": "Ephemeral",
+      "commandPalette": "Command palette",
       "focus": "Focus"
     },
     "onThisScreen": "On this screen",

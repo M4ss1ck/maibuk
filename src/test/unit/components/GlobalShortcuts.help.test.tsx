@@ -138,6 +138,7 @@ describe("GlobalShortcuts", () => {
       "global.gotoNotes",
       "global.gotoProjects",
       "global.gotoSettings",
+      "global.openCommandPalette",
       "global.showHelp",
       "global.syncNow",
       "global.toggleAlwaysOnTop",

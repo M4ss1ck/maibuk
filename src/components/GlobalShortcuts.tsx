@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/Toast";
 import { getDictation } from "@/features/dictation/runtime";
 import { cycleDictationLanguage } from "@/features/dictation/language";
 import { useDictationStore } from "@/features/dictation/store";
+import { useCommandPaletteStore } from "@/features/command-palette";
 import { useThemeStore, getCycledTheme } from "@/features/theme";
 import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
@@ -213,6 +214,13 @@ export function GlobalShortcuts() {
       id: "global.showHelp",
       onTrigger: () => {
         setShowShortcutsHelp(true);
+      },
+    },
+    {
+      id: "global.openCommandPalette",
+      allowInInput: true,
+      onTrigger: () => {
+        useCommandPaletteStore.getState().open();
       },
     },
     {

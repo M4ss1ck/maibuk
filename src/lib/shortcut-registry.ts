@@ -31,7 +31,8 @@ export type ShortcutContext =
   | "chapterItem"
   | "canvasNode"
   | "image"
-  | "footnoteItem";
+  | "footnoteItem"
+  | "commandPalette";
 
 /** Handled by the TipTap keymap inside the editor instead of a `useShortcuts` binding. */
 export type ShortcutSource = "editor-keymap";
@@ -48,6 +49,8 @@ export interface CommandDef {
   fixedReasonKey?: string;
   /** A Sealed Command takes no Shortcuts beyond its Fixed ones. */
   sealed?: true;
+  /** An i18n key whose value is an array of extra search terms for the Command Palette. */
+  keywordsKey?: string;
   /** Replaces `defaults` on the web build, where the browser keeps some keys. */
   web?: readonly Shortcut[];
   source?: ShortcutSource;
@@ -160,7 +163,13 @@ export const COMMANDS = {
   "global.toggleAlwaysOnTop": {
     labelKey: "shortcuts.toggleAlwaysOnTop",
     contexts: ["global"],
-    defaults: [["Mod+Shift+p"]],
+    defaults: [["Mod+Alt+t"]],
+  },
+  "global.openCommandPalette": {
+    labelKey: "shortcuts.openCommandPalette",
+    contexts: ["global"],
+    defaults: [["F1"], ["Mod+Shift+p"]],
+    web: [["F1"]],
   },
   "global.cyclePanesForward": {
     labelKey: "shortcuts.cyclePanesForward",
@@ -1217,17 +1226,25 @@ export function isCommandId(value: string): value is CommandId {
  * is on every route and not listed. A new screen adds one line here.
  */
 export const ROUTE_CONTEXTS: Readonly<Record<string, readonly ShortcutContext[]>> = {
-  "/": ["bookList"],
-  "/notes": ["notes", "noteItem"],
-  "/notes/:noteId": ["notes", "noteItem", "editor", "image", "footnoteItem"],
-  "/canvas": ["canvas"],
-  "/canvas/:canvasId": ["canvas", "canvasNode", "editor"],
-  "/ephemeral": ["ephemeral", "editor", "image", "footnoteItem"],
-  "/metrics": [],
-  "/settings": [],
+  "/": ["bookList", "commandPalette"],
+  "/notes": ["notes", "noteItem", "commandPalette"],
+  "/notes/:noteId": ["notes", "noteItem", "editor", "image", "footnoteItem", "commandPalette"],
+  "/canvas": ["canvas", "commandPalette"],
+  "/canvas/:canvasId": ["canvas", "canvasNode", "editor", "commandPalette"],
+  "/ephemeral": ["ephemeral", "editor", "image", "footnoteItem", "commandPalette"],
+  "/metrics": ["commandPalette"],
+  "/settings": ["commandPalette"],
   "/embed": [],
-  "/book/:bookId": ["bookEditor", "chapterItem", "noteItem", "editor", "image", "footnoteItem"],
-  "/book/:bookId/cover": ["coverDesigner"],
+  "/book/:bookId": [
+    "bookEditor",
+    "chapterItem",
+    "noteItem",
+    "editor",
+    "image",
+    "footnoteItem",
+    "commandPalette",
+  ],
+  "/book/:bookId/cover": ["coverDesigner", "commandPalette"],
 };
 
 /** The Shortcut Editor and the shortcut help list Commands in these sections, in order. */
@@ -1252,6 +1269,11 @@ export const SHORTCUT_SECTIONS = [
     id: "editor",
     labelKey: "shortcuts.sections.editor",
     contexts: ["editor", "image", "footnoteItem"],
+  },
+  {
+    id: "commandPalette",
+    labelKey: "shortcuts.sections.commandPalette",
+    contexts: ["commandPalette"],
   },
   { id: "focus", labelKey: "shortcuts.sections.focus", contexts: [] },
 ] as const satisfies readonly {

@@ -26,6 +26,13 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "Vitest platform tests, manual QA",
   },
   {
+    kind: "shortcut",
+    items: ["global.openCommandPalette"],
+    reason:
+      "Slice 1 of the Command Palette (issue #353): the opener is bound, but the palette UI it opens lands in a later slice",
+    owner: "https://github.com/M4ss1ck/maibuk/issues/353",
+  },
+  {
     kind: "term",
     items: ["Backup Directory"],
     reason:

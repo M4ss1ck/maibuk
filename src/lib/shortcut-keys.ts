@@ -252,6 +252,7 @@ const RESERVED_ON_WEB = new Set([
   "Mod+t",
   "Mod+w",
   "Mod+Shift+n",
+  "Mod+Shift+p",
   "Mod+Shift+t",
   "Mod+Shift+w",
   "Mod+Tab",

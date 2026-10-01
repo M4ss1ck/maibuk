@@ -42,6 +42,31 @@ function findBinding(id: CommandId): RunnableBinding | undefined {
   return undefined;
 }
 
+export type CommandState = "runnable" | "disabled" | "hidden";
+/** Reads every registered source without running anything: an enabled binding wins, a binding with `enabled: false` only is disabled, none is hidden. */
+export function commandState(id: CommandId): CommandState {
+  let seenDisabled = false;
+  for (const getBindings of sources) {
+    for (const binding of getBindings()) {
+      if (binding.id !== id) continue;
+      if (binding.enabled !== false) return "runnable";
+      seenDisabled = true;
+    }
+  }
+  return seenDisabled ? "disabled" : "hidden";
+}
+/** Every id with at least one binding, and its state. */
+export function commandStates(): Map<CommandId, Exclude<CommandState, "hidden">> {
+  const states = new Map<CommandId, Exclude<CommandState, "hidden">>();
+  for (const getBindings of sources) {
+    for (const binding of getBindings()) {
+      if (states.get(binding.id) === "runnable") continue;
+      states.set(binding.id, binding.enabled !== false ? "runnable" : "disabled");
+    }
+  }
+  return states;
+}
+
 /** Navigating Commands close open dialogs first; the rest run over them. */
 export async function runCommand(
   id: CommandId,

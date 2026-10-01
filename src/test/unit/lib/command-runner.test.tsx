@@ -7,7 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useTutorialStore } from "@/features/tutorial/store";
 import { useItemCommands } from "@/hooks/useItemCommands";
-import { runCommand } from "@/lib/command-runner";
+import { commandState, commandStates, runCommand } from "@/lib/command-runner";
 import { useShortcuts } from "@/lib/shortcuts";
 import type { CommandId } from "@/lib/shortcut-registry";
 
@@ -380,5 +380,72 @@ describe("runCommand()", () => {
     );
     expect(navigate).not.toHaveBeenCalled();
     expect(useModalStore.getState().modalIds).toEqual(["bare-modal"]);
+  });
+});
+
+describe("commandState()", () => {
+  it("reports runnable for a mounted binding, enabled or not", () => {
+    render(
+      <>
+        <Binding id="common.save" onTrigger={vi.fn()} />
+        <Binding id="global.showHelp" onTrigger={vi.fn()} enabled />
+      </>
+    );
+
+    expect(commandState("common.save")).toBe("runnable");
+    expect(commandState("global.showHelp")).toBe("runnable");
+  });
+
+  it("reports disabled when only enabled-false bindings are mounted", () => {
+    render(<Binding id="common.save" onTrigger={vi.fn()} enabled={false} />);
+
+    expect(commandState("common.save")).toBe("disabled");
+  });
+
+  it("prefers an enabled binding over a disabled one across sources", () => {
+    render(
+      <>
+        <Binding id="common.save" onTrigger={vi.fn()} enabled={false} />
+        <Binding id="common.save" onTrigger={vi.fn()} />
+      </>
+    );
+
+    expect(commandState("common.save")).toBe("runnable");
+  });
+
+  it("reports hidden with no binding, and again after unregister", () => {
+    expect(commandState("common.save")).toBe("hidden");
+
+    const { unmount } = render(<Binding id="common.save" onTrigger={vi.fn()} />);
+    expect(commandState("common.save")).toBe("runnable");
+    unmount();
+    expect(commandState("common.save")).toBe("hidden");
+  });
+});
+
+describe("commandStates()", () => {
+  it("lists every bound id with its state", () => {
+    render(
+      <>
+        <Binding id="common.save" onTrigger={vi.fn()} />
+        <Binding id="global.showHelp" onTrigger={vi.fn()} enabled={false} />
+      </>
+    );
+
+    const states = commandStates();
+    expect(states.get("common.save")).toBe("runnable");
+    expect(states.get("global.showHelp")).toBe("disabled");
+    expect(states.has("common.undo")).toBe(false);
+  });
+
+  it("an enabled binding wins over a disabled one for the same id", () => {
+    render(
+      <>
+        <Binding id="common.save" onTrigger={vi.fn()} enabled={false} />
+        <Binding id="common.save" onTrigger={vi.fn()} />
+      </>
+    );
+
+    expect(commandStates().get("common.save")).toBe("runnable");
   });
 });
