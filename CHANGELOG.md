@@ -5,6 +5,45 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-10-01
+
+### Added
+- Command Palette reachable via F1 / Mod+Shift+P with ranked search across commands, books, chapters, notes, canvases, settings rows, nested pages, and recent choices
+- Offline dictation on web and Linux desktop with English and Spanish models, a floating page control, and model management in Settings → Dictation
+- Dictation Command Interpreter with voice commands for formatting and navigation, spoken punctuation, scratch that, numeral and all-caps modifiers, click by name, focus keys, and dictation handoff across navigation
+- Dictation Vocabulary and per-language Spoken Punctuation settings for heard/written replacements and punctuation behavior
+- Custom voice commands per Dictation language and a Shortcut Editor for assigning custom shortcuts to every Command
+- Shared accessible color picker across Settings, editor, Canvas, and Cover Designer with contrast warnings and live preview
+- Keyboard access to the selection toolbar via Alt+F10
+- Edit and delete actions for footnotes in the Footnotes lists
+- Chapter Status submenu in Chapter item menus
+- Keyboard reordering for the Notes list
+- Phrase recording by saying a phrase once in voice command fields
+- Dictation into plain text fields, including native undo and password refusal
+- Shortcut help displays current Voice Commands while Dictation is on
+
+### Changed
+- Full-width title bar in the Book Editor and Note editor
+- Removed hover lift from Book and Note cards
+- Raised minimum Android version from 7.0/7.1 to 8.0 (API 26)
+- Restricted Library database access from the webview and hardened SQLite authorization for ATTACH, VACUUM INTO, and PRAGMAs
+- Dictation settings now use one language tab group and a compact language picker
+
+### Fixed
+- Make Library database file loading, import, and backup restore all-or-nothing
+- Recover from a failed Library open with an error message and Try again instead of an empty Library, and stop cascade deletes on desktop
+- Keep the Reading Position stable while a freshly opened Chapter finishes loading images and node views
+- Apply line height as a block setting that tightens list spacing and scales paragraph spacing after Enter
+- Fix Note heading links that never scrolled to their target and report missing targets
+- Restore Export button colors in dark mode
+- Refuse to close a busy export dialog until generation and saving finish
+- Keep shell live regions announced while a modal is open
+- Recognize Spanish “pulsar tap” as Tab
+- Show the dictation bar on the ephemeral page
+- Let Escape stop dictation in the Book Editor
+- Default new Books and Notes to the author’s app language or their Book’s language
+- Improve keyboard focus restoration and Enter/default button behavior across dialogs, menus, toolbars, and forms
+
 ## [0.9.0] - 2026-09-25
 
 ### Added
