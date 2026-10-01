@@ -90,6 +90,46 @@ async function notesWithLinksAndTags(): Promise<void> {
   await updateNoteRow({ id: harborNotes.id, content: harborNotes.content }, "local");
 }
 
+// Two Books with Chapters and an Unfiled Note: the Command Palette seed, so
+// a Chapter of another Book, a Note, and a second Book are all findable.
+async function paletteLibrary(): Promise<void> {
+  const book = await createBookRow({ ...SEED_BOOK }, "local");
+  let words = 0;
+  for (const chapter of [SEED_CHAPTERS[0], SEED_CHAPTERS[1]]) {
+    const created = await createChapterRow({ bookId: book.id, title: chapter.title }, "local");
+    const saved = await updateChapterRow(
+      created.id,
+      { content: `<p>${chapter.text}</p>` },
+      "local"
+    );
+    words += saved?.wordCount ?? 0;
+  }
+  await updateBookWordCountRow(book.id, words);
+
+  const other = await createBookRow(
+    { title: SHELF_BOOKS[0].title, authorName: SHELF_BOOKS[0].authorName },
+    "local"
+  );
+  const otherChapter = await createChapterRow(
+    { bookId: other.id, title: SEED_CHAPTERS[2].title },
+    "local"
+  );
+  const otherSaved = await updateChapterRow(
+    otherChapter.id,
+    { content: `<p>${SEED_CHAPTERS[2].text}</p>` },
+    "local"
+  );
+  await updateBookWordCountRow(other.id, otherSaved?.wordCount ?? 0);
+
+  await createNoteRow(
+    {
+      title: SEED_NOTES.tideTables,
+      content: "<p>High water at six. Low water at noon.</p>",
+    },
+    "local"
+  );
+}
+
 // A Canvas library with two Text Nodes connected, a Note Reference, a dangling
 // Note Reference that reads "Missing note", a second Canvas, and a Canvas whose
 // stored doc cannot be parsed (the recovery path's seed).
@@ -177,6 +217,7 @@ export const SEED_LIBRARIES = {
   oneBookThreeChapters,
   bookShelf,
   notesWithLinksAndTags,
+  paletteLibrary,
   canvasWithNodes,
   checkpointHistory,
   backupsPresent,

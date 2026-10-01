@@ -211,6 +211,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Change Kind": "architecture vocabulary (ADR 0003); never shown to the author",
   "Change Feed": "architecture vocabulary (ADR 0003); never shown to the author",
   "Entity Sync": "architecture vocabulary (ADR 0006); never shown to the author",
+  "Command Palette":
+    "Opened from any screen with F1 or its button; the Tutorial runs keep the app inert and the palette refuses to open during a run, so no step can show it.",
 };
 
 /** The step the Settings → Tutorial row is anchored to; the whole Tutorial ends there. */

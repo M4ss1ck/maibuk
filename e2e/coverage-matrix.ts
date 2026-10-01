@@ -26,13 +26,6 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "Vitest platform tests, manual QA",
   },
   {
-    kind: "shortcut",
-    items: ["global.openCommandPalette", "commandPalette.removeRecent"],
-    reason:
-      "Slice 1 of the Command Palette (issue #353): the opener is bound, but the palette UI it opens lands in a later slice",
-    owner: "https://github.com/M4ss1ck/maibuk/issues/353",
-  },
-  {
     kind: "term",
     items: ["Backup Directory"],
     reason:
@@ -251,6 +244,28 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/notes/:noteId", "/"],
     fixture: "notesWithLinksAndTags",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "command-palette",
+    area: "shell",
+    workflow:
+      "Find and run anything by name from the Command Palette",
+    edges: [
+      "open and close with F1 (focus entry, Tab containment, Escape restores focus)",
+      "run a Command",
+      "disabled Command reachable but not runnable",
+      "open a Chapter of another Book",
+      "nested page with chip and Backspace back",
+      "Settings result focuses its row's control",
+      "Recent removal with Shift+Delete",
+      "formatting Command keeps the selection",
+    ],
+    terms: ["Command Palette"],
+    shortcuts: ["global.openCommandPalette", "commandPalette.removeRecent"],
+    routes: ["/", "/book/:bookId", "/settings"],
+    fixture: "paletteLibrary",
     tags: [],
     status: "accepted",
   },
