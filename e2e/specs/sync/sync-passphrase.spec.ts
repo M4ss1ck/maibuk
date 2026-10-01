@@ -102,7 +102,9 @@ test.describe("Enter the Passphrase @wf:sync-passphrase", () => {
     await signIn(deviceB, syncUrl, account);
     await syncFromSettings(deviceB, { passphrase: `${account.passphrase}-wrong` });
     await expect(
-      logEntries(syncSection(deviceB)).filter({ hasText: /decrypt|passphrase/i }).first()
+      logEntries(syncSection(deviceB))
+        .filter({ hasText: /decrypt|passphrase/i })
+        .first()
     ).toBeVisible();
     await openHome(deviceB);
     await expect(bookCard(deviceB, SEED_BOOK.title)).toHaveCount(0);

@@ -64,7 +64,9 @@ export async function makeHermetic(context: BrowserContext): Promise<void> {
   // route takes precedence.
   await context.route(/^https:\/\/download\.moonshine\.ai\//, (route) => {
     const file = MODEL_FILES.get(route.request().url());
-    return file && existsSync(file) ? route.fulfill({ path: file }) : route.fulfill({ status: 404 });
+    return file && existsSync(file)
+      ? route.fulfill({ path: file })
+      : route.fulfill({ status: 404 });
   });
 }
 

@@ -20,6 +20,7 @@ export function sweepRunDirs(
   base: string,
   options?: { onStale?: (dir: string, probe: ProcessProbe) => void; probe?: ProcessProbe }
 ): number;
+export function killRecordedPreview(dir: string, probe?: ProcessProbe): void;
 export function sweepStalePreviews(root: string, probe?: ProcessProbe): number;
 export function createRunDir(root: string, runsDir: string): string;
 

@@ -108,7 +108,9 @@ test.describe("Sync faults @wf:sync-faults", () => {
     await expect(syncButton(page)).toHaveText("Sync", { timeout: 20_000 });
     const section = syncSection(page);
     await expect(logEntries(section).filter({ hasText: pushed })).toHaveCount(1);
-    await expect(logEntries(section).filter({ hasText: "Created pre-sync safety backup" })).toHaveCount(1);
+    await expect(
+      logEntries(section).filter({ hasText: "Created pre-sync safety backup" })
+    ).toHaveCount(1);
   });
 
   test("Backup failure: the exact abort copy and nothing reaches the server", async ({

@@ -27,7 +27,10 @@ const TITLE = SEED_BOOK.title;
 const pulled = /Pulled (remote-only )?book/;
 
 const reviewGroup = (page: Page, title: string) =>
-  syncSection(page).locator("div").filter({ has: page.getByText(title, { exact: true }) }).last();
+  syncSection(page)
+    .locator("div")
+    .filter({ has: page.getByText(title, { exact: true }) })
+    .last();
 
 /** A and B share the Book; A deletes it, confirms its review, and syncs. Returns B. */
 async function deleteOnA(
@@ -44,7 +47,9 @@ async function deleteOnA(
   await deleteOpenBook(page);
   await openSettings(page);
   await syncFromSettings(page, { until: `Deletion needs confirmation: ${TITLE}` });
-  await expect(syncSection(page).getByText("Deletions made on this device", { exact: true })).toBeVisible();
+  await expect(
+    syncSection(page).getByText("Deletions made on this device", { exact: true })
+  ).toBeVisible();
   await expect(reviewGroup(page, "Deletions made on this device")).toContainText(TITLE);
   await tabTo(page, syncSection(page).getByRole("button", { name: "Delete remote copies" }), {
     max: 40,
@@ -53,7 +58,9 @@ async function deleteOnA(
   await expect(
     logEntries(syncSection(page)).filter({ hasText: `Deleted remote book: ${TITLE}` })
   ).toHaveCount(1);
-  await expect(syncSection(page).getByText("Deletions made on this device", { exact: true })).toHaveCount(0);
+  await expect(
+    syncSection(page).getByText("Deletions made on this device", { exact: true })
+  ).toHaveCount(0);
   return deviceB;
 }
 
@@ -67,13 +74,21 @@ test.describe("Deleted Elsewhere and the Deletion Review @wf:sync-deleted-elsewh
     const deviceB = await deleteOnA(page, syncUrl, account, openDevice);
 
     await openSettings(deviceB);
-    await syncFromSettings(deviceB, { until: `Deleted on another device, needs confirmation: ${TITLE}` });
-    await expect(reviewGroup(deviceB, "Deleted on another device")).toContainText(TITLE);
-    await tabTo(deviceB, syncSection(deviceB).getByRole("button", { name: "Delete from this device" }), {
-      max: 40,
+    await syncFromSettings(deviceB, {
+      until: `Deleted on another device, needs confirmation: ${TITLE}`,
     });
+    await expect(reviewGroup(deviceB, "Deleted on another device")).toContainText(TITLE);
+    await tabTo(
+      deviceB,
+      syncSection(deviceB).getByRole("button", { name: "Delete from this device" }),
+      {
+        max: 40,
+      }
+    );
     await deviceB.keyboard.press("Enter");
-    await expect(syncSection(deviceB).getByText("Deleted on another device", { exact: true })).toHaveCount(0);
+    await expect(
+      syncSection(deviceB).getByText("Deleted on another device", { exact: true })
+    ).toHaveCount(0);
     await expect(syncButton(deviceB)).toHaveText("Sync", { timeout: 20_000 });
 
     await openHome(deviceB);
@@ -88,7 +103,9 @@ test.describe("Deleted Elsewhere and the Deletion Review @wf:sync-deleted-elsewh
   }) => {
     const deviceB = await deleteOnA(page, syncUrl, account, openDevice);
     await openSettings(deviceB);
-    await syncFromSettings(deviceB, { until: `Deleted on another device, needs confirmation: ${TITLE}` });
+    await syncFromSettings(deviceB, {
+      until: `Deleted on another device, needs confirmation: ${TITLE}`,
+    });
 
     await openHome(deviceB);
     await expect(bookCard(deviceB, TITLE)).toBeVisible();

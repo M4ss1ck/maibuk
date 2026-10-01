@@ -21,9 +21,7 @@ async function openDrawer(page: Page): Promise<void> {
 async function openPaletteFromDrawer(page: Page): Promise<void> {
   await menuDialog(page).getByRole("button", { name: "Open command palette" }).tap();
   await expect(paletteDialog(page)).toBeVisible();
-  await expect(
-    paletteDialog(page).getByRole("searchbox", { name: "Find by name" })
-  ).toBeFocused();
+  await expect(paletteDialog(page).getByRole("searchbox", { name: "Find by name" })).toBeFocused();
 }
 
 test.describe("phone Command Palette @touch @wf:command-palette", () => {
@@ -61,9 +59,7 @@ test.describe("phone Command Palette @touch @wf:command-palette", () => {
       .getByRole("group", { name: "Recent" })
       .getByRole("option", { name: "Cycle theme", exact: true });
     await expect(recent).toBeVisible();
-    await paletteDialog(page)
-      .getByRole("button", { name: "Remove Cycle theme from recent" })
-      .tap();
+    await paletteDialog(page).getByRole("button", { name: "Remove Cycle theme from recent" }).tap();
     await expect(recent).toHaveCount(0);
   });
 });

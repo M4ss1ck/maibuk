@@ -1,10 +1,19 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PREVIEW_RUNS_DIR,
   createRunDir,
+  killRecordedPreview,
   sweepRunDirs,
   sweepStalePreviews,
 } from "../../../../e2e/preview-server.mjs";
@@ -49,8 +58,7 @@ describe("sweepRunDirs", () => {
     freshBase();
     const dir = run("run-stale", { "owner.pid": "99991", "preview.pid": "4242" });
     const probe = probeFor({
-      runs: (_pid: number, pattern: RegExp) =>
-        pattern.test("node /x/vite preview --port 1"),
+      runs: (_pid: number, pattern: RegExp) => pattern.test("node /x/vite preview --port 1"),
     });
     expect(sweepRunDirs(base, { probe })).toBe(1);
     expect(probe.kill).toHaveBeenCalledTimes(1);
@@ -139,5 +147,27 @@ describe("sweepStalePreviews and createRunDir", () => {
     const dir = createRunDir(root, PREVIEW_RUNS_DIR);
     expect(dir).toBe(join(root, PREVIEW_RUNS_DIR, `run-${process.pid}`));
     expect(readFileSync(join(dir, "owner.pid"), "utf8")).toBe(String(process.pid));
+    expect(readdirSync(join(root, PREVIEW_RUNS_DIR, ".."))).toEqual(["preview"]);
+  });
+
+  it("kills the recorded preview so a runner stopped mid-start leaves none", () => {
+    root = mkdtempSync(join(tmpdir(), "preview-sweep-"));
+    const dir = createRunDir(root, PREVIEW_RUNS_DIR);
+    writeFileSync(join(dir, "preview.pid"), "4242");
+    const probe = probeFor({
+      runs: (_pid: number, pattern: RegExp) => pattern.test("vite preview"),
+    });
+    killRecordedPreview(dir, probe);
+    expect(probe.kill).toHaveBeenCalledWith(-4242, "SIGKILL");
+  });
+
+  it("leaves a recorded pid alone once it no longer runs vite preview", () => {
+    root = mkdtempSync(join(tmpdir(), "preview-sweep-"));
+    const dir = createRunDir(root, PREVIEW_RUNS_DIR);
+    writeFileSync(join(dir, "preview.pid"), "4242");
+    const probe = probeFor();
+    killRecordedPreview(dir, probe);
+    killRecordedPreview(join(root, "missing"), probe);
+    expect(probe.kill).not.toHaveBeenCalled();
   });
 });

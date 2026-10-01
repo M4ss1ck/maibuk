@@ -9,7 +9,12 @@
 // `pnpm test:e2e`, never in CI. Args pass to `playwright test`.
 
 import { fetchSyncServer } from "../scripts/fetch-sync-server.mjs";
-import { startPreview, ownTeardown, runPlaywright } from "./preview-server.mjs";
+import {
+  killRecordedPreview,
+  ownTeardown,
+  runPlaywright,
+  startPreview,
+} from "./preview-server.mjs";
 import { buildWeb, preflight, root, wallClock } from "./run-steps.mjs";
 import { startSyncServer, sweepStaleRuns } from "./sync-server.mjs";
 
@@ -34,6 +39,7 @@ let preview = null;
 // Last resort: whatever ends the process, both servers and the data go with it.
 const teardown = ownTeardown(() => {
   preview?.stopSync();
+  killRecordedPreview(server.runDir);
   server.stopSync();
 });
 try {

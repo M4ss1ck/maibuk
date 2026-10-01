@@ -73,7 +73,9 @@ test.describe("Resolve a Sync Conflict @wf:sync-conflict", () => {
     await expectFocusWithin(dialog);
     await expectTabContained(deviceB, dialog);
     await choose(deviceB, "Keep Local & Push");
-    await expect(logEntries(syncSection(deviceB)).filter({ hasText: `Pushed book ${SEED_BOOK.title}` })).toHaveCount(1);
+    await expect(
+      logEntries(syncSection(deviceB)).filter({ hasText: `Pushed book ${SEED_BOOK.title}` })
+    ).toHaveCount(1);
 
     await syncFromSettings(page, { until: /^Pulled book/ });
     await openFirstBook(page, SEED_BOOK.title, B_EDIT.trim());
@@ -83,7 +85,9 @@ test.describe("Resolve a Sync Conflict @wf:sync-conflict", () => {
   test("Use Remote & Pull: B gets A's text", async ({ page, syncUrl, account, openDevice }) => {
     const deviceB = await makeConflict(page, syncUrl, account, openDevice);
     await choose(deviceB, "Use Remote & Pull");
-    await expect(logEntries(syncSection(deviceB)).filter({ hasText: /^Pulled book/ })).toHaveCount(1);
+    await expect(logEntries(syncSection(deviceB)).filter({ hasText: /^Pulled book/ })).toHaveCount(
+      1
+    );
 
     await openFirstBook(deviceB, SEED_BOOK.title, A_EDIT.trim());
     await expect(chapterText(deviceB)).not.toContainText(B_EDIT.trim());

@@ -54,7 +54,9 @@ test.describe("Auto Sync after an edit @wf:sync-auto", () => {
     await openSettings(deviceB);
     await tabTo(deviceB, syncButton(deviceB), { max: 80 });
     await deviceB.keyboard.press("Enter");
-    await expect(logEntries(syncSection(deviceB)).filter({ hasText: /^Pulled book/ })).toHaveCount(1);
+    await expect(logEntries(syncSection(deviceB)).filter({ hasText: /^Pulled book/ })).toHaveCount(
+      1
+    );
     await openFirstBook(deviceB, TITLE, "Written, then left alone.");
   });
 

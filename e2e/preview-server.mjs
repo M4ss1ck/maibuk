@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -18,7 +19,9 @@ import { join } from "node:path";
 export const PREVIEW_RUNS_DIR = "e2e/.output/preview";
 export const OWNER_PID = "owner.pid";
 export const PREVIEW_PID = "preview.pid";
-const READY_TIMEOUT_MS = 20_000;
+// The old Playwright webServer timeout: a cold vite preview on a loaded host
+// takes far longer than PocketBase.
+const READY_TIMEOUT_MS = 60_000;
 const STOP_TIMEOUT_MS = 5_000;
 
 export function freePort() {
@@ -84,13 +87,22 @@ export function sweepRunDirs(base, { onStale, probe = processProbe } = {}) {
     const owner = readPid(join(dir, OWNER_PID));
     if (owner !== null && owner !== process.pid && probe.isAlive(owner)) continue;
     onStale?.(dir, probe);
-    const preview = readPid(join(dir, PREVIEW_PID));
-    // The preview leads its own process group; take pnpm and vite together.
-    if (preview !== null && probe.runs(preview, /vite preview/)) probe.kill(-preview, "SIGKILL");
+    killRecordedPreview(dir, probe);
     rmSync(dir, { recursive: true, force: true });
     swept++;
   }
   return swept;
+}
+
+/**
+ * Kills the preview whose pid `dir` records, if that pid still runs `vite
+ * preview`. A runner stopped while its preview is still starting has no
+ * handle on it yet, so its teardown calls this before deleting `dir`.
+ */
+export function killRecordedPreview(dir, probe = processProbe) {
+  const preview = readPid(join(dir, PREVIEW_PID));
+  // The preview leads its own process group; take pnpm and vite together.
+  if (preview !== null && probe.runs(preview, /vite preview/)) probe.kill(-preview, "SIGKILL");
 }
 
 export function sweepStalePreviews(root, probe = processProbe) {
@@ -99,18 +111,23 @@ export function sweepStalePreviews(root, probe = processProbe) {
 
 export function createRunDir(root, runsDir) {
   const dir = join(root, runsDir, `run-${process.pid}`);
+  // Staged beside runsDir, so a concurrent sweep never sees it without its owner.
+  const staging = join(root, runsDir, "..", `.staging-run-${process.pid}`);
   rmSync(dir, { recursive: true, force: true });
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, OWNER_PID), String(process.pid));
+  rmSync(staging, { recursive: true, force: true });
+  mkdirSync(staging, { recursive: true });
+  writeFileSync(join(staging, OWNER_PID), String(process.pid));
+  mkdirSync(join(root, runsDir), { recursive: true });
+  renameSync(staging, dir);
   return dir;
 }
 
 /**
  * Serves the web build (e2e/.output/web-dist) on a free port, in a process
  * group of its own so `stop` takes the whole pnpm > vite tree with it. Its pid
- * goes in `runDir` for sweepStalePreviews. The
- * runner owns it instead of Playwright's webServer, which an interrupted
- * Playwright leaves running on its port.
+ * goes in `runDir` for killRecordedPreview and the next run's sweep. The runner
+ * owns it instead of Playwright's webServer, which an interrupted Playwright
+ * leaves running on its port.
  */
 export async function startPreview(root, runDir) {
   const port = await freePort();
@@ -129,7 +146,12 @@ export async function startPreview(root, runDir) {
       String(port),
       "--strictPort",
     ],
-    { cwd: root, env: { ...process.env, VITE_BUILD_TARGET: "web" }, stdio: "ignore", detached: true }
+    {
+      cwd: root,
+      env: { ...process.env, VITE_BUILD_TARGET: "web" },
+      stdio: "ignore",
+      detached: true,
+    }
   );
   writeFileSync(join(runDir, PREVIEW_PID), String(child.pid));
 
@@ -158,7 +180,7 @@ export async function startPreview(root, runDir) {
     stopSync();
   };
 
-  const deadline = Date.now() + READY_TIMEOUT_MS * 3;
+  const deadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) break;
     try {

@@ -13,6 +13,7 @@ import { rmSync } from "node:fs";
 import {
   PREVIEW_RUNS_DIR,
   createRunDir,
+  killRecordedPreview,
   ownTeardown,
   runPlaywright,
   startPreview,
@@ -36,6 +37,7 @@ const runDir = createRunDir(root, PREVIEW_RUNS_DIR);
 let preview = null;
 const stopSync = () => {
   preview?.stopSync();
+  killRecordedPreview(runDir);
   rmSync(runDir, { recursive: true, force: true });
 };
 const teardown = ownTeardown(stopSync);

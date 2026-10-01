@@ -11,8 +11,7 @@ import { expect, test } from "../support/test";
 test.use({ library: "paletteLibrary" });
 
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Command palette" });
-const searchbox = (page: Page) =>
-  dialog(page).getByRole("searchbox", { name: "Find by name" });
+const searchbox = (page: Page) => dialog(page).getByRole("searchbox", { name: "Find by name" });
 const option = (page: Page, name: string) =>
   dialog(page).getByRole("option", { name, exact: true });
 const section = (page: Page, name: string) => dialog(page).getByRole("group", { name });
@@ -30,9 +29,7 @@ async function openPalette(page: Page): Promise<void> {
  */
 async function search(page: Page, query: string): Promise<void> {
   await page.keyboard.type(query);
-  await expect
-    .poll(async () => searchbox(page).getAttribute("aria-activedescendant"))
-    .toBeTruthy();
+  await expect.poll(async () => searchbox(page).getAttribute("aria-activedescendant")).toBeTruthy();
 }
 
 /** The item key of the active result, read off the input's active descendant. */
@@ -59,16 +56,12 @@ async function arrowTo(page: Page, key: string, { max = 30 } = {}): Promise<void
 
 async function openBookEditorOnArrival(page: Page): Promise<void> {
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "My Books", level: 1 })
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
   await openPalette(page);
   await search(page, SEED_CHAPTERS[0].title);
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/book\/[^/]+$/);
-  await expect(
-    page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
 }
 
 test.describe("Command Palette open and close @wf:command-palette", () => {
@@ -76,9 +69,7 @@ test.describe("Command Palette open and close @wf:command-palette", () => {
     page,
   }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { name: "My Books", level: 1 })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
     const trigger = page.getByRole("button", { name: "Open command palette" }).first();
     await tabTo(page, trigger, { max: 60 });
 
@@ -110,13 +101,9 @@ test.describe("Command Palette open and close @wf:command-palette", () => {
 });
 
 test.describe("Command Palette commands @wf:command-palette", () => {
-  test("typing a Command and pressing Enter runs it and closes the palette", async ({
-    page,
-  }) => {
+  test("typing a Command and pressing Enter runs it and closes the palette", async ({ page }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { name: "My Books", level: 1 })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
     await openPalette(page);
     await search(page, "go to notes");
@@ -130,13 +117,9 @@ test.describe("Command Palette commands @wf:command-palette", () => {
   test.describe("with an empty Library", () => {
     test.use({ library: "empty" });
 
-    test("a disabled Command is reachable but Enter keeps the palette open", async ({
-      page,
-    }) => {
+    test("a disabled Command is reachable but Enter keeps the palette open", async ({ page }) => {
       await page.goto("/");
-      await expect(
-        page.getByRole("heading", { name: "Your stories begin here" })
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Your stories begin here" })).toBeVisible();
 
       await openPalette(page);
       await search(page, "next book");
@@ -155,9 +138,7 @@ test.describe("Command Palette commands @wf:command-palette", () => {
 test.describe("Command Palette entities @wf:command-palette", () => {
   test("a Chapter of another Book opens in its Book", async ({ page }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { name: "My Books", level: 1 })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
     await openPalette(page);
     await search(page, SEED_CHAPTERS[2].title);
@@ -165,9 +146,7 @@ test.describe("Command Palette entities @wf:command-palette", () => {
     await page.keyboard.press("Enter");
 
     await expect(page).toHaveURL(/\/book\/[^/]+$/);
-    await expect(
-      page.getByRole("heading", { name: SHELF_BOOKS[0].title, level: 1 })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: SHELF_BOOKS[0].title, level: 1 })).toBeVisible();
     await expect(
       page.getByRole("textbox", { name: `Text of ${SEED_CHAPTERS[2].title}` })
     ).toBeVisible();
@@ -196,9 +175,7 @@ test.describe("Command Palette entities @wf:command-palette", () => {
 test.describe("Command Palette settings @wf:command-palette", () => {
   test("a Settings result lands on its row's control", async ({ page }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { name: "My Books", level: 1 })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
     await openPalette(page);
     await search(page, "theme");
@@ -208,9 +185,7 @@ test.describe("Command Palette settings @wf:command-palette", () => {
     await page.keyboard.press("Enter");
 
     await expect(page).toHaveURL(/\/settings$/);
-    await expect(
-      page.getByRole("heading", { name: "Settings", level: 1 })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
     await expectFocusWithin(page.locator('[data-settings-row="theme"]'));
   });
 });
@@ -220,9 +195,7 @@ test.describe("Command Palette recent @wf:command-palette", () => {
     page,
   }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { name: "My Books", level: 1 })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
     // Choosing a Command once records it in Recent. A navigating Command
     // leaves the theme alone, so the capture below can emulate both schemes.
@@ -253,9 +226,7 @@ test.describe("Command Palette suggested @wf:command-palette", () => {
     page,
   }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { name: "My Books", level: 1 })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
     await openPalette(page);
     const suggested = section(page, "Suggested").getByRole("option");
@@ -280,9 +251,7 @@ test.describe("Command Palette suggested @wf:command-palette", () => {
 });
 
 test.describe("Command Palette formatting @wf:command-palette", () => {
-  test("a formatting Command applies to the kept selection and focus returns", async ({
-    page,
-  }) => {
+  test("a formatting Command applies to the kept selection and focus returns", async ({ page }) => {
     await openBookEditorOnArrival(page);
     const text = page.getByRole("textbox", { name: `Text of ${SEED_CHAPTERS[0].title}` });
     await expect(text).toBeVisible();
