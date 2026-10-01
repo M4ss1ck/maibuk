@@ -56,12 +56,7 @@ describe("buildEntityItems()", () => {
       "note:n1",
       "canvas:v1",
     ]);
-    expect(items.map((item) => item.label)).toEqual([
-      "The Sea",
-      "Arrival",
-      "Idea",
-      "Map",
-    ]);
+    expect(items.map((item) => item.label)).toEqual(["The Sea", "Arrival", "Idea", "Map"]);
     for (const item of items) {
       expect(item.state).toBe("runnable");
       expect(item.terms).toEqual([]);
@@ -136,16 +131,8 @@ describe("buildPageItems()", () => {
   it("labels each page and carries its target", () => {
     const items = buildPageItems({ t, inBookEditor: false });
 
-    expect(items.map((item) => item.key)).toEqual([
-      "page:books",
-      "page:notes",
-      "page:canvases",
-    ]);
-    expect(items.map((item) => item.label)).toEqual([
-      "Go to Book…",
-      "Open Note…",
-      "Open Canvas…",
-    ]);
+    expect(items.map((item) => item.key)).toEqual(["page:books", "page:notes", "page:canvases"]);
+    expect(items.map((item) => item.label)).toEqual(["Go to Book…", "Open Note…", "Open Canvas…"]);
     expect(items.every((item) => item.kind === "page")).toBe(true);
     expect(items.every((item) => item.state === "runnable")).toBe(true);
     expect(items.every((item) => item.targetPage === item.id)).toBe(true);

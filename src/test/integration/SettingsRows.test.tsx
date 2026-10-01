@@ -3,10 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { computeAccessibleName } from "dom-accessibility-api";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  SETTINGS_SECTIONS,
-  type SettingsRowId,
-} from "@/components/settings/settings-sections";
+import { SETTINGS_SECTIONS, type SettingsRowId } from "@/components/settings/settings-sections";
 import { currentSettingsPlatform, rowOnPlatform } from "@/features/settings/rows";
 import { focusSettingsRow } from "@/features/settings/focus-row";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
@@ -83,9 +80,7 @@ vi.mock("@/lib/platform", () => ({
       pageSize: 10,
     }),
   })),
-  getDefaultBackupDirectory: vi.fn(async () =>
-    platformState.isDesktop ? "/backups" : null
-  ),
+  getDefaultBackupDirectory: vi.fn(async () => (platformState.isDesktop ? "/backups" : null)),
   pickBackupDirectory: vi.fn(async () => null),
   requestBackupDirectory: vi.fn(async () => true),
   restoreBackupDirectory: vi.fn(async () => undefined),
@@ -216,31 +211,27 @@ describe("Settings rows", { timeout: 30_000 }, () => {
     resetStores();
   });
 
-  it.each(["web", "desktop"] as const)(
-    "renders every declared row exactly once on %s",
-    async (platform) => {
-      platformState.isWeb = platform === "web";
-      platformState.isDesktop = platform === "desktop";
-      const user = userEvent.setup();
-      renderSettings();
+  it.each([
+    "web",
+    "desktop",
+  ] as const)("renders every declared row exactly once on %s", async (platform) => {
+    platformState.isWeb = platform === "web";
+    platformState.isDesktop = platform === "desktop";
+    const user = userEvent.setup();
+    renderSettings();
 
-      // Rows inside the collapsed blocks only exist once opened.
-      await openCollapsedBlocks(user);
+    // Rows inside the collapsed blocks only exist once opened.
+    await openCollapsedBlocks(user);
 
-      const actualPlatform = currentSettingsPlatform();
-      expect(actualPlatform).toBe(platform);
-      for (const section of SETTINGS_SECTIONS) {
-        for (const row of section.rows) {
-          const count = document.querySelectorAll(
-            `[data-settings-row="${row.id}"]`
-          ).length;
-          expect(count, `${row.id} on ${platform}`).toBe(
-            rowOnPlatform(row, actualPlatform) ? 1 : 0
-          );
-        }
+    const actualPlatform = currentSettingsPlatform();
+    expect(actualPlatform).toBe(platform);
+    for (const section of SETTINGS_SECTIONS) {
+      for (const row of section.rows) {
+        const count = document.querySelectorAll(`[data-settings-row="${row.id}"]`).length;
+        expect(count, `${row.id} on ${platform}`).toBe(rowOnPlatform(row, actualPlatform) ? 1 : 0);
       }
     }
-  );
+  });
 
   it("keeps every named control inside a row", async () => {
     const user = userEvent.setup();
@@ -253,8 +244,7 @@ describe("Settings rows", { timeout: 30_000 }, () => {
       // Dialogs portal outside the page; their buttons belong to the dialog.
       if (html.closest('[role="dialog"]')) continue;
       // Section disclosure toggles are not settings controls.
-      if (html.matches("button[aria-expanded]") && !html.closest("[data-settings-row]"))
-        continue;
+      if (html.matches("button[aria-expanded]") && !html.closest("[data-settings-row]")) continue;
       if (computeAccessibleName(html) === "") continue;
       if (!html.closest("[data-settings-row]")) {
         orphans.push(

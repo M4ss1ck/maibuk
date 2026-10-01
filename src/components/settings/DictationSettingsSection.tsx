@@ -10,10 +10,7 @@ export function DictationSettingsSection() {
   const { t } = useTranslation();
 
   return (
-    <section
-      id="dictation"
-      className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5"
-    >
+    <section id="dictation" className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
       <h2
         tabIndex={-1}
         data-settings-section="dictation"

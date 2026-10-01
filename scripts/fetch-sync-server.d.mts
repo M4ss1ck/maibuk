@@ -11,10 +11,7 @@ export const MAIBUK_SYNC_COMMIT: string;
 export const MIGRATIONS: Record<string, string>;
 export const SYNC_SERVER_DIR: string;
 
-export function pocketbaseAsset(
-  platform: string,
-  arch: string
-): PocketbaseAsset & { url: string };
+export function pocketbaseAsset(platform: string, arch: string): PocketbaseAsset & { url: string };
 export function syncServerPaths(
   root: string,
   platform?: string

@@ -5,13 +5,7 @@ import { Button, Modal } from "@/components/ui";
 import { ChevronDownIcon } from "@/components/icons";
 import { exportDatabase, importDatabase, resetDatabase } from "@/lib/db";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
-import {
-  getFileSystem,
-  IS_TAURI,
-  getDialog,
-  getWebDialog,
-  createBackup,
-} from "@/lib/platform";
+import { getFileSystem, IS_TAURI, getDialog, getWebDialog, createBackup } from "@/lib/platform";
 import { BackupService } from "@/features/backup/backup-service";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 import { SettingRow } from "@/components/settings/SettingRow";

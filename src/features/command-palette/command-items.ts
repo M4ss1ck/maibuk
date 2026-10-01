@@ -1,13 +1,7 @@
 import { COMMANDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
-import {
-  voicePhrases,
-  type CustomVoiceCommands,
-} from "@/features/dictation/voice-commands";
+import { voicePhrases, type CustomVoiceCommands } from "@/features/dictation/voice-commands";
 import type { DictationLanguage } from "@/features/dictation/types";
-import type {
-  PaletteItem,
-  PaletteTranslate,
-} from "@/features/command-palette/palette-index";
+import type { PaletteItem, PaletteTranslate } from "@/features/command-palette/palette-index";
 
 export interface BuildCommandItemsOptions {
   /** Every bound Command and its state, read before the palette opened. */
@@ -19,10 +13,7 @@ export interface BuildCommandItemsOptions {
   customVoice: CustomVoiceCommands;
 }
 
-function keywordsOf(
-  t: BuildCommandItemsOptions["t"],
-  key: string
-): string[] {
+function keywordsOf(t: BuildCommandItemsOptions["t"], key: string): string[] {
   const raw = t(key, { returnObjects: true });
   if (!Array.isArray(raw)) return [];
   return raw.filter((entry): entry is string => typeof entry === "string");

@@ -484,158 +484,158 @@ export function BackupSection() {
           <p className="text-sm text-muted-foreground">{t("backup.noBackups")}</p>
         ) : (
           <div className="space-y-3">
-          {selected.size > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">
-              <span id={selectedCountId} role="status" className="font-medium text-foreground">
-                {t("backup.selectedCount", { count: selected.size })}
-              </span>
-              <Button
-                variant="destructive"
-                size="sm"
-                aria-describedby={selectedCountId}
-                onClick={() => setConfirmBulkDelete(true)}
-                disabled={bulkDeleting}
-              >
-                {t("backup.deleteBackup")}
-              </Button>
-            </div>
-          )}
+            {selected.size > 0 && (
+              <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">
+                <span id={selectedCountId} role="status" className="font-medium text-foreground">
+                  {t("backup.selectedCount", { count: selected.size })}
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  aria-describedby={selectedCountId}
+                  onClick={() => setConfirmBulkDelete(true)}
+                  disabled={bulkDeleting}
+                >
+                  {t("backup.deleteBackup")}
+                </Button>
+              </div>
+            )}
 
-          <div className="rounded-md border border-border overflow-x-auto">
-            <table className="w-full min-w-[600px] text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  <th className="w-10 px-3 py-2">
-                    <div className="flex items-center justify-center">
-                      <Checkbox
-                        inputRef={selectAllRef}
-                        label={t("backup.selectAllOnPage")}
-                        checked={allOnPageSelected}
-                        indeterminate={selectedOnPage > 0 && !allOnPageSelected}
-                        onChange={(isSelected) =>
-                          setSelected(
-                            isSelected
-                              ? new Set(backups.map((backup) => backup.filename))
-                              : new Set()
-                          )
-                        }
-                      />
-                    </div>
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-foreground">
-                    {t("backup.columnDate")}
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-foreground">
-                    {t("backup.columnTrigger")}
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-foreground">
-                    {t("backup.columnSize")}
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-foreground">
-                    {t("backup.columnActions")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {backups.map((backup) => {
-                  const createdAt = formatBackupDate(backup.createdAt, i18n.language);
-                  const isSelected = selected.has(backup.filename);
-                  return (
-                    <tr
-                      key={backup.filename}
-                      className={`border-b border-border last:border-0 ${
-                        isSelected ? "bg-primary/5" : ""
-                      }`}
-                    >
-                      <td className="w-10 px-3 py-2">
-                        <div className="flex items-center justify-center">
-                          <Checkbox
-                            label={t("backup.selectRow", { date: createdAt })}
-                            checked={isSelected}
-                            onChange={(next) => toggleSelected(backup.filename, next)}
-                          />
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-foreground tabular-nums">{createdAt}</td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {t(`backup.trigger.${backup.trigger}`)}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {backup.sizeBytes < 1024
-                          ? `${backup.sizeBytes} B`
-                          : `${(backup.sizeBytes / 1024).toFixed(0)} KB`}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setConfirmRestore(backup.filename)}
-                        >
-                          {t("backup.restoreBackup")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(backup.filename)}
-                          className="text-destructive"
-                        >
-                          {t("backup.deleteBackup")}
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>{t("backup.itemsPerPage")}</span>
-              <Select
-                ariaLabel={t("backup.itemsPerPage")}
-                value={backupListPageSize}
-                onChange={setBackupListPageSize}
-                options={pageSizeOptions}
-                minWidth="none"
-                className="w-20"
-              />
+            <div className="rounded-md border border-border overflow-x-auto">
+              <table className="w-full min-w-[600px] text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="w-10 px-3 py-2">
+                      <div className="flex items-center justify-center">
+                        <Checkbox
+                          inputRef={selectAllRef}
+                          label={t("backup.selectAllOnPage")}
+                          checked={allOnPageSelected}
+                          indeterminate={selectedOnPage > 0 && !allOnPageSelected}
+                          onChange={(isSelected) =>
+                            setSelected(
+                              isSelected
+                                ? new Set(backups.map((backup) => backup.filename))
+                                : new Set()
+                            )
+                          }
+                        />
+                      </div>
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">
+                      {t("backup.columnDate")}
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">
+                      {t("backup.columnTrigger")}
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium text-foreground">
+                      {t("backup.columnSize")}
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-foreground">
+                      {t("backup.columnActions")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {backups.map((backup) => {
+                    const createdAt = formatBackupDate(backup.createdAt, i18n.language);
+                    const isSelected = selected.has(backup.filename);
+                    return (
+                      <tr
+                        key={backup.filename}
+                        className={`border-b border-border last:border-0 ${
+                          isSelected ? "bg-primary/5" : ""
+                        }`}
+                      >
+                        <td className="w-10 px-3 py-2">
+                          <div className="flex items-center justify-center">
+                            <Checkbox
+                              label={t("backup.selectRow", { date: createdAt })}
+                              checked={isSelected}
+                              onChange={(next) => toggleSelected(backup.filename, next)}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-foreground tabular-nums">{createdAt}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {t(`backup.trigger.${backup.trigger}`)}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {backup.sizeBytes < 1024
+                            ? `${backup.sizeBytes} B`
+                            : `${(backup.sizeBytes / 1024).toFixed(0)} KB`}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmRestore(backup.filename)}
+                          >
+                            {t("backup.restoreBackup")}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(backup.filename)}
+                            className="text-destructive"
+                          >
+                            {t("backup.deleteBackup")}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setBackupListPage(backupListPage - 1)}
-                disabled={backupListPage <= 1 || loading}
-                aria-label={t("backup.previousPage")}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{t("backup.pageLabel")}</span>
+                <span>{t("backup.itemsPerPage")}</span>
                 <Select
-                  ariaLabel={t("backup.pageLabel")}
-                  value={backupListPage}
-                  onChange={setBackupListPage}
-                  options={pageOptions}
-                  endAdornment={`/ ${totalPages}`}
+                  ariaLabel={t("backup.itemsPerPage")}
+                  value={backupListPageSize}
+                  onChange={setBackupListPageSize}
+                  options={pageSizeOptions}
                   minWidth="none"
                   className="w-20"
                 />
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setBackupListPage(backupListPage + 1)}
-                disabled={backupListPage >= totalPages || loading}
-                aria-label={t("backup.nextPage")}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBackupListPage(backupListPage - 1)}
+                  disabled={backupListPage <= 1 || loading}
+                  aria-label={t("backup.previousPage")}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>{t("backup.pageLabel")}</span>
+                  <Select
+                    ariaLabel={t("backup.pageLabel")}
+                    value={backupListPage}
+                    onChange={setBackupListPage}
+                    options={pageOptions}
+                    endAdornment={`/ ${totalPages}`}
+                    minWidth="none"
+                    className="w-20"
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBackupListPage(backupListPage + 1)}
+                  disabled={backupListPage >= totalPages || loading}
+                  aria-label={t("backup.nextPage")}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
         )}
       </SettingRow>
 

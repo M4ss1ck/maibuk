@@ -18,7 +18,11 @@ describe("palette-index tie-breaking", () => {
     expect(results).toHaveLength(3);
     // All three tie on score, so "abc" labels come before "abd" (collator
     // order) and the two "abc" entries fall back to key order.
-    expect(results.map((r) => r.score)).toEqual([results[0].score, results[0].score, results[0].score]);
+    expect(results.map((r) => r.score)).toEqual([
+      results[0].score,
+      results[0].score,
+      results[0].score,
+    ]);
     expect(results.map((r) => r.item.key)).toEqual(["command:a", "command:c", "command:b"]);
   });
 });

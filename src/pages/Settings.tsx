@@ -16,10 +16,7 @@ import { ExportSection } from "@/components/settings/ExportSection";
 import { TutorialSection } from "@/components/settings/TutorialSection";
 import { AdvancedSection } from "@/components/settings/AdvancedSection";
 import { AboutSection } from "@/components/settings/AboutSection";
-import {
-  SETTINGS_SECTIONS,
-  findSettingsRow,
-} from "@/components/settings/settings-sections";
+import { SETTINGS_SECTIONS, findSettingsRow } from "@/components/settings/settings-sections";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 
 const SECTION_COMPONENTS = {
@@ -75,9 +72,7 @@ function usePendingSettingsRow() {
       if (attempts >= 10) {
         // The row is state-dependent (e.g. a logged-out sync row) and never
         // mounted: fall back to its section's heading.
-        document
-          .querySelector<HTMLElement>(`[data-settings-section="${section.id}"]`)
-          ?.focus();
+        document.querySelector<HTMLElement>(`[data-settings-section="${section.id}"]`)?.focus();
         useSettingsRevealStore.getState().clearRow();
         return;
       }

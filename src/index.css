@@ -1556,8 +1556,7 @@ li.footnote-item,
      ignore the rounded thumb below, so only engines without it get them. */
   @supports not selector(::-webkit-scrollbar) {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent)
-      transparent;
+    scrollbar-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent) transparent;
   }
 
   /* Chromium, Safari, and the Linux desktop webview. */

@@ -30,8 +30,7 @@ export const SETTINGS_SECTIONS = [
   ABOUT_SECTION,
 ] as const;
 
-export type SettingsRowId =
-  (typeof SETTINGS_SECTIONS)[number]["rows"][number]["id"];
+export type SettingsRowId = (typeof SETTINGS_SECTIONS)[number]["rows"][number]["id"];
 
 export function findSettingsRow(
   id: string

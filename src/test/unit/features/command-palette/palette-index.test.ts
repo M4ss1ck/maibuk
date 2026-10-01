@@ -61,7 +61,10 @@ describe("palette-index ranking", () => {
   });
 
   it("finds a fuzzy acronym across words", () => {
-    const items = [item("command", "a", "Toggle always on top"), item("command", "b", "Export book")];
+    const items = [
+      item("command", "a", "Toggle always on top"),
+      item("command", "b", "Export book"),
+    ];
     const index = preparePaletteIndex(items);
     const sections = searchPalette(index, rootQuery("alwtop"));
     expect(sections).toHaveLength(1);
@@ -95,10 +98,7 @@ describe("palette-index ranking", () => {
       item("chapter", "open", "The arrival", { bookId: "book-a" }),
     ];
     const index = preparePaletteIndex(items);
-    const sections = searchPalette(
-      index,
-      rootQuery("arrival", { openBookId: "book-a" })
-    );
+    const sections = searchPalette(index, rootQuery("arrival", { openBookId: "book-a" }));
     expect(sections).toHaveLength(1);
     expect(sections[0].id).toBe("chapters");
     expect(sections[0].results.map((r) => r.item.id)).toEqual(["open", "other"]);
@@ -153,10 +153,7 @@ describe("palette-index sections and caps", () => {
     const exact = item("command", "exact", "Export");
     const fuzzy = item("command", "fuzzy", "Export summary report");
     const index = preparePaletteIndex([exact, fuzzy]);
-    const sections = searchPalette(
-      index,
-      rootQuery("export", { recent: [fuzzy.key, exact.key] })
-    );
+    const sections = searchPalette(index, rootQuery("export", { recent: [fuzzy.key, exact.key] }));
     expect(sectionIds(sections)).toEqual(["recent"]);
     expect(sections[0].results.map((r) => r.item.key)).toEqual([fuzzy.key, exact.key]);
   });
@@ -249,10 +246,7 @@ describe("palette-index empty query", () => {
       ...notes,
       ...PALETTE_SUGGESTED_KEYS.map((key) => suggestedItem(key)),
     ]);
-    const sections = searchPalette(
-      index,
-      rootQuery("", { recent: notes.map((note) => note.key) })
-    );
+    const sections = searchPalette(index, rootQuery("", { recent: notes.map((note) => note.key) }));
     expect(sectionIds(sections)).toEqual(["recent"]);
   });
 
@@ -274,9 +268,7 @@ describe("palette-index empty query", () => {
     });
     expect(sectionIds(sections)).toEqual(["notes"]);
     expect(sections[0].results).toHaveLength(60);
-    expect(sections[0].results.map((r) => r.item.id)).toEqual(
-      items.map((entry) => entry.id)
-    );
+    expect(sections[0].results.map((r) => r.item.id)).toEqual(items.map((entry) => entry.id));
   });
 });
 
@@ -315,9 +307,7 @@ describe("palette-index page filtering", () => {
   it("shows no chapters when openBookId is missing", () => {
     const index = preparePaletteIndex(mixed);
     expect(searchPalette(index, { query: "", page: "chapters", recent: [] })).toEqual([]);
-    expect(
-      searchPalette(index, { query: "great", page: "chapters", recent: [] })
-    ).toEqual([]);
+    expect(searchPalette(index, { query: "great", page: "chapters", recent: [] })).toEqual([]);
   });
 
   it("chapters page only lists chapters of the open Book", () => {

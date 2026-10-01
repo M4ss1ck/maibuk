@@ -402,7 +402,10 @@ function OpenCommandPalette() {
       panelClassName="relative mt-2 flex max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-xl flex-col overflow-hidden rounded-lg border border-border bg-card shadow-2xl modal-panel-drop"
     >
       <Autocomplete inputValue={query} onInputChange={changeQuery}>
-        <SearchField onKeyDown={handleSearchKeyDown} className="flex shrink-0 items-center gap-2 p-1.5">
+        <SearchField
+          onKeyDown={handleSearchKeyDown}
+          className="flex shrink-0 items-center gap-2 p-1.5"
+        >
           {/* Visually the placeholder says what to type; the label names the field. */}
           <Label className="sr-only">{t("commandPalette.searchLabel")}</Label>
           {/* The breadcrumb: which page narrowed the results. */}
@@ -553,9 +556,7 @@ function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: Palette
         {item.detail && (
           <span className="truncate text-xs text-muted-foreground">{item.detail}</span>
         )}
-        {item.kind === "command" && (
-          <PaletteShortcuts id={item.id as CommandId} mac={mac} />
-        )}
+        {item.kind === "command" && <PaletteShortcuts id={item.id as CommandId} mac={mac} />}
       </Text>
       {isRecent && (
         <button

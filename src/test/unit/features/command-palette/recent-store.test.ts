@@ -85,9 +85,6 @@ describe("command palette recent", () => {
       })
     );
     await useCommandPaletteRecentStore.persist.rehydrate();
-    expect(keys()).toEqual([
-      "command:a",
-      ...Array.from({ length: 9 }, (_, n) => `command:n${n}`),
-    ]);
+    expect(keys()).toEqual(["command:a", ...Array.from({ length: 9 }, (_, n) => `command:n${n}`)]);
   });
 });

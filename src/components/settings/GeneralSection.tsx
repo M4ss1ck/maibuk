@@ -23,11 +23,7 @@ export function GeneralSection() {
       </h2>
       <div className="divide-y divide-border">
         <SettingRow id="autoSave" className={ROW_CLASS}>
-          <Switch
-            checked={autoSave}
-            onChange={setAutoSave}
-            label={t("settings.toggleAutoSave")}
-          />
+          <Switch checked={autoSave} onChange={setAutoSave} label={t("settings.toggleAutoSave")} />
         </SettingRow>
 
         {IS_DESKTOP && (

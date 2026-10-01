@@ -4,14 +4,8 @@ import type { Editor as TiptapEditor } from "@tiptap/core";
 import { Editor as CoreEditor } from "@tiptap/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@/components/editor/Editor";
-import {
-  canRunEditorCommand,
-  runEditorCommand,
-} from "@/components/editor/editor-commands";
-import {
-  editorCommandBindings,
-  forgetEditor,
-} from "@/components/editor/editor-command-source";
+import { canRunEditorCommand, runEditorCommand } from "@/components/editor/editor-commands";
+import { editorCommandBindings, forgetEditor } from "@/components/editor/editor-command-source";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { useCommandPaletteStore } from "@/features/command-palette/store";
 import { commandState, runCommand } from "@/lib/command-runner";

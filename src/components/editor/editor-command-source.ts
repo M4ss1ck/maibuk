@@ -1,10 +1,7 @@
 import { useEffect } from "react";
 import type { Editor } from "@tiptap/core";
 import { COMMANDS, COMMAND_IDS, type CommandDef } from "@/lib/shortcut-registry";
-import {
-  registerCommandSource,
-  type RunnableBinding,
-} from "@/lib/command-runner";
+import { registerCommandSource, type RunnableBinding } from "@/lib/command-runner";
 import {
   EDITOR_COMMANDS,
   canRunEditorCommand,

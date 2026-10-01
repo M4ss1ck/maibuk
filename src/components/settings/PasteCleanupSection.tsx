@@ -47,9 +47,7 @@ export function PasteCleanupSection() {
   // The collapsed "advanced" block lives in the reveal store so focusing a
   // row inside it can open it from outside this section.
   const advancedOpen = useSettingsRevealStore((state) => state.pasteCleanupAdvancedOpen);
-  const setAdvancedOpen = useSettingsRevealStore(
-    (state) => state.setPasteCleanupAdvancedOpen
-  );
+  const setAdvancedOpen = useSettingsRevealStore((state) => state.setPasteCleanupAdvancedOpen);
 
   // Opened via "Add cleanup rule" from the HTML source view: jump straight to
   // the rules editor with the new rule revealed and focused.
