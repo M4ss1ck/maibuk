@@ -3,27 +3,34 @@ import type { CommandId } from "@/lib/shortcut-registry";
 import { dictationHub } from "@/features/dictation/hub";
 import type { VoiceCommandRun, VoiceOutcome } from "@/features/dictation/voice-commands";
 
-type EditorCommand = (editor: Editor) => boolean;
+type EditorCommand = (editor: Editor, commands?: LooseCommands) => boolean;
 
 // `editor.commands` is typed by the extensions that declare each command; a
 // command whose extension this editor did not load is simply absent.
 type LooseCommands = Record<string, ((...args: unknown[]) => boolean) | undefined>;
 
 function run(name: string, ...args: unknown[]): EditorCommand {
-  return (editor) => {
-    const command = (editor.commands as unknown as LooseCommands)[name];
+  return (editor, commands) => {
+    const command = (commands ?? (editor.commands as unknown as LooseCommands))[name];
     return command ? command(...args) : false;
   };
 }
 
 function indent(direction: "increase" | "decrease"): EditorCommand {
-  return (editor) => {
+  return (editor, commands) => {
     if (editor.isActive("listItem")) {
-      return direction === "increase"
-        ? editor.commands.sinkListItem("listItem")
-        : editor.commands.liftListItem("listItem");
+      const loose = commands ?? (editor.commands as unknown as LooseCommands);
+      if (direction === "increase") {
+        const sink = loose.sinkListItem;
+        return sink ? sink("listItem") : false;
+      }
+      const lift = loose.liftListItem;
+      return lift ? lift("listItem") : false;
     }
-    return run(direction === "increase" ? "increaseIndent" : "decreaseIndent")(editor);
+    return run(direction === "increase" ? "increaseIndent" : "decreaseIndent")(
+      editor,
+      commands
+    );
   };
 }
 
@@ -145,6 +152,21 @@ export const VOICE_RUNNERS: Partial<Record<CommandId, VoiceRunners>> = {
     on: setBlock(run("setBlockquote"), (editor) => editor.isActive("blockquote")),
   },
 };
+
+/** Whether the editor can apply this Command at its current selection; dry-runs through `editor.can()`. */
+export function canRunEditorCommand(editor: Editor, id: CommandId): boolean {
+  if (id === "dictation.stop") return dictationHub.isListening();
+  const runner = EDITOR_COMMANDS[id];
+  if (!runner) return false;
+  return runner(editor, editor.can() as unknown as LooseCommands);
+}
+
+/** Runs the Command the way its key does (the toggle runner), on the editor's current selection. */
+export function runEditorCommand(editor: Editor, id: CommandId): boolean {
+  const runner = EDITOR_COMMANDS[id];
+  if (!runner) return false;
+  return runner(editor);
+}
 
 /** Runs one Voice Command's runner on this editor. */
 export function runVoiceCommand(editor: Editor, run: VoiceCommandRun): VoiceOutcome {

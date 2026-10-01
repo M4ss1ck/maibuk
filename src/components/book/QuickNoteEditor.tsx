@@ -4,6 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { useEditorCommandSource } from "@/components/editor/editor-command-source";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
@@ -80,6 +81,7 @@ export function QuickNoteEditor({ onChange, placeholder, onEscape }: QuickNoteEd
     [editor]
   );
   useBoundShortcutIds(keymapShortcutIds);
+  useEditorCommandSource(editor);
 
   const toolbarButton = (
     label: string,
