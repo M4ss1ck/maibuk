@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { COMMANDS } from "@/lib/shortcut-registry";
 import type { CommandId } from "@/lib/shortcut-registry";
 import { buildCommandItems } from "@/features/command-palette/command-items";
+import en from "@/locales/en.json";
+import es from "@/locales/es.json";
 
 type Snapshot = Map<CommandId, "runnable" | "disabled">;
 
@@ -106,5 +108,55 @@ describe("buildCommandItems", () => {
       if (previous === undefined) delete definition.keywordsKey;
       else definition.keywordsKey = previous;
     }
+  });
+
+  it("finds Always on Top by 'pin' and the dictation toggle by 'microphone'", () => {
+    function lookup(locale: Record<string, unknown>, key: string): unknown {
+      return key.split(".").reduce<unknown>(
+        (node, part) =>
+          node && typeof node === "object"
+            ? (node as Record<string, unknown>)[part]
+            : undefined,
+        locale
+      );
+    }
+    const realT =
+      (locale: Record<string, unknown>) =>
+      ((key: string, options?: Record<string, unknown>) => {
+        const value = lookup(locale, key);
+        if (options?.returnObjects === true) return value as readonly string[];
+        return typeof value === "string" ? value : key;
+      }) as Parameters<typeof buildCommandItems>[0]["t"];
+
+    const desktop = buildCommandItems({
+      snapshot: snapshotOf([
+        ["global.toggleAlwaysOnTop", "runnable"],
+        ["dictation.toggle", "runnable"],
+      ]),
+      t: realT(en as unknown as Record<string, unknown>),
+      language: "en",
+      customVoice: {},
+    });
+    const alwaysOnTop = desktop.find((item) => item.id === "global.toggleAlwaysOnTop");
+    expect(alwaysOnTop?.label).toBe("Toggle always on top");
+    expect(alwaysOnTop?.terms).toContain("pin");
+    const dictation = desktop.find((item) => item.id === "dictation.toggle");
+    expect(dictation?.terms).toContain("microphone");
+
+    const spanish = buildCommandItems({
+      snapshot: snapshotOf([
+        ["global.toggleAlwaysOnTop", "runnable"],
+        ["dictation.toggle", "runnable"],
+      ]),
+      t: realT(es as unknown as Record<string, unknown>),
+      language: "es",
+      customVoice: {},
+    });
+    expect(
+      spanish.find((item) => item.id === "global.toggleAlwaysOnTop")?.terms
+    ).toContain("fijar");
+    expect(spanish.find((item) => item.id === "dictation.toggle")?.terms).toContain(
+      "micrófono"
+    );
   });
 });

@@ -21,7 +21,7 @@ async function openPaletteFromDrawer(page: Page): Promise<void> {
   await menuDialog(page).getByRole("button", { name: "Open command palette" }).tap();
   await expect(paletteDialog(page)).toBeVisible();
   await expect(
-    paletteDialog(page).getByRole("searchbox", { name: "Search commands" })
+    paletteDialog(page).getByRole("searchbox", { name: "Find by name" })
   ).toBeFocused();
 }
 

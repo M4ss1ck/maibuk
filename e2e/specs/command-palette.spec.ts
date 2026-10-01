@@ -12,7 +12,7 @@ test.use({ library: "paletteLibrary" });
 
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Command palette" });
 const searchbox = (page: Page) =>
-  dialog(page).getByRole("searchbox", { name: "Search commands" });
+  dialog(page).getByRole("searchbox", { name: "Find by name" });
 const option = (page: Page, name: string) =>
   dialog(page).getByRole("option", { name, exact: true });
 
@@ -101,9 +101,7 @@ test.describe("Command Palette open and close @wf:command-palette", () => {
     await expectTabContained(page, dialog(page));
     await capture(page, "palette-open");
 
-    // The first Escape clears the query; the second closes the palette.
-    await page.keyboard.press("Escape");
-    await expect(searchbox(page)).toHaveValue("");
+    // One Escape closes the palette whatever the query, restoring focus.
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toBeHidden();
     await expect(trigger).toBeFocused();

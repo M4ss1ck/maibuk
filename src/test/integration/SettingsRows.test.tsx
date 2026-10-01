@@ -303,6 +303,23 @@ describe("Settings rows", () => {
     await waitFor(() => expect(document.activeElement).toBe(row));
   });
 
+  it("reveals a row inside the Dictation Language tab and focuses its control", async () => {
+    useDictationStore.setState({
+      support: { supported: true },
+      installed: ["moonshine-tiny-en-260821", "moonshine-tiny-es-260824"],
+    } as never);
+    renderSettings();
+
+    focusSettingsRow("dictationVocabulary");
+
+    await waitFor(() => {
+      const row = document.querySelector('[data-settings-row="dictationVocabulary"]');
+      expect(row).not.toBeNull();
+      expect(row?.contains(document.activeElement)).toBe(true);
+    });
+    expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
+  });
+
   it("falls back to the section heading for a state-dependent row", async () => {
     syncState.authStatus = "logged-out";
     syncState.userEmail = null;

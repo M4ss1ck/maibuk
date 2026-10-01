@@ -48,6 +48,7 @@ import type {
   PaletteItemKind,
   PalettePage,
   PaletteResult,
+  PaletteTranslate,
 } from "@/features/command-palette/palette-index";
 import type { SettingsRowId } from "@/components/settings/settings-sections";
 import { focusSettingsRow } from "@/features/settings/focus-row";
@@ -104,18 +105,19 @@ function OpenCommandPalette() {
   const location = useLocation();
   const openBookId = useMatch("/book/:bookId")?.params.bookId ?? null;
 
+  // One typed local for the builders: they accept registry and Settings keys
+  // the i18n `t` type does not know about.
+  const translate = t as unknown as PaletteTranslate;
+
   const commandItems = useMemo(
     () =>
       buildCommandItems({
         snapshot,
-        t: t as unknown as (
-          key: string,
-          options?: Record<string, unknown>
-        ) => string | readonly string[],
+        t: translate,
         language: normalizeLanguage(i18n.language),
         customVoice,
       }),
-    [snapshot, t, i18n.language, customVoice]
+    [snapshot, translate, i18n.language, customVoice]
   );
 
   // Entities load once per open, in the background: the Commands are listed
@@ -152,21 +154,18 @@ function OpenCommandPalette() {
   const pageItems = useMemo(
     () =>
       buildPageItems({
-        t: t as unknown as (key: string, options?: Record<string, unknown>) => string,
+        t: translate,
         inBookEditor: openBookId !== null,
       }),
-    [t, openBookId]
+    [translate, openBookId]
   );
   const settingsItems = useMemo(
     () =>
       buildSettingsItems({
-        t: t as unknown as (
-          key: string,
-          options?: Record<string, unknown>
-        ) => string | readonly string[],
+        t: translate,
         platform: currentSettingsPlatform(),
       }),
-    [t]
+    [translate]
   );
   const entityItems = useMemo(
     () =>
@@ -176,10 +175,10 @@ function OpenCommandPalette() {
             chapters: entities.chapters,
             notes: entities.notes,
             canvases: entities.canvases,
-            t: t as unknown as (key: string) => string,
+            t: translate,
           })
         : [],
-    [entities, t]
+    [entities, translate]
   );
 
   const items = useMemo(
@@ -265,6 +264,13 @@ function OpenCommandPalette() {
   };
 
   const handleSearchKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // One Escape always closes the palette: the SearchField would otherwise
+    // clear a non-empty query on the first press and need a second to close.
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      return;
+    }
     if (event.key === "Delete" && event.shiftKey) {
       event.preventDefault();
       removeActiveRecent();
@@ -288,6 +294,15 @@ function OpenCommandPalette() {
     }
   };
 
+  const handleSearchEscapeCapture = (event: KeyboardEvent<HTMLInputElement>) => {
+    // Target phase runs before the SearchField wrapper's bubble handler, so
+    // one Escape closes even if the wrapper never sees the key.
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    }
+  };
   /** Enters a nested page: it narrows the list, it does not open anything. */
   const enterPage = (next: PalettePage) => {
     setPage(next);
@@ -386,6 +401,7 @@ function OpenCommandPalette() {
               <Input
                 ref={inputRef}
                 data-autofocus
+                onKeyDown={handleSearchEscapeCapture}
                 placeholder={t("commandPalette.placeholder")}
                 className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
               />

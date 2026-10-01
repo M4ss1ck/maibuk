@@ -115,11 +115,13 @@ export const COMMANDS = {
     contexts: ["global"],
     defaults: [["g", "s"]],
     navigates: true,
+    keywordsKey: "shortcuts.keywords.gotoSettings",
   },
   "global.toggleTheme": {
     labelKey: "shortcuts.toggleTheme",
     contexts: ["global"],
     defaults: [["g", "t"]],
+    keywordsKey: "shortcuts.keywords.toggleTheme",
   },
   "global.themeLight": {
     labelKey: "settings.light",
@@ -148,11 +150,13 @@ export const COMMANDS = {
     labelKey: "shortcuts.syncNow",
     contexts: ["global"],
     defaults: [["Mod+Shift+y"]],
+    keywordsKey: "shortcuts.keywords.syncNow",
   },
   "global.showHelp": {
     labelKey: "shortcuts.showHelp",
     contexts: ["global"],
     defaults: [["?"]],
+    keywordsKey: "shortcuts.keywords.showHelp",
     voice: {
       phrases: {
         en: ["show shortcuts help", "show voice commands"],
@@ -164,6 +168,7 @@ export const COMMANDS = {
     labelKey: "shortcuts.toggleAlwaysOnTop",
     contexts: ["global"],
     defaults: [["Mod+Alt+t"]],
+    keywordsKey: "shortcuts.keywords.toggleAlwaysOnTop",
   },
   "global.openCommandPalette": {
     labelKey: "shortcuts.openCommandPalette",
@@ -196,6 +201,7 @@ export const COMMANDS = {
     labelKey: "dictation.toggle",
     contexts: ["global"],
     defaults: [["Mod+Shift+Space"]],
+    keywordsKey: "shortcuts.keywords.dictationToggle",
   },
   "dictation.cycleLanguage": {
     labelKey: "dictation.cycleLanguage",

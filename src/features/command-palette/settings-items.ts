@@ -1,26 +1,27 @@
 import { SETTINGS_SECTIONS } from "@/components/settings/settings-sections";
-import type { PaletteItem } from "@/features/command-palette/palette-index";
+import type {
+  PaletteItem,
+  PaletteTranslate,
+} from "@/features/command-palette/palette-index";
 import {
   rowOnPlatform,
   type SettingsPlatform,
   type SettingsRowDef,
 } from "@/features/settings/rows";
 
-type Translate = (key: string, options?: Record<string, unknown>) => string | readonly string[];
-
 export interface BuildSettingsItemsOptions {
-  t: Translate;
+  t: PaletteTranslate;
   /** Rows the platform this build runs on does not have are left out. */
   platform: SettingsPlatform;
 }
 
-function keywordsOf(t: Translate, key: string): string[] {
+function keywordsOf(t: PaletteTranslate, key: string): string[] {
   const raw = t(key, { returnObjects: true });
   if (!Array.isArray(raw)) return [];
   return raw.filter((entry): entry is string => typeof entry === "string");
 }
 
-function labelOf(t: Translate, key: string, fallback: string): string {
+function labelOf(t: PaletteTranslate, key: string, fallback: string): string {
   const label = t(key);
   return typeof label === "string" && label !== "" ? label : fallback;
 }

@@ -251,7 +251,7 @@ async function openPaletteWithF1(user: ReturnType<typeof userEvent.setup>) {
 }
 
 function paletteSearch(dialog: HTMLElement): HTMLElement {
-  return within(dialog).getByRole("searchbox", { name: "Search commands" });
+  return within(dialog).getByRole("searchbox", { name: "Find by name" });
 }
 
 /** The label of the result React Aria currently holds focused, if any. */
@@ -416,6 +416,26 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("Escape once with a query closes and returns focus to the opener", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const trigger = screen.getByRole("button", { name: en("books.noBooksButton") });
+    trigger.focus();
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("dark");
+    expect(search).not.toHaveValue("");
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
+    );
+    expect(trigger).toHaveFocus();
+  });
+
   it("keeps Tab inside the dialog", async () => {
     const user = userEvent.setup();
     renderApp("/");
@@ -494,6 +514,26 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     expect(options).toHaveLength(1);
     expect(options[0]).toHaveTextContent("Dark");
     expect(within(reopened).queryByText("Commands")).toBeNull();
+  });
+
+  it("lists Dark on a Book page and running it applies dark", async () => {
+    const book = await createBookRow({ title: "Themed", authorName: "Author" }, "local");
+    const user = userEvent.setup();
+    renderApp(`/book/${book.id}`);
+    await settleOn(`/book/${book.id}`);
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+
+    await user.keyboard("{F1}");
+    const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
+    const search = paletteSearch(dialog);
+    await user.keyboard("dark");
+    const dark = await within(dialog).findByRole("option", { name: "Dark" });
+    await arrowToAndChoose(user, dialog, search, dark);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
+    );
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
   it("reaches a disabled Command by arrows, announces it disabled, and Enter does nothing", async () => {

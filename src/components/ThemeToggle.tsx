@@ -4,7 +4,6 @@ import { useTheme } from "@/features/theme";
 import { useTranslation } from "react-i18next";
 import { SunIcon, MoonIcon, MonitorIcon } from "@/components/icons";
 import { Tooltip } from "@/components/ui";
-import { useShortcuts } from "@/lib/shortcuts";
 
 interface ThemeToggleProps {
   variant?: "inline" | "dropdown";
@@ -19,12 +18,6 @@ const THEME_COMMAND_IDS = {
 export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
-
-  useShortcuts([
-    { id: "global.themeLight", onTrigger: () => setTheme("light") },
-    { id: "global.themeDark", onTrigger: () => setTheme("dark") },
-    { id: "global.themeSystem", onTrigger: () => setTheme("system") },
-  ]);
 
   const themes = [
     { value: "light" as const, label: t("settings.light"), icon: SunIcon },

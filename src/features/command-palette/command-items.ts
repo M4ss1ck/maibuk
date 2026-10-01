@@ -4,13 +4,16 @@ import {
   type CustomVoiceCommands,
 } from "@/features/dictation/voice-commands";
 import type { DictationLanguage } from "@/features/dictation/types";
-import type { PaletteItem } from "@/features/command-palette/palette-index";
+import type {
+  PaletteItem,
+  PaletteTranslate,
+} from "@/features/command-palette/palette-index";
 
 export interface BuildCommandItemsOptions {
   /** Every bound Command and its state, read before the palette opened. */
   snapshot: ReadonlyMap<CommandId, "runnable" | "disabled">;
   /** Labels and keyword lists; the caller's `t` cast to accept registry keys. */
-  t: (key: string, options?: Record<string, unknown>) => string | readonly string[];
+  t: PaletteTranslate;
   /** The UI language; both app languages take Voice Commands. */
   language: DictationLanguage;
   customVoice: CustomVoiceCommands;

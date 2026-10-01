@@ -31,6 +31,12 @@ export const PALETTE_SECTION_ORDER: readonly PaletteSectionId[] = [
 
 export const PALETTE_SECTION_CAP = 50;
 
+/** Labels, descriptions, and keyword lists; the caller's `t` cast to accept registry keys. */
+export type PaletteTranslate = (
+  key: string,
+  options?: Record<string, unknown>
+) => string | readonly string[];
+
 export interface PaletteItem {
   key: string;
   kind: PaletteItemKind;
@@ -68,7 +74,6 @@ export interface PaletteIndex {
 
 interface PreparedPaletteItem {
   item: PaletteItem;
-  order: number;
   labelRank: number;
   section: PaletteSectionId;
   labelTarget: Prepared;
@@ -146,13 +151,12 @@ function compareResults(a: ScoredEntry, b: ScoredEntry): number {
 }
 
 export function preparePaletteIndex(items: readonly PaletteItem[]): PaletteIndex {
-  const entries: PreparedPaletteItem[] = items.map((item, order) => {
+  const entries: PreparedPaletteItem[] = items.map((item) => {
     const foldedLabel = fold(item.label);
     const foldedTerms = item.terms.map((term) => fold(term));
     const foldedWords = foldedLabel.split(/\s+/).filter((word) => word.length > 0);
     return {
       item,
-      order,
       labelRank: 0,
       section: sectionOf(item),
       labelTarget: fuzzysort.prepare(item.label),

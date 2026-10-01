@@ -159,6 +159,24 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.themeLight",
+      onTrigger: () => {
+        setTheme("light");
+      },
+    },
+    {
+      id: "global.themeDark",
+      onTrigger: () => {
+        setTheme("dark");
+      },
+    },
+    {
+      id: "global.themeSystem",
+      onTrigger: () => {
+        setTheme("system");
+      },
+    },
+    {
       id: "global.toggleShortcutHints",
       onTrigger: () => {
         setHideKeyboardHints(!hideKeyboardHints);

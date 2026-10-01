@@ -1132,7 +1132,7 @@
   },
   "commandPalette": {
     "title": "Paleta de comandos",
-    "searchLabel": "Buscar comandos",
+    "searchLabel": "Encontrar por nombre",
     "placeholder": "Escribe un comando, libro, nota…",
     "resultsLabel": "Resultados",
     "resultCount_one": "{{count}} resultado",
@@ -1263,7 +1263,15 @@
     "areaCover": "Diseñador de portada",
     "startTutorial": "Empezar el Tutorial",
     "skipTutorial": "Omitir el Tutorial",
-    "areaTutorial": "Tutorial"
+    "areaTutorial": "Tutorial",
+    "keywords": {
+      "toggleAlwaysOnTop": ["fijar", "flotante", "ventana", "siempre visible"],
+      "toggleTheme": ["oscuro", "claro", "modo", "apariencia"],
+      "syncNow": ["subir", "descargar", "nube"],
+      "showHelp": ["teclado", "teclas", "atajos"],
+      "gotoSettings": ["preferencias", "opciones", "ajustes"],
+      "dictationToggle": ["voz", "micrófono", "hablar"]
+    }
   },
   "shortcutEditor": {
     "title": "Personalizar atajos",

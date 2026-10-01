@@ -2,9 +2,11 @@ import type { Book } from "@/features/books/types";
 import type { Canvas } from "@/features/canvas/types";
 import type { ChapterTitle } from "@/features/chapters/store";
 import type { Note } from "@/features/notes/types";
-import type { PaletteItem, PalettePage } from "@/features/command-palette/palette-index";
-
-type Translate = (key: string, options?: Record<string, unknown>) => string | readonly string[];
+import type {
+  PaletteItem,
+  PalettePage,
+  PaletteTranslate,
+} from "@/features/command-palette/palette-index";
 
 export interface BuildEntityItemsOptions {
   books: readonly Book[];
@@ -12,7 +14,7 @@ export interface BuildEntityItemsOptions {
   chapters: readonly ChapterTitle[];
   notes: readonly Note[];
   canvases: readonly Canvas[];
-  t: Translate;
+  t: PaletteTranslate;
 }
 
 /** The label an untitled entity gets, per kind, from the screen that shows it. */
@@ -21,7 +23,7 @@ const UNTITLED_KEY = {
   canvas: "canvas.untitled",
 } as const;
 
-function titled(title: string, untitledKey: string, t: Translate): string {
+function titled(title: string, untitledKey: string, t: PaletteTranslate): string {
   if (title.trim() !== "") return title;
   const fallback = t(untitledKey);
   return typeof fallback === "string" && fallback !== "" ? fallback : title;
@@ -91,7 +93,7 @@ export function buildEntityItems({
 }
 
 export interface BuildPageItemsOptions {
-  t: Translate;
+  t: PaletteTranslate;
   /** The Book Editor is the only screen with an open Book to list Chapters of. */
   inBookEditor: boolean;
 }

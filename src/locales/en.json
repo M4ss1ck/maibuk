@@ -1132,7 +1132,7 @@
   },
   "commandPalette": {
     "title": "Command palette",
-    "searchLabel": "Search commands",
+    "searchLabel": "Find by name",
     "placeholder": "Type a command, Book, Note…",
     "resultsLabel": "Results",
     "resultCount_one": "{{count}} result",
@@ -1263,7 +1263,15 @@
     "areaCover": "Cover Designer",
     "startTutorial": "Start the Tutorial",
     "skipTutorial": "Skip the Tutorial",
-    "areaTutorial": "Tutorial"
+    "areaTutorial": "Tutorial",
+    "keywords": {
+      "toggleAlwaysOnTop": ["pin", "float", "window", "stay on top"],
+      "toggleTheme": ["dark", "light", "mode", "appearance"],
+      "syncNow": ["upload", "download", "cloud", "backup"],
+      "showHelp": ["keyboard", "keys", "hotkeys", "cheat sheet"],
+      "gotoSettings": ["preferences", "options", "configuration"],
+      "dictationToggle": ["voice", "speech", "microphone", "talk"]
+    }
   },
   "shortcutEditor": {
     "title": "Customize shortcuts",
