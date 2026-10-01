@@ -272,7 +272,7 @@ What a Synced Item looked like on both sides the last time this device synced it
 _Avoid_: last sync, common ancestor
 
 **Conflict**:
-A Synced Item changed on this device and elsewhere since its Sync Base (edited on both, or edited here and Deleted Elsewhere), so the author must choose which state wins. Choosing this device's state Pushes it; choosing the other device's Pulls it.
+A Synced Item changed on this device and elsewhere since its Sync Base (edited on both, or edited here and Deleted Elsewhere), so the author must choose which state wins. Choosing this device's state Pushes it; choosing the other device's Pulls it. The author keeps one state, never both: a Book's losing state survives as the Checkpoint taken before a Pull.
 _UI_: en "Sync Conflict" / es "Conflicto de sincronización"
 _Avoid_: collision, merge
 
