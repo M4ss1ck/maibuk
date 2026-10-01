@@ -6,8 +6,10 @@
 //! Every pooled connection installs a SQLite authorizer and turns on
 //! SQLITE_DBCONFIG_DEFENSIVE. Plain VACUUM attaches the empty filename ''
 //! internally, so ATTACH '' is allowed while every other ATTACH target is
-//! denied (#196, ADR 0017). Only allow-listed PRAGMAs run, so switches like
-//! temp_store_directory cannot redirect files.
+//! denied (#196, ADR 0017). Only allow-listed PRAGMAs run, and only as reads
+//! apart from wal_checkpoint and table_info, so switches like
+//! temp_store_directory cannot redirect files. load_extension() is denied even
+//! though the connection never enables extensions.
 
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_void};
@@ -44,23 +46,40 @@ const ALLOWED_PRAGMAS: &[&str] = &[
     "wal_checkpoint",
 ];
 
-fn pragma_allowed(name: Option<&CStr>) -> bool {
+// A pragma value arrives as arg2, so `PRAGMA foreign_keys = OFF` and
+// `PRAGMA page_size = 1024` are denied while a bare read is allowed.
+fn pragma_allowed(name: Option<&CStr>, arg: Option<&CStr>) -> bool {
     let Some(name) = name else {
         return false;
     };
     let Ok(text) = name.to_str() else {
         return false;
     };
-    ALLOWED_PRAGMAS
+    if !ALLOWED_PRAGMAS
         .iter()
         .any(|allowed| allowed.eq_ignore_ascii_case(text))
+    {
+        return false;
+    }
+    // These two take a read argument rather than setting a switch.
+    if text.eq_ignore_ascii_case("wal_checkpoint") || text.eq_ignore_ascii_case("table_info") {
+        return true;
+    }
+    arg.is_none()
+}
+
+fn function_allowed(name: Option<&CStr>) -> bool {
+    match name {
+        Some(name) => !name.to_bytes().eq_ignore_ascii_case(b"load_extension"),
+        None => true,
+    }
 }
 
 extern "C" fn authorize(
     _user: *mut c_void,
     action: c_int,
     arg1: *const c_char,
-    _arg2: *const c_char,
+    arg2: *const c_char,
     _db: *const c_char,
     _trigger: *const c_char,
 ) -> c_int {
@@ -72,7 +91,27 @@ extern "C" fn authorize(
             // for the pragma name argument of SQLITE_PRAGMA.
             Some(unsafe { CStr::from_ptr(arg1) })
         };
-        if pragma_allowed(name) {
+        let arg = if arg2.is_null() {
+            None
+        } else {
+            // SAFETY: SQLite passes a valid null-terminated string or null
+            // for the pragma argument of SQLITE_PRAGMA.
+            Some(unsafe { CStr::from_ptr(arg2) })
+        };
+        if pragma_allowed(name, arg) {
+            libsqlite3_sys::SQLITE_OK
+        } else {
+            libsqlite3_sys::SQLITE_DENY
+        }
+    } else if action == libsqlite3_sys::SQLITE_FUNCTION {
+        let name = if arg2.is_null() {
+            None
+        } else {
+            // SAFETY: SQLite passes a valid null-terminated string or null
+            // for the function name argument of SQLITE_FUNCTION.
+            Some(unsafe { CStr::from_ptr(arg2) })
+        };
+        if function_allowed(name) {
             libsqlite3_sys::SQLITE_OK
         } else {
             libsqlite3_sys::SQLITE_DENY
@@ -256,12 +295,14 @@ mod tests {
     }
 
     #[test]
-    fn plugin_setup_injects_the_pool_before_any_window() {
+    fn plugin_setup_injects_the_pool_during_build() {
         let dir = temp_dir("plugin-setup");
         let _ = std::fs::remove_dir_all(&dir);
         let setup_dir = dir.clone();
-        // init() itself is not registered here: it would read the real app
-        // config dir. Only its shape matters, and it is the shape that runs.
+        // The mock context has no windows; this proves the pool is in
+        // DbInstances once build() returns. That plugin setup runs before Tauri
+        // creates config windows is Tauri's own order (tauri crate app.rs: initialize_plugins
+        // in build, windows in setup).
         let library_db_plugin: tauri::plugin::TauriPlugin<MockRuntime> =
             tauri::plugin::Builder::new("library-db-test")
                 .setup(move |app, _api| install_at(app, &setup_dir))
@@ -532,6 +573,24 @@ mod tests {
                     .await
                     .is_err()
             );
+            // Allowed names that set a switch rather than read are denied too.
+            assert!(
+                sqlx::query("PRAGMA foreign_keys = OFF")
+                    .execute(&pool)
+                    .await
+                    .is_err()
+            );
+            assert!(
+                sqlx::query("PRAGMA page_size = 1024")
+                    .execute(&pool)
+                    .await
+                    .is_err()
+            );
+            let foreign_keys: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(foreign_keys, 1);
         });
         assert!(outside_is_empty(&outside));
         tauri::async_runtime::block_on(async {
@@ -549,6 +608,26 @@ mod tests {
         });
         std::fs::remove_dir_all(&dir).unwrap();
         std::fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn load_extension_is_denied() {
+        let dir = temp_dir("guard-load-extension");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            let err = sqlx::query("SELECT load_extension('/nonexistent/x')")
+                .execute(&pool)
+                .await
+                .unwrap_err();
+            assert!(
+                err.to_string().contains("not authorized"),
+                "unexpected error: {err}"
+            );
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -584,11 +663,23 @@ mod tests {
 
     #[test]
     fn pragma_allowed_matches_the_authorizer_rule() {
-        assert!(!pragma_allowed(None));
-        assert!(pragma_allowed(Some(c"page_count")));
-        assert!(pragma_allowed(Some(c"PAGE_COUNT")));
-        assert!(!pragma_allowed(Some(c"temp_store_directory")));
-        assert!(!pragma_allowed(Some(c"")));
+        assert!(!pragma_allowed(None, None));
+        assert!(pragma_allowed(Some(c"page_count"), None));
+        assert!(pragma_allowed(Some(c"PAGE_COUNT"), None));
+        assert!(!pragma_allowed(Some(c"temp_store_directory"), None));
+        assert!(!pragma_allowed(Some(c""), None));
+        assert!(!pragma_allowed(Some(c"foreign_keys"), Some(c"OFF")));
+        assert!(!pragma_allowed(Some(c"page_size"), Some(c"1024")));
+        assert!(pragma_allowed(Some(c"wal_checkpoint"), Some(c"TRUNCATE")));
+        assert!(pragma_allowed(Some(c"table_info"), Some(c"notes")));
+    }
+
+    #[test]
+    fn function_allowed_matches_the_authorizer_rule() {
+        assert!(function_allowed(None));
+        assert!(function_allowed(Some(c"lower")));
+        assert!(!function_allowed(Some(c"load_extension")));
+        assert!(!function_allowed(Some(c"LOAD_EXTENSION")));
     }
 
     #[test]

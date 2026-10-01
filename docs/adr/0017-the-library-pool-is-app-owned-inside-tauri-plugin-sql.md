@@ -1,12 +1,12 @@
 ---
-status: accepted (not implemented)
+status: accepted
 ---
 
 # The Library pool is app-owned inside tauri-plugin-sql
 
 On desktop and Android the webview reached SQLite through `tauri-plugin-sql`, and that let any script in it open, read, write, or create SQLite files anywhere the user can write (#196): `load` joins the path with `PathBuf::push`, so an absolute path or `..` escapes the app config directory, and `execute`/`select` pass `ATTACH` and `VACUUM INTO` straight to SQLite. The plugin has no connect hook, so we keep it for its commands and value decoding but the app builds the Library's pool itself: a lazy pool on the fixed path `<app config dir>/maibuk.db`, inserted into the plugin's public `DbInstances` under `sqlite:maibuk.db`, with an `after_connect` that installs a SQLite authorizer and turns on `SQLITE_DBCONFIG_DEFENSIVE`. The webview gets only `execute` and `select`; `load` and `close` are not granted, and `preload` is gone so the plugin never opens an unguarded pool.
 
-The authorizer allows `ATTACH` only for the empty filename and denies every other one, allows `DETACH`, and allows only the PRAGMAs the app and sqlx use. Denying `ATTACH` outright is not possible: plain `VACUUM`, which `compactLibrary()` runs, attaches `''` internally and the authorizer sees it as `SQLITE_ATTACH` (checked on SQLite 3.53.1), and `SQLITE_LIMIT_ATTACHED = 0` breaks it the same way. `VACUUM INTO` reports its target as the filename, so it is denied.
+The authorizer allows `ATTACH` only for the empty filename and denies every other one, allows `DETACH`, and allows only the PRAGMAs the app uses, and only as reads (`wal_checkpoint` and `table_info` take their argument), and denies `load_extension()`. Denying `ATTACH` outright is not possible: plain `VACUUM`, which `compactLibrary()` runs, attaches `''` internally and the authorizer sees it as `SQLITE_ATTACH` (checked on SQLite 3.53.1), and `SQLITE_LIMIT_ATTACHED = 0` breaks it the same way. `VACUUM INTO` reports its target as the filename, so it is denied.
 
 ## Considered Options
 
