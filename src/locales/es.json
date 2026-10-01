@@ -949,6 +949,15 @@
       "syncNow": ["sincronizar", "sincronización", "nube"],
       "resetDatabase": ["borrar todo", "eliminar todo"],
       "customizeShortcuts": ["teclas", "teclado", "atajos"]
+    },
+    "outline": {
+      "label": "Secciones de configuración",
+      "searchPlaceholder": "Buscar",
+      "searchLabel": "Buscar en la configuración",
+      "clearSearch": "Borrar búsqueda",
+      "noMatches": "Sin resultados",
+      "jumpTo": "Ir a una sección, actual: {{section}}",
+      "current": "actual"
     }
   },
   "cover": {

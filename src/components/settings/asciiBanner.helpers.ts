@@ -59,3 +59,32 @@ export function cellIntensity(distance: number, radius: number): number {
 export function randomGlyph(): string {
   return CHARSET[(Math.random() * CHARSET.length) | 0];
 }
+
+/** A rectangle in canvas coordinates. */
+export interface Rect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/**
+ * How much the cursor effect is held off at (x, y): 1 within `pad` px of any
+ * rect, easing linearly to 0 over the next `feather` px.
+ */
+export function quietness(
+  rects: readonly Rect[],
+  x: number,
+  y: number,
+  pad: number,
+  feather: number
+): number {
+  let quiet = 0;
+  for (const rect of rects) {
+    const dx = Math.max(rect.left - x, 0, x - rect.right);
+    const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+    const distance = Math.max(0, Math.hypot(dx, dy) - pad);
+    quiet = Math.max(quiet, 1 - Math.min(1, distance / feather));
+  }
+  return quiet;
+}

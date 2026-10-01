@@ -949,6 +949,15 @@
       "syncNow": ["sync", "synchronize", "cloud"],
       "resetDatabase": ["delete everything", "wipe"],
       "customizeShortcuts": ["keys", "keyboard", "hotkeys"]
+    },
+    "outline": {
+      "label": "Settings sections",
+      "searchPlaceholder": "Search",
+      "searchLabel": "Search settings",
+      "clearSearch": "Clear search",
+      "noMatches": "No matches",
+      "jumpTo": "Jump to section, current: {{section}}",
+      "current": "current"
     }
   },
   "cover": {

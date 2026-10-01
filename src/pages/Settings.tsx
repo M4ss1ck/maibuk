@@ -1,8 +1,9 @@
-import { useEffect, type ComponentType } from "react";
+import { useEffect, useRef, type ComponentType } from "react";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "@/features/settings";
 import { AsciiFieldBackground } from "@/components/settings/AsciiFieldBackground";
+import { SettingsOutlineLayout } from "@/components/settings/SettingsOutlineLayout";
 import { AppearanceSection } from "@/components/settings/AppearanceSection";
 import { WindowSection } from "@/components/settings/WindowSection";
 import { GeneralSection } from "@/components/settings/GeneralSection";
@@ -94,6 +95,7 @@ export function Settings() {
   const { t } = useTranslation();
   const location = useLocation();
   const { primaryColor } = useSettings();
+  const scrollerRef = useRef<HTMLDivElement>(null);
 
   // A control elsewhere links to Settings → Dictation by hash; scroll to it.
   // Two frames wait for the section to be in the DOM; location.key re-scrolls
@@ -111,19 +113,21 @@ export function Settings() {
   }, [location.hash, location.key]);
 
   return (
-    <div className="h-full overflow-auto relative">
+    <div ref={scrollerRef} className="h-full overflow-auto relative @container">
       <PendingSettingsRow />
       <AsciiFieldBackground color={primaryColor} />
-      <div className="relative z-10 p-4 sm:p-8 max-w-2xl bg-background @container">
-        <h1 data-route-heading className="text-xl @lg:text-2xl font-semibold mb-6 @lg:mb-8">
-          {t("settings.title")}
-        </h1>
+      <SettingsOutlineLayout scrollerRef={scrollerRef}>
+        <div className="relative z-10 p-4 sm:p-8 w-full max-w-2xl bg-background @container">
+          <h1 data-route-heading className="text-xl @lg:text-2xl font-semibold mb-6 @lg:mb-8">
+            {t("settings.title")}
+          </h1>
 
-        {SETTINGS_SECTIONS.map((section) => {
-          const Section = SECTION_COMPONENTS[section.id];
-          return <Section key={section.id} />;
-        })}
-      </div>
+          {SETTINGS_SECTIONS.map((section) => {
+            const Section = SECTION_COMPONENTS[section.id];
+            return <Section key={section.id} />;
+          })}
+        </div>
+      </SettingsOutlineLayout>
     </div>
   );
 }

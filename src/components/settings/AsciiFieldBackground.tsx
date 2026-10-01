@@ -4,6 +4,8 @@ import {
   randomGlyph,
   hexToRgb,
   FALLBACK_RGB,
+  quietness,
+  type Rect,
 } from "@/components/settings/asciiBanner.helpers";
 
 interface AsciiFieldBackgroundProps {
@@ -25,6 +27,12 @@ const FIELD_ALPHA = 0.13;
 // an idle Settings page still costs nothing once it has faded).
 const HOLD_MS = 250;
 const FADE_MS = 800;
+// Over an element marked `data-ascii-quiet` (the Settings outline) the glyphs
+// stay as they are but the cursor effect is off, so text drawn there stays
+// legible without a backdrop. The zone reaches QUIET_PAD px past the element,
+// then feathers out over QUIET_FEATHER px; a cursor inside it lights nothing.
+const QUIET_PAD = 16;
+const QUIET_FEATHER = 48;
 
 /**
  * A full-bleed shimmer of random glyphs behind the whole Settings page. Stays
@@ -72,6 +80,29 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
       const a = lerp(FIELD_ALPHA, 1, intensity);
       return `rgba(${r},${g},${b},${a})`;
     };
+
+    // The quiet elements are sticky, so their place on the (sticky) canvas
+    // only changes when they resize or the field relays out.
+    let quietRects: Rect[] = [];
+    const quietObserver = new ResizeObserver(() => readQuietRects());
+    const readQuietRects = () => {
+      const origin = canvas.getBoundingClientRect();
+      quietRects = Array.from(
+        scroller.querySelectorAll<HTMLElement>("[data-ascii-quiet]"),
+        (el) => {
+          quietObserver.observe(el);
+          const rect = el.getBoundingClientRect();
+          return {
+            left: rect.left - origin.left,
+            top: rect.top - origin.top,
+            right: rect.right - origin.left,
+            bottom: rect.bottom - origin.top,
+          };
+        }
+      );
+    };
+    const quietAt = (x: number, y: number) =>
+      quietRects.length > 0 ? quietness(quietRects, x, y, QUIET_PAD, QUIET_FEATHER) : 0;
 
     const layout = () => {
       cssWidth = scroller.clientWidth;
@@ -123,13 +154,15 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
           let ox = 0;
           let oy = 0;
 
-          if (active) {
-            const cx = x + cellWidth / 2;
-            const cy = y + rowHeight / 2;
+          const cx = x + cellWidth / 2;
+          const cy = y + rowHeight / 2;
+          const quiet = active ? quietAt(cx, cy) : 0;
+
+          if (active && quiet < 1) {
             const distance = Math.hypot(mouse.x - cx, mouse.y - cy);
             // Scale the cursor falloff by the fade so brightness, distortion
             // and mutation all ease out together.
-            intensity = cellIntensity(distance, RADIUS) * influence;
+            intensity = cellIntensity(distance, RADIUS) * influence * (1 - quiet);
 
             if (intensity > 0) {
               if (doMutate) {
@@ -175,6 +208,8 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
       // Outside the field: leave `lastMove` frozen so the running loop keeps
       // easing out from where the cursor left.
       if (!inside) return;
+      // Over the quiet zone counts as leaving the field: the glow eases out.
+      if (quietAt(x, y) >= 1) return;
 
       mouse.x = x;
       mouse.y = y;
@@ -184,6 +219,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
 
     const resizeObserver = new ResizeObserver(() => {
       layout();
+      readQuietRects();
       if (!running) drawStatic();
     });
 
@@ -191,6 +227,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
     document.fonts.ready.then(() => {
       if (cancelled) return;
       layout();
+      readQuietRects();
       drawStatic();
       resizeObserver.observe(scroller);
       if (pointerFine && !reduceMotion) {
@@ -202,6 +239,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
       cancelled = true;
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
+      quietObserver.disconnect();
       window.removeEventListener("mousemove", onMove);
     };
   }, [color]);
