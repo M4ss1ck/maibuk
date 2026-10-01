@@ -194,7 +194,9 @@ async function openCollapsedBlocks(user: ReturnType<typeof userEvent.setup>) {
 const ORPHAN_SELECTOR =
   'button, input, select, textarea, [role="switch"], [role="slider"], [role="combobox"], [role="radio"]';
 
-describe("Settings rows", () => {
+// Each test mounts the whole Settings page; under the full suite on CI a
+// render plus opening both collapsed blocks runs 4-8s, past the 5s default.
+describe("Settings rows", { timeout: 30_000 }, () => {
   beforeEach(() => {
     platformState.isWeb = true;
     platformState.isDesktop = false;
@@ -228,7 +230,7 @@ describe("Settings rows", () => {
     }
   );
 
-  it("keeps every named control inside a row", { timeout: 30_000 }, async () => {
+  it("keeps every named control inside a row", async () => {
     const user = userEvent.setup();
     renderSettings();
     await openCollapsedBlocks(user);
@@ -268,7 +270,7 @@ describe("Settings rows", () => {
     expect(
       await screen.findByRole("button", { name: "settings.exportDatabaseButton" })
     ).toBeInTheDocument();
-  }, 30_000);
+  });
 
   it("focuses the control of a normal row", async () => {
     renderSettings();
