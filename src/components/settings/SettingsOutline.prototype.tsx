@@ -6,8 +6,8 @@
 //  - A clicked section or row is selected and stays selected until the author
 //    scrolls by themselves.
 //  - Otherwise the selected section is the first one whose top is inside the
-//    visible area; when none starts there, the one covering the top. Rows of
-//    that section follow the same rule.
+//    visible area; when none starts there, the one covering the top. No row
+//    is highlighted unless it was clicked.
 import {
   useCallback,
   useEffect,
@@ -94,21 +94,10 @@ function useOutlineSpy(scrollerRef: RefObject<HTMLDivElement | null>, topInset: 
         viewTop,
         viewBottom
       );
-      const rows = section
-        ? Array.from(
-            sectionBlock(section).block?.querySelectorAll<HTMLElement>("[data-settings-row]") ?? []
-          )
-        : [];
-      const row = pickFirstStartingInView(
-        rows,
-        (el) => el.getBoundingClientRect().top,
-        viewTop,
-        viewBottom
+      // Rows are never picked by scrolling, only by a click.
+      setSelection((prev) =>
+        prev.section === section && prev.row === null ? prev : { section, row: null }
       );
-      setSelection((prev) => {
-        const next = { section, row: row?.dataset.settingsRow ?? null };
-        return prev.section === next.section && prev.row === next.row ? prev : next;
-      });
     };
     const settle = (ms: number) => {
       window.clearTimeout(settleTimer.current);
@@ -303,7 +292,7 @@ export function VariantD({
                   setQuery("");
                 }
               }}
-              placeholder="Search settings"
+              placeholder="Search"
               aria-label="Search settings"
               className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />

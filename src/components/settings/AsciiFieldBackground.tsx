@@ -26,10 +26,12 @@ const FIELD_ALPHA = 0.13;
 const HOLD_MS = 250;
 const FADE_MS = 800;
 // Over an element marked `data-ascii-quiet` (the Settings outline) the field
-// dims and ignores the cursor, so text drawn on it stays legible without a
-// solid backdrop. The effect feathers out over QUIET_FEATHER px.
-const QUIET_FEATHER = 28;
-const QUIET_DIM = 0.6;
+// dims and the cursor effect is off, so text drawn on it stays legible without
+// a solid backdrop. The zone reaches QUIET_PAD px past the element, then
+// feathers out over QUIET_FEATHER px; a cursor inside it lights nothing.
+const QUIET_PAD = 16;
+const QUIET_FEATHER = 48;
+const QUIET_DIM = 0.75;
 
 interface QuietRect {
   left: number;
@@ -106,13 +108,14 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
         }
       );
     };
-    // 1 inside a quiet element, easing to 0 at QUIET_FEATHER px outside it.
+    // 1 within QUIET_PAD of a quiet element, easing to 0 over QUIET_FEATHER.
     const quietness = (x: number, y: number) => {
       let quiet = 0;
       for (const rect of quietRects) {
         const dx = Math.max(rect.left - x, 0, x - rect.right);
         const dy = Math.max(rect.top - y, 0, y - rect.bottom);
-        quiet = Math.max(quiet, 1 - Math.min(1, Math.hypot(dx, dy) / QUIET_FEATHER));
+        const distance = Math.max(0, Math.hypot(dx, dy) - QUIET_PAD);
+        quiet = Math.max(quiet, 1 - Math.min(1, distance / QUIET_FEATHER));
       }
       return quiet;
     };
@@ -224,6 +227,8 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
       // Outside the field: leave `lastMove` frozen so the running loop keeps
       // easing out from where the cursor left.
       if (!inside) return;
+      // Over the quiet zone counts as leaving the field: the glow eases out.
+      if (quietRects.length > 0 && quietness(x, y) >= 1) return;
 
       mouse.x = x;
       mouse.y = y;
