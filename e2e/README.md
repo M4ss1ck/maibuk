@@ -1,7 +1,7 @@
 # Keyboard-first E2E suite
 
 Playwright drives the production **web build** of Maibuk in Chromium and WebKit
-using the keyboard only. It is a separate, local command: nothing in `pnpm test`,
+using the keyboard only, plus a phone project that proves the touch paths. It is a separate, local command: nothing in `pnpm test`,
 `pnpm test:run`, `pnpm test:coverage`, the builds, the release scripts, CI, or
 git hooks runs it.
 
@@ -45,6 +45,7 @@ terminal you control. A slim container often also needs `libnss3`, `libnspr4`,
 ```bash
 pnpm test:e2e                                     # everything: guard, typecheck, build, all projects
 pnpm test:e2e --project=chromium                  # one browser (chromium or webkit)
+pnpm test:e2e --project=phone                     # the touch specs on a phone
 pnpm test:e2e specs/books-create.spec.ts          # one file
 pnpm test:e2e specs/books.spec.ts -g "Esc cancels"  # one test by title
 pnpm test:e2e --grep @wf:books-create             # one matrix workflow
@@ -90,13 +91,19 @@ E2E_PORT=4400 pnpm test:e2e --project=chromium
 | `chromium` | Chromium | every spec |
 | `webkit` | WebKit (the engine of the Linux and macOS desktop shells) | every spec except `@chromium-only` |
 | `mac-platform` | Chromium reporting a Mac `navigator.platform` | only tests tagged `@mac-platform` |
+| `phone` | Chromium as a Pixel 7: 412x839 viewport, touch, `isMobile` | only tests tagged `@touch` |
 
 `mac-platform` proves the platform-dependent labels (⌘, ⌥) and the Mod
 bindings. It is not real macOS. Specs press `ControlOrMeta`; a spec that also
 runs on `mac-platform` presses the `mod` fixture, because `ControlOrMeta`
 follows the host OS while TipTap's Mod follows the reported platform.
 
-All projects use en-US, UTC, and a 1280x800 viewport. Workers default to CPU
+`phone` proves what AGENTS.md section 2, item 7 requires of touch screens:
+`(pointer: coarse)` matches and `hover:` never applies, so a control revealed only on hover stays hidden
+there. It is Chromium only: the long-press and swipe helpers send touch points
+over CDP. Desktop projects never run `@touch` tests.
+
+All projects use en-US and UTC; the desktop ones use a 1280x800 viewport. Workers default to CPU
 cores / 2, retries are 0, and a test times out after 30 s.
 
 ## How a test starts
@@ -144,6 +151,8 @@ else (a comment, a variable, an annotation) covers nothing:
   lists must be tagged in a spec file that carries that row.
 - `@mac-platform` also runs the test in the `mac-platform` project, and
   `@chromium-only` keeps it out of WebKit (clipboard rows only).
+- `@touch` runs the test only in the `phone` project, and lets it use touch
+  input (see "Driving the app by touch").
 
 `pnpm test:e2e` runs `e2e/guards/run.ts` before anything else. It fails, naming
 the reason, when:
@@ -162,11 +171,12 @@ the reason, when:
   `test.fail()` without a `https://github.com/M4ss1ck/maibuk/issues/N` URL
   (`fail-without-issue`);
 - a spec breaks the keyboard contract (`keyboard-contract`): pointer or
-  programmatic interaction (`click`, `dblclick`, `hover`, `tap`, `dragTo`,
+  programmatic interaction (`click`, `dblclick`, `hover`, `dragTo`,
   `check`, `selectOption`, `fill`, `clear`, `focus`, `blur`, `setInputFiles`,
-  `locator.press`, `locator.type`, `mouse`, `touchscreen`), `dispatchEvent`,
-  page scripts (`evaluate`, `addInitScript`, `$eval`...), `retries`, or
-  importing `@playwright/test` instead of `../support/test`;
+  `locator.press`, `locator.type`, `mouse`), `dispatchEvent`, page scripts
+  (`evaluate`, `addInitScript`, `$eval`, `newCDPSession`...), `retries`, or
+  importing `@playwright/test` instead of `../support/test`; or touch input
+  (`tap`, `touchscreen`, importing `../support/touch`) outside a `@touch` test;
 - any e2e file other than `e2e/support/storage.ts` and `e2e/support/fault.ts`
   touches IndexedDB, localStorage, or sessionStorage (`storage-outside-support`).
 
@@ -208,6 +218,26 @@ Specs locate elements by role and accessible name and assert focus with
 `expectTabContained(page, dialog)` proves a dialog keeps Tab inside. The file
 chooser is the one allowed bypass: open it with a key, then
 `(await page.waitForEvent("filechooser")).setFiles(path)`.
+
+### Driving the app by touch
+
+A `@touch` spec drives the phone the way a finger does and locates elements by
+role and accessible name like every other spec. Touch input is allowed only
+there: `locator.tap()` and `page.touchscreen` anywhere in a spec whose every
+test is `@touch` (its helpers included), or inside a single `@touch` test of a
+mixed spec. `e2e/support/touch.ts`, which only a spec whose every test is
+`@touch` may import, adds what Playwright lacks:
+
+- `longPress(page, target)` holds past React Aria's 500 ms threshold, then
+  cancels the touch. Chromium's emulated touch has no long-press gesture, so a
+  lifted finger would also become a tap (a compatibility mousedown and click)
+  that a phone never sends after a long-press.
+- `swipe(page, from, to)` moves a finger without holding first.
+
+Emulated touch starts no HTML5 drag, so the phone project cannot reorder by
+dragging a handle. `phone-drag-handle` proves the handle owns the gesture (a
+long-press there opens no Item Menu, a swipe from the row body moves nothing);
+the drag itself stays with the Vitest suites (see the matrix exclusion).
 
 ## Output
 

@@ -29,6 +29,7 @@ export type RowStatus = "planned" | "accepted" | "not-accepted";
 export type RowTag =
   | "chromium-only"
   | "mac-platform"
+  | "touch"
   | "clock"
   | "download"
   | "filechooser"

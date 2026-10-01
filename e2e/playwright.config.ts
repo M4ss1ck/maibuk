@@ -40,7 +40,7 @@ export default defineConfig<{ macPlatform: boolean }>({
       name: "chromium",
       // The fake microphone is a Chromium flag; the WebKit-only edge runs in
       // its own project (tagged @webkit-only) and never here.
-      grepInvert: /@webkit-only/,
+      grepInvert: /@webkit-only|@touch/,
       use: {
         ...devices["Desktop Chrome"],
         ...shared,
@@ -59,7 +59,7 @@ export default defineConfig<{ macPlatform: boolean }>({
     {
       name: "webkit",
       // WebKit cannot grant clipboard permissions; clipboard rows are chromium-only.
-      grepInvert: /@chromium-only/,
+      grepInvert: /@chromium-only|@touch/,
       use: { ...devices["Desktop Safari"], ...shared },
     },
     {
@@ -69,6 +69,14 @@ export default defineConfig<{ macPlatform: boolean }>({
       name: "mac-platform",
       grep: /@mac-platform/,
       use: { ...devices["Desktop Chrome"], ...shared, macPlatform: true },
+    },
+    {
+      // A phone: Chromium with a Pixel 7 viewport, touch, and isMobile, so
+      // `(pointer: coarse)` matches and `hover:` never applies. Only specs
+      // tagged @touch run here, and only they may use touch input.
+      name: "phone",
+      grep: /@touch/,
+      use: { ...devices["Pixel 7"], locale: shared.locale, timezoneId: shared.timezoneId },
     },
   ],
   webServer: {

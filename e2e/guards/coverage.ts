@@ -186,18 +186,18 @@ function callEnd(code: string, open: number): number {
   return i;
 }
 
-/**
- * Tags that declare coverage: those in the title (first argument) of a
- * `test(...)` or `test.fail(...)` declaration, or of a `test.describe(...)`
- * whose body declares at least one test. A tag anywhere else is inert, so a
- * spec cannot claim a row with a string that runs nothing. `code` and `text`
- * are the aligned views from `sourceViews`.
- */
-function declaredTags(
-  code: string,
-  text: string
-): { wf: Set<string>; sc: Set<string>; titleRanges: [number, number][] } {
-  const declarations = [
+interface Declaration {
+  isDescribe: boolean;
+  /** Where the call starts and where its closing `)` ends. */
+  start: number;
+  end: number;
+  titleStart: number;
+  titleEnd: number;
+}
+
+/** Every `test(...)`, `test.fail(...)` and `test.describe(...)` declaration with a literal title. */
+function declarations(code: string): Declaration[] {
+  return [
     ...code.matchAll(/\btest(\.describe(?:\.(?:serial|parallel))?|\.fail)?\s*\(\s*(["'`])/g),
   ].map((m) => {
     const titleStart = (m.index ?? 0) + m[0].length;
@@ -211,8 +211,22 @@ function declaredTags(
       start: m.index ?? 0,
     };
   });
-  const tests = declarations.filter((d) => !d.isDescribe);
-  const counted = declarations.filter(
+}
+
+/**
+ * Tags that declare coverage: those in the title (first argument) of a
+ * `test(...)` or `test.fail(...)` declaration, or of a `test.describe(...)`
+ * whose body declares at least one test. A tag anywhere else is inert, so a
+ * spec cannot claim a row with a string that runs nothing. `code` and `text`
+ * are the aligned views from `sourceViews`.
+ */
+function declaredTags(
+  code: string,
+  text: string
+): { wf: Set<string>; sc: Set<string>; titleRanges: [number, number][] } {
+  const all = declarations(code);
+  const tests = all.filter((d) => !d.isDescribe);
+  const counted = all.filter(
     (d) => !d.isDescribe || tests.some((t) => t.start > d.start && t.start < d.end)
   );
 
@@ -224,6 +238,27 @@ function declaredTags(
     }
   }
   return { wf, sc, titleRanges: counted.map((d) => [d.titleStart, d.titleEnd]) };
+}
+
+const TOUCH_TAG = /@touch\b/;
+
+/**
+ * Where touch input is allowed: inside a declaration whose title carries
+ * `@touch`, which only the `phone` project runs. `wholeFile` is true when
+ * every test the file declares sits in such a range, so it may import the
+ * touch helpers.
+ */
+function touchScope(
+  code: string,
+  text: string
+): { ranges: [number, number][]; wholeFile: boolean } {
+  const all = declarations(code);
+  const ranges = all
+    .filter((d) => TOUCH_TAG.test(text.slice(d.titleStart, d.titleEnd)))
+    .map((d): [number, number] => [d.start, d.end]);
+  const inRange = (at: number) => ranges.some(([from, to]) => at >= from && at < to);
+  const tests = all.filter((d) => !d.isDescribe);
+  return { ranges, wholeFile: tests.length > 0 && tests.every((t) => inRange(t.start)) };
 }
 
 /** Argument text of every `test.fail(` call, up to its body. */
@@ -253,18 +288,18 @@ function failCalls(text: string): string[] {
 const BANNED_IN_SPECS: { pattern: RegExp; why: string; view?: "text" }[] = [
   {
     pattern:
-      /\.(click|dblclick|hover|tap|dragTo|check|uncheck|setChecked|selectOption|selectText|fill|clear|focus|blur|setInputFiles|pressSequentially)\s*\(/g,
+      /\.(click|dblclick|hover|dragTo|check|uncheck|setChecked|selectOption|selectText|fill|clear|focus|blur|setInputFiles|pressSequentially)\s*\(/g,
     why: "pointer or programmatic interaction; drive it with page.keyboard",
   },
   {
     pattern: /(?<!keyboard)\.(press|type)\s*\(/g,
     why: "locator.press/type focuses the element for you; press keys on page.keyboard",
   },
-  { pattern: /\b(mouse|touchscreen)\s*\./g, why: "pointer input" },
+  { pattern: /\bmouse\s*\./g, why: "pointer input" },
   { pattern: /\.dispatchEvent\s*\(/g, why: "synthetic event" },
   {
     pattern:
-      /\.(evaluate|evaluateHandle|evaluateAll|addInitScript|exposeFunction|exposeBinding|\$eval|\$\$eval)\s*\(/g,
+      /\.(evaluate|evaluateHandle|evaluateAll|addInitScript|exposeFunction|exposeBinding|newCDPSession|\$eval|\$\$eval)\s*\(/g,
     why: "page script can reach app state; setup belongs in e2e/support/",
   },
   {
@@ -275,6 +310,21 @@ const BANNED_IN_SPECS: { pattern: RegExp; why: string; view?: "text" }[] = [
     view: "text",
   },
   { pattern: /\bretries\s*:/g, why: "retries hide flakes; the suite runs with retries 0" },
+];
+
+/**
+ * Touch input, allowed only in @touch tests (the `phone` project): anywhere in
+ * a spec whose every test is one, helpers included, and otherwise only inside
+ * a @touch declaration. Importing the touch helpers needs the whole file.
+ */
+const TOUCH_IN_SPECS: { pattern: RegExp; scope: "test" | "file"; view?: "text" }[] = [
+  { pattern: /\.tap\s*\(/g, scope: "test" },
+  { pattern: /\btouchscreen\s*\./g, scope: "test" },
+  {
+    pattern: /\bimport\s+(?!type\b)[^;]*?from\s*["'][^"']*support\/touch["']/g,
+    scope: "file",
+    view: "text",
+  },
 ];
 
 function lineOf(source: string, index: number): number {
@@ -306,6 +356,23 @@ export function checkCoverage(input: GuardInput): Problem[] {
         add(
           "keyboard-contract",
           `${spec.path}:${lineOf(scanned, m.index ?? 0)} uses \`${m[0].trim()}\`: ${why}`
+        );
+      }
+    }
+    const touch = touchScope(code, text);
+    for (const { pattern, scope, view } of TOUCH_IN_SPECS) {
+      const scanned = view === "text" ? text : code;
+      for (const m of scanned.matchAll(pattern)) {
+        const at = m.index ?? 0;
+        const allowed =
+          touch.wholeFile ||
+          (scope === "test" && touch.ranges.some(([from, to]) => at >= from && at < to));
+        if (allowed) continue;
+        add(
+          "keyboard-contract",
+          `${spec.path}:${lineOf(scanned, at)} uses \`${m[0].trim()}\`: touch input belongs only in ${
+            scope === "file" ? "a spec whose every test is" : "a test or describe"
+          } tagged @touch (the phone project)`
         );
       }
     }
