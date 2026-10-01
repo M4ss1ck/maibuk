@@ -7,6 +7,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
 import type { LightweightCanvasNode } from "@/features/canvas/types";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { useEditorCommandSource } from "@/components/editor/editor-command-source";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { FootnoteList } from "@/components/editor/FootnoteList";
 import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
@@ -63,6 +64,7 @@ function ActiveNodeEditor({
       attributes: { class: "outline-none" },
     },
   });
+  useEditorCommandSource(editor);
 
   // Focus during the commit that opens the editor, not in a passive effect:
   // a keyboard author's next keystroke (T then typing, F2 then Control+a)

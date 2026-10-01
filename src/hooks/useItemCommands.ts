@@ -9,21 +9,28 @@ export interface ItemCommand {
   children?: ItemCommand[];
 }
 
-/** Whether focus is on the element or inside it; only reads focus, never moves it. */
+/**
+ * Whether focus is on the element or inside it; only reads focus, never moves
+ * it. Listens on the document and reads the ref when focus moves, because a
+ * React Aria collection item renders twice (a hidden pass that builds the
+ * collection, then the visible one) and the ref only reaches the visible DOM
+ * after this effect has run.
+ */
 function useFocusInside(ref: RefObject<HTMLElement | null>): boolean {
   const [inside, setInside] = useState(false);
   useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    const update = () => setInside(element.contains(element.ownerDocument.activeElement));
+    const update = () => {
+      const element = ref.current;
+      setInside(element !== null && element.contains(document.activeElement));
+    };
     update();
     // focusout fires before the next element takes focus; read it once focus settles.
     const onFocusOut = () => queueMicrotask(update);
-    element.addEventListener("focusin", update);
-    element.addEventListener("focusout", onFocusOut);
+    document.addEventListener("focusin", update);
+    document.addEventListener("focusout", onFocusOut);
     return () => {
-      element.removeEventListener("focusin", update);
-      element.removeEventListener("focusout", onFocusOut);
+      document.removeEventListener("focusin", update);
+      document.removeEventListener("focusout", onFocusOut);
     };
   }, [ref]);
   return inside;

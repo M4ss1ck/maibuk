@@ -6,6 +6,7 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -97,7 +98,7 @@ test.describe("primary navigation @wf:shell-nav-sidebar", () => {
 });
 
 test.describe("g sequences @wf:shell-goto-sequences", () => {
-  test("g p, g n, g c, g e, g m, g s go to each screen @sc:global.gotoProjects @sc:global.gotoNotes @sc:global.gotoCanvas @sc:global.gotoEphemeral @sc:global.gotoMetrics @sc:global.gotoSettings", async ({
+  test("g p, g n, g c, g e, g m, g s go to each screen @sc:global.gotoProjects @sc:global.gotoNotes @sc:global.gotoCanvas @sc:global.gotoEphemeral @sc:global.gotoMetrics @sc:global.gotoSettings @palette-entry", async ({
     page,
   }) => {
     await openHome(page);
@@ -115,6 +116,8 @@ test.describe("g sequences @wf:shell-goto-sequences", () => {
       await expect(page).toHaveURL(url);
       await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
     }
+    // Home again: the sidebar footer carries the Command Palette entry point.
+    await capture(page, "palette-entry-sidebar-footer");
   });
 
   test("g n typed in a text field is text, not navigation", async ({ page }) => {

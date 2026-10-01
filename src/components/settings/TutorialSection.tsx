@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { Check, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { SettingRow } from "@/components/settings/SettingRow";
 import { requestTutorial } from "@/features/tutorial/controller";
 import { TUTORIAL_SECTIONS, TUTORIAL_SETTINGS_ROW_STEP } from "@/features/tutorial/sections";
 import { useTutorialStore } from "@/features/tutorial/store";
@@ -26,28 +27,39 @@ export function TutorialSection({ returnTo = "/settings" }: TutorialSectionProps
   };
 
   return (
-    <div data-tutorial={TUTORIAL_SETTINGS_ROW_STEP}>
-      <div className="mb-4 flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between">
-        <p className="text-sm text-muted-foreground">{t("tutorial.settings.description")}</p>
-        <Button
-          type="button"
-          variant="secondary"
-          className="shrink-0"
-          onClick={() => start(null)}
-          data-tutorial-trigger="settings-start"
-        >
-          <GraduationCap className="h-4 w-4" aria-hidden="true" />
-          {t("tutorial.settings.startAll")}
-        </Button>
-      </div>
-      <ListBox
-        aria-label={t("tutorial.settings.sectionsLabel")}
-        items={TUTORIAL_SECTIONS}
-        dependencies={[i18n.resolvedLanguage]}
-        selectionMode="none"
-        onAction={(key) => start(key as TutorialSectionId)}
-        className="grid gap-1 @lg:grid-cols-2"
+    <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
+      <h2
+        tabIndex={-1}
+        data-settings-section="tutorial"
+        className="text-lg text-primary font-medium mb-4"
       >
+        {t("tutorial.settings.title")}
+      </h2>
+      <div data-tutorial={TUTORIAL_SETTINGS_ROW_STEP}>
+        <SettingRow
+          id="tutorialStart"
+          labelHidden
+          className="mb-4 flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between"
+        >
+          <Button
+            type="button"
+            variant="secondary"
+            className="shrink-0"
+            onClick={() => start(null)}
+            data-tutorial-trigger="settings-start"
+          >
+            <GraduationCap className="h-4 w-4" aria-hidden="true" />
+            {t("tutorial.settings.startAll")}
+          </Button>
+        </SettingRow>
+        <ListBox
+          aria-label={t("tutorial.settings.sectionsLabel")}
+          items={TUTORIAL_SECTIONS}
+          dependencies={[i18n.resolvedLanguage]}
+          selectionMode="none"
+          onAction={(key) => start(key as TutorialSectionId)}
+          className="grid gap-1 @lg:grid-cols-2"
+        >
         {(section) => {
           const name = translate(section.nameKey);
           const done = sections[section.id]?.completedAt != null;
@@ -78,6 +90,7 @@ export function TutorialSection({ returnTo = "/settings" }: TutorialSectionProps
           );
         }}
       </ListBox>
-    </div>
+      </div>
+    </section>
   );
 }

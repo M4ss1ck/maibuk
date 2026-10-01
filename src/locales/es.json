@@ -935,6 +935,20 @@
       },
       "promptMarkdownLabel": "Preguntar al pegar Markdown",
       "promptMarkdownDescription": "Al pegar texto Markdown, preguntar si convertirlo a contenido con formato."
+    },
+    "keywords": {
+      "theme": ["oscuro", "claro", "modo", "apariencia", "sistema"],
+      "primaryColor": ["acento", "color"],
+      "appFontSize": ["zoom", "tamaño de texto"],
+      "pasteCleanupPreset": ["copiar", "pegar", "portapapeles", "formato"],
+      "alwaysOnTop": ["fijar", "ventana", "flotante"],
+      "spellCheck": ["ortografía", "diccionario"],
+      "autoSave": ["guardar", "automático"],
+      "language": ["idioma", "traducción", "español", "inglés"],
+      "backupsList": ["copia de seguridad", "restaurar"],
+      "syncNow": ["sincronizar", "sincronización", "nube"],
+      "resetDatabase": ["borrar todo", "eliminar todo"],
+      "customizeShortcuts": ["teclas", "teclado", "atajos"]
     }
   },
   "cover": {
@@ -1116,6 +1130,43 @@
   "embed": {
     "placeholder": "Empieza a escribir..."
   },
+  "commandPalette": {
+    "title": "Paleta de comandos",
+    "searchLabel": "Encontrar por nombre",
+    "placeholder": "Escribe un comando, libro, nota…",
+    "resultsLabel": "Resultados",
+    "resultCount_one": "{{count}} resultado",
+    "resultCount_other": "{{count}} resultados",
+    "removedFromRecent": "Quitado de recientes",
+    "removeFromRecent": "Quitar de recientes",
+    "removeItem": "Quitar {{label}} de recientes",
+    "unavailable": "Ese comando ya no está disponible aquí",
+    "saveFailed": "No se pudo guardar tu último texto, así que no se abrió nada",
+    "noResults": "Sin resultados",
+    "pageAnnouncement": "Mostrando {{page}}",
+    "pages": {
+      "chapters": "Abrir capítulo…",
+      "books": "Ir a libro…",
+      "notes": "Abrir nota…",
+      "canvases": "Abrir lienzo…"
+    },
+    "chips": {
+      "chapters": "Abrir capítulo",
+      "books": "Ir a libro",
+      "notes": "Abrir nota",
+      "canvases": "Abrir lienzo"
+    },
+    "sections": {
+      "recent": "Recientes",
+      "suggested": "Sugerencias",
+      "commands": "Comandos",
+      "chapters": "Capítulos",
+      "notes": "Notas",
+      "books": "Libros",
+      "canvases": "Lienzos",
+      "settings": "Configuración"
+    }
+  },
   "shortcuts": {
     "title": "Atajos de teclado",
     "none": "No hay atajos disponibles para esta pantalla",
@@ -1129,6 +1180,7 @@
     "toggleTheme": "Cambiar tema",
     "toggleShortcutHints": "Alternar atajos visuales",
     "toggleAlwaysOnTop": "Alternar siempre visible",
+    "openCommandPalette": "Abrir paleta de comandos",
     "syncNow": "Sincronizar ahora",
     "newBook": "Crear libro nuevo",
     "jumpBooks": "Ir al libro por número",
@@ -1199,6 +1251,7 @@
       "canvas": "Lienzo",
       "editor": "Editor",
       "ephemeral": "Efímero",
+      "commandPalette": "Paleta de comandos",
       "focus": "Foco"
     },
     "onThisScreen": "En esta pantalla",
@@ -1210,7 +1263,15 @@
     "areaCover": "Diseñador de portada",
     "startTutorial": "Empezar el Tutorial",
     "skipTutorial": "Omitir el Tutorial",
-    "areaTutorial": "Tutorial"
+    "areaTutorial": "Tutorial",
+    "keywords": {
+      "toggleAlwaysOnTop": ["fijar", "flotante", "ventana", "siempre visible"],
+      "toggleTheme": ["oscuro", "claro", "modo", "apariencia"],
+      "syncNow": ["subir", "descargar", "nube"],
+      "showHelp": ["teclado", "teclas", "atajos"],
+      "gotoSettings": ["preferencias", "opciones", "ajustes"],
+      "dictationToggle": ["voz", "micrófono", "hablar"]
+    }
   },
   "shortcutEditor": {
     "title": "Personalizar atajos",

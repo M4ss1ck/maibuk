@@ -98,7 +98,7 @@ test.describe("adding a Chapter @wf:chapters-add", () => {
 });
 
 test.describe("moving through Chapters @wf:chapters-navigate", () => {
-  test("arrows move between rows, Enter opens the Chapter, and a reload reopens it", async ({
+  test("arrows move between rows, Enter opens the Chapter, and a reload reopens it @palette-entry", async ({
     page,
   }) => {
     await openBook(page);
@@ -117,6 +117,9 @@ test.describe("moving through Chapters @wf:chapters-navigate", () => {
 
     await page.reload();
     await expect(page.getByRole("textbox", { name: "Text of The Lamp" })).toBeVisible();
+
+    // The Chapter list footer carries the Command Palette entry point.
+    await capture(page, "palette-entry-chapter-footer");
   });
 });
 

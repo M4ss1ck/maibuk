@@ -935,6 +935,20 @@
       },
       "promptMarkdownLabel": "Prompt to convert pasted Markdown",
       "promptMarkdownDescription": "When you paste Markdown text, ask whether to convert it to formatted content."
+    },
+    "keywords": {
+      "theme": ["dark", "light", "mode", "appearance", "system"],
+      "primaryColor": ["accent", "color"],
+      "appFontSize": ["zoom", "text size"],
+      "pasteCleanupPreset": ["copy", "paste", "clipboard", "formatting"],
+      "alwaysOnTop": ["pin", "window", "float"],
+      "spellCheck": ["spelling", "dictionary"],
+      "autoSave": ["save", "automatic"],
+      "language": ["locale", "translation", "spanish", "english"],
+      "backupsList": ["backup", "restore"],
+      "syncNow": ["sync", "synchronize", "cloud"],
+      "resetDatabase": ["delete everything", "wipe"],
+      "customizeShortcuts": ["keys", "keyboard", "hotkeys"]
     }
   },
   "cover": {
@@ -1116,6 +1130,43 @@
   "embed": {
     "placeholder": "Start writing..."
   },
+  "commandPalette": {
+    "title": "Command palette",
+    "searchLabel": "Find by name",
+    "placeholder": "Type a command, Book, Note…",
+    "resultsLabel": "Results",
+    "resultCount_one": "{{count}} result",
+    "resultCount_other": "{{count}} results",
+    "removedFromRecent": "Removed from recent",
+    "removeFromRecent": "Remove from recent",
+    "removeItem": "Remove {{label}} from recent",
+    "unavailable": "That command is not available here anymore",
+    "saveFailed": "Your latest text could not be saved, so nothing was opened",
+    "noResults": "No results",
+    "pageAnnouncement": "Showing {{page}}",
+    "pages": {
+      "chapters": "Open Chapter…",
+      "books": "Go to Book…",
+      "notes": "Open Note…",
+      "canvases": "Open Canvas…"
+    },
+    "chips": {
+      "chapters": "Open Chapter",
+      "books": "Go to Book",
+      "notes": "Open Note",
+      "canvases": "Open Canvas"
+    },
+    "sections": {
+      "recent": "Recent",
+      "suggested": "Suggested",
+      "commands": "Commands",
+      "chapters": "Chapters",
+      "notes": "Notes",
+      "books": "Books",
+      "canvases": "Canvases",
+      "settings": "Settings"
+    }
+  },
   "shortcuts": {
     "title": "Keyboard shortcuts",
     "none": "No shortcuts available for this screen",
@@ -1129,6 +1180,7 @@
     "toggleTheme": "Cycle theme",
     "toggleShortcutHints": "Toggle shortcut hints",
     "toggleAlwaysOnTop": "Toggle always on top",
+    "openCommandPalette": "Open command palette",
     "syncNow": "Sync now",
     "newBook": "Create new book",
     "jumpBooks": "Jump to book by number",
@@ -1199,6 +1251,7 @@
       "canvas": "Canvas",
       "editor": "Editor",
       "ephemeral": "Ephemeral",
+      "commandPalette": "Command palette",
       "focus": "Focus"
     },
     "onThisScreen": "On this screen",
@@ -1210,7 +1263,15 @@
     "areaCover": "Cover Designer",
     "startTutorial": "Start the Tutorial",
     "skipTutorial": "Skip the Tutorial",
-    "areaTutorial": "Tutorial"
+    "areaTutorial": "Tutorial",
+    "keywords": {
+      "toggleAlwaysOnTop": ["pin", "float", "window", "stay on top"],
+      "toggleTheme": ["dark", "light", "mode", "appearance"],
+      "syncNow": ["upload", "download", "cloud", "backup"],
+      "showHelp": ["keyboard", "keys", "hotkeys", "cheat sheet"],
+      "gotoSettings": ["preferences", "options", "configuration"],
+      "dictationToggle": ["voice", "speech", "microphone", "talk"]
+    }
   },
   "shortcutEditor": {
     "title": "Customize shortcuts",

@@ -24,6 +24,8 @@ import {
 } from "@/features/settings/types";
 import { Select, Switch, Button, Modal, Input } from "@/components/ui";
 import { ChevronDownIcon } from "@/components/icons";
+import { SettingRow } from "@/components/settings/SettingRow";
+import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 
 export function PasteCleanupSection() {
   const { t } = useTranslation();
@@ -38,11 +40,16 @@ export function PasteCleanupSection() {
     removePasteCleanupRule,
     movePasteCleanupRule,
   } = useSettingsStore();
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [newProperty, setNewProperty] = useState("");
   const [focusRuleId, setFocusRuleId] = useState<string | null>(null);
   const [returnToEditorPath, setReturnToEditorPath] = useState<string | null>(null);
+  // The collapsed "advanced" block lives in the reveal store so focusing a
+  // row inside it can open it from outside this section.
+  const advancedOpen = useSettingsRevealStore((state) => state.pasteCleanupAdvancedOpen);
+  const setAdvancedOpen = useSettingsRevealStore(
+    (state) => state.setPasteCleanupAdvancedOpen
+  );
 
   // Opened via "Add cleanup rule" from the HTML source view: jump straight to
   // the rules editor with the new rule revealed and focused.
@@ -68,6 +75,9 @@ export function PasteCleanupSection() {
   const captureFocusRule = useCallback((node: HTMLTextAreaElement | null) => {
     focusRuleNodeRef.current = node;
   }, []);
+  // A fresh mount starts closed, like the old local state: reset on unmount
+  // so one visit's open block never leaks into the next mount.
+  useEffect(() => () => setAdvancedOpen(false), [setAdvancedOpen]);
   useEffect(() => {
     if (!rulesOpen || !focusRuleId) return;
     const node = focusRuleNodeRef.current;
@@ -114,35 +124,34 @@ export function PasteCleanupSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
-        <div>
-          <p className="font-medium">{t("settings.pasteCleanup.preset.label")}</p>
-          <p className="text-sm text-muted-foreground">
-            {t("settings.pasteCleanup.preset.description")}
-          </p>
-        </div>
+      <SettingRow
+        id="pasteCleanupPreset"
+        className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4"
+      >
         <Select<PasteCleanupPreset>
           ariaLabel={t("settings.pasteCleanup.preset.label")}
           value={preset}
           onChange={setPasteCleanupPreset}
           options={presetOptions}
         />
-      </div>
+      </SettingRow>
 
-      <div className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4">
-        <div>
-          <p className="font-medium">{t("settings.pasteCleanup.promptMarkdownLabel")}</p>
-          <p className="text-sm text-muted-foreground">
-            {t("settings.pasteCleanup.promptMarkdownDescription")}
-          </p>
-        </div>
-        <Switch checked={promptMarkdownOnPaste} onChange={setPromptMarkdownOnPaste} />
-      </div>
+      <SettingRow
+        id="pasteCleanupPromptMarkdown"
+        className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4"
+      >
+        <Switch
+          checked={promptMarkdownOnPaste}
+          onChange={setPromptMarkdownOnPaste}
+          label={t("settings.pasteCleanup.promptMarkdownLabel")}
+        />
+      </SettingRow>
 
       <div>
         <button
           type="button"
-          onClick={() => setAdvancedOpen((open) => !open)}
+          onClick={() => setAdvancedOpen(!advancedOpen)}
+          aria-expanded={advancedOpen}
           className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           {t("settings.pasteCleanup.advanced")}
@@ -153,95 +162,102 @@ export function PasteCleanupSection() {
 
         {advancedOpen && (
           <div className="mt-3 space-y-5 border-l-2 border-border pl-4">
-            <div className="space-y-3">
-              {PASTE_STRUCTURAL_OPTION_KEYS.map((key) => (
-                <div key={key} className="flex items-center justify-between gap-4">
-                  <p className="text-sm">{t(`settings.pasteCleanup.option.${key}`)}</p>
-                  <Switch
-                    checked={options[key]}
-                    onChange={(value) => setPasteCleanupOption(key, value)}
-                    label={t(`settings.pasteCleanup.option.${key}`)}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm font-medium">{t("settings.pasteCleanup.strip.title")}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t("settings.pasteCleanup.strip.description")}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 @lg:grid-cols-2 gap-x-6 gap-y-2">
-                {PASTE_STRIP_COMMON_PROPERTIES.map((property) => (
-                  <div key={property} className="flex items-center justify-between gap-3">
-                    <p className="text-sm">{t(`settings.pasteCleanup.property.${property}`)}</p>
-                    <Switch
-                      checked={strippedProperties.includes(property)}
-                      onChange={(on) =>
-                        on ? addStrippedProperty(property) : removeStrippedProperty(property)
-                      }
-                      label={t(`settings.pasteCleanup.property.${property}`)}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {customProperties.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {customProperties.map((property) => (
-                    <span
-                      key={property}
-                      className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-mono"
-                    >
-                      {property}
-                      <button
-                        type="button"
-                        onClick={() => removeStrippedProperty(property)}
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label={t("settings.pasteCleanup.rules.remove")}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
+            <SettingRow id="pasteCleanupAdvanced" visuallyHiddenLabel>
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  {PASTE_STRUCTURAL_OPTION_KEYS.map((key) => (
+                    <div key={key} className="flex items-center justify-between gap-4">
+                      <p className="text-sm">{t(`settings.pasteCleanup.option.${key}`)}</p>
+                      <Switch
+                        checked={options[key]}
+                        onChange={(value) => setPasteCleanupOption(key, value)}
+                        label={t(`settings.pasteCleanup.option.${key}`)}
+                      />
+                    </div>
                   ))}
                 </div>
-              )}
 
-              <div className="flex items-center gap-2">
-                <Input
-                  value={newProperty}
-                  onChange={(e) => setNewProperty(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddProperty();
-                    }
-                  }}
-                  placeholder={t("settings.pasteCleanup.strip.addPropertyPlaceholder")}
-                  className="flex-1"
-                />
-                <Button variant="secondary" size="sm" onClick={handleAddProperty}>
-                  {t("settings.pasteCleanup.strip.addProperty")}
-                </Button>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">{t("settings.pasteCleanup.strip.title")}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("settings.pasteCleanup.strip.description")}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 @lg:grid-cols-2 gap-x-6 gap-y-2">
+                    {PASTE_STRIP_COMMON_PROPERTIES.map((property) => (
+                      <div key={property} className="flex items-center justify-between gap-3">
+                        <p className="text-sm">{t(`settings.pasteCleanup.property.${property}`)}</p>
+                        <Switch
+                          checked={strippedProperties.includes(property)}
+                          onChange={(on) =>
+                            on ? addStrippedProperty(property) : removeStrippedProperty(property)
+                          }
+                          label={t(`settings.pasteCleanup.property.${property}`)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {customProperties.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {customProperties.map((property) => (
+                        <span
+                          key={property}
+                          className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-mono"
+                        >
+                          {property}
+                          <button
+                            type="button"
+                            onClick={() => removeStrippedProperty(property)}
+                            className="text-muted-foreground hover:text-destructive"
+                            aria-label={t("settings.pasteCleanup.rules.remove")}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={newProperty}
+                      onChange={(e) => setNewProperty(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddProperty();
+                        }
+                      }}
+                      placeholder={t("settings.pasteCleanup.strip.addPropertyPlaceholder")}
+                      className="flex-1"
+                    />
+                    <Button variant="secondary" size="sm" onClick={handleAddProperty}>
+                      {t("settings.pasteCleanup.strip.addProperty")}
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
+            </SettingRow>
 
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">{t("settings.pasteCleanup.rules.title")}</p>
+            <SettingRow
+              id="pasteCleanupRules"
+              className="flex items-center justify-between gap-4"
+              labelClassName="text-sm font-medium"
+              descriptionOverride={
                 <p className="text-xs text-muted-foreground">
                   {t("settings.pasteCleanup.rules.count", {
                     count: rules.length,
                   })}
                 </p>
-              </div>
+              }
+            >
               <Button variant="secondary" size="sm" onClick={() => setRulesOpen(true)}>
                 {t("settings.pasteCleanup.rules.manage")}
               </Button>
-            </div>
+            </SettingRow>
           </div>
         )}
       </div>

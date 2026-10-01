@@ -274,6 +274,7 @@ describe("isReservedOnWeb", () => {
     "Mod+t",
     "Mod+w",
     "Mod+Shift+n",
+    "Mod+Shift+p",
     "Mod+Shift+t",
     "Mod+Shift+w",
     "Mod+Tab",

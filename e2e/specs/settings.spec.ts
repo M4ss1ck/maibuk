@@ -381,3 +381,35 @@ test.describe("Metrics Categories @wf:settings-metrics", () => {
     await expect(time).toBeFocused();
   });
 });
+
+test.describe("Settings screens", () => {
+  test("full-page captures across scroll stops with Advanced open", async ({ page }) => {
+    await openSettings(page);
+    const main = settingsMain(page);
+    const editorScope = page.locator('[data-tutorial~="settings.editor"]');
+    const advancedScope = page.locator('section[data-tutorial="settings.advanced"]');
+    const byName = (scope: Page | ReturnType<Page["locator"]>, name: string) =>
+      scope.getByRole("button", { name, exact: true });
+
+    await capture(page, "settings-01-top");
+
+    await tabTo(page, byName(main, "Customize shortcuts"), { max: 200 });
+    await capture(page, "settings-02-shortcuts");
+
+    await tabTo(page, byName(main, "Create Backup Now"), { max: 200 });
+    await capture(page, "settings-03-backups");
+
+    await tabTo(page, byName(editorScope, "Advanced"), { max: 200 });
+    await page.keyboard.press("Enter");
+    await tabTo(page, byName(main, "Manage rules"), { max: 200 });
+    await capture(page, "settings-04-editor");
+
+    await tabTo(page, byName(main, "Start from the beginning"), { max: 200 });
+    await capture(page, "settings-05-tutorial");
+
+    await tabTo(page, byName(advancedScope, "Advanced"), { max: 200 });
+    await page.keyboard.press("Enter");
+    await tabTo(page, byName(advancedScope, "Reset"), { max: 200 });
+    await capture(page, "settings-06-advanced");
+  });
+});

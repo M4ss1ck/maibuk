@@ -25,6 +25,7 @@ import { toast } from "@/components/ui/Toast";
 import type { BackupEntry } from "@/lib/platform/types";
 import { useSettingsStore } from "@/features/settings/store";
 import { BACKUP_LIST_PAGE_SIZE_OPTIONS } from "@/features/settings/types";
+import { SettingRow } from "@/components/settings/SettingRow";
 
 const SIZE_WARNING_THRESHOLD = 500 * 1024 * 1024; // 500MB
 
@@ -394,14 +395,18 @@ export function BackupSection() {
 
   return (
     <div className="@container space-y-4">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+      <h3
+        tabIndex={-1}
+        data-settings-section="backups"
+        className="text-sm font-semibold uppercase tracking-wider text-muted-foreground"
+      >
         {t("backup.title")}
       </h3>
       <div>
         <p className="text-sm text-muted-foreground">{t("backup.description")}</p>
       </div>
 
-      <div className="flex items-center gap-4">
+      <SettingRow id="backupRetention" labelHidden className="flex items-center gap-4">
         <Input
           type="number"
           label={t("backup.retentionLimit")}
@@ -411,12 +416,14 @@ export function BackupSection() {
           onChange={(e) => setBackupRetention(Number(e.target.value))}
           className="w-24"
         />
-      </div>
+      </SettingRow>
 
       {IS_DESKTOP && (
         // An error below the field would pull a bottom-aligned button down
         // with it; align the button to the field under its label instead.
-        <div
+        <SettingRow
+          id="backupDirectory"
+          labelHidden
           className={`flex flex-col gap-3 @sm:flex-row ${directoryError ? "@sm:items-start" : "@sm:items-end"}`}
           onBlur={(e) => {
             // Moving between the field and Choose folder keeps the draft (it
@@ -455,25 +462,28 @@ export function BackupSection() {
           >
             {t("backup.chooseDirectory")}
           </Button>
-        </div>
+        </SettingRow>
       )}
 
-      <Button ref={createButtonRef} variant="primary" onClick={handleCreate} disabled={!service}>
-        {t("backup.createBackup")}
-      </Button>
+      <SettingRow id="backupCreate" labelHidden>
+        <Button ref={createButtonRef} variant="primary" onClick={handleCreate} disabled={!service}>
+          {t("backup.createBackup")}
+        </Button>
+      </SettingRow>
 
       {totalSizeBytes > SIZE_WARNING_THRESHOLD && (
         <p className="text-sm text-destructive">{t("backup.sizeWarning")}</p>
       )}
 
-      {loading && totalCount === 0 ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          {t("common.loading")}
-        </p>
-      ) : totalCount === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("backup.noBackups")}</p>
-      ) : (
-        <div className="space-y-3">
+      <SettingRow id="backupsList" visuallyHiddenLabel>
+        {loading && totalCount === 0 ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            {t("common.loading")}
+          </p>
+        ) : totalCount === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("backup.noBackups")}</p>
+        ) : (
+          <div className="space-y-3">
           {selected.size > 0 && (
             <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm">
               <span id={selectedCountId} role="status" className="font-medium text-foreground">
@@ -626,7 +636,8 @@ export function BackupSection() {
             </div>
           </div>
         </div>
-      )}
+        )}
+      </SettingRow>
 
       {/* Restore confirmation modal */}
       <Modal

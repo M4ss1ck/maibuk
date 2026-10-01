@@ -14,6 +14,7 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -106,7 +107,7 @@ function jpegSize(bytes: Buffer) {
 }
 
 test.describe("opening the Cover Designer @wf:cover-open", () => {
-  test("Design Cover opens it by keyboard and hands focus to Back and the toolbar", async ({
+  test("Design Cover opens it by keyboard and hands focus to Back and the toolbar @palette-entry", async ({
     page,
   }) => {
     await openCover(page);
@@ -119,6 +120,16 @@ test.describe("opening the Cover Designer @wf:cover-open", () => {
     await tabTo(page, templates(page), { max: 5 });
     await expect(templates(page)).toBeFocused();
     await expect(page.getByRole("button", { name: '6" x 9"', exact: true })).toBeVisible();
+
+    // Wide: the Layers sidebar footer carries the Command Palette entry point.
+    await capture(page, "palette-entry-cover-wide");
+
+    // Narrow: Layers becomes a sheet and the entry point moves to the toolbar.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      page.getByRole("button", { name: "Open command palette", exact: true })
+    ).toBeVisible();
+    await capture(page, "palette-entry-cover-narrow");
   });
 });
 

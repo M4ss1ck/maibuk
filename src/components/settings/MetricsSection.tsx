@@ -8,8 +8,16 @@ import { useSyncStore } from "@/features/sync/store";
 import { getDatabase } from "@/lib/db";
 import { metricsService } from "@/lib/metrics/MetricsService";
 import { Button, Modal, Switch } from "@/components/ui";
+import { SettingRow } from "@/components/settings/SettingRow";
+import type { SettingsRowId } from "@/components/settings/settings-sections";
 
 const METRIC_CATEGORIES: MetricsCategory[] = ["writing", "time", "engagement"];
+
+const CATEGORY_ROW_IDS: Record<MetricsCategory, SettingsRowId> = {
+  writing: "metricsWriting",
+  time: "metricsTime",
+  engagement: "metricsEngagement",
+};
 
 const CATEGORY_EVENT_PREFIX: Partial<Record<MetricsCategory, string>> = {
   writing: "writing.",
@@ -87,7 +95,9 @@ export function MetricsSection() {
   return (
     <div className="space-y-4">
       <div>
-        <p className="font-medium">{t("settings.metrics.title")}</p>
+        <p tabIndex={-1} data-settings-section="metrics" className="font-medium">
+          {t("settings.metrics.title")}
+        </p>
         <p className="text-sm text-muted-foreground">{t("settings.metrics.description")}</p>
       </div>
 
@@ -95,15 +105,11 @@ export function MetricsSection() {
         {METRIC_CATEGORIES.map((category) => {
           const measuredDate = formatMeasuredDate(measuringSince[category]);
           return (
-            <div
+            <SettingRow
               key={category}
+              id={CATEGORY_ROW_IDS[category]}
               className="flex flex-col gap-2 py-3 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4"
-            >
-              <div>
-                <p className="font-medium">{t(`settings.metrics.${category}.label`)}</p>
-                <p className="text-sm text-muted-foreground">
-                  {t(`settings.metrics.${category}.description`)}
-                </p>
+              labelExtra={
                 <p className="mt-1 text-xs text-muted-foreground">
                   {measuredDate
                     ? t("settings.metrics.measuringSince", {
@@ -111,35 +117,35 @@ export function MetricsSection() {
                       })
                     : t("settings.metrics.notMeasuredYet")}
                 </p>
-              </div>
+              }
+            >
               <Switch
                 checked={metrics.enabled[category]}
                 onChange={(enabled) => handleCategoryChange(category, enabled)}
                 label={t(`settings.metrics.${category}.label`)}
               />
-            </div>
+            </SettingRow>
           );
         })}
 
-        <div className="flex flex-col gap-2 py-3 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4">
-          <div>
-            <p className="font-medium">{t("settings.metrics.sync.label")}</p>
-            <p className="text-sm text-muted-foreground">
-              {t("settings.metrics.sync.description")}
-            </p>
-            {authStatus !== "logged-in" && (
+        <SettingRow
+          id="metricsSync"
+          className="flex flex-col gap-2 py-3 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4"
+          labelExtra={
+            authStatus !== "logged-in" ? (
               <p className="mt-1 text-xs text-muted-foreground">
                 {t("settings.metrics.syncRequiresAuth")}
               </p>
-            )}
-          </div>
+            ) : undefined
+          }
+        >
           <Switch
             checked={metrics.syncMetrics}
             onChange={setMetricsSyncEnabled}
             label={t("settings.metrics.sync.label")}
             disabled={authStatus !== "logged-in"}
           />
-        </div>
+        </SettingRow>
       </div>
 
       <Modal

@@ -5,6 +5,7 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { expect, test } from "../support/test";
 
 // The Canvas editor (issue #210): tools, Text Nodes, Note References, moving
@@ -58,7 +59,7 @@ async function selectEdge(page: Page, name: string | RegExp) {
 }
 
 test.describe("tools @wf:canvas-tools @sc:canvas.toolSelect @sc:canvas.toolPen @sc:canvas.toolEraser", () => {
-  test("V, P, and E switch the active tool", async ({ page }) => {
+  test("V, P, and E switch the active tool @palette-entry", async ({ page }) => {
     await openMap(page);
     const select = page.getByRole("button", { name: "Select", exact: true });
     const pen = page.getByRole("button", { name: "Pen", exact: true });
@@ -74,6 +75,9 @@ test.describe("tools @wf:canvas-tools @sc:canvas.toolSelect @sc:canvas.toolPen @
 
     await page.keyboard.press("v");
     await expect(select).toHaveAttribute("aria-pressed", "true");
+
+    // The floating tool column ends with the Command Palette entry point.
+    await capture(page, "palette-entry-canvas-tools");
   });
 
   test("the tool panel moves focus with the arrow keys", async ({ page }) => {

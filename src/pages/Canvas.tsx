@@ -27,6 +27,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { maibukArt } from "@/assets/ascii/maibuk";
 import { Button } from "@/components/ui/Button";
+import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
@@ -623,6 +624,7 @@ function CanvasEditor() {
                 onZoomIn={() => reactFlow.zoomIn()}
                 onZoomOut={() => reactFlow.zoomOut()}
                 onFitView={() => reactFlow.fitView()}
+                trailing={<CommandPaletteButton variant="toolColumn" />}
               />
               {toolMode === "pen" && <PenSettingsPanel />}
               {selectedNode && !interactivityLocked && !editorReadOnly && <NodeConnectButton />}

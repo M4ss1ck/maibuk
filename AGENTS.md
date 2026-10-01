@@ -130,6 +130,7 @@ src/
 │   ├── project/         # Book card, new book dialog
 │   ├── book/            # Book settings dialog
 │   ├── canvas/          # Canvas gallery cards
+│   ├── command-palette/   # Command Palette dialog and entry button
 │   ├── dictation/       # DictationControl, dictation messages
 │   ├── tutorial/        # TutorialRunner (Joyride + inert boundary), TutorialCard (React Aria dialog), TutorialOffer
 │   └── icons/           # Custom SVG icon components
@@ -138,6 +139,7 @@ src/
 │   ├── books/           # store.ts, types.ts
 │   ├── chapters/        # store.ts, types.ts
 │   ├── canvas/          # versioned docs, store, React Flow adapter, custom nodes
+│   ├── command-palette/ # Command Palette: index, items, Recent, store
 │   ├── covers/          # types.ts
 │   ├── dictation/       # Dictation: catalog (data), model store, session, router, hub; engines behind RecognizerHost (ADR 0013)
 │   ├── edit-session/    # createEditSession (framework-free), useEditSession hook
@@ -282,6 +284,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `EditorHandle` (`<Editor ref>`; `flush()` hands the coalesced typing burst to `onUpdate` synchronously)                                                                                                                                        | `src/components/editor/Editor.tsx`                                     |
 | `createEditSession()` / `useEditSession()` (one Edit Session per open Chapter, Note, or Canvas: debounced save, Save Status, Flush registration, echo check against the content the last save returned; `Editor` never guesses echoes)                  | `src/features/edit-session/`                                           |
 | `useShortcuts(bindings, options)` (bind Commands by `id`; keys come from the registry and Custom Shortcuts; a mounted, enabled id is a Bound Shortcut)                                                                                                                           | `src/lib/shortcuts.ts`                                                 |
+| `commandState()` / `commandStates()` (the live runnable state of one Command, or of every bound Command at once, for the Command Palette snapshot) | `src/lib/command-runner.ts` |
 | `runCommand(id, { source })` / `registerCommandSource()` (async; runs the live binding of a Command without a key event, for voice and the Command Palette; the most recently mounted live binding wins, re-read after dialogs close; gates: Tutorial, unavailable, dialog; a navigating (`navigates`) global Command closes open dialogs first, `refused-dialog-close` when one cannot close; returns an outcome, never throws for a gate) | `src/lib/command-runner.ts` |
 | `useBoundShortcutIds(ids, enabled)` / `useBoundShortcuts()` (declare keys handled outside `useShortcuts`; read what works on this screen)                                                                                                      | `src/lib/bound-shortcuts.ts`                                           |
 | `topmostLayer()` / `isOutsideLayer()` (the topmost modal layer, and whether an element hides in an inert or aria-hidden subtree) | `src/lib/top-layer.ts` |
@@ -290,6 +293,15 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `pressKey()` / `moveFocus()` / `useFocusCommands()` (the browser's own keys and React Aria's Tab order as voice-runnable focus Commands; a voice Enter in a form field submits the form the way the browser's implicit submission does) | `src/lib/focus-commands.ts` |
 | `editorKeymapShortcutIds(editor)` (the `editor-keymap` registry shortcuts a TipTap editor's extensions really bind)                                                                                                                            | `src/components/editor/keymap-shortcuts.ts`                            |
 | `COMMANDS` / `ROUTE_CONTEXTS` / `SHORTCUT_SECTIONS` / `commandSection()` / `COMMAND_RENAMES` (the Command registry; add a rename whenever an id changes) | `src/lib/shortcut-registry.ts` |
+| `buildEntityItems()` / `buildPageItems()` (Command Palette entities and nested pages; a Chapter carries its Book's title and id) | `src/features/command-palette/entity-items.ts` |
+| `buildCommandItems()` (Command Palette Command rows from the live registry snapshot with their runnable state) | `src/features/command-palette/command-items.ts` |
+| `preparePaletteIndex()` / `searchPalette()` / `liveRecentKeys()` (ranked Command Palette search index with fuzzysort, built once per open, never per keystroke) | `src/features/command-palette/palette-index.ts` |
+| `useCommandPaletteStore` (transient palette state: open flag, focus-return opener, and the bound-Command snapshot taken before the dialog mounts) | `src/features/command-palette/store.ts` |
+| `useCommandPaletteRecentStore` (device-local Recent item keys, most recent first, at most 10; never synced, never in Backups) | `src/features/command-palette/recent-store.ts` |
+| `CommandPalette` (the palette dialog: live Commands, entities, Settings rows, nested pages, device-local Recent) | `src/components/command-palette/CommandPalette.tsx` |
+| `buildSettingsItems()` (Command Palette Settings rows, read from the same declared rows the Settings screen renders; ADR 0018) | `src/features/command-palette/settings-items.ts` |
+| `CommandPaletteButton` (the always-visible Command Palette entry point: ghost icon button + Tooltip with the live Shortcut, `data-command="global.openCommandPalette"`; sidebar, Chapter list, Notes list, Cover Designer, and Canvas footers/toolbars) | `src/components/command-palette/CommandPaletteButton.tsx` |
+| `listChapterTitles()` (every Chapter's id, Book id, and title, never its content, for the Command Palette) | `src/features/chapters/store.ts` |
 | `stepsFromEvent()` / `recordedStepFromEvent()` / `normalizeShortcut()` / `formatShortcut()` / `toAriaKeyShortcuts()` / `isTypingSafe()` / `isReservedOnWeb()` (key parsing, matching candidates, display) | `src/lib/shortcut-keys.ts` |
 | `effectiveShortcuts()` / `editableShortcuts()` / `findConflicts()` / `contextsOverlap()` / `normalizeShortcuts()` / `parseShortcutFile()` / `serializeShortcutFile()` (pure resolve, conflict and file logic) | `src/lib/shortcut-resolve.ts` |
 | `useCommandKeys(id)` / `useCommandHint(id)` / `liveShortcuts()` / `getLiveShortcuts()` (the keys that fire now, for hints and matching) | `src/lib/command-keys.ts` |
@@ -300,6 +312,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `FootnoteGrid` (a Footnotes list with an Item Menu per entry, Edit dialog, and focus after Delete; the list after the text and the side panel's tab) | `src/components/editor/FootnoteGrid.tsx` |
 | `ShortcutEditorDialog` / `ShortcutRecorder` (the Shortcut Editor and its read-only key-capture field) | `src/components/shortcuts/` |
 | `ShortcutOverrides` / `EDITOR_COMMANDS` (Custom Shortcuts for `editor-keymap` Commands without re-creating the editor) | `src/components/editor/extensions/ShortcutOverrides.ts` / `src/components/editor/editor-commands.ts` |
+| `useEditorCommandSource()` / `canRunEditorCommand()` / `runEditorCommand()` (the focused editor's formatting Commands as a palette-runnable source on the kept selection) | `src/components/editor/editor-command-source.ts` / `src/components/editor/editor-commands.ts` |
 | `IS_WEB` (also re-exported from `@/lib/platform`; import this leaf from code that must not pull in the platform factories) | `src/lib/platform/target.ts` |
 | `getDatabase()`                                                                                                                                                                                                                                | `src/lib/db/index.ts`                                                  |
 | `exportDatabase()` / `importDatabase()` / `resetDatabase()`                                                                                                                                                                                    | `src/lib/db/index.ts`                                                  |
@@ -382,8 +395,16 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `pnpm conformance:dictation` (periodic lane: plays the vendored WAVs through the web host in Chromium and the Rust runner, then reports latency and CPU per model) | `scripts/dictation-conformance/web.mjs` / `src-tauri/src/dictation/runner.rs` |
 | `pnpm bench:dictation` / `pnpm bench:dictation:android` (periodic lane: the Dictation Command Interpreter against the ADR 0015 budget, p99 under 1 ms per line and 10 ms per phrase table rebuild, with 1,000 aliases and Vocabulary entries; Node via `vitest bench`, Android in Chrome over `adb`; both fail when a budget is missed. The gate lane checks only that the worst-case inputs still reach every path, never timings) | `src/test/bench/` / `src/test/support/dictation-bench.ts` / `scripts/dictation-bench-budget.mjs` / `scripts/dictation-bench/android.mjs` |
 | `pnpm record:dictation-phrases <en\|es>` / `pnpm conformance:dictation:phrases` (periodic lane, issue #285: record the phrase script, then per-phrase hit rate on every model, the prose set, and the names tier's exact written forms (issue #274: `score.ts --vocabulary <file>` or `--vocabulary-from-clips` for the Vocabulary baseline, `BIAS_*` for context biasing runs, see `docs/research/dictation-context-biasing.md`); script in `src/test/support/dictation-phrase-set.ts`, scoring in `dictation-phrase-score.ts`) | `scripts/dictation-phrases/` / `scripts/dictation-conformance/README.md` |
+| `pnpm bench:palette` (periodic lane: the Command Palette search index against its 16 ms keystroke budget; fails when a budget is missed) | `src/test/bench/command-palette.bench.ts` / `scripts/palette-bench-budget.mjs` |
 | `normalizeHexColor()` / `contrastRatio()` / `readableForeground()` (hex parsing that returns null on invalid input; WCAG contrast) | `src/lib/color.ts` |
 | `applyAccentColor(color)` (sets `--color-primary`, hover, and their readable foregrounds without writing settings; used for commit and preview) | `src/features/settings/accent-color.ts` |
+| `SETTINGS_SECTIONS` / `findSettingsRow(id)` / `SettingsRowId` (every Settings section in screen order with its declared rows; the Command Palette reads this too) | `src/components/settings/settings-sections.ts` (+ one `.rows.ts` beside each section component) |
+| `SettingRow` (one Settings row: `data-settings-row` anchor, label/description from the declaration) | `src/components/settings/SettingRow.tsx` |
+| `focusSettingsRow(id)` (asks the Settings page to reveal and focus a row's control) | `src/features/settings/focus-row.ts` |
+| `useSettingsRevealStore` (pending row, Advanced / Paste Cleanup advanced open state) | `src/features/settings/settings-reveal-store.ts` |
+| `SETTINGS_KEY_ROWS` (every Settings store key classified as its row or `internal`) | `src/features/settings/settings-rows-keys.ts` |
+| `SettingsRowDef` / `SettingsSectionDef` (one declared row / section: id, label and description keys, optional keywords key, platforms, reveal) | `src/features/settings/rows.ts` |
+| `currentSettingsPlatform()` / `rowOnPlatform()` (this build's platform; whether a declared row exists on it) | `src/features/settings/rows.ts` |
 | `ItemActionsMenu` / `ItemActionsPopover` (always-visible ⋯ button, or a popover anchored to the item, with a React Aria menu of its actions; submenus via `children`) | `src/components/ui/ItemActionsMenu.tsx`                                |
 | `useItemContextMenu({ onOpen })` / `useTouchDragFromHandle()` (touch long-press and right-click open the item menu; touch drags start only from `data-drag-handle`)                                                                            | `src/hooks/useItemContextMenu.ts`                                      |
 | `installPointerEvent()` / `touchLongPress()` / `touchTap()` / `pointerHitTarget()` (jsdom touch-gesture test helpers; `pointerHitTarget` resolves `pointer-events: none` the way a browser does)                                                                                                                                                 | `src/test/support/pointer-events.ts`                                   |
@@ -420,6 +441,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `runBetweenSyncRuns(task)` (runs a task with no sync run in flight; the Tutorial switch uses it)                                                                                                                                             | `src/features/sync/sync-engine.ts`                                     |
 | `hasLaunchAutoSyncSettled()` / `onLaunchAutoSyncSettled()` (whether this launch's Auto Sync is behind us)                                                                                                                                     | `src/features/sync/auto-sync.ts`                                       |
 | `toast.info()` (text-only hint toast)                                                                                                                                                                                                        | `src/components/ui/Toast.tsx`                                          |
+| `Modal` `placement="top"` (pins the panel to the top edge on every screen size; the Command Palette uses it with `unstyled`) | `src/components/ui/Modal.tsx` |
 | `useModalScope(isOpen, close?)` (modal ID registration with its own close path, removed on unregister; `Modal` passes the Escape path, other callers may omit it)                                                                                                                                                                            | `src/hooks/useModalScope.ts`                                           |
 | `useRestoreFocus(isOpen)` (returns focus to the opener after an overlay closes; call it after `useModalOverlay`, whose `inert` cleanup must run first) | `src/hooks/useRestoreFocus.ts` |
 | `data-focus-pane` / `data-focus-pane-nested` (F6 pane stops; nested panes collapse into the innermost, unless the inner one is marked nested, like the Footnotes after the text) | `src/components/GlobalShortcuts.tsx` |
@@ -467,6 +489,7 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 - **Typography**: Three font families defined — `font-sans` (Inter), `font-serif` (Literata), `font-mono`
 - **Button variants**: `primary`, `secondary`, `ghost`, `destructive` — use the existing `Button` component, don't create ad-hoc button styles
 - **Border radius**: Consistently `rounded-lg` across the codebase
+- **Scroll boxes inside overlays**: add `scrollbar-themed` (`src/index.css`) so the scrollbar follows the theme instead of the OS default
 - **Panel layout responds to its container, not the viewport**: content sits beside a resizable sidebar, so a viewport breakpoint (`md:`) does not describe the space a panel actually has. Mark the wrapper `@container` and use container variants (`@md:`, `@3xl:`) for anything laid out inside the main content area — see the notes filter panel in `src/pages/NotesGallery.tsx`. Viewport breakpoints stay correct for the outermost page shell
 - **Touch compatibility**: No hover-only controls (section 2, item 7). Use `pointer-coarse:` for touch-only visibility and larger touch targets, never a viewport breakpoint; desktop hover affordances stay as they are
 - **Keyboard compatibility**: Any UI feature with interactive controls must meet the keyboard & accessibility completion requirements in section 2 and the test gate in section 6 — this is a definition-of-done item, not a styling preference

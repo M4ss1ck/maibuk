@@ -111,6 +111,8 @@ describe("LightweightNode editor lifecycle", () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
+      on: vi.fn(),
+      off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
     });
     renderNode();
@@ -123,6 +125,8 @@ describe("LightweightNode editor lifecycle", () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
+      on: vi.fn(),
+      off: vi.fn(),
       view: { focus: viewFocus },
       getHTML: vi.fn(() => "<p>Idea</p>"),
     });
@@ -147,6 +151,8 @@ describe("LightweightNode editor lifecycle", () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
+      on: vi.fn(),
+      off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
     });
     renderNode(textNode({ textColor: "#ef4444", backgroundColor: "#f59e0b" }));
@@ -173,6 +179,8 @@ describe("LightweightNode editor lifecycle", () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
+      on: vi.fn(),
+      off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
     });
     renderNode();
@@ -192,6 +200,8 @@ describe("LightweightNode editor lifecycle", () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
+      on: vi.fn(),
+      off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
     });
     renderNode();
@@ -210,6 +220,8 @@ describe("LightweightNode editor lifecycle", () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
+      on: vi.fn(),
+      off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
     });
     renderNode();
@@ -224,6 +236,8 @@ describe("LightweightNode editor lifecycle", () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
+      on: vi.fn(),
+      off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
     });
     renderNode();
@@ -238,6 +252,8 @@ describe("LightweightNode editor lifecycle", () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
+      on: vi.fn(),
+      off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea edited</p>"),
     });
     renderNode();

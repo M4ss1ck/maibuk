@@ -181,6 +181,28 @@ export async function listAllChaptersForLinking(): Promise<
   }));
 }
 
+export interface ChapterTitle {
+  id: string;
+  bookId: string;
+  title: string;
+}
+
+/**
+ * Every Chapter's id, Book, and title, without the content: what a list that
+ * only shows names needs (the Command Palette lists Chapters across all Books).
+ */
+export async function listChapterTitles(): Promise<ChapterTitle[]> {
+  const db = await getDatabase();
+  const rows = await db.select<{ id: string; book_id: string; title: string }[]>(
+    'SELECT id, book_id, title FROM chapters ORDER BY book_id, "order" ASC'
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id,
+    title: r.title,
+  }));
+}
+
 export async function listChaptersForBookLinking(
   bookId: string
 ): Promise<{ id: string; bookId: string; title: string }[]> {

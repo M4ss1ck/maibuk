@@ -60,6 +60,8 @@ interface ModalProps {
    * the element focused when the Modal opened.
    */
   restoreFocusTarget?: () => HTMLElement | null;
+  /** "top" pins the panel to the top edge on every screen size, like a command bar. */
+  placement?: "center" | "top";
 }
 
 export function Modal({
@@ -75,6 +77,7 @@ export function Modal({
   titleClassName,
   unstyled = false,
   restoreFocusTarget,
+  placement = "center",
 }: ModalProps) {
   const { t } = useTranslation();
   const sizeClass = size === "wide" ? "sm:max-w-5xl" : "sm:max-w-md";
@@ -140,7 +143,11 @@ export function Modal({
       <FocusScope contain autoFocus>
         <div
           {...underlayProps}
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 modal-backdrop-enter"
+          className={
+            placement === "top"
+              ? "fixed inset-0 z-50 flex items-start justify-center bg-black/30 pt-[env(safe-area-inset-top)] modal-backdrop-enter"
+              : "fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 modal-backdrop-enter"
+          }
         >
           <div
             {...modalProps}

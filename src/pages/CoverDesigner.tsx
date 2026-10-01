@@ -11,10 +11,33 @@ import { createDefaultScene, createTextLayer } from "@/features/covers/scene/def
 import { loadScene } from "@/features/covers/scene/migrate";
 import { dataUrlToBytes, exportScene, exportScenePdf } from "@/features/covers/export";
 import { Button, Modal } from "@/components/ui";
+import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import { BackIcon } from "@/components/icons";
 import { useShortcuts } from "@/lib/shortcuts";
 
 const DEFAULT_PRESET = "6x9";
+
+/** Whether the Layers sidebar is docked (`md:` breakpoint). Below it Layers
+ * is a sheet, so the sidebar footer (and its palette button) is not rendered
+ * and the toolbar carries the entry point instead. */
+const WIDE_LAYERS_QUERY = "(min-width: 768px)";
+
+function useWideLayers(): boolean {
+  const [wide, setWide] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(WIDE_LAYERS_QUERY).matches
+      : true
+  );
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(WIDE_LAYERS_QUERY);
+    const onChange = (event: MediaQueryListEvent) => setWide(event.matches);
+    query.addEventListener("change", onChange);
+    setWide(query.matches);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return wide;
+}
 
 export function CoverDesigner() {
   const { t } = useTranslation();
@@ -26,6 +49,7 @@ export function CoverDesigner() {
   const [isSaving, setIsSaving] = useState(false);
   const [layersOpen, setLayersOpen] = useState(false);
   const [propsOpen, setPropsOpen] = useState(false);
+  const wideLayers = useWideLayers();
   const coverLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -259,12 +283,21 @@ export function CoverDesigner() {
         onExport={exportAndSave}
         bookTitle={currentBook.title}
         bookAuthor={currentBook.authorName}
+        trailing={!wideLayers ? <CommandPaletteButton size="sm" /> : undefined}
       />
 
       {/* Main area: layers | canvas | properties */}
       <main className="flex-1 flex min-h-0">
-        <div className="w-56 border-r border-border hidden md:block">
-          <LayersPanel />
+        <div className="w-56 border-r border-border hidden md:flex md:flex-col">
+          <div className="flex-1 min-h-0">
+            <LayersPanel />
+          </div>
+          {wideLayers && (
+            <div className="flex items-center gap-2 border-t border-border p-2">
+              <span className="flex-1" />
+              <CommandPaletteButton size="sm" />
+            </div>
+          )}
         </div>
         <CanvasStage className="flex-1" />
         <div className="w-64 border-l border-border overflow-y-auto hidden lg:block">

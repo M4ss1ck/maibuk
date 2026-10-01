@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { SEED_NOTES } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -28,8 +29,11 @@ test.describe("phone navigation menu @touch @wf:phone-nav-menu", () => {
     await expect(page.getByRole("heading", { name: "Notes", level: 1 })).toBeVisible();
   });
 
-  test("the close button closes the menu without navigating", async ({ page }) => {
+  test("the close button closes the menu without navigating @palette-entry", async ({ page }) => {
     await openMenu(page);
+    // The drawer footer carries the Command Palette entry point; the phone
+    // top bar carries none.
+    await capture(page, "palette-entry-phone-drawer");
     await menuDialog(page).getByRole("button", { name: "Close navigation menu" }).tap();
     await expect(menuDialog(page)).toBeHidden();
     await expect(page).toHaveURL(/\/$/);

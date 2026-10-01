@@ -32,6 +32,7 @@ import {
 import { toast } from "@/components/ui/Toast";
 import type { ResponsiveToggleOption } from "@/components/ui";
 import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
+import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import { NoteListItem } from "@/components/notes/NoteListItem";
 import type { NoteMoveTarget } from "@/components/notes/NoteListItem";
 import { useTouchDragFromHandle } from "@/hooks/useItemContextMenu";
@@ -783,11 +784,17 @@ export function NotesList({
         )}
       </div>
 
-      {notes.length > 0 && (
-        <div className="p-3 border-t border-border text-xs text-muted-foreground bg-background shrink-0">
-          {t("notes.pinnedCount", { count: pinnedCount })}
-        </div>
-      )}
+      {/* The footer always renders so the Command Palette entry point is
+          reachable from the list; the pinned count shows only in list view
+          with at least one pinned Note. */}
+      <div className="p-3 border-t border-border text-xs text-muted-foreground bg-background shrink-0 flex items-center gap-2">
+        <span className="flex-1 min-w-0">
+          {viewMode === "list" && pinnedCount > 0
+            ? t("notes.pinnedCount", { count: pinnedCount })
+            : null}
+        </span>
+        <CommandPaletteButton size="sm" />
+      </div>
 
       <DeleteNoteDialog
         note={pendingDeleteNote}

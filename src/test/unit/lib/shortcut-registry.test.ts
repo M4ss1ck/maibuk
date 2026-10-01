@@ -15,7 +15,7 @@ import {
   type ShortcutContext,
 } from "@/lib/shortcut-registry";
 import { normalizeShortcut } from "@/lib/shortcut-keys";
-import { findDefaultConflicts } from "@/lib/shortcut-resolve";
+import { effectiveShortcuts, findDefaultConflicts } from "@/lib/shortcut-resolve";
 
 function lookup(messages: unknown, key: string): unknown {
   return key.split(".").reduce<unknown>((node, part) => {
@@ -83,6 +83,26 @@ describe("command registry", () => {
   it("ships no Default Shortcut that conflicts with another on desktop or web", () => {
     expect(findDefaultConflicts(false)).toEqual([]);
     expect(findDefaultConflicts(true)).toEqual([]);
+  });
+
+  it("opens the Command Palette with F1 and Mod+Shift+P on desktop, F1 only on web", () => {
+    expect(effectiveShortcuts("global.openCommandPalette", {}, false)).toEqual([
+      ["F1"],
+      ["Mod+Shift+p"],
+    ]);
+    expect(effectiveShortcuts("global.openCommandPalette", {}, true)).toEqual([["F1"]]);
+  });
+
+  it("keeps Always on Top on Mod+Alt+T on desktop and web", () => {
+    expect(effectiveShortcuts("global.toggleAlwaysOnTop", {}, false)).toEqual([["Mod+Alt+t"]]);
+    expect(effectiveShortcuts("global.toggleAlwaysOnTop", {}, true)).toEqual([["Mod+Alt+t"]]);
+  });
+
+  it("lists the commandPalette Context on every route except /embed", () => {
+    for (const [route, contexts] of Object.entries(ROUTE_CONTEXTS)) {
+      if (route === "/embed") expect(contexts).toEqual([]);
+      else expect(contexts, route).toContain("commandPalette");
+    }
   });
 
   it("declares the Contexts of every route in App.tsx", () => {

@@ -248,6 +248,29 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "command-palette",
+    area: "shell",
+    workflow:
+      "Find and run anything by name from the Command Palette",
+    edges: [
+      "open and close with F1 (focus entry, Tab containment, Escape restores focus)",
+      "run a Command",
+      "disabled Command reachable but not runnable",
+      "open a Chapter of another Book",
+      "nested page with chip and Backspace back",
+      "Settings result focuses its row's control",
+      "Recent removal with Shift+Delete",
+      "empty query lists Suggested and a suggested page narrows",
+      "formatting Command keeps the selection",
+    ],
+    terms: ["Command Palette"],
+    shortcuts: ["global.openCommandPalette", "commandPalette.removeRecent"],
+    routes: ["/", "/book/:bookId", "/settings"],
+    fixture: "paletteLibrary",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "books-empty-state",
     area: "books",
     workflow:
