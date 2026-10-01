@@ -15,7 +15,7 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
-import { capture } from "../support/capture";
+import { primaryButtonColors } from "../support/primary-colors";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -276,22 +276,9 @@ test.describe("Cover export @wf:cover-export", () => {
 
     for (const scheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme: scheme });
-      const colors = await trigger.evaluate((button) => {
-        const sample = document.createElement("div");
-        sample.style.backgroundColor = "var(--color-primary)";
-        sample.style.color = "var(--color-primary-foreground)";
-        document.body.append(sample);
-        const actual = getComputedStyle(button);
-        const expected = getComputedStyle(sample);
-        const result = {
-          background: actual.backgroundColor,
-          foreground: actual.color,
-          primaryBackground: expected.backgroundColor,
-          primaryForeground: expected.color,
-        };
-        sample.remove();
-        return result;
-      });
+      if (scheme === "dark") await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+      else await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
+      const colors = await primaryButtonColors(trigger);
       expect(colors.background).toBe(colors.primaryBackground);
       expect(colors.foreground).toBe(colors.primaryForeground);
     }
