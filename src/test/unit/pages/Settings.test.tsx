@@ -287,3 +287,44 @@ describe("Settings page — automatic sync", () => {
     expect(screen.queryByRole("switch", { name: "sync.autoSync" })).not.toBeInTheDocument();
   });
 });
+
+describe("Settings page — sync server URL", () => {
+  afterEach(() => {
+    syncState.apiUrl = "";
+    syncState.setApiUrl.mockClear();
+  });
+
+  // Signing in from the Log In dialog sets the server URL while Settings is
+  // open. The field used to keep its first, empty value and write it back on
+  // blur, pointing every later Sync at the app's own origin (issue #222).
+  it("follows a server URL set elsewhere and does not write a stale one back on blur", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderSettings();
+    const field = screen.getByRole("textbox", { name: "sync.serverUrl" });
+    expect(field).toHaveValue("");
+
+    syncState.apiUrl = "http://127.0.0.1:8090";
+    rerender(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <Settings />
+      </MemoryRouter>
+    );
+    expect(field).toHaveValue("http://127.0.0.1:8090");
+
+    field.focus();
+    await user.tab();
+    expect(syncState.setApiUrl).not.toHaveBeenCalled();
+  });
+
+  it("saves an edited server URL, normalized, when the field loses focus", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    const field = screen.getByRole("textbox", { name: "sync.serverUrl" });
+
+    field.focus();
+    await user.keyboard("sync.example.org");
+    await user.tab();
+    expect(syncState.setApiUrl).toHaveBeenCalledWith("https://sync.example.org");
+    expect(field).toHaveValue("https://sync.example.org");
+  });
+});

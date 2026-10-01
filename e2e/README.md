@@ -239,6 +239,64 @@ dragging a handle. `phone-drag-handle` proves the handle owns the gesture (a
 long-press there opens no Item Menu, a swipe from the row body moves nothing);
 the drag itself stays with the Vitest suites (see the matrix exclusion).
 
+## Sync lane
+
+Sync runs against a real server, so it has its own lane (issue #222): the
+specs in `specs/sync/` drive the web build against a local PocketBase 0.25.0
+with the [maibuk-sync](https://github.com/M4ss1ck/maibuk-sync) migrations.
+`pnpm test:e2e` ignores them, and like the rest of the suite the lane never
+runs in CI.
+
+```bash
+pnpm test:e2e:sync                                  # everything, both browsers
+pnpm test:e2e:sync --project=chromium               # one browser
+pnpm test:e2e:sync specs/sync/sync-conflict.spec.ts # one file
+pnpm test:e2e:sync --grep @wf:sync-faults           # one matrix workflow
+pnpm test:e2e:sync --repeat-each=3                  # the acceptance run
+```
+
+The runner supports Linux and macOS: it stops its servers by process group,
+which Windows does not have. One command does the whole job on a clean machine (after the browser install
+above): the guard, its self-tests and the e2e typecheck, `pnpm
+fetch:sync-server`, the web build, then the server and Playwright
+(`playwright.sync.config.ts`). The runner serves the web build itself, on a
+free port, so both lanes can run at once. It runs at most four workers: each test drives two or three browser
+contexts, and more workers starved a 16-core, 32 GB machine. Arguments pass to `playwright test`; `E2E_REUSE_BUILD=1` skips the
+build.
+
+**The server.** `pnpm fetch:sync-server` downloads the PocketBase release zip
+for the host and each `pb_migrations/` file of maibuk-sync at a pinned commit,
+checks every file against its pinned SHA-256, and caches them in
+`vendor/sync-server/` (git-ignored). `run-sync.mjs` then starts PocketBase on
+a free 127.0.0.1 port with a fresh data directory under
+`e2e/.output/sync-server/run-<pid>/`, creates a superuser with a random
+password, and hands Playwright the URL and that superuser through the
+environment (`E2E_SYNC_URL`, `E2E_SYNC_SUPERUSER_*`). Running
+`playwright test --config e2e/playwright.sync.config.ts` by hand fails at once
+with "No sync server": there is no server without the runner.
+
+**Teardown.** The web server and PocketBase stop and the data directory is
+deleted when the run
+passes or fails, on Ctrl+C (Playwright stops first, then the server; a second
+Ctrl+C stops at once), on SIGTERM or SIGHUP, and on a crash of the runner. A
+runner killed outright (SIGKILL) cannot clean up; the next run sweeps what it
+left: it kills that PocketBase (only if the pid still is PocketBase) and
+deletes the directory.
+
+**Fixtures** (`support/sync.ts`). Every test gets a fresh Sync Account,
+deleted afterwards, with a random password and Passphrase; nothing in the lane
+prints them, a token, or note content. `openDevice()` opens another device: a
+new browser context, hermetic and seeded like `page`. "Sync automatically" is
+off on every device unless a spec sets `test.use({ autoSync: true })`, so an
+idle run cannot race the step under test. The keyboard helpers sign in, enter
+the Passphrase, run Sync from Settings, pick a Scope or Direction, and read
+the Sync log. Network faults are route interceptions on the objects API
+(`failObjectsApi`, `holdObjectsApi`) and `context.setOffline`; a failed
+pre-sync Backup is `failBackupWrites` in `support/fault.ts`.
+
+**Artifacts** land in `e2e/.output/sync/` (report and test results). A
+failing test's trace holds that test's throwaway account and its Library.
+
 ## Output
 
 Everything generated lands in `e2e/.output/` (gitignored): the web build,

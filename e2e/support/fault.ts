@@ -26,6 +26,28 @@ export async function failIndexedDbWrites(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Makes writes to the web Backup store ("backups") reject with a quota error,
+ * while the Library keeps saving: a Backup that cannot be written, and
+ * nothing else. Installed after the app has booted.
+ */
+export async function failBackupWrites(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const proto = IDBObjectStore.prototype as IDBObjectStore & { __e2eBackupsPatched?: boolean };
+    if (proto.__e2eBackupsPatched) return;
+    proto.__e2eBackupsPatched = true;
+    for (const method of ["put", "add"] as const) {
+      const original = proto[method];
+      proto[method] = function (this: IDBObjectStore, ...args: Parameters<typeof original>) {
+        if (this.name === "backups") {
+          throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+        }
+        return original.apply(this, args);
+      };
+    }
+  });
+}
+
 /** Lets IndexedDB writes through again, so the next save can succeed. */
 export async function allowIndexedDbWrites(page: Page): Promise<void> {
   await page.evaluate(() => {

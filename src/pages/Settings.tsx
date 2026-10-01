@@ -101,6 +101,11 @@ export function Settings() {
     resolveConflict,
   } = useSyncFlow();
   const [syncServerUrl, setSyncServerUrl] = useState(apiUrl);
+  // The Log In dialog sets the URL while Settings is open; a field still
+  // holding its first value would write that stale URL back on blur.
+  useEffect(() => {
+    setSyncServerUrl(apiUrl);
+  }, [apiUrl]);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
@@ -447,6 +452,7 @@ export function Settings() {
               <div className="w-full @xl:w-80">
                 <Input
                   type="text"
+                  aria-label={t("sync.serverUrl")}
                   value={syncServerUrl}
                   onChange={(e) => setSyncServerUrl(e.target.value)}
                   onBlur={() => {

@@ -30,6 +30,17 @@ export async function writeSeedFiles(): Promise<string[]> {
     logLevel: "error",
     appType: "custom",
     server: { middlewareMode: true, hmr: false, ws: false },
+    plugins: [
+      {
+        // No file watcher: seeds are built once, and a watcher needs inotify
+        // instances, which a busy host runs out of (EMFILE). An inline
+        // `watch: null` is dropped by mergeConfig, so clear the resolved one.
+        name: "e2e-seeds-no-watch",
+        configResolved(config) {
+          (config.server as { watch: unknown }).watch = null;
+        },
+      },
+    ],
     optimizeDeps: { noDiscovery: true, include: [] },
   });
   try {
