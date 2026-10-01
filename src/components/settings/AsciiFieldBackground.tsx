@@ -25,6 +25,18 @@ const FIELD_ALPHA = 0.13;
 // an idle Settings page still costs nothing once it has faded).
 const HOLD_MS = 250;
 const FADE_MS = 800;
+// Over an element marked `data-ascii-quiet` (the Settings outline) the field
+// dims and ignores the cursor, so text drawn on it stays legible without a
+// solid backdrop. The effect feathers out over QUIET_FEATHER px.
+const QUIET_FEATHER = 28;
+const QUIET_DIM = 0.6;
+
+interface QuietRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
 
 /**
  * A full-bleed shimmer of random glyphs behind the whole Settings page. Stays
@@ -65,12 +77,44 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
     let running = false;
 
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-    const colorString = (intensity: number) => {
+    const colorString = (intensity: number, quiet = 0) => {
       const r = Math.round(lerp(base.r, 255, intensity * 0.6));
       const g = Math.round(lerp(base.g, 255, intensity * 0.6));
       const b = Math.round(lerp(base.b, 255, intensity * 0.6));
-      const a = lerp(FIELD_ALPHA, 1, intensity);
+      const a = lerp(FIELD_ALPHA * (1 - QUIET_DIM * quiet), 1, intensity);
       return `rgba(${r},${g},${b},${a})`;
+    };
+
+    let quietRects: QuietRect[] = [];
+    const quietObserver = new ResizeObserver(() => {
+      readQuietRects();
+      if (!running) drawStatic();
+    });
+    const readQuietRects = () => {
+      const origin = canvas.getBoundingClientRect();
+      quietRects = Array.from(
+        scroller.querySelectorAll<HTMLElement>("[data-ascii-quiet]"),
+        (el) => {
+          quietObserver.observe(el);
+          const rect = el.getBoundingClientRect();
+          return {
+            left: rect.left - origin.left,
+            top: rect.top - origin.top,
+            right: rect.right - origin.left,
+            bottom: rect.bottom - origin.top,
+          };
+        }
+      );
+    };
+    // 1 inside a quiet element, easing to 0 at QUIET_FEATHER px outside it.
+    const quietness = (x: number, y: number) => {
+      let quiet = 0;
+      for (const rect of quietRects) {
+        const dx = Math.max(rect.left - x, 0, x - rect.right);
+        const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+        quiet = Math.max(quiet, 1 - Math.min(1, Math.hypot(dx, dy) / QUIET_FEATHER));
+      }
+      return quiet;
     };
 
     const layout = () => {
@@ -98,10 +142,14 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
 
     const drawStatic = () => {
       ctx.clearRect(0, 0, cssWidth, cssHeight);
-      ctx.fillStyle = colorString(0);
+      const plain = colorString(0);
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          ctx.fillText(glyphs[r][c], c * cellWidth, r * rowHeight);
+          const x = c * cellWidth;
+          const y = r * rowHeight;
+          const quiet = quietness(x + cellWidth / 2, y + rowHeight / 2);
+          ctx.fillStyle = quiet > 0 ? colorString(0, quiet) : plain;
+          ctx.fillText(glyphs[r][c], x, y);
         }
       }
     };
@@ -122,14 +170,15 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
           let intensity = 0;
           let ox = 0;
           let oy = 0;
+          const cx = x + cellWidth / 2;
+          const cy = y + rowHeight / 2;
+          const quiet = quietRects.length > 0 ? quietness(cx, cy) : 0;
 
-          if (active) {
-            const cx = x + cellWidth / 2;
-            const cy = y + rowHeight / 2;
+          if (active && quiet < 1) {
             const distance = Math.hypot(mouse.x - cx, mouse.y - cy);
             // Scale the cursor falloff by the fade so brightness, distortion
             // and mutation all ease out together.
-            intensity = cellIntensity(distance, RADIUS) * influence;
+            intensity = cellIntensity(distance, RADIUS) * influence * (1 - quiet);
 
             if (intensity > 0) {
               if (doMutate) {
@@ -145,7 +194,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
             }
           }
 
-          ctx.fillStyle = colorString(intensity);
+          ctx.fillStyle = colorString(intensity, quiet);
           ctx.fillText(glyph, x + ox, y + oy);
         }
       }
@@ -184,6 +233,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
 
     const resizeObserver = new ResizeObserver(() => {
       layout();
+      readQuietRects();
       if (!running) drawStatic();
     });
 
@@ -191,6 +241,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
     document.fonts.ready.then(() => {
       if (cancelled) return;
       layout();
+      readQuietRects();
       drawStatic();
       resizeObserver.observe(scroller);
       if (pointerFine && !reduceMotion) {
@@ -202,6 +253,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
       cancelled = true;
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
+      quietObserver.disconnect();
       window.removeEventListener("mousemove", onMove);
     };
   }, [color]);

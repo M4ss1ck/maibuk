@@ -26,8 +26,9 @@ import {
   VariantB,
   VariantC,
 } from "@/components/settings/SettingsNav.prototype";
+import { VariantD } from "@/components/settings/SettingsOutline.prototype";
 
-const NAV_VARIANTS = { A: VariantA, B: VariantB, C: VariantC };
+const NAV_VARIANTS = { A: VariantA, B: VariantB, C: VariantC, D: VariantD };
 
 const SECTION_COMPONENTS = {
   appearance: AppearanceSection,
@@ -106,8 +107,8 @@ export function Settings() {
   const { primaryColor } = useSettings();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [searchParams] = useSearchParams();
-  const variantKey = (searchParams.get("variant") ?? "A") as keyof typeof NAV_VARIANTS;
-  const NavVariant = NAV_VARIANTS[variantKey] ?? VariantA;
+  const variantKey = (searchParams.get("variant") ?? "D") as keyof typeof NAV_VARIANTS;
+  const NavVariant = NAV_VARIANTS[variantKey] ?? VariantD;
 
   // A control elsewhere links to Settings → Dictation by hash; scroll to it.
   // Two frames wait for the section to be in the DOM; location.key re-scrolls

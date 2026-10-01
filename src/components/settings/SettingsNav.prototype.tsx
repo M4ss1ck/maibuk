@@ -8,6 +8,7 @@
 //   A  Outline + chip strip      plain text outline / horizontal sticky chips
 //   B  Editorial index + pill    numbered card with progress / floating pill → sheet
 //   C  Live tree + breadcrumb    sections + rows with filter / sticky dropdown
+//   D  Chosen direction          see SettingsOutline.prototype.tsx
 import {
   useCallback,
   useEffect,
@@ -29,6 +30,7 @@ export const SETTINGS_NAV_VARIANTS = [
   { key: "A", name: "Outline + chip strip" },
   { key: "B", name: "Editorial index + pill" },
   { key: "C", name: "Live tree + breadcrumb" },
+  { key: "D", name: "Chosen: outline tree + breadcrumb" },
 ] as const;
 
 type SectionId = (typeof SETTINGS_SECTIONS)[number]["id"];
