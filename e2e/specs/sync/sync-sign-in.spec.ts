@@ -31,7 +31,9 @@ test.describe("Sign in to a Sync Account @wf:sync-sign-in", () => {
     await fillAuthDialog(page, syncUrl, account);
     await expect(dialog).toBeHidden();
     await expect(syncSection(page).getByText(`Logged in as ${account.email}`)).toBeVisible();
-    await expect(syncSection(page).getByRole("switch", { name: "Sync automatically" })).toBeVisible();
+    await expect(
+      syncSection(page).getByRole("switch", { name: "Sync automatically" })
+    ).toBeVisible();
   });
 
   test("A wrong password shows the server's error and keeps the dialog open", async ({
@@ -58,9 +60,13 @@ test.describe("Sign in to a Sync Account @wf:sync-sign-in", () => {
     await openSettings(page);
     await tabTo(page, loginButton(page), { max: 80 });
     await page.keyboard.press("Enter");
-    await tabTo(page, authDialog(page).getByRole("button", { name: "Don't have an account? Sign up" }), {
-      max: 10,
-    });
+    await tabTo(
+      page,
+      authDialog(page).getByRole("button", { name: "Don't have an account? Sign up" }),
+      {
+        max: 10,
+      }
+    );
     await page.keyboard.press("Enter");
     await fillAuthDialog(page, syncUrl, fresh, "Sign Up");
     await expect(authDialog(page, "Sign Up")).toBeHidden();
@@ -96,7 +102,9 @@ test.describe("Sign in to a Sync Account @wf:sync-sign-in", () => {
     await tabTo(page, field, { max: 40, backwards: true });
     await page.keyboard.press("Tab");
     await page.reload();
-    await expect(syncSection(page).getByRole("textbox", { name: "Server URL" })).toHaveValue(syncUrl);
+    await expect(syncSection(page).getByRole("textbox", { name: "Server URL" })).toHaveValue(
+      syncUrl
+    );
     await expect(syncSection(page).getByText(`Logged in as ${account.email}`)).toBeVisible();
   });
 });

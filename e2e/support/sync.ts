@@ -45,7 +45,9 @@ async function api(url: string, init: RequestInit & { token?: string } = {}): Pr
   });
   if (!res.ok) {
     // The status and path only: a body can echo submitted credentials.
-    throw new Error(`sync server: ${rest.method ?? "GET"} ${new URL(url).pathname} -> ${res.status}`);
+    throw new Error(
+      `sync server: ${rest.method ?? "GET"} ${new URL(url).pathname} -> ${res.status}`
+    );
   }
   return res;
 }
@@ -107,7 +109,18 @@ export const test = base.extend<SyncFixtures, SyncWorkerFixtures>({
   },
 
   openDevice: async (
-    { browser, autoSync, baseURL, viewport, locale, timezoneId, userAgent, deviceScaleFactor, isMobile, hasTouch },
+    {
+      browser,
+      autoSync,
+      baseURL,
+      viewport,
+      locale,
+      timezoneId,
+      userAgent,
+      deviceScaleFactor,
+      isMobile,
+      hasTouch,
+    },
     use
   ) => {
     const contexts: BrowserContext[] = [];
@@ -244,7 +257,8 @@ export async function syncFromSettings(
   await page.keyboard.press("Enter");
   if (passphrase) await enterPassphrase(page, passphrase);
   await expect(syncButton(page)).toHaveText("Sync", { timeout: 20_000 });
-  if (until) await expect(logEntries(syncSection(page)).filter({ hasText: until }).first()).toBeVisible();
+  if (until)
+    await expect(logEntries(syncSection(page)).filter({ hasText: until }).first()).toBeVisible();
 }
 
 /** Signs in and runs the first Sync, Passphrase included. */

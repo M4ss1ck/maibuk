@@ -11,11 +11,5 @@ export interface SyncServer {
   stopSync: () => void;
 }
 
-export function freePort(): Promise<number>;
 export function sweepStaleRuns(root: string): number;
 export function startSyncServer(root: string): Promise<SyncServer>;
-
-export function startPreview(
-  root: string,
-  runDir: string
-): Promise<{ url: string; stop: () => Promise<void>; stopSync: () => void }>;

@@ -40,11 +40,23 @@ export function preflight({ allowPlanned }) {
  */
 export function buildWeb() {
   if (process.env.E2E_REUSE_BUILD === "1") return;
-  step("dictation WASM runtime (build input)", "node", ["scripts/fetch-dictation-runtime.mjs", "--web"]);
+  step("dictation WASM runtime (build input)", "node", [
+    "scripts/fetch-dictation-runtime.mjs",
+    "--web",
+  ]);
   step(
     "build web target -> e2e/.output/web-dist",
     "pnpm",
-    ["exec", "vite", "build", "--outDir", "e2e/.output/web-dist", "--emptyOutDir", "--logLevel", "warn"],
+    [
+      "exec",
+      "vite",
+      "build",
+      "--outDir",
+      "e2e/.output/web-dist",
+      "--emptyOutDir",
+      "--logLevel",
+      "warn",
+    ],
     { VITE_BUILD_TARGET: "web" }
   );
 }

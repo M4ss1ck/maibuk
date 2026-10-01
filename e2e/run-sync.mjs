@@ -8,10 +8,15 @@
 // by the next run. Never part of
 // `pnpm test:e2e`, never in CI. Args pass to `playwright test`.
 
-import { spawn } from "node:child_process";
 import { fetchSyncServer } from "../scripts/fetch-sync-server.mjs";
+import {
+  killRecordedPreview,
+  ownTeardown,
+  runPlaywright,
+  startPreview,
+} from "./preview-server.mjs";
 import { buildWeb, preflight, root, wallClock } from "./run-steps.mjs";
-import { startPreview, startSyncServer, sweepStaleRuns } from "./sync-server.mjs";
+import { startSyncServer, sweepStaleRuns } from "./sync-server.mjs";
 
 const argv = process.argv.slice(2).filter((a) => a !== "--");
 const allowPlanned = argv.includes("--allow-planned");
@@ -32,8 +37,9 @@ const server = await startSyncServer(root);
 console.log(`[e2e] sync server up at ${server.url}`);
 let preview = null;
 // Last resort: whatever ends the process, both servers and the data go with it.
-process.on("exit", () => {
+const teardown = ownTeardown(() => {
   preview?.stopSync();
+  killRecordedPreview(server.runDir);
   server.stopSync();
 });
 try {
@@ -45,44 +51,18 @@ try {
 }
 console.log(`[e2e] web build served at ${preview.url}`);
 
-let playwright = null;
-let interrupted = false;
-for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-  process.on(signal, () => {
-    if (interrupted || !playwright) {
-      // Second signal, or nothing to wait for: stop now.
-      preview?.stopSync();
-      server.stopSync();
-      process.exit(130);
-    }
-    interrupted = true;
-    console.error(`\n[e2e] ${signal}: stopping Playwright, then the servers`);
-    playwright.kill(signal);
-  });
-}
-
-console.log("\n[e2e] playwright (sync lane)");
-const code = await new Promise((resolve) => {
-  playwright = spawn(
-    "pnpm",
-    ["exec", "playwright", "test", "--config", "e2e/playwright.sync.config.ts", ...args],
-    {
-      cwd: root,
-      stdio: "inherit",
-      env: {
-        ...process.env,
-        E2E_SYNC_BASE_URL: preview.url,
-        E2E_SYNC_URL: server.url,
-        E2E_SYNC_SUPERUSER_EMAIL: server.superuser.email,
-        E2E_SYNC_SUPERUSER_PASSWORD: server.superuser.password,
-      },
-    }
-  );
-  playwright.on("exit", (status, signal) => resolve(status ?? (signal ? 130 : 1)));
-  playwright.on("error", (error) => {
-    console.error(`[e2e] playwright did not start: ${error.message}`);
-    resolve(1);
-  });
+const code = await runPlaywright({
+  root,
+  label: "playwright (sync lane)",
+  config: "e2e/playwright.sync.config.ts",
+  args,
+  env: {
+    E2E_SYNC_BASE_URL: preview.url,
+    E2E_SYNC_URL: server.url,
+    E2E_SYNC_SUPERUSER_EMAIL: server.superuser.email,
+    E2E_SYNC_SUPERUSER_PASSWORD: server.superuser.password,
+  },
+  teardown,
 });
 
 await preview.stop();

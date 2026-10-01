@@ -30,7 +30,9 @@ test.describe("Sync Now pushes and pulls a Book @wf:sync-now", () => {
     openDevice,
   }) => {
     await signInAndSync(page, syncUrl, account, pushed);
-    await expect(logEntries(syncSection(page)).filter({ hasText: "Created pre-sync safety backup" })).toHaveCount(1);
+    await expect(
+      logEntries(syncSection(page)).filter({ hasText: "Created pre-sync safety backup" })
+    ).toHaveCount(1);
 
     const deviceB = await openDevice();
     await signInAndSync(deviceB, syncUrl, account, pulled);
@@ -70,7 +72,9 @@ test.describe("Sync Now pushes and pulls a Book @wf:sync-now", () => {
     await openHome(deviceB);
     await deviceB.keyboard.press("ControlOrMeta+Shift+Y");
     await gotoSettingsInApp(deviceB);
-    await expect(logEntries(syncSection(deviceB)).filter({ hasText: /^Pulled book/ })).toHaveCount(1);
+    await expect(logEntries(syncSection(deviceB)).filter({ hasText: /^Pulled book/ })).toHaveCount(
+      1
+    );
     await openFirstBook(deviceB, SEED_BOOK.title, "The keeper wrote it down.");
   });
 

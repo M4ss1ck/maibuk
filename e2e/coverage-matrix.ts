@@ -250,8 +250,7 @@ export const ROWS: MatrixRow[] = [
   {
     id: "command-palette",
     area: "shell",
-    workflow:
-      "Find and run anything by name from the Command Palette",
+    workflow: "Find and run anything by name from the Command Palette",
     edges: [
       "open and close with F1 (focus entry, Tab containment, Escape restores focus)",
       "run a Command",

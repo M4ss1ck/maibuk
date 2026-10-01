@@ -455,7 +455,8 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `buildSeed(name)` / `buildAllSeeds()` (build seed Libraries into database bytes through the real write paths)                                                                                                                                                                | `e2e/support/seed/build-seeds.ts`                                      |
 | `capture(page, name, { around })` (light and dark screenshot of the current state into `E2E_CAPTURE_DIR`; a no-op otherwise) | `e2e/support/capture.ts` |
 | `test` / `expect` with `syncUrl`, `account`, `openDevice()`, `autoSync` (the Sync lane fixture: a fresh Sync Account per test, more devices as browser contexts) plus keyboard helpers (`signIn`, `enterPassphrase`, `syncFromSettings`, `chooseSyncOption`, `logEntries`) and objects-API faults (`failObjectsApi`, `holdObjectsApi`) | `e2e/support/sync.ts` |
-| `startSyncServer(root)` / `sweepStaleRuns(root)` (the Sync lane's PocketBase: free port, fresh data dir, superuser; cleanup of runs a killed runner left) | `e2e/sync-server.mjs` |
+| `startSyncServer(root)` / `sweepStaleRuns(root)` (the Sync lane's PocketBase: free port, fresh data dir, superuser; cleanup of sync runs a killed runner left) | `e2e/sync-server.mjs` |
+| `startPreview(root, runDir)` / `sweepStalePreviews(root)` / `ownTeardown()` / `runPlaywright()` (the web build server both E2E runners own: free port, own process group, stopped however the run ends; sweep of what a killed runner left) | `e2e/preview-server.mjs` |
 | `failBackupWrites(page)` (only Backup writes fail, the Library keeps saving: the pre-sync Backup abort path) / `countBackupsByTrigger(page, trigger)` | `e2e/support/fault.ts` / `e2e/support/storage.ts` |
 | `pnpm screenshots <playwright filter>` (before/after `capture` shots against the merge-base, plus a PR body table and `gh --attach` args) | `scripts/pr-screenshots.sh` |
 

@@ -27,7 +27,9 @@ test.describe("Read the Sync Log @wf:sync-log", () => {
     await signInAndSync(page, syncUrl, account, pushed);
     const section = syncSection(page);
     const header = logHeader(section);
-    await expect(logEntries(section).filter({ hasText: "Created pre-sync safety backup" })).toHaveCount(1);
+    await expect(
+      logEntries(section).filter({ hasText: "Created pre-sync safety backup" })
+    ).toHaveCount(1);
     await expect(header).toHaveAttribute("aria-expanded", "true");
 
     await tabTo(page, header, { max: 40 });
