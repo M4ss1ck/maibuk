@@ -4,6 +4,7 @@ import { useVersionCheck } from "@/features/version";
 import { useSettings } from "@/features/settings";
 import { AsciiBanner } from "@/components/settings/AsciiBanner";
 import { SettingRow } from "@/components/settings/SettingRow";
+import { SettingsSection } from "@/components/settings/SettingsSection";
 
 export function AboutSection() {
   const { t } = useTranslation();
@@ -12,10 +13,7 @@ export function AboutSection() {
   const updateAvailable = isOutdated && latestVersion;
 
   return (
-    <section className="pt-4 border-t border-border">
-      <h2 tabIndex={-1} data-settings-section="about" className="sr-only">
-        {t("settings.about")}
-      </h2>
+    <SettingsSection sectionId="about" title={t("settings.about")} titleHidden>
       <SettingRow id="appVersion" visuallyHiddenLabel>
         <div>
           <div className="relative">
@@ -37,6 +35,6 @@ export function AboutSection() {
           <p className="mt-1 text-sm text-muted-foreground">{t("app.description")}</p>
         </div>
       </SettingRow>
-    </section>
+    </SettingsSection>
   );
 }

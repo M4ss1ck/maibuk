@@ -25,6 +25,7 @@ import {
 import { Select, Switch, Button, Modal, Input } from "@/components/ui";
 import { ChevronDownIcon } from "@/components/icons";
 import { SettingRow } from "@/components/settings/SettingRow";
+import { SETTINGS_ROWS_CLASS, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 
 export function PasteCleanupSection() {
@@ -121,11 +122,8 @@ export function PasteCleanupSection() {
   };
 
   return (
-    <div className="space-y-4">
-      <SettingRow
-        id="pasteCleanupPreset"
-        className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4"
-      >
+    <div className={SETTINGS_ROWS_CLASS}>
+      <SettingRow id="pasteCleanupPreset" className={SETTINGS_ROW_CLASS}>
         <Select<PasteCleanupPreset>
           ariaLabel={t("settings.pasteCleanup.preset.label")}
           value={preset}
@@ -134,10 +132,7 @@ export function PasteCleanupSection() {
         />
       </SettingRow>
 
-      <SettingRow
-        id="pasteCleanupPromptMarkdown"
-        className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4"
-      >
+      <SettingRow id="pasteCleanupPromptMarkdown" className={SETTINGS_ROW_CLASS}>
         <Switch
           checked={promptMarkdownOnPaste}
           onChange={setPromptMarkdownOnPaste}
@@ -145,7 +140,7 @@ export function PasteCleanupSection() {
         />
       </SettingRow>
 
-      <div>
+      <div className="py-3">
         <button
           type="button"
           onClick={() => setAdvancedOpen(!advancedOpen)}
@@ -159,7 +154,7 @@ export function PasteCleanupSection() {
         </button>
 
         {advancedOpen && (
-          <div className="mt-3 space-y-5 border-l-2 border-border pl-4">
+          <div className="mt-3 space-y-5">
             <SettingRow id="pasteCleanupAdvanced" visuallyHiddenLabel>
               <div className="space-y-5">
                 <div className="space-y-3">

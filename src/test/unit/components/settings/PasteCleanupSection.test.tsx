@@ -137,12 +137,12 @@ describe("PasteCleanupSection — open from HTML view", () => {
       </MemoryRouter>
     );
 
-    const presetRow = screen.getByText("settings.pasteCleanup.preset.label").closest(".py-2");
+    const presetRow = screen.getByText("settings.pasteCleanup.preset.label").closest(".py-3");
     expect(presetRow).not.toBeNull();
     expect(presetRow).toHaveClass("flex-col", "@lg:flex-row", "@lg:items-center");
     expect(presetRow).not.toHaveClass("sm:flex-row");
 
-    const promptRow = screen.getByRole("switch").closest(".py-2");
+    const promptRow = screen.getByRole("switch").closest(".py-3");
     expect(promptRow).not.toBeNull();
     expect(promptRow).toHaveClass("flex-col", "@lg:flex-row");
     expect(promptRow).not.toHaveClass("sm:flex-row");

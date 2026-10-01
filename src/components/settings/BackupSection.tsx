@@ -26,6 +26,7 @@ import type { BackupEntry } from "@/lib/platform/types";
 import { useSettingsStore } from "@/features/settings/store";
 import { BACKUP_LIST_PAGE_SIZE_OPTIONS } from "@/features/settings/types";
 import { SettingRow } from "@/components/settings/SettingRow";
+import { SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 
 const SIZE_WARNING_THRESHOLD = 500 * 1024 * 1024; // 500MB
 
@@ -394,28 +395,18 @@ export function BackupSection() {
   const allOnPageSelected = backups.length > 0 && selectedOnPage === backups.length;
 
   return (
-    <div className="@container space-y-4">
-      <h3
-        tabIndex={-1}
-        data-settings-section="backups"
-        className="text-sm font-semibold uppercase tracking-wider text-muted-foreground"
-      >
-        {t("backup.title")}
-      </h3>
-      <div>
-        <p className="text-sm text-muted-foreground">{t("backup.description")}</p>
-      </div>
-
-      <SettingRow id="backupRetention" labelHidden className="flex items-center gap-4">
-        <Input
-          type="number"
-          label={t("backup.retentionLimit")}
-          min={1}
-          max={100}
-          value={backupRetention}
-          onChange={(e) => setBackupRetention(Number(e.target.value))}
-          className="w-24"
-        />
+    <>
+      <SettingRow id="backupRetention" className={SETTINGS_ROW_CLASS}>
+        <div className="w-28">
+          <Input
+            type="number"
+            aria-label={t("backup.retentionLimit")}
+            min={1}
+            max={100}
+            value={backupRetention}
+            onChange={(e) => setBackupRetention(Number(e.target.value))}
+          />
+        </div>
       </SettingRow>
 
       {IS_DESKTOP && (
@@ -424,7 +415,7 @@ export function BackupSection() {
         <SettingRow
           id="backupDirectory"
           labelHidden
-          className={`flex flex-col gap-3 @sm:flex-row ${directoryError ? "@sm:items-start" : "@sm:items-end"}`}
+          className={`flex flex-col gap-3 py-3 @sm:flex-row ${directoryError ? "@sm:items-start" : "@sm:items-end"}`}
           onBlur={(e) => {
             // Moving between the field and Choose folder keeps the draft (it
             // is the picker's start), and so does a native picker or
@@ -465,17 +456,17 @@ export function BackupSection() {
         </SettingRow>
       )}
 
-      <SettingRow id="backupCreate" labelHidden>
+      <SettingRow id="backupCreate" labelHidden className="py-3">
         <Button ref={createButtonRef} variant="primary" onClick={handleCreate} disabled={!service}>
           {t("backup.createBackup")}
         </Button>
       </SettingRow>
 
       {totalSizeBytes > SIZE_WARNING_THRESHOLD && (
-        <p className="text-sm text-destructive">{t("backup.sizeWarning")}</p>
+        <p className="py-3 text-sm text-destructive">{t("backup.sizeWarning")}</p>
       )}
 
-      <SettingRow id="backupsList" visuallyHiddenLabel>
+      <SettingRow id="backupsList" visuallyHiddenLabel className="py-3">
         {loading && totalCount === 0 ? (
           <p role="status" className="text-sm text-muted-foreground">
             {t("common.loading")}
@@ -704,6 +695,6 @@ export function BackupSection() {
       >
         <p className="text-sm text-destructive">{errorMessage}</p>
       </Modal>
-    </div>
+    </>
   );
 }
