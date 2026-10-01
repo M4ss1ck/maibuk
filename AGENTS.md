@@ -432,6 +432,9 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `SEED_LIBRARIES` / `SeedName` (named E2E seed Libraries; each builder uses the real write paths)                                                                                                                                                                             | `e2e/support/seed/libraries.ts`                                        |
 | `buildSeed(name)` / `buildAllSeeds()` (build seed Libraries into database bytes through the real write paths)                                                                                                                                                                | `e2e/support/seed/build-seeds.ts`                                      |
 | `capture(page, name, { around })` (light and dark screenshot of the current state into `E2E_CAPTURE_DIR`; a no-op otherwise) | `e2e/support/capture.ts` |
+| `test` / `expect` with `syncUrl`, `account`, `openDevice()`, `autoSync` (the Sync lane fixture: a fresh Sync Account per test, more devices as browser contexts) plus keyboard helpers (`signIn`, `enterPassphrase`, `syncFromSettings`, `chooseSyncOption`, `logEntries`) and objects-API faults (`failObjectsApi`, `holdObjectsApi`) | `e2e/support/sync.ts` |
+| `startSyncServer(root)` / `sweepStaleRuns(root)` (the Sync lane's PocketBase: free port, fresh data dir, superuser; cleanup of runs a killed runner left) | `e2e/sync-server.mjs` |
+| `failBackupWrites(page)` (only Backup writes fail, the Library keeps saving: the pre-sync Backup abort path) / `countBackupsByTrigger(page, trigger)` | `e2e/support/fault.ts` / `e2e/support/storage.ts` |
 | `pnpm screenshots <playwright filter>` (before/after `capture` shots against the merge-base, plus a PR body table and `gh --attach` args) | `scripts/pr-screenshots.sh` |
 
 ---
@@ -696,6 +699,7 @@ pnpm test:e2e --project=phone                     # the @touch specs on a phone
 pnpm test:e2e specs/books-create.spec.ts          # one file
 pnpm test:e2e --grep @wf:books-create             # one matrix workflow
 pnpm test:e2e --repeat-each=3                     # the acceptance run
+pnpm test:e2e:sync                                # Sync lane: local PocketBase + maibuk-sync migrations, specs/sync/
 ```
 
 Specs live in `e2e/specs/`. The suite drives the production web build in
@@ -861,6 +865,8 @@ pnpm bench:dictation:android # Same bench in Chrome on the one adb device (phone
 pnpm record:dictation-phrases en  # Record the Dictation phrase script (then es)
 pnpm conformance:dictation:phrases  # Per-phrase hit rate + prose triggers, native models
 pnpm screenshots -g "<test>"  # Before/after PR screenshots (e2e/README.md)
+pnpm test:e2e:sync    # E2E Sync lane against a local PocketBase (e2e/README.md "Sync lane")
+pnpm fetch:sync-server  # Pinned PocketBase 0.25.0 + maibuk-sync migrations into vendor/sync-server/
 pnpm tauri            # Direct Tauri CLI access
 ```
 

@@ -77,17 +77,29 @@ export async function prepareDevice(
 /**
  * Seeds persisted Settings (localStorage `maibuk-settings`) before the app
  * boots, e.g. a toolbar already expanded so a spec need not navigate there.
+ * By default it re-applies on every load; `once` seeds only the first load of
+ * the tab, so a setting the author then changes survives a reload.
  */
-export async function seedSettings(page: Page, state: Record<string, unknown>): Promise<void> {
-  await page.addInitScript((partial) => {
-    const key = "maibuk-settings";
-    const raw = localStorage.getItem(key);
-    const parsed = raw
-      ? (JSON.parse(raw) as { state: Record<string, unknown>; version: number })
-      : { state: {}, version: 0 };
-    parsed.state = { ...parsed.state, ...partial };
-    localStorage.setItem(key, JSON.stringify(parsed));
-  }, state);
+export async function seedSettings(
+  page: Page,
+  state: Record<string, unknown>,
+  { once = false }: { once?: boolean } = {}
+): Promise<void> {
+  await page.addInitScript(
+    ({ partial, once }) => {
+      const marker = "e2e-settings-seeded";
+      if (once && sessionStorage.getItem(marker)) return;
+      const key = "maibuk-settings";
+      const raw = localStorage.getItem(key);
+      const parsed = raw
+        ? (JSON.parse(raw) as { state: Record<string, unknown>; version: number })
+        : { state: {}, version: 0 };
+      parsed.state = { ...parsed.state, ...partial };
+      localStorage.setItem(key, JSON.stringify(parsed));
+      if (once) sessionStorage.setItem(marker, "1");
+    },
+    { partial: state, once }
+  );
 }
 
 /** Persists a Paste Cleanup preset so paste rows do not have to walk Settings. */
@@ -103,6 +115,36 @@ export async function seedPasteCleanupPreset(
 /** Reads one localStorage value, e.g. a device-local store a run must not touch. */
 export async function readStorageValue(page: Page, key: string): Promise<string | null> {
   return page.evaluate((k) => localStorage.getItem(k), key);
+}
+
+/**
+ * How many web Backups a trigger made (`pre-sync`, `daily`...), read from the
+ * filenames the adapter keys them by. The Sync lane counts `pre-sync` ones,
+ * which a launch "Daily" Backup landing mid-test cannot disturb.
+ */
+export async function countBackupsByTrigger(page: Page, trigger: string): Promise<number> {
+  return page.evaluate(
+    (prefix) =>
+      new Promise<number>((resolve, reject) => {
+        const open = indexedDB.open("maibuk-backups");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          if (!db.objectStoreNames.contains("backups")) {
+            db.close();
+            resolve(0);
+            return;
+          }
+          const keys = db.transaction("backups", "readonly").objectStore("backups").getAllKeys();
+          keys.onsuccess = () => {
+            db.close();
+            resolve(keys.result.filter((key) => String(key).startsWith(prefix)).length);
+          };
+          keys.onerror = () => reject(keys.error);
+        };
+      }),
+    `maibuk-backup-${trigger}-`
+  );
 }
 
 /** How many Backups the web adapter holds; a Tutorial run must add none. */

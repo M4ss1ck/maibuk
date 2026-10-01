@@ -4,7 +4,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { test as base, expect } from "@playwright/test";
+import { type BrowserContext, test as base, expect } from "@playwright/test";
 import { REPO_ROOT } from "./seed/seeds";
 import { prepareDevice, type LibrarySeed, type TutorialProgressSeed } from "./storage";
 
@@ -41,6 +41,33 @@ const MODEL_FILES = new Map(
   )
 );
 
+/**
+ * Hermetic network. Nothing leaves the machine: 127.0.0.1 (the preview server,
+ * and the Sync lane's PocketBase) is the only origin. A spec that needs a
+ * stubbed external call (Word Lookup) registers its own page.route, which
+ * takes precedence.
+ */
+export async function makeHermetic(context: BrowserContext): Promise<void> {
+  await context.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
+  // The web adapter loads sql.js wasm from sql.js.org; serve the copy the
+  // bundled JS glue ships with, so it is offline and version-matched.
+  await context.route("https://sql.js.org/dist/sql-wasm.wasm", (route) =>
+    route.fulfill({ path: SQL_WASM, contentType: "application/wasm" })
+  );
+  // The update check reads GitHub tags; no tags means "no update".
+  await context.route("https://api.github.com/repos/M4ss1ck/maibuk/tags*", (route) =>
+    route.fulfill({ json: [] })
+  );
+  // Dictation Models come from vendor/ (pnpm fetch:dictation --test-assets),
+  // never the network. Unknown files 404, which the settings spec relies on.
+  // Registered after the catch-all abort, like the sql.js route: a later
+  // route takes precedence.
+  await context.route(/^https:\/\/download\.moonshine\.ai\//, (route) => {
+    const file = MODEL_FILES.get(route.request().url());
+    return file && existsSync(file) ? route.fulfill({ path: file }) : route.fulfill({ status: 404 });
+  });
+}
+
 export const test = base.extend<Options & Fixtures>({
   library: ["empty", { option: true }],
   tutorialProgress: ["dismissed", { option: true }],
@@ -51,30 +78,7 @@ export const test = base.extend<Options & Fixtures>({
   },
 
   page: async ({ page, library, tutorialProgress, macPlatform }, use) => {
-    // Hermetic network. Nothing leaves the machine: the preview server is the
-    // only origin. A spec that needs a stubbed external call (Word Lookup)
-    // registers its own page.route, which takes precedence.
-    const context = page.context();
-    await context.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
-    // The web adapter loads sql.js wasm from sql.js.org; serve the copy the
-    // bundled JS glue ships with, so it is offline and version-matched.
-    await context.route("https://sql.js.org/dist/sql-wasm.wasm", (route) =>
-      route.fulfill({ path: SQL_WASM, contentType: "application/wasm" })
-    );
-    // The update check reads GitHub tags; no tags means "no update".
-    await context.route("https://api.github.com/repos/M4ss1ck/maibuk/tags*", (route) =>
-      route.fulfill({ json: [] })
-    );
-    // Dictation Models come from vendor/ (pnpm fetch:dictation --test-assets),
-    // never the network. Unknown files 404, which the settings spec relies on.
-    // Registered after the catch-all abort, like the sql.js route: a later
-    // route takes precedence.
-    await context.route(/^https:\/\/download\.moonshine\.ai\//, (route) => {
-      const file = MODEL_FILES.get(route.request().url());
-      return file && existsSync(file)
-        ? route.fulfill({ path: file })
-        : route.fulfill({ status: 404 });
-    });
+    await makeHermetic(page.context());
     if (macPlatform) {
       // isMac() prefers userAgentData.platform; TipTap reads navigator.platform.
       await page.addInitScript(() => {

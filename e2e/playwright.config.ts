@@ -11,7 +11,7 @@ if (Number.isNaN(slowMo)) {
   throw new Error(`E2E_SLOW_MO must be milliseconds, got "${process.env.E2E_SLOW_MO}"`);
 }
 
-const shared = {
+export const shared = {
   locale: "en-US",
   timezoneId: "UTC",
   viewport: { width: 1280, height: 800 },
@@ -19,6 +19,9 @@ const shared = {
 
 export default defineConfig<{ macPlatform: boolean }>({
   testDir: "./specs",
+  // The Sync lane's specs need a sync server; run-sync.mjs runs them with
+  // playwright.sync.config.ts.
+  testIgnore: "sync/**",
   outputDir: resolve(OUTPUT, "test-results"),
   globalSetup: "./support/global-setup.ts",
   timeout: 30_000,
@@ -79,15 +82,19 @@ export default defineConfig<{ macPlatform: boolean }>({
       use: { ...devices["Pixel 7"], locale: shared.locale, timezoneId: shared.timezoneId },
     },
   ],
-  webServer: {
-    // run.mjs builds the web target into .output/web-dist first.
-    command: `pnpm exec vite preview --outDir e2e/.output/web-dist --host 127.0.0.1 --port ${E2E_PORT} --strictPort`,
+  webServer: previewServer(E2E_PORT),
+});
+
+/** The production web build served on `port`; the runners build it into .output/web-dist first. */
+export function previewServer(port: number) {
+  return {
+    command: `pnpm exec vite preview --outDir e2e/.output/web-dist --host 127.0.0.1 --port ${port} --strictPort`,
     cwd: resolve(import.meta.dirname, ".."),
     env: { VITE_BUILD_TARGET: "web" },
-    url: `http://127.0.0.1:${E2E_PORT}/`,
+    url: `http://127.0.0.1:${port}/`,
     reuseExistingServer: false,
     timeout: 60_000,
-    stdout: "ignore",
-    stderr: "pipe",
-  },
-});
+    stdout: "ignore" as const,
+    stderr: "pipe" as const,
+  };
+}

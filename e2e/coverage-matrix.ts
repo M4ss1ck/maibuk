@@ -5,27 +5,19 @@
 
 import type { Exclusion, MatrixRow } from "./guards/types";
 
-const SYNC_FOLLOW_UP =
-  "Vitest sync suites; follow-up issue: E2E Sync lane (local PocketBase 0.25.0 + maibuk-sync migrations) https://github.com/M4ss1ck/maibuk/issues/222";
-
 export const EXCLUSIONS: Exclusion[] = [
   {
-    kind: "context-section",
-    section: "Sync",
-    reason: "Sync is out of scope for this delivery (maintainer, 2026-09-25)",
-    owner: SYNC_FOLLOW_UP,
+    kind: "term",
+    items: ["Origin", "Change Kind"],
+    reason:
+      "Internal to the Change Feed: no visible outcome tells a local Change from a pulled one, or content from metadata, beyond Last Edited (covered by the books rows)",
+    owner: "Vitest change-feed and per-entity write-path suites",
   },
   {
     kind: "context-section",
     section: "Anticipated",
     reason: "Reserved names for features nobody has decided to build",
     owner: "none: nothing to test",
-  },
-  {
-    kind: "shortcut",
-    items: ["global.syncNow"],
-    reason: "Sync is out of scope for this delivery",
-    owner: SYNC_FOLLOW_UP,
   },
   {
     kind: "shortcut",
@@ -2449,6 +2441,161 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: ["touch"],
+    status: "accepted",
+  },
+
+  // Sync lane (issue #222): specs in e2e/specs/sync/, run only by
+  // `pnpm test:e2e:sync` against a local PocketBase with the maibuk-sync
+  // migrations. Two browser contexts act as two devices.
+  {
+    id: "sync-sign-in",
+    area: "sync",
+    workflow:
+      "Settings > Sync: Tab to Log In, Enter; type Server URL, Email, Password; Tab to the footer Log In, Enter; asserts: focus enters the dialog and Tab stays inside, Settings reads Logged in as <email> and shows Sync automatically",
+    edges: [
+      "A wrong password shows the server's error and keeps the dialog open",
+      "Sign up creates a new Sync Account and signs in",
+      "Escape closes the dialog and focus returns to Log In",
+      "Log Out returns to Not logged in",
+      "Settings' Server URL shows the URL signed in with; tabbing past it keeps it across a reload",
+    ],
+    terms: ["Sync Account"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "empty",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "sync-passphrase",
+    area: "sync",
+    workflow:
+      "First Sync opens Enter Passphrase with the field focused; type, Enter confirms, Tab to Close, Enter runs the waiting sync; asserts: Sync log reads Pushed book The Lighthouse Keeper",
+    edges: [
+      "Show passphrase toggles the field between hidden and visible by keyboard",
+      "Escape before confirming runs no sync: no log entries, no Pre-sync Backup",
+      "A second device with a different Passphrase does not get the Book and logs an error",
+    ],
+    terms: ["Passphrase"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "sync-now",
+    area: "sync",
+    workflow:
+      "Device A (seeded) signs in and presses Sync: Push; device B (empty) signs in and presses Sync: Pull; asserts: Sync logs, the Book on B's Home and its chapter text in B's editor",
+    edges: [
+      "Mod+Shift+Y on Home runs a full sync",
+      "Mod+Shift+Y in the Book Editor syncs that Book",
+      "A second Sync with nothing changed logs Skipped unchanged book (Sync Base)",
+    ],
+    terms: ["Sync", "Synced Item", "Push", "Pull", "Sync Base", "Entity Sync"],
+    shortcuts: ["global.syncNow"],
+    routes: ["/settings", "/", "/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "sync-scope-direction",
+    area: "sync",
+    workflow:
+      "Scope and Direction selects in Settings > Sync, opened with Enter and picked with arrows; asserts: what the Sync log says each run Pushed, Pulled or skipped",
+    edges: [
+      "Scope Books pushes the Book and no Note",
+      "Pull only skips a local-only Book",
+      "Push only does not pull another device's Book",
+    ],
+    terms: ["Sync Scope", "Sync Direction"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "notesWithLinksAndTags",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "sync-auto",
+    area: "sync",
+    workflow:
+      "With a Passphrase set, edit a chapter, then 30 s of quiet (fast-forwarded clock) pushes it with no key pressed; asserts: device B pulls the new text",
+    edges: [
+      "With Sync automatically off, the same quiet pushes nothing",
+      "An item changed on both devices is Deferred by Auto Sync: no dialog, a log line, and the next manual Sync asks",
+    ],
+    terms: ["Auto Sync", "Change", "Change Feed", "Deferred"],
+    shortcuts: [],
+    routes: ["/settings", "/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["clock"],
+    status: "accepted",
+  },
+  {
+    id: "sync-conflict",
+    area: "sync",
+    workflow:
+      "Both devices edit the same chapter after a shared sync; A syncs, then B's Sync opens Sync Conflict; Tab to a choice, Enter; asserts: focus entry, Tab containment, the winning text on both devices",
+    edges: [
+      "Keep Local & Push: B's text wins and A pulls it",
+      "Use Remote & Pull: B gets A's text",
+      "Escape cancels: nothing changes on either device",
+    ],
+    terms: ["Conflict"],
+    shortcuts: [],
+    routes: ["/settings", "/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "sync-deleted-elsewhere",
+    area: "sync",
+    workflow:
+      "A deletes a synced Book; Sync lists it under Deletions made on this device, Delete remote copies; B's Sync lists it under Deleted on another device, Delete from this device removes it; asserts: Home on both devices",
+    edges: [
+      "An unconfirmed Deletion Review leaves the Book on B",
+      "B edited it meanwhile: Deleted on Another Device, Keep & Push restores it for A",
+      "After confirming, A's next Sync never re-creates the Book (Tombstone)",
+    ],
+    terms: ["Delete", "Tombstone", "Deleted Elsewhere", "Deletion Review", "Keep"],
+    shortcuts: [],
+    routes: ["/settings", "/"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "sync-log",
+    area: "sync",
+    workflow:
+      "After a Sync, the Sync log lists what the run did; Enter on its header collapses and expands it; Clear sync log empties it; asserts: aria-expanded and the visible entries",
+    edges: ["A failed run adds an error entry"],
+    terms: ["Sync Log"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "sync-faults",
+    area: "sync",
+    workflow:
+      "Network and storage faults during a manual Sync (route interception, offline context, failing IndexedDB writes); asserts: the user-facing error, whether a Pre-sync Backup exists, and that local data is untouched",
+    edges: [
+      "Offline: No internet connection, no new Backup, no request reaches the server",
+      "5xx from the server: an error in the Sync log and the Sync status panel, a Pre-sync Backup exists, the Book is unchanged",
+      "Slow response: Syncing... disabled, the Pre-sync Backup exists while the request is held, Mod+Shift+Y starts no second run, the run then finishes",
+      "Backup failure: the exact abort copy and no request reaches the server",
+    ],
+    terms: [],
+    shortcuts: [],
+    routes: ["/settings", "/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["fault"],
     status: "accepted",
   },
 ];

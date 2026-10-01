@@ -16,7 +16,8 @@ export type Area =
   | "settings"
   | "metrics"
   | "tutorial"
-  | "embed";
+  | "embed"
+  | "sync";
 
 /**
  * - `planned`: no spec yet. Fails the run unless `--allow-planned` is passed.
