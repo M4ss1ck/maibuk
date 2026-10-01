@@ -5,13 +5,17 @@ const mockDb = {
   select: vi.fn(),
   close: vi.fn(),
   exportData: vi.fn(),
-  importData: vi.fn(),
+  executeAtomic: vi.fn(),
 };
 
 const mockEnsureMetricsSchema = vi.fn();
 
 const { mockCreateDatabase } = vi.hoisted(() => ({
   mockCreateDatabase: vi.fn(),
+}));
+
+const { mockFlushPendingEdits } = vi.hoisted(() => ({
+  mockFlushPendingEdits: vi.fn(),
 }));
 
 vi.mock("../../../../lib/platform", () => ({
@@ -23,6 +27,10 @@ vi.mock("../../../../features/metrics/events-repo", () => ({
   ensureMetricsSchema: mockEnsureMetricsSchema,
 }));
 
+vi.mock("@/features/sync/pending-edits", () => ({
+  flushPendingEdits: mockFlushPendingEdits,
+}));
+
 describe("src/lib/db/index.ts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -31,7 +39,8 @@ describe("src/lib/db/index.ts", () => {
     mockDb.execute.mockResolvedValue({ rowsAffected: 0 });
     mockDb.select.mockResolvedValue([]);
     mockDb.exportData.mockResolvedValue(new Uint8Array([1, 2, 3]));
-    mockDb.importData.mockResolvedValue(undefined);
+    mockDb.executeAtomic.mockResolvedValue(undefined);
+    mockFlushPendingEdits.mockResolvedValue(undefined);
   });
 
   describe("getDatabase()", () => {
@@ -247,16 +256,41 @@ describe("src/lib/db/index.ts", () => {
   });
 
   describe("importDatabase()", () => {
-    it("imports sql content after converting each INSERT to an in-place upsert", async () => {
+    it("flushes pending edits, then loads each INSERT as an in-place upsert", async () => {
       const { importDatabase } = await import("@/lib/db");
       const sql = `INSERT INTO books (id) VALUES ('1');\nINSERT OR IGNORE INTO chapters (id) VALUES ('a;b');`;
 
       await importDatabase(sql);
 
-      expect(mockDb.importData).toHaveBeenCalledWith(
-        `INSERT INTO books (id) VALUES ('1') ON CONFLICT DO UPDATE SET id = excluded.id;\n` +
-          `INSERT INTO chapters (id) VALUES ('a;b') ON CONFLICT DO UPDATE SET id = excluded.id;`
+      expect(mockFlushPendingEdits).toHaveBeenCalled();
+      expect(mockDb.executeAtomic).toHaveBeenCalledWith([
+        `INSERT INTO books (id) VALUES ('1') ON CONFLICT DO UPDATE SET id = excluded.id`,
+        `INSERT INTO chapters (id) VALUES ('a;b') ON CONFLICT DO UPDATE SET id = excluded.id`,
+      ]);
+      expect(mockFlushPendingEdits.mock.invocationCallOrder[0]).toBeLessThan(
+        mockDb.executeAtomic.mock.invocationCallOrder[0]
       );
+    });
+
+    it("drops the dump's own transaction control statements", async () => {
+      const { importDatabase } = await import("@/lib/db");
+      const sql = `BEGIN TRANSACTION;\nINSERT INTO books (id) VALUES ('1');\nCOMMIT;`;
+
+      await importDatabase(sql);
+
+      expect(mockDb.executeAtomic).toHaveBeenCalledWith([
+        `INSERT INTO books (id) VALUES ('1') ON CONFLICT DO UPDATE SET id = excluded.id`,
+      ]);
+    });
+
+    it("a failed pending-edits flush stops the load before anything changes", async () => {
+      const { importDatabase } = await import("@/lib/db");
+      mockFlushPendingEdits.mockRejectedValueOnce(new Error("disk full"));
+
+      await expect(importDatabase(`INSERT INTO books (id) VALUES ('1');`)).rejects.toThrow(
+        "disk full"
+      );
+      expect(mockDb.executeAtomic).not.toHaveBeenCalled();
     });
   });
 });

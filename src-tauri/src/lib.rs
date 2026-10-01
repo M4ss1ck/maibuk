@@ -53,6 +53,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             tray::set_tray_syncing,
             android_exit::exit_app,
+            library_db::library_execute_atomic,
             backup::pick_backup_directory,
             backup::request_backup_directory,
             backup::restore_backup_directory,

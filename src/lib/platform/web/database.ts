@@ -1,6 +1,6 @@
 import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
 import type { DatabaseAdapter } from "@/lib/platform/types";
-import { parseSqlStatements } from "@/lib/db/sql-parser";
+import { runAtomicSqlJs } from "@/lib/db/atomic";
 import { exportSqlDump } from "@/lib/db/sql-export";
 
 const DB_STORAGE_KEY = "maibuk-database";
@@ -44,16 +44,8 @@ export class WebDatabaseAdapter implements DatabaseAdapter {
     return exportSqlDump(this);
   }
 
-  async importData(sqlContent: string): Promise<void> {
-    // Parse SQL statements properly handling semicolons inside quoted strings
-    const statements = parseSqlStatements(sqlContent);
-
-    for (const statement of statements) {
-      if (statement.length > 0) {
-        this.db.run(statement);
-      }
-    }
-
+  async executeAtomic(statements: string[]): Promise<void> {
+    runAtomicSqlJs(this.db, statements);
     await this.persist();
   }
 

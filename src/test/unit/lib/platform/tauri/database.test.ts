@@ -1,16 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AtomicStatementError } from "@/lib/db/atomic";
 
 const mockExecute = vi.hoisted(() => vi.fn());
 const mockSelect = vi.hoisted(() => vi.fn());
 const mockClose = vi.hoisted(() => vi.fn());
 const mockGet = vi.hoisted(() => vi.fn());
 const mockLoad = vi.hoisted(() => vi.fn());
+const mockInvoke = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/plugin-sql", () => ({
   default: {
     get: mockGet,
     load: mockLoad,
   },
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: mockInvoke,
 }));
 
 const { createTauriDatabase } = await import("@/lib/platform/tauri/database");
@@ -25,6 +31,7 @@ describe("createTauriDatabase", () => {
     });
     mockExecute.mockResolvedValue({ rowsAffected: 1, lastInsertId: 7 });
     mockSelect.mockResolvedValue([{ title: "hello" }]);
+    mockInvoke.mockResolvedValue(undefined);
   });
 
   it("opens the Library through Database.get and never calls load", async () => {
@@ -56,22 +63,29 @@ describe("createTauriDatabase", () => {
     expect(mockSelect).toHaveBeenCalledWith("SELECT title FROM notes WHERE id = ?", ["n1"]);
   });
 
-  it("importData runs each statement in order, keeping quoted semicolons intact", async () => {
+  it("executeAtomic invokes library_execute_atomic with the statements", async () => {
     const db = await createTauriDatabase("sqlite:maibuk.db");
-
-    await db.importData(
-      "INSERT INTO notes (id, title) VALUES ('a;b');\nINSERT INTO notes (id, title) VALUES ('c');",
-    );
-
-    expect(mockExecute).toHaveBeenCalledTimes(2);
-    expect(mockExecute).toHaveBeenNthCalledWith(
-      1,
+    const statements = [
       "INSERT INTO notes (id, title) VALUES ('a;b')",
-    );
-    expect(mockExecute).toHaveBeenNthCalledWith(
-      2,
       "INSERT INTO notes (id, title) VALUES ('c')",
-    );
+    ];
+
+    await db.executeAtomic(statements);
+
+    expect(mockInvoke).toHaveBeenCalledWith("library_execute_atomic", { statements });
+  });
+
+  it("maps a rejected invoke to AtomicStatementError with index and detail", async () => {
+    const db = await createTauriDatabase("sqlite:maibuk.db");
+    mockInvoke.mockRejectedValue({ index: 1, message: "no such table: x" });
+
+    const error = await db
+      .executeAtomic(["SELECT 1", "INSERT INTO x (id) VALUES ('1')"])
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(AtomicStatementError);
+    expect((error as AtomicStatementError).index).toBe(1);
+    expect((error as AtomicStatementError).detail).toBe("no such table: x");
   });
 
   it("close resolves without calling the plugin close", async () => {

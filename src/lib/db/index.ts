@@ -3,7 +3,9 @@ import { ensureMetricsSchema } from "@/features/metrics/events-repo";
 import { getTutorialDatabase } from "@/features/tutorial/library-switch";
 import { DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
 import { compactLibrary } from "@/lib/db/compact";
+import { isTransactionControl } from "@/lib/db/atomic";
 import { parseSqlStatements } from "@/lib/db/sql-parser";
+import { flushPendingEdits } from "@/features/sync/pending-edits";
 
 let db: DatabaseAdapter | null = null;
 let dbPromise: Promise<DatabaseAdapter> | null = null;
@@ -456,9 +458,12 @@ export function normaliseToUpsert(statement: string): string {
 }
 
 export async function importDatabase(sqlContent: string): Promise<void> {
+  // Pending editor text lands first; a failed save stops the load before anything changes.
+  await flushPendingEdits();
   const database = await getDatabase();
-  const upsertSql = parseSqlStatements(sqlContent)
-    .map((statement) => `${normaliseToUpsert(statement)};`)
-    .join("\n");
-  await database.importData(upsertSql);
+  const statements = parseSqlStatements(sqlContent)
+    // The load is already one transaction; a dump's own BEGIN/COMMIT would split it.
+    .filter((s) => !isTransactionControl(s))
+    .map((s) => normaliseToUpsert(s));
+  await database.executeAtomic(statements);
 }

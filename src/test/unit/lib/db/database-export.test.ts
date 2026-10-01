@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createTestDatabase } from "@/test/support/db-test-context";
+import { parseSqlStatements } from "@/lib/db/sql-parser";
 
 describe("DatabaseAdapter export/import round-trip", () => {
   it("round-trips book_versions rows", async () => {
@@ -26,7 +27,7 @@ describe("DatabaseAdapter export/import round-trip", () => {
 
     // Create fresh DB and import
     const freshDb = await createTestDatabase();
-    await freshDb.importData(sqlDump);
+    await freshDb.executeAtomic(parseSqlStatements(sqlDump));
 
     // Verify rows
     const versions = await freshDb.select<Record<string, unknown>[]>(
@@ -57,7 +58,7 @@ describe("DatabaseAdapter export/import round-trip", () => {
     expect(sqlDump).toContain("Deleted Draft");
 
     const freshDb = await createTestDatabase();
-    await freshDb.importData(sqlDump);
+    await freshDb.executeAtomic(parseSqlStatements(sqlDump));
 
     const tombstones = await freshDb.select<Record<string, unknown>[]>(
       "SELECT * FROM sync_tombstones WHERE id = ?",
@@ -85,7 +86,7 @@ describe("DatabaseAdapter export/import round-trip", () => {
     expect(sqlDump).toContain('INSERT OR REPLACE INTO "canvases"');
 
     const freshDb = await createTestDatabase();
-    await freshDb.importData(sqlDump);
+    await freshDb.executeAtomic(parseSqlStatements(sqlDump));
     const rows = await freshDb.select<Record<string, unknown>[]>(
       "SELECT * FROM canvases WHERE id = ?",
       ["canvas-1"]

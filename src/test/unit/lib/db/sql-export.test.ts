@@ -9,6 +9,7 @@ import {
 } from "@/lib/db/sql-export-format";
 import type { SqlExportRequest } from "@/lib/db/sql-export-format";
 import type { DatabaseAdapter } from "@/lib/platform/types";
+import { parseSqlStatements } from "@/lib/db/sql-parser";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
 const SECTION_COMMENTS = [
@@ -139,7 +140,7 @@ describe("exportSqlDump fallback (Worker unavailable)", () => {
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
 
     const freshDb = await createTestDatabase();
-    await freshDb.importData(sqlDump);
+    await freshDb.executeAtomic(parseSqlStatements(sqlDump));
 
     const books = await freshDb.select<Record<string, unknown>[]>("SELECT * FROM books");
     expect(books).toHaveLength(1);
@@ -259,7 +260,7 @@ describe("exportSqlDump fallback (Worker unavailable)", () => {
     expect(sqlDump).not.toContain("INSERT OR REPLACE");
 
     const freshDb = await createTestDatabase();
-    await freshDb.importData(sqlDump);
+    await freshDb.executeAtomic(parseSqlStatements(sqlDump));
     const books = await freshDb.select<Record<string, unknown>[]>("SELECT * FROM books");
     expect(books).toHaveLength(0);
   });

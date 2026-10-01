@@ -20,6 +20,7 @@ import { useVersionCheck } from "@/features/version";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "@/components/icons";
 import { exportDatabase, importDatabase, resetDatabase } from "@/lib/db";
+import { flushPendingEdits } from "@/features/sync/pending-edits";
 import {
   getFileSystem,
   IS_TAURI,
@@ -179,6 +180,8 @@ export function Settings() {
       }
 
       if (sqlContent) {
+        // Before the pre-import Backup, so the Backup holds the text too; importDatabase flushes again.
+        await flushPendingEdits();
         // Create a pre-import backup before overwriting data
         try {
           const { backupDirectory } = useSettingsStore.getState();

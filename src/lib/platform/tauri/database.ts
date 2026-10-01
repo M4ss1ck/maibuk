@@ -1,6 +1,7 @@
 import Database from "@tauri-apps/plugin-sql";
+import { invoke } from "@tauri-apps/api/core";
 import type { DatabaseAdapter } from "@/lib/platform/types";
-import { parseSqlStatements } from "@/lib/db/sql-parser";
+import { AtomicStatementError } from "@/lib/db/atomic";
 import { exportSqlDump } from "@/lib/db/sql-export";
 
 class TauriDatabaseAdapter implements DatabaseAdapter {
@@ -24,14 +25,22 @@ class TauriDatabaseAdapter implements DatabaseAdapter {
     return exportSqlDump(this);
   }
 
-  async importData(sqlContent: string): Promise<void> {
-    // Parse SQL statements properly handling semicolons inside quoted strings
-    const statements = parseSqlStatements(sqlContent);
-
-    for (const statement of statements) {
-      if (statement.length > 0) {
-        await this.db.execute(statement);
+  async executeAtomic(statements: string[]): Promise<void> {
+    try {
+      await invoke("library_execute_atomic", { statements });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        typeof (error as { message?: unknown }).message === "string" &&
+        "index" in error &&
+        ((error as { index?: unknown }).index === null ||
+          typeof (error as { index?: unknown }).index === "number")
+      ) {
+        const { message, index } = error as { message: string; index: number | null };
+        throw new AtomicStatementError(index, message, statements.length);
       }
+      throw new AtomicStatementError(null, String(error), statements.length);
     }
   }
 }

@@ -173,6 +173,98 @@ fn build_library_pool(path: &Path) -> SqlitePool {
         .connect_lazy_with(connect_options(path))
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AtomicStatementError {
+    pub index: Option<usize>,
+    pub message: String,
+}
+
+fn is_transaction_control(statement: &str) -> bool {
+    const KEYWORDS: &[&str] = &["BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE"];
+    let trimmed = statement.trim();
+    KEYWORDS.iter().any(|keyword| {
+        let Some(head) = trimmed.get(..keyword.len()) else {
+            return false;
+        };
+        let Some(rest) = trimmed.get(keyword.len()..) else {
+            return false;
+        };
+        head.eq_ignore_ascii_case(keyword)
+            && rest
+                .chars()
+                .next()
+                .is_none_or(|c| c.is_whitespace() || c == ';')
+    })
+}
+
+/// Loading a Database File and Restoring a Backup apply every statement or none
+/// (#344): the write lock from `BEGIN IMMEDIATE` is held for the whole load so
+/// the Library never sits half-applied.
+pub async fn execute_atomic_on(
+    pool: &SqlitePool,
+    statements: &[String],
+) -> Result<(), AtomicStatementError> {
+    for (index, statement) in statements.iter().enumerate() {
+        if is_transaction_control(statement) {
+            return Err(AtomicStatementError {
+                index: Some(index),
+                message: "transaction control statements are not allowed in an atomic load"
+                    .to_string(),
+            });
+        }
+    }
+    let mut tx = pool
+        .begin_with("BEGIN IMMEDIATE")
+        .await
+        .map_err(|err| AtomicStatementError {
+            index: None,
+            message: err.to_string(),
+        })?;
+    // `sqlx::query` (not `raw_sql`): `RawSql::execute` ties the statement
+    // borrow to the executor borrow (`'q: 'e`), which the compiler cannot
+    // prove `Send` for a transaction executor, and Tauri commands and spawned
+    // tasks must be `Send`. `Query::execute` leaves the two lifetimes
+    // independent, so the same statements run fine on the one connection.
+    for (index, statement) in statements.iter().enumerate() {
+        if statement.trim().is_empty() {
+            continue;
+        }
+        if let Err(err) = sqlx::query(statement).execute(&mut *tx).await {
+            let _ = tx.rollback().await;
+            return Err(AtomicStatementError {
+                index: Some(index),
+                message: err.to_string(),
+            });
+        }
+    }
+    tx.commit().await.map_err(|err| AtomicStatementError {
+        index: None,
+        message: err.to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn library_execute_atomic<R: Runtime>(
+    app: AppHandle<R>,
+    statements: Vec<String>,
+) -> Result<(), AtomicStatementError> {
+    let pool = {
+        let state = app.state::<tauri_plugin_sql::DbInstances>();
+        let guard = state.0.read().await;
+        match guard.get(LIBRARY_DB_KEY) {
+            Some(tauri_plugin_sql::DbPool::Sqlite(pool)) => pool.clone(),
+            _ => {
+                return Err(AtomicStatementError {
+                    index: None,
+                    message: "the Library is not open".to_string(),
+                });
+            }
+        }
+    };
+    execute_atomic_on(&pool, &statements).await
+}
+
 pub fn install_at<R: Runtime>(
     app: &AppHandle<R>,
     config_dir: &Path,
@@ -454,9 +546,70 @@ mod tests {
     }
 
     #[test]
-    fn database_file_import_stops_at_attach_without_applying_later_statements() {
-        let dir = temp_dir("guard-import");
-        let outside = temp_dir("guard-import-outside");
+    fn atomic_load_applies_every_statement() {
+        let dir = temp_dir("atomic-ok");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            let statements = [
+                "CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)".to_string(),
+                "INSERT INTO notes (title) VALUES ('a')".to_string(),
+                "INSERT INTO notes (title) VALUES ('b')".to_string(),
+                "INSERT INTO notes (title) VALUES ('c')".to_string(),
+            ];
+            execute_atomic_on(&pool, &statements).await.unwrap();
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM notes")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(count, 3);
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn atomic_load_rolls_back_the_whole_list_on_first_error() {
+        let dir = temp_dir("atomic-rollback");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)")
+                .execute(&pool)
+                .await
+                .unwrap();
+            sqlx::query("INSERT INTO notes (title) VALUES ('original')")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let statements = [
+                "INSERT INTO notes (title) VALUES ('a')".to_string(),
+                "INSERT INTO notes (title) VALUES ('b')".to_string(),
+                "INSERT INTO missing_table (title) VALUES ('x')".to_string(),
+                "INSERT INTO notes (title) VALUES ('c')".to_string(),
+            ];
+            let err = execute_atomic_on(&pool, &statements).await.unwrap_err();
+            assert_eq!(err.index, Some(2));
+            assert!(
+                err.message.contains("no such table"),
+                "unexpected error: {err:?}"
+            );
+            let rows: Vec<String> = sqlx::query_scalar("SELECT title FROM notes")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            assert_eq!(rows, vec!["original".to_string()]);
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn atomic_load_with_attach_or_vacuum_into_rolls_back_and_creates_no_file() {
+        let dir = temp_dir("atomic-guard");
+        let outside = temp_dir("atomic-guard-outside");
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&outside);
         std::fs::create_dir_all(&outside).unwrap();
@@ -464,33 +617,165 @@ mod tests {
         install_at(app.handle(), &dir).unwrap();
         let pool = installed_pool(app.handle());
         tauri::async_runtime::block_on(async {
-            // Mirrors the TS adapter importData loop: one statement at a
-            // time, stopping at the first error. Loading is non-atomic
-            // until #344, so earlier statements stay applied.
-            let statements = [
-                "CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)".to_string(),
+            sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)")
+                .execute(&pool)
+                .await
+                .unwrap();
+            sqlx::query("INSERT INTO notes (title) VALUES ('original')")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let attach = format!("ATTACH '{}' AS x", outside.join("i.db").display());
+            let statements = vec![
                 "INSERT INTO notes (title) VALUES ('a')".to_string(),
                 "INSERT INTO notes (title) VALUES ('b')".to_string(),
-                format!("ATTACH '{}' AS x", outside.join("i.db").display()),
+                attach,
                 "INSERT INTO notes (title) VALUES ('c')".to_string(),
             ];
-            let mut stopped_at: Option<usize> = None;
-            for (index, statement) in statements.iter().enumerate() {
-                if sqlx::query(statement).execute(&pool).await.is_err() {
-                    stopped_at = Some(index);
-                    break;
-                }
-            }
-            assert_eq!(stopped_at, Some(3));
+            let err = execute_atomic_on(&pool, &statements).await.unwrap_err();
+            assert_eq!(err.index, Some(2));
             let count: i64 = sqlx::query_scalar("SELECT count(*) FROM notes")
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-            assert_eq!(count, 2);
+            assert_eq!(count, 1);
+
+            let vacuum_into = format!("VACUUM INTO '{}'", outside.join("y.db").display());
+            let statements = vec![
+                "INSERT INTO notes (title) VALUES ('a')".to_string(),
+                "INSERT INTO notes (title) VALUES ('b')".to_string(),
+                vacuum_into,
+            ];
+            let err = execute_atomic_on(&pool, &statements).await.unwrap_err();
+            assert_eq!(err.index, Some(2));
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM notes")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(count, 1);
         });
         assert!(outside_is_empty(&outside));
         std::fs::remove_dir_all(&dir).unwrap();
         std::fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn atomic_load_refuses_transaction_control_without_touching_the_database() {
+        let dir = temp_dir("atomic-tx-control");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            let statements = [
+                "CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)".to_string(),
+                "COMMIT".to_string(),
+                "INSERT INTO notes (title) VALUES ('a')".to_string(),
+            ];
+            let err = execute_atomic_on(&pool, &statements).await.unwrap_err();
+            assert_eq!(err.index, Some(1));
+            assert!(
+                err.message.contains("transaction control"),
+                "unexpected error: {err:?}"
+            );
+            let count: i64 =
+                sqlx::query_scalar("SELECT count(*) FROM sqlite_master WHERE name = 'notes'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(count, 0);
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn readers_see_the_library_while_the_load_runs_and_it_commits_once() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let dir = temp_dir("atomic-readers");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)")
+                .execute(&pool)
+                .await
+                .unwrap();
+            for i in 0..5 {
+                sqlx::query("INSERT INTO notes (title) VALUES (?)")
+                    .bind(format!("seed {i}"))
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+            }
+            let statements: Vec<String> = (0..5000)
+                .map(|i| format!("INSERT INTO notes (title) VALUES ('bulk {i}')"))
+                .collect();
+
+            let done = Arc::new(AtomicBool::new(false));
+            let done_reader = done.clone();
+            let writer_pool = pool.clone();
+            let reader_pool = pool.clone();
+            let writer = tauri::async_runtime::spawn(async move {
+                let result = execute_atomic_on(&writer_pool, &statements).await;
+                done.store(true, Ordering::SeqCst);
+                result
+            });
+            let reader = tauri::async_runtime::spawn(async move {
+                let mut conn = reader_pool.acquire().await.unwrap();
+                let mut counts = Vec::new();
+                let mut errored = false;
+                loop {
+                    match sqlx::query_scalar::<_, i64>("SELECT count(*) FROM notes")
+                        .fetch_one(&mut *conn)
+                        .await
+                    {
+                        Ok(count) => counts.push(count),
+                        Err(_) => {
+                            errored = true;
+                            break;
+                        }
+                    }
+                    if done_reader.load(Ordering::SeqCst) {
+                        break;
+                    }
+                }
+                (counts, errored)
+            });
+            writer.await.unwrap().unwrap();
+            let (counts, errored) = reader.await.unwrap();
+            assert!(!errored);
+            assert!(!counts.is_empty());
+            for count in &counts {
+                assert!(*count == 5 || *count == 5005, "saw partial count {count}");
+            }
+            let final_count: i64 = sqlx::query_scalar("SELECT count(*) FROM notes")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(final_count, 5005);
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn is_transaction_control_matches_statement_starts() {
+        assert!(is_transaction_control("BEGIN"));
+        assert!(is_transaction_control("begin transaction"));
+        assert!(is_transaction_control("COMMIT;"));
+        assert!(is_transaction_control("END"));
+        assert!(is_transaction_control("ROLLBACK"));
+        assert!(is_transaction_control("SAVEPOINT x"));
+        assert!(is_transaction_control("RELEASE x"));
+        assert!(!is_transaction_control(
+            "INSERT INTO beginnings (title) VALUES ('a')"
+        ));
+        assert!(!is_transaction_control("CREATE TABLE ends(id INTEGER)"));
+        assert!(!is_transaction_control("ñandú"));
+        assert!(!is_transaction_control("—x"));
+        assert!(!is_transaction_control("BEGIÑ"));
     }
 
     #[test]

@@ -68,7 +68,7 @@ vi.mock("@/lib/db", () => ({
     select: vi.fn().mockResolvedValue([]),
     close: vi.fn().mockResolvedValue(undefined),
     exportData: vi.fn().mockResolvedValue(new Uint8Array()),
-    importData: vi.fn().mockResolvedValue(undefined),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   }),
   exportDatabase: vi.fn().mockResolvedValue(new Uint8Array()),
   importDatabase: vi.fn().mockResolvedValue(undefined),
