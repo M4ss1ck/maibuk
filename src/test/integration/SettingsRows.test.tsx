@@ -243,6 +243,8 @@ describe("Settings rows", { timeout: 30_000 }, () => {
       const html = element as HTMLElement;
       // Dialogs portal outside the page; their buttons belong to the dialog.
       if (html.closest('[role="dialog"]')) continue;
+      // The outline and the section menu move around the page; they are not settings.
+      if (html.closest("[data-settings-navigation]")) continue;
       // Section disclosure toggles are not settings controls.
       if (html.matches("button[aria-expanded]") && !html.closest("[data-settings-row]")) continue;
       if (computeAccessibleName(html) === "") continue;

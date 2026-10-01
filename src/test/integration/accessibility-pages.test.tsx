@@ -534,9 +534,8 @@ describe("Settings page", () => {
       </MemoryRouter>
     );
     await waitFor(() => {
-      expect(screen.queryByText("settings.title")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 1, name: "settings.title" })).toBeInTheDocument();
     });
-    expect(container.querySelector("h1")).toHaveTextContent("settings.title");
     await expectNoAxeViolations(container);
   });
 

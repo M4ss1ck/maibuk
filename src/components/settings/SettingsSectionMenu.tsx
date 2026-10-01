@@ -45,11 +45,14 @@ export function SettingsSectionMenu({
     );
 
   return (
-    <div className="@min-[58rem]:hidden sticky top-0 z-20 bg-background/90 backdrop-blur border-b border-border">
+    <div
+      data-settings-navigation
+      className="@min-[58rem]:hidden sticky top-0 z-20 bg-background/90 backdrop-blur border-b border-border"
+    >
       <div className="flex items-center gap-1 px-4 h-11 text-sm">
-        <span className="text-muted-foreground">{t("settings.title")}</span>
+        {/* The page's h1 already says Settings; screen readers skip the echo. */}
         <span className="text-muted-foreground" aria-hidden="true">
-          /
+          {t("settings.title")} /
         </span>
         <MenuTrigger>
           <AriaButton

@@ -9,7 +9,7 @@ import {
   TreeItemContent,
   type Key,
 } from "react-aria-components";
-import { Search, X } from "lucide-react";
+import { ChevronRight, Search, X } from "lucide-react";
 import { SETTINGS_SECTIONS, type SettingsRowId } from "@/components/settings/settings-sections";
 import type { SettingsSectionId } from "@/components/settings/SettingsSection";
 import { buildOutline, type OutlineSelection } from "@/features/settings/outline";
@@ -95,6 +95,7 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
     <nav
       aria-label={t("settings.outline.label")}
       data-ascii-quiet
+      data-settings-navigation
       className="hidden @min-[58rem]:flex flex-col sticky top-8 mt-8 mx-auto w-64 shrink-0 max-h-[calc(100vh-4rem)]"
     >
       <SearchField
@@ -149,7 +150,25 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
                   } ${isFocusVisible ? "ring-2 ring-inset ring-primary rounded-sm" : ""}`
                 }
               >
-                <TreeItemContent>{section.label}</TreeItemContent>
+                <TreeItemContent>
+                  {({ isExpanded }) => (
+                    <span className="flex items-center gap-1">
+                      <span className="min-w-0 flex-1 truncate">{section.label}</span>
+                      {/* React Aria's expand button: the one way a screen reader
+                          user opens or closes a section's rows. Out of the Tab
+                          order; ArrowRight/ArrowLeft do the same from the row. */}
+                      <AriaButton
+                        slot="chevron"
+                        className="shrink-0 rounded p-0.5 text-muted-foreground/70 outline-none hover:text-foreground"
+                      >
+                        <ChevronRight
+                          aria-hidden="true"
+                          className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                        />
+                      </AriaButton>
+                    </span>
+                  )}
+                </TreeItemContent>
                 {section.rows.map((row) => {
                   const rowCurrent = isCurrent && row.id === selection.row;
                   return (
