@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useMatch } from "react-router-dom";
 import {
@@ -23,7 +24,7 @@ import {
   Text,
   Virtualizer,
 } from "react-aria-components";
-import { NotebookPen, Workflow, X } from "lucide-react";
+import { NotebookPen, Search, Workflow, X } from "lucide-react";
 import { ChapterIcon, ProjectsIcon, SettingsIcon } from "@/components/icons";
 import { Modal } from "@/components/ui/Modal";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
@@ -75,8 +76,6 @@ export function CommandPalette() {
   if (!isOpen) return null;
   return <OpenCommandPalette />;
 }
-
-const LIST_LAYOUT_OPTIONS = { estimatedRowSize: 44, estimatedHeadingSize: 28 };
 
 function OpenCommandPalette() {
   const { t, i18n } = useTranslation();
@@ -385,70 +384,194 @@ function OpenCommandPalette() {
   const showHint = query.trim() === "" && count === 0;
   const chipLabel = page === "root" ? null : t(`commandPalette.chips.${page}`);
 
-  return (
-    <Modal isOpen onClose={close} title={t("commandPalette.title")}>
-      <div className="flex min-h-0 flex-col gap-2">
-        <Autocomplete inputValue={query} onInputChange={setQuery}>
-          <SearchField onKeyDown={handleSearchKeyDown} className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">{t("commandPalette.searchLabel")}</Label>
-            {/* The breadcrumb: which page narrowed the results. */}
-            <div className="flex items-center gap-2">
-              {chipLabel && (
-                <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-sm text-foreground">
-                  {chipLabel}
-                </span>
-              )}
-              <Input
-                ref={inputRef}
-                data-autofocus
-                onKeyDown={handleSearchEscapeCapture}
-                placeholder={t("commandPalette.placeholder")}
-                className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
+  // PROTOTYPE (#358): ?variant=A|B|C picks the shell; delete once one wins.
+  const variant = paletteVariant(location.search);
+  const look = VARIANT_LOOKS[variant];
+
+  const field = (
+    <SearchField onKeyDown={handleSearchKeyDown} className={look.field}>
+      <Label className="sr-only">{t("commandPalette.searchLabel")}</Label>
+      {look.searchIcon && (
+        <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      )}
+      {/* The breadcrumb: which page narrowed the results. */}
+      {chipLabel && (
+        <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-sm text-foreground">
+          {chipLabel}
+        </span>
+      )}
+      <Input
+        ref={inputRef}
+        data-autofocus
+        onKeyDown={handleSearchEscapeCapture}
+        placeholder={t("commandPalette.placeholder")}
+        className={`${look.input} [&::-webkit-search-cancel-button]:appearance-none`}
+      />
+    </SearchField>
+  );
+
+  const results = showHint ? (
+    <p className={look.message}>{t("commandPalette.emptyHint")}</p>
+  ) : count === 0 ? (
+    <p className={look.message}>{t("commandPalette.noResults")}</p>
+  ) : (
+    <Virtualizer layout={ListLayout} layoutOptions={look.layout}>
+      <ListBox aria-label={t("commandPalette.resultsLabel")} className={look.list}>
+        {sections.map((section) => (
+          <ListBoxSection key={section.id} id={section.id}>
+            <Header className={look.header}>{t(`commandPalette.sections.${section.id}`)}</Header>
+            {section.results.map((result) => (
+              <PaletteRow
+                key={result.item.key}
+                result={result}
+                isRecent={section.id === "recent"}
+                mac={mac}
+                rowClassName={look.row}
+                onChoose={choose}
+                onRemoveRecent={removeByKey}
               />
+            ))}
+          </ListBoxSection>
+        ))}
+      </ListBox>
+    </Virtualizer>
+  );
+
+  return (
+    <Modal
+      isOpen
+      onClose={close}
+      title={t("commandPalette.title")}
+      placement="top"
+      unstyled
+      panelClassName={look.panel}
+    >
+      <Autocomplete inputValue={query} onInputChange={setQuery}>
+        {look.detached ? (
+          <>
+            {field}
+            <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+              {results}
             </div>
-          </SearchField>
-          {showHint ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              {t("commandPalette.emptyHint")}
-            </p>
-          ) : count === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              {t("commandPalette.noResults")}
-            </p>
-          ) : (
-            <Virtualizer layout={ListLayout} layoutOptions={LIST_LAYOUT_OPTIONS}>
-              <ListBox
-                aria-label={t("commandPalette.resultsLabel")}
-                className="max-h-[50vh] min-h-0 overflow-y-auto rounded-lg outline-none"
-              >
-                {sections.map((section) => (
-                  <ListBoxSection key={section.id} id={section.id}>
-                    <Header className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {t(`commandPalette.sections.${section.id}`)}
-                    </Header>
-                    {section.results.map((result) => (
-                      <PaletteRow
-                        key={result.item.key}
-                        result={result}
-                        isRecent={section.id === "recent"}
-                        mac={mac}
-                        onChoose={choose}
-                        onRemoveRecent={removeByKey}
-                      />
-                    ))}
-                  </ListBoxSection>
-                ))}
-              </ListBox>
-            </Virtualizer>
-          )}
-        </Autocomplete>
-        <div aria-live="polite" role="status" className="sr-only">
-          {announcement}
-        </div>
+          </>
+        ) : (
+          <>
+            {field}
+            {results}
+          </>
+        )}
+      </Autocomplete>
+      <div aria-live="polite" role="status" className="sr-only">
+        {announcement}
       </div>
+      {import.meta.env.DEV && <PalettePrototypeSwitcher current={variant} />}
     </Modal>
   );
 }
+
+// PROTOTYPE (#358) start: three shells over the same palette.
+type PaletteVariant = "A" | "B" | "C";
+const PALETTE_VARIANTS: PaletteVariant[] = ["A", "B", "C"];
+
+function paletteVariant(search: string): PaletteVariant {
+  const value = new URLSearchParams(search).get("variant");
+  return value === "B" || value === "C" ? value : "A";
+}
+
+interface VariantLook {
+  name: string;
+  panel: string;
+  field: string;
+  input: string;
+  searchIcon: boolean;
+  detached: boolean;
+  list: string;
+  header: string;
+  row: string;
+  message: string;
+  layout: { estimatedRowSize: number; estimatedHeadingSize: number; padding: number };
+}
+
+const VARIANT_LOOKS: Record<PaletteVariant, VariantLook> = {
+  A: {
+    name: "VS Code",
+    panel:
+      "relative mt-2 flex max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-xl flex-col overflow-hidden rounded-lg border border-border bg-card shadow-2xl modal-panel-drop",
+    field: "flex shrink-0 items-center gap-2 p-1.5",
+    input:
+      "h-8 min-w-0 flex-1 rounded-md border border-primary bg-background px-2 text-sm text-foreground outline-none placeholder:text-muted-foreground pointer-coarse:h-11",
+    searchIcon: false,
+    detached: false,
+    list: "max-h-[min(60dvh,26rem)] min-h-0 overflow-y-auto outline-none",
+    header:
+      "mx-1.5 mt-1 border-t border-border px-2 pt-0.5 text-right text-[11px] text-muted-foreground",
+    row: "mx-1 flex min-h-8 items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none pointer-coarse:min-h-11 data-focused:bg-primary/15 data-focus-visible:ring-1 data-focus-visible:ring-inset data-focus-visible:ring-primary",
+    message: "px-3 pb-3 pt-1 text-sm text-muted-foreground",
+    layout: { estimatedRowSize: 32, estimatedHeadingSize: 22, padding: 4 },
+  },
+  B: {
+    name: "Spotlight",
+    panel:
+      "relative mt-3 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1rem)] max-w-2xl flex-col overflow-hidden rounded-xl bg-background shadow-2xl ring-1 ring-border modal-panel-drop",
+    field: "flex h-14 shrink-0 items-center gap-3 border-b border-border px-4",
+    input:
+      "h-full min-w-0 flex-1 bg-transparent text-lg text-foreground outline-none placeholder:text-muted-foreground",
+    searchIcon: true,
+    detached: false,
+    list: "max-h-[min(60dvh,28rem)] min-h-0 overflow-y-auto outline-none",
+    header:
+      "px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
+    row: "mx-2 flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm text-foreground outline-none data-focused:bg-muted data-focus-visible:ring-2 data-focus-visible:ring-inset data-focus-visible:ring-primary",
+    message: "px-4 py-6 text-center text-sm text-muted-foreground",
+    layout: { estimatedRowSize: 44, estimatedHeadingSize: 32, padding: 8 },
+  },
+  C: {
+    name: "Detached",
+    panel:
+      "relative mt-3 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1rem)] max-w-xl flex-col gap-2 modal-panel-drop",
+    field:
+      "flex h-12 shrink-0 items-center gap-3 rounded-full border border-border bg-card px-5 shadow-lg focus-within:border-primary",
+    input:
+      "h-full min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground",
+    searchIcon: true,
+    detached: true,
+    list: "max-h-[min(60dvh,28rem)] min-h-0 overflow-y-auto outline-none",
+    header: "px-4 pb-0.5 pt-2.5 text-[11px] font-medium text-primary",
+    row: "mx-1.5 flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm text-foreground outline-none pointer-coarse:min-h-11 data-focused:bg-muted data-focus-visible:ring-2 data-focus-visible:ring-inset data-focus-visible:ring-primary",
+    message: "px-4 py-4 text-sm text-muted-foreground",
+    layout: { estimatedRowSize: 40, estimatedHeadingSize: 26, padding: 6 },
+  },
+};
+
+function PalettePrototypeSwitcher({ current }: { current: PaletteVariant }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const go = (step: number) => {
+    const at = PALETTE_VARIANTS.indexOf(current);
+    const next = PALETTE_VARIANTS[(at + step + PALETTE_VARIANTS.length) % PALETTE_VARIANTS.length];
+    const params = new URLSearchParams(location.search);
+    params.set("variant", next);
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  };
+  return createPortal(
+    <div
+      data-react-aria-top-layer
+      className="fixed bottom-4 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-3 rounded-full bg-black px-4 py-2 text-sm text-white shadow-2xl"
+    >
+      <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={() => go(-1)}>
+        ←
+      </button>
+      <span>
+        {current} ({VARIANT_LOOKS[current].name})
+      </span>
+      <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={() => go(1)}>
+        →
+      </button>
+    </div>,
+    document.body
+  );
+}
+// PROTOTYPE (#358) end.
 
 function renderHighlightedLabel(label: string, result: PaletteResult): ReactNode {
   if (result.highlights.length === 0) return label;
@@ -498,11 +621,19 @@ interface PaletteRowProps {
   result: PaletteResult;
   isRecent: boolean;
   mac: boolean;
+  rowClassName: string;
   onChoose: (item: PaletteItem) => void;
   onRemoveRecent: (key: string) => void;
 }
 
-function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: PaletteRowProps) {
+function PaletteRow({
+  result,
+  isRecent,
+  mac,
+  rowClassName,
+  onChoose,
+  onRemoveRecent,
+}: PaletteRowProps) {
   const { t } = useTranslation();
   const item = result.item;
   const unavailable = item.state === "disabled";
@@ -525,7 +656,7 @@ function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: Palette
       ref={markUnavailable}
       textValue={item.label}
       onAction={() => onChoose(item)}
-      className={`mx-1 flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm text-foreground outline-none data-focus-visible:ring-2 data-focus-visible:ring-primary data-focused:bg-muted ${
+      className={`${rowClassName} ${
         unavailable ? "cursor-default opacity-60" : "cursor-pointer"
       }`}
     >

@@ -12,6 +12,7 @@ export type PaletteItemKind =
 export type PalettePage = "root" | "chapters" | "books" | "notes" | "canvases";
 export type PaletteSectionId =
   | "recent"
+  | "suggested"
   | "commands"
   | "chapters"
   | "notes"
@@ -21,6 +22,7 @@ export type PaletteSectionId =
 
 export const PALETTE_SECTION_ORDER: readonly PaletteSectionId[] = [
   "recent",
+  "suggested",
   "commands",
   "chapters",
   "notes",
@@ -30,6 +32,30 @@ export const PALETTE_SECTION_ORDER: readonly PaletteSectionId[] = [
 ];
 
 export const PALETTE_SECTION_CAP = 50;
+
+/** How many rows an empty query lists on root: Recent first, then Suggested. */
+export const PALETTE_EMPTY_ROOT_LIMIT = 10;
+
+/**
+ * What an empty palette offers besides Recent, in order. The nested pages come
+ * first because they are how the author learns a Book or Note is findable here.
+ * A key the screen does not offer, or cannot run now, is skipped.
+ */
+export const PALETTE_SUGGESTED_KEYS: readonly string[] = [
+  "page:chapters",
+  "page:books",
+  "page:notes",
+  "page:canvases",
+  "command:bookList.newBook",
+  "command:notes.newNote",
+  "command:canvas.newCanvas",
+  "command:global.syncNow",
+  "command:global.toggleTheme",
+  "command:global.gotoSettings",
+  "command:global.showHelp",
+  "command:global.gotoEphemeral",
+  "command:global.gotoMetrics",
+];
 
 /** Labels, descriptions, and keyword lists; the caller's `t` cast to accept registry keys. */
 export type PaletteTranslate = (
@@ -303,8 +329,18 @@ export function searchPalette(index: PaletteIndex, query: PaletteQuery): Palette
         const entry = index.byKey.get(key);
         if (entry) results.push({ item: entry.item, score: 0, highlights: [] });
       }
-      if (results.length === 0) return [];
-      return [{ id: "recent", results }];
+      const sections: PaletteSection[] = [];
+      if (results.length > 0) sections.push({ id: "recent", results });
+      const shown = new Set(query.recent);
+      const suggested: PaletteResult[] = [];
+      for (const key of PALETTE_SUGGESTED_KEYS) {
+        if (results.length + suggested.length >= PALETTE_EMPTY_ROOT_LIMIT) break;
+        const entry = index.byKey.get(key);
+        if (!entry || shown.has(key) || entry.item.state === "disabled") continue;
+        suggested.push({ item: entry.item, score: 0, highlights: [] });
+      }
+      if (suggested.length > 0) sections.push({ id: "suggested", results: suggested });
+      return sections;
     }
     const results: PaletteResult[] = [];
     for (const entry of index.entries) {
