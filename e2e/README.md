@@ -67,22 +67,33 @@ shortcut.
 2. the guard's own self-tests (`e2e/guards/coverage.test.ts`, `node:test`);
 3. the e2e TypeScript check (`tsc --noEmit -p e2e`);
 4. the web build into `e2e/.output/web-dist` (`VITE_BUILD_TARGET=web`);
-5. `playwright test --config e2e/playwright.config.ts`.
+5. the runner sweeping leftovers from a killed run, starting the web build on
+   a free port (`vite preview`, its own process group) and passing its URL as
+   E2E_BASE_URL, then `playwright test --config e2e/playwright.config.ts`.
 
 It stops at the first failing step and prints the wall-clock time at the end.
+
+**Teardown.** The web server stops and the run directory is deleted when the
+run passes or fails, on Ctrl+C (Playwright stops first, then the server; a
+second Ctrl+C stops at once), on SIGTERM or SIGHUP, and on a crash of the
+runner. A runner killed outright (SIGKILL) cannot clean up; the next run
+sweeps what it left: it deletes `e2e/.output/preview/run-<pid>/`, killing the
+recorded preview only if that pid still runs `vite preview`; a run whose
+runner is alive is left alone.
 
 `--allow-planned` lets the guard accept matrix rows that are still `planned`
 while a slice is being built. The finished suite runs without it.
 
+`--no-preflight` skips the guard, its self-tests and the typecheck; used by
+the `pnpm screenshots` "before" run.
+
 `E2E_REUSE_BUILD=1 pnpm test:e2e ...` skips step 4 when only specs changed. Use
 it while iterating; a run without it rebuilds, so it never tests a stale bundle.
 
-`E2E_PORT` overrides the preview-server port (default `4317`). Set the same
-value for the server and the test run, since the `baseURL` is derived from it:
-
-```bash
-E2E_PORT=4400 pnpm test:e2e --project=chromium
-```
+The preview runs on a free port each run, so two runs (and the Sync lane) can
+run at once and a leftover never blocks a run. Running
+`playwright test --config e2e/playwright.config.ts` by hand fails at once with
+"No web server".
 
 ## Projects
 
@@ -353,10 +364,8 @@ body's `![...](path)` references to it, so no image is committed.
 
 ## Troubleshooting
 
-**Port already in use.** The preview server runs with `--strictPort`, so a run
-fails fast if `4317` is taken instead of drifting to another port. Find the
-holder with `lsof -i :4317` (or `ss -ltnp | grep 4317`) and stop it, or run on
-another port with `E2E_PORT=4400 pnpm test:e2e`.
+**Port already in use.** The main lane picks a free port every run, so this
+cannot come from a previous run. A killed run's server is swept by the next run.
 
 **Stale build.** A run without `E2E_REUSE_BUILD=1` rebuilds the web target, so
 this only happens when you opt in. Drop `E2E_REUSE_BUILD=1` after changing app

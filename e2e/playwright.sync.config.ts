@@ -9,7 +9,7 @@
 import { availableParallelism } from "node:os";
 import { resolve } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
-import { shared } from "./playwright.config";
+import { shared } from "./shared";
 
 const OUTPUT = resolve(import.meta.dirname, ".output/sync");
 

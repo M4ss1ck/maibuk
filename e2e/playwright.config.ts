@@ -1,8 +1,10 @@
 import { availableParallelism } from "node:os";
 import { resolve } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+import { shared } from "./shared";
 
-export const E2E_PORT = Number(process.env.E2E_PORT ?? 4317);
+export { shared } from "./shared";
+
 const OUTPUT = resolve(import.meta.dirname, ".output");
 // Personal headed watch loop (scripts/e2e-headed.sh). Unset keeps Playwright's
 // default speed for every existing command.
@@ -11,11 +13,14 @@ if (Number.isNaN(slowMo)) {
   throw new Error(`E2E_SLOW_MO must be milliseconds, got "${process.env.E2E_SLOW_MO}"`);
 }
 
-export const shared = {
-  locale: "en-US",
-  timezoneId: "UTC",
-  viewport: { width: 1280, height: 800 },
-};
+// The runner owns the web server, not Playwright's webServer: an interrupted
+// Playwright leaves that one holding its port.
+const baseURL = process.env.E2E_BASE_URL;
+if (!baseURL) {
+  throw new Error(
+    "No web server: run the main E2E lane with `pnpm test:e2e`, never `playwright test` directly"
+  );
+}
 
 export default defineConfig<{ macPlatform: boolean }>({
   testDir: "./specs",
@@ -32,7 +37,7 @@ export default defineConfig<{ macPlatform: boolean }>({
   workers: Math.max(1, Math.floor(availableParallelism() / 2)),
   reporter: [["list"], ["html", { outputFolder: resolve(OUTPUT, "report"), open: "never" }]],
   use: {
-    baseURL: `http://127.0.0.1:${E2E_PORT}`,
+    baseURL,
     trace: "retain-on-first-failure",
     screenshot: "only-on-failure",
     ...(slowMo > 0 ? { launchOptions: { slowMo } } : {}),
@@ -82,19 +87,4 @@ export default defineConfig<{ macPlatform: boolean }>({
       use: { ...devices["Pixel 7"], locale: shared.locale, timezoneId: shared.timezoneId },
     },
   ],
-  webServer: previewServer(E2E_PORT),
 });
-
-/** The production web build served on `port`; the runners build it into .output/web-dist first. */
-export function previewServer(port: number) {
-  return {
-    command: `pnpm exec vite preview --outDir e2e/.output/web-dist --host 127.0.0.1 --port ${port} --strictPort`,
-    cwd: resolve(import.meta.dirname, ".."),
-    env: { VITE_BUILD_TARGET: "web" },
-    url: `http://127.0.0.1:${port}/`,
-    reuseExistingServer: false,
-    timeout: 60_000,
-    stdout: "ignore" as const,
-    stderr: "pipe" as const,
-  };
-}

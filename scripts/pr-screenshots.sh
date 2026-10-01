@@ -73,10 +73,9 @@ fi
 (
   cd "$WORKTREE"
   VITE_BUILD_TARGET=web pnpm exec vite build --outDir e2e/.output/web-dist --emptyOutDir --logLevel warn
-  # No coverage guard here: it checks the branch's matrix against the base's
-  # app, which is not the question. The after run below runs it.
-  E2E_CAPTURE_DIR="$OUT/before" pnpm exec playwright test --config e2e/playwright.config.ts \
-    --reporter=line "${args[@]}"
+  # No coverage guard here (--no-preflight): it checks the branch's matrix
+  # against the base's app, which is not the question. The after run below runs it.
+  E2E_CAPTURE_DIR="$OUT/before" E2E_REUSE_BUILD=1 node e2e/run.mjs --no-preflight --reporter=line "${args[@]}"
 ) || echo "[screenshots] before run had failing tests (expected when the branch fixes them)"
 
 echo "[screenshots] after: $BRANCH"
