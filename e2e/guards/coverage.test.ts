@@ -349,6 +349,8 @@ test.describe.serial("outer @wf:books-create @sc:home.newBook", () => {
     'await page.locator("input").setInputFiles("a.txt");',
     "await page.mouse.click(1, 2);",
     "await page.touchscreen.tap(1, 2);",
+    'await page.getByRole("button").tap();',
+    "await page.context().newCDPSession(page);",
     'await page.getByRole("button").dispatchEvent("click");',
     "await page.evaluate(() => 1);",
     'await page.$eval("x", (e) => e);',
@@ -371,6 +373,90 @@ test.describe.serial("outer @wf:books-create @sc:home.newBook", () => {
     await page.keyboard.press("Enter");
     await (await chooser).setFiles("a.epub");`;
     assert.deepEqual(codes(specWith(body)), []);
+  });
+
+  describe("touch input", () => {
+    const TOUCH_SPEC = `import { expect, test } from "../support/test";
+import { longPress } from "../support/touch";
+async function openMenu(page) {
+  await page.getByRole("button", { name: "Open" }).tap();
+}
+test.describe("books-create @touch @wf:books-create @sc:home.newBook @sc:editor.save", () => {
+  test("taps", async ({ page }) => {
+    await openMenu(page);
+    await page.touchscreen.tap(1, 2);
+    await longPress(page, page.getByRole("row"));
+  });
+});
+`;
+    const touchSpec = (source: string) => ({
+      specs: [{ path: "e2e/specs/phone.spec.ts", source }],
+    });
+
+    it("allows taps, the touchscreen, and the touch helpers in a spec whose every test is @touch", () => {
+      assert.deepEqual(codes(touchSpec(TOUCH_SPEC)), []);
+    });
+
+    it("allows a tap inside a @touch test of a mixed spec", () => {
+      const spec = `${GOOD_SPEC}
+test("taps @touch", async ({ page }) => {
+  await page.getByRole("button").tap();
+});
+`;
+      assert.deepEqual(codes(touchSpec(spec)), []);
+    });
+
+    it("rejects the touch helpers in a spec with a test that is not @touch", () => {
+      const spec = `import { longPress } from "../support/touch";
+${GOOD_SPEC}
+test("long-presses @touch", async ({ page }) => {
+  await longPress(page, page.getByRole("row"));
+});
+`;
+      assert.deepEqual(codes(touchSpec(spec)), ["keyboard-contract"]);
+    });
+
+    it("rejects a tap in a test that is not @touch, even beside a @touch one", () => {
+      const spec = `${GOOD_SPEC}
+test("taps @touch", async ({ page }) => {
+  await page.getByRole("button").tap();
+});
+test("taps without the tag", async ({ page }) => {
+  await page.touchscreen.tap(1, 2);
+});
+`;
+      // `.tap(` and `touchscreen.` are both reported.
+      assert.deepEqual(codes(touchSpec(spec)), ["keyboard-contract", "keyboard-contract"]);
+    });
+
+    it("does not read @touch from a comment or a string outside a title", () => {
+      const spec = TOUCH_SPEC.replace("books-create @touch", "books-create").replace(
+        "async function openMenu(page) {",
+        'const tag = "@touch"; // @touch\nasync function openMenu(page) {'
+      );
+      const result = codes(touchSpec(spec));
+      assert.ok(result.length >= 3, result.join());
+      assert.ok(
+        result.every((code) => code === "keyboard-contract"),
+        result.join()
+      );
+    });
+
+    it("still rejects mouse, click, and page script in a @touch spec", () => {
+      for (const call of [
+        "await page.mouse.click(1, 2);",
+        'await page.getByRole("button").click();',
+        "await page.evaluate(() => 1);",
+      ]) {
+        const spec = TOUCH_SPEC.replace("await page.touchscreen.tap(1, 2);", call);
+        const result = codes(touchSpec(spec));
+        assert.ok(result.length > 0, call);
+        assert.ok(
+          result.every((code) => code === "keyboard-contract"),
+          `${call}: ${result.join()}`
+        );
+      }
+    });
   });
 
   it("rejects importing @playwright/test directly in a spec", () => {

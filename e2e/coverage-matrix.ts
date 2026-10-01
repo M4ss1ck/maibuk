@@ -73,10 +73,11 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "behavior",
-    items: ["phone viewport", "touch", "Item Menu long-press", "mobile navigation menu"],
-    reason: "Desktop viewport only in this delivery (decision 11)",
+    items: ["HTML5 drag-and-drop started by touch"],
+    reason:
+      "Chromium's emulated touch input starts no HTML5 drag, so the phone project cannot drag a row by its handle; phone-drag-handle proves the handle owns the gesture instead",
     owner:
-      "src/test/unit/touch-reachability.test.ts; follow-up issue: phone/touch E2E project https://github.com/M4ss1ck/maibuk/issues/223",
+      "Vitest (ChapterList and NotesList suites: a touch drag starts from the grip, never from the row body)",
   },
   {
     kind: "behavior",
@@ -2377,6 +2378,77 @@ export const ROWS: MatrixRow[] = [
     routes: ["/book/:bookId", "/settings"],
     fixture: "oneBookThreeChapters",
     tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
+    id: "phone-nav-menu",
+    area: "shell",
+    workflow:
+      "Phone (@touch): the sidebar is hidden; tap Open navigation menu, then a destination; asserts: Primary navigation dialog opens, URL and heading change, dialog closes",
+    edges: [
+      "Close navigation menu closes it without navigating",
+      "A tap on the backdrop closes it without navigating",
+    ],
+    terms: [],
+    shortcuts: [],
+    routes: ["/", "/notes"],
+    fixture: "notesWithLinksAndTags",
+    tags: ["touch"],
+    status: "accepted",
+  },
+  {
+    id: "phone-notes-gallery",
+    area: "notes",
+    workflow:
+      "Phone (@touch): navigation menu → Notes shows the Notes Gallery; tap a card; asserts: the Note opens alone (no notes list), Back returns to the Gallery",
+    edges: [],
+    terms: ["Gallery"],
+    shortcuts: [],
+    routes: ["/notes", "/notes/:noteId"],
+    fixture: "notesWithLinksAndTags",
+    tags: ["touch"],
+    status: "accepted",
+  },
+  {
+    id: "phone-item-menu-button",
+    area: "chapters",
+    workflow:
+      "Phone (@touch): a Chapter's hover-revealed Edit and Delete are hidden and its ⋯ shows; tap ⋯ → Status → Revised; asserts: Item Menu lists the actions, the Chapter reads Revised",
+    edges: ["A Notes Gallery card's ⋯ opens its Item Menu; Duplicate note adds a card"],
+    terms: ["Item Menu", "Chapter Status"],
+    shortcuts: [],
+    routes: ["/book/:bookId", "/notes"],
+    fixture: "oneBookThreeChapters",
+    tags: ["touch"],
+    status: "accepted",
+  },
+  {
+    id: "phone-item-menu-long-press",
+    area: "chapters",
+    workflow:
+      "Phone (@touch): long-press a Chapter in the Chapters drawer; asserts: its Item Menu opens and Edit Chapter starts renaming",
+    edges: [
+      "A tap on a Chapter opens it, not its Item Menu",
+      "A long-press on a Notes Gallery card opens its Item Menu without opening the Note",
+    ],
+    terms: ["Item Menu"],
+    shortcuts: [],
+    routes: ["/book/:bookId", "/notes"],
+    fixture: "oneBookThreeChapters",
+    tags: ["touch"],
+    status: "accepted",
+  },
+  {
+    id: "phone-drag-handle",
+    area: "chapters",
+    workflow:
+      "Phone (@touch): long-press a Chapter's Reorder handle; asserts: no Item Menu (the handle owns the gesture), while a long-press on the same row's body opens it",
+    edges: ["A swipe from a Chapter's body moves nothing and opens no menu"],
+    terms: [],
+    shortcuts: [],
+    routes: ["/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["touch"],
     status: "accepted",
   },
 ];
