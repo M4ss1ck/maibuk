@@ -38,7 +38,8 @@
     "conformance:dictation": "node scripts/dictation-conformance/web.mjs && cd src-tauri && cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture && python3 ../scripts/dictation-conformance/report.py",
     "record:dictation-phrases": "tsx scripts/dictation-phrases/record.ts",
     "conformance:dictation:phrases": "cd src-tauri && cargo test --release dictation::runner::tests::phrase_transcripts -- --ignored --nocapture && cd .. && tsx scripts/dictation-phrases/score.ts",
-    "bench:dictation": "vitest bench --run src/test/bench --outputJson .bench/dictation.json && node scripts/dictation-bench-budget.mjs .bench/dictation.json",
+    "bench:dictation": "vitest bench --run src/test/bench/dictation-interpreter.bench.ts --outputJson .bench/dictation.json && node scripts/dictation-bench-budget.mjs .bench/dictation.json",
+    "bench:palette": "vitest bench --run src/test/bench/command-palette.bench.ts --outputJson .bench/palette.json && node scripts/palette-bench-budget.mjs .bench/palette.json",
     "bench:dictation:android": "node scripts/dictation-bench/android.mjs .bench/dictation-android.json",
     "e2e:voice-audio": "bash scripts/e2e-voice-audio.sh"
   },
@@ -104,6 +105,7 @@
     "epub-gen-memory": "^1.1.2",
     "fabric": "^7.1.0",
     "fflate": "^0.8.3",
+    "fuzzysort": "^4.0.2",
     "html-to-image": "^1.11.13",
     "i18next": "^25.7.4",
     "lowlight": "^3.3.0",
