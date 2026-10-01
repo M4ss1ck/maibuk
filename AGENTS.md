@@ -784,7 +784,9 @@ by. `empty` is a fresh device and is the default; Tutorial specs set
 
 ### Linting & Formatting
 
-There is no ESLint or Prettier. Two gates run in CI: TypeScript strict mode (`tsconfig.json`) and `pnpm lint` (Biome, `biome.json`), which fails the build on any error, scripts included. Run `pnpm lint` before pushing.
+There is no ESLint or Prettier. Two gates run in CI's fast `checks` job: `pnpm typecheck` (TypeScript strict mode, `tsconfig.json`) and `pnpm lint` (Biome, `biome.json`), which fails the build on any error, scripts included. Vitest strips types without checking them, so a type error in a test file passes `pnpm test:run` and fails only `pnpm typecheck`. Run both before pushing.
+
+CI runs the Vitest suite in three shards (`--shard`, `--reporter=blob`) with the coverage thresholds off, then a `coverage` job merges the blobs (`vitest run --mergeReports --coverage`) and enforces `coverage.thresholds` on the whole. `src/test/unit/ci-workflow.test.ts` fails if that layout changes.
 
 ### Type Safety
 
@@ -870,6 +872,7 @@ pnpm dev:web          # Web-only dev (VITE_BUILD_TARGET=web)
 pnpm test             # Tests in watch mode (TDD loop)
 pnpm test:run         # Tests once (CI)
 pnpm test:coverage    # Coverage report
+pnpm typecheck        # tsc over src/, test files included (CI checks job)
 
 # Build
 pnpm build            # TypeScript check + Vite build (for Tauri)

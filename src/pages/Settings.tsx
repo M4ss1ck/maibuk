@@ -88,11 +88,17 @@ function usePendingSettingsRow() {
   }, [pendingRowId]);
 }
 
+// Its own component so a request re-renders this null child, not every
+// Settings section, before the first focus attempt.
+function PendingSettingsRow() {
+  usePendingSettingsRow();
+  return null;
+}
+
 export function Settings() {
   const { t } = useTranslation();
   const location = useLocation();
   const { primaryColor } = useSettings();
-  usePendingSettingsRow();
 
   // A control elsewhere links to Settings → Dictation by hash; scroll to it.
   // Two frames wait for the section to be in the DOM; location.key re-scrolls
@@ -111,6 +117,7 @@ export function Settings() {
 
   return (
     <div className="h-full overflow-auto relative">
+      <PendingSettingsRow />
       <AsciiFieldBackground color={primaryColor} />
       <div className="relative z-10 p-4 sm:p-8 max-w-2xl bg-background @container">
         <h1 data-route-heading className="text-xl @lg:text-2xl font-semibold mb-6 @lg:mb-8">
