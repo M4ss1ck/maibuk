@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { GridList, GridListItem } from "react-aria-components";
 import { useModalStore } from "@/components/ui/modal-store";
 import { ItemActionsMenu, type ItemAction } from "@/components/ui/ItemActionsMenu";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
@@ -163,5 +164,42 @@ describe("Item Menu shows each action's Shortcut", () => {
     const deleteItem = within(menu).getByRole("menuitem", { name: /Delete/ });
     expect(deleteItem.querySelector("kbd")).toHaveTextContent("Delete");
     expect(within(menu).getByRole("menuitem", { name: "Rename" }).querySelector("kbd")).toBeNull();
+  });
+});
+
+function GridCard({ name, onDelete }: { name: string; onDelete: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useItemCommands(ref, [
+    { commandId: "common.delete", onAction: onDelete },
+  ]);
+  return (
+    <GridListItem id={name} ref={ref} textValue={name}>
+      {name}
+    </GridListItem>
+  );
+}
+
+describe("useItemCommands inside a React Aria collection", () => {
+  // A collection item renders first in a hidden pass that builds the
+  // collection; the ref reaches the visible row only after that pass's
+  // effects ran. Focus on the visible row must still bind the item.
+  it("binds the item's Commands while its visible row has focus", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(
+      <>
+        <GridList aria-label="Cards" items={[{ id: "Alpha" }]}>
+          {(item) => <GridCard name={item.id} onDelete={onDelete} />}
+        </GridList>
+        <BoundList />
+      </>
+    );
+
+    await user.tab();
+    expect(screen.getByRole("row", { name: "Alpha" })).toHaveFocus();
+    expect(screen.getByRole("status", { name: "bound" }).textContent).toContain("common.delete");
+
+    await user.keyboard("{Delete}");
+    expect(onDelete).toHaveBeenCalledTimes(1);
   });
 });

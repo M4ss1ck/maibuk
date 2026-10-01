@@ -27,7 +27,7 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "shortcut",
-    items: ["global.openCommandPalette"],
+    items: ["global.openCommandPalette", "commandPalette.removeRecent"],
     reason:
       "Slice 1 of the Command Palette (issue #353): the opener is bound, but the palette UI it opens lands in a later slice",
     owner: "https://github.com/M4ss1ck/maibuk/issues/353",

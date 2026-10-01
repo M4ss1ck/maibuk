@@ -1130,6 +1130,29 @@
   "embed": {
     "placeholder": "Start writing..."
   },
+  "commandPalette": {
+    "title": "Command palette",
+    "searchLabel": "Search commands",
+    "placeholder": "Type a command…",
+    "resultsLabel": "Results",
+    "resultCount_one": "{{count}} result",
+    "resultCount_other": "{{count}} results",
+    "removedFromRecent": "Removed from recent",
+    "removeFromRecent": "Remove from recent",
+    "removeItem": "Remove {{label}} from recent",
+    "unavailable": "That command is not available here anymore",
+    "emptyHint": "Type to find a command",
+    "noResults": "No results",
+    "sections": {
+      "recent": "Recent",
+      "commands": "Commands",
+      "chapters": "Chapters",
+      "notes": "Notes",
+      "books": "Books",
+      "canvases": "Canvases",
+      "settings": "Settings"
+    }
+  },
   "shortcuts": {
     "title": "Keyboard shortcuts",
     "none": "No shortcuts available for this screen",

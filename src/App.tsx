@@ -19,6 +19,7 @@ import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { ToastViewport } from "@/components/ui";
 import { ClickBadges, DictationLiveRegion } from "@/components/dictation";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
+import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { DeepLinkHandler } from "@/components/DeepLinkHandler";
 import { AndroidBackNavigator } from "@/components/AndroidBackNavigator";
 import { TutorialBoundary, TutorialRunner } from "@/components/tutorial/TutorialRunner";
@@ -76,6 +77,7 @@ function App() {
         <PathTracker />
         <RouteAnnouncer />
         <GlobalShortcuts />
+        <CommandPalette />
         <TutorialBoundary>
           <Routes>
             <Route path="/" element={<Layout />}>

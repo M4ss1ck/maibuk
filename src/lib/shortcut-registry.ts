@@ -171,6 +171,11 @@ export const COMMANDS = {
     defaults: [["F1"], ["Mod+Shift+p"]],
     web: [["F1"]],
   },
+  "commandPalette.removeRecent": {
+    labelKey: "commandPalette.removeFromRecent",
+    contexts: ["commandPalette"],
+    defaults: [["Shift+Delete"]],
+  },
   "global.cyclePanesForward": {
     labelKey: "shortcuts.cyclePanesForward",
     contexts: ["global"],

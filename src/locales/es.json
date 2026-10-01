@@ -1130,6 +1130,29 @@
   "embed": {
     "placeholder": "Empieza a escribir..."
   },
+  "commandPalette": {
+    "title": "Paleta de comandos",
+    "searchLabel": "Buscar comandos",
+    "placeholder": "Escribe un comando…",
+    "resultsLabel": "Resultados",
+    "resultCount_one": "{{count}} resultado",
+    "resultCount_other": "{{count}} resultados",
+    "removedFromRecent": "Quitado de recientes",
+    "removeFromRecent": "Quitar de recientes",
+    "removeItem": "Quitar {{label}} de recientes",
+    "unavailable": "Ese comando ya no está disponible aquí",
+    "emptyHint": "Escribe para buscar un comando",
+    "noResults": "Sin resultados",
+    "sections": {
+      "recent": "Recientes",
+      "commands": "Comandos",
+      "chapters": "Capítulos",
+      "notes": "Notas",
+      "books": "Libros",
+      "canvases": "Lienzos",
+      "settings": "Configuración"
+    }
+  },
   "shortcuts": {
     "title": "Atajos de teclado",
     "none": "No hay atajos disponibles para esta pantalla",
