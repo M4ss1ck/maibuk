@@ -6,7 +6,8 @@
 //! Every pooled connection installs a SQLite authorizer and turns on
 //! SQLITE_DBCONFIG_DEFENSIVE. Plain VACUUM attaches the empty filename ''
 //! internally, so ATTACH '' is allowed while every other ATTACH target is
-//! denied (#196, ADR 0017).
+//! denied (#196, ADR 0017). Only allow-listed PRAGMAs run, so switches like
+//! temp_store_directory cannot redirect files.
 
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_void};
@@ -34,6 +35,27 @@ fn attach_allowed(filename: Option<&CStr>) -> bool {
     }
 }
 
+const ALLOWED_PRAGMAS: &[&str] = &[
+    "foreign_keys",
+    "table_info",
+    "page_size",
+    "page_count",
+    "freelist_count",
+    "wal_checkpoint",
+];
+
+fn pragma_allowed(name: Option<&CStr>) -> bool {
+    let Some(name) = name else {
+        return false;
+    };
+    let Ok(text) = name.to_str() else {
+        return false;
+    };
+    ALLOWED_PRAGMAS
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(text))
+}
+
 extern "C" fn authorize(
     _user: *mut c_void,
     action: c_int,
@@ -42,7 +64,20 @@ extern "C" fn authorize(
     _db: *const c_char,
     _trigger: *const c_char,
 ) -> c_int {
-    if action == libsqlite3_sys::SQLITE_ATTACH {
+    if action == libsqlite3_sys::SQLITE_PRAGMA {
+        let name = if arg1.is_null() {
+            None
+        } else {
+            // SAFETY: SQLite passes a valid null-terminated string or null
+            // for the pragma name argument of SQLITE_PRAGMA.
+            Some(unsafe { CStr::from_ptr(arg1) })
+        };
+        if pragma_allowed(name) {
+            libsqlite3_sys::SQLITE_OK
+        } else {
+            libsqlite3_sys::SQLITE_DENY
+        }
+    } else if action == libsqlite3_sys::SQLITE_ATTACH {
         let filename = if arg1.is_null() {
             None
         } else {
@@ -415,6 +450,145 @@ mod tests {
         assert!(outside_is_empty(&outside));
         std::fs::remove_dir_all(&dir).unwrap();
         std::fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn allow_listed_pragmas_work_as_the_app_sends_them() {
+        let dir = temp_dir("guard-pragma-allow");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)")
+                .execute(&pool)
+                .await
+                .unwrap();
+            sqlx::query("PRAGMA page_size")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            sqlx::query("PRAGMA page_count")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            sqlx::query("PRAGMA freelist_count")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            sqlx::query("PRAGMA table_info(notes)")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            sqlx::query("PRAGMA foreign_keys")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            sqlx::query("pragma Page_Count")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn unlisted_pragmas_are_denied_and_change_nothing() {
+        let dir = temp_dir("guard-pragma-deny");
+        let outside = temp_dir("guard-pragma-deny-outside");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&outside).unwrap();
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            let target = outside.join("evil.db").display().to_string();
+            assert!(
+                sqlx::query(&format!("PRAGMA temp_store_directory = '{target}'"))
+                    .execute(&pool)
+                    .await
+                    .is_err()
+            );
+            assert!(
+                sqlx::query("PRAGMA writable_schema = ON")
+                    .execute(&pool)
+                    .await
+                    .is_err()
+            );
+            assert!(
+                sqlx::query("PRAGMA journal_mode = OFF")
+                    .execute(&pool)
+                    .await
+                    .is_err()
+            );
+            assert!(
+                sqlx::query("PRAGMA user_version = 7")
+                    .execute(&pool)
+                    .await
+                    .is_err()
+            );
+        });
+        assert!(outside_is_empty(&outside));
+        tauri::async_runtime::block_on(async {
+            use sqlx::Connection as _;
+            let mut conn = sqlx::SqliteConnection::connect_with(&connect_options(
+                &library_db_path(&dir),
+            ))
+            .await
+            .unwrap();
+            let version: i64 = sqlx::query_scalar("PRAGMA user_version")
+                .fetch_one(&mut conn)
+                .await
+                .unwrap();
+            assert_eq!(version, 0);
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+        std::fs::remove_dir_all(&outside).unwrap();
+    }
+
+    #[test]
+    fn pool_lifecycle_stays_healthy_under_the_allow_list() {
+        let dir = temp_dir("guard-pragma-lifecycle");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            let mut first = pool.acquire().await.unwrap();
+            let mut second = pool.acquire().await.unwrap();
+            let mut third = pool.acquire().await.unwrap();
+            sqlx::query("SELECT 1").execute(&mut *first).await.unwrap();
+            sqlx::query("SELECT 1").execute(&mut *second).await.unwrap();
+            sqlx::query("SELECT 1").execute(&mut *third).await.unwrap();
+            drop(first);
+            drop(second);
+            drop(third);
+            pool.close().await;
+        });
+        install_at(app.handle(), &dir).unwrap();
+        let again = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM sqlite_master")
+                .fetch_one(&again)
+                .await
+                .unwrap();
+            assert!(count >= 0);
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn pragma_allowed_matches_the_authorizer_rule() {
+        assert!(!pragma_allowed(None));
+        assert!(pragma_allowed(Some(c"page_count")));
+        assert!(pragma_allowed(Some(c"PAGE_COUNT")));
+        assert!(!pragma_allowed(Some(c"temp_store_directory")));
+        assert!(!pragma_allowed(Some(c"")));
     }
 
     #[test]
