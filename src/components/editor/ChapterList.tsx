@@ -24,6 +24,7 @@ import type { DroppedTextFile, DropPoint } from "@/hooks/useTextFileDrop";
 import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
 import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
+import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import type { ItemAction } from "@/components/ui";
 import { useItemCommands } from "@/hooks/useItemCommands";
 import { useShortcuts } from "@/lib/shortcuts";
@@ -760,17 +761,20 @@ export function ChapterList({
 
       {/* Sticky footer - Word count summary */}
       {chapters.length > 0 && (
-        <div className="p-3 border-t border-border text-xs text-muted-foreground bg-background shrink-0">
-          <div className="flex justify-between">
-            <span>{t("common.totalWords")}</span>
-            <span className="font-medium">
-              {chapters.reduce((sum, c) => sum + c.wordCount, 0).toLocaleString()}
-            </span>
+        <div className="p-3 border-t border-border text-xs text-muted-foreground bg-background shrink-0 flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex justify-between">
+              <span>{t("common.totalWords")}</span>
+              <span className="font-medium">
+                {chapters.reduce((sum, c) => sum + c.wordCount, 0).toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between mt-1">
+              <span>{t("common.chaptersCount")}</span>
+              <span className="font-medium">{chapters.length}</span>
+            </div>
           </div>
-          <div className="flex justify-between mt-1">
-            <span>{t("common.chaptersCount")}</span>
-            <span className="font-medium">{chapters.length}</span>
-          </div>
+          <CommandPaletteButton size="sm" />
         </div>
       )}
     </aside>

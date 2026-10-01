@@ -292,6 +292,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `COMMANDS` / `ROUTE_CONTEXTS` / `SHORTCUT_SECTIONS` / `commandSection()` / `COMMAND_RENAMES` (the Command registry; add a rename whenever an id changes) | `src/lib/shortcut-registry.ts` |
 | `buildEntityItems()` / `buildPageItems()` (Command Palette entities and nested pages; a Chapter carries its Book's title and id) | `src/features/command-palette/entity-items.ts` |
 | `buildSettingsItems()` (Command Palette Settings rows, read from the same declared rows the Settings screen renders; ADR 0018) | `src/features/command-palette/settings-items.ts` |
+| `CommandPaletteButton` (the always-visible Command Palette entry point: ghost icon button + Tooltip with the live Shortcut, `data-command="global.openCommandPalette"`; sidebar, Chapter list, Notes list, Cover Designer, and Canvas footers/toolbars) | `src/components/command-palette/CommandPaletteButton.tsx` |
 | `listChapterTitles()` (every Chapter's id, Book id, and title, never its content, for the Command Palette) | `src/features/chapters/store.ts` |
 | `stepsFromEvent()` / `recordedStepFromEvent()` / `normalizeShortcut()` / `formatShortcut()` / `toAriaKeyShortcuts()` / `isTypingSafe()` / `isReservedOnWeb()` (key parsing, matching candidates, display) | `src/lib/shortcut-keys.ts` |
 | `effectiveShortcuts()` / `editableShortcuts()` / `findConflicts()` / `contextsOverlap()` / `normalizeShortcuts()` / `parseShortcutFile()` / `serializeShortcutFile()` (pure resolve, conflict and file logic) | `src/lib/shortcut-resolve.ts` |

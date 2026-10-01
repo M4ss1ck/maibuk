@@ -55,12 +55,15 @@ export function CanvasToolPanel({
   onZoomIn,
   onZoomOut,
   onFitView,
+  trailing,
 }: {
   onAddText: () => void;
   onAddNoteRef: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFitView: () => void;
+  /** Rendered as the last tool in the card, after its own divider. */
+  trailing?: React.ReactNode;
 }) {
   const { t } = useTranslation();
   const toolMode = useCanvasStore((state) => state.toolMode);
@@ -180,6 +183,13 @@ export function CanvasToolPanel({
             </ToolbarButton>
           </Tooltip>
         </ToolbarGroup>
+
+        {trailing && (
+          <>
+            <ToolbarDivider />
+            <ToolbarGroup>{trailing}</ToolbarGroup>
+          </>
+        )}
       </Toolbar>
     </TooltipGroup>
   );

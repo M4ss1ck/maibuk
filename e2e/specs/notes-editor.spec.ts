@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { SEED_NOTES } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -140,7 +141,7 @@ test.describe("following a Link to a heading @wf:editor-follow-link @sc:editor.f
 });
 
 test.describe("F6 pane cycle in the Note editor @wf:shell-cycle-panes @sc:global.cyclePanesForward @sc:global.cyclePanesBackward", () => {
-  test("in the Note editor, F6 cycles the title bar, the notes list, and the note editor and wraps", async ({
+  test("in the Note editor, F6 cycles the title bar, the notes list, and the note editor and wraps @palette-entry", async ({
     page,
   }) => {
     await openNote(page, SEED_NOTES.tideTables);
@@ -163,5 +164,8 @@ test.describe("F6 pane cycle in the Note editor @wf:shell-cycle-panes @sc:global
     // Shift+F6 steps back one pane.
     await page.keyboard.press("Shift+F6");
     await expectFocusWithin(editor);
+
+    // The Notes list footer carries the Command Palette entry point.
+    await capture(page, "palette-entry-notes-footer");
   });
 });

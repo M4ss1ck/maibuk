@@ -1170,3 +1170,176 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     await waitFor(() => expect(path).toBe(`/canvas/${canvas.id}`), { timeout: 10_000 });
   });
 });
+
+describe("Command Palette entry buttons", { timeout: 60_000 }, () => {
+  const BUTTON_NAME = en("shortcuts.openCommandPalette");
+
+  /**
+   * Every always-visible entry point, outside inert drawers and sheets. The
+   * sidebars mount twice (desktop plus the closed mobile drawer), so the
+   * inert copy is skipped: only the reachable button counts.
+   */
+  function visiblePaletteButtons(): HTMLElement[] {
+    return screen
+      .getAllByRole("button", { name: BUTTON_NAME })
+      .filter((button) => button.closest("[inert]") === null);
+  }
+
+  /** Tabs from the body until the entry button holds focus; keyboard only. */
+  async function tabToEntryButton(
+    user: ReturnType<typeof userEvent.setup>
+  ): Promise<HTMLElement> {
+    for (let i = 0; i < 250; i++) {
+      const focused = visiblePaletteButtons().find(
+        (button) => button === document.activeElement
+      );
+      if (focused) return focused;
+      await user.tab();
+    }
+    throw new Error("the palette entry button never took focus");
+  }
+
+  /** Enter opens the palette; Escape closes it and focus returns to the button. */
+  async function openFromButton(user: ReturnType<typeof userEvent.setup>, button: HTMLElement) {
+    expect(button).toHaveFocus();
+    await user.keyboard("{Enter}");
+    const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
+    expect(paletteSearch(dialog)).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
+    );
+    expect(button).toHaveFocus();
+  }
+
+  it("opens from the main sidebar footer on / and returns focus to it", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    expect(visiblePaletteButtons()).toHaveLength(1);
+    await openFromButton(user, await tabToEntryButton(user));
+  });
+
+  it("opens from the Chapter list footer in the Book Editor", async () => {
+    const book = await createBookRow({ title: "Footer Book", authorName: "Author" }, "local");
+    await createChapterRow({ bookId: book.id, title: "Only Chapter" }, "local");
+    const user = userEvent.setup();
+    renderApp(`/book/${book.id}`);
+    await settleOn(`/book/${book.id}`);
+
+    expect(visiblePaletteButtons()).toHaveLength(1);
+    // Focus starts in the Chapter text, where Tab indents instead of moving:
+    // Escape leaves for the chapter list first.
+    await user.keyboard("{Escape}");
+    await openFromButton(user, await tabToEntryButton(user));
+  });
+
+  it("keeps the Notes footer and button with zero pinned Notes and no pinned text", async () => {
+    useSettingsStore.setState({ notesListView: "list" });
+    const note = await createNoteRow({ title: "Solo", bookId: null }, "local");
+    const user = userEvent.setup();
+    renderApp(`/notes/${note.id}`);
+    await waitFor(() => expect(path).toBe(`/notes/${note.id}`), { timeout: 10_000 });
+    await screen.findByRole("row", { name: "Solo" });
+
+    expect(visiblePaletteButtons()).toHaveLength(1);
+    expect(document.body.textContent).not.toMatch(/\d+ pinned/);
+    await openFromButton(user, await tabToEntryButton(user));
+  });
+
+  it("shows '1 pinned' in list view with one pinned Note", async () => {
+    useSettingsStore.setState({ notesListView: "list" });
+    const note = await createNoteRow({ title: "Pinned One", bookId: null, pinned: true }, "local");
+    const user = userEvent.setup();
+    renderApp(`/notes/${note.id}`);
+    await waitFor(() => expect(path).toBe(`/notes/${note.id}`), { timeout: 10_000 });
+
+    expect(await screen.findByText("1 pinned")).toBeInTheDocument();
+    expect(visiblePaletteButtons()).toHaveLength(1);
+    await openFromButton(user, await tabToEntryButton(user));
+  });
+
+  /**
+   * The Layers breakpoint the Cover Designer answers to. The suite polyfill
+   * reports every query as not matching, so wide must be stubbed per query.
+   */
+  function stubLayersMedia(wide: boolean) {
+    vi.stubGlobal(
+      "matchMedia",
+      (query: string) => ({
+        matches: wide && query === "(min-width: 768px)",
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(() => false),
+      })
+    );
+  }
+
+  it("opens from the Layers sidebar footer in a wide Cover Designer", async () => {
+    stubLayersMedia(true);
+    try {
+      const book = await createBookRow({ title: "Cover Book", authorName: "Author" }, "local");
+      const user = userEvent.setup();
+      renderApp(`/book/${book.id}/cover`);
+      await settleOn(`/book/${book.id}/cover`);
+
+      // The sidebar (inside main) carries the one button; the toolbar has none.
+      const buttons = visiblePaletteButtons();
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0].closest("main")).not.toBeNull();
+      await openFromButton(user, await tabToEntryButton(user));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("renders only the toolbar button in a narrow Cover Designer", async () => {
+    stubLayersMedia(false);
+    try {
+      const book = await createBookRow({ title: "Narrow Cover", authorName: "Author" }, "local");
+      const user = userEvent.setup();
+      renderApp(`/book/${book.id}/cover`);
+      await settleOn(`/book/${book.id}/cover`);
+
+      // The sidebar footer stays unrendered; the toolbar carries the one button.
+      const buttons = visiblePaletteButtons();
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0].closest("main")).toBeNull();
+      await openFromButton(user, await tabToEntryButton(user));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("opens from the last button of the Canvas tool column", async () => {
+    const canvas = await createCanvasRow({ title: "Tool Column" }, "local");
+    const user = userEvent.setup();
+    renderApp(`/canvas/${canvas.id}`);
+    await settleOn(`/canvas/${canvas.id}`);
+
+    const buttons = visiblePaletteButtons();
+    expect(buttons).toHaveLength(1);
+    const entry = buttons[0];
+    // The React Aria Toolbar owns arrow-key travel: Tab enters the column,
+    // then ArrowDown moves between its buttons. Tab alone must not be used
+    // to reach the last button (the toolbar's Tab handler parks focus and
+    // remembers a stale button, so a later dialog restore would land there).
+    for (let i = 0; i < 250; i++) {
+      const focused = document.activeElement as HTMLElement | null;
+      if (focused && focused.closest?.('[role="toolbar"]')) break;
+      await user.tab();
+    }
+    expect(document.activeElement?.closest?.('[role="toolbar"]')).not.toBeNull();
+    for (let i = 0; i < 20; i++) {
+      if (document.activeElement === entry) break;
+      await user.keyboard("{ArrowDown}");
+    }
+    await openFromButton(user, entry);
+  });
+});

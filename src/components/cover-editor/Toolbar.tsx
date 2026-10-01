@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button as AriaButton, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import {
@@ -47,6 +47,8 @@ interface ToolbarProps {
   onExport: (format: ExportChoice) => void;
   bookTitle: string;
   bookAuthor: string;
+  /** Shown after the Export menu when the Layers sidebar is a sheet. */
+  trailing?: ReactNode;
 }
 
 // The menus follow the app's React Aria menu pattern (see TextCaseMenu): a
@@ -77,7 +79,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
+export function Toolbar({ onExport, bookTitle, bookAuthor, trailing }: ToolbarProps) {
   const { t } = useTranslation();
   const scene = useCoverStore((s) => s.scene);
   const selectedId = useCoverStore((s) => s.selectedId);
@@ -512,6 +514,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
             </Menu>
           </Popover>
         </MenuTrigger>
+        {trailing}
       </div>
     </TooltipGroup>
   );

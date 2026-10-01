@@ -6,6 +6,7 @@ import { Outlet, useHref, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BarChart3, Feather, Menu, NotebookPen, Workflow } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import { CloseIcon, MaibukLogo, ProjectsIcon, SettingsIcon } from "@/components/icons";
 import { KeyboardShortcut } from "@/components/ui";
 import { useRestoreFocus } from "@/hooks";
@@ -204,19 +205,22 @@ export function Layout() {
 
       <div className="p-4 border-t border-border space-y-3">
         <ThemeToggle />
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          {APP_VERSION}
-          {updateAvailable && (
-            <a
-              href={DOWNLOAD_PAGE}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs px-2 py-0.5 bg-update-bg text-update-text rounded-full hover:opacity-80 transition-opacity truncate"
-            >
-              {t("settings.updateAvailable", { version: latestVersion })}
-            </a>
-          )}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+            {APP_VERSION}
+            {updateAvailable && (
+              <a
+                href={DOWNLOAD_PAGE}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs px-2 py-0.5 bg-update-bg text-update-text rounded-full hover:opacity-80 transition-opacity truncate"
+              >
+                {t("settings.updateAvailable", { version: latestVersion })}
+              </a>
+            )}
+          </p>
+          <CommandPaletteButton size="sm" />
+        </div>
       </div>
     </>
   );
