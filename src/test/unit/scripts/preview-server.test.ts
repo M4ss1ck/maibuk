@@ -18,7 +18,13 @@ import {
   sweepStalePreviews,
 } from "../../../../e2e/preview-server.mjs";
 
-function probeFor({ alive = () => false, runs = () => false } = {}) {
+function probeFor({
+  alive = () => false,
+  runs = () => false,
+}: {
+  alive?: (pid: number) => boolean;
+  runs?: (pid: number, pattern: RegExp) => boolean;
+} = {}) {
   return { isAlive: vi.fn(alive), runs: vi.fn(runs), kill: vi.fn() };
 }
 

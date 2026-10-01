@@ -6,8 +6,16 @@ on:
     branches:
       - main
 
+# A newer push to the same PR makes the running checks moot.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  quality:
+  # Everything that fails in seconds runs apart from the tests, so a type error
+  # or lint error reports in about a minute instead of after the whole suite.
+  checks:
+    name: Lint, typecheck, build
     runs-on: ubuntu-latest
 
     steps:
@@ -32,11 +40,89 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Run tests with coverage gates
-        run: pnpm test:coverage
+      # Vitest strips types without checking them: test files only meet tsc here.
+      - name: Typecheck
+        run: pnpm typecheck
 
       - name: Test the release changelog generator
         run: pnpm test:release
 
       - name: Build web target
         run: pnpm build:web
+
+  # The suite in parallel shards. Each shard records its results and coverage
+  # as a blob; the coverage job merges them and enforces the thresholds on the
+  # whole, since a shard alone covers a third of the code.
+  tests:
+    name: Tests (shard ${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch dictation runtime
+        run: pnpm fetch:dictation
+
+      - name: Run tests
+        run: >-
+          pnpm exec vitest run --coverage
+          --coverage.thresholds.lines=0 --coverage.thresholds.functions=0
+          --coverage.thresholds.statements=0 --coverage.thresholds.branches=0
+          --shard=${{ matrix.shard }}/3 --reporter=default --reporter=blob
+
+      - name: Upload shard report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-blob-${{ matrix.shard }}
+          path: .vitest-reports/
+          include-hidden-files: true
+          retention-days: 1
+
+  coverage:
+    name: Coverage gates
+    needs: tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download shard reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vitest-blob-*
+          path: .vitest-reports
+          merge-multiple: true
+
+      - name: Merge reports and check coverage thresholds
+        run: pnpm exec vitest run --mergeReports --coverage

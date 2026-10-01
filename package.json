@@ -17,6 +17,7 @@
     "screenshots": "bash scripts/pr-screenshots.sh",
     "preview": "vite preview",
     "lint": "biome lint",
+    "typecheck": "tsc",
     "lint:fix": "biome lint --write",
     "format": "biome format",
     "format:fix": "biome format --write",

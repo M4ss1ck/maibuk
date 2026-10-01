@@ -307,8 +307,10 @@ describe("navigating Commands (issue #319)", () => {
         seen.add(id);
         const before = path;
         const outcome = await runCommand(id, { source: "palette" });
-        // Note and canvas creation navigate once the write lands.
-        if (getCommand(id).navigates === true) {
+        const inPlaceReason = IN_PLACE[id]?.(screen);
+        // Note and canvas creation navigate once the write lands. An in-place
+        // run never moves, so waiting for a move would only burn the timeout.
+        if (getCommand(id).navigates === true && !inPlaceReason) {
           await waitFor(() => expect(path).not.toBe(before), { timeout: 5_000 }).catch(() => {});
         } else {
           await new Promise((resolve) => setTimeout(resolve, 100));
@@ -316,7 +318,6 @@ describe("navigating Commands (issue #319)", () => {
         const after = path;
         const navigates = getCommand(id).navigates === true;
         if (outcome === "ran" && navigates && after !== before) exercised.add(id);
-        const inPlaceReason = IN_PLACE[id]?.(screen);
         expect(
           after !== before,
           `${id} on ${screen}: route ${before} -> ${after}, navigates=${navigates}, outcome=${outcome}${inPlaceReason ? ` (${inPlaceReason})` : ""}`

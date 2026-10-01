@@ -918,7 +918,9 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
     );
-    expect(path).toBe(`/book/${otherBook.id}`);
+    // The palette navigates only after the open Chapter's text has landed, so
+    // the move trails the dialog closing.
+    await waitFor(() => expect(path).toBe(`/book/${otherBook.id}`), { timeout: 10_000 });
     await waitFor(() => expect(openChapterTitle()).toBe("Prologue"), { timeout: 10_000 });
     // The Chapter that opened is the other Book's, not this one's.
     await waitFor(

@@ -47,3 +47,6 @@ vendor/
 
 # Local E2E voice audio build (pnpm e2e:voice-audio)
 .cache/
+
+# Vitest shard blob reports (CI)
+.vitest-reports

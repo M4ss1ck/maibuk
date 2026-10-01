@@ -11,7 +11,8 @@ import { currentSettingsPlatform, rowOnPlatform } from "@/features/settings/rows
 import { focusSettingsRow } from "@/features/settings/focus-row";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 
-const { platformState, syncState, mockT } = vi.hoisted(() => ({
+const { platformState, syncState, mockT, aboutRenders } = vi.hoisted(() => ({
+  aboutRenders: { count: 0 },
   platformState: { isWeb: true, isDesktop: false, isAndroid: false },
   mockT: (key: string) => key,
   syncState: {
@@ -132,6 +133,17 @@ vi.mock("@/components/sync/AuthDialog", () => ({ AuthDialog: () => null }));
 vi.mock("@/components/sync/PassphraseDialog", () => ({ PassphraseDialog: () => null }));
 vi.mock("@/components/sync/ConflictDialog", () => ({ ConflictDialog: () => null }));
 vi.mock("@/components/settings/AsciiBanner", () => ({ AsciiBanner: () => null }));
+// Counts renders of one section, to prove a row request leaves the page alone.
+vi.mock("@/components/settings/AboutSection", async (importOriginal) => {
+  const { AboutSection } =
+    await importOriginal<typeof import("@/components/settings/AboutSection")>();
+  return {
+    AboutSection: () => {
+      aboutRenders.count += 1;
+      return <AboutSection />;
+    },
+  };
+});
 vi.mock("@/components/settings/AsciiFieldBackground", () => ({
   AsciiFieldBackground: () => null,
 }));
@@ -282,6 +294,19 @@ describe("Settings rows", { timeout: 30_000 }, () => {
     expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
   });
 
+  it("re-renders no section to request a row", async () => {
+    renderSettings();
+    const group = screen.getByRole("group", { name: "settings.theme" });
+    const firstTheme = within(group).getAllByRole("button")[0];
+    const before = aboutRenders.count;
+
+    focusSettingsRow("theme");
+    await waitFor(() => expect(document.activeElement).toBe(firstTheme));
+    // Setting and clearing the pending row once re-rendered every section of
+    // the page; on CI that doubled the wait before the first focus attempt.
+    expect(aboutRenders.count).toBe(before);
+  });
+
   it("opens the collapsed Advanced block to focus its row", async () => {
     renderSettings();
     expect(screen.queryByRole("button", { name: "settings.exportDatabaseButton" })).toBeNull();
@@ -331,6 +356,8 @@ describe("Settings rows", { timeout: 30_000 }, () => {
     focusSettingsRow("syncAutoSync" as SettingsRowId);
 
     const heading = document.querySelector('[data-settings-section="sync"]') as HTMLElement;
-    await waitFor(() => expect(document.activeElement).toBe(heading));
+    // The fallback waits out 10 animation frames by design: ~300ms here,
+    // ~2.2x that on a CI runner, so waitFor's 1s default leaves no margin.
+    await waitFor(() => expect(document.activeElement).toBe(heading), { timeout: 3_000 });
   });
 });

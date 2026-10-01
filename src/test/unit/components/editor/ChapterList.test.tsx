@@ -200,6 +200,14 @@ async function tabToControl(user: ReturnType<typeof userEvent.setup>, control: H
   expect(control).toHaveFocus();
 }
 
+/**
+ * The delete confirmation focuses No one frame after it opens. A Tab pressed
+ * before that frame can land after it and move focus off No, so wait first.
+ */
+async function confirmationFocused(noButton: HTMLElement) {
+  await waitFor(() => expect(noButton).toHaveFocus());
+}
+
 async function arrowToDropTarget(user: ReturnType<typeof userEvent.setup>, accessibleName: string) {
   for (
     let index = 0;
@@ -858,6 +866,7 @@ describe("ChapterList", () => {
       deleteButton.focus();
       await user.keyboard("{Enter}");
       const noButton = screen.getByRole("button", { name: "common.no" });
+      await confirmationFocused(noButton);
       await tabToControl(user, noButton);
       await user.keyboard("{Enter}");
 
@@ -880,7 +889,7 @@ describe("ChapterList", () => {
         const trigger = await openChapterMenu(user);
         await user.keyboard("{ArrowDown}{Enter}");
         const noButton = screen.getByRole("button", { name: "common.no" });
-        await tabToControl(user, noButton);
+        await confirmationFocused(noButton);
         await user.keyboard("{Enter}");
 
         await waitFor(() => expect(trigger).toHaveFocus());
