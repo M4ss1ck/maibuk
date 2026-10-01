@@ -1142,7 +1142,6 @@
     "removeItem": "Remove {{label}} from recent",
     "unavailable": "That command is not available here anymore",
     "saveFailed": "Your latest text could not be saved, so nothing was opened",
-    "emptyHint": "Type to find a command",
     "noResults": "No results",
     "pageAnnouncement": "Showing {{page}}",
     "pages": {
@@ -1159,6 +1158,7 @@
     },
     "sections": {
       "recent": "Recent",
+      "suggested": "Suggested",
       "commands": "Commands",
       "chapters": "Chapters",
       "notes": "Notes",

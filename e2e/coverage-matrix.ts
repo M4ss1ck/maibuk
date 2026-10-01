@@ -260,6 +260,7 @@ export const ROWS: MatrixRow[] = [
       "nested page with chip and Backspace back",
       "Settings result focuses its row's control",
       "Recent removal with Shift+Delete",
+      "empty query lists Suggested and a suggested page narrows",
       "formatting Command keeps the selection",
     ],
     terms: ["Command Palette"],

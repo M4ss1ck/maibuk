@@ -1142,7 +1142,6 @@
     "removeItem": "Quitar {{label}} de recientes",
     "unavailable": "Ese comando ya no está disponible aquí",
     "saveFailed": "No se pudo guardar tu último texto, así que no se abrió nada",
-    "emptyHint": "Escribe para buscar un comando",
     "noResults": "Sin resultados",
     "pageAnnouncement": "Mostrando {{page}}",
     "pages": {
@@ -1159,6 +1158,7 @@
     },
     "sections": {
       "recent": "Recientes",
+      "suggested": "Sugerencias",
       "commands": "Comandos",
       "chapters": "Capítulos",
       "notes": "Notas",

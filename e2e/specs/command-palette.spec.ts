@@ -15,6 +15,7 @@ const searchbox = (page: Page) =>
   dialog(page).getByRole("searchbox", { name: "Find by name" });
 const option = (page: Page, name: string) =>
   dialog(page).getByRole("option", { name, exact: true });
+const section = (page: Page, name: string) => dialog(page).getByRole("group", { name });
 
 async function openPalette(page: Page): Promise<void> {
   await page.keyboard.press("F1");
@@ -233,7 +234,10 @@ test.describe("Command Palette recent @wf:command-palette", () => {
 
     await page.keyboard.press("F1");
     await expect(dialog(page)).toBeVisible();
-    const recent = option(page, "Go to Notes");
+    const recent = section(page, "Recent").getByRole("option", {
+      name: "Go to Notes",
+      exact: true,
+    });
     await expect(recent).toBeVisible();
     await capture(page, "palette-recent");
 
@@ -241,6 +245,37 @@ test.describe("Command Palette recent @wf:command-palette", () => {
     await page.keyboard.press("Shift+Delete");
     await expect(recent).toHaveCount(0);
     await expect(dialog(page).getByRole("status")).toContainText("Removed from recent");
+  });
+});
+
+test.describe("Command Palette suggested @wf:command-palette", () => {
+  test("an empty query lists Suggested, and a suggested page narrows the list", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { name: "My Books", level: 1 })
+    ).toBeVisible();
+
+    await openPalette(page);
+    const suggested = section(page, "Suggested").getByRole("option");
+    await expect(suggested.first()).toHaveAccessibleName("Go to Book…");
+    expect(await suggested.count()).toBeGreaterThanOrEqual(5);
+    expect(await suggested.count()).toBeLessThanOrEqual(10);
+    // The last row sits whole inside the list, not cut by its bottom edge.
+    const list = dialog(page).getByRole("listbox");
+    const listBox = await list.boundingBox();
+    const lastBox = await suggested.last().boundingBox();
+    expect(listBox && lastBox && lastBox.y + lastBox.height <= listBox.y + listBox.height).toBe(
+      true
+    );
+    await capture(page, "palette-suggested");
+
+    await arrowTo(page, "page:books");
+    await page.keyboard.press("Enter");
+    await expect(dialog(page).getByText("Go to Book", { exact: true })).toBeVisible();
+    await expect(option(page, SHELF_BOOKS[0].title)).toBeVisible();
+    await expect(searchbox(page)).toBeFocused();
   });
 });
 

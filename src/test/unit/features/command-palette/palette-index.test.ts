@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  PALETTE_EMPTY_ROOT_LIMIT,
   PALETTE_SECTION_CAP,
+  PALETTE_SUGGESTED_KEYS,
   liveRecentKeys,
   preparePaletteIndex,
   searchPalette,
@@ -190,6 +192,74 @@ describe("palette-index empty query", () => {
     const index = preparePaletteIndex([item("command", "a", "Toggle bold")]);
     expect(searchPalette(index, rootQuery("", { recent: ["note:ghost"] }))).toEqual([]);
     expect(searchPalette(index, rootQuery(""))).toEqual([]);
+  });
+
+  /** An item for a suggested key, so the index holds what the screen offers. */
+  function suggestedItem(key: string, extra?: Partial<PaletteItem>): PaletteItem {
+    const [kind, ...rest] = key.split(":");
+    const id = rest.join(":");
+    return item(kind as PaletteItemKind, id, `Label ${id}`, {
+      ...(kind === "page" ? { targetPage: id as PalettePage } : {}),
+      ...extra,
+    });
+  }
+
+  it("suggests useful items on root when nothing is recent, in suggestion order", () => {
+    const items = PALETTE_SUGGESTED_KEYS.map((key) => suggestedItem(key));
+    const index = preparePaletteIndex([item("command", "zz", "Not suggested"), ...items]);
+    const sections = searchPalette(index, rootQuery(""));
+    expect(sectionIds(sections)).toEqual(["suggested"]);
+    expect(sections[0].results.map((r) => r.item.key)).toEqual(
+      PALETTE_SUGGESTED_KEYS.slice(0, PALETTE_EMPTY_ROOT_LIMIT)
+    );
+  });
+
+  it("fills up to the limit after Recent, never repeating a Recent item", () => {
+    const items = PALETTE_SUGGESTED_KEYS.map((key) => suggestedItem(key));
+    const extra = [item("note", "n1", "One"), item("note", "n2", "Two")];
+    const index = preparePaletteIndex([...extra, ...items]);
+    const recent = [extra[0].key, PALETTE_SUGGESTED_KEYS[0], extra[1].key];
+    const sections = searchPalette(index, rootQuery("", { recent }));
+    expect(sectionIds(sections)).toEqual(["recent", "suggested"]);
+    expect(sections[0].results.map((r) => r.item.key)).toEqual(recent);
+    const suggested = sections[1].results.map((r) => r.item.key);
+    expect(suggested).not.toContain(PALETTE_SUGGESTED_KEYS[0]);
+    expect(suggested).toEqual(
+      PALETTE_SUGGESTED_KEYS.slice(1, 1 + PALETTE_EMPTY_ROOT_LIMIT - recent.length)
+    );
+  });
+
+  it("skips suggestions this screen does not offer or cannot run", () => {
+    const [first, second, third] = PALETTE_SUGGESTED_KEYS;
+    const index = preparePaletteIndex([
+      suggestedItem(first, { state: "disabled" }),
+      suggestedItem(third),
+    ]);
+    const sections = searchPalette(index, rootQuery(""));
+    expect(sectionIds(sections)).toEqual(["suggested"]);
+    expect(sections[0].results.map((r) => r.item.key)).toEqual([third]);
+    expect(sections[0].results.map((r) => r.item.key)).not.toContain(second);
+  });
+
+  it("suggests nothing once Recent reaches the limit", () => {
+    const notes = Array.from({ length: PALETTE_EMPTY_ROOT_LIMIT }, (_, n) =>
+      item("note", `n${n}`, `Note ${n}`)
+    );
+    const index = preparePaletteIndex([
+      ...notes,
+      ...PALETTE_SUGGESTED_KEYS.map((key) => suggestedItem(key)),
+    ]);
+    const sections = searchPalette(
+      index,
+      rootQuery("", { recent: notes.map((note) => note.key) })
+    );
+    expect(sectionIds(sections)).toEqual(["recent"]);
+  });
+
+  it("never suggests on a typed query or a nested page", () => {
+    const index = preparePaletteIndex(PALETTE_SUGGESTED_KEYS.map((key) => suggestedItem(key)));
+    expect(sectionIds(searchPalette(index, rootQuery("label")))).not.toContain("suggested");
+    expect(searchPalette(index, { query: "", page: "notes", recent: [] })).toEqual([]);
   });
 
   it("lists a page's items uncapped and in input order", () => {

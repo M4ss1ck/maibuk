@@ -76,7 +76,8 @@ export function CommandPalette() {
   return <OpenCommandPalette />;
 }
 
-const LIST_LAYOUT_OPTIONS = { estimatedRowSize: 44, estimatedHeadingSize: 28 };
+// Padding keeps the last row's focus ring inside the scroll box.
+const LIST_LAYOUT_OPTIONS = { estimatedRowSize: 32, estimatedHeadingSize: 22, padding: 4 };
 
 function OpenCommandPalette() {
   const { t, i18n } = useTranslation();
@@ -205,16 +206,16 @@ function OpenCommandPalette() {
   const recentKeySet = useMemo(() => new Set(recentKeys), [recentKeys]);
 
   // The count and the removal confirmation share one live region: a removal
-  // wins over the count change it causes.
+  // wins over the count change it causes. A removal may change no count at
+  // all (a Suggested row fills the place), so it announces itself.
   useEffect(() => {
-    if (previousCountRef.current === count && !removalRef.current) return;
+    if (previousCountRef.current === count) return;
     previousCountRef.current = count;
     if (removalRef.current) {
       removalRef.current = false;
-      setAnnouncement(t("commandPalette.removedFromRecent"));
-    } else {
-      setAnnouncement(t("commandPalette.resultCount", { count }));
+      return;
     }
+    setAnnouncement(t("commandPalette.resultCount", { count }));
   }, [count, t]);
 
   // Entering or leaving a nested page is announced after the count it changes,
@@ -251,7 +252,14 @@ function OpenCommandPalette() {
 
   const removeByKey = (key: string) => {
     removalRef.current = true;
+    setAnnouncement(t("commandPalette.removedFromRecent"));
     removeRecent(key);
+  };
+
+  const changeQuery = (value: string) => {
+    // Typing after a removal that changed no count: the next count is news.
+    removalRef.current = false;
+    setQuery(value);
   };
 
   const removeActiveRecent = () => {
@@ -382,69 +390,75 @@ function OpenCommandPalette() {
     })();
   };
 
-  const showHint = query.trim() === "" && count === 0;
   const chipLabel = page === "root" ? null : t(`commandPalette.chips.${page}`);
 
   return (
-    <Modal isOpen onClose={close} title={t("commandPalette.title")}>
-      <div className="flex min-h-0 flex-col gap-2">
-        <Autocomplete inputValue={query} onInputChange={setQuery}>
-          <SearchField onKeyDown={handleSearchKeyDown} className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">{t("commandPalette.searchLabel")}</Label>
-            {/* The breadcrumb: which page narrowed the results. */}
-            <div className="flex items-center gap-2">
-              {chipLabel && (
-                <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-sm text-foreground">
-                  {chipLabel}
-                </span>
-              )}
-              <Input
-                ref={inputRef}
-                data-autofocus
-                onKeyDown={handleSearchEscapeCapture}
-                placeholder={t("commandPalette.placeholder")}
-                className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
-          </SearchField>
-          {showHint ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              {t("commandPalette.emptyHint")}
-            </p>
-          ) : count === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
+    <Modal
+      isOpen
+      onClose={close}
+      title={t("commandPalette.title")}
+      placement="top"
+      unstyled
+      panelClassName="relative mt-2 flex max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-xl flex-col overflow-hidden rounded-lg border border-border bg-card shadow-2xl modal-panel-drop"
+    >
+      <Autocomplete inputValue={query} onInputChange={changeQuery}>
+        <SearchField onKeyDown={handleSearchKeyDown} className="flex shrink-0 items-center gap-2 p-1.5">
+          {/* Visually the placeholder says what to type; the label names the field. */}
+          <Label className="sr-only">{t("commandPalette.searchLabel")}</Label>
+          {/* The breadcrumb: which page narrowed the results. */}
+          {chipLabel && (
+            <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-sm text-foreground">
+              {chipLabel}
+            </span>
+          )}
+          <Input
+            ref={inputRef}
+            data-autofocus
+            onKeyDown={handleSearchEscapeCapture}
+            placeholder={t("commandPalette.placeholder")}
+            className="h-8 min-w-0 flex-1 rounded-md border border-primary bg-background px-2 text-sm text-foreground outline-none placeholder:text-muted-foreground pointer-coarse:h-11 [&::-webkit-search-cancel-button]:hidden"
+          />
+        </SearchField>
+        {count === 0 ? (
+          query.trim() !== "" && (
+            <p className="px-3 pb-3 pt-1 text-sm text-muted-foreground">
               {t("commandPalette.noResults")}
             </p>
-          ) : (
-            <Virtualizer layout={ListLayout} layoutOptions={LIST_LAYOUT_OPTIONS}>
-              <ListBox
-                aria-label={t("commandPalette.resultsLabel")}
-                className="max-h-[50vh] min-h-0 overflow-y-auto rounded-lg outline-none"
-              >
-                {sections.map((section) => (
-                  <ListBoxSection key={section.id} id={section.id}>
-                    <Header className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {t(`commandPalette.sections.${section.id}`)}
-                    </Header>
-                    {section.results.map((result) => (
-                      <PaletteRow
-                        key={result.item.key}
-                        result={result}
-                        isRecent={section.id === "recent"}
-                        mac={mac}
-                        onChoose={choose}
-                        onRemoveRecent={removeByKey}
-                      />
-                    ))}
-                  </ListBoxSection>
-                ))}
-              </ListBox>
-            </Virtualizer>
-          )}
-        </Autocomplete>
-        <div aria-live="polite" role="status" className="sr-only">
-          {announcement}
-        </div>
+          )
+        ) : (
+          <Virtualizer layout={ListLayout} layoutOptions={LIST_LAYOUT_OPTIONS}>
+            <ListBox
+              aria-label={t("commandPalette.resultsLabel")}
+              className="scrollbar-themed max-h-[min(60dvh,26rem)] min-h-0 pointer-coarse:max-h-[70dvh] overflow-y-auto outline-none"
+            >
+              {sections.map((section, sectionIndex) => (
+                <ListBoxSection key={section.id} id={section.id}>
+                  {/* A rule between sections, none above the first. */}
+                  <Header
+                    className={`mx-1.5 px-2 pt-0.5 text-right text-[11px] text-muted-foreground ${
+                      sectionIndex === 0 ? "" : "mt-1 border-t border-border"
+                    }`}
+                  >
+                    {t(`commandPalette.sections.${section.id}`)}
+                  </Header>
+                  {section.results.map((result) => (
+                    <PaletteRow
+                      key={result.item.key}
+                      result={result}
+                      isRecent={section.id === "recent"}
+                      mac={mac}
+                      onChoose={choose}
+                      onRemoveRecent={removeByKey}
+                    />
+                  ))}
+                </ListBoxSection>
+              ))}
+            </ListBox>
+          </Virtualizer>
+        )}
+      </Autocomplete>
+      <div aria-live="polite" role="status" className="sr-only">
+        {announcement}
       </div>
     </Modal>
   );
@@ -525,7 +539,7 @@ function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: Palette
       ref={markUnavailable}
       textValue={item.label}
       onAction={() => onChoose(item)}
-      className={`mx-1 flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm text-foreground outline-none data-focus-visible:ring-2 data-focus-visible:ring-primary data-focused:bg-muted ${
+      className={`mx-1 flex min-h-8 items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none pointer-coarse:min-h-11 data-focused:bg-primary/15 data-focus-visible:ring-1 data-focus-visible:ring-inset data-focus-visible:ring-primary ${
         unavailable ? "cursor-default opacity-60" : "cursor-pointer"
       }`}
     >

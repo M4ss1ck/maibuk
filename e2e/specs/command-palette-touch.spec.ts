@@ -4,6 +4,7 @@
 
 import type { Page } from "@playwright/test";
 import { expect, test } from "../support/test";
+import { capture } from "../support/capture";
 
 test.use({ library: "paletteLibrary" });
 
@@ -38,6 +39,12 @@ test.describe("phone Command Palette @touch @wf:command-palette", () => {
   }) => {
     await openDrawer(page);
     await openPaletteFromDrawer(page);
+    // Before any Command runs: Cycle theme pins the theme, and the capture
+    // shoots both schemes.
+    await expect(
+      paletteDialog(page).getByRole("group", { name: "Suggested" }).getByRole("option").first()
+    ).toBeVisible();
+    await capture(page, "palette-phone");
 
     await page.keyboard.type("cycle theme");
     const command = paletteDialog(page).getByRole("option", {
@@ -49,10 +56,10 @@ test.describe("phone Command Palette @touch @wf:command-palette", () => {
     await expect(paletteDialog(page)).toBeHidden();
 
     await openPaletteFromDrawer(page);
-    const recent = paletteDialog(page).getByRole("option", {
-      name: "Cycle theme",
-      exact: true,
-    });
+    // Cycle theme is also Suggested, so look in Recent only.
+    const recent = paletteDialog(page)
+      .getByRole("group", { name: "Recent" })
+      .getByRole("option", { name: "Cycle theme", exact: true });
     await expect(recent).toBeVisible();
     await paletteDialog(page)
       .getByRole("button", { name: "Remove Cycle theme from recent" })

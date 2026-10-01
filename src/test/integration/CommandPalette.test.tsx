@@ -291,6 +291,11 @@ async function awaitActiveInCurrentOptions(dialog: HTMLElement, search: HTMLElem
   );
 }
 
+/** The options of one titled section of the results, e.g. "Recent". */
+function sectionOptions(dialog: HTMLElement, name: string): HTMLElement[] {
+  return within(within(dialog).getByRole("group", { name })).getAllByRole("option");
+}
+
 /** An option's name is its label alone; the detail is its description. */
 function optionLabel(option: HTMLElement): string {
   return option.querySelector('[slot="label"]')?.textContent ?? option.textContent ?? "";
@@ -506,11 +511,11 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(useCommandPaletteRecentStore.getState().keys).toEqual(["command:global.themeDark"]);
 
-    // Reopening with an empty query shows only the Recent Command.
+    // Reopening with an empty query lists the Recent Command first, then
+    // Suggested; no search result section.
     await user.keyboard("{F1}");
     const reopened = await screen.findByRole("dialog", { name: PALETTE_NAME });
-    expect(within(reopened).getByText("Recent")).toBeInTheDocument();
-    const options = within(reopened).getAllByRole("option");
+    const options = sectionOptions(reopened, "Recent");
     expect(options).toHaveLength(1);
     expect(options[0]).toHaveTextContent("Dark");
     expect(within(reopened).queryByText("Commands")).toBeNull();
@@ -742,7 +747,7 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     await user.keyboard("{F1}");
     dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
     search = paletteSearch(dialog);
-    let options = within(dialog).getAllByRole("option");
+    let options = sectionOptions(dialog, "Recent");
     expect(options.map((option) => option.textContent)).toEqual(["Light", "Dark"]);
 
     await user.keyboard("{ArrowDown}");
@@ -752,8 +757,8 @@ describe("Command Palette", { timeout: 60_000 }, () => {
 
     await user.keyboard("{Shift>}{Delete}{/Shift}");
     await within(dialog).findByText("Removed from recent");
-    await waitFor(() => expect(within(dialog).getAllByRole("option")).toHaveLength(1));
-    options = within(dialog).getAllByRole("option");
+    await waitFor(() => expect(sectionOptions(dialog, "Recent")).toHaveLength(1));
+    options = sectionOptions(dialog, "Recent");
     expect(options[0]).toHaveTextContent(survivor);
     // The highlight moved to the row that survived.
     await waitFor(() => expect(activeResultLabel(search)).toContain(survivor));
@@ -761,8 +766,9 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     await user.click(
       within(dialog).getByRole("button", { name: `Remove ${survivor} from recent` })
     );
-    await within(dialog).findByText("Type to find a command");
-    expect(within(dialog).queryByRole("option")).toBeNull();
+    await waitFor(() => expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull());
+    // With Recent empty the palette still lists something to choose.
+    expect(sectionOptions(dialog, "Suggested").length).toBeGreaterThan(0);
     expect(useCommandPaletteRecentStore.getState().keys).toEqual([]);
   });
 
@@ -982,8 +988,9 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     // Backspace on the empty field steps back out to the root page.
     await user.keyboard("{Backspace}");
     await waitFor(() => expect(within(dialog).queryByText("Open Chapter")).toBeNull());
-    // Root with an empty query lists Recent only, and nothing has been chosen.
-    expect(within(dialog).getByText("Type to find a command")).toBeInTheDocument();
+    // Root with an empty query lists Suggested, nothing has been chosen yet.
+    expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull();
+    expect(sectionOptions(dialog, "Suggested").map(optionLabel)).toContain("Open Chapter…");
     // The other Book's Chapter is reachable again, which the narrowed page hid.
     await user.keyboard("Theirs");
     const theirs = await within(dialog).findByRole("option", { name: "Theirs Only" });
@@ -1119,12 +1126,40 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     await openPaletteWithF1(user);
     const dialog = screen.getByRole("dialog", { name: PALETTE_NAME });
     await waitFor(() =>
-      expect(within(dialog).getAllByRole("option").map(optionLabel)).toEqual(["Keeper"])
+      expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Keeper"])
     );
     await waitFor(() =>
       expect(useCommandPaletteRecentStore.getState().keys).toEqual([`note:${keep.id}`])
     );
     expect(screen.queryByText("Doomed")).toBeNull();
+  });
+
+  it("suggests the nested pages first when nothing is recent, and choosing one narrows", async () => {
+    await createNoteRow({ title: "Findable", bookId: null }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    await openPaletteWithF1(user);
+    const dialog = screen.getByRole("dialog", { name: PALETTE_NAME });
+    const search = paletteSearch(dialog);
+    const suggested = sectionOptions(dialog, "Suggested");
+    expect(suggested.length).toBeGreaterThanOrEqual(5);
+    expect(suggested.length).toBeLessThanOrEqual(10);
+    expect(suggested.slice(0, 3).map(optionLabel)).toEqual([
+      "Go to Book…",
+      "Open Note…",
+      "Open Canvas…",
+    ]);
+
+    // Nothing is active until the first arrow: the list opens on Suggested.
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => expect(activeResultLabel(search)).toContain("Go to Book…"));
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => expect(activeResultLabel(search)).toContain("Open Note…"));
+    await user.keyboard("{Enter}");
+    expect(await within(dialog).findByText("Showing Open Note")).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("option").map(optionLabel)).toEqual(["Findable"]);
   });
 
   it("lands the open editor's text before navigating away to a Note", async () => {

@@ -1471,6 +1471,17 @@ li.footnote-item,
   }
 }
 
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes slide-down-out {
   from {
     opacity: 1;
@@ -1539,6 +1550,36 @@ li.footnote-item,
 }
 
 /* Dropdown menu entrance */
+/* A scroll box whose scrollbar follows the theme instead of the OS default. */
+@utility scrollbar-themed {
+  /* Firefox. Chromium would take these too, and then draw arrow buttons and
+     ignore the rounded thumb below, so only engines without it get them. */
+  @supports not selector(::-webkit-scrollbar) {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent)
+      transparent;
+  }
+
+  /* Chromium, Safari, and the Linux desktop webview. */
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background-clip: padding-box;
+    background-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent);
+  }
+}
+
+.modal-panel-drop {
+  animation: drop-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 .dropdown-enter {
   animation: slide-up 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -1568,6 +1609,7 @@ li.footnote-item,
   .toast-exit,
   .loading-entrance,
   .dropdown-enter,
+  .modal-panel-drop,
   .empty-state-enter,
   .book-card-enter,
   .selection-toolbar-enter {

@@ -474,7 +474,7 @@ _UI_: en "Save to file", "Load from file" / es "Guardar en archivo", "Cargar des
 _Avoid_: export, import (reserved for Library content)
 
 **Command Palette**:
-Where the author finds a Command, a Book, Chapter, Note, or Canvas, or a Settings row by typing part of its name, and runs or opens it from anywhere in the app. The results chosen most recently on this device are listed first, and the author can remove any of them from that list.
+Where the author finds a Command, a Book, Chapter, Note, or Canvas, or a Settings row by typing part of its name, and runs or opens it from anywhere in the app. The results chosen most recently on this device are listed first, and the author can remove any of them from that list. With nothing typed, it also suggests common destinations and Commands, so it is never empty.
 _UI_: en "Command palette" / es "Paleta de comandos"
 _Avoid_: command bar, quick open, launcher, search (reserved for searching Library content)
 
