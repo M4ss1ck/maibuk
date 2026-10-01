@@ -180,6 +180,7 @@ export function Settings() {
       }
 
       if (sqlContent) {
+        // Before the pre-import Backup, so the Backup holds the text too; importDatabase flushes again.
         await flushPendingEdits();
         // Create a pre-import backup before overwriting data
         try {

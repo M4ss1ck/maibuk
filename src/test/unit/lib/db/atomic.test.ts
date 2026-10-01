@@ -104,6 +104,29 @@ describe("runAtomicSqlJs()", () => {
     db.close();
   });
 
+  it("rolls back a load that contains ATTACH or VACUUM INTO", async () => {
+    for (const statement of ["ATTACH 'other.db' AS x", "VACUUM INTO 'copy.db'"]) {
+      const db = await createRawDb();
+      const before = snapshot(db);
+
+      let error: unknown = null;
+      try {
+        runAtomicSqlJs(db, [
+          "INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')",
+          statement,
+          "INSERT INTO notes (id, title) VALUES ('n2', 'Doomed')",
+        ]);
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeInstanceOf(AtomicStatementError);
+      expect((error as AtomicStatementError).index).toBe(1);
+      expect(snapshot(db)).toEqual(before);
+      db.close();
+    }
+  });
+
   it("skips whitespace-only statements", async () => {
     const db = await createRawDb();
 

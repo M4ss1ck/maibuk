@@ -15,6 +15,10 @@ export class AtomicStatementError extends Error {
   }
 }
 
+// sql.js has no authorizer, and SQLite allows ATTACH inside a transaction, so
+// the web load refuses it up front the way desktop's authorizer does (#196).
+const ATTACH_RE = /^ATTACH\b/i;
+
 const TRANSACTION_CONTROL_RE = /^(BEGIN|COMMIT|END|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
 
 /**
@@ -43,6 +47,9 @@ export function runAtomicSqlJs(db: SqlJsDatabase, statements: string[]): void {
         "transaction control statements are not allowed in an atomic load",
         total
       );
+    }
+    if (ATTACH_RE.test(statements[index].trimStart())) {
+      throw new AtomicStatementError(index, "ATTACH is not allowed in an atomic load", total);
     }
   }
 
