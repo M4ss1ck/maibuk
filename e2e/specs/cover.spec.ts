@@ -7,6 +7,7 @@
 import { readFile } from "node:fs/promises";
 import type { Download, Locator, Page } from "@playwright/test";
 import { PDFDocument } from "pdf-lib";
+import { capture } from "../support/capture";
 import { DOT_PNG, IMAGE_FIXTURE_DIR } from "../support/fixtures/images";
 import {
   expectFocusWithin,
@@ -14,7 +15,7 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
-import { capture } from "../support/capture";
+import { primaryButtonColors } from "../support/primary-colors";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -263,6 +264,26 @@ test.describe("Cover layout aids @wf:cover-overlays-snapping", () => {
 });
 
 test.describe("Cover export @wf:cover-export", () => {
+  test("Export keeps the primary button colors in light and dark mode", async ({ page }) => {
+    await openCover(page);
+    const trigger = exportTrigger(page);
+    await capture(page, "cover-export-trigger", { around: [trigger] });
+    await page.setViewportSize({ width: 390, height: 800 });
+    await capture(page, "cover-export-trigger-narrow", {
+      around: [page.locator('[data-tutorial="cover-designer.export"]')],
+    });
+    await expect(trigger).toBeVisible();
+
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      if (scheme === "dark") await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+      else await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
+      const colors = await primaryButtonColors(trigger);
+      expect(colors.background).toBe(colors.primaryBackground);
+      expect(colors.foreground).toBe(colors.primaryForeground);
+    }
+  });
+
   test("PNG, JPG, and PDF downloads carry the Cover at the document size", async ({ page }) => {
     await openCover(page);
 
