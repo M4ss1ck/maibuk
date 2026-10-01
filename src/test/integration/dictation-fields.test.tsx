@@ -12,16 +12,9 @@ import {
   interpret,
 } from "@/features/dictation/interpreter";
 import { createRouter } from "@/features/dictation/router";
-import {
-  createDictationSession,
-  type SessionNotice,
-} from "@/features/dictation/session";
+import { createDictationSession, type SessionNotice } from "@/features/dictation/session";
 import { createLineStats } from "@/features/dictation/stats";
-import type {
-  DictationEvent,
-  DictationLanguage,
-  ModelSpec,
-} from "@/features/dictation/types";
+import type { DictationEvent, DictationLanguage, ModelSpec } from "@/features/dictation/types";
 import { defaultVoicePhrases } from "@/features/dictation/voice-commands";
 import type { CommandRunOutcome } from "@/lib/command-runner";
 import { getCommand, type CommandId } from "@/lib/shortcut-registry";
@@ -96,8 +89,7 @@ function makeSession({
       });
       state = output.state;
       if (output.result.kind === "scratch") return { kind: "scratch" };
-      if (output.result.kind === "click")
-        return { kind: "click", name: output.result.name };
+      if (output.result.kind === "click") return { kind: "click", name: output.result.name };
       if (output.result.kind === "click_number")
         return { kind: "click_number", n: output.result.n };
       return {
@@ -154,11 +146,7 @@ function RawInputForm({ onSubmit }: { onSubmit: (value: string) => void }) {
       }}
     >
       <label htmlFor="raw-title">Title</label>
-      <input
-        id="raw-title"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-      />
+      <input id="raw-title" value={value} onChange={(event) => setValue(event.target.value)} />
     </form>
   );
 }
@@ -172,11 +160,7 @@ function SharedInputForm({ onSubmit }: { onSubmit: (value: string) => void }) {
         onSubmit(value);
       }}
     >
-      <Input
-        label="Title"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-      />
+      <Input label="Title" value={value} onChange={(event) => setValue(event.target.value)} />
     </form>
   );
 }
@@ -192,10 +176,7 @@ function AriaInputForm({ onSubmit }: { onSubmit: (value: string) => void }) {
     >
       <TextField>
         <Label>Title</Label>
-        <AriaInput
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-        />
+        <AriaInput value={value} onChange={(event) => setValue(event.target.value)} />
       </TextField>
     </form>
   );
@@ -211,11 +192,7 @@ function TextareaForm({ onSubmit }: { onSubmit: (value: string) => void }) {
       }}
     >
       <label htmlFor="body">Body</label>
-      <textarea
-        id="body"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-      />
+      <textarea id="body" value={value} onChange={(event) => setValue(event.target.value)} />
       <button type="submit">Submit</button>
     </form>
   );
@@ -227,32 +204,30 @@ describe("dictation into plain text fields", () => {
     { name: "shared Input", Form: SharedInputForm, label: "Title" },
     { name: "react-aria TextField", Form: AriaInputForm, label: "Title" },
     { name: "textarea", Form: TextareaForm, label: "Body" },
-  ])(
-    "dictates into a $name and submits the form with the dictated value",
-    async ({ Form, label }) => {
-      const user = userEvent.setup();
-      const { session, host } = setupFieldSession();
-      const submitted: string[] = [];
-      render(<Form onSubmit={(value) => void submitted.push(value)} />);
-      const el = screen.getByLabelText(label) as
-        | HTMLInputElement
-        | HTMLTextAreaElement;
-      await user.click(el);
-      await act(async () => {
-        await session.start();
-      });
-      act(() => {
-        host.emitFinal("My book");
-      });
-      expect(el.value).toBe("My book");
-      if (el instanceof HTMLTextAreaElement) {
-        await user.click(screen.getByRole("button", { name: "Submit" }));
-      } else {
-        await user.keyboard("{Enter}");
-      }
-      expect(submitted).toEqual(["My book"]);
+  ])("dictates into a $name and submits the form with the dictated value", async ({
+    Form,
+    label,
+  }) => {
+    const user = userEvent.setup();
+    const { session, host } = setupFieldSession();
+    const submitted: string[] = [];
+    render(<Form onSubmit={(value) => void submitted.push(value)} />);
+    const el = screen.getByLabelText(label) as HTMLInputElement | HTMLTextAreaElement;
+    await user.click(el);
+    await act(async () => {
+      await session.start();
+    });
+    act(() => {
+      host.emitFinal("My book");
+    });
+    expect(el.value).toBe("My book");
+    if (el instanceof HTMLTextAreaElement) {
+      await user.click(screen.getByRole("button", { name: "Submit" }));
+    } else {
+      await user.keyboard("{Enter}");
     }
-  );
+    expect(submitted).toEqual(["My book"]);
+  });
 
   it("never dictates into opted-out, read-only, disabled, or number fields", async () => {
     const user = userEvent.setup();
@@ -266,9 +241,7 @@ describe("dictation into plain text fields", () => {
       showPartial: () => {},
       before: () => "",
       apply: (edits) => {
-        void commits.push(
-          edits.map((edit) => (edit.kind === "text" ? edit.text : "?")).join("")
-        );
+        void commits.push(edits.map((edit) => (edit.kind === "text" ? edit.text : "?")).join(""));
       },
     });
     session.focus("elsewhere");
@@ -517,17 +490,9 @@ describe("dictation into plain text fields", () => {
       return (
         <>
           <label htmlFor="field-a">First</label>
-          <input
-            id="field-a"
-            value={a}
-            onChange={(event) => setA(event.target.value)}
-          />
+          <input id="field-a" value={a} onChange={(event) => setA(event.target.value)} />
           <label htmlFor="field-b">Second</label>
-          <input
-            id="field-b"
-            value={b}
-            onChange={(event) => setB(event.target.value)}
-          />
+          <input id="field-b" value={b} onChange={(event) => setB(event.target.value)} />
         </>
       );
     }
@@ -601,9 +566,7 @@ describe("dictation into plain text fields", () => {
             ref={(node) => {
               // Autofocus from the dialog, not a user: deliver the focusin the browser fires.
               node?.focus();
-              node?.dispatchEvent(
-                new FocusEvent("focusin", { bubbles: true })
-              );
+              node?.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
             }}
             value={value}
             onChange={(event) => setValue(event.target.value)}
@@ -661,9 +624,7 @@ describe("dictation into plain text fields", () => {
     await waitFor(() => {
       // The queued line routes as plain prose (the test route returns null
       // for it), so it lands as heard.
-      expect(
-        (screen.getByLabelText("Title") as HTMLInputElement).value
-      ).toBe("hello title");
+      expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("hello title");
     });
   });
 });

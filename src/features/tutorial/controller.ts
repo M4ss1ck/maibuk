@@ -152,9 +152,7 @@ export async function authorLibraryIsEmpty(): Promise<boolean> {
   return Number(rows[0]?.total ?? 0) === 0;
 }
 
-export type TutorialOffer =
-  | { kind: "start" }
-  | { kind: "continue"; position: TutorialPosition };
+export type TutorialOffer = { kind: "start" } | { kind: "continue"; position: TutorialPosition };
 
 /**
  * What the first-launch offer shows, from the device-local state alone plus

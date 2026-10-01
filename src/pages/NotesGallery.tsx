@@ -24,11 +24,7 @@ import { normalizeLanguage } from "@/features/settings/types";
 import { NoteCard } from "@/components/notes";
 import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
 import { NotesSortMenu } from "@/components/notes/NotesSortMenu";
-import {
-  duplicateNoteInput,
-  filterNotes,
-  sortNotesBy,
-} from "@/components/notes/notes-list-model";
+import { duplicateNoteInput, filterNotes, sortNotesBy } from "@/components/notes/notes-list-model";
 import type { ItemAction } from "@/components/ui";
 import { Button } from "@/components/ui/Button";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";

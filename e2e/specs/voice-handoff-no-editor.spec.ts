@@ -49,8 +49,6 @@ test.describe("@wf:voice-commands-app @chromium-only", () => {
     await page.keyboard.press("1");
     await page.keyboard.press("Enter");
     await expect(page.getByRole("textbox", { name: /^Text of / })).toBeFocused();
-    await expect(
-      page.getByRole("button", { name: /Start dictation/ })
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /Start dictation/ })).toBeVisible();
   });
 });

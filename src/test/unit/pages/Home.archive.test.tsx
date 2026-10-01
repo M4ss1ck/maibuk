@@ -3,13 +3,15 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildBook } from "@/test/support/fixtures";
 
-const { mockLoadBooks, mockNavigate, mockUpdateBook, storeState, locationState } = vi.hoisted(() => ({
-  locationState: { current: null as unknown },
-  mockLoadBooks: vi.fn(),
-  mockNavigate: vi.fn(),
-  mockUpdateBook: vi.fn(),
-  storeState: { books: [] as ReturnType<typeof buildBook>[] },
-}));
+const { mockLoadBooks, mockNavigate, mockUpdateBook, storeState, locationState } = vi.hoisted(
+  () => ({
+    locationState: { current: null as unknown },
+    mockLoadBooks: vi.fn(),
+    mockNavigate: vi.fn(),
+    mockUpdateBook: vi.fn(),
+    storeState: { books: [] as ReturnType<typeof buildBook>[] },
+  })
+);
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
@@ -231,7 +233,9 @@ describe("Home archiving", () => {
     (document.activeElement as HTMLElement | null)?.blur();
     render(<Home />);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Create a book" })).toHaveFocus());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Create a book" })).toHaveFocus()
+    );
   });
 
   it("leaves focus alone on an ordinary visit", async () => {

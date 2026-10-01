@@ -154,9 +154,9 @@ describe("sync codec service dispatch", () => {
     // Service decrypts blobs produced by crypto.ts directly, and vice versa.
     const direct = await encrypt("direct json", passphrase);
     expect(await decryptBufferToText(direct, passphrase)).toBe("direct json");
-    expect(await decrypt(new Uint8Array(await encryptToBuffer("codec json", passphrase)), passphrase)).toBe(
-      "codec json"
-    );
+    expect(
+      await decrypt(new Uint8Array(await encryptToBuffer("codec json", passphrase)), passphrase)
+    ).toBe("codec json");
   });
 
   it("round-trips base64 encrypt/decrypt", async () => {
@@ -190,9 +190,7 @@ describe("sync codec service dispatch", () => {
   it("detects SQL dump data", async () => {
     useFakeWorker();
     expect(
-      await dumpHasDataAsync(
-        new TextEncoder().encode('INSERT INTO "books" ("id") VALUES (\'a\');')
-      )
+      await dumpHasDataAsync(new TextEncoder().encode('INSERT INTO "books" ("id") VALUES (\'a\');'))
     ).toBe(true);
     expect(await dumpHasDataAsync(new TextEncoder().encode("-- empty export\n"))).toBe(false);
   });
@@ -230,8 +228,7 @@ describe("sync codec error preservation", () => {
     useFakeWorker();
     const buffer = await encryptToBuffer("secret", "right");
     await expect(decryptBufferToText(new Uint8Array(buffer), "wrong")).rejects.toSatisfy(
-      (error: unknown) =>
-        error instanceof SyncCryptoError && error.code === "INVALID_PASSPHRASE"
+      (error: unknown) => error instanceof SyncCryptoError && error.code === "INVALID_PASSPHRASE"
     );
   });
 
@@ -287,15 +284,12 @@ describe("sync codec fallback without Worker", () => {
     expect(await parseJsonAsync(await stringifySnapshotAsync(value))).toEqual(value);
 
     const buffer = await encryptToBuffer("fallback secret", "passphrase");
-    expect(await decryptBufferToText(new Uint8Array(buffer), "passphrase")).toBe(
-      "fallback secret"
-    );
+    expect(await decryptBufferToText(new Uint8Array(buffer), "passphrase")).toBe("fallback secret");
     await expect(decryptBufferToText(new Uint8Array(buffer), "wrong")).rejects.toSatisfy(
-      (error: unknown) =>
-        error instanceof SyncCryptoError && error.code === "INVALID_PASSPHRASE"
+      (error: unknown) => error instanceof SyncCryptoError && error.code === "INVALID_PASSPHRASE"
     );
-    expect(
-      await dumpHasDataAsync(new TextEncoder().encode("INSERT INTO notes VALUES (1);"))
-    ).toBe(true);
+    expect(await dumpHasDataAsync(new TextEncoder().encode("INSERT INTO notes VALUES (1);"))).toBe(
+      true
+    );
   });
 });

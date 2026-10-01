@@ -35,27 +35,27 @@ async function seedTrickyRows(db: DatabaseAdapter): Promise<void> {
   const trickyTitle = `O'Brien; "quoted" -- tale\nnewline ❄ 中文 🎉`;
   await db.execute(
     "INSERT INTO books (id, title, author_name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-    ["book-1", trickyTitle, "Auth'or", null, 1000, 1000],
+    ["book-1", trickyTitle, "Auth'or", null, 1000, 1000]
   );
   await db.execute(
     'INSERT INTO chapters (id, book_id, title, content, "order", created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    ["ch-1", "book-1", "Ch; 1 'x'", "<p>say 'hi'; bye — ❄</p>", 0, 1000, 1000],
+    ["ch-1", "book-1", "Ch; 1 'x'", "<p>say 'hi'; bye — ❄</p>", 0, 1000, 1000]
   );
   await db.execute(
     "INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ["ver-1", "book-1", "v'1;2", '{"title":"it\'s; fine ❄"}', 7, "abc123", "manual", 2000],
+    ["ver-1", "book-1", "v'1;2", '{"title":"it\'s; fine ❄"}', 7, "abc123", "manual", 2000]
   );
   await db.execute(
     'INSERT INTO notes (id, title, content, "order", created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-    ["note-1", "Note; 'n'", null, 0, 1000, 1000],
+    ["note-1", "Note; 'n'", null, 0, 1000, 1000]
   );
   await db.execute(
     "INSERT INTO sync_tombstones (id, entity_type, entity_id, title, deleted_at, confirmed_at, pushed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ["book:gone", "book", "gone", "Gone; 'book' ❄", 1000, null, null],
+    ["book:gone", "book", "gone", "Gone; 'book' ❄", 1000, null, null]
   );
   await db.execute(
     "INSERT INTO cover_templates (id, name, fabric_json, created_at) VALUES (?, ?, ?, ?)",
-    ["tpl-1", "T; 'fancy'", '{"text":"it\'s; ❄"}', 1000],
+    ["tpl-1", "T; 'fancy'", '{"text":"it\'s; ❄"}', 1000]
   );
   await db.execute("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)", [
     "theme",
@@ -81,7 +81,7 @@ describe("sql-export pure formatter (shared by worker and fallback)", () => {
       { id: "b1", title: "O'Brien", word_count: 3, subtitle: null },
     ]);
     expect(sql).toBe(
-      `INSERT OR REPLACE INTO "books" ("id", "title", "word_count", "subtitle") VALUES ('b1', 'O''Brien', 3, NULL);`,
+      `INSERT OR REPLACE INTO "books" ("id", "title", "word_count", "subtitle") VALUES ('b1', 'O''Brien', 3, NULL);`
     );
   });
 
@@ -118,7 +118,7 @@ describe("sql-export pure formatter (shared by worker and fallback)", () => {
         "",
         "-- Settings",
         "",
-      ].join("\n"),
+      ].join("\n")
     );
   });
 });
@@ -150,16 +150,14 @@ describe("exportSqlDump fallback (Worker unavailable)", () => {
     const chapters = await freshDb.select<Record<string, unknown>[]>("SELECT * FROM chapters");
     expect(chapters[0].content).toBe("<p>say 'hi'; bye — ❄</p>");
 
-    const versions = await freshDb.select<Record<string, unknown>[]>(
-      "SELECT * FROM book_versions",
-    );
+    const versions = await freshDb.select<Record<string, unknown>[]>("SELECT * FROM book_versions");
     expect(versions[0].snapshot).toBe('{"title":"it\'s; fine ❄"}');
 
     const notes = await freshDb.select<Record<string, unknown>[]>("SELECT * FROM notes");
     expect(notes[0].content).toBeNull();
 
     const tombstones = await freshDb.select<Record<string, unknown>[]>(
-      "SELECT * FROM sync_tombstones",
+      "SELECT * FROM sync_tombstones"
     );
     expect(tombstones[0].title).toBe("Gone; 'book' ❄");
 
@@ -173,7 +171,7 @@ describe("exportSqlDump fallback (Worker unavailable)", () => {
     for (let index = 0; index < 205; index += 1) {
       await db.execute(
         "INSERT INTO books (id, title, author_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        [`book-${index}`, `Title ${index}`, "Author", 1000, 1000],
+        [`book-${index}`, `Title ${index}`, "Author", 1000, 1000]
       );
     }
 
@@ -201,7 +199,7 @@ describe("exportSqlDump fallback (Worker unavailable)", () => {
     const firstChapters = calls.findIndex((call) => call.sql.includes('"chapters"'));
     const lastBooks = calls.reduce(
       (last, call, index) => (call.sql.includes('"books"') ? index : last),
-      -1,
+      -1
     );
     expect(firstChapters).toBeGreaterThan(lastBooks);
 
@@ -219,7 +217,7 @@ describe("exportSqlDump fallback (Worker unavailable)", () => {
     for (let index = 0; index < 205; index += 1) {
       await db.execute(
         "INSERT INTO books (id, title, author_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        [`book-${index}`, `Title ${index}`, "Author", 1000, 1000],
+        [`book-${index}`, `Title ${index}`, "Author", 1000, 1000]
       );
     }
 
@@ -314,7 +312,7 @@ class FakeExportWorker {
         const encoded = new TextEncoder().encode(assembleSqlDump(exportedAt, sections));
         const buffer = encoded.buffer.slice(
           encoded.byteOffset,
-          encoded.byteOffset + encoded.byteLength,
+          encoded.byteOffset + encoded.byteLength
         );
         this.emit({ type: "result", buffer });
         return;
@@ -374,7 +372,7 @@ describe("exportSqlDump worker path (injected worker)", () => {
     for (let index = 0; index < 205; index += 1) {
       await db.execute(
         "INSERT INTO books (id, title, author_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        [`book-${index}`, `Title ${index}`, "Author", 1000, 1000],
+        [`book-${index}`, `Title ${index}`, "Author", 1000, 1000]
       );
     }
     const worker = new FakeExportWorker();
@@ -385,7 +383,7 @@ describe("exportSqlDump worker path (injected worker)", () => {
     });
 
     const bookPages = worker.posted.filter(
-      (posted) => posted.type === "page" && posted.table === "books",
+      (posted) => posted.type === "page" && posted.table === "books"
     );
     expect(bookPages.map((posted) => (posted.type === "page" ? posted.rows.length : 0))).toEqual([
       100, 100, 5,
@@ -405,7 +403,7 @@ describe("exportSqlDump worker path (injected worker)", () => {
     worker.errorOnNextAck = "error";
 
     await expect(
-      exportSqlDump(db, { createWorker: () => worker as unknown as Worker }),
+      exportSqlDump(db, { createWorker: () => worker as unknown as Worker })
     ).rejects.toThrow("sql-export worker failed");
     expect(worker.terminated).toBe(true);
   });
@@ -416,7 +414,7 @@ describe("exportSqlDump worker path (injected worker)", () => {
     worker.errorOnNextAck = "messageerror";
 
     await expect(
-      exportSqlDump(db, { createWorker: () => worker as unknown as Worker }),
+      exportSqlDump(db, { createWorker: () => worker as unknown as Worker })
     ).rejects.toThrow("failed to deserialize");
     expect(worker.terminated).toBe(true);
   });
@@ -427,7 +425,7 @@ describe("exportSqlDump worker path (injected worker)", () => {
     worker.failOnPost = new Error("postMessage failed");
 
     await expect(
-      exportSqlDump(db, { createWorker: () => worker as unknown as Worker }),
+      exportSqlDump(db, { createWorker: () => worker as unknown as Worker })
     ).rejects.toThrow("postMessage failed");
     expect(worker.terminated).toBe(true);
   });

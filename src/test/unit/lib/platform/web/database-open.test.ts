@@ -74,7 +74,10 @@ describe("createWebDatabase()", () => {
     const saved = await librarySavedWith("Saved");
     await saveBytes(saved);
     const get = vi.spyOn(IDBObjectStore.prototype, "get").mockImplementationOnce(() => {
-      throw new DOMException("The operation failed for reasons unrelated to the database itself.", "UnknownError");
+      throw new DOMException(
+        "The operation failed for reasons unrelated to the database itself.",
+        "UnknownError"
+      );
     });
 
     try {

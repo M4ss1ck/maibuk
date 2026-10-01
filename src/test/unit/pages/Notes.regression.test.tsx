@@ -210,14 +210,19 @@ describe("Notes repeated heading regression (behavioral)", () => {
     function NavHelper2() {
       const nav = useNavigate();
       return (
-        <button type="button" onClick={() => nav("/notes/n1", { state: { scrollToHeadingId: "h-2" } })}>
+        <button
+          type="button"
+          onClick={() => nav("/notes/n1", { state: { scrollToHeadingId: "h-2" } })}
+        >
           go h2
         </button>
       );
     }
 
     render(
-      <MemoryRouter initialEntries={[{ pathname: "/notes/n1", state: { scrollToHeadingId: "h-1" } }]}>
+      <MemoryRouter
+        initialEntries={[{ pathname: "/notes/n1", state: { scrollToHeadingId: "h-1" } }]}
+      >
         <Routes>
           <Route path="/notes/:noteId" element={<Notes />} />
         </Routes>

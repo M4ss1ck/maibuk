@@ -28,8 +28,7 @@ vi.mock("@xyflow/react", () => ({
 }));
 
 vi.mock("../../../../features/canvas/store", () => ({
-  useCanvasStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector(mocks.state),
+  useCanvasStore: (selector: (state: Record<string, unknown>) => unknown) => selector(mocks.state),
 }));
 
 vi.mock("../../../../features/canvas/nodes/NodeFormatBubble", () => ({

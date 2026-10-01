@@ -8,14 +8,9 @@ import {
   type SupportReport,
 } from "@/features/dictation/types";
 
-export type HostMessage =
-  | { kind: "event"; event: DictationEvent }
-  | { kind: "stopped" };
+export type HostMessage = { kind: "event"; event: DictationEvent } | { kind: "stopped" };
 
-async function call<T = void>(
-  command: string,
-  args?: Record<string, unknown>,
-): Promise<T> {
+async function call<T = void>(command: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await invoke<T>(command, args);
   } catch (error) {
@@ -79,8 +74,7 @@ export const tauriModelFiles: ModelFiles = {
     }
     const channel = new Channel<[number, number]>();
     channel.onmessage = ([done, total]) => onProgress(done, total);
-    const cancel = () =>
-      void invoke("dictation_models_cancel", { id: spec.id });
+    const cancel = () => void invoke("dictation_models_cancel", { id: spec.id });
     signal.addEventListener("abort", cancel, { once: true });
     try {
       await call("dictation_models_install", { spec, onProgress: channel });

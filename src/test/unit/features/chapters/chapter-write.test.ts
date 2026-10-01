@@ -242,9 +242,9 @@ describe("chapter write path", () => {
       select: realDb.select.bind(realDb),
     } as DatabaseAdapter);
 
-    await expect(
-      updateChapterRow("ch-1", { content: "<p>Edited</p>" }, "local")
-    ).rejects.toThrow("disk full");
+    await expect(updateChapterRow("ch-1", { content: "<p>Edited</p>" }, "local")).rejects.toThrow(
+      "disk full"
+    );
     // The chapter row persisted, so its notification stands.
     expect(changes).toEqual([{ entity: "book", id: "book-1", origin: "local", kind: "content" }]);
     const persisted = await realDb.select<{ content: string }[]>(

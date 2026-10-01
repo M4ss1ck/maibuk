@@ -15,7 +15,9 @@ vi.mock("react-i18next", () => ({
 }));
 const editors: Editor[] = [];
 afterEach(() => {
-  editors.splice(0).forEach((editor) => { editor.destroy(); });
+  editors.splice(0).forEach((editor) => {
+    editor.destroy();
+  });
 });
 const callbacks: ToolbarGroupCallbacks = {
   spellCheckLanguage: "en",

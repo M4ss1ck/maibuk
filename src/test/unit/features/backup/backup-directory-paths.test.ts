@@ -2,19 +2,26 @@ import { describe, expect, it } from "vitest";
 import { isAbsoluteDirectoryPath, isSameDirectory } from "@/features/backup/utils";
 
 describe("isAbsoluteDirectoryPath()", () => {
-  it.each(["/mnt/backups", "/", "C:\\Backups", "c:/Backups", "\\\\server\\share\\backups"])(
-    "accepts %s",
-    (path) => {
-      expect(isAbsoluteDirectoryPath(path)).toBe(true);
-    }
-  );
+  it.each([
+    "/mnt/backups",
+    "/",
+    "C:\\Backups",
+    "c:/Backups",
+    "\\\\server\\share\\backups",
+  ])("accepts %s", (path) => {
+    expect(isAbsoluteDirectoryPath(path)).toBe(true);
+  });
 
-  it.each(["backups", "~/Backups", "./backups", "C:Backups", "", "\\\\server"])(
-    "rejects %s",
-    (path) => {
-      expect(isAbsoluteDirectoryPath(path)).toBe(false);
-    }
-  );
+  it.each([
+    "backups",
+    "~/Backups",
+    "./backups",
+    "C:Backups",
+    "",
+    "\\\\server",
+  ])("rejects %s", (path) => {
+    expect(isAbsoluteDirectoryPath(path)).toBe(false);
+  });
 });
 
 describe("isSameDirectory()", () => {

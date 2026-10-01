@@ -8,11 +8,7 @@ import type {
   BackupAdapter,
 } from "@/lib/platform/types";
 
-import type {
-  DictationPlatform,
-  ModelFiles,
-  RecognizerHost,
-} from "@/features/dictation/types";
+import type { DictationPlatform, ModelFiles, RecognizerHost } from "@/features/dictation/types";
 
 import { IS_WEB } from "@/lib/platform/target";
 
@@ -214,30 +210,23 @@ export async function forgetBackupDirectory(): Promise<void> {
 export function dictationPlatform(): DictationPlatform | null {
   if (IS_WEB) return "web";
   // The native engine exists for Linux only; the Rust side confirms at runtime.
-  if (
-    IS_DESKTOP &&
-    typeof navigator !== "undefined" &&
-    /Linux/.test(navigator.userAgent)
-  )
+  if (IS_DESKTOP && typeof navigator !== "undefined" && /Linux/.test(navigator.userAgent))
     return "tauri-linux";
   return null;
 }
 
 export async function createRecognizerHost(): Promise<RecognizerHost> {
   if (IS_WEB) {
-    const { createWebRecognizerHost } =
-      await import("@/lib/platform/web/dictation/host");
+    const { createWebRecognizerHost } = await import("@/lib/platform/web/dictation/host");
     return createWebRecognizerHost();
   }
-  const { createTauriRecognizerHost } =
-    await import("@/lib/platform/tauri/dictation");
+  const { createTauriRecognizerHost } = await import("@/lib/platform/tauri/dictation");
   return createTauriRecognizerHost();
 }
 
 export async function getModelFiles(): Promise<ModelFiles> {
   if (IS_WEB) {
-    const { cacheModelFiles } =
-      await import("@/lib/platform/web/dictation/cache-model-files");
+    const { cacheModelFiles } = await import("@/lib/platform/web/dictation/cache-model-files");
     return cacheModelFiles;
   }
   const { tauriModelFiles } = await import("@/lib/platform/tauri/dictation");

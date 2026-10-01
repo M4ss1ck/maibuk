@@ -92,8 +92,7 @@ export function GlobalShortcuts() {
         runtime.setNotifier((notice) => {
           const message = noticeMessage(notice, t);
           if (message.toast) toast[message.toast.variant](message.toast.text);
-          if (message.announce)
-            useDictationStore.setState({ announcement: message.announce });
+          if (message.announce) useDictationStore.setState({ announcement: message.announce });
         });
       })
       .catch(() => {});

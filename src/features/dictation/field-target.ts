@@ -16,10 +16,7 @@ import {
 } from "@/features/dictation/plain-text";
 import type { DictationEdit } from "@/features/dictation/router";
 import type { DictationTarget, ScratchOutcome } from "@/features/dictation/session";
-import type {
-  VoiceCommandRun,
-  VoiceOutcome,
-} from "@/features/dictation/voice-commands";
+import type { VoiceCommandRun, VoiceOutcome } from "@/features/dictation/voice-commands";
 import { isOutsideLayer } from "@/lib/top-layer";
 
 /**
@@ -49,9 +46,7 @@ export function createFieldTarget(
     if (el.selectionStart !== null && typeof doc.execCommand === "function") {
       el.setSelectionRange(from, to);
       const ok =
-        text === ""
-          ? doc.execCommand("delete")
-          : doc.execCommand("insertText", false, text);
+        text === "" ? doc.execCommand("delete") : doc.execCommand("insertText", false, text);
       native = ok && el.value === expected;
     }
     if (!native) {
@@ -59,10 +54,7 @@ export function createFieldTarget(
       // exposes no selection API (email): set the value through the element
       // prototype's native setter — this is what lets React's controlled
       // inputs notice — then announce it as an input.
-      Object.getOwnPropertyDescriptor(
-        Object.getPrototypeOf(el),
-        "value"
-      )?.set?.call(el, expected);
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")?.set?.call(el, expected);
       el.dispatchEvent(
         new InputEvent("input", {
           bubbles: true,
@@ -97,8 +89,7 @@ export function createFieldTarget(
       const start = el.selectionStart ?? el.value.length;
       const end = el.selectionEnd ?? start;
       const plan = planFieldEdits(el.value, start, end, edits, multiline);
-      if (!plan.changed)
-        return plan.layoutIgnored ? "layout_ignored" : "applied";
+      if (!plan.changed) return plan.layoutIgnored ? "layout_ignored" : "applied";
       const valueBefore = el.value;
       replaceRange(plan.from, plan.to, plan.text, plan.value, plan.caret);
       history = recordFieldInsert(history, valueBefore, plan);
@@ -109,8 +100,7 @@ export function createFieldTarget(
     ...(!secret
       ? {
           voice: (run: VoiceCommandRun): VoiceOutcome => {
-            if (run.id !== "common.undo" && run.id !== "common.redo")
-              return "unavailable";
+            if (run.id !== "common.undo" && run.id !== "common.redo") return "unavailable";
             const valueBefore = el.value;
             if (run.id === "common.undo") doc.execCommand?.("undo");
             else doc.execCommand?.("redo");
@@ -138,8 +128,7 @@ function asDictationField(
 ): { el: HTMLInputElement | HTMLTextAreaElement; kind: FieldKind } | null {
   const kind = dictationFieldKind(el);
   if (kind === null) return null;
-  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
-    return { el, kind };
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return { el, kind };
   return null;
 }
 
@@ -148,9 +137,7 @@ function asDictationField(
  * field holds the caret it is the Session's target; at most one field target
  * is registered at a time.
  */
-export function installDictationFieldTracker(
-  doc: Document = document
-): () => void {
+export function installDictationFieldTracker(doc: Document = document): () => void {
   let current: {
     el: HTMLInputElement | HTMLTextAreaElement;
     targetId: string;

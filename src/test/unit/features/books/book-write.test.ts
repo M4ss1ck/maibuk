@@ -25,10 +25,9 @@ async function seedBook(id: string, updatedAt = 1000): Promise<void> {
 }
 
 async function readBookRow(id: string): Promise<Record<string, unknown>> {
-  const rows = await testDb.select<Record<string, unknown>[]>(
-    "SELECT * FROM books WHERE id = ?",
-    [id]
-  );
+  const rows = await testDb.select<Record<string, unknown>[]>("SELECT * FROM books WHERE id = ?", [
+    id,
+  ]);
   return rows[0];
 }
 

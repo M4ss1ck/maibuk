@@ -34,7 +34,7 @@ export function escapeSqlExportValue(value: unknown): string {
 
 export function formatExportInsertStatements(
   tableName: string,
-  rows: Record<string, unknown>[],
+  rows: Record<string, unknown>[]
 ): string {
   if (rows.length === 0) return "";
 
@@ -43,7 +43,7 @@ export function formatExportInsertStatements(
     const columns = Object.keys(row);
     const values = columns.map((col) => escapeSqlExportValue(row[col]));
     statements.push(
-      `INSERT OR REPLACE INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`,
+      `INSERT OR REPLACE INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});`
     );
   }
   return statements.join("\n");
@@ -53,7 +53,7 @@ export function formatExportInsertStatements(
 // blank-line layout.
 export function assembleSqlDump(
   exportedAt: string,
-  sections: Map<string, string> | Record<string, string>,
+  sections: Map<string, string> | Record<string, string>
 ): string {
   const getSection = (name: string): string =>
     sections instanceof Map ? (sections.get(name) ?? "") : (sections[name] ?? "");

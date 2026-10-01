@@ -93,9 +93,7 @@ function handleMessage(data: CodecResponse): void {
 
 function handleWorkerFailure(event: unknown): void {
   const message =
-    event instanceof ErrorEvent && event.message
-      ? event.message
-      : "Sync codec worker failed";
+    event instanceof ErrorEvent && event.message ? event.message : "Sync codec worker failed";
   failAllPending(new Error(message));
 }
 
@@ -229,27 +227,18 @@ export async function normalizeCanvasSnapshotAsync(json: string): Promise<string
 
 // Returns a freshly owned transferable buffer — wrap it directly in a Blob,
 // no extra copy.
-export async function encryptToBuffer(
-  plaintext: string,
-  passphrase: string
-): Promise<ArrayBuffer> {
+export async function encryptToBuffer(plaintext: string, passphrase: string): Promise<ArrayBuffer> {
   return requiredBuffer(await dispatch({ op: "encrypt", plaintext, passphrase }), "encrypt");
 }
 
-export async function decryptBufferToText(
-  data: Uint8Array,
-  passphrase: string
-): Promise<string> {
+export async function decryptBufferToText(data: Uint8Array, passphrase: string): Promise<string> {
   // Copy before transferring so the caller's view is never detached.
   const buffer = toOwnedBuffer(data);
   const response = await dispatch({ op: "decrypt", buffer, passphrase }, [buffer]);
   return requiredText(response, "decrypt");
 }
 
-export async function encryptToBase64Async(
-  plaintext: string,
-  passphrase: string
-): Promise<string> {
+export async function encryptToBase64Async(plaintext: string, passphrase: string): Promise<string> {
   const response = await dispatch({ op: "encryptToBase64", plaintext, passphrase });
   if (response.base64 === undefined) {
     throw new Error("Sync codec worker returned no base64 payload for encryptToBase64");
@@ -257,14 +246,8 @@ export async function encryptToBase64Async(
   return response.base64;
 }
 
-export async function decryptBase64ToText(
-  base64: string,
-  passphrase: string
-): Promise<string> {
-  return requiredText(
-    await dispatch({ op: "decryptBase64", base64, passphrase }),
-    "decryptBase64"
-  );
+export async function decryptBase64ToText(base64: string, passphrase: string): Promise<string> {
+  return requiredText(await dispatch({ op: "decryptBase64", base64, passphrase }), "decryptBase64");
 }
 
 export async function computeChecksumAsync(text: string): Promise<string> {

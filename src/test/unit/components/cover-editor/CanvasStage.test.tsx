@@ -64,9 +64,7 @@ vi.mock("../../../../features/covers/store", () => {
   return { useCoverStore };
 });
 
-const { CanvasStage, computeStageScale } = await import(
-  "@/components/cover-editor/CanvasStage"
-);
+const { CanvasStage, computeStageScale } = await import("@/components/cover-editor/CanvasStage");
 
 type MockResizeObserver = {
   callback: ResizeObserverCallback;

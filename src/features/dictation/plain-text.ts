@@ -12,7 +12,7 @@ export function isSentenceEndMark(ch: string): boolean {
 }
 
 /** Closing marks a sentence end takes with it: `hola.»` is one sentence. */
-export const SENTENCE_CLOSERS = new Set(['»', '”', '’', '"', "'", ")", "]", "}"]);
+export const SENTENCE_CLOSERS = new Set(["»", "”", "’", '"', "'", ")", "]", "}"]);
 
 /**
  * Split one text slice into dictated sentences. Shares the interpreter's
@@ -254,8 +254,7 @@ export function recordFieldInsert(
       /^[ \t]*$/.test(between) &&
       findSentenceStartOffset(prefix) !== prefix.length
     ) {
-      const start =
-        plan.openerAt.includes(last.start - 1) ? last.start - 1 : last.start;
+      const start = plan.openerAt.includes(last.start - 1) ? last.start - 1 : last.start;
       base[base.length - 1] = {
         start,
         end: first.end,

@@ -9,14 +9,15 @@ type SyncState = {
 };
 type Listener = (state: SyncState, previous: SyncState) => void;
 
-const { settings, syncState, syncListeners, mockGetPassphrase, mockFlushPendingEdits } =
-  vi.hoisted(() => ({
+const { settings, syncState, syncListeners, mockGetPassphrase, mockFlushPendingEdits } = vi.hoisted(
+  () => ({
     settings: { autoSync: true },
     syncState: {} as SyncState,
     syncListeners: new Set<Listener>(),
     mockGetPassphrase: vi.fn(),
     mockFlushPendingEdits: vi.fn(),
-  }));
+  })
+);
 
 vi.mock("../../../../features/settings/store", () => ({
   useSettingsStore: { getState: () => settings },
@@ -98,7 +99,12 @@ describe("automatic sync", () => {
 
     it("schedules nothing for the sample content's local Changes", async () => {
       installAutoSync();
-      await emitChange({ entity: "book", id: "tutorial-book-novel", origin: "local", kind: "content" });
+      await emitChange({
+        entity: "book",
+        id: "tutorial-book-novel",
+        origin: "local",
+        kind: "content",
+      });
       librarySwitch.resetLibrarySwitchForTests();
       await vi.advanceTimersByTimeAsync(AUTO_SYNC_IDLE_DELAY_MS * 2);
 

@@ -122,11 +122,7 @@ function findSentenceStartPos(doc: ProseMirrorNode, caretPos: number): number {
  * closing marks are skipped, then `.?!`, a hard break, or the block start
  * counts as a boundary. Only the tail is read, so long Chapters stay cheap.
  */
-function blockTextEndsSentence(
-  doc: ProseMirrorNode,
-  blockStart: number,
-  pos: number
-): boolean {
+function blockTextEndsSentence(doc: ProseMirrorNode, blockStart: number, pos: number): boolean {
   if (pos <= blockStart) return true;
   const text = doc.textBetween(Math.max(blockStart, pos - 8), pos, "\n", "\n");
   let end = text.length;
@@ -193,8 +189,7 @@ function mergeIntoOpenSentence(
     const opener = doc.textBetween(from - 1, from, "\n", "\n");
     if (opener === "¿" || opener === "¡") from = from - 1;
   }
-  const lastLines =
-    last.lines.length > 0 ? last.lines : [{ from: last.from, to: last.to }];
+  const lastLines = last.lines.length > 0 ? last.lines : [{ from: last.from, to: last.to }];
   return {
     consumed: 1,
     pieces: [
@@ -235,7 +230,13 @@ export function extractDictatedSentences(
     if (blockFrom >= blockTo) return false;
     const sliceText = doc.textBetween(blockFrom, blockTo, "\n", "\n");
     if (sliceText.length !== blockTo - blockFrom) {
-      out.push({ from: blockFrom, to: blockTo, text: sliceText, dirty: false, lines: [{ from: blockFrom, to: blockTo }] });
+      out.push({
+        from: blockFrom,
+        to: blockTo,
+        text: sliceText,
+        dirty: false,
+        lines: [{ from: blockFrom, to: blockTo }],
+      });
       return false;
     }
     let splitFallback = false;
@@ -250,7 +251,13 @@ export function extractDictatedSentences(
       out.push({ from: rFrom, to: rTo, text, dirty: false, lines: [{ from: rFrom, to: rTo }] });
     }
     if (splitFallback) {
-      out.push({ from: blockFrom, to: blockTo, text: sliceText, dirty: false, lines: [{ from: blockFrom, to: blockTo }] });
+      out.push({
+        from: blockFrom,
+        to: blockTo,
+        text: sliceText,
+        dirty: false,
+        lines: [{ from: blockFrom, to: blockTo }],
+      });
     }
     return false;
   });
@@ -258,14 +265,15 @@ export function extractDictatedSentences(
 }
 
 /** The last dictated span scratch that would remove, without removing it. */
-export function lastDictatedRange(state: EditorState): { from: number; to: number } | "empty" | "refused" {
+export function lastDictatedRange(
+  state: EditorState
+): { from: number; to: number } | "empty" | "refused" {
   const history = dictationPluginKey.getState(state)?.history ?? [];
   if (history.length === 0) return "empty";
   const last = history[history.length - 1];
   const doc = state.doc;
   if (last.from < 0 || last.to > doc.content.size || last.from >= last.to) return "refused";
-  if (last.dirty || doc.textBetween(last.from, last.to, "\n", "\n") !== last.text)
-    return "refused";
+  if (last.dirty || doc.textBetween(last.from, last.to, "\n", "\n") !== last.text) return "refused";
   // An entry without a sentence end is an unfinished sentence: only its last
   // dictated line is in reach, like scratch that removes it.
   if (!/[.!?]/.test(last.text)) {
@@ -571,10 +579,9 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
                     meta.added,
                     meta.openersInserted === true
                   );
-                  history = [
-                    ...history.slice(0, history.length - consumed),
-                    ...pieces,
-                  ].slice(-MAX_DICTATED_SENTENCES);
+                  history = [...history.slice(0, history.length - consumed), ...pieces].slice(
+                    -MAX_DICTATED_SENTENCES
+                  );
                 }
               }
             } else if (tr.docChanged) {

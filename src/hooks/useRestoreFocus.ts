@@ -33,8 +33,7 @@ export function useRestoreFocus(
   if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
     const provided = getTargetRef.current?.() ?? null;
     const activeElement = document.activeElement;
-    targetRef.current =
-      provided ?? (activeElement instanceof HTMLElement ? activeElement : null);
+    targetRef.current = provided ?? (activeElement instanceof HTMLElement ? activeElement : null);
     openedRef.current = true;
   }
   wasOpenRef.current = isOpen;

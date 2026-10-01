@@ -87,9 +87,7 @@ describe("LineHeight block attribute", () => {
   });
 
   it("updates only the nested list item", () => {
-    const editor = makeEditor(
-      "<ul><li><p>Outer</p><ul><li><p>Inner</p></li></ul></li></ul>"
-    );
+    const editor = makeEditor("<ul><li><p>Outer</p><ul><li><p>Inner</p></li></ul></li></ul>");
     cursorInText(editor, "Inner", 1);
 
     editor.chain().setLineHeight("1").run();

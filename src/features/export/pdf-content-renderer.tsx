@@ -250,8 +250,7 @@ function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode 
 
 function renderParagraph(el: Element, styles: PdfStyles, key: string): ReactNode {
   const lineHeight = blockLineHeight(el);
-  const style =
-    lineHeight !== undefined ? [styles.paragraph, { lineHeight }] : styles.paragraph;
+  const style = lineHeight !== undefined ? [styles.paragraph, { lineHeight }] : styles.paragraph;
   return createElement(Text, { key, style }, ...renderInlineChildren(el, styles));
 }
 

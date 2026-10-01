@@ -9,9 +9,7 @@ class FakeWorker {
   postMessage(msg: { id?: number; type: string }) {
     this.posted.push(msg);
     if (msg.id !== undefined)
-      queueMicrotask(() =>
-        this.onmessage?.({ data: { type: "ok", id: msg.id } } as MessageEvent),
-      );
+      queueMicrotask(() => this.onmessage?.({ data: { type: "ok", id: msg.id } } as MessageEvent));
   }
   emit(event: DictationEvent) {
     this.onmessage?.({ data: { type: "event", event } } as MessageEvent);
@@ -94,7 +92,7 @@ describe("WebRecognizerHost", () => {
           }),
         };
         close = closeContext;
-      },
+      }
     );
     const host = createWebRecognizerHost({
       createWorker: () => worker as unknown as Worker,
@@ -111,12 +109,10 @@ describe("WebRecognizerHost", () => {
       createWorker: () => worker as unknown as Worker,
     });
     await host.load(spec);
-    (
-      host as unknown as { attach(l: (e: DictationEvent) => void): void }
-    ).attach((e) => events.push(e));
+    (host as unknown as { attach(l: (e: DictationEvent) => void): void }).attach((e) =>
+      events.push(e)
+    );
     worker.onerror?.({ message: "boom" } as ErrorEvent);
-    expect(events).toEqual([
-      { type: "error", code: "engine_crashed", detail: "boom" },
-    ]);
+    expect(events).toEqual([{ type: "error", code: "engine_crashed", detail: "boom" }]);
   });
 });

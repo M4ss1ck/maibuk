@@ -3,24 +3,18 @@ import { describe, expect, it } from "vitest";
 
 const conf = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8"));
 const LIBS = {
-  "/usr/lib/maibuk/libmoonshine.so":
-    "../vendor/moonshine/linux-x86_64/lib/libmoonshine.so",
-  "/usr/lib/maibuk/libonnxruntime.so.1":
-    "../vendor/moonshine/linux-x86_64/lib/libonnxruntime.so.1",
+  "/usr/lib/maibuk/libmoonshine.so": "../vendor/moonshine/linux-x86_64/lib/libmoonshine.so",
+  "/usr/lib/maibuk/libonnxruntime.so.1": "../vendor/moonshine/linux-x86_64/lib/libonnxruntime.so.1",
 };
 
 describe("Linux bundles", () => {
-  it.each(["deb", "rpm"])(
-    "%s ships the dictation libraries beside each other",
-    (kind) => {
-      expect(conf.bundle.linux[kind].files).toMatchObject(LIBS);
-    },
-  );
+  it.each(["deb", "rpm"])("%s ships the dictation libraries beside each other", (kind) => {
+    expect(conf.bundle.linux[kind].files).toMatchObject(LIBS);
+  });
   it("the AppImage ships them under usr/lib/maibuk", () => {
     expect(conf.bundle.linux.appimage.files).toMatchObject({
       "usr/lib/maibuk/libmoonshine.so": LIBS["/usr/lib/maibuk/libmoonshine.so"],
-      "usr/lib/maibuk/libonnxruntime.so.1":
-        LIBS["/usr/lib/maibuk/libonnxruntime.so.1"],
+      "usr/lib/maibuk/libonnxruntime.so.1": LIBS["/usr/lib/maibuk/libonnxruntime.so.1"],
     });
   });
 

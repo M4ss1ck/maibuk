@@ -37,8 +37,7 @@ function declaredBindings(): Set<string> {
     for (const match of text.matchAll(new RegExp(String.raw`\b(?:id|commandId):\s*"(${ID})"`, "g")))
       declared.add(match[1]);
     for (const call of text.matchAll(/useBoundShortcutIds\(\s*\[([^\]]*)\]/g)) {
-      for (const match of call[1].matchAll(new RegExp(`"(${ID})"`, "g")))
-        declared.add(match[1]);
+      for (const match of call[1].matchAll(new RegExp(`"(${ID})"`, "g"))) declared.add(match[1]);
     }
   }
   return declared;

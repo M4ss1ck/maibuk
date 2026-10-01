@@ -18,7 +18,6 @@ import {
 import { getSection } from "@/features/tutorial/sections";
 import { useTutorialStore } from "@/features/tutorial/store";
 
-
 function focusRouteHeading(): void {
   requestAnimationFrame(() => {
     const heading = document.querySelector<HTMLElement>("[data-route-heading]");

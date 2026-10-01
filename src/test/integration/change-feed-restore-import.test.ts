@@ -7,19 +7,14 @@ import type { BookSnapshot } from "@/features/sync/types";
 
 let testDb: DatabaseAdapter;
 
-const {
-  mockGetDatabase,
-  mockScanEpub,
-  mockReadEpub,
-  mockNormalizeEpubProject,
-  mockReindex,
-} = vi.hoisted(() => ({
-  mockGetDatabase: vi.fn(),
-  mockScanEpub: vi.fn(),
-  mockReadEpub: vi.fn(),
-  mockNormalizeEpubProject: vi.fn(),
-  mockReindex: vi.fn(),
-}));
+const { mockGetDatabase, mockScanEpub, mockReadEpub, mockNormalizeEpubProject, mockReindex } =
+  vi.hoisted(() => ({
+    mockGetDatabase: vi.fn(),
+    mockScanEpub: vi.fn(),
+    mockReadEpub: vi.fn(),
+    mockNormalizeEpubProject: vi.fn(),
+    mockReindex: vi.fn(),
+  }));
 
 vi.mock("../../lib/db", () => ({
   getDatabase: mockGetDatabase,
@@ -138,9 +133,11 @@ describe("write path integration", () => {
     // Mount the views the way BookEditor does, then edit past the version.
     await useBookStore.getState().loadBook(book.id);
     await useChapterStore.getState().loadChapters(book.id);
-    useChapterStore.getState().setCurrentChapter(
-      useChapterStore.getState().chapters.find((c) => c.id === chapter.id) ?? null
-    );
+    useChapterStore
+      .getState()
+      .setCurrentChapter(
+        useChapterStore.getState().chapters.find((c) => c.id === chapter.id) ?? null
+      );
     await useChapterStore.getState().updateChapter(chapter.id, { content: "<p>Edited</p>" });
     changes.length = 0;
 
@@ -279,7 +276,9 @@ describe("write path integration", () => {
       ...normalized,
       // filename is NOT NULL: this asset fails after the book and chapters
       // already persisted.
-      assets: [{ filename: undefined as unknown as string, href: "EPUB/bad.png", mediaType: "image/png" }],
+      assets: [
+        { filename: undefined as unknown as string, href: "EPUB/bad.png", mediaType: "image/png" },
+      ],
     });
 
     await expect(

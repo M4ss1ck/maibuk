@@ -20,7 +20,13 @@ vi.mock("@/lib/platform", async (importOriginal) => ({
   createDatabase: vi.fn(async () => authorDb.current),
   createBackup: vi.fn(async () => ({
     listBackups: async () => [],
-    listBackupsPage: async () => ({ entries: [], totalCount: 0, totalSizeBytes: 0, page: 1, pageSize: 10 }),
+    listBackupsPage: async () => ({
+      entries: [],
+      totalCount: 0,
+      totalSizeBytes: 0,
+      page: 1,
+      pageSize: 10,
+    }),
   })),
   isLaunchOnStartupEnabled: vi.fn(async () => false),
   setLaunchOnStartup: vi.fn(async () => undefined),
@@ -132,8 +138,7 @@ const { createBookRow } = await import("@/features/books/write");
 const { createNoteRow } = await import("@/features/notes/write");
 const { createCanvasRow } = await import("@/features/canvas/write");
 const librarySwitch = await import("@/features/tutorial/library-switch");
-const { useTutorialStore, EMPTY_TUTORIAL_PROGRESS } =
-  await import("@/features/tutorial");
+const { useTutorialStore, EMPTY_TUTORIAL_PROGRESS } = await import("@/features/tutorial");
 const { useSettingsStore } = await import("@/features/settings/store");
 const { useBookStore } = await import("@/features/books/store");
 const { useNoteStore } = await import("@/features/notes/store");
@@ -169,10 +174,9 @@ function renderApp(initialPath = "/") {
 async function settleOn(screenPath: string) {
   await waitFor(() => expect(path).toBe(screenPath), { timeout: 10_000 });
   // Let bindings mount and stores load from the Library.
-  await waitFor(
-    () => expect(document.querySelector("[data-route-heading]")).not.toBeNull(),
-    { timeout: 10_000 }
-  );
+  await waitFor(() => expect(document.querySelector("[data-route-heading]")).not.toBeNull(), {
+    timeout: 10_000,
+  });
   await new Promise((resolve) => setTimeout(resolve, 300));
 }
 
@@ -258,10 +262,7 @@ beforeEach(async () => {
 
 describe("navigating Commands (issue #319)", () => {
   it("a run changes the route iff the Command is flagged navigates", async () => {
-    const book = await createBookRow(
-      { title: "Nav Book", authorName: "Nav Author" },
-      "local"
-    );
+    const book = await createBookRow({ title: "Nav Book", authorName: "Nav Author" }, "local");
     const note = await createNoteRow({ title: "Nav Note", bookId: null }, "local");
     const canvas = await createCanvasRow({ title: "Nav Canvas" }, "local");
 
@@ -308,9 +309,7 @@ describe("navigating Commands (issue #319)", () => {
         const outcome = await runCommand(id, { source: "palette" });
         // Note and canvas creation navigate once the write lands.
         if (getCommand(id).navigates === true) {
-          await waitFor(() => expect(path).not.toBe(before), { timeout: 5_000 }).catch(
-            () => {}
-          );
+          await waitFor(() => expect(path).not.toBe(before), { timeout: 5_000 }).catch(() => {});
         } else {
           await new Promise((resolve) => setTimeout(resolve, 100));
         }

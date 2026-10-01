@@ -46,7 +46,10 @@ function isHidden(el: HTMLElement, root: HTMLElement): boolean {
   }
   if (root.hasAttribute("hidden")) return true;
   const rootStyle = window.getComputedStyle(root);
-  if (root !== document.body && (rootStyle.display === "none" || rootStyle.visibility === "hidden")) {
+  if (
+    root !== document.body &&
+    (rootStyle.display === "none" || rootStyle.visibility === "hidden")
+  ) {
     return true;
   }
   return false;
@@ -65,9 +68,7 @@ export function collectPressable(root: HTMLElement = topmostLayer()): HTMLElemen
 export function findByName(spoken: string, root: HTMLElement = topmostLayer()): HTMLElement[] {
   const want = normalizePhrase(spoken);
   if (want === "") return [];
-  return collectPressable(root).filter(
-    (el) => normalizePhrase(computeAccessibleName(el)) === want
-  );
+  return collectPressable(root).filter((el) => normalizePhrase(computeAccessibleName(el)) === want);
 }
 
 const TOGGLE_ROLES = new Set([

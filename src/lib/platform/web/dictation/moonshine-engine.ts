@@ -24,8 +24,7 @@ export function createMoonshineEngine(): SpeechEngine {
   return {
     async load(files, spec: ModelSpec) {
       const { arch, ...options } = spec.engineOptions;
-      const factory = (await import(/* @vite-ignore */ absolute(mjsUrl)))
-        .default;
+      const factory = (await import(/* @vite-ignore */ absolute(mjsUrl))).default;
       transcriber?.close();
       transcriber = await Transcriber.load({
         files: Object.fromEntries(files),
@@ -36,8 +35,7 @@ export function createMoonshineEngine(): SpeechEngine {
             factory({
               ...opts,
               mainScriptUrlOrBlob: absolute(mjsUrl),
-              locateFile: (path: string) =>
-                path.endsWith(".wasm") ? absolute(wasmUrl) : path,
+              locateFile: (path: string) => (path.endsWith(".wasm") ? absolute(wasmUrl) : path),
             }),
         },
       });

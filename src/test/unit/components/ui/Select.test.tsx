@@ -121,7 +121,7 @@ describe("Select", () => {
     it("names each option in full while showing its code", async () => {
       const user = userEvent.setup();
       render(
-        <Select value="auto" onChange={() => {}} options={namedOptions} ariaLabel="Language" />,
+        <Select value="auto" onChange={() => {}} options={namedOptions} ariaLabel="Language" />
       );
 
       await user.tab();
@@ -132,9 +132,7 @@ describe("Select", () => {
     });
 
     it("names the selected value in full while showing its code", () => {
-      render(
-        <Select value="en" onChange={() => {}} options={namedOptions} ariaLabel="Language" />,
-      );
+      render(<Select value="en" onChange={() => {}} options={namedOptions} ariaLabel="Language" />);
 
       const trigger = screen.getByRole("button");
       expect(trigger).toHaveTextContent("en");

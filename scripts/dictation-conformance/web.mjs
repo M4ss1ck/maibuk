@@ -26,10 +26,7 @@ const TYPE_FOR_MS = 30_000;
 const TYPE_EVERY_MS = 111; // ~9 characters a second
 
 function wavFor(spec) {
-  return join(
-    audioDir,
-    spec.languages[0] === "es" ? "quijote_es_16k.wav" : "two_cities_16k.wav"
-  );
+  return join(audioDir, spec.languages[0] === "es" ? "quijote_es_16k.wav" : "two_cities_16k.wav");
 }
 
 // Duration from the RIFF header: data size / byte rate.
@@ -92,8 +89,7 @@ async function main() {
   const server = await preview({ configFile });
   // The build input is harness.html, so the preview serves it at /harness.html.
   const pageUrl =
-    process.env.CONFORMANCE_URL ??
-    new URL("harness.html", server.resolvedUrls.local[0]).href;
+    process.env.CONFORMANCE_URL ?? new URL("harness.html", server.resolvedUrls.local[0]).href;
   console.log(`harness at ${pageUrl}`);
 
   try {
@@ -123,10 +119,7 @@ async function main() {
         await typeFor(page, TYPE_FOR_MS);
         await runPromise;
         const result = await page.evaluate(() => window.__conformance.result);
-        writeFileSync(
-          join(outDir, `web-${id}.json`),
-          `${JSON.stringify(result, null, 2)}\n`
-        );
+        writeFileSync(join(outDir, `web-${id}.json`), `${JSON.stringify(result, null, 2)}\n`);
         const s = result.summary;
         console.log(
           `${id}: load ${s.loadMs} ms, finals ${result.trace.length}, ` +

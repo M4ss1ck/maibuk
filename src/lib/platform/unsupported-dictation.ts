@@ -6,9 +6,7 @@ import {
 } from "@/features/dictation/types";
 
 /** A backend that refuses: Android, Windows, macOS, and the placeholders. */
-export function createUnsupportedHost(
-  reason: UnsupportedReason,
-): RecognizerHost {
+export function createUnsupportedHost(reason: UnsupportedReason): RecognizerHost {
   const refuse = async () => {
     throw new DictationError("unsupported", reason);
   };

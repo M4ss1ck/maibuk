@@ -77,8 +77,7 @@ export function toFlowNodes(
     // brand-new node's editor would open unfocused (its keystrokes then hit the
     // canvas). Seed the dimensions so the node is visible the moment its
     // editor mounts; React Flow refines the height after measuring.
-    initialWidth:
-      node.kind === "text" ? (node.width ?? CANVAS_TEXT_NODE_DEFAULT_WIDTH) : undefined,
+    initialWidth: node.kind === "text" ? (node.width ?? CANVAS_TEXT_NODE_DEFAULT_WIDTH) : undefined,
     initialHeight: node.kind === "text" ? CANVAS_TEXT_NODE_MIN_HEIGHT : undefined,
     data: {
       node,

@@ -3,7 +3,11 @@
 // Tutorial in tests instead of in an author's hands. Called only while the
 // Tutorial Library is active; every id carries the `tutorial-` prefix.
 
-import { applyBookSnapshotData, updateBookRow, updateBookWordCountRow } from "@/features/books/write";
+import {
+  applyBookSnapshotData,
+  updateBookRow,
+  updateBookWordCountRow,
+} from "@/features/books/write";
 import { updateChapterRow } from "@/features/chapters/write";
 import { applyNoteSnapshotData, updateNoteRow } from "@/features/notes/write";
 import { applyCanvasSnapshotData } from "@/features/canvas/write";

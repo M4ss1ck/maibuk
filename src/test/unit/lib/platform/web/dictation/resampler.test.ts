@@ -3,19 +3,21 @@ import cases from "@/test/fixtures/dictation/resampler.json";
 import { createResampler } from "@/lib/platform/web/dictation/resampler";
 
 describe("createResampler()", () => {
-  it.each(cases)(
-    "matches the shared reference at $inRate Hz, fed in chunks",
-    ({ inRate, input, chunks, output }) => {
-      const r = createResampler(inRate);
-      const a = r.push(Float32Array.from(input.slice(0, chunks[0])));
-      const b = r.push(Float32Array.from(input.slice(chunks[0])));
-      const got = [...a, ...b];
-      expect(got.length).toBe(output.length);
-      got.forEach((v, i) => {
-        expect(v).toBeCloseTo(output[i], 5);
-      });
-    },
-  );
+  it.each(cases)("matches the shared reference at $inRate Hz, fed in chunks", ({
+    inRate,
+    input,
+    chunks,
+    output,
+  }) => {
+    const r = createResampler(inRate);
+    const a = r.push(Float32Array.from(input.slice(0, chunks[0])));
+    const b = r.push(Float32Array.from(input.slice(chunks[0])));
+    const got = [...a, ...b];
+    expect(got.length).toBe(output.length);
+    got.forEach((v, i) => {
+      expect(v).toBeCloseTo(output[i], 5);
+    });
+  });
 
   it("keeps a constant signal constant when downsampling 48 kHz", () => {
     const out = createResampler(48000).push(new Float32Array(4800).fill(0.25));

@@ -1,15 +1,8 @@
 // The web backend: port → Resampler16k → SpeechEngine → DictationEvents.
-import {
-  toDictationError,
-  type DictationEvent,
-  type ModelSpec,
-} from "@/features/dictation/types";
+import { toDictationError, type DictationEvent, type ModelSpec } from "@/features/dictation/types";
 import { readModelFiles } from "@/lib/platform/web/dictation/cache-model-files";
 import { createEngine } from "@/lib/platform/web/dictation/engines";
-import {
-  createResampler,
-  type Resampler,
-} from "@/lib/platform/web/dictation/resampler";
+import { createResampler, type Resampler } from "@/lib/platform/web/dictation/resampler";
 import type { SpeechEngine } from "@/lib/platform/web/dictation/speech-engine";
 
 type Request =
@@ -93,16 +86,13 @@ self.onmessage = (event: MessageEvent<Request>) => {
   handle(msg).then(
     () => postMessage({ type: "ok", id: msg.id }),
     (error) => {
-      const e = toDictationError(
-        error,
-        msg.type === "load" ? "model_corrupt" : "engine_crashed",
-      );
+      const e = toDictationError(error, msg.type === "load" ? "model_corrupt" : "engine_crashed");
       postMessage({
         type: "error",
         id: msg.id,
         code: e.code,
         detail: e.message,
       });
-    },
+    }
   );
 };

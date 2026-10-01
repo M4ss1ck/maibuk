@@ -14,7 +14,15 @@ describe("CanvasDrawingLayer", () => {
       doc: {
         ...state.doc,
         strokes: [
-          { id: "s1", color: "#ef4444", width: 3, points: [{ x: 0, y: 0 }, { x: 40, y: 20 }] },
+          {
+            id: "s1",
+            color: "#ef4444",
+            width: 3,
+            points: [
+              { x: 0, y: 0 },
+              { x: 40, y: 20 },
+            ],
+          },
         ],
       },
     }));

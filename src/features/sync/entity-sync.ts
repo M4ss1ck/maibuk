@@ -19,11 +19,7 @@ import {
   markTombstonePushed,
   tombstoneId,
 } from "@/features/sync/tombstones";
-import {
-  decryptBufferToText,
-  encryptToBuffer,
-  parseJsonAsync,
-} from "@/features/sync/sync-codec";
+import { decryptBufferToText, encryptToBuffer, parseJsonAsync } from "@/features/sync/sync-codec";
 import type { EntityRemote, EntityRemoteKind, RemoteItemMeta } from "@/features/sync/remote-port";
 import type {
   ConflictResolver,

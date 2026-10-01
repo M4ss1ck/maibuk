@@ -152,9 +152,7 @@ describe("VersionCompare", () => {
 
   it("marks the layout as a container so the list/diff grid stacks when the modal content is narrow", () => {
     renderCompare({
-      chapters: [
-        { chapterId: "chapter-1", title: "Chapter 1", status: "unchanged", html: null },
-      ],
+      chapters: [{ chapterId: "chapter-1", title: "Chapter 1", status: "unchanged", html: null }],
     });
 
     expect(screen.getByTestId("version-compare-root")).toHaveClass("@container");
@@ -167,9 +165,7 @@ describe("VersionCompare", () => {
   it("keeps the grid single-column when the chapter list is hidden", async () => {
     const user = userEvent.setup();
     renderCompare({
-      chapters: [
-        { chapterId: "chapter-1", title: "Chapter 1", status: "unchanged", html: null },
-      ],
+      chapters: [{ chapterId: "chapter-1", title: "Chapter 1", status: "unchanged", html: null }],
     });
 
     await user.click(screen.getByRole("button", { name: "Hide chapter list" }));

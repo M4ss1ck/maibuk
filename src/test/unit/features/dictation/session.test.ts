@@ -725,9 +725,7 @@ describe("Dictation Session", () => {
     host.emit({ type: "final", text: "ponlo en negrita", latencyMs: 5 });
     expect(voice).toHaveBeenCalledWith({ id: "editor.bold", polarity: "on" });
     expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_command" }));
-    expect(notices).not.toContainEqual(
-      expect.objectContaining({ kind: "voice_that_refused" })
-    );
+    expect(notices).not.toContainEqual(expect.objectContaining({ kind: "voice_that_refused" }));
   });
 });
 
@@ -747,7 +745,11 @@ describe("Dictation Session Command Runner voice commands (#316)", () => {
     const session = createDictationSession({
       host,
       modelFor: (l) => models[l] ?? null,
-      route: createRouter(() => ({ kind: "voice_command", id: "bookList.newBook", polarity: null })),
+      route: createRouter(() => ({
+        kind: "voice_command",
+        id: "bookList.newBook",
+        polarity: null,
+      })),
       voiceCommandsAllowed,
       runCommand,
       isEditorCommand,
@@ -944,7 +946,8 @@ describe("Dictation Session Command Runner voice commands (#316)", () => {
   });
 });
 
-describe("Dictation Session all-caps lock (#271)", () => {  it("notifies when a line turns the lock on", async () => {
+describe("Dictation Session all-caps lock (#271)", () => {
+  it("notifies when a line turns the lock on", async () => {
     const session = createDictationSession({
       host,
       modelFor: (l) => models[l] ?? null,
@@ -1003,9 +1006,7 @@ describe("Dictation Session navigation hand-off (#320)", () => {
 
   // "go notes" is the navigating Voice Command; anything else is plain prose.
   const routeForHandoff = (text: string): RouteResult | null =>
-    text === "go notes"
-      ? { kind: "voice_command", id: "global.gotoNotes", polarity: null }
-      : null;
+    text === "go notes" ? { kind: "voice_command", id: "global.gotoNotes", polarity: null } : null;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -1087,28 +1088,28 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     await vi.waitFor(() => expect(session.getSnapshot().status).toBe("idle"));
   });
 
-  it.each(["unavailable", "refused-dialog-close"] as const)(
-    "keeps its target with no window when a navigating run ends %s",
-    async (outcome) => {
-      const session = handoffSession(routeForHandoff);
-      const target = fakeTarget("a");
-      session.register(target);
-      session.focus("a");
-      await session.start();
-      runCommand.mockResolvedValueOnce(outcome);
-      host.emit({ type: "final", text: "go notes", latencyMs: 5 });
-      await flushRuns();
+  it.each([
+    "unavailable",
+    "refused-dialog-close",
+  ] as const)("keeps its target with no window when a navigating run ends %s", async (outcome) => {
+    const session = handoffSession(routeForHandoff);
+    const target = fakeTarget("a");
+    session.register(target);
+    session.focus("a");
+    await session.start();
+    runCommand.mockResolvedValueOnce(outcome);
+    host.emit({ type: "final", text: "go notes", latencyMs: 5 });
+    await flushRuns();
 
-      // No window: the next line routes live into the target that never left.
-      host.emit({ type: "final", text: "still here", latencyMs: 5 });
-      expect(target.commits).toEqual(["still here"]);
-      expect(session.getSnapshot().status).toBe("listening");
-      vi.advanceTimersByTime(HANDOFF_LIMIT_MS + 1000);
-      await flushRuns();
-      expect(session.getSnapshot().status).toBe("listening");
-      expect(copied).toEqual([]);
-    }
-  );
+    // No window: the next line routes live into the target that never left.
+    host.emit({ type: "final", text: "still here", latencyMs: 5 });
+    expect(target.commits).toEqual(["still here"]);
+    expect(session.getSnapshot().status).toBe("listening");
+    vi.advanceTimersByTime(HANDOFF_LIMIT_MS + 1000);
+    await flushRuns();
+    expect(session.getSnapshot().status).toBe("listening");
+    expect(copied).toEqual([]);
+  });
 
   it("keeps listening when a dialog hides the target and refuses a navigating run", async () => {
     const session = handoffSession(routeForHandoff);
@@ -1137,11 +1138,10 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     const session = createDictationSession({
       host,
       modelFor: (l) => models[l] ?? null,
-      route: createRouter(
-        (text): RouteResult | null =>
-          text === "toggle theme"
-            ? { kind: "voice_command", id: "global.toggleTheme", polarity: null }
-            : null
+      route: createRouter((text): RouteResult | null =>
+        text === "toggle theme"
+          ? { kind: "voice_command", id: "global.toggleTheme", polarity: null }
+          : null
       ),
       runCommand: vi.fn(async () => "ran" as const),
       isEditorCommand: () => false,
@@ -1170,7 +1170,11 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     const session = handoffSession(routeText);
     const oldScratch = vi.fn(() => "removed" as const);
     const oldReset = vi.fn();
-    const unregisterOld = session.register({ ...fakeTarget("old"), scratch: oldScratch, resetScratch: oldReset });
+    const unregisterOld = session.register({
+      ...fakeTarget("old"),
+      scratch: oldScratch,
+      resetScratch: oldReset,
+    });
     session.focus("old");
     await session.start();
     host.emit({ type: "final", text: "go notes", latencyMs: 5 });
@@ -1234,7 +1238,12 @@ describe("Dictation Session Click by Name", () => {
   function clickSession(
     routeText: (text: string) => RouteResult | null,
     click: {
-      pressByName: (name: string) => { kind: "pressed"; name: string } | { kind: "choices"; count: number } | { kind: "not_found" };
+      pressByName: (
+        name: string
+      ) =>
+        | { kind: "pressed"; name: string }
+        | { kind: "choices"; count: number }
+        | { kind: "not_found" };
       pressChoice: (n: number) => { kind: "pressed"; name: string } | { kind: "no_choice" };
       clearChoices: () => void;
       hasChoices: () => boolean;
@@ -1268,7 +1277,7 @@ describe("Dictation Session Click by Name", () => {
         pending = false;
         return n === 2
           ? { kind: "pressed" as const, name: "Duplicate" }
-          : ({ kind: "no_choice" as const });
+          : { kind: "no_choice" as const };
       }),
       clearChoices: vi.fn(() => {
         pending = false;
@@ -1807,9 +1816,7 @@ describe("Dictation Session recordPhrase() (Phrase Recording, #270)", () => {
     await startListening(session, fakeTarget("chapter", "en"));
     expect(host.loads).toEqual(["m-en"]);
     let releaseStop!: () => void;
-    host.stop.mockImplementationOnce(
-      () => new Promise<void>((resolve) => (releaseStop = resolve))
-    );
+    host.stop.mockImplementationOnce(() => new Promise<void>((resolve) => (releaseStop = resolve)));
     const first = session.recordPhrase("es");
     await vi.waitFor(() => expect(host.stop).toHaveBeenCalledTimes(1));
     await expect(session.recordPhrase("en")).resolves.toEqual({ kind: "busy" });
@@ -1835,9 +1842,7 @@ describe("Dictation Session recordPhrase() (Phrase Recording, #270)", () => {
     notices.length = 0;
     const startsBefore = host.starts;
     let releaseStop!: () => void;
-    host.stop.mockImplementationOnce(
-      () => new Promise<void>((resolve) => (releaseStop = resolve))
-    );
+    host.stop.mockImplementationOnce(() => new Promise<void>((resolve) => (releaseStop = resolve)));
     const recording = session.recordPhrase("es");
     await vi.waitFor(() => expect(host.stop).toHaveBeenCalledTimes(1));
     const stopping = session.stop();
@@ -1851,9 +1856,7 @@ describe("Dictation Session recordPhrase() (Phrase Recording, #270)", () => {
     if (host.starts !== startsBefore) {
       const startOrder = host.start.mock.invocationCallOrder;
       const stopOrder = host.stop.mock.invocationCallOrder;
-      expect(stopOrder[stopOrder.length - 1]).toBeGreaterThan(
-        startOrder[startOrder.length - 1]
-      );
+      expect(stopOrder[stopOrder.length - 1]).toBeGreaterThan(startOrder[startOrder.length - 1]);
     } else {
       expect(host.starts).toBe(startsBefore);
     }
@@ -1864,9 +1867,7 @@ describe("Dictation Session recordPhrase() (Phrase Recording, #270)", () => {
     await startListening(session, fakeTarget("chapter", "en"));
     notices.length = 0;
     let releaseStop!: () => void;
-    host.stop.mockImplementationOnce(
-      () => new Promise<void>((resolve) => (releaseStop = resolve))
-    );
+    host.stop.mockImplementationOnce(() => new Promise<void>((resolve) => (releaseStop = resolve)));
     const recording = session.recordPhrase("es");
     await vi.waitFor(() => expect(host.stop).toHaveBeenCalledTimes(1));
     const cancelling = session.cancelRecording();
@@ -1880,9 +1881,7 @@ describe("Dictation Session recordPhrase() (Phrase Recording, #270)", () => {
         recording: false,
       })
     );
-    expect(notices.filter((n) => n.kind === "started" || n.kind === "stopped")).toEqual(
-      []
-    );
+    expect(notices.filter((n) => n.kind === "started" || n.kind === "stopped")).toEqual([]);
   });
 
   it("p. recordPhrase uses its own language despite the Session override", async () => {

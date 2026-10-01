@@ -133,7 +133,10 @@ describe("normalizeBookSnapshotJson", () => {
     ).not.toBe(base);
     expect(
       normalizeBookSnapshotJson(
-        JSON.stringify({ book, chapters: [{ ...chapters[0], content: "<p>Edit</p>", updatedAt: 6 }] })
+        JSON.stringify({
+          book,
+          chapters: [{ ...chapters[0], content: "<p>Edit</p>", updatedAt: 6 }],
+        })
       )
     ).not.toBe(base);
   });

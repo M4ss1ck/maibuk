@@ -52,7 +52,8 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   const hasFloatingGroups = deriveFloatingGroupIds(toolbarConfig).length > 0;
 
-  const isVisible = editorState.hasSelection && position !== null && !isAnyModalOpen && hasFloatingGroups;
+  const isVisible =
+    editorState.hasSelection && position !== null && !isAnyModalOpen && hasFloatingGroups;
 
   /** Whether the bubble itself holds focus, so a command must not move it away. */
   const toolbarHasFocus = useCallback(

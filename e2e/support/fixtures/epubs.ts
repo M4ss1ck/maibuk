@@ -36,7 +36,9 @@ function container(): string {
 /** EPUB 3 with a nav, two Chapters, and an audio file the editor cannot hold (a lossy warning). */
 function harborLog(): Uint8Array {
   const items = HARBOR_LOG.chapters
-    .map((_, i) => `<item id="c${i + 1}" href="c${i + 1}.xhtml" media-type="application/xhtml+xml"/>`)
+    .map(
+      (_, i) => `<item id="c${i + 1}" href="c${i + 1}.xhtml" media-type="application/xhtml+xml"/>`
+    )
     .join("\n    ");
   const spine = HARBOR_LOG.chapters.map((_, i) => `<itemref idref="c${i + 1}"/>`).join("");
   const navLinks = HARBOR_LOG.chapters

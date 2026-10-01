@@ -126,7 +126,8 @@ async function build(): Promise<DictationRuntime> {
       interpreterState = output.state;
       if (output.result.kind === "scratch") return { kind: "scratch" };
       if (output.result.kind === "click") return { kind: "click", name: output.result.name };
-      if (output.result.kind === "click_number") return { kind: "click_number", n: output.result.n };
+      if (output.result.kind === "click_number")
+        return { kind: "click_number", n: output.result.n };
       return {
         ...output.result,
         spokenPunctuationCount: output.spokenPunctuationCount,

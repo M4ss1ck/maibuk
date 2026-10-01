@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
-import {
-  AtomicStatementError,
-  isTransactionControl,
-  runAtomicSqlJs,
-} from "@/lib/db/atomic";
+import { AtomicStatementError, isTransactionControl, runAtomicSqlJs } from "@/lib/db/atomic";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
 async function createRawDb(): Promise<SqlJsDatabase> {
@@ -87,10 +83,7 @@ describe("runAtomicSqlJs()", () => {
 
     let error: unknown = null;
     try {
-      runAtomicSqlJs(db, [
-        "INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')",
-        "COMMIT",
-      ]);
+      runAtomicSqlJs(db, ["INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')", "COMMIT"]);
     } catch (e) {
       error = e;
     }

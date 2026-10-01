@@ -1,12 +1,6 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Button as AriaButton,
-  Menu,
-  MenuItem,
-  MenuTrigger,
-  Popover,
-} from "react-aria-components";
+import { Button as AriaButton, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import {
   AlignCenterHorizontal,
   AlignCenterVertical,
@@ -183,7 +177,11 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
     { id: "coverDesigner.addShapeRect", onTrigger: () => addShape("rect") },
     { id: "coverDesigner.addShapeEllipse", onTrigger: () => addShape("ellipse") },
     { id: "coverDesigner.addShapeLine", onTrigger: () => addShape("line") },
-    { id: "coverDesigner.alignLeft", enabled: !!selectedId, onTrigger: () => alignSelected("left") },
+    {
+      id: "coverDesigner.alignLeft",
+      enabled: !!selectedId,
+      onTrigger: () => alignSelected("left"),
+    },
     {
       id: "coverDesigner.alignHCenter",
       enabled: !!selectedId,
@@ -218,10 +216,7 @@ export function Toolbar({ onExport, bookTitle, bookAuthor }: ToolbarProps) {
         {/* Preset selector */}
         <MenuTrigger>
           <Tooltip content={t("cover.sizePreset")}>
-            <AriaButton
-              data-tutorial="cover-designer.size"
-              className={TRIGGER_CLASS}
-            >
+            <AriaButton data-tutorial="cover-designer.size" className={TRIGGER_CLASS}>
               <DimensionIcon className="w-4 h-4" aria-hidden="true" />
               <span className="hidden sm:inline">{currentPreset.name}</span>
               <ChevronDownIcon className="w-3 h-3" aria-hidden="true" />

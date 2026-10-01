@@ -17,8 +17,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const inputId = id || props.name || generatedId;
     const inputRef = useRef<HTMLInputElement | null>(null);
     const errorId = error && inputId ? `${inputId}-error` : undefined;
-    const describedBy =
-      [props["aria-describedby"], errorId].filter(Boolean).join(" ") || undefined;
+    const describedBy = [props["aria-describedby"], errorId].filter(Boolean).join(" ") || undefined;
     const showNumberControls = type === "number" && !endAdornment;
 
     const setInputRef = (node: HTMLInputElement | null) => {

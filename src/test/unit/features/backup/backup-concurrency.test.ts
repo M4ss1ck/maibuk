@@ -206,15 +206,22 @@ describe("BackupService concurrency — shared write queue", () => {
     expect(mockDb.executeAtomic).not.toHaveBeenCalled();
 
     // The failed restore must not block later backup work.
-    await expect(service.createBackup("daily")).resolves.toMatch(
-      /^maibuk-backup-daily-.*\.sql$/
-    );
+    await expect(service.createBackup("daily")).resolves.toMatch(/^maibuk-backup-daily-.*\.sql$/);
   });
 
   it("completes concurrent delete, prune and create writes without deadlock", async () => {
-    await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
-    await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
-    await mockAdapter.saveBackup("maibuk-backup-manual-2026-03-15T10-00-02.sql", new TextEncoder().encode("sql"));
+    await mockAdapter.saveBackup(
+      "maibuk-backup-daily-2026-03-15T10-00-00.sql",
+      new TextEncoder().encode("sql")
+    );
+    await mockAdapter.saveBackup(
+      "maibuk-backup-daily-2026-03-15T10-00-01.sql",
+      new TextEncoder().encode("sql")
+    );
+    await mockAdapter.saveBackup(
+      "maibuk-backup-manual-2026-03-15T10-00-02.sql",
+      new TextEncoder().encode("sql")
+    );
 
     const deleter = new BackupService(mockAdapter);
     const pruner = new BackupService(mockAdapter);

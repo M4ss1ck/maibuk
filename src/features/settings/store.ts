@@ -74,8 +74,7 @@ const isWebBuild = import.meta.env.VITE_BUILD_TARGET === "web";
 // Check if this is first load (no persisted settings) - evaluated once at module load.
 // The write paths read the app language from here, and the E2E seed builder runs
 // them in Node, where there is no localStorage.
-const isFirstLoad =
-  typeof localStorage === "undefined" || !localStorage.getItem(STORAGE_KEY);
+const isFirstLoad = typeof localStorage === "undefined" || !localStorage.getItem(STORAGE_KEY);
 
 interface SettingsStore extends Settings {
   setAppFontSize: (size: FontSize) => void;

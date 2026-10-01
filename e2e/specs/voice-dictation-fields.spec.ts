@@ -76,9 +76,7 @@ test.describe("@wf:dictation-fields @sc:dictation.toggle @chromium-only", () => 
     // "Press enter key." submits the dialog: it closes and the new Book opens.
     await expect(dialog).toBeHidden({ timeout: 60_000 });
     await expect(page).toHaveURL(/\/book\/[\w-]+$/);
-    await expect(
-      page.getByRole("heading", { name: /silent harbor/i, level: 1 })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: /silent harbor/i, level: 1 })).toBeVisible();
 
     await stopDictation(page);
   });

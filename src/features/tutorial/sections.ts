@@ -50,7 +50,12 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
     route: NOVEL_ROUTE,
     nameKey: "tutorial.sections.book-editor",
     steps: [
-      step("book-editor.chapters", ["Chapter", "Chapter Type", "Chapter Status", "Last Opened Chapter"]),
+      step("book-editor.chapters", [
+        "Chapter",
+        "Chapter Type",
+        "Chapter Status",
+        "Last Opened Chapter",
+      ]),
       step("book-editor.text", ["Heading", "Scene Break", "Footnote"]),
       step("book-editor.outline", ["Outline"]),
       step("book-editor.toolbar", ["Spell Check", "Word Lookup", "Symbol", "Text Case"]),
@@ -187,8 +192,10 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
  * when a new term appears in neither place.
  */
 export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
-  "Default Shortcut": "shown only as a row's keys inside the Shortcut Editor, which the Tutorial does not open",
-  "Fixed Shortcut": "shown only as a lock inside the Shortcut Editor, which the Tutorial does not open",
+  "Default Shortcut":
+    "shown only as a row's keys inside the Shortcut Editor, which the Tutorial does not open",
+  "Fixed Shortcut":
+    "shown only as a lock inside the Shortcut Editor, which the Tutorial does not open",
   "Sealed Command": "shown only inside the Shortcut Editor, which the Tutorial does not open",
   "Shared Command": "only a section label inside the Shortcut Editor",
   "Shortcut Context": "internal: it decides which Shortcuts conflict and has no control of its own",

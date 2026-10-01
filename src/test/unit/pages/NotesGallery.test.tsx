@@ -303,9 +303,8 @@ describe("NotesGallery", () => {
     await user.click(screen.getByRole("button", { name: "notes.advancedFilters" }));
     await user.click(screen.getByRole("button", { name: "notes.dateFrom" }));
 
-    const popover = screen
-      .getByRole("button", { name: "notes.previousMonth" })
-      .parentElement?.parentElement;
+    const popover = screen.getByRole("button", { name: "notes.previousMonth" }).parentElement
+      ?.parentElement;
     expect(popover).not.toBeNull();
     expect(popover).toHaveClass("w-72", "max-w-[calc(100vw-2rem)]");
   });

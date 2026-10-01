@@ -19,9 +19,7 @@ export interface RunnableBinding {
 const sources: Array<() => readonly RunnableBinding[]> = [];
 
 /** Registers a source of bindings; the getter is read at run time. Returns unregister. */
-export function registerCommandSource(
-  getBindings: () => readonly RunnableBinding[]
-): () => void {
+export function registerCommandSource(getBindings: () => readonly RunnableBinding[]): () => void {
   sources.push(getBindings);
   return () => {
     const index = sources.indexOf(getBindings);

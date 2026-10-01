@@ -336,7 +336,11 @@ export function interpret(input: InterpretInput): InterpretResult {
       const rest = words.slice(1);
       const parsed = parseNumberWords(rest, table.language);
       if (parsed && parsed.length === rest.length && parsed.value >= 1) {
-        return { result: { kind: "click_number", n: parsed.value }, state, spokenPunctuationCount: 0 };
+        return {
+          result: { kind: "click_number", n: parsed.value },
+          state,
+          spokenPunctuationCount: 0,
+        };
       }
       if (rest.length === 1 && /^\p{Nd}+$/u.test(rest[0])) {
         const n = Number.parseInt(rest[0], 10);

@@ -28,9 +28,7 @@ let settle: ((result: PhraseRecordingResult) => void) | null;
 
 function renderDialog() {
   const onClose = vi.fn();
-  const view = render(
-    <VoiceCommandsDialog id={COMMAND} initialLanguage="en" onClose={onClose} />
-  );
+  const view = render(<VoiceCommandsDialog id={COMMAND} initialLanguage="en" onClose={onClose} />);
   return { ...view, onClose };
 }
 

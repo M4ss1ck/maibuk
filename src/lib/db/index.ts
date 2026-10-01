@@ -434,7 +434,8 @@ export async function resetDatabase(): Promise<void> {
  * Matches an INSERT (with or without OR REPLACE/OR IGNORE) and captures its
  * table and column list, which every Maibuk export writes.
  */
-const INSERT_RE = /^INSERT\s+(?:OR\s+\w+\s+)?INTO\s+("[^"]+"|\w+)\s*\(([^)]*)\)\s*(VALUES[\s\S]*)$/i;
+const INSERT_RE =
+  /^INSERT\s+(?:OR\s+\w+\s+)?INTO\s+("[^"]+"|\w+)\s*\(([^)]*)\)\s*(VALUES[\s\S]*)$/i;
 const LEGACY_INSERT_RE = /^INSERT\s+(?:OR\s+\w+\s+)?INTO/i;
 
 /**

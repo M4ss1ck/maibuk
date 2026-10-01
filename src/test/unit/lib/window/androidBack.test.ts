@@ -3,15 +3,21 @@ import androidCapability from "../../../../../src-tauri/capabilities/android.jso
 
 type BackHandler = (payload: { canGoBack: boolean }) => void | Promise<void>;
 
-const { eventState, mockExit, mockInvoke, mockOnBackButtonPress, mockRunTopBackDismiss, platformState } =
-  vi.hoisted(() => ({
-    eventState: { handler: null as BackHandler | null },
-    mockExit: vi.fn().mockResolvedValue(undefined),
-    mockInvoke: vi.fn().mockResolvedValue(undefined),
-    mockOnBackButtonPress: vi.fn(),
-    mockRunTopBackDismiss: vi.fn(),
-    platformState: { isAndroid: true },
-  }));
+const {
+  eventState,
+  mockExit,
+  mockInvoke,
+  mockOnBackButtonPress,
+  mockRunTopBackDismiss,
+  platformState,
+} = vi.hoisted(() => ({
+  eventState: { handler: null as BackHandler | null },
+  mockExit: vi.fn().mockResolvedValue(undefined),
+  mockInvoke: vi.fn().mockResolvedValue(undefined),
+  mockOnBackButtonPress: vi.fn(),
+  mockRunTopBackDismiss: vi.fn(),
+  platformState: { isAndroid: true },
+}));
 
 vi.mock("@/lib/platform", () => ({
   get IS_ANDROID() {

@@ -24,7 +24,13 @@ vi.mock("@/lib/platform", async (importOriginal) => ({
   createDatabase: vi.fn(async () => authorDb.current),
   createBackup: vi.fn(async () => ({
     listBackups: async () => [],
-    listBackupsPage: async () => ({ entries: [], totalCount: 0, totalSizeBytes: 0, page: 1, pageSize: 10 }),
+    listBackupsPage: async () => ({
+      entries: [],
+      totalCount: 0,
+      totalSizeBytes: 0,
+      page: 1,
+      pageSize: 10,
+    }),
   })),
   isLaunchOnStartupEnabled: vi.fn(async () => false),
   setLaunchOnStartup: vi.fn(async () => undefined),
@@ -269,7 +275,11 @@ describe("the first-launch offer", () => {
     const user = userEvent.setup();
     renderApp("/");
 
-    const offer = await screen.findByRole("dialog", { name: en("tutorial.offer.title") }, CARD_TIMEOUT);
+    const offer = await screen.findByRole(
+      "dialog",
+      { name: en("tutorial.offer.title") },
+      CARD_TIMEOUT
+    );
     expect(offer).toHaveTextContent("5 minutes");
     await tabTo(user, within(offer).getByRole("button", { name: en("tutorial.offer.start") }));
     await user.keyboard("{Enter}");
@@ -350,7 +360,11 @@ describe("the first-launch offer", () => {
   it("Not now dismisses it for good, says where to find it, and focuses the Books heading", async () => {
     const user = userEvent.setup();
     renderApp("/");
-    const offer = await screen.findByRole("dialog", { name: en("tutorial.offer.title") }, CARD_TIMEOUT);
+    const offer = await screen.findByRole(
+      "dialog",
+      { name: en("tutorial.offer.title") },
+      CARD_TIMEOUT
+    );
     expect(offer).toHaveTextContent(en("tutorial.relaunchHint"));
 
     await user.click(within(offer).getByRole("button", { name: en("tutorial.offer.notNow") }));
@@ -366,12 +380,18 @@ describe("the first-launch offer by keyboard", () => {
   it("Escape is Not now: dismissed for good, with focus on the Books heading", async () => {
     const user = userEvent.setup();
     renderApp("/");
-    const offer = await screen.findByRole("dialog", { name: en("tutorial.offer.title") }, CARD_TIMEOUT);
+    const offer = await screen.findByRole(
+      "dialog",
+      { name: en("tutorial.offer.title") },
+      CARD_TIMEOUT
+    );
     await waitFor(() => expect(offer.contains(document.activeElement)).toBe(true));
 
     await user.keyboard("{Escape}");
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: en("tutorial.offer.title") })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: en("tutorial.offer.title") })).toBeNull()
+    );
     expect(useTutorialStore.getState().progress.dismissedAt).not.toBeNull();
     expect(useTutorialStore.getState().status).toBe("idle");
     const heading = screen.getByRole("heading", { level: 1, name: en("books.title") });
@@ -415,7 +435,9 @@ describe("running the Tutorial again", () => {
     dismissOffer();
     const user = userEvent.setup();
     renderApp("/settings");
-    const list = await screen.findByRole("listbox", { name: en("tutorial.settings.sectionsLabel") });
+    const list = await screen.findByRole("listbox", {
+      name: en("tutorial.settings.sectionsLabel"),
+    });
     const options = within(list).getAllByRole("option");
     expect(options[1]).toHaveTextContent(
       `${en("tutorial.sections.book-editor")} · ${en("tutorial.settings.steps", { count: 11 })}`
@@ -454,7 +476,9 @@ describe("running the Tutorial again", () => {
     dismissOffer();
     const user = userEvent.setup();
     renderApp("/settings");
-    const list = await screen.findByRole("listbox", { name: en("tutorial.settings.sectionsLabel") });
+    const list = await screen.findByRole("listbox", {
+      name: en("tutorial.settings.sectionsLabel"),
+    });
     const options = within(list).getAllByRole("option");
     const dictation = TUTORIAL_SECTIONS.find((section) => section.id === "dictation");
     if (!dictation) throw new Error("no Dictation Tutorial section");
@@ -557,7 +581,10 @@ describe("running the Tutorial again", () => {
     (document.activeElement as HTMLElement).blur();
     await user.keyboard("?");
     const help = await screen.findByRole("dialog", { name: en("shortcuts.title") });
-    await tabTo(user, within(help).getByRole("button", { name: en("tutorial.help.startForScreen") }));
+    await tabTo(
+      user,
+      within(help).getByRole("button", { name: en("tutorial.help.startForScreen") })
+    );
     await user.keyboard("{Enter}");
 
     const dialog = await findCard("ephemeral.editor");
@@ -644,9 +671,9 @@ describe("the app shell's live regions", () => {
   /** A status the accessibility tree reaches (no `hidden`) that says `text`. */
   async function expectStatusHeard(text: string) {
     await waitFor(() =>
-      expect(screen.getAllByRole("status").some((status) => status.textContent?.includes(text))).toBe(
-        true
-      )
+      expect(
+        screen.getAllByRole("status").some((status) => status.textContent?.includes(text))
+      ).toBe(true)
     );
   }
 

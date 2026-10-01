@@ -3,10 +3,7 @@ import type { BackupAdapter, BackupEntry } from "@/lib/platform/types";
 import { parseTriggerFromFilename } from "@/features/backup/utils";
 import { CURRENT_CANVAS_SCHEMA_VERSION } from "@/lib/canvas/defaultDoc";
 import { AtomicStatementError } from "@/lib/db/atomic";
-import {
-  registerPendingEditsFlush,
-  PendingEditsFlushError,
-} from "@/features/sync/pending-edits";
+import { registerPendingEditsFlush, PendingEditsFlushError } from "@/features/sync/pending-edits";
 
 const mockGenerateSqlDump = vi.hoisted(() => vi.fn());
 const mockCreateBackup = vi.hoisted(() => vi.fn());
@@ -210,9 +207,18 @@ describe("BackupService", () => {
 
   describe("deleteByTrigger", () => {
     it("removes all backups matching the given trigger", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup(
+        "maibuk-backup-pre-sync-2026-03-15T10-00-00.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-pre-sync-2026-03-15T10-00-01.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-02.sql",
+        new TextEncoder().encode("sql")
+      );
 
       await service.deleteByTrigger("pre-sync");
 
@@ -222,7 +228,10 @@ describe("BackupService", () => {
     });
 
     it("does nothing when no backups match the trigger", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-00.sql",
+        new TextEncoder().encode("sql")
+      );
 
       await service.deleteByTrigger("pre-sync");
 
@@ -280,9 +289,18 @@ describe("BackupService", () => {
   describe("pruneBackups", () => {
     it("deletes oldest backup when over limit", async () => {
       // Use deterministic filenames via direct adapter calls
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-00.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-01.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-02.sql",
+        new TextEncoder().encode("sql")
+      );
 
       await service.pruneBackups(2);
 
@@ -291,8 +309,14 @@ describe("BackupService", () => {
     });
 
     it("treats close backups as unprotected prune candidates", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-close-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup(
+        "maibuk-backup-close-2026-03-15T10-00-00.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-pre-sync-2026-03-15T10-00-01.sql",
+        new TextEncoder().encode("sql")
+      );
 
       await service.pruneBackups(1);
 
@@ -302,13 +326,34 @@ describe("BackupService", () => {
     });
 
     it("preserves at least 2 pre-sync and 2 pre-restore backups", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-pre-sync-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-pre-restore-2026-03-15T10-00-02.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-pre-restore-2026-03-15T10-00-03.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-04.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-05.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-06.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup(
+        "maibuk-backup-pre-sync-2026-03-15T10-00-00.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-pre-sync-2026-03-15T10-00-01.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-pre-restore-2026-03-15T10-00-02.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-pre-restore-2026-03-15T10-00-03.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-04.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-05.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-06.sql",
+        new TextEncoder().encode("sql")
+      );
 
       // Prune to 4 total — should delete daily backups, keep pre-sync and pre-restore
       await service.pruneBackups(4);
@@ -321,10 +366,22 @@ describe("BackupService", () => {
     });
 
     it("deletes from most-represented trigger type first", async () => {
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-00.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-01.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-daily-2026-03-15T10-00-02.sql", new TextEncoder().encode("sql"));
-      await mockAdapter.saveBackup("maibuk-backup-manual-2026-03-15T10-00-03.sql", new TextEncoder().encode("sql"));
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-00.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-01.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-daily-2026-03-15T10-00-02.sql",
+        new TextEncoder().encode("sql")
+      );
+      await mockAdapter.saveBackup(
+        "maibuk-backup-manual-2026-03-15T10-00-03.sql",
+        new TextEncoder().encode("sql")
+      );
 
       await service.pruneBackups(2);
 

@@ -1,13 +1,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { GridListItem } from "react-aria-components/GridList";
-import {
-  Button,
-  Dialog,
-  ListBox,
-  ListBoxItem,
-  Popover,
-} from "react-aria-components";
+import { Button, Dialog, ListBox, ListBoxItem, Popover } from "react-aria-components";
 import { Archive, Check, ChevronDown, CircleCheck, Loader, PencilLine } from "lucide-react";
 import { KeyboardShortcut } from "@/components/ui";
 import { MaibukLogo } from "@/components/icons";

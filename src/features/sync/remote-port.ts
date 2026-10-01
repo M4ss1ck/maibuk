@@ -39,11 +39,7 @@ export interface RemoteBlob {
 export interface EntityRemote {
   list(kind: EntityRemoteKind): Promise<RemoteItemMeta[]>;
   listDeleted(kind: EntityRemoteKind): Promise<RemoteDeletionMeta[]>;
-  pullBlob(
-    kind: EntityRemoteKind,
-    entityId: string,
-    remoteId?: string
-  ): Promise<RemoteBlob | null>;
+  pullBlob(kind: EntityRemoteKind, entityId: string, remoteId?: string): Promise<RemoteBlob | null>;
   pushBlob(
     kind: EntityRemoteKind,
     entityId: string,

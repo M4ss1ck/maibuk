@@ -81,16 +81,11 @@ async function defaultNoteLanguage(db: DatabaseAdapter, bookId: string | null): 
 
 async function readNote(id: string): Promise<Note | null> {
   const db = await getDatabase();
-  const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM notes WHERE id = ?", [
-    id,
-  ]);
+  const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM notes WHERE id = ?", [id]);
   return rows.length > 0 ? toNote(rows[0]) : null;
 }
 
-export async function createNoteRow(
-  input: CreateNoteInput,
-  origin: ChangeOrigin
-): Promise<Note> {
+export async function createNoteRow(input: CreateNoteInput, origin: ChangeOrigin): Promise<Note> {
   assertWritableId(input.bookId);
   const db = await getDatabase();
   const id = generateId();
@@ -345,8 +340,7 @@ export async function applyNoteSnapshotData(
   const updatedAt = origin === "local" ? now : note.updatedAt;
   let contentUpdatedAt = origin === "local" ? now : (note.contentUpdatedAt ?? note.updatedAt);
   if (existing !== null && origin !== "local") {
-    const changed =
-      note.title !== existing.title || (note.content ?? "") !== existing.content;
+    const changed = note.title !== existing.title || (note.content ?? "") !== existing.content;
     kind = changed ? "content" : "metadata";
     if (!changed) contentUpdatedAt = existing.contentUpdatedAt;
   }

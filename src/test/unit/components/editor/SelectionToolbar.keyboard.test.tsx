@@ -38,11 +38,13 @@ vi.mock("@/components/editor/FootnoteList", () => ({ FootnoteList: () => null })
 vi.mock("react-i18next", async (importOriginal) => {
   const { default: en } = await import("@/locales/en.json");
   const lookup = (key: string): unknown =>
-    key.split(".").reduce<unknown>(
-      (node, part) =>
-        node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined,
-      en
-    );
+    key
+      .split(".")
+      .reduce<unknown>(
+        (node, part) =>
+          node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined,
+        en
+      );
   return {
     ...(await importOriginal<typeof import("react-i18next")>()),
     useTranslation: () => ({ t: (key: string) => lookup(key) ?? key }),
@@ -443,9 +445,7 @@ describe("SelectionToolbar keeps the selection visible", () => {
 
     await user.keyboard("{Escape}");
 
-    await waitFor(() =>
-      expect(editor.view.dom.querySelector(".selection-kept")).toBeNull()
-    );
+    await waitFor(() => expect(editor.view.dom.querySelector(".selection-kept")).toBeNull());
     expect(editor.view.dom.contains(document.activeElement)).toBe(true);
   });
 
@@ -478,9 +478,7 @@ describe("SelectionToolbar keeps the selection visible", () => {
       screen.getByLabelText("Outside field").focus();
     });
 
-    await waitFor(() =>
-      expect(editor.view.dom.querySelector(".selection-kept")).toBeNull()
-    );
+    await waitFor(() => expect(editor.view.dom.querySelector(".selection-kept")).toBeNull());
   });
 
   it("keeps the paint while the highlight color picker is open, and Escape applies nothing", async () => {

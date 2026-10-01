@@ -1,9 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  cacheModelFiles,
-  readModelFiles,
-} from "@/lib/platform/web/dictation/cache-model-files";
+import { cacheModelFiles, readModelFiles } from "@/lib/platform/web/dictation/cache-model-files";
 import { crc32cBase64 } from "@/features/dictation/crc32c";
 import type { ModelSpec } from "@/features/dictation/types";
 
@@ -17,9 +14,7 @@ const fakeCaches = {
       match: async (key: string) => bucket.get(key)?.clone(),
       delete: async (key: string) => bucket.delete(key),
       keys: async () =>
-        [...bucket.keys()].map(
-          (url) => new Request(new URL(url, "https://app.test")),
-        ),
+        [...bucket.keys()].map((url) => new Request(new URL(url, "https://app.test"))),
     };
   },
 };
@@ -57,7 +52,7 @@ function serve(map: Record<string, Uint8Array | number>) {
       const body = map[url];
       if (typeof body === "number") return new Response(null, { status: body });
       return new Response(body);
-    }),
+    })
   );
 }
 
@@ -76,7 +71,7 @@ describe("cacheModelFiles", () => {
     await cacheModelFiles.install(
       spec,
       (done) => progress.push(done),
-      new AbortController().signal,
+      new AbortController().signal
     );
     expect(await cacheModelFiles.isComplete(spec)).toBe(true);
     expect(progress.at(-1)).toBe(12);
@@ -90,7 +85,7 @@ describe("cacheModelFiles", () => {
       "https://cdn.test/b.bin": bytesB,
     });
     await expect(
-      cacheModelFiles.install(spec, () => {}, new AbortController().signal),
+      cacheModelFiles.install(spec, () => {}, new AbortController().signal)
     ).rejects.toMatchObject({ code: "download_failed" });
     expect(await cacheModelFiles.isComplete(spec)).toBe(false);
     expect([...(store.get("maibuk-dictation-v1")?.keys() ?? [])]).toEqual([]);
@@ -99,7 +94,7 @@ describe("cacheModelFiles", () => {
   it("maps a 404 to model_gone", async () => {
     serve({ "https://cdn.test/a.ort": 404 });
     await expect(
-      cacheModelFiles.install(spec, () => {}, new AbortController().signal),
+      cacheModelFiles.install(spec, () => {}, new AbortController().signal)
     ).rejects.toMatchObject({ code: "model_gone" });
   });
 
@@ -112,7 +107,7 @@ describe("cacheModelFiles", () => {
     const install = cacheModelFiles.install(
       spec,
       (done) => done >= 5 && controller.abort(),
-      controller.signal,
+      controller.signal
     );
     await expect(install).rejects.toBeTruthy();
     expect(await cacheModelFiles.isComplete(spec)).toBe(false);
@@ -129,9 +124,7 @@ describe("cacheModelFiles", () => {
       "https://cdn.test/b.bin": bytesB,
     });
     await cacheModelFiles.install(spec, () => {}, new AbortController().signal);
-    await (
-      await caches.open("maibuk-dictation-v1")
-    ).delete("/dictation/m1/.complete");
+    await (await caches.open("maibuk-dictation-v1")).delete("/dictation/m1/.complete");
     expect(await cacheModelFiles.isComplete(spec)).toBe(false);
     await expect(readModelFiles(spec)).rejects.toMatchObject({
       code: "model_corrupt",
@@ -144,9 +137,10 @@ describe("cacheModelFiles", () => {
       "https://cdn.test/b.bin": bytesB,
     });
     await cacheModelFiles.install(spec, () => {}, new AbortController().signal);
-    await (
-      await caches.open("maibuk-dictation-v1")
-    ).put("/dictation/m1/b.bin", new Response("wor"));
+    await (await caches.open("maibuk-dictation-v1")).put(
+      "/dictation/m1/b.bin",
+      new Response("wor")
+    );
     await expect(readModelFiles(spec)).rejects.toMatchObject({
       code: "model_corrupt",
     });

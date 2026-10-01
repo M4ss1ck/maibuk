@@ -70,7 +70,10 @@ export function VersionCompare({ current, target }: VersionCompareProps) {
     diff.chapters.find((chapter) => chapter.chapterId === selectedChapterId) ?? diff.chapters[0];
 
   return (
-    <div className="flex flex-col gap-3 h-full min-h-0 @container" data-testid="version-compare-root">
+    <div
+      className="flex flex-col gap-3 h-full min-h-0 @container"
+      data-testid="version-compare-root"
+    >
       <div className="flex items-center justify-between gap-3 shrink-0">
         <h3 className="min-w-0 truncate text-sm font-semibold text-foreground">
           {target.book.title}

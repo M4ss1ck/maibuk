@@ -16,10 +16,7 @@ describe("noticeMessage()", () => {
     });
   });
   it("turns an error into an error toast and an announcement", () => {
-    const message = noticeMessage(
-      { kind: "error", code: "model_missing", language: "es" },
-      t,
-    );
+    const message = noticeMessage({ kind: "error", code: "model_missing", language: "es" }, t);
     expect(message.toast).toEqual({
       variant: "error",
       text: "No Spanish dictation model is downloaded. Download one in Settings → Dictation.",
@@ -27,19 +24,17 @@ describe("noticeMessage()", () => {
     expect(message.announce).toBe(message.toast?.text);
   });
   it("treats no_target as a hint, not an error", () => {
-    expect(
-      noticeMessage({ kind: "error", code: "no_target" }, t).toast?.variant,
-    ).toBe("info");
+    expect(noticeMessage({ kind: "error", code: "no_target" }, t).toast?.variant).toBe("info");
   });
   it("treats cancelled as a hint, not an error", () => {
-    expect(
-      noticeMessage({ kind: "error", code: "cancelled" }, t).toast?.variant,
-    ).toBe("info");
+    expect(noticeMessage({ kind: "error", code: "cancelled" }, t).toast?.variant).toBe("info");
   });
   it("announces a refused scratch without a toast", () => {
     const message = noticeMessage({ kind: "scratch_refused" }, t);
     expect(message.toast).toBeUndefined();
-    expect(message.announce).toBe("Nothing removed. Scratch that only removes text that hasn't been edited.");
+    expect(message.announce).toBe(
+      "Nothing removed. Scratch that only removes text that hasn't been edited."
+    );
   });
   it("announces a refused scratch in Spanish", () => {
     const es = i18n.getFixedT("es");
@@ -54,9 +49,7 @@ describe("noticeMessage()", () => {
   });
   it("announces an empty scratch in Spanish", () => {
     const es = i18n.getFixedT("es");
-    expect(noticeMessage({ kind: "scratch_empty" }, es).announce).toBe(
-      "No hay nada que borrar."
-    );
+    expect(noticeMessage({ kind: "scratch_empty" }, es).announce).toBe("No hay nada que borrar.");
   });
   it("announces a refused voice that without a toast", () => {
     const message = noticeMessage({ kind: "voice_that_refused" }, t);
@@ -89,8 +82,9 @@ describe("noticeMessage()", () => {
     expect(
       noticeMessage({ kind: "voice_command", id: "editor.bold", polarity: "off" }, t).announce
     ).toBe("Bold off");
-    expect(noticeMessage({ kind: "voice_command", id: "common.undo", polarity: null }, t).announce)
-      .toBe("Voice command: Undo");
+    expect(
+      noticeMessage({ kind: "voice_command", id: "common.undo", polarity: null }, t).announce
+    ).toBe("Voice command: Undo");
   });
   it("announces a Voice Command in Spanish", () => {
     const es = i18n.getFixedT("es");
@@ -100,8 +94,9 @@ describe("noticeMessage()", () => {
     expect(
       noticeMessage({ kind: "voice_command", id: "editor.bold", polarity: "off" }, es).announce
     ).toBe("Se desactivó Negrita");
-    expect(noticeMessage({ kind: "voice_command", id: "dictation.stop", polarity: null }, es).announce)
-      .toBe("Comando de voz: Detener dictado");
+    expect(
+      noticeMessage({ kind: "voice_command", id: "dictation.stop", polarity: null }, es).announce
+    ).toBe("Comando de voz: Detener dictado");
   });
   it("announces an unavailable voice command with the Command's label", () => {
     expect(
@@ -110,9 +105,9 @@ describe("noticeMessage()", () => {
   });
   it("announces an unavailable voice command in Spanish", () => {
     const es = i18n.getFixedT("es");
-    expect(noticeMessage({ kind: "voice_command_unavailable", id: "editor.bold" }, es).announce).toBe(
-      "Negrita no está disponible aquí."
-    );
+    expect(
+      noticeMessage({ kind: "voice_command_unavailable", id: "editor.bold" }, es).announce
+    ).toBe("Negrita no está disponible aquí.");
   });
   it("announces a dialog-refused voice command with the Command's label", () => {
     expect(
@@ -276,8 +271,7 @@ describe("noticeMessage()", () => {
       "cancelled",
     ] as const;
     for (const lng of ["en", "es"]) {
-      for (const code of codes)
-        expect(i18n.exists(`dictation.errors.${code}`, { lng })).toBe(true);
+      for (const code of codes) expect(i18n.exists(`dictation.errors.${code}`, { lng })).toBe(true);
     }
   });
 });

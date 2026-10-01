@@ -10,13 +10,10 @@ import workletUrl from "./capture-worklet.ts?worker&url";
 
 type Pending = { resolve: () => void; reject: (e: DictationError) => void };
 
-export function createWebRecognizerHost(
-  deps: { createWorker?: () => Worker } = {},
-) {
+export function createWebRecognizerHost(deps: { createWorker?: () => Worker } = {}) {
   const createWorker =
     deps.createWorker ??
-    (() =>
-      new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }));
+    (() => new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }));
   let worker: Worker | null = null;
   let nextId = 1;
   const pending = new Map<number, Pending>();
@@ -54,7 +51,7 @@ export function createWebRecognizerHost(
   const rpc = (
     type: string,
     payload: Record<string, unknown> = {},
-    transfer: Transferable[] = [],
+    transfer: Transferable[] = []
   ) =>
     new Promise<void>((resolve, reject) => {
       const id = nextId++;
@@ -75,16 +72,10 @@ export function createWebRecognizerHost(
     attach(l: (e: DictationEvent) => void): void;
   } = {
     async isSupported(): Promise<SupportReport> {
-      if (
-        !globalThis.crossOriginIsolated ||
-        typeof SharedArrayBuffer === "undefined"
-      ) {
+      if (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer === "undefined") {
         return { supported: false, reason: "not_isolated" };
       }
-      if (
-        typeof AudioWorkletNode === "undefined" ||
-        !navigator.mediaDevices?.getUserMedia
-      ) {
+      if (typeof AudioWorkletNode === "undefined" || !navigator.mediaDevices?.getUserMedia) {
         return { supported: false, reason: "no_audio" };
       }
       return { supported: true };
@@ -103,10 +94,8 @@ export function createWebRecognizerHost(
       } catch (error) {
         const name = (error as DOMException).name;
         throw new DictationError(
-          name === "NotAllowedError" || name === "SecurityError"
-            ? "mic_denied"
-            : "mic_unavailable",
-          name,
+          name === "NotAllowedError" || name === "SecurityError" ? "mic_denied" : "mic_unavailable",
+          name
         );
       }
       listener = onEvent;
@@ -119,11 +108,9 @@ export function createWebRecognizerHost(
         });
         const channel = new MessageChannel();
         node.port.postMessage({ port: channel.port1 }, [channel.port1]);
-        await rpc(
-          "start",
-          { port: channel.port2, sampleRate: context.sampleRate },
-          [channel.port2],
-        );
+        await rpc("start", { port: channel.port2, sampleRate: context.sampleRate }, [
+          channel.port2,
+        ]);
         const source = context.createMediaStreamSource(media);
         const mute = context.createGain();
         mute.gain.value = 0;

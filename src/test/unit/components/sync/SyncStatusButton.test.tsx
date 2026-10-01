@@ -101,9 +101,7 @@ describe("SyncStatusButton", () => {
 
     await user.keyboard("{Escape}");
 
-    await waitFor(() =>
-      expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
@@ -119,9 +117,7 @@ describe("SyncStatusButton", () => {
     expect(screen.getByText("writer@example.com")).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument());
   });
 
   it("keeps the panel open while choosing a nested sync dropdown option with the keyboard", async () => {
@@ -181,9 +177,7 @@ describe("SyncStatusButton", () => {
     await user.keyboard("{Enter}");
 
     expect(syncState.logout).toHaveBeenCalled();
-    await waitFor(() =>
-      expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 

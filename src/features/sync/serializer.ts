@@ -12,7 +12,10 @@ import {
   fetchStoredCanvas,
   removeCanvasRow,
 } from "@/features/canvas/write";
-import { normalizeCanvasSnapshotJson, normalizeNoteSnapshotJson } from "@/features/sync/sync-codec-handlers";
+import {
+  normalizeCanvasSnapshotJson,
+  normalizeNoteSnapshotJson,
+} from "@/features/sync/sync-codec-handlers";
 import { stringifySnapshotAsync } from "@/features/sync/sync-codec";
 import type { ChangeOrigin } from "@/features/sync/change-feed";
 import type { BookSnapshot, CanvasSnapshot, NoteSnapshot } from "@/features/sync/types";

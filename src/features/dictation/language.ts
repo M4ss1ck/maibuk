@@ -50,8 +50,7 @@ export async function cycleDictationLanguage(t: TFunction): Promise<void> {
   if (!current.enabled || current.languageOverride !== next) return;
   useDictationStore.setState({
     announcement: t("dictation.announceLanguage", {
-      language:
-        next === null ? t("dictation.autoName") : t(`dictation.languages.${next}`),
+      language: next === null ? t("dictation.autoName") : t(`dictation.languages.${next}`),
     }),
   });
 }

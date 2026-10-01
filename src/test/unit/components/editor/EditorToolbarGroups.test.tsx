@@ -170,9 +170,7 @@ describe("EditorToolbarGroups", () => {
     const trigger = screen.getByLabelText("editor.spellCheckLanguage");
     await user.click(trigger);
 
-    const menu = document.querySelector(
-      ".spellcheck-language-menu-portal"
-    ) as HTMLElement | null;
+    const menu = document.querySelector(".spellcheck-language-menu-portal") as HTMLElement | null;
     expect(menu).not.toBeNull();
     expect(parseFloat(menu!.style.left)).toBeGreaterThanOrEqual(0);
     expect(parseFloat(menu!.style.top)).toBeGreaterThanOrEqual(0);

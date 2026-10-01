@@ -194,7 +194,8 @@ export const useDictationStore = create<DictationStoreState>()(
           const current = entries[index];
           const trimmedHeard = heard.trim();
           const trimmedWritten = written.trim();
-          if (!current || trimmedWritten === "" || normalizePhrase(trimmedHeard) === "") return state;
+          if (!current || trimmedWritten === "" || normalizePhrase(trimmedHeard) === "")
+            return state;
           if (findVocabularyEntryIndex(entries, trimmedHeard, index) !== -1) return state;
           const next = [...entries];
           next[index] = { heard: trimmedHeard, written: trimmedWritten };

@@ -116,9 +116,9 @@ describe("note write path", () => {
   it("emits nothing when the write fails before persistence", async () => {
     mockGetDatabase.mockRejectedValueOnce(new Error("disk full"));
 
-    await expect(
-      useNoteStore.getState().createNote({ title: "Lost" })
-    ).rejects.toThrow("disk full");
+    await expect(useNoteStore.getState().createNote({ title: "Lost" })).rejects.toThrow(
+      "disk full"
+    );
     expect(changes).toEqual([]);
   });
 

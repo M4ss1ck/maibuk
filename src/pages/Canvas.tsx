@@ -60,7 +60,10 @@ function sessionDocKey(doc: CanvasDoc): string {
 }
 
 function sessionDocFromKey(key: string): CanvasDoc {
-  return { ...(JSON.parse(key) as Omit<CanvasDoc, "viewport">), viewport: DEFAULT_SESSION_VIEWPORT };
+  return {
+    ...(JSON.parse(key) as Omit<CanvasDoc, "viewport">),
+    viewport: DEFAULT_SESSION_VIEWPORT,
+  };
 }
 
 function hasMeaningfulViewport(doc: CanvasDoc): boolean {
@@ -215,10 +218,7 @@ function CanvasEditor() {
     [canvasId]
   );
 
-  const {
-    sessionRef,
-    status: saveStatus,
-  } = useEditSession({
+  const { sessionRef, status: saveStatus } = useEditSession({
     sessionKey,
     content: sessionInitialRef.current.doc,
     save: saveSessionDoc,

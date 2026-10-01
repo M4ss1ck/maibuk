@@ -88,7 +88,10 @@ export async function failLibraryReads(page: Page): Promise<void> {
     const state = window as unknown as { __e2eFailLibraryReads?: boolean };
     state.__e2eFailLibraryReads = true;
     const original = IDBObjectStore.prototype.get;
-    IDBObjectStore.prototype.get = function (this: IDBObjectStore, ...args: Parameters<typeof original>) {
+    IDBObjectStore.prototype.get = function (
+      this: IDBObjectStore,
+      ...args: Parameters<typeof original>
+    ) {
       if (state.__e2eFailLibraryReads && this.name === "database") {
         throw new DOMException("The e2e fault blocked this read.", "UnknownError");
       }

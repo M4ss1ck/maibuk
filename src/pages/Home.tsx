@@ -278,140 +278,142 @@ export function Home() {
   return (
     <div className="h-full min-h-0 overflow-x-hidden overflow-y-auto">
       <div className="@container min-h-full p-4 sm:p-8">
-      <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-4 mb-6 @xl:mb-8">
-        <h1 data-route-heading className="text-xl @xl:text-2xl font-semibold">
-          {t("books.title")}
-        </h1>
-        <Toolbar
-          ref={actionsRef}
-          aria-label={t("books.actions")}
-          className="flex flex-wrap items-center gap-2"
-        >
-          {books.length > 0 && (
-            <BookStatusFilter
-              value={statusFilter}
-              counts={statusCounts}
-              onChange={setStatusFilter}
-            />
-          )}
-          {IS_WEB && (
+        <div className="flex flex-col @xl:flex-row @xl:items-center justify-between gap-4 mb-6 @xl:mb-8">
+          <h1 data-route-heading className="text-xl @xl:text-2xl font-semibold">
+            {t("books.title")}
+          </h1>
+          <Toolbar
+            ref={actionsRef}
+            aria-label={t("books.actions")}
+            className="flex flex-wrap items-center gap-2"
+          >
+            {books.length > 0 && (
+              <BookStatusFilter
+                value={statusFilter}
+                counts={statusCounts}
+                onChange={setStatusFilter}
+              />
+            )}
+            {IS_WEB && (
+              <Button
+                variant="secondary"
+                onClick={() => window.open(DOWNLOAD_PAGE, "_blank")}
+                className="text-sm"
+                aria-label={t("nav.downloadApp")}
+              >
+                <Download className="w-5 h-5" />
+                <span className="hidden @xl:inline">{t("nav.downloadApp")}</span>
+              </Button>
+            )}
             <Button
               variant="secondary"
-              onClick={() => window.open(DOWNLOAD_PAGE, "_blank")}
-              className="text-sm"
-              aria-label={t("nav.downloadApp")}
+              onClick={handleImportEpub}
+              // aria-disabled, not disabled: a disabled button drops focus while
+              // the EPUB scans, and the report would then close onto <body>.
+              className={`text-sm ${isScanningEpub ? "opacity-50 cursor-progress" : ""}`}
+              aria-disabled={isScanningEpub || undefined}
+              data-tutorial="books.import"
             >
-              <Download className="w-5 h-5" />
-              <span className="hidden @xl:inline">{t("nav.downloadApp")}</span>
+              <FileUp className="w-5 h-5" />
+              <span className="hidden @xl:inline">
+                {isScanningEpub ? t("import.scanning") : t("books.importEpub")}
+              </span>
+              <span className="@xl:hidden">{t("books.importShort")}</span>
             </Button>
-          )}
-          <Button
-            variant="secondary"
-            onClick={handleImportEpub}
-            // aria-disabled, not disabled: a disabled button drops focus while
-            // the EPUB scans, and the report would then close onto <body>.
-            className={`text-sm ${isScanningEpub ? "opacity-50 cursor-progress" : ""}`}
-            aria-disabled={isScanningEpub || undefined}
-            data-tutorial="books.import"
-          >
-            <FileUp className="w-5 h-5" />
-            <span className="hidden @xl:inline">
-              {isScanningEpub ? t("import.scanning") : t("books.importEpub")}
-            </span>
-            <span className="@xl:hidden">{t("books.importShort")}</span>
-          </Button>
-          <Button
-            onClick={() => setIsNewBookOpen(true)}
-            className="text-sm"
-            data-tutorial="books.new-book"
-          >
-            <AddIcon className="w-5 h-5" />
-            <span className="hidden @xl:inline">{t("books.newBook")}</span>
-            <span className="@xl:hidden">{t("common.new")}</span>
-            {newBookHint && (
-              <KeyboardShortcut
-                shortcut={newBookHint.formatted}
-                className="hidden @3xl:inline-flex"
-              />
-            )}
-          </Button>
-        </Toolbar>
-      </div>
+            <Button
+              onClick={() => setIsNewBookOpen(true)}
+              className="text-sm"
+              data-tutorial="books.new-book"
+            >
+              <AddIcon className="w-5 h-5" />
+              <span className="hidden @xl:inline">{t("books.newBook")}</span>
+              <span className="@xl:hidden">{t("common.new")}</span>
+              {newBookHint && (
+                <KeyboardShortcut
+                  shortcut={newBookHint.formatted}
+                  className="hidden @3xl:inline-flex"
+                />
+              )}
+            </Button>
+          </Toolbar>
+        </div>
 
-      {books.length === 0 && error ? (
-        <LibraryLoadError error={error} onRetry={() => void loadBooks()} />
-      ) : books.length === 0 ? (
-        /* Empty state */
-        <div className="empty-state-enter flex flex-col items-center justify-center py-20 sm:py-28 text-center">
-          <div className="w-20 h-20 mb-8">
-            <MaibukLogo className="w-full h-full text-primary opacity-70" />
+        {books.length === 0 && error ? (
+          <LibraryLoadError error={error} onRetry={() => void loadBooks()} />
+        ) : books.length === 0 ? (
+          /* Empty state */
+          <div className="empty-state-enter flex flex-col items-center justify-center py-20 sm:py-28 text-center">
+            <div className="w-20 h-20 mb-8">
+              <MaibukLogo className="w-full h-full text-primary opacity-70" />
+            </div>
+            <h3 className="text-2xl sm:text-3xl font-semibold mb-3 tracking-tight">
+              {t("books.noBooks")}
+            </h3>
+            <p className="text-muted-foreground mb-8 max-w-sm leading-relaxed">
+              {t("books.noBooksFull")}
+            </p>
+            <Button ref={startWritingRef} size="lg" onClick={() => setIsNewBookOpen(true)}>
+              <AddIcon className="w-5 h-5" />
+              {t("books.noBooksButton")}
+            </Button>
           </div>
-          <h3 className="text-2xl sm:text-3xl font-semibold mb-3 tracking-tight">
-            {t("books.noBooks")}
-          </h3>
-          <p className="text-muted-foreground mb-8 max-w-sm leading-relaxed">
-            {t("books.noBooksFull")}
+        ) : visibleBooks.length === 0 ? (
+          /* Every book is filtered out */
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="mb-5 rounded-full bg-muted p-4 text-muted-foreground">
+              <ListFilter className="h-8 w-8" />
+            </div>
+            <h3 className="text-xl font-semibold tracking-tight">{t("books.noMatches")}</h3>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setStatusFilter([...BOOK_STATUSES])}
+              className="mt-5"
+            >
+              {t("books.showAllStatuses")}
+            </Button>
+          </div>
+        ) : (
+          /* Book grid */
+          <div
+            data-tutorial="books.gallery"
+            onFocusCapture={(event) => {
+              // React focus events bubble through portals: a card's status
+              // popover options also carry data-key. Only this grid's rows count.
+              const row = (event.target as HTMLElement).closest<HTMLElement>(
+                '[role="row"][data-key]'
+              );
+              if (row?.dataset.key && gridRef.current?.contains(row)) {
+                focusedBookIdRef.current = row.dataset.key;
+              }
+            }}
+          >
+            <GridList
+              ref={gridRef}
+              aria-label={t("books.collectionLabel")}
+              items={visibleBooks}
+              layout="grid"
+              selectionMode="none"
+              onAction={(key) => activateBook(String(key))}
+              className="grid grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4 gap-6"
+            >
+              {(book) => (
+                <BookCard
+                  book={book}
+                  index={visibleBooks.findIndex((candidate) => candidate.id === book.id)}
+                  onPress={() => activateBook(book.id)}
+                  onStatusChange={(status) => void handleStatusChange(book, status)}
+                />
+              )}
+            </GridList>
+          </div>
+        )}
+
+        {books.length > 0 && (
+          <p aria-live="polite" className="sr-only">
+            {t("books.filterAnnouncement", { count: visibleBooks.length })}
           </p>
-          <Button ref={startWritingRef} size="lg" onClick={() => setIsNewBookOpen(true)}>
-            <AddIcon className="w-5 h-5" />
-            {t("books.noBooksButton")}
-          </Button>
-        </div>
-      ) : visibleBooks.length === 0 ? (
-        /* Every book is filtered out */
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-5 rounded-full bg-muted p-4 text-muted-foreground">
-            <ListFilter className="h-8 w-8" />
-          </div>
-          <h3 className="text-xl font-semibold tracking-tight">{t("books.noMatches")}</h3>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setStatusFilter([...BOOK_STATUSES])}
-            className="mt-5"
-          >
-            {t("books.showAllStatuses")}
-          </Button>
-        </div>
-      ) : (
-        /* Book grid */
-        <div
-          data-tutorial="books.gallery"
-          onFocusCapture={(event) => {
-            // React focus events bubble through portals: a card's status
-            // popover options also carry data-key. Only this grid's rows count.
-            const row = (event.target as HTMLElement).closest<HTMLElement>('[role="row"][data-key]');
-            if (row?.dataset.key && gridRef.current?.contains(row)) {
-              focusedBookIdRef.current = row.dataset.key;
-            }
-          }}
-        >
-          <GridList
-            ref={gridRef}
-            aria-label={t("books.collectionLabel")}
-            items={visibleBooks}
-            layout="grid"
-            selectionMode="none"
-            onAction={(key) => activateBook(String(key))}
-            className="grid grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4 gap-6"
-          >
-            {(book) => (
-              <BookCard
-                book={book}
-                index={visibleBooks.findIndex((candidate) => candidate.id === book.id)}
-                onPress={() => activateBook(book.id)}
-                onStatusChange={(status) => void handleStatusChange(book, status)}
-              />
-            )}
-          </GridList>
-        </div>
-      )}
-
-      {books.length > 0 && (
-        <p aria-live="polite" className="sr-only">
-          {t("books.filterAnnouncement", { count: visibleBooks.length })}
-        </p>
-      )}
+        )}
       </div>
 
       {importError && (

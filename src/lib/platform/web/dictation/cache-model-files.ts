@@ -1,11 +1,7 @@
 // Dictation Models on the web live in the Cache API, one entry per file plus
 // a completion marker written last. Readable from the dictation worker.
 import { createCrc32c } from "@/features/dictation/crc32c";
-import {
-  DictationError,
-  type ModelFiles,
-  type ModelSpec,
-} from "@/features/dictation/types";
+import { DictationError, type ModelFiles, type ModelSpec } from "@/features/dictation/types";
 
 export const CACHE_NAME = "maibuk-dictation-v1";
 const key = (id: string, name: string) => `/dictation/${id}/${name}`;
@@ -23,16 +19,12 @@ async function removeAll(id: string): Promise<void> {
 async function download(
   file: ModelSpec["files"][number],
   signal: AbortSignal,
-  onBytes: (n: number) => void,
+  onBytes: (n: number) => void
 ): Promise<Blob> {
   const res = await fetch(file.url, { signal });
-  if (res.status === 404 || res.status === 410)
-    throw new DictationError("model_gone", file.url);
+  if (res.status === 404 || res.status === 410) throw new DictationError("model_gone", file.url);
   if (!res.ok || !res.body)
-    throw new DictationError(
-      "download_failed",
-      `${file.url}: HTTP ${res.status}`,
-    );
+    throw new DictationError("download_failed", `${file.url}: HTTP ${res.status}`);
   const crc = createCrc32c();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -46,10 +38,7 @@ async function download(
     onBytes(value.length);
   }
   if (size !== file.bytes || crc.digestBase64() !== file.checksum.value) {
-    throw new DictationError(
-      "download_failed",
-      `${file.name}: checksum or size mismatch`,
-    );
+    throw new DictationError("download_failed", `${file.name}: checksum or size mismatch`);
   }
   return new Blob(chunks);
 }
@@ -72,14 +61,13 @@ export const cacheModelFiles: ModelFiles = {
       if (signal.aborted) throw new DictationError("cancelled");
       await cache.put(
         marker(spec.id),
-        new Response(JSON.stringify(spec.files.map((f) => [f.name, f.bytes]))),
+        new Response(JSON.stringify(spec.files.map((f) => [f.name, f.bytes])))
       );
     } catch (error) {
       await removeAll(spec.id);
       if ((error as DOMException).name === "QuotaExceededError")
         throw new DictationError("disk_full");
-      if ((error as DOMException).name === "AbortError")
-        throw new DictationError("cancelled");
+      if ((error as DOMException).name === "AbortError") throw new DictationError("cancelled");
       throw error;
     }
   },
@@ -91,9 +79,7 @@ export const cacheModelFiles: ModelFiles = {
 };
 
 /** Verified bytes for a load: marker present and every file its catalog size. */
-export async function readModelFiles(
-  spec: ModelSpec,
-): Promise<Map<string, Uint8Array>> {
+export async function readModelFiles(spec: ModelSpec): Promise<Map<string, Uint8Array>> {
   const cache = await caches.open(CACHE_NAME);
   if (!(await cache.match(marker(spec.id))))
     throw new DictationError("model_corrupt", "not installed");

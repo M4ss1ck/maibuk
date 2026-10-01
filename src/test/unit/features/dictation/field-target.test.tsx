@@ -2,15 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import {
-  createFieldTarget,
-  installDictationFieldTracker,
-} from "@/features/dictation/field-target";
+import { createFieldTarget, installDictationFieldTracker } from "@/features/dictation/field-target";
 import { FIELD_BEFORE_LIMIT } from "@/features/dictation/plain-text";
-import {
-  attachSession,
-  resetDictationHubForTests,
-} from "@/features/dictation/hub";
+import { attachSession, resetDictationHubForTests } from "@/features/dictation/hub";
 import type { DictationTarget } from "@/features/dictation/session";
 import { useSettingsStore } from "@/features/settings/store";
 
@@ -30,14 +24,8 @@ function makeTextarea(): HTMLTextAreaElement {
 // document.execCommand stubbed the way a browser implements it: insertText and
 // delete edit the focused field, undo/redo walk a small value stack.
 function stubExecCommand() {
-  const undoStacks = new WeakMap<
-    HTMLInputElement | HTMLTextAreaElement,
-    string[]
-  >();
-  const redoStacks = new WeakMap<
-    HTMLInputElement | HTMLTextAreaElement,
-    string[]
-  >();
+  const undoStacks = new WeakMap<HTMLInputElement | HTMLTextAreaElement, string[]>();
+  const redoStacks = new WeakMap<HTMLInputElement | HTMLTextAreaElement, string[]>();
   const push = (
     map: WeakMap<HTMLInputElement | HTMLTextAreaElement, string[]>,
     el: HTMLInputElement | HTMLTextAreaElement,
@@ -47,52 +35,46 @@ function stubExecCommand() {
     stack.push(value);
     map.set(el, stack);
   };
-  const fn = vi.fn(
-    (command: string, _showUI?: boolean, value?: string): boolean => {
-      const el = document.activeElement as
-        | HTMLInputElement
-        | HTMLTextAreaElement
-        | null;
-      if (!el) return false;
-      if (command === "insertText") {
-        push(undoStacks, el, el.value);
-        redoStacks.set(el, []);
-        const start = el.selectionStart ?? el.value.length;
-        const end = el.selectionEnd ?? start;
-        el.setRangeText(value ?? "", start, end, "end");
-        el.dispatchEvent(new InputEvent("input", { bubbles: true }));
-        return true;
-      }
-      if (command === "delete") {
-        push(undoStacks, el, el.value);
-        redoStacks.set(el, []);
-        const start = el.selectionStart ?? el.value.length;
-        const end = el.selectionEnd ?? start;
-        if (start === end)
-          el.setRangeText("", Math.max(0, start - 1), end, "end");
-        else el.setRangeText("", start, end, "end");
-        el.dispatchEvent(new InputEvent("input", { bubbles: true }));
-        return true;
-      }
-      if (command === "undo") {
-        const stack = undoStacks.get(el) ?? [];
-        const prev = stack.pop();
-        if (prev === undefined) return false;
-        push(redoStacks, el, el.value);
-        el.value = prev;
-        return true;
-      }
-      if (command === "redo") {
-        const stack = redoStacks.get(el) ?? [];
-        const next = stack.pop();
-        if (next === undefined) return false;
-        push(undoStacks, el, el.value);
-        el.value = next;
-        return true;
-      }
-      return false;
+  const fn = vi.fn((command: string, _showUI?: boolean, value?: string): boolean => {
+    const el = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
+    if (!el) return false;
+    if (command === "insertText") {
+      push(undoStacks, el, el.value);
+      redoStacks.set(el, []);
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? start;
+      el.setRangeText(value ?? "", start, end, "end");
+      el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      return true;
     }
-  );
+    if (command === "delete") {
+      push(undoStacks, el, el.value);
+      redoStacks.set(el, []);
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? start;
+      if (start === end) el.setRangeText("", Math.max(0, start - 1), end, "end");
+      else el.setRangeText("", start, end, "end");
+      el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      return true;
+    }
+    if (command === "undo") {
+      const stack = undoStacks.get(el) ?? [];
+      const prev = stack.pop();
+      if (prev === undefined) return false;
+      push(redoStacks, el, el.value);
+      el.value = prev;
+      return true;
+    }
+    if (command === "redo") {
+      const stack = redoStacks.get(el) ?? [];
+      const next = stack.pop();
+      if (next === undefined) return false;
+      push(undoStacks, el, el.value);
+      el.value = next;
+      return true;
+    }
+    return false;
+  });
   (document as unknown as { execCommand: typeof fn }).execCommand = fn;
   return fn;
 }
@@ -132,9 +114,7 @@ describe("createFieldTarget", () => {
     await user.click(el);
     const target = createFieldTarget(el, "text");
     const events: InputEvent[] = [];
-    el.addEventListener("input", (event) =>
-      events.push(event as InputEvent)
-    );
+    el.addEventListener("input", (event) => events.push(event as InputEvent));
     target.apply([{ kind: "text", text: "My book" }]);
     expect(el.value).toBe("My book");
     expect(events).toHaveLength(1);
@@ -221,8 +201,7 @@ describe("createFieldTarget", () => {
       const el = makeInput("email");
       el.value = "me@";
       await user.click(el);
-      if (el.selectionStart !== null)
-        el.setSelectionRange(el.value.length, el.value.length);
+      if (el.selectionStart !== null) el.setSelectionRange(el.value.length, el.value.length);
       const target = createFieldTarget(el, "text");
       target.apply([{ kind: "text", text: "example" }]);
       // Appended at the end (with the usual separating space: "@" takes one).
@@ -277,9 +256,7 @@ describe("createFieldTarget", () => {
     expect(el.value).toBe("Hello.");
     expect(target.voice!({ id: "common.undo", polarity: null })).toBe("ran");
     expect(target.voice!({ id: "common.undo", polarity: null })).toBe("empty");
-    expect(
-      target.voice!({ id: "editor.bold", polarity: "on" })
-    ).toBe("unavailable");
+    expect(target.voice!({ id: "editor.bold", polarity: "on" })).toBe("unavailable");
     expect(el.value).toBe("");
   });
 
@@ -374,9 +351,7 @@ describe("createFieldTarget", () => {
 });
 
 describe("installDictationFieldTracker", () => {
-  let register: ReturnType<
-    typeof vi.fn<(target: DictationTarget) => () => void>
-  >;
+  let register: ReturnType<typeof vi.fn<(target: DictationTarget) => () => void>>;
   let focus: ReturnType<typeof vi.fn<(targetId: string) => void>>;
   let registered: Map<string, DictationTarget>;
   let unregisters: Map<string, ReturnType<typeof vi.fn>>;

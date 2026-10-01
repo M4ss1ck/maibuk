@@ -362,9 +362,9 @@ describe("topmostLayer and isOutsideLayer", () => {
       </div>
     );
     expect(isOutsideLayer(screen.getByRole("button", { name: "Buried" }))).toBe(true);
-    expect(
-      isOutsideLayer(container.querySelector('[aria-hidden="true"] button') as Element)
-    ).toBe(true);
+    expect(isOutsideLayer(container.querySelector('[aria-hidden="true"] button') as Element)).toBe(
+      true
+    );
     expect(isOutsideLayer(screen.getByRole("button", { name: "Shown" }))).toBe(false);
   });
 

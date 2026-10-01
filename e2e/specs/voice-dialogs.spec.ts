@@ -86,10 +86,7 @@ test.describe("@wf:voice-commands-app @sc:dictation.toggle @chromium-only", () =
     await expect(dialog).toBeVisible();
     await expect(busy).toBeDisabled();
 
-    const [download] = await Promise.all([
-      page.waitForEvent("download"),
-      releaseBlobReads(page),
-    ]);
+    const [download] = await Promise.all([page.waitForEvent("download"), releaseBlobReads(page)]);
     expect(download.suggestedFilename()).toMatch(/\.epub$/);
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
