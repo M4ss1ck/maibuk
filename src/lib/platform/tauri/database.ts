@@ -16,7 +16,7 @@ class TauriDatabaseAdapter implements DatabaseAdapter {
   }
 
   async close(): Promise<void> {
-    await this.db.close();
+    // The webview is not allowed to close the app-owned Library pool (ADR 0017).
   }
 
   async exportData(): Promise<Uint8Array> {
@@ -37,6 +37,6 @@ class TauriDatabaseAdapter implements DatabaseAdapter {
 }
 
 export async function createTauriDatabase(path: string): Promise<DatabaseAdapter> {
-  const db = await Database.load(path);
+  const db = Database.get(path);
   return new TauriDatabaseAdapter(db);
 }
