@@ -1133,7 +1133,7 @@
   "commandPalette": {
     "title": "Command palette",
     "searchLabel": "Search commands",
-    "placeholder": "Type a command…",
+    "placeholder": "Type a command, Book, Note…",
     "resultsLabel": "Results",
     "resultCount_one": "{{count}} result",
     "resultCount_other": "{{count}} results",
@@ -1141,8 +1141,22 @@
     "removeFromRecent": "Remove from recent",
     "removeItem": "Remove {{label}} from recent",
     "unavailable": "That command is not available here anymore",
+    "saveFailed": "Your latest text could not be saved, so nothing was opened",
     "emptyHint": "Type to find a command",
     "noResults": "No results",
+    "pageAnnouncement": "Showing {{page}}",
+    "pages": {
+      "chapters": "Open Chapter…",
+      "books": "Go to Book…",
+      "notes": "Open Note…",
+      "canvases": "Open Canvas…"
+    },
+    "chips": {
+      "chapters": "Open Chapter",
+      "books": "Go to Book",
+      "notes": "Open Note",
+      "canvases": "Open Canvas"
+    },
     "sections": {
       "recent": "Recent",
       "commands": "Commands",

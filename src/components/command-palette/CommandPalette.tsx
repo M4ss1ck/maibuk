@@ -4,10 +4,12 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation, useNavigate, useMatch } from "react-router-dom";
 import {
   Autocomplete,
   Header,
@@ -21,22 +23,39 @@ import {
   Text,
   Virtualizer,
 } from "react-aria-components";
-import { X } from "lucide-react";
+import { NotebookPen, Workflow, X } from "lucide-react";
+import { ChapterIcon, ProjectsIcon, SettingsIcon } from "@/components/icons";
 import { Modal } from "@/components/ui/Modal";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { toast } from "@/components/ui/Toast";
 import { useModalStore } from "@/components/ui/modal-store";
+import { useBookStore } from "@/features/books/store";
+import { useCanvasStore } from "@/features/canvas/store";
+import { listChapterTitles, type ChapterTitle } from "@/features/chapters/store";
 import {
   buildCommandItems,
+  buildEntityItems,
+  buildPageItems,
+  buildSettingsItems,
   liveRecentKeys,
   preparePaletteIndex,
   searchPalette,
   useCommandPaletteRecentStore,
   useCommandPaletteStore,
 } from "@/features/command-palette";
-import type { PaletteItem, PaletteResult } from "@/features/command-palette/palette-index";
+import type {
+  PaletteItem,
+  PaletteItemKind,
+  PalettePage,
+  PaletteResult,
+} from "@/features/command-palette/palette-index";
+import type { SettingsRowId } from "@/components/settings/settings-sections";
+import { focusSettingsRow } from "@/features/settings/focus-row";
+import { currentSettingsPlatform } from "@/features/settings/rows";
+import { useNoteStore } from "@/features/notes/store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { normalizeLanguage } from "@/features/settings/types";
+import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { useCommandKeys } from "@/lib/command-keys";
 import { commandState, runCommand } from "@/lib/command-runner";
@@ -68,14 +87,24 @@ function OpenCommandPalette() {
   const removeRecent = useCommandPaletteRecentStore((state) => state.remove);
   const pruneRecent = useCommandPaletteRecentStore((state) => state.prune);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState<PalettePage>("root");
   const [announcement, setAnnouncement] = useState("");
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [entities, setEntities] = useState<{
+    books: ReturnType<typeof useBookStore.getState>["books"];
+    chapters: ChapterTitle[];
+    notes: ReturnType<typeof useNoteStore.getState>["notes"];
+    canvases: ReturnType<typeof useCanvasStore.getState>["canvases"];
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const removalRef = useRef(false);
   const previousCountRef = useRef(-1);
   const mac = isMac();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const openBookId = useMatch("/book/:bookId")?.params.bookId ?? null;
 
-  const items = useMemo(
+  const commandItems = useMemo(
     () =>
       buildCommandItems({
         snapshot,
@@ -88,16 +117,89 @@ function OpenCommandPalette() {
       }),
     [snapshot, t, i18n.language, customVoice]
   );
+
+  // Entities load once per open, in the background: the Commands are listed
+  // right away and merge in when the Library answers, so there is no spinner
+  // to flash. A store that already holds its list is not re-read.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const bookStore = useBookStore.getState();
+      const noteStore = useNoteStore.getState();
+      const canvasStore = useCanvasStore.getState();
+      const [, , , chapters] = await Promise.all([
+        // The refresh reads the Library without flipping the store's isLoading,
+        // which would blank the page behind the palette and drop the focus its
+        // opener held.
+        bookStore.refreshBooks(),
+        noteStore.refreshNotes(),
+        canvasStore.refreshCanvases(),
+        listChapterTitles(),
+      ]);
+      if (cancelled) return;
+      setEntities({
+        books: useBookStore.getState().books,
+        chapters,
+        notes: useNoteStore.getState().notes,
+        canvases: useCanvasStore.getState().canvases,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const pageItems = useMemo(
+    () =>
+      buildPageItems({
+        t: t as unknown as (key: string, options?: Record<string, unknown>) => string,
+        inBookEditor: openBookId !== null,
+      }),
+    [t, openBookId]
+  );
+  const settingsItems = useMemo(
+    () =>
+      buildSettingsItems({
+        t: t as unknown as (
+          key: string,
+          options?: Record<string, unknown>
+        ) => string | readonly string[],
+        platform: currentSettingsPlatform(),
+      }),
+    [t]
+  );
+  const entityItems = useMemo(
+    () =>
+      entities
+        ? buildEntityItems({
+            books: entities.books,
+            chapters: entities.chapters,
+            notes: entities.notes,
+            canvases: entities.canvases,
+            t: t as unknown as (key: string) => string,
+          })
+        : [],
+    [entities, t]
+  );
+
+  const items = useMemo(
+    () => [...commandItems, ...pageItems, ...settingsItems, ...entityItems],
+    [commandItems, pageItems, settingsItems, entityItems]
+  );
   const index = useMemo(() => preparePaletteIndex(items), [items]);
 
-  // Drop Recent entries that resolve to nothing, silently.
+  // Drop Recent entries that resolve to nothing, silently. Only once the
+  // entities are in: pruning against a Command-only index would drop a Recent
+  // Book just because the Library had not answered yet.
+  const entitiesLoaded = entities !== null;
   useEffect(() => {
+    if (!entitiesLoaded) return;
     pruneRecent(liveRecentKeys(index, recentKeys));
-  }, [index, pruneRecent, recentKeys]);
+  }, [entitiesLoaded, index, pruneRecent, recentKeys]);
 
   const sections = useMemo(
-    () => searchPalette(index, { query, page: "root", recent: recentKeys, openBookId: null }),
-    [index, query, recentKeys]
+    () => searchPalette(index, { query, page, recent: recentKeys, openBookId }),
+    [index, query, page, recentKeys, openBookId]
   );
   const flatResults = useMemo(() => sections.flatMap((section) => section.results), [sections]);
   const count = flatResults.length;
@@ -115,6 +217,15 @@ function OpenCommandPalette() {
       setAnnouncement(t("commandPalette.resultCount", { count }));
     }
   }, [count, t]);
+
+  // Entering or leaving a nested page is announced after the count it changes,
+  // so this effect sits below the count's on purpose.
+  useEffect(() => {
+    if (page === "root") return;
+    setAnnouncement(
+      t("commandPalette.pageAnnouncement", { page: t(`commandPalette.chips.${page}`) })
+    );
+  }, [page, t]);
 
   // The active result lives in React Aria's virtual focus (the caret stays in
   // the field), so read it off the input's active descendant.
@@ -159,6 +270,12 @@ function OpenCommandPalette() {
       removeActiveRecent();
       return;
     }
+    // Backspace on an empty field steps out of a nested page instead of leaving
+    // the palette: the chip says which page the results are narrowed to.
+    if (event.key === "Backspace" && page !== "root" && query === "") {
+      event.preventDefault();
+      setPage("root");
+    }
     if (event.key === "Tab") {
       // React Spectrum stops keydown propagation by default, which would keep
       // Tab from ever reaching the Modal's FocusScope trap and let focus
@@ -171,8 +288,63 @@ function OpenCommandPalette() {
     }
   };
 
+  /** Enters a nested page: it narrows the list, it does not open anything. */
+  const enterPage = (next: PalettePage) => {
+    setPage(next);
+    setQuery("");
+  };
+
+  /**
+   * Leaves the palette and lands on the entity, Settings row, or page the
+   * result named. Open editor text lands first: navigating away from a Chapter
+   * with unsaved keystrokes would lose them.
+   */
+  const openResult = (item: PaletteItem) => {
+    recordRecent(item.key);
+    close();
+    void (async () => {
+      // Let the Modal unmount (and lift its gate) before moving.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      try {
+        await flushPendingEdits();
+      } catch {
+        toast.info(t("commandPalette.saveFailed"));
+        return;
+      }
+      if (item.kind === "settingsRow") {
+        focusSettingsRow(item.id as SettingsRowId);
+        if (location.pathname !== "/settings") navigate("/settings");
+        return;
+      }
+      if (item.kind === "book") {
+        navigate(`/book/${item.id}`);
+        return;
+      }
+      if (item.kind === "chapter") {
+        navigate(`/book/${item.bookId}`, { state: { openChapterId: item.id } });
+        return;
+      }
+      if (item.kind === "note") {
+        navigate(`/notes/${item.id}`);
+        return;
+      }
+      if (item.kind === "canvas") {
+        navigate(`/canvas/${item.id}`);
+      }
+    })();
+  };
+
   const choose = (item: PaletteItem) => {
-    if (item.kind !== "command" || item.state === "disabled") return;
+    if (item.state === "disabled") return;
+    if (item.kind === "page") {
+      // A page is not a destination: it narrows the list and stays open.
+      if (item.targetPage) enterPage(item.targetPage);
+      return;
+    }
+    if (item.kind !== "command") {
+      openResult(item);
+      return;
+    }
     const id = item.id as CommandId;
     const opener = useCommandPaletteStore.getState().opener;
     recordRecent(item.key);
@@ -196,6 +368,7 @@ function OpenCommandPalette() {
   };
 
   const showHint = query.trim() === "" && count === 0;
+  const chipLabel = page === "root" ? null : t(`commandPalette.chips.${page}`);
 
   return (
     <Modal isOpen onClose={close} title={t("commandPalette.title")}>
@@ -203,12 +376,20 @@ function OpenCommandPalette() {
         <Autocomplete inputValue={query} onInputChange={setQuery}>
           <SearchField onKeyDown={handleSearchKeyDown} className="flex flex-col gap-1">
             <Label className="text-xs text-muted-foreground">{t("commandPalette.searchLabel")}</Label>
-            <Input
-              ref={inputRef}
-              data-autofocus
-              placeholder={t("commandPalette.placeholder")}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
-            />
+            {/* The breadcrumb: which page narrowed the results. */}
+            <div className="flex items-center gap-2">
+              {chipLabel && (
+                <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-sm text-foreground">
+                  {chipLabel}
+                </span>
+              )}
+              <Input
+                ref={inputRef}
+                data-autofocus
+                placeholder={t("commandPalette.placeholder")}
+                className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
           </SearchField>
           {showHint ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
@@ -272,6 +453,31 @@ function renderHighlightedLabel(label: string, result: PaletteResult): ReactNode
   return parts;
 }
 
+/** The icon each kind is recognized by, where the feature has one. */
+const KIND_ICONS: Partial<Record<PaletteItemKind, ComponentType<{ className?: string }>>> = {
+  book: ProjectsIcon,
+  chapter: ChapterIcon,
+  note: NotebookPen,
+  canvas: Workflow,
+  settingsRow: SettingsIcon,
+};
+
+/** A Command result's live Shortcuts; the other kinds are not Commands. */
+function PaletteShortcuts({ id, mac }: { id: CommandId; mac: boolean }) {
+  const shortcuts = useCommandKeys(id);
+  return (
+    <>
+      {shortcuts.map((shortcut) => (
+        <KeyboardShortcut
+          key={shortcut.join(" ")}
+          shortcut={formatShortcut(shortcut, mac)}
+          className="shrink-0"
+        />
+      ))}
+    </>
+  );
+}
+
 interface PaletteRowProps {
   result: PaletteResult;
   isRecent: boolean;
@@ -283,9 +489,8 @@ interface PaletteRowProps {
 function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: PaletteRowProps) {
   const { t } = useTranslation();
   const item = result.item;
-  // Every row is a Command in this slice; later kinds branch here.
-  const shortcuts = useCommandKeys(item.id as CommandId);
   const unavailable = item.state === "disabled";
+  const Icon = KIND_ICONS[item.kind];
   // A disabled Command stays reachable with the arrow keys and announced as
   // disabled. React Aria offers either skipping disabled items or never
   // marking them, so the row stays an ordinary option and carries
@@ -308,6 +513,7 @@ function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: Palette
         unavailable ? "cursor-default opacity-60" : "cursor-pointer"
       }`}
     >
+      {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
       {/* The label names the option; the detail and the live Shortcut are its
           description, so they are announced after the name, not glued to it. */}
       <Text slot="label" className="min-w-0 flex-1 truncate">
@@ -317,14 +523,9 @@ function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: Palette
         {item.detail && (
           <span className="truncate text-xs text-muted-foreground">{item.detail}</span>
         )}
-        {item.kind === "command" &&
-          shortcuts.map((shortcut) => (
-            <KeyboardShortcut
-              key={shortcut.join(" ")}
-              shortcut={formatShortcut(shortcut, mac)}
-              className="shrink-0"
-            />
-          ))}
+        {item.kind === "command" && (
+          <PaletteShortcuts id={item.id as CommandId} mac={mac} />
+        )}
       </Text>
       {isRecent && (
         <button

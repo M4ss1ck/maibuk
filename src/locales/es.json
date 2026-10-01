@@ -1133,7 +1133,7 @@
   "commandPalette": {
     "title": "Paleta de comandos",
     "searchLabel": "Buscar comandos",
-    "placeholder": "Escribe un comando…",
+    "placeholder": "Escribe un comando, libro, nota…",
     "resultsLabel": "Resultados",
     "resultCount_one": "{{count}} resultado",
     "resultCount_other": "{{count}} resultados",
@@ -1141,8 +1141,22 @@
     "removeFromRecent": "Quitar de recientes",
     "removeItem": "Quitar {{label}} de recientes",
     "unavailable": "Ese comando ya no está disponible aquí",
+    "saveFailed": "No se pudo guardar tu último texto, así que no se abrió nada",
     "emptyHint": "Escribe para buscar un comando",
     "noResults": "Sin resultados",
+    "pageAnnouncement": "Mostrando {{page}}",
+    "pages": {
+      "chapters": "Abrir capítulo…",
+      "books": "Ir a libro…",
+      "notes": "Abrir nota…",
+      "canvases": "Abrir lienzo…"
+    },
+    "chips": {
+      "chapters": "Abrir capítulo",
+      "books": "Ir a libro",
+      "notes": "Abrir nota",
+      "canvases": "Abrir lienzo"
+    },
     "sections": {
       "recent": "Recientes",
       "commands": "Comandos",

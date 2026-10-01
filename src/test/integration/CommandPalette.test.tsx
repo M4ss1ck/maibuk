@@ -190,10 +190,13 @@ const { closeDatabase } = await import("@/lib/db");
 const { createBookRow } = await import("@/features/books/write");
 const { createChapterRow, updateChapterRow } = await import("@/features/chapters/write");
 const { createNoteRow } = await import("@/features/notes/write");
+const { createCanvasRow } = await import("@/features/canvas/write");
+const { getDatabase } = await import("@/lib/db");
 const librarySwitch = await import("@/features/tutorial/library-switch");
 const { useTutorialStore, EMPTY_TUTORIAL_PROGRESS } = await import("@/features/tutorial");
 const { useSettingsStore } = await import("@/features/settings/store");
 const { useBookStore } = await import("@/features/books/store");
+const { useSettingsRevealStore } = await import("@/features/settings/settings-reveal-store");
 const { useNoteStore } = await import("@/features/notes/store");
 const { useCanvasStore } = await import("@/features/canvas/store");
 const { useEphemeralStore } = await import("@/features/ephemeral/store");
@@ -262,6 +265,62 @@ async function settleEffects() {
   await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
 }
 
+/** The Book Editor's heading is the open Book's title. */
+function bookEditorTitle(): string {
+  return document.querySelector("[data-route-heading]")?.textContent ?? "";
+}
+
+/** The Chapter the Book Editor currently shows, by its own title line. */
+function openChapterTitle(): string {
+  const heading = document.querySelector("[data-route-heading]");
+  return heading?.nextElementSibling?.textContent ?? "";
+}
+
+/**
+ * Waits until React Aria holds one of the CURRENT options as active. It
+ * updates the active descendant 500 ms after typing forward, so a screen
+ * reader finishes announcing the typed letter first.
+ */
+async function awaitActiveInCurrentOptions(dialog: HTMLElement, search: HTMLElement) {
+  await waitFor(
+    () => {
+      const id = search.getAttribute("aria-activedescendant");
+      expect(within(dialog).getAllByRole("option").some((option) => option.id === id)).toBe(true);
+    },
+    { timeout: 3000 }
+  );
+}
+
+/** An option's name is its label alone; the detail is its description. */
+function optionLabel(option: HTMLElement): string {
+  return option.querySelector('[slot="label"]')?.textContent ?? option.textContent ?? "";
+}
+
+/** Arrows down until the named option is the active result, then Enter chooses it. */
+async function arrowToAndChoose(
+  user: ReturnType<typeof userEvent.setup>,
+  dialog: HTMLElement,
+  search: HTMLElement,
+  option: HTMLElement
+) {
+  const isActive = () => {
+    const id = search.getAttribute("aria-activedescendant");
+    return id !== null && document.getElementById(id) === option;
+  };
+  await awaitActiveInCurrentOptions(dialog, search);
+  for (let i = 0; i < 60 && !isActive(); i += 1) {
+    const before = search.getAttribute("aria-activedescendant");
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => expect(search.getAttribute("aria-activedescendant")).not.toBe(before), {
+      timeout: 3000,
+    });
+  }
+  expect(isActive()).toBe(true);
+  // The caret stays in the field: React Aria holds the list in virtual focus.
+  expect(document.activeElement).toBe(search);
+  await user.keyboard("{Enter}");
+}
+
 beforeEach(async () => {
   await closeDatabase();
   librarySwitch.resetLibrarySwitchForTests();
@@ -284,11 +343,16 @@ beforeEach(async () => {
   });
   useBookStore.setState({ books: [], currentBook: null, error: null });
   useNoteStore.setState({ notes: [], currentNote: null, error: null });
-  useCanvasStore.setState({ canvases: [] });
+  useCanvasStore.setState({ canvases: [], galleryLoaded: false, galleryLoading: false });
   useEphemeralStore.setState({ content: "", wordCount: 0 });
   useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   useCommandPaletteStore.setState({ isOpen: false, opener: null, snapshot: new Map() });
   useCommandPaletteRecentStore.setState({ keys: [] });
+  useSettingsRevealStore.setState({
+    pendingRowId: null,
+    advancedOpen: false,
+    pasteCleanupAdvancedOpen: false,
+  });
   useThemeStore.setState({ theme: "system" });
   document.documentElement.classList.remove("dark");
   useDictationStore.setState({ enabled: true, support: null });
@@ -411,9 +475,10 @@ describe("Command Palette", { timeout: 60_000 }, () => {
 
     await user.keyboard("{F1}");
     const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
+    const search = paletteSearch(dialog);
     await user.keyboard("dark");
-    await within(dialog).findByRole("option", { name: "Dark" });
-    await user.keyboard("{ArrowDown}{Enter}");
+    const dark = await within(dialog).findByRole("option", { name: "Dark" });
+    await arrowToAndChoose(user, dialog, search, dark);
 
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
@@ -486,8 +551,13 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
     await user.keyboard("save version");
 
-    await within(dialog).findByText("No results");
-    expect(within(dialog).queryByRole("option")).toBeNull();
+    // A Command bound only in the Book Editor is not offered on the Library.
+    await within(dialog).findAllByRole("option");
+    expect(within(dialog).queryByRole("option", { name: "Save version" })).toBeNull();
+    // Everything offered here is a Settings row, never a Command.
+    for (const option of within(dialog).getAllByRole("option")) {
+      expect(option.getAttribute("data-key")).toContain("settingsRow:");
+    }
   });
 
   it("lists a Note Item Command only with focus in the note, and runs it on that note", async () => {
@@ -502,9 +572,10 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     });
     await openPaletteWithF1(user);
     const dialog = screen.getByRole("dialog", { name: PALETTE_NAME });
+    const search = paletteSearch(dialog);
     await user.keyboard("duplicate");
-    await within(dialog).findByRole("option", { name: "Duplicate note" });
-    await user.keyboard("{ArrowDown}{Enter}");
+    const duplicate = await within(dialog).findByRole("option", { name: "Duplicate note" });
+    await arrowToAndChoose(user, dialog, search, duplicate);
 
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
@@ -527,7 +598,8 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     const dialog = screen.getByRole("dialog", { name: PALETTE_NAME });
     await user.keyboard("duplicate");
 
-    await within(dialog).findByText("No results");
+    // Settings rows still answer "duplicate", but the Note Item Command does not.
+    await within(dialog).findAllByRole("option");
     expect(within(dialog).queryByRole("option", { name: "Duplicate note" })).toBeNull();
   });
 
@@ -609,25 +681,27 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     // Two runs: the most recent run lists first.
     await user.keyboard("{F1}");
     let dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
+    let search = paletteSearch(dialog);
     await user.keyboard("dark");
-    await within(dialog).findByRole("option", { name: "Dark" });
-    await user.keyboard("{ArrowDown}{Enter}");
+    const dark = await within(dialog).findByRole("option", { name: "Dark" });
+    await arrowToAndChoose(user, dialog, search, dark);
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
     );
 
     await user.keyboard("{F1}");
     dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
+    search = paletteSearch(dialog);
     await user.keyboard("light");
-    await within(dialog).findByRole("option", { name: "Light" });
-    await user.keyboard("{ArrowDown}{Enter}");
+    const light = await within(dialog).findByRole("option", { name: "Light" });
+    await arrowToAndChoose(user, dialog, search, light);
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
     );
 
     await user.keyboard("{F1}");
     dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
-    const search = paletteSearch(dialog);
+    search = paletteSearch(dialog);
     let options = within(dialog).getAllByRole("option");
     expect(options.map((option) => option.textContent)).toEqual(["Light", "Dark"]);
 
@@ -726,9 +800,10 @@ describe("Command Palette", { timeout: 60_000 }, () => {
 
       await user.keyboard("{F1}");
       const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
+      const search = paletteSearch(dialog);
       await user.keyboard("bold");
-      await within(dialog).findByRole("option", { name: "Bold" });
-      await user.keyboard("{ArrowDown}{Enter}");
+      const bold = await within(dialog).findByRole("option", { name: "Bold" });
+      await arrowToAndChoose(user, dialog, search, bold);
 
       await waitFor(() =>
         expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
@@ -738,5 +813,360 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
+  it("lists a Book by title under Books and Enter opens the Book Editor", async () => {
+    await createBookRow({ title: "Alpha", authorName: "Author" }, "local");
+    await createBookRow({ title: "Beta", authorName: "Author" }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Alpha");
+    const book = await within(dialog).findByRole("option", { name: "Alpha" });
+    expect(within(dialog).getByText("Books")).toBeInTheDocument();
+    await arrowToAndChoose(user, dialog, search, book);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
+    );
+    await settleEffects();
+    await waitFor(() => expect(bookEditorTitle()).toBe("Alpha"), { timeout: 10_000 });
+    expect(path).toBe(`/book/${(useBookStore.getState().books[0] as { id: string }).id}`);
+  });
+
+  it("finds a Chapter of another Book, shows its Book, and opens that Book at it", async () => {
+    const mine = await createBookRow({ title: "Home Book", authorName: "Author" }, "local");
+    const otherBook = await createBookRow({ title: "Other Book", authorName: "Author" }, "local");
+    const otherChapter = await createChapterRow(
+      { bookId: otherBook.id, title: "Prologue" },
+      "local"
+    );
+    const mineChapter = await createChapterRow({ bookId: mine.id, title: "Prologue" }, "local");
+    await updateChapterRow(otherChapter.id, { content: "<p>Far away</p>" }, "local");
+    await updateChapterRow(mineChapter.id, { content: "<p>Right here</p>" }, "local");
+
+    const user = userEvent.setup();
+    renderApp(`/book/${mine.id}`);
+    await settleOn(`/book/${mine.id}`);
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Prologue");
+    const options = await within(dialog).findAllByRole("option", { name: "Prologue" });
+    expect(options).toHaveLength(2);
+    const byBook = new Map(
+      options.map((option) => [option.textContent ?? "", option] as const)
+    );
+    const theirs = [...byBook.entries()].find(([text]) => text.includes("Other Book"))?.[1];
+    const mineOption = [...byBook.entries()].find(([text]) => text.includes("Home Book"))?.[1];
+    expect(theirs).toBeDefined();
+    expect(mineOption).toBeDefined();
+
+    await arrowToAndChoose(user, dialog, search, theirs as HTMLElement);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
+    );
+    expect(path).toBe(`/book/${otherBook.id}`);
+    await waitFor(() => expect(openChapterTitle()).toBe("Prologue"), { timeout: 10_000 });
+    // The Chapter that opened is the other Book's, not this one's.
+    await waitFor(
+      () =>
+        expect(document.querySelector(".tiptap")?.textContent ?? "").toContain("Far away"),
+      { timeout: 10_000 }
+    );
+  });
+
+  it("ranks the open Book's Chapters above another Book's", async () => {
+    const mine = await createBookRow({ title: "Open One", authorName: "Author" }, "local");
+    const other = await createBookRow({ title: "Other One", authorName: "Author" }, "local");
+    await createChapterRow({ bookId: mine.id, title: "Shared Title" }, "local");
+    await createChapterRow({ bookId: other.id, title: "Shared Title" }, "local");
+
+    const user = userEvent.setup();
+    renderApp(`/book/${mine.id}`);
+    await settleOn(`/book/${mine.id}`);
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Shared Title");
+    await waitFor(() => expect(within(dialog).getAllByRole("option").length).toBeGreaterThan(1));
+
+    await waitFor(
+      () => expect(search.getAttribute("aria-activedescendant")).toContain("chapter:"),
+      { timeout: 3000 }
+    );
+    // The first result is one of the two identical-titled Chapters, and it is
+    // the open Book's: its detail says which Book it belongs to.
+    const firstId = search.getAttribute("aria-activedescendant") as string;
+    const first = document.getElementById(firstId) as HTMLElement;
+    expect(first.textContent).toContain("Open One");
+
+    await arrowToAndChoose(user, dialog, search, first);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
+    );
+    expect(path).toBe(`/book/${mine.id}`);
+  });
+
+  it("lists only the open Book's Chapters on the Open Chapter… page, and Backspace leaves it", async () => {
+    const mine = await createBookRow({ title: "Open One", authorName: "Author" }, "local");
+    const other = await createBookRow({ title: "Other One", authorName: "Author" }, "local");
+    await createChapterRow({ bookId: mine.id, title: "Mine Only" }, "local");
+    await createChapterRow({ bookId: other.id, title: "Theirs Only" }, "local");
+
+    const user = userEvent.setup();
+    renderApp(`/book/${mine.id}`);
+    await settleOn(`/book/${mine.id}`);
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Open Chapter");
+    const page = await within(dialog).findByRole("option", { name: "Open Chapter…" });
+    await arrowToAndChoose(user, dialog, search, page);
+
+    // The palette stays open, narrowed, with the chip naming the page.
+    expect(screen.getByRole("dialog", { name: PALETTE_NAME })).toBeInTheDocument();
+    expect(paletteSearch(dialog)).toHaveValue("");
+    expect(within(dialog).getByText("Open Chapter")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Showing Open Chapter")).toBeInTheDocument();
+
+    // The row carries the Book as its description, so compare names, not text.
+    expect(within(dialog).getAllByRole("option").map(optionLabel)).toEqual(["Mine Only"]);
+
+    // Backspace on the empty field steps back out to the root page.
+    await user.keyboard("{Backspace}");
+    await waitFor(() => expect(within(dialog).queryByText("Open Chapter")).toBeNull());
+    // Root with an empty query lists Recent only, and nothing has been chosen.
+    expect(within(dialog).getByText("Type to find a command")).toBeInTheDocument();
+    // The other Book's Chapter is reachable again, which the narrowed page hid.
+    await user.keyboard("Theirs");
+    const theirs = await within(dialog).findByRole("option", { name: "Theirs Only" });
+    expect(theirs.textContent).toContain("Other One");
+  });
+
+  it("offers Open Chapter… only in the Book Editor", async () => {
+    const book = await createBookRow({ title: "Only Book", authorName: "Author" }, "local");
+    await createChapterRow({ bookId: book.id, title: "Prologue" }, "local");
+
+    const user = userEvent.setup();
+    renderApp("/notes");
+    await settleOn("/notes");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    // "Open" reaches every Open… page, so the absence of one is the fact.
+    await user.keyboard("Open ");
+    await within(dialog).findByRole("option", { name: "Open Note…" });
+    await within(dialog).findByRole("option", { name: "Open Canvas…" });
+    expect(within(dialog).queryByRole("option", { name: "Open Chapter…" })).toBeNull();
+    expect(search).toHaveValue("Open ");
+  });
+
+  it("narrows to Books, Notes, and Canvases on their pages", async () => {
+    const book = await createBookRow({ title: "Paged Book", authorName: "Author" }, "local");
+    await createChapterRow({ bookId: book.id, title: "Paged Chapter" }, "local");
+    await createNoteRow({ title: "Paged Note", bookId: null }, "local");
+    await createCanvasRow({ title: "Paged Canvas" }, "local");
+
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+
+    for (const [pageLabel, chip, expected] of [
+      ["Go to Book…", "Go to Book", ["Paged Book"]],
+      ["Open Note…", "Open Note", ["Paged Note"]],
+      ["Open Canvas…", "Open Canvas", ["Paged Canvas"]],
+    ] as const) {
+      await user.clear(search);
+      await user.keyboard(pageLabel);
+      const page = await within(dialog).findByRole("option", { name: pageLabel });
+      await arrowToAndChoose(user, dialog, search, page);
+      expect(within(dialog).getByText(chip)).toBeInTheDocument();
+      await waitFor(() =>
+        expect(within(dialog).getAllByRole("option").map(optionLabel)).toEqual(expected)
+      );
+      // Backspace on the empty field steps back out to the root page.
+      await user.keyboard("{Backspace}");
+      await waitFor(() => expect(within(dialog).queryByText(chip)).toBeNull());
+    }
+  });
+
+  it("finds the theme row by its keywords and lands on Settings with it focused", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    // "dark" is a keyword of the theme row, not any part of its label.
+    await user.keyboard("dark");
+    const theme = await within(dialog).findByRole("option", { name: "Theme" });
+    expect(within(dialog).getByText("Settings")).toBeInTheDocument();
+    await arrowToAndChoose(user, dialog, search, theme);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
+    );
+    await waitFor(() => expect(path).toBe("/settings"), { timeout: 10_000 });
+    await waitFor(() =>
+      expect(
+        document.activeElement?.closest('[data-settings-row="theme"]')
+      ).not.toBeNull()
+    );
+    expect(document.activeElement).toBe(document.querySelector('[data-settings-row="theme"] button'));
+  });
+
+  it("reveals a row inside the collapsed Advanced block and focuses it", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Export Database");
+    const row = await within(dialog).findByRole("option", { name: "Export Database" });
+    await arrowToAndChoose(user, dialog, search, row);
+
+    await waitFor(() => expect(path).toBe("/settings"), { timeout: 10_000 });
+    // The block is collapsed on arrival and the result opened it to focus the row.
+    await waitFor(() =>
+      expect(document.activeElement?.closest('[data-settings-row="exportDatabase"]')).not.toBeNull()
+    );
+    expect(useSettingsRevealStore.getState().advancedOpen).toBe(true);
+    expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
+  });
+
+  it("hides desktop-only Settings rows on the web build", async () => {
+    web.value = true;
+    platform.desktop = false;
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Launch on startup");
+    await within(dialog).findByText("No results");
+    expect(within(dialog).queryByRole("option", { name: "Launch on startup" })).toBeNull();
+
+    // A row every platform has is still there.
+    await user.clear(search);
+    await user.keyboard("Choose your preferred theme");
+    expect(await within(dialog).findByRole("option", { name: "Theme" })).toBeInTheDocument();
+  });
+
+  it("drops a deleted Note from Recent on the next open, without an error", async () => {
+    const keep = await createNoteRow({ title: "Keeper", bookId: null }, "local");
+    const doomed = await createNoteRow({ title: "Doomed", bookId: null }, "local");
+    useCommandPaletteRecentStore.setState({ keys: [`note:${keep.id}`, `note:${doomed.id}`] });
+
+    const user = userEvent.setup();
+    renderApp("/notes");
+    await settleOn("/notes");
+
+    // Deleted through the Notes write path, the same one the Item Menu uses.
+    await act(() => useNoteStore.getState().deleteNote(doomed.id));
+
+    await openPaletteWithF1(user);
+    const dialog = screen.getByRole("dialog", { name: PALETTE_NAME });
+    await waitFor(() =>
+      expect(within(dialog).getAllByRole("option").map(optionLabel)).toEqual(["Keeper"])
+    );
+    await waitFor(() =>
+      expect(useCommandPaletteRecentStore.getState().keys).toEqual([`note:${keep.id}`])
+    );
+    expect(screen.queryByText("Doomed")).toBeNull();
+  });
+
+  it("lands the open editor's text before navigating away to a Note", async () => {
+    const book = await createBookRow({ title: "Unsaved", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Draft" }, "local");
+    const note = await createNoteRow({ title: "Destination", bookId: null }, "local");
+
+    const user = userEvent.setup();
+    renderApp(`/book/${book.id}`);
+    await settleOn(`/book/${book.id}`);
+    const editorDom = await waitFor(
+      () => {
+        const element = document.querySelector('[data-focus-pane="editor-main"] .tiptap');
+        expect(element).not.toBeNull();
+        return element as HTMLElement;
+      },
+      { timeout: 10_000 }
+    );
+    act(() => {
+      editorDom.focus();
+    });
+
+    await user.keyboard("Typed straight through");
+    // The debounced save has not run: the Library has no trace of the text yet.
+    const before = await getDatabase();
+    const beforeRows = await before.select<{ content: string | null }[]>(
+      "SELECT content FROM chapters WHERE id = ?",
+      [chapter.id]
+    );
+    expect(beforeRows[0]?.content ?? "").not.toContain("Typed straight through");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Destination");
+    const row = await within(dialog).findByRole("option", { name: "Destination" });
+    await arrowToAndChoose(user, dialog, search, row);
+
+    await waitFor(() => expect(path).toBe(`/notes/${note.id}`), { timeout: 10_000 });
+    const after = await getDatabase();
+    const afterRows = await after.select<{ content: string | null }[]>(
+      "SELECT content FROM chapters WHERE id = ?",
+      [chapter.id]
+    );
+    expect(afterRows[0]?.content ?? "").toContain("Typed straight through");
+  });
+
+  it("opens an Unfiled Note from the palette", async () => {
+    await createNoteRow({ title: "Loose Thought", bookId: null }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Loose");
+    const note = await within(dialog).findByRole("option", { name: "Loose Thought" });
+    await arrowToAndChoose(user, dialog, search, note);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
+    );
+    await waitFor(() => expect(path).toBe(`/notes/${useNoteStore.getState().notes[0]?.id}`), {
+      timeout: 10_000,
+    });
+    await waitFor(() => expect(bookEditorTitle()).toBe("Loose Thought"), { timeout: 10_000 });
+  });
+
+  it("opens a Canvas from the palette", async () => {
+    const canvas = await createCanvasRow({ title: "Story Arcs" }, "local");
+    const user = userEvent.setup();
+    renderApp("/canvas");
+    await settleOn("/canvas");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Story Arcs");
+    const row = await within(dialog).findByRole("option", { name: "Story Arcs" });
+    await arrowToAndChoose(user, dialog, search, row);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull()
+    );
+    await waitFor(() => expect(path).toBe(`/canvas/${canvas.id}`), { timeout: 10_000 });
   });
 });
