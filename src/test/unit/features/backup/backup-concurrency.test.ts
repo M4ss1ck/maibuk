@@ -108,7 +108,7 @@ function createMockAdapter(): BackupAdapter {
 
 describe("BackupService concurrency — shared write queue", () => {
   let mockAdapter: BackupAdapter;
-  let mockDb: { execute: ReturnType<typeof vi.fn> };
+  let mockDb: { execute: ReturnType<typeof vi.fn>; executeAtomic: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -117,6 +117,7 @@ describe("BackupService concurrency — shared write queue", () => {
     mockGenerateSqlDump.mockResolvedValue(new TextEncoder().encode("INSERT INTO books ..."));
     mockDb = {
       execute: vi.fn().mockResolvedValue({ rowsAffected: 1 }),
+      executeAtomic: vi.fn().mockResolvedValue(undefined),
     };
     mockGetDatabase.mockResolvedValue(mockDb);
     mockParseSqlStatements.mockImplementation((sql: string) => [sql]);
@@ -180,7 +181,17 @@ describe("BackupService concurrency — shared write queue", () => {
     // The create finished before the restore's pre-restore backup, which
     // precedes the restore's read of the target.
     expect(order).toEqual(["save:daily", "save:pre-restore", `read:${target}`]);
-    expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM chapters");
+    expect(mockDb.executeAtomic).toHaveBeenCalledTimes(1);
+    const restoreStatements = mockDb.executeAtomic.mock.calls[0][0] as string[];
+    expect(restoreStatements.slice(0, 7)).toEqual([
+      "DELETE FROM chapters",
+      "DELETE FROM book_versions",
+      "DELETE FROM books",
+      "DELETE FROM notes",
+      "DELETE FROM canvases",
+      "DELETE FROM sync_tombstones",
+      "DELETE FROM sync_state",
+    ]);
   });
 
   it("leaves data untouched on restore failure and releases the queue", async () => {
@@ -192,7 +203,7 @@ describe("BackupService concurrency — shared write queue", () => {
 
     const service = new BackupService(mockAdapter);
     await expect(service.restoreBackup(target)).rejects.toThrow("BACKUP_CORRUPT");
-    expect(mockDb.execute).not.toHaveBeenCalled();
+    expect(mockDb.executeAtomic).not.toHaveBeenCalled();
 
     // The failed restore must not block later backup work.
     await expect(service.createBackup("daily")).resolves.toMatch(

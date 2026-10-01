@@ -17,6 +17,8 @@ import { generateSqlDump } from "@/features/backup/generate-sql-dump";
 import { dumpHasDataAsync } from "@/features/sync/sync-codec";
 import { createAsyncQueue } from "@/lib/async-queue";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
+import { flushPendingEdits } from "@/features/sync/pending-edits";
+import { AtomicStatementError } from "@/lib/db/atomic";
 
 // Serializes expensive backup work (create/restore) and concurrent
 // delete/prune writes across ALL BackupService instances. Reads
@@ -150,25 +152,27 @@ async function replaceRestoreData(
   statements: string[],
   replaceCanvases: boolean
 ): Promise<void> {
-  // Delete existing data first, then insert from backup.
-  // Each statement is auto-committed. If an INSERT fails, the database
-  // will be in a partial state — the pre-restore backup is the safety net.
-  await db.execute("DELETE FROM chapters");
-  await db.execute("DELETE FROM book_versions");
-  await db.execute("DELETE FROM books");
-  await db.execute("DELETE FROM notes");
-  if (replaceCanvases) await db.execute("DELETE FROM canvases");
-  await db.execute("DELETE FROM sync_tombstones");
-  // Bases describe the replaced data; the restored library is compared afresh.
-  await db.execute("DELETE FROM sync_state").catch(() => {});
-
-  for (let i = 0; i < statements.length; i++) {
-    try {
-      await db.execute(statements[i]);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      throw new Error(`Restore failed on statement ${i + 1}/${statements.length}: ${detail}`);
+  // The deletes and inserts are one transaction, so a failed insert leaves
+  // the Library as it was (#344).
+  const deletes = [
+    "DELETE FROM chapters",
+    "DELETE FROM book_versions",
+    "DELETE FROM books",
+    "DELETE FROM notes",
+    ...(replaceCanvases ? ["DELETE FROM canvases"] : []),
+    "DELETE FROM sync_tombstones",
+    // Bases describe the replaced data; the restored library is compared afresh.
+    "DELETE FROM sync_state",
+  ];
+  try {
+    await db.executeAtomic([...deletes, ...statements]);
+  } catch (error) {
+    if (error instanceof AtomicStatementError && error.index !== null && error.index >= deletes.length) {
+      throw new Error(
+        `Restore failed on statement ${error.index - deletes.length + 1}/${statements.length}: ${error.detail}`
+      );
     }
+    throw error;
   }
 }
 
@@ -252,6 +256,9 @@ export class BackupService {
   }
 
   private async restoreBackupInner(filename: string): Promise<void> {
+    // Pending editor text lands before the pre-restore Backup; a failed save
+    // stops the Restore before anything changes.
+    await flushPendingEdits();
     const currentSql = await generateSqlDump();
     if (await dumpHasDataAsync(currentSql)) {
       await this.saveBackupSnapshot("pre-restore", currentSql);

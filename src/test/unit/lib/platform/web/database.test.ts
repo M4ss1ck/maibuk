@@ -1,7 +1,8 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
-import type { Database as SqlJsDatabase } from "sql.js";
+import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
 import { WebDatabaseAdapter } from "@/lib/platform/web/database";
+import { AtomicStatementError } from "@/lib/db/atomic";
 
 const DB_NAME = "maibuk-db-storage";
 
@@ -78,6 +79,47 @@ describe("WebDatabaseAdapter persistence", () => {
 
     await adapter.execute("INSERT INTO books VALUES (2)");
     expect(Array.from((await readPersisted()) ?? [])).toEqual([7, 7, 7]);
+    await adapter.close();
+  });
+
+  it("a failed executeAtomic leaves the persisted bytes untouched", async () => {
+    const SQL = await initSqlJs();
+    const sqlDb = new SQL.Database();
+    sqlDb.run("CREATE TABLE notes (id TEXT PRIMARY KEY, title TEXT)");
+    sqlDb.run("INSERT INTO notes (id, title) VALUES ('kept', 'Kept')");
+    const adapter = new WebDatabaseAdapter(sqlDb as unknown as SqlJsDatabase);
+
+    await adapter.execute("INSERT INTO notes (id, title) VALUES ('base', 'Base')");
+    const before = await readPersisted();
+    expect(before).not.toBeNull();
+
+    await expect(
+      adapter.executeAtomic([
+        "INSERT INTO notes (id, title) VALUES ('doomed', 'Doomed')",
+        "INSERT INTO missing_table (id) VALUES ('x')",
+      ])
+    ).rejects.toBeInstanceOf(AtomicStatementError);
+
+    expect(await readPersisted()).toEqual(before);
+    expect(
+      await adapter.select<Record<string, unknown>[]>("SELECT id FROM notes ORDER BY id")
+    ).toEqual([{ id: "base" }, { id: "kept" }]);
+
+    await adapter.execute("INSERT INTO notes (id, title) VALUES ('marker', 'Marker')");
+    const persisted = await readPersisted();
+    expect(persisted).not.toBeNull();
+    const restored = new SQL.Database(persisted ?? undefined);
+    try {
+      const stmt = restored.prepare("SELECT id FROM notes ORDER BY id");
+      const ids: unknown[] = [];
+      while (stmt.step()) {
+        ids.push((stmt.getAsObject() as Record<string, unknown>).id);
+      }
+      stmt.free();
+      expect(ids).toEqual(["base", "kept", "marker"]);
+    } finally {
+      restored.close();
+    }
     await adapter.close();
   });
 });

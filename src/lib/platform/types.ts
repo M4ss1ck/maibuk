@@ -5,7 +5,8 @@ export interface DatabaseAdapter {
   select<T = unknown[]>(sql: string, params?: unknown[]): Promise<T>;
   close(): Promise<void>;
   exportData(): Promise<Uint8Array>;
-  importData(sqlContent: string): Promise<void>;
+  /** Runs every statement in one transaction, or none: rejects with AtomicStatementError and leaves the Library unchanged. */
+  executeAtomic(statements: string[]): Promise<void>;
 }
 
 export interface SaveDialogOptions {
