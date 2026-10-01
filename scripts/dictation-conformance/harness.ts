@@ -6,13 +6,7 @@ import type { DictationEvent } from "@/features/dictation/types";
 import { cacheModelFiles } from "@/lib/platform/web/dictation/cache-model-files";
 import { createWebRecognizerHost } from "@/lib/platform/web/dictation/host";
 
-const TYPING_EVENTS = new Set([
-  "keydown",
-  "keyup",
-  "keypress",
-  "input",
-  "beforeinput",
-]);
+const TYPING_EVENTS = new Set(["keydown", "keyup", "keypress", "input", "beforeinput"]);
 
 interface RawEvent {
   ts: number;
@@ -46,10 +40,7 @@ interface ConformanceResult {
 
 const status = document.getElementById("status");
 
-async function buildResult(
-  modelId: string,
-  audioSeconds: number
-): Promise<ConformanceResult> {
+async function buildResult(modelId: string, audioSeconds: number): Promise<ConformanceResult> {
   const entry = MODEL_CATALOG.find((m) => m.id === modelId);
   if (!entry) throw new Error(`unknown model: ${modelId}`);
   // Same-origin copies served by the preview (web.mjs links them in). A
@@ -80,15 +71,13 @@ async function buildResult(
 
   const longTasks: PerformanceEntry[] = [];
   const longTaskObserver = new PerformanceObserver((list) => {
-    for (const entry of list.getEntries())
-      if (entry.startTime >= runStart) longTasks.push(entry);
+    for (const entry of list.getEntries()) if (entry.startTime >= runStart) longTasks.push(entry);
   });
   longTaskObserver.observe({ type: "longtask", buffered: true });
   const typingEvents: PerformanceEventTiming[] = [];
   const eventObserver = new PerformanceObserver((list) => {
     for (const entry of list.getEntries() as PerformanceEventTiming[])
-      if (TYPING_EVENTS.has(entry.name) && entry.startTime >= runStart)
-        typingEvents.push(entry);
+      if (TYPING_EVENTS.has(entry.name) && entry.startTime >= runStart) typingEvents.push(entry);
   });
   eventObserver.observe({
     type: "event",
@@ -129,9 +118,7 @@ async function buildResult(
   };
 
   await host.start(listener);
-  await new Promise((resolve) =>
-    setTimeout(resolve, (audioSeconds + 1.5) * 1000)
-  );
+  await new Promise((resolve) => setTimeout(resolve, (audioSeconds + 1.5) * 1000));
   await host.stop();
   // stop() resolving means the stream ended: the stopped event is at this time.
   const stoppedAt = performance.now();

@@ -66,9 +66,7 @@ describe("createBackup()", () => {
     mockInvoke.mockRejectedValue("BACKUP_DIRECTORY_NOT_APPROVED");
     const { createBackup, BACKUP_DIRECTORY_NOT_APPROVED } = await loadPlatform("tauri", "linux");
 
-    await expect(createBackup("/home/author/.ssh")).rejects.toThrow(
-      BACKUP_DIRECTORY_NOT_APPROVED
-    );
+    await expect(createBackup("/home/author/.ssh")).rejects.toThrow(BACKUP_DIRECTORY_NOT_APPROVED);
     expect(mockCreateTauriBackup).not.toHaveBeenCalled();
   });
 

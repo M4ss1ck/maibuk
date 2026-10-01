@@ -9,9 +9,9 @@ describe("applyAccentColor", () => {
     expect(document.documentElement.style.getPropertyValue("--color-primary-foreground")).toBe(
       "#000000"
     );
-    expect(document.documentElement.style.getPropertyValue("--color-primary-hover-foreground")).toBe(
-      "#FFFFFF"
-    );
+    expect(
+      document.documentElement.style.getPropertyValue("--color-primary-hover-foreground")
+    ).toBe("#FFFFFF");
     applyAccentColor("#FFFF55");
     expect(document.documentElement.style.getPropertyValue("--color-primary-foreground")).toBe(
       "#000000"

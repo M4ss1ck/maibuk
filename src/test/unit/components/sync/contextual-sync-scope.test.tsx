@@ -117,9 +117,7 @@ describe("contextual sync scope", () => {
     expect(syncFlow.syncAllWithSessionPassphrase).not.toHaveBeenCalled();
 
     await user.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument());
   });
 
   it("SyncStatusButton resets a manual scope change when the panel reopens", async () => {
@@ -136,18 +134,14 @@ describe("contextual sync scope", () => {
     expect(screen.getByRole("button", { name: /sync\.scopeBooks/ })).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument());
 
     trigger.focus();
     await user.keyboard("{Enter}");
     expect(screen.getByRole("button", { name: /sync\.scopeNotes/ })).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument());
   });
 
   it("SyncStatusButton dispatches the keyboard-chosen scope and direction", async () => {
@@ -183,9 +177,7 @@ describe("contextual sync scope", () => {
     });
 
     await user.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument());
   });
 
   it("Settings controls keep All as their default", () => {

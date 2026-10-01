@@ -7,11 +7,7 @@ import {
   toChapter,
   updateChapterRow,
 } from "@/features/chapters/write";
-import type {
-  Chapter,
-  CreateChapterInput,
-  UpdateChapterInput,
-} from "@/features/chapters/types";
+import type { Chapter, CreateChapterInput, UpdateChapterInput } from "@/features/chapters/types";
 
 interface ChapterStore {
   chapters: Chapter[];

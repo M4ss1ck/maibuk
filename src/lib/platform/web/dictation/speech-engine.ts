@@ -1,10 +1,7 @@
 // The swap point. One implementation per engine per backend; nothing above the worker sees it.
 import type { DictationEvent, ModelSpec } from "@/features/dictation/types";
 
-export type EngineEvent = Extract<
-  DictationEvent,
-  { type: "partial" | "final" }
->;
+export type EngineEvent = Extract<DictationEvent, { type: "partial" | "final" }>;
 
 export interface SpeechEngine {
   load(files: Map<string, Uint8Array>, spec: ModelSpec): Promise<void>;

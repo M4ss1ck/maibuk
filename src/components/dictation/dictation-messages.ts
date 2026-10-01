@@ -7,10 +7,7 @@ export interface NoticeMessage {
   announce?: string;
 }
 
-export function noticeMessage(
-  notice: SessionNotice,
-  t: TFunction,
-): NoticeMessage {
+export function noticeMessage(notice: SessionNotice, t: TFunction): NoticeMessage {
   switch (notice.kind) {
     case "started":
       return {
@@ -82,14 +79,9 @@ export function noticeMessage(
       return { announce: t("dictation.fieldNoLineBreaks") };
     case "error": {
       const text = t(`dictation.errors.${notice.code}`, {
-        language: notice.language
-          ? t(`dictation.languages.${notice.language}`)
-          : "",
+        language: notice.language ? t(`dictation.languages.${notice.language}`) : "",
       });
-      const variant =
-        notice.code === "no_target" || notice.code === "cancelled"
-          ? "info"
-          : "error";
+      const variant = notice.code === "no_target" || notice.code === "cancelled" ? "info" : "error";
       return { toast: { variant, text }, announce: text };
     }
   }

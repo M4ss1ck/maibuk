@@ -296,16 +296,12 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const state = get();
     if (!state.current) return;
     const db = await getDatabase();
-    const rows = await db.select<Record<string, unknown>[]>(
-      "SELECT * FROM canvases WHERE id = ?",
-      [state.current.id]
-    );
+    const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM canvases WHERE id = ?", [
+      state.current.id,
+    ]);
     if (!rows[0]) return;
     const parsed = parseCanvasDoc(rows[0].doc as string);
-    const stored = toModel(
-      rows[0],
-      parsed.ok ? parsed.doc : createDefaultCanvasDoc()
-    );
+    const stored = toModel(rows[0], parsed.ok ? parsed.doc : createDefaultCanvasDoc());
     const doc = parsed.ok
       ? { ...parsed.doc, viewport: viewportForCanvas(stored.id, parsed.doc.viewport) }
       : stored.doc;
@@ -857,9 +853,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     }
     // Recovery is a content edit like any other: it goes through the write
     // path so it emits a Change and syncs.
-    const stored = await canvasWriteQueue.enqueue(() =>
-      updateCanvasDocRow(canvasId, doc, "local")
-    );
+    const stored = await canvasWriteQueue.enqueue(() => updateCanvasDocRow(canvasId, doc, "local"));
     if (!stored) {
       throw new Error("Canvas document replacement is not allowed");
     }

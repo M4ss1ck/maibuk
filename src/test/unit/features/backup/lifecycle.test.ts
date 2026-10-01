@@ -39,8 +39,13 @@ vi.mock("../../../../features/backup/backup-service", () => ({
   },
 }));
 
-const { createDailyBackup, runBackgroundBackup, runDailyBackupOnce, resetBackupLifecycleForTests, scheduleDailyBackup } =
-  await import("@/features/backup/lifecycle");
+const {
+  createDailyBackup,
+  runBackgroundBackup,
+  runDailyBackupOnce,
+  resetBackupLifecycleForTests,
+  scheduleDailyBackup,
+} = await import("@/features/backup/lifecycle");
 const librarySwitch = await import("@/features/tutorial/library-switch");
 
 describe("backup lifecycle", () => {

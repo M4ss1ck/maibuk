@@ -21,8 +21,7 @@ async function refreshViewsForRemote(change: Change): Promise<void> {
     // exists; close it the way the old direct removal did.
     const books = useBookStore.getState();
     if (
-      (books.currentBook?.id === change.id &&
-        !books.books.some((book) => book.id === change.id)) ||
+      (books.currentBook?.id === change.id && !books.books.some((book) => book.id === change.id)) ||
       (useChapterStore.getState().currentBookId === change.id &&
         !books.books.some((book) => book.id === change.id))
     ) {
@@ -36,10 +35,7 @@ async function refreshViewsForRemote(change: Change): Promise<void> {
   } else if (change.entity === "note") {
     await useNoteStore.getState().refreshNotes();
     const notes = useNoteStore.getState();
-    if (
-      notes.currentNote?.id === change.id &&
-      !notes.notes.some((note) => note.id === change.id)
-    ) {
+    if (notes.currentNote?.id === change.id && !notes.notes.some((note) => note.id === change.id)) {
       useNoteStore.setState({ currentNote: null });
     }
   } else {

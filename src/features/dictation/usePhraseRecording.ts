@@ -63,9 +63,7 @@ export function usePhraseRecording({
     fieldRef.current?.focus();
     void getDictation()
       .then((runtime) => runtime.session.recordPhrase(language))
-      .catch(
-        (): PhraseRecordingResult => ({ kind: "error", code: "unsupported" })
-      )
+      .catch((): PhraseRecordingResult => ({ kind: "error", code: "unsupported" }))
       .then((result) => {
         recordingRef.current = false;
         if (!mounted.current) return;
@@ -93,7 +91,8 @@ export function usePhraseRecording({
   // caret, or its own recording under way.
   useEffect(() => {
     const doc = fieldRef.current?.ownerDocument ?? document;
-    const update = () => setFieldFocused(fieldRef.current !== null && doc.activeElement === fieldRef.current);
+    const update = () =>
+      setFieldFocused(fieldRef.current !== null && doc.activeElement === fieldRef.current);
     update();
     doc.addEventListener("focusin", update);
     doc.addEventListener("focusout", update);

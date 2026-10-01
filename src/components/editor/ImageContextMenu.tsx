@@ -276,80 +276,80 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
             onAction={handleAction}
             className="w-48 rounded-lg border border-border bg-card py-1 shadow-lg outline-none"
           >
-          <MenuItem
-            id="edit-alt"
-            data-command="image.editAlt"
-            textValue={t("editor.imageEditAlt")}
-            className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
-          >
-            <Type className="w-4 h-4 shrink-0" />
-            {t("editor.imageEditAlt")}
-          </MenuItem>
-          <MenuItem
-            id="copy"
-            data-command="image.copy"
-            textValue={t("editor.imageCopy")}
-            className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
-          >
-            <Copy className="w-4 h-4 shrink-0" />
-            {t("editor.imageCopy")}
-          </MenuItem>
-          <MenuItem
-            id="save"
-            data-command="image.save"
-            textValue={t("editor.imageSave")}
-            className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
-          >
-            <Download className="w-4 h-4 shrink-0" />
-            {t("editor.imageSave")}
-          </MenuItem>
-
-          <Separator className="my-1 border-t border-border" />
-
-          <MenuSection className="outline-none">
-            <Header className="px-3 py-1 text-xs text-muted-foreground">
-              {t("editor.imageAlignment")}
-            </Header>
             <MenuItem
-              id="align-left"
-              data-command="image.alignLeft"
-              textValue={t("editor.alignLeft")}
+              id="edit-alt"
+              data-command="image.editAlt"
+              textValue={t("editor.imageEditAlt")}
               className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
             >
-              <AlignLeft className="w-4 h-4 shrink-0" />
-              {t("editor.alignLeft")}
+              <Type className="w-4 h-4 shrink-0" />
+              {t("editor.imageEditAlt")}
             </MenuItem>
             <MenuItem
-              id="align-center"
-              data-command="image.alignCenter"
-              textValue={t("editor.alignCenter")}
+              id="copy"
+              data-command="image.copy"
+              textValue={t("editor.imageCopy")}
               className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
             >
-              <AlignCenter className="w-4 h-4 shrink-0" />
-              {t("editor.alignCenter")}
+              <Copy className="w-4 h-4 shrink-0" />
+              {t("editor.imageCopy")}
             </MenuItem>
             <MenuItem
-              id="align-right"
-              data-command="image.alignRight"
-              textValue={t("editor.alignRight")}
+              id="save"
+              data-command="image.save"
+              textValue={t("editor.imageSave")}
               className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
             >
-              <AlignRight className="w-4 h-4 shrink-0" />
-              {t("editor.alignRight")}
+              <Download className="w-4 h-4 shrink-0" />
+              {t("editor.imageSave")}
             </MenuItem>
-          </MenuSection>
 
-          <Separator className="my-1 border-t border-border" />
+            <Separator className="my-1 border-t border-border" />
 
-          <MenuItem
-            id="delete"
-            data-command="image.delete"
-            textValue={t("common.delete")}
-            className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-destructive outline-none data-focused:bg-muted"
-          >
-            <Trash2 className="w-4 h-4 shrink-0" />
-            {t("common.delete")}
-          </MenuItem>
+            <MenuSection className="outline-none">
+              <Header className="px-3 py-1 text-xs text-muted-foreground">
+                {t("editor.imageAlignment")}
+              </Header>
+              <MenuItem
+                id="align-left"
+                data-command="image.alignLeft"
+                textValue={t("editor.alignLeft")}
+                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
+              >
+                <AlignLeft className="w-4 h-4 shrink-0" />
+                {t("editor.alignLeft")}
+              </MenuItem>
+              <MenuItem
+                id="align-center"
+                data-command="image.alignCenter"
+                textValue={t("editor.alignCenter")}
+                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
+              >
+                <AlignCenter className="w-4 h-4 shrink-0" />
+                {t("editor.alignCenter")}
+              </MenuItem>
+              <MenuItem
+                id="align-right"
+                data-command="image.alignRight"
+                textValue={t("editor.alignRight")}
+                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-foreground outline-none data-focused:bg-muted"
+              >
+                <AlignRight className="w-4 h-4 shrink-0" />
+                {t("editor.alignRight")}
+              </MenuItem>
+            </MenuSection>
+
+            <Separator className="my-1 border-t border-border" />
+
+            <MenuItem
+              id="delete"
+              data-command="image.delete"
+              textValue={t("common.delete")}
+              className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-destructive outline-none data-focused:bg-muted"
+            >
+              <Trash2 className="w-4 h-4 shrink-0" />
+              {t("common.delete")}
+            </MenuItem>
           </Menu>
         </Popover>
       </MenuTrigger>

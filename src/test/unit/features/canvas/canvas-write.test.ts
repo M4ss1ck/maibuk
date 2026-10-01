@@ -46,7 +46,9 @@ describe("canvas write path", () => {
     expect(canvas.title).toBe("Map");
     expect(canvas.doc).toEqual(createDefaultCanvasDoc());
     expect(await rowCount()).toBe(1);
-    expect(changes).toEqual([{ entity: "canvas", id: canvas.id, origin: "local", kind: "content" }]);
+    expect(changes).toEqual([
+      { entity: "canvas", id: canvas.id, origin: "local", kind: "content" },
+    ]);
   });
 
   it("doc save emits one local content Change and moves Last Edited", async () => {
@@ -66,10 +68,9 @@ describe("canvas write path", () => {
     const doc = { ...createDefaultCanvasDoc(), viewport: { x: 9, y: 8, zoom: 3 } };
     await updateCanvasDocRow(canvas.id, doc, "local");
 
-    const rows = await testDb.select<{ doc: string }[]>(
-      "SELECT doc FROM canvases WHERE id = ?",
-      [canvas.id]
-    );
+    const rows = await testDb.select<{ doc: string }[]>("SELECT doc FROM canvases WHERE id = ?", [
+      canvas.id,
+    ]);
     expect((JSON.parse(rows[0].doc) as Record<string, unknown>).viewport).toBeUndefined();
   });
 

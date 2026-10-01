@@ -276,10 +276,7 @@ it("leaves Escape to a portaled popover opened from the toolbar", async () => {
   const user = userEvent.setup();
   const onExitToolbar = vi.fn();
   // Popovers render in a portal, but React still bubbles their events through the toolbar.
-  renderToolbar(
-    onExitToolbar,
-    createPortal(<input aria-label="Hex color" />, document.body)
-  );
+  renderToolbar(onExitToolbar, createPortal(<input aria-label="Hex color" />, document.body));
 
   screen.getByRole("textbox", { name: "Hex color" }).focus();
   await user.keyboard("{Escape}");

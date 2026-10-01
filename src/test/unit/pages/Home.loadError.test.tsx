@@ -40,9 +40,7 @@ describe("Home when the Library cannot be read", () => {
   });
 
   it("shows the error instead of the empty Library, and Try again loads the Books by keyboard", async () => {
-    mockGetDatabase
-      .mockRejectedValueOnce(new Error("database is locked"))
-      .mockResolvedValue(db);
+    mockGetDatabase.mockRejectedValueOnce(new Error("database is locked")).mockResolvedValue(db);
     const user = userEvent.setup();
     render(<Home />);
 

@@ -13,7 +13,9 @@ vi.mock("@/lib/platform/detect", async (importOriginal) => ({
 }));
 
 function setShortcuts(custom: CustomShortcuts, singleKeyEnabled = true) {
-  useShortcutSettingsStore.setState({ shortcuts: { version: 2, voice: {}, custom, singleKeyEnabled } });
+  useShortcutSettingsStore.setState({
+    shortcuts: { version: 2, voice: {}, custom, singleKeyEnabled },
+  });
 }
 
 function press(init: KeyboardEventInit, target: EventTarget = window) {
@@ -187,9 +189,7 @@ describe("useShortcuts capture phase and typing targets", () => {
     document.body.appendChild(input);
     input.focus();
 
-    input.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
-    );
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
 
     expect(onTrigger).not.toHaveBeenCalled();
     input.remove();
@@ -221,9 +221,7 @@ describe("useShortcuts capture phase and typing targets", () => {
 
     // A modifier combo reaches both the capture listener and the bubble
     // listener; the shared handled set keeps it from triggering twice.
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })
-    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
 
     expect(onTrigger).toHaveBeenCalledTimes(1);
   });
@@ -450,6 +448,8 @@ describe("useShortcuts resolves keys from the registry and Custom Shortcuts", ()
   it("uses the web default where the browser keeps the desktop key", async () => {
     const { liveShortcuts } = await import("@/lib/command-keys");
     expect(liveShortcuts("bookList.newBook", DEFAULT_SHORTCUT_SETTINGS, true)).toEqual([["Alt+n"]]);
-    expect(liveShortcuts("bookList.newBook", DEFAULT_SHORTCUT_SETTINGS, false)).toEqual([["Mod+n"]]);
+    expect(liveShortcuts("bookList.newBook", DEFAULT_SHORTCUT_SETTINGS, false)).toEqual([
+      ["Mod+n"],
+    ]);
   });
 });

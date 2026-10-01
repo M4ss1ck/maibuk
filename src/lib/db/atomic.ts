@@ -7,7 +7,9 @@ export class AtomicStatementError extends Error {
 
   constructor(index: number | null, detail: string, total: number) {
     super(
-      index !== null ? `Statement ${index + 1}/${total} failed: ${detail}` : `Load failed: ${detail}`
+      index !== null
+        ? `Statement ${index + 1}/${total} failed: ${detail}`
+        : `Load failed: ${detail}`
     );
     this.name = "AtomicStatementError";
     this.index = index;

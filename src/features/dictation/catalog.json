@@ -2,14 +2,9 @@
   {
     "id": "moonshine-tiny-en-260821",
     "engine": "moonshine",
-    "languages": [
-      "en"
-    ],
+    "languages": ["en"],
     "tier": "fast",
-    "platforms": [
-      "web",
-      "tauri-linux"
-    ],
+    "platforms": ["web", "tauri-linux"],
     "files": [
       {
         "name": "adapter.ort",
@@ -97,14 +92,9 @@
   {
     "id": "moonshine-small-en-260821",
     "engine": "moonshine",
-    "languages": [
-      "en"
-    ],
+    "languages": ["en"],
     "tier": "accurate",
-    "platforms": [
-      "web",
-      "tauri-linux"
-    ],
+    "platforms": ["web", "tauri-linux"],
     "files": [
       {
         "name": "adapter.ort",
@@ -192,14 +182,9 @@
   {
     "id": "moonshine-tiny-es-260824",
     "engine": "moonshine",
-    "languages": [
-      "es"
-    ],
+    "languages": ["es"],
     "tier": "fast",
-    "platforms": [
-      "web",
-      "tauri-linux"
-    ],
+    "platforms": ["web", "tauri-linux"],
     "files": [
       {
         "name": "adapter.ort",
@@ -287,14 +272,9 @@
   {
     "id": "moonshine-small-es-260824",
     "engine": "moonshine",
-    "languages": [
-      "es"
-    ],
+    "languages": ["es"],
     "tier": "accurate",
-    "platforms": [
-      "web",
-      "tauri-linux"
-    ],
+    "platforms": ["web", "tauri-linux"],
     "files": [
       {
         "name": "adapter.ort",

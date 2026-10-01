@@ -14,7 +14,5 @@ export function topmostLayer(doc: Document = document): HTMLElement {
 // True when the element is hidden from the author: inside an inert subtree
 // (the app under a running Tutorial) or inside aria-hidden content.
 export function isOutsideLayer(element: Element): boolean {
-  return (
-    element.closest("[inert]") !== null || element.closest('[aria-hidden="true"]') !== null
-  );
+  return element.closest("[inert]") !== null || element.closest('[aria-hidden="true"]') !== null;
 }

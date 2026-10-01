@@ -276,9 +276,7 @@ describe("Canvas Edit Session", () => {
     });
     await settle();
 
-    expect(
-      useCanvasStore.getState().doc.nodes.map((node) => node.id)
-    ).toEqual(["remote-1"]);
+    expect(useCanvasStore.getState().doc.nodes.map((node) => node.id)).toEqual(["remote-1"]);
     // Let the session run past its save delay: nothing local to save, so the
     // pulled doc stands and no clock moves.
     await act(async () => {
@@ -286,7 +284,7 @@ describe("Canvas Edit Session", () => {
     });
     await settle();
     const doc = await storedDoc(CANVAS_ID);
-    expect((doc.nodes as unknown[])).toHaveLength(1);
+    expect(doc.nodes as unknown[]).toHaveLength(1);
     const rows = await testDb.select<{ updated_at: number }[]>(
       "SELECT updated_at FROM canvases WHERE id = ?",
       [CANVAS_ID]

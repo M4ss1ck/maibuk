@@ -112,7 +112,10 @@ describe("Voice Command defaults", () => {
             for (const target of voice?.targets?.[language] ?? []) {
               for (const filler of vocabulary.fillers) {
                 const words = normalizePhrase(`${verb} ${filler} ${target}`).split(" ");
-                expect(matchVoiceCommand(table, words), `${id}: ${verb} ${filler} ${target}`).toEqual({
+                expect(
+                  matchVoiceCommand(table, words),
+                  `${id}: ${verb} ${filler} ${target}`
+                ).toEqual({
                   id,
                   polarity: vocabulary.verbs[cls].polarity,
                 });
@@ -251,7 +254,11 @@ describe("matchVoiceCommand() demonstratives", () => {
     matchVoiceCommand(tables[language], normalizePhrase(line).split(" "));
 
   it("runs a mark verb and target with the demonstrative on the last span", () => {
-    expect(match("en", "make bold that")).toEqual({ id: "editor.bold", polarity: "on", that: true });
+    expect(match("en", "make bold that")).toEqual({
+      id: "editor.bold",
+      polarity: "on",
+      that: true,
+    });
     expect(match("en", "remove bold that")).toEqual({
       id: "editor.bold",
       polarity: "off",
@@ -347,9 +354,10 @@ describe("voiceThatPhrases()", () => {
       for (const { id, phrase } of phrases) {
         const normalized = normalizePhrase(phrase);
         expect(wordsOf(phrase).length, `${id}: ${phrase}`).toBeGreaterThanOrEqual(2);
-        expect(matchVoiceCommand(table, normalized.split(" ")), `${id}: ${phrase}`).toMatchObject(
-          { id, that: true }
-        );
+        expect(matchVoiceCommand(table, normalized.split(" ")), `${id}: ${phrase}`).toMatchObject({
+          id,
+          that: true,
+        });
         expect(punctuation.has(normalized), `${id}: ${phrase}`).toBe(false);
         const previous = owner.get(normalized);
         expect(

@@ -2,21 +2,15 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "../../../support/db-test-context";
 import { InMemoryRemote } from "../../../support/in-memory-remote";
-import type {
-  EntitySyncAdapter,
-  EntitySyncContext,
-} from "@/features/sync/entity-sync";
+import type { EntitySyncAdapter, EntitySyncContext } from "@/features/sync/entity-sync";
 import type { SyncLogEntry, SyncDeletionReviewItem, SyncOptions } from "@/features/sync/types";
 
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
 vi.mock("../../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
 
-const {
-  syncEntity,
-  syncEntityBatch,
-  pullEntity,
-  processPendingDeletions,
-} = await import("@/features/sync/entity-sync");
+const { syncEntity, syncEntityBatch, pullEntity, processPendingDeletions } = await import(
+  "@/features/sync/entity-sync"
+);
 const { bookAdapter, noteAdapter } = await import("@/features/sync/sync-engine");
 const { createBookRow, updateBookRow, fetchStoredBook, deleteBookRow } = await import(
   "@/features/books/write"
@@ -193,10 +187,9 @@ async function seedRemoteOnly(
 ): Promise<string> {
   const scratchId = await world.seedLocal(`scratch-${title}`);
   const json = await world.serialize(scratchId);
-  const obj = (await parseJsonAsync<Record<string, { title?: string; id?: string }>>(json)) as Record<
-    string,
-    { title?: string; id?: string }
-  >;
+  const obj = (await parseJsonAsync<Record<string, { title?: string; id?: string }>>(
+    json
+  )) as Record<string, { title?: string; id?: string }>;
   const id = `remote-only-${world.kind}-${title}`;
   if (obj.book) {
     obj.book.title = title;
@@ -217,9 +210,7 @@ async function seedRemoteOnly(
 async function seenFor(remote: InMemoryRemote, kind: "book" | "note", localIds: string[]) {
   const remotes = await remote.list(kind);
   const live = new Set(remotes.map((r) => r.entityId));
-  const deletions = localIds.some((id) => !live.has(id))
-    ? await remote.listDeleted(kind)
-    : [];
+  const deletions = localIds.some((id) => !live.has(id)) ? await remote.listDeleted(kind) : [];
   return { remotes, deletions };
 }
 
@@ -231,10 +222,9 @@ async function remoteTitleOf(
   const row = remote.getObject(world.kind, id);
   if (!row || row.deleted) return null;
   const json = await decryptBufferToText(row.data, PASS);
-  const obj = (await parseJsonAsync<{ book?: { title: string }; note?: { title: string } }>(json));
+  const obj = await parseJsonAsync<{ book?: { title: string }; note?: { title: string } }>(json);
   return obj.book?.title ?? obj.note?.title ?? null;
 }
-
 
 describe.each([
   { name: "book", world: bookWorld },
@@ -564,4 +554,3 @@ describe("entity sync — pending deletions through the registry", () => {
     expect(remote.deleted).toHaveLength(0);
   });
 });
-

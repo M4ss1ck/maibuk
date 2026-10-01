@@ -81,7 +81,8 @@ function submitImplicitly(field: HTMLInputElement): void {
   const defaultButton = Array.from(form.elements).find(
     (element): element is HTMLButtonElement | HTMLInputElement =>
       (element instanceof HTMLButtonElement && element.type === "submit") ||
-      (element instanceof HTMLInputElement && (element.type === "submit" || element.type === "image"))
+      (element instanceof HTMLInputElement &&
+        (element.type === "submit" || element.type === "image"))
   );
   if (defaultButton) {
     if (!defaultButton.disabled) defaultButton.click();

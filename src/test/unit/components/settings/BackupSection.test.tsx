@@ -399,25 +399,26 @@ describe("BackupSection", () => {
       expect(screen.queryByText("backup.directoryAccessFailed")).not.toBeInTheDocument();
     });
 
-    it.each(["backups", "~/Backups", "./backups"])(
-      "rejects the relative path %s without asking or saving",
-      async (path) => {
-        const { user, input } = await renderWithDirectoryField();
+    it.each([
+      "backups",
+      "~/Backups",
+      "./backups",
+    ])("rejects the relative path %s without asking or saving", async (path) => {
+      const { user, input } = await renderWithDirectoryField();
 
-        await typeDirectory(user, input, path);
-        await user.keyboard("{Enter}");
+      await typeDirectory(user, input, path);
+      await user.keyboard("{Enter}");
 
-        expect(input).toHaveAccessibleDescription("backup.directoryNotAbsolute");
-        expect(input).toBeInvalid();
-        expect(input).toHaveValue(path);
-        expect(input).toHaveFocus();
-        expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
-        expect(useSettingsStore.getState().backupDirectory).toBeNull();
+      expect(input).toHaveAccessibleDescription("backup.directoryNotAbsolute");
+      expect(input).toBeInvalid();
+      expect(input).toHaveValue(path);
+      expect(input).toHaveFocus();
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
+      expect(useSettingsStore.getState().backupDirectory).toBeNull();
 
-        await typeDirectory(user, input, "/mnt/fixed");
-        expect(input).not.toBeInvalid();
-      }
-    );
+      await typeDirectory(user, input, "/mnt/fixed");
+      expect(input).not.toBeInvalid();
+    });
 
     it("shows an error when approval fails", async () => {
       mockRequestBackupDirectory.mockRejectedValue(new Error("BACKUP_DIRECTORY_INVALID"));

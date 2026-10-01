@@ -256,10 +256,11 @@ describe("FootnoteList", () => {
     await chooseMenuItem(user, "editor.deleteFootnote");
 
     await waitFor(() => expect(refs()).toEqual(["1", "2"]));
-    expect(within(grid()).getAllByRole("row").map((r) => r.textContent)).toEqual([
-      expect.stringContaining("1.Second"),
-      expect.stringContaining("2.Third"),
-    ]);
+    expect(
+      within(grid())
+        .getAllByRole("row")
+        .map((r) => r.textContent)
+    ).toEqual([expect.stringContaining("1.Second"), expect.stringContaining("2.Third")]);
   });
 
   it("offers the same actions on the hover buttons for pointer devices", async () => {
@@ -281,7 +282,9 @@ describe("FootnoteList", () => {
 
     it("edits from the ⋯ button a tap opens", async () => {
       const user = await renderList();
-      touchTap(screen.getByRole("button", { name: "common.moreActionsFor editor.footnoteNumber 2" }));
+      touchTap(
+        screen.getByRole("button", { name: "common.moreActionsFor editor.footnoteNumber 2" })
+      );
       touchTap(await screen.findByRole("menuitem", { name: "editor.editFootnote" }));
 
       const dialog = await screen.findByRole("dialog", { name: "editor.editFootnote" });

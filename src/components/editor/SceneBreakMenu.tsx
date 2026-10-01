@@ -144,106 +144,104 @@ export function SceneBreakMenu({ editor, bookId }: SceneBreakMenuProps) {
           className="w-64 rounded-lg border border-border bg-card p-3 shadow-lg max-h-[calc(100vh-1rem)] overflow-y-auto outline-none"
           style={{ maxHeight: "calc(100dvh - 1rem)" }}
         >
-            <p className="text-xs text-muted-foreground mb-1">{t("editor.sceneBreakBuiltIns")}</p>
-            <div className="flex flex-col gap-1 mb-3">
-              {BUILTIN_SCENE_BREAKS.map((descriptor) => (
-                <button
-                  key={descriptor.symbols}
-                  type="button"
-                  onClick={() => insert(descriptor)}
-                  className="text-center py-1 rounded hover:bg-muted tracking-[0.3em]"
-                >
-                  {descriptor.symbols}
-                </button>
-              ))}
-            </div>
+          <p className="text-xs text-muted-foreground mb-1">{t("editor.sceneBreakBuiltIns")}</p>
+          <div className="flex flex-col gap-1 mb-3">
+            {BUILTIN_SCENE_BREAKS.map((descriptor) => (
+              <button
+                key={descriptor.symbols}
+                type="button"
+                onClick={() => insert(descriptor)}
+                className="text-center py-1 rounded hover:bg-muted tracking-[0.3em]"
+              >
+                {descriptor.symbols}
+              </button>
+            ))}
+          </div>
 
-            {presets.length > 0 && (
-              <>
-                <p className="text-xs text-muted-foreground mb-1">
-                  {t("editor.sceneBreakPresets")}
-                </p>
-                <div className="flex flex-col gap-1 mb-3">
-                  {presets.map((descriptor, index) => (
-                    <div key={JSON.stringify(descriptor)} className="flex items-center gap-1">
+          {presets.length > 0 && (
+            <>
+              <p className="text-xs text-muted-foreground mb-1">{t("editor.sceneBreakPresets")}</p>
+              <div className="flex flex-col gap-1 mb-3">
+                {presets.map((descriptor, index) => (
+                  <div key={JSON.stringify(descriptor)} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => insert(descriptor)}
+                      className="flex-1 text-center py-1 rounded hover:bg-muted truncate"
+                    >
+                      {descriptor.kind === "image"
+                        ? t("editor.sceneBreakImagePreset")
+                        : descriptor.symbols}
+                    </button>
+                    <Tooltip content={t("editor.sceneBreakDeletePreset")}>
                       <button
                         type="button"
-                        onClick={() => insert(descriptor)}
-                        className="flex-1 text-center py-1 rounded hover:bg-muted truncate"
+                        onClick={() => removeSceneBreakPreset(index)}
+                        aria-label={t("editor.sceneBreakDeletePreset")}
+                        className="p-1 rounded hover:bg-destructive/10 text-destructive"
                       >
-                        {descriptor.kind === "image"
-                          ? t("editor.sceneBreakImagePreset")
-                          : descriptor.symbols}
+                        <X className="w-3 h-3" />
                       </button>
-                      <Tooltip content={t("editor.sceneBreakDeletePreset")}>
-                        <button
-                          type="button"
-                          onClick={() => removeSceneBreakPreset(index)}
-                          aria-label={t("editor.sceneBreakDeletePreset")}
-                          className="p-1 rounded hover:bg-destructive/10 text-destructive"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </Tooltip>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            <p className="text-xs text-muted-foreground mb-1">{t("editor.sceneBreakCustom")}</p>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="flex-1 min-w-0">
-                <Input
-                  type="text"
-                  value={unit}
-                  onChange={(event) => setUnit(event.target.value)}
-                  placeholder={t("editor.sceneBreakCharacters")}
-                  className="py-1 text-sm"
-                />
+                    </Tooltip>
+                  </div>
+                ))}
               </div>
-              <div className="w-20">
-                <Input
-                  type="number"
-                  min={1}
-                  value={count}
-                  onChange={(event) => setCount(Number(event.target.value))}
-                  className="py-1 text-sm"
-                />
-              </div>
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">{t("editor.sceneBreakSpaced")}</span>
-              <Switch checked={spaced} onChange={setSpaced} />
-            </div>
-            <p className="text-center py-1 mb-2 tracking-[0.3em] text-muted-foreground">
-              {customPreview}
-            </p>
-            <div className="flex gap-2 mb-3">
-              <button
-                type="button"
-                onClick={() => insert(customDescriptor())}
-                className="flex-1 py-1 rounded bg-primary text-primary-foreground text-sm"
-              >
-                {t("common.insert")}
-              </button>
-              <button
-                type="button"
-                onClick={() => addSceneBreakPreset(customDescriptor())}
-                className="flex-1 py-1 rounded border border-border text-sm hover:bg-muted"
-              >
-                {t("editor.sceneBreakSavePreset")}
-              </button>
-            </div>
+            </>
+          )}
 
+          <p className="text-xs text-muted-foreground mb-1">{t("editor.sceneBreakCustom")}</p>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1 min-w-0">
+              <Input
+                type="text"
+                value={unit}
+                onChange={(event) => setUnit(event.target.value)}
+                placeholder={t("editor.sceneBreakCharacters")}
+                className="py-1 text-sm"
+              />
+            </div>
+            <div className="w-20">
+              <Input
+                type="number"
+                min={1}
+                value={count}
+                onChange={(event) => setCount(Number(event.target.value))}
+                className="py-1 text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-muted-foreground">{t("editor.sceneBreakSpaced")}</span>
+            <Switch checked={spaced} onChange={setSpaced} />
+          </div>
+          <p className="text-center py-1 mb-2 tracking-[0.3em] text-muted-foreground">
+            {customPreview}
+          </p>
+          <div className="flex gap-2 mb-3">
             <button
               type="button"
-              onClick={handleUpload}
-              className="w-full flex items-center justify-center gap-2 py-1 rounded border border-border text-sm hover:bg-muted disabled:opacity-50"
+              onClick={() => insert(customDescriptor())}
+              className="flex-1 py-1 rounded bg-primary text-primary-foreground text-sm"
             >
-              <ImageIcon className="w-4 h-4" />
-              {t("editor.sceneBreakUploadImage")}
+              {t("common.insert")}
             </button>
+            <button
+              type="button"
+              onClick={() => addSceneBreakPreset(customDescriptor())}
+              className="flex-1 py-1 rounded border border-border text-sm hover:bg-muted"
+            >
+              {t("editor.sceneBreakSavePreset")}
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleUpload}
+            className="w-full flex items-center justify-center gap-2 py-1 rounded border border-border text-sm hover:bg-muted disabled:opacity-50"
+          >
+            <ImageIcon className="w-4 h-4" />
+            {t("editor.sceneBreakUploadImage")}
+          </button>
         </AriaDialog>
       </Popover>
     </div>

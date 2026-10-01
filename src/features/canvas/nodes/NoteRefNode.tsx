@@ -27,7 +27,9 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
   const books = useBookStore((state) => state.books);
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
   const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
-  const nodeMenu = useCanvasNodeMenu(node.id, { isDisabled: editorReadOnly || interactivityLocked });
+  const nodeMenu = useCanvasNodeMenu(node.id, {
+    isDisabled: editorReadOnly || interactivityLocked,
+  });
 
   if (node.kind !== "noteRef") return null;
 

@@ -3,7 +3,10 @@ import type { ParsedLink } from "@/features/links/types";
 import { getDatabase } from "@/lib/db";
 import { assignHeadingIds } from "@/features/links/heading-ids";
 
-export type LinkToastKey = "deepLink.resourceGone" | "deepLink.headingGone" | "deepLink.genericError";
+export type LinkToastKey =
+  | "deepLink.resourceGone"
+  | "deepLink.headingGone"
+  | "deepLink.genericError";
 
 export type LinkTarget = {
   to: string;

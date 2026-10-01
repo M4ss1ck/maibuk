@@ -107,7 +107,9 @@ describe("NoteEditor Escape leaves the editor", () => {
 
   it("lands on the first Backlink when another Note links here", async () => {
     const user = userEvent.setup();
-    render(<NoteEditor note={buildNote()} onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>()} />);
+    render(
+      <NoteEditor note={buildNote()} onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>()} />
+    );
 
     const backlink = await screen.findByRole("button", { name: "Note A" });
     await focusEditor(user);
@@ -119,7 +121,9 @@ describe("NoteEditor Escape leaves the editor", () => {
   it("lands on Back when the Note has no Backlinks", async () => {
     getBacklinksForNote.mockResolvedValue([]);
     const user = userEvent.setup();
-    render(<NoteEditor note={buildNote()} onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>()} />);
+    render(
+      <NoteEditor note={buildNote()} onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>()} />
+    );
 
     await waitFor(() => expect(screen.queryByRole("button", { name: "Note A" })).toBeNull());
     await focusEditor(user);

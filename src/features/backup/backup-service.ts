@@ -167,7 +167,11 @@ async function replaceRestoreData(
   try {
     await db.executeAtomic([...deletes, ...statements]);
   } catch (error) {
-    if (error instanceof AtomicStatementError && error.index !== null && error.index >= deletes.length) {
+    if (
+      error instanceof AtomicStatementError &&
+      error.index !== null &&
+      error.index >= deletes.length
+    ) {
       throw new Error(
         `Restore failed on statement ${error.index - deletes.length + 1}/${statements.length}: ${error.detail}`
       );
@@ -184,7 +188,10 @@ export interface BulkDeleteResult {
 export class BackupService {
   constructor(private adapter: BackupAdapter) {}
 
-  private async saveBackupSnapshot(trigger: BackupEntry["trigger"], sql: Uint8Array): Promise<string> {
+  private async saveBackupSnapshot(
+    trigger: BackupEntry["trigger"],
+    sql: Uint8Array
+  ): Promise<string> {
     const filename = buildFilename(trigger);
     await this.adapter.saveBackup(filename, sql);
     return filename;

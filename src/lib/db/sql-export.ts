@@ -40,7 +40,7 @@ function pagedSelect(table: string, afterRowId: number): { sql: string; params: 
 async function readTablePages(
   adapter: SqlExportReader,
   table: string,
-  onPage: (rows: Record<string, unknown>[]) => Promise<void> | void,
+  onPage: (rows: Record<string, unknown>[]) => Promise<void> | void
 ): Promise<void> {
   let afterRowId = 0;
   for (;;) {
@@ -68,7 +68,7 @@ async function readTablePages(
 // Fallback when the Worker API is unavailable.
 async function exportViaFallback(
   adapter: SqlExportReader,
-  exportedAt: string,
+  exportedAt: string
 ): Promise<Uint8Array> {
   const sections = new Map<string, string>();
   for (const table of SQL_EXPORT_TABLES) {
@@ -99,7 +99,7 @@ type PendingResult = {
 async function exportViaWorker(
   adapter: SqlExportReader,
   exportedAt: string,
-  createWorker: () => Worker,
+  createWorker: () => Worker
 ): Promise<Uint8Array> {
   let worker: Worker | null = null;
   try {
@@ -198,7 +198,7 @@ function defaultCreateWorker(): (() => Worker) | undefined {
 
 export async function exportSqlDump(
   adapter: SqlExportReader,
-  options?: SqlExportOptions,
+  options?: SqlExportOptions
 ): Promise<Uint8Array> {
   const exportedAt = new Date().toISOString();
   const createWorker = options?.createWorker ?? defaultCreateWorker();

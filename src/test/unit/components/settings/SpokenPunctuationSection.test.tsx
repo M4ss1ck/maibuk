@@ -144,7 +144,9 @@ describe("SpokenPunctuationSection", () => {
     renderSection("es");
 
     const numeralEs = screen.getByRole("group", { name: "numeral" });
-    expect(within(numeralEs).getByText("Escribe el número siguiente en cifras")).toBeInTheDocument();
+    expect(
+      within(numeralEs).getByText("Escribe el número siguiente en cifras")
+    ).toBeInTheDocument();
   });
 
   it("follows the model's capabilities for the initial switch state", () => {

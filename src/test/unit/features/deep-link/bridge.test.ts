@@ -296,7 +296,10 @@ describe("deep-link bridge", () => {
     );
     let resolveFirst: () => void = () => {};
     const handlerA = vi.fn(
-      () => new Promise<void>((res) => { resolveFirst = res; })
+      () =>
+        new Promise<void>((res) => {
+          resolveFirst = res;
+        })
     );
     await installDeepLinkBridge(handlerA);
     releaseDeepLinkQueue();

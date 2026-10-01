@@ -401,9 +401,7 @@ describe("VersionPanel", () => {
 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "r" }));
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Restore" })).toHaveFocus()
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Restore" })).toHaveFocus());
 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
 

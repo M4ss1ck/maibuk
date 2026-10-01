@@ -26,10 +26,7 @@ test.describe("@wf:voice-focus-keys @sc:focus.left @chromium-only", () => {
     const size = toolbar(page).getByRole("combobox", { name: "Size" });
     await expect(size).toBeFocused();
     await page.keyboard.press("ArrowRight");
-    await expect(toolbar(page).locator(":focus")).toHaveAttribute(
-      "aria-label",
-      "Show suggestions"
-    );
+    await expect(toolbar(page).locator(":focus")).toHaveAttribute("aria-label", "Show suggestions");
 
     await expect(size).toBeFocused({ timeout: 90_000 });
     await expect(voiceStatus(page)).toHaveText("Voice command: Press Left");

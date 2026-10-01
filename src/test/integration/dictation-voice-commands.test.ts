@@ -214,7 +214,9 @@ describe("Voice Commands in a real editor session", () => {
   });
 
   it("keeps a typed link running through the separating space", async () => {
-    const { editor, emit } = await setup({ content: '<p><a href="https://example.com">Uno</a></p>' });
+    const { editor, emit } = await setup({
+      content: '<p><a href="https://example.com">Uno</a></p>',
+    });
     editor.commands.setTextSelection(4);
     emit("dos");
     const html = editor.getHTML();

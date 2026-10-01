@@ -80,9 +80,7 @@ function Harness() {
       onUpdateChapter={() => {}}
       onDeleteChapter={() => {}}
       onReorderChapters={() => {}}
-      onSetChapterStatus={(id, status) =>
-        useChapterStore.getState().updateChapter(id, { status })
-      }
+      onSetChapterStatus={(id, status) => useChapterStore.getState().updateChapter(id, { status })}
     />
   );
 }
@@ -116,7 +114,10 @@ function row(name = "Chapter 1") {
 }
 
 /** Opens the row's Item Menu from its ⋯ button with the keyboard. */
-async function openMenu(user: ReturnType<typeof userEvent.setup>, label = "More actions for Chapter 1") {
+async function openMenu(
+  user: ReturnType<typeof userEvent.setup>,
+  label = "More actions for Chapter 1"
+) {
   const trigger = screen.getByRole("button", { name: label });
   trigger.focus();
   await user.keyboard("{Enter}");
@@ -173,9 +174,7 @@ describe("Chapter Status from the row's Item Menu", () => {
     await waitFor(async () => expect(await chapterStatus(chapterId)).toBe("revised"));
     expect(row()).toHaveTextContent("Revised");
     expect(await bookContentUpdatedAt(bookId)).toBe(contentBefore);
-    expect(changes).toEqual([
-      { entity: "book", id: bookId, origin: "local", kind: "metadata" },
-    ]);
+    expect(changes).toEqual([{ entity: "book", id: bookId, origin: "local", kind: "metadata" }]);
   });
 
   it("choosing the current status writes nothing", async () => {

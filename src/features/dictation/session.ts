@@ -78,7 +78,11 @@ export type SessionNotice =
   | { kind: "handoff_no_editor" }
   // A Voice Command refused by a gate (an open dialog, the Tutorial): the
   // live region says so, and the stats count it as refused.
-  | { kind: "voice_command_refused"; id: CommandId; reason: "dialog" | "tutorial" | "dialog_refused" }
+  | {
+      kind: "voice_command_refused";
+      id: CommandId;
+      reason: "dialog" | "tutorial" | "dialog_refused";
+    }
   // The all-caps lock changed: the live region says whether it is on or off.
   | { kind: "caps_lock"; on: boolean }
   // "Bold that" on edited dictated text: nothing changed, the live region says so.
@@ -160,10 +164,9 @@ export function editsToOrphanText(edits: DictationEdit[]): string {
 }
 
 export interface ClickDeps {
-  pressByName(name: string):
-    | { kind: "pressed"; name: string }
-    | { kind: "choices"; count: number }
-    | { kind: "not_found" };
+  pressByName(
+    name: string
+  ): { kind: "pressed"; name: string } | { kind: "choices"; count: number } | { kind: "not_found" };
   pressChoice(n: number): { kind: "pressed"; name: string } | { kind: "no_choice" };
   clearChoices(): void;
   hasChoices(): boolean;

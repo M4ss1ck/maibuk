@@ -13,8 +13,9 @@ vi.mock("@tauri-apps/api/core", () => ({
     return h(args);
   }),
 }));
-const { createTauriRecognizerHost, tauriModelFiles } =
-  await import("@/lib/platform/tauri/dictation");
+const { createTauriRecognizerHost, tauriModelFiles } = await import(
+  "@/lib/platform/tauri/dictation"
+);
 const { invoke } = await import("@tauri-apps/api/core");
 
 beforeEach(() => {
@@ -55,9 +56,9 @@ describe("TauriRecognizerHost", () => {
     handlers.dictation_load = () => {
       throw { code: "model_corrupt", detail: "a.ort" };
     };
-    await expect(
-      createTauriRecognizerHost().load({ id: "m" } as never),
-    ).rejects.toMatchObject({ code: "model_corrupt" });
+    await expect(createTauriRecognizerHost().load({ id: "m" } as never)).rejects.toMatchObject({
+      code: "model_corrupt",
+    });
   });
 
   it("reports library_missing as unsupported", async () => {
@@ -73,12 +74,19 @@ describe("TauriRecognizerHost", () => {
 
   it("uses the exact command names and argument keys", async () => {
     for (const name of [
-      "dictation_is_supported", "dictation_load", "dictation_start",
-      "dictation_stop", "dictation_set_context", "dictation_unload",
-      "dictation_input_device", "dictation_models_install",
-      "dictation_models_cancel", "dictation_models_is_complete",
+      "dictation_is_supported",
+      "dictation_load",
+      "dictation_start",
+      "dictation_stop",
+      "dictation_set_context",
+      "dictation_unload",
+      "dictation_input_device",
+      "dictation_models_install",
+      "dictation_models_cancel",
+      "dictation_models_is_complete",
       "dictation_models_remove",
-    ]) handlers[name] = () => undefined;
+    ])
+      handlers[name] = () => undefined;
     const host = createTauriRecognizerHost();
     const spec = { id: "m" } as never;
     await host.isSupported();
@@ -94,9 +102,14 @@ describe("TauriRecognizerHost", () => {
     abort.abort();
     const calls = vi.mocked(invoke).mock.calls;
     expect(calls.map(([name]) => name)).toEqual([
-      "dictation_is_supported", "dictation_load", "dictation_start",
-      "dictation_set_context", "dictation_input_device", "dictation_unload",
-      "dictation_models_is_complete", "dictation_models_remove",
+      "dictation_is_supported",
+      "dictation_load",
+      "dictation_start",
+      "dictation_set_context",
+      "dictation_input_device",
+      "dictation_unload",
+      "dictation_models_is_complete",
+      "dictation_models_remove",
       "dictation_models_install",
     ]);
     expect(calls[1][1]).toEqual({ spec });
@@ -155,7 +168,7 @@ describe("tauriModelFiles", () => {
     const install = tauriModelFiles.install(
       { id: "m" } as never,
       (d) => progress.push(d),
-      controller.signal,
+      controller.signal
     );
     controller.abort();
     await expect(install).rejects.toMatchObject({ code: "cancelled" });
@@ -168,11 +181,8 @@ describe("tauriModelFiles", () => {
     const controller = new AbortController();
     controller.abort();
     await expect(
-      tauriModelFiles.install({ id: "m" } as never, () => {}, controller.signal),
+      tauriModelFiles.install({ id: "m" } as never, () => {}, controller.signal)
     ).rejects.toMatchObject({ code: "cancelled" });
-    expect(invoke).not.toHaveBeenCalledWith(
-      "dictation_models_install",
-      expect.anything(),
-    );
+    expect(invoke).not.toHaveBeenCalledWith("dictation_models_install", expect.anything());
   });
 });

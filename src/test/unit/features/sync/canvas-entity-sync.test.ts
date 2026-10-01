@@ -13,12 +13,9 @@ const { syncEntity, syncEntityBatch, processPendingDeletions } = await import(
   "@/features/sync/entity-sync"
 );
 const { canvasAdapter } = await import("@/features/sync/sync-engine");
-const {
-  createCanvasRow,
-  updateCanvasDocRow,
-  updateCanvasRow,
-  deleteCanvasRow,
-} = await import("@/features/canvas/write");
+const { createCanvasRow, updateCanvasDocRow, updateCanvasRow, deleteCanvasRow } = await import(
+  "@/features/canvas/write"
+);
 const { serializeCanvas } = await import("@/features/sync/serializer");
 const {
   encryptToBuffer,
@@ -109,7 +106,7 @@ async function seedRemoteTitle(
   updatedAt?: number
 ): Promise<void> {
   const json = await serializeCanvas(id);
-  const obj = (await parseJsonAsync<{ canvas: { title: string } }>(json));
+  const obj = await parseJsonAsync<{ canvas: { title: string } }>(json);
   obj.canvas.title = title;
   const edited = await stringifySnapshotAsync(obj);
   const data = new Uint8Array(await encryptToBuffer(edited, PASS));
@@ -123,7 +120,7 @@ async function seedRemoteOnly(
 ): Promise<string> {
   const scratch = await createCanvasRow({ title: `scratch-${title}` }, "local");
   const json = await serializeCanvas(scratch.id);
-  const obj = (await parseJsonAsync<{ canvas: { title: string; id: string } }>(json));
+  const obj = await parseJsonAsync<{ canvas: { title: string; id: string } }>(json);
   const id = `remote-only-canvas-${title}`;
   obj.canvas.title = title;
   obj.canvas.id = id;
@@ -137,17 +134,14 @@ async function seedRemoteOnly(
 async function seenFor(remote: InMemoryRemote, localIds: string[]) {
   const remotes = await remote.list("canvas");
   const live = new Set(remotes.map((r) => r.entityId));
-  const deletions = localIds.some((id) => !live.has(id))
-    ? await remote.listDeleted("canvas")
-    : [];
+  const deletions = localIds.some((id) => !live.has(id)) ? await remote.listDeleted("canvas") : [];
   return { remotes, deletions };
 }
 
 async function readTitle(id: string): Promise<string | null> {
-  const rows = await testDb.select<{ title: string }[]>(
-    "SELECT title FROM canvases WHERE id = ?",
-    [id]
-  );
+  const rows = await testDb.select<{ title: string }[]>("SELECT title FROM canvases WHERE id = ?", [
+    id,
+  ]);
   return rows[0]?.title ?? null;
 }
 
@@ -448,10 +442,9 @@ describe("entity sync — canvas viewport stays out of the payload", () => {
       y: 6,
       zoom: 2,
     });
-    const rows = await testDb.select<{ doc: string }[]>(
-      "SELECT doc FROM canvases WHERE id = ?",
-      [canvas.id]
-    );
+    const rows = await testDb.select<{ doc: string }[]>("SELECT doc FROM canvases WHERE id = ?", [
+      canvas.id,
+    ]);
     expect((JSON.parse(rows[0].doc) as Record<string, unknown>).viewport).toBeUndefined();
   });
 
@@ -489,9 +482,7 @@ describe("entity sync — canvas viewport stays out of the payload", () => {
     expect(useReadingPositionStore.getState().getCanvasViewport(id)).toBeUndefined();
     const { useCanvasStore } = await import("@/features/canvas/store");
     await useCanvasStore.getState().loadCanvas(id);
-    expect(useCanvasStore.getState().doc.viewport).toEqual(
-      createDefaultCanvasDoc().viewport
-    );
+    expect(useCanvasStore.getState().doc.viewport).toEqual(createDefaultCanvasDoc().viewport);
     useCanvasStore.getState().closeCanvas();
   });
 });
@@ -528,10 +519,9 @@ describe("entity sync — newer canvas schema is stored verbatim and never pushe
     const batch = await syncEntityBatch(canvasAdapter, ctx);
 
     expect(batch.actions).toEqual(["pulled"]);
-    const rows = await testDb.select<{ doc: string }[]>(
-      "SELECT doc FROM canvases WHERE id = ?",
-      [id]
-    );
+    const rows = await testDb.select<{ doc: string }[]>("SELECT doc FROM canvases WHERE id = ?", [
+      id,
+    ]);
     expect(JSON.parse(rows[0].doc)).toEqual({
       schemaVersion: NEWER,
       nodes: [{ id: "future-node" }],
@@ -568,7 +558,12 @@ describe("entity sync — newer canvas schema is stored verbatim and never pushe
     const obj = await parseJsonAsync<{ canvas: { title: string } }>(json);
     obj.canvas.title = "Remote rename";
     const edited = await stringifySnapshotAsync(obj);
-    await remote.seedLive("canvas", id, new Uint8Array(await encryptToBuffer(edited, PASS)), await remoteChecksumFor(edited));
+    await remote.seedLive(
+      "canvas",
+      id,
+      new Uint8Array(await encryptToBuffer(edited, PASS)),
+      await remoteChecksumFor(edited)
+    );
 
     const seen = await seenFor(remote, [id]);
     const action = await syncEntity(canvasAdapter, id, conflictCtx, seen);
@@ -619,7 +614,12 @@ describe("entity sync — newer canvas schema is stored verbatim and never pushe
     const obj = await parseJsonAsync<{ canvas: { title: string } }>(json);
     obj.canvas.title = "Remote v2";
     const edited = await stringifySnapshotAsync(obj);
-    await remote.seedLive("canvas", id, new Uint8Array(await encryptToBuffer(edited, PASS)), await remoteChecksumFor(edited));
+    await remote.seedLive(
+      "canvas",
+      id,
+      new Uint8Array(await encryptToBuffer(edited, PASS)),
+      await remoteChecksumFor(edited)
+    );
 
     const batch = await syncEntityBatch(canvasAdapter, makeCtx(remote).ctx);
     expect(batch.actions).toEqual(["pulled"]);
@@ -650,11 +650,7 @@ describe("entity sync — canvas 50 MB limit", () => {
     const { ctx, logs } = makeCtx(remote);
     const huge = await createCanvasRow({ title: "Huge" }, "local");
     const small = await createCanvasRow({ title: "Small" }, "local");
-    await updateCanvasDocRow(
-      huge.id,
-      { ...createDefaultCanvasDoc(), nodes: [] },
-      "local"
-    );
+    await updateCanvasDocRow(huge.id, { ...createDefaultCanvasDoc(), nodes: [] }, "local");
 
     const batch = await syncEntityBatch(canvasAdapter, ctx);
 
@@ -678,9 +674,7 @@ describe("entity sync — deleting a note never edits canvases", () => {
       canvas.id,
       {
         ...createDefaultCanvasDoc(),
-        nodes: [
-          { id: "ref-1", kind: "noteRef", noteId: "doomed-note", position: { x: 1, y: 2 } },
-        ],
+        nodes: [{ id: "ref-1", kind: "noteRef", noteId: "doomed-note", position: { x: 1, y: 2 } }],
       },
       "local"
     );

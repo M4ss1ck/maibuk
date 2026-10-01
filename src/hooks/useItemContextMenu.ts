@@ -83,7 +83,8 @@ export function useItemContextMenu({
       if (event.target instanceof Element && closestFrom(event.target, EDITABLE_SELECTOR)) return;
       // A drag handle owns its own gesture: a native contextmenu bubbling out
       // of it (touch long-press or right click) must not open the item menu.
-      if (event.target instanceof Element && closestFrom(event.target, DRAG_HANDLE_SELECTOR)) return;
+      if (event.target instanceof Element && closestFrom(event.target, DRAG_HANDLE_SELECTOR))
+        return;
       event.preventDefault();
       onOpenRef.current();
     };

@@ -13,7 +13,12 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { shift } from "@floating-ui/react";
 import { useTranslation } from "react-i18next";
-import type { EventData, Props as JoyrideProps, Step as JoyrideStep, TooltipRenderProps } from "react-joyride";
+import type {
+  EventData,
+  Props as JoyrideProps,
+  Step as JoyrideStep,
+  TooltipRenderProps,
+} from "react-joyride";
 import { TutorialCard } from "@/components/tutorial/TutorialCard";
 import { toast } from "@/components/ui/Toast";
 import { useModalStore } from "@/components/ui/modal-store";
@@ -58,13 +63,7 @@ const NEUTRAL_ROUTE = "/";
  */
 const KEEP_CARD_ON_SCREEN = { middleware: [shift({ crossAxis: true, padding: 16 })] };
 
-type Phase =
-  | "idle"
-  | "flushing"
-  | "entering"
-  | "running"
-  | "leaving"
-  | "returning";
+type Phase = "idle" | "flushing" | "entering" | "running" | "leaving" | "returning";
 
 interface ReturnTarget {
   returnTo: string;
@@ -89,7 +88,11 @@ function nextFrame(): Promise<void> {
 }
 
 /** Resolves once `selector` matches, or after `timeoutMs` with false. */
-function waitForElement(selector: string, timeoutMs: number, signal: AbortSignal): Promise<boolean> {
+function waitForElement(
+  selector: string,
+  timeoutMs: number,
+  signal: AbortSignal
+): Promise<boolean> {
   if (document.querySelector(selector)) return Promise.resolve(true);
   return new Promise((resolve) => {
     const finish = (found: boolean) => {
@@ -227,7 +230,8 @@ export function TutorialRunner() {
       returnTo: run.returnTo,
       origin: run.origin,
       trigger,
-      triggerKey: trigger?.closest("[data-tutorial-trigger]")?.getAttribute("data-tutorial-trigger") ?? null,
+      triggerKey:
+        trigger?.closest("[data-tutorial-trigger]")?.getAttribute("data-tutorial-trigger") ?? null,
       reason: null,
     };
     setPhase("flushing");

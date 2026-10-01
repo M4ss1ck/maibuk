@@ -46,7 +46,7 @@ describe("createTauriDatabase", () => {
     mockExecute.mockResolvedValue({ rowsAffected: 3, lastInsertId: 9 });
 
     await expect(
-      db.execute("UPDATE notes SET title = ? WHERE id = ?", ["hi", "n1"]),
+      db.execute("UPDATE notes SET title = ? WHERE id = ?", ["hi", "n1"])
     ).resolves.toEqual({ rowsAffected: 3 });
     expect(mockExecute).toHaveBeenCalledWith("UPDATE notes SET title = ? WHERE id = ?", [
       "hi",

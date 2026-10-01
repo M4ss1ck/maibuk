@@ -203,7 +203,7 @@ describe("DictationControl", () => {
     await user.keyboard("{Enter}");
 
     expect(screen.getByRole("option", { name: "Auto (Spell Check language)" })).toHaveTextContent(
-      "auto",
+      "auto"
     );
     expect(screen.getByRole("option", { name: "English" })).toHaveTextContent("en");
     expect(screen.getByRole("option", { name: "Spanish" })).toHaveTextContent("es");

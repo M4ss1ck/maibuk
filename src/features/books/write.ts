@@ -15,12 +15,7 @@ import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/
 import { normalizeChapterContent, toChapter } from "@/features/chapters/write";
 import { reindexSource } from "@/features/links/link-index";
 import { appLanguage } from "@/features/settings/app-language";
-import type {
-  Book,
-  BookStatus,
-  CreateBookInput,
-  UpdateBookInput,
-} from "@/features/books/types";
+import type { Book, BookStatus, CreateBookInput, UpdateBookInput } from "@/features/books/types";
 import type { BookSnapshot } from "@/features/sync/types";
 import type { Chapter } from "@/features/chapters/types";
 
@@ -57,9 +52,7 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 async function readBook(id: string): Promise<Book | null> {
   const db = await getDatabase();
-  const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM books WHERE id = ?", [
-    id,
-  ]);
+  const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM books WHERE id = ?", [id]);
   return rows.length > 0 ? toBook(rows[0]) : null;
 }
 
@@ -71,21 +64,26 @@ export async function fetchStoredBook(id: string): Promise<Book | null> {
 /** Book fields that carry what the book says (title, details, cover). */
 function bookContentChanged(
   input: UpdateBookInput,
-  existing: { title: string; subtitle?: string; description?: string; coverImagePath?: string; coverData?: string }
+  existing: {
+    title: string;
+    subtitle?: string;
+    description?: string;
+    coverImagePath?: string;
+    coverData?: string;
+  }
 ): boolean {
   return (
     (input.title !== undefined && input.title !== existing.title) ||
     (input.subtitle !== undefined && (input.subtitle ?? undefined) !== existing.subtitle) ||
-    (input.description !== undefined && (input.description ?? undefined) !== existing.description) ||
-    (input.coverImagePath !== undefined && (input.coverImagePath ?? undefined) !== existing.coverImagePath) ||
+    (input.description !== undefined &&
+      (input.description ?? undefined) !== existing.description) ||
+    (input.coverImagePath !== undefined &&
+      (input.coverImagePath ?? undefined) !== existing.coverImagePath) ||
     (input.coverData !== undefined && (input.coverData ?? undefined) !== existing.coverData)
   );
 }
 
-export async function createBookRow(
-  input: CreateBookInput,
-  origin: ChangeOrigin
-): Promise<Book> {
+export async function createBookRow(input: CreateBookInput, origin: ChangeOrigin): Promise<Book> {
   const db = await getDatabase();
   const id = generateId();
   const now = nowSeconds();

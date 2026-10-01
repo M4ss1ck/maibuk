@@ -156,7 +156,9 @@ describe("getEditorToolbarState", () => {
   });
 
   it("shows a larger legacy span line height over a block value", () => {
-    const editor = makeEditor('<p style="line-height: 1"><span style="line-height: 2">Hello</span></p>');
+    const editor = makeEditor(
+      '<p style="line-height: 1"><span style="line-height: 2">Hello</span></p>'
+    );
     editor.commands.setTextSelection(2);
     expect(getEditorToolbarState(editor).lineHeight).toBe("2");
   });

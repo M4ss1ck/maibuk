@@ -247,7 +247,12 @@ describe("findAliasRefusal()", () => {
     ).toEqual({ kind: "duplicate", entryId: "nuevoParrafo" });
     // A phrase the escape alias does not start stays available.
     expect(
-      findAliasRefusal({ language: "es", entryId: "literal", alias: "sección", settings: withAlias })
+      findAliasRefusal({
+        language: "es",
+        entryId: "literal",
+        alias: "sección",
+        settings: withAlias,
+      })
     ).toBeNull();
   });
 
@@ -255,12 +260,12 @@ describe("findAliasRefusal()", () => {
     // Defaults are never dropped on load, so this is not needed for storage to
     // survive; they count anyway so one rule holds for every phrase, and the
     // author is told before a longer alias would be refused as an escape.
-    expect(findAliasRefusal({ language: "es", entryId: "literal", alias: "nueva", settings })).toEqual(
-      { kind: "shadow", entryId: "nuevaLinea", conflict: "nueva línea" }
-    );
-    expect(findAliasRefusal({ language: "en", entryId: "literal", alias: "new", settings: settings })).toEqual(
-      { kind: "shadow", entryId: "newParagraph", conflict: "new paragraph" }
-    );
+    expect(
+      findAliasRefusal({ language: "es", entryId: "literal", alias: "nueva", settings })
+    ).toEqual({ kind: "shadow", entryId: "nuevaLinea", conflict: "nueva línea" });
+    expect(
+      findAliasRefusal({ language: "en", entryId: "literal", alias: "new", settings: settings })
+    ).toEqual({ kind: "shadow", entryId: "newParagraph", conflict: "new paragraph" });
   });
 
   it("checks the language's own phrases only", () => {
@@ -402,7 +407,9 @@ describe("normalizeSpokenPunctuationSettings()", () => {
           ["es", "literal", "textual"],
           ["es", "coma", "textual coma"],
         ],
-        aliases: { es: { nuevoParrafo: ["nueva sección"], coma: ["comita"], literal: ["textual"] } },
+        aliases: {
+          es: { nuevoParrafo: ["nueva sección"], coma: ["comita"], literal: ["textual"] },
+        },
       },
       {
         adds: [
@@ -413,7 +420,9 @@ describe("normalizeSpokenPunctuationSettings()", () => {
           ["es", "literal", "textual"],
           ["es", "coma", "textual coma"],
         ],
-        aliases: { es: { nuevoParrafo: ["nueva sección"], punto: ["comita"], literal: ["textual"] } },
+        aliases: {
+          es: { nuevoParrafo: ["nueva sección"], punto: ["comita"], literal: ["textual"] },
+        },
       },
       {
         adds: [

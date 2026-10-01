@@ -42,9 +42,9 @@ test.describe("@wf:voice-click-by-name @sc:dictation.toggle @chromium-only", () 
 
     // A selection shows the floating toolbar: Bold is now two controls.
     await selectFirstWords(page, 5);
-    await expect(
-      page.getByRole("toolbar", { name: "Selection formatting" })
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("toolbar", { name: "Selection formatting" })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // "Click Bold." finds both: the live region counts the matches.
     const clickStatus = page.getByRole("status").filter({ hasText: /matches/ });

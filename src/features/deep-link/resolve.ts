@@ -20,9 +20,7 @@ export function selectFirstValidUrl(urls: string[] | null | undefined): ParsedLi
   return null;
 }
 
-export async function resolveBatch(
-  urls: string[] | null | undefined
-): Promise<LinkOutcome | null> {
+export async function resolveBatch(urls: string[] | null | undefined): Promise<LinkOutcome | null> {
   const parsed = selectFirstValidUrl(urls);
   if (!parsed) return null;
   const outcome = await resolveParsedLinkTarget(parsed);

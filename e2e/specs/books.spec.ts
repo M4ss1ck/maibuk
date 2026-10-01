@@ -103,7 +103,9 @@ test.describe("empty Gallery @wf:books-empty-state", () => {
 test.describe("a Library that cannot be read @wf:books-library-load-error", () => {
   test.use({ library: "bookShelf" });
 
-  test("shows the error, never the empty state, and Try again loads the Books", async ({ page }) => {
+  test("shows the error, never the empty state, and Try again loads the Books", async ({
+    page,
+  }) => {
     await failLibraryReads(page);
     await page.goto("/");
 

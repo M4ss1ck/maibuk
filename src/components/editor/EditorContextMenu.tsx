@@ -21,10 +21,7 @@ import {
 import { spellCheckService } from "@/lib/spellcheck";
 import { looksLikeMarkdown, markdownToEditorHtml } from "@/features/markdown";
 import { useShortcuts } from "@/lib/shortcuts";
-import {
-  clampPosition,
-  getWordAtPosition,
-} from "@/components/editor/editor-context-menu-utils";
+import { clampPosition, getWordAtPosition } from "@/components/editor/editor-context-menu-utils";
 import type { ClipboardProbe } from "@/components/editor/useClipboardProbe";
 import {
   fallbackPaste,
@@ -273,10 +270,7 @@ export function EditorContextMenu({
         editor
           .chain()
           .focus()
-          .insertContentAt(
-            { from: menu.misspelling.from, to: menu.misspelling.to },
-            suggestion
-          )
+          .insertContentAt({ from: menu.misspelling.from, to: menu.misspelling.to }, suggestion)
           .run();
       }
       close();

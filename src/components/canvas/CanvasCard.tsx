@@ -67,7 +67,8 @@ export function CanvasCard({
   return (
     <article
       data-tutorial={tutorialAnchor}
-      className="flex h-48 flex-col rounded-lg border border-border bg-card p-4 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-lg">
+      className="flex h-48 flex-col rounded-lg border border-border bg-card p-4 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-lg"
+    >
       {renaming ? (
         <div className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">

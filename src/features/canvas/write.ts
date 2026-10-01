@@ -155,12 +155,10 @@ export async function updateCanvasDocRow(
   if (!existing) return null;
   const now = nowSeconds();
 
-  await db.execute("UPDATE canvases SET doc = ?, updated_at = ?, content_updated_at = ? WHERE id = ?", [
-    stripViewportForStorage(doc),
-    now,
-    now,
-    id,
-  ]);
+  await db.execute(
+    "UPDATE canvases SET doc = ?, updated_at = ?, content_updated_at = ? WHERE id = ?",
+    [stripViewportForStorage(doc), now, now, id]
+  );
 
   const stored = await fetchStoredCanvas(id);
   // A read-back failure after the durable write still emits below.
@@ -222,11 +220,10 @@ export async function reorderCanvasRows(
   for (const item of items) {
     let affected = 0;
     try {
-      const result = await db.execute('UPDATE canvases SET "order" = ?, updated_at = ? WHERE id = ?', [
-        item.order,
-        now,
-        item.id,
-      ]);
+      const result = await db.execute(
+        'UPDATE canvases SET "order" = ?, updated_at = ? WHERE id = ?',
+        [item.order, now, item.id]
+      );
       affected = result.rowsAffected ?? 0;
     } catch (error) {
       for (const id of persistedIds) {
@@ -301,7 +298,9 @@ export async function applyCanvasSnapshotData(
       canvas.title !== existingTitle ||
       docContentKey(canvas.doc) !== docContentKey(parseStoredRaw(existing.doc));
     kind = changed ? "content" : "metadata";
-    if (!changed) contentUpdatedAt = (existing.content_updated_at as number | null) ?? (existing.updated_at as number);
+    if (!changed)
+      contentUpdatedAt =
+        (existing.content_updated_at as number | null) ?? (existing.updated_at as number);
   }
 
   await db.execute(

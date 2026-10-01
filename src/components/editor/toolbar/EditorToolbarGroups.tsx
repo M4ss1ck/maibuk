@@ -337,9 +337,7 @@ export function EditorToolbarGroups({
             onPreview={(color) => previewSelectionColor(editor, "text", color)}
             onClear={() => editor.chain().unsetColor().run()}
             onToggle={() =>
-              editorState.color
-                ? chain().unsetColor().run()
-                : chain().setColor("#000000").run()
+              editorState.color ? chain().unsetColor().run() : chain().setColor("#000000").run()
             }
             isActive={!!editorState.color}
             label={t("editor.textColor")}

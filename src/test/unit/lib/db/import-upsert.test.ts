@@ -21,7 +21,7 @@ describe("normaliseToUpsert()", () => {
     expect(normaliseToUpsert('INSERT INTO "settings" ("key") VALUES (\'theme\')')).toBe(
       'INSERT INTO "settings" ("key") VALUES (\'theme\') ON CONFLICT DO UPDATE SET "key" = excluded."key"'
     );
-    expect(normaliseToUpsert('insert or ignore into chapters (id) values (\'1\')')).toBe(
+    expect(normaliseToUpsert("insert or ignore into chapters (id) values ('1')")).toBe(
       "INSERT INTO chapters (id) values ('1') ON CONFLICT DO UPDATE SET id = excluded.id"
     );
   });

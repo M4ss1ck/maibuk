@@ -47,10 +47,9 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 async function readChapter(id: string): Promise<Chapter | null> {
   const db = await getDatabase();
-  const rows = await db.select<Record<string, unknown>[]>(
-    "SELECT * FROM chapters WHERE id = ?",
-    [id]
-  );
+  const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM chapters WHERE id = ?", [
+    id,
+  ]);
   return rows.length > 0 ? toChapter(rows[0]) : null;
 }
 
@@ -180,10 +179,9 @@ export async function updateChapterRow(
   assertWritableId(id);
   const db = await getDatabase();
   const now = nowSeconds();
-  const rows = await db.select<Record<string, unknown>[]>(
-    "SELECT * FROM chapters WHERE id = ?",
-    [id]
-  );
+  const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM chapters WHERE id = ?", [
+    id,
+  ]);
   if (rows.length === 0) return null;
   const existing = toChapter(rows[0]);
 
@@ -215,8 +213,7 @@ export async function updateChapterRow(
     : null;
   const chapterTsBefore = Math.floor(existing.updatedAt.getTime() / 1000);
   const shouldTouchParent =
-    contentChanged ||
-    (hasContentKeys && bookContentTs !== null && bookContentTs < chapterTsBefore);
+    contentChanged || (hasContentKeys && bookContentTs !== null && bookContentTs < chapterTsBefore);
 
   const updates: string[] = ["updated_at = ?"];
   const values: unknown[] = [now];
@@ -306,10 +303,9 @@ export async function updateChapterRow(
 export async function deleteChapterRow(id: string, origin: ChangeOrigin): Promise<void> {
   assertWritableId(id);
   const db = await getDatabase();
-  const rows = await db.select<{ book_id: string }[]>(
-    "SELECT book_id FROM chapters WHERE id = ?",
-    [id]
-  );
+  const rows = await db.select<{ book_id: string }[]>("SELECT book_id FROM chapters WHERE id = ?", [
+    id,
+  ]);
   await db.execute("DELETE FROM chapters WHERE id = ?", [id]);
   if (rows.length > 0) {
     // Removing a chapter removes content: the Book's Last Edited moves. The

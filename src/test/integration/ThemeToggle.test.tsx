@@ -90,7 +90,10 @@ describe("ThemeToggle", () => {
     it("marks only the current theme's button as pressed", async () => {
       const user = userEvent.setup();
       render(<ThemeToggle />);
-      expect(screen.getByRole("button", { name: "System" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "System" })).toHaveAttribute(
+        "aria-pressed",
+        "true"
+      );
       expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "false");
 
       await user.tab();
@@ -99,7 +102,10 @@ describe("ThemeToggle", () => {
 
       expect(useThemeStore.getState().theme).toBe("dark");
       expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
-      expect(screen.getByRole("button", { name: "System" })).toHaveAttribute("aria-pressed", "false");
+      expect(screen.getByRole("button", { name: "System" })).toHaveAttribute(
+        "aria-pressed",
+        "false"
+      );
     });
   });
 

@@ -122,7 +122,9 @@ describe("useNoteStore", () => {
 
   describe("refreshNotes()", () => {
     it("refreshes the list and the open note without a loading state", async () => {
-      const note = await useNoteStore.getState().createNote({ title: "Old", content: "<p>Old</p>" });
+      const note = await useNoteStore
+        .getState()
+        .createNote({ title: "Old", content: "<p>Old</p>" });
       useNoteStore.getState().setCurrentNote(note);
       await testDb.execute("UPDATE notes SET title = ?, content = ? WHERE id = ?", [
         "New",

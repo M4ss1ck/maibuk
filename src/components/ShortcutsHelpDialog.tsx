@@ -119,9 +119,7 @@ export function ShortcutsHelpDialog({
   // Global shortcuts are bound on every screen, so one missing here is not
   // available on this device at all and belongs in neither list.
   const otherScreens = groupsFor(
-    COMMAND_IDS.filter(
-      (id) => !boundSet.has(id) && commandSection(id) !== "global" && hasLive(id)
-    )
+    COMMAND_IDS.filter((id) => !boundSet.has(id) && commandSection(id) !== "global" && hasLive(id))
   );
 
   return (

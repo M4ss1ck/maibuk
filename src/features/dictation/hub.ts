@@ -1,20 +1,11 @@
 // Editors register synchronously, before the async dictation runtime exists;
 // the hub keeps them and hands them to the session once it attaches.
-import type {
-  DictationSession,
-  DictationTarget,
-} from "@/features/dictation/session";
+import type { DictationSession, DictationTarget } from "@/features/dictation/session";
 
-type AttachedSession = Pick<
-  DictationSession,
-  "register" | "focus" | "stop" | "getSnapshot"
->;
+type AttachedSession = Pick<DictationSession, "register" | "focus" | "stop" | "getSnapshot">;
 
 let session: AttachedSession | null = null;
-const entries = new Map<
-  string,
-  { target: DictationTarget; unregister?: () => void }
->();
+const entries = new Map<string, { target: DictationTarget; unregister?: () => void }>();
 let lastFocus: string | null = null;
 
 export const dictationHub = {
@@ -45,8 +36,7 @@ export const dictationHub = {
 
 export function attachSession(next: AttachedSession): void {
   session = next;
-  for (const entry of entries.values())
-    entry.unregister = next.register(entry.target);
+  for (const entry of entries.values()) entry.unregister = next.register(entry.target);
   if (lastFocus) next.focus(lastFocus);
 }
 

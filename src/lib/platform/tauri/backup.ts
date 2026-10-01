@@ -1,4 +1,12 @@
-import { readTextFile, writeTextFile, writeFile, readDir, remove, mkdir, stat } from "@tauri-apps/plugin-fs";
+import {
+  readTextFile,
+  writeTextFile,
+  writeFile,
+  readDir,
+  remove,
+  mkdir,
+  stat,
+} from "@tauri-apps/plugin-fs";
 import { appConfigDir, join } from "@tauri-apps/api/path";
 import type { DirEntry } from "@tauri-apps/plugin-fs";
 import type {

@@ -181,9 +181,7 @@ describe("Backup restore is all-or-nothing", () => {
     const after = await snapshotLibrary(db);
     expect(after).toEqual(before);
 
-    const safety = (await service.listBackups()).find(
-      (entry) => entry.trigger === "pre-restore"
-    );
+    const safety = (await service.listBackups()).find((entry) => entry.trigger === "pre-restore");
     expect(safety).toBeDefined();
   });
 

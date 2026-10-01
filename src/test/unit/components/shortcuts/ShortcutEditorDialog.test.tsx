@@ -437,7 +437,9 @@ describe("Shortcut Editor: Voice commands", { timeout: 20_000 }, () => {
     await focusRow(user, "shortcuts.gotoNotes");
     for (let press = 0; press < 8; press += 1) {
       if (
-        /^shortcutEditor\.voice\.open/.test(document.activeElement?.getAttribute("aria-label") ?? "")
+        /^shortcutEditor\.voice\.open/.test(
+          document.activeElement?.getAttribute("aria-label") ?? ""
+        )
       )
         break;
       await user.keyboard("{ArrowRight}");

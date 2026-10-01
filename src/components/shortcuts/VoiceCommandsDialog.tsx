@@ -62,9 +62,7 @@ function VoiceCommandsDialogContent({
   const [language, setLanguage] = useState<DictationLanguage>(initialLanguage);
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
-  const [refusal, setRefusal] = useState<{ conflict: PhraseConflict; phrase: string } | null>(
-    null
-  );
+  const [refusal, setRefusal] = useState<{ conflict: PhraseConflict; phrase: string } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const refusalId = useId();
@@ -216,7 +214,10 @@ function VoiceCommandsDialogContent({
           {(_language) => (
             <>
               <GridList
-                aria-label={t("shortcutEditor.voice.listLabel", { command, language: languageName })}
+                aria-label={t("shortcutEditor.voice.listLabel", {
+                  command,
+                  language: languageName,
+                })}
                 onAction={(key) => startEdit(String(key))}
                 renderEmptyState={() => (
                   <p className="px-3 py-2 text-sm text-muted-foreground">

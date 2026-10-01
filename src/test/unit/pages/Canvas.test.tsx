@@ -234,9 +234,7 @@ describe("Canvas page", () => {
       const onNodesChange = mocks.flowProps.current?.onNodesChange as (
         changes: Record<string, unknown>[]
       ) => void;
-      onNodesChange([
-        { type: "position", id: "node", position: { x: 5, y: 0 }, dragging: false },
-      ]);
+      onNodesChange([{ type: "position", id: "node", position: { x: 5, y: 0 }, dragging: false }]);
     });
 
     expect(mocks.actions.beginLiveChange).toHaveBeenCalledTimes(1);
@@ -254,9 +252,7 @@ describe("Canvas page", () => {
       const onNodesChange = mocks.flowProps.current?.onNodesChange as (
         changes: Record<string, unknown>[]
       ) => void;
-      onNodesChange([
-        { type: "position", id: "node", position: { x: 30, y: 0 }, dragging: true },
-      ]);
+      onNodesChange([{ type: "position", id: "node", position: { x: 30, y: 0 }, dragging: true }]);
     });
 
     expect(mocks.actions.beginLiveChange).not.toHaveBeenCalled();

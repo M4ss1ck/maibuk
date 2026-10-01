@@ -26,9 +26,7 @@ const { useEphemeralStore } = await import("@/features/ephemeral/store");
 const { registerPendingEditsFlush, PendingEditsFlushError } = await import(
   "@/features/sync/pending-edits"
 );
-const { runBetweenSyncRuns, resetSyncEngineForTests } = await import(
-  "@/features/sync/sync-engine"
-);
+const { runBetweenSyncRuns, resetSyncEngineForTests } = await import("@/features/sync/sync-engine");
 const { getBacklinksForNote } = await import("@/features/links/link-index");
 const librarySwitch = await import("@/features/tutorial/library-switch");
 const tutorial = await import("@/features/tutorial");
@@ -85,9 +83,9 @@ describe("entering the Tutorial Library", () => {
     const db = await getDatabase();
     expect(db).not.toBe(authorDb.current);
 
-    const books = await db.select<{ id: string; title: string; status: string; cover_data: string | null }[]>(
-      "SELECT id, title, status, cover_data FROM books ORDER BY id"
-    );
+    const books = await db.select<
+      { id: string; title: string; status: string; cover_data: string | null }[]
+    >("SELECT id, title, status, cover_data FROM books ORDER BY id");
     expect(books.map((book) => [book.id, book.status])).toEqual([
       ["tutorial-book-archived", "archived"],
       ["tutorial-book-completed", "completed"],
@@ -122,9 +120,9 @@ describe("entering the Tutorial Library", () => {
       ])
     );
 
-    const notes = await db.select<{ id: string; book_id: string | null; pinned: number; tags: string; content: string }[]>(
-      "SELECT id, book_id, pinned, tags, content FROM notes ORDER BY \"order\""
-    );
+    const notes = await db.select<
+      { id: string; book_id: string | null; pinned: number; tags: string; content: string }[]
+    >('SELECT id, book_id, pinned, tags, content FROM notes ORDER BY "order"');
     expect(notes.map((note) => [note.id, note.book_id, note.pinned])).toEqual([
       ["tutorial-note-characters", "tutorial-book-novel", 1],
       ["tutorial-note-research", "tutorial-book-novel", 0],
@@ -356,7 +354,9 @@ describe("Tutorial state on this device", () => {
 
     const { progress } = useTutorialStore.getState();
     expect(progress.completedAt).not.toBeNull();
-    expect(Object.keys(progress.sections).sort()).toEqual([...tutorial.TUTORIAL_SECTION_IDS].sort());
+    expect(Object.keys(progress.sections).sort()).toEqual(
+      [...tutorial.TUTORIAL_SECTION_IDS].sort()
+    );
     expect(progress).toMatchObject({ dismissedAt: null, lastSection: null, lastStep: null });
   });
 

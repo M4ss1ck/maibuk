@@ -25,9 +25,7 @@ test.use({
 });
 
 test.describe("@wf:voice-commands-app @chromium-only", () => {
-  test("saying Show voice commands opens the help with its Voice Commands", async ({
-    page,
-  }) => {
+  test("saying Show voice commands opens the help with its Voice Commands", async ({ page }) => {
     test.setTimeout(180_000);
     await downloadEnglishFast(page);
     // Dictation starts before the dialog: a Modal blocks the toggle shortcut,

@@ -15,11 +15,9 @@ const chapters = await import("@/features/chapters/write");
 const notes = await import("@/features/notes/write");
 const canvas = await import("@/features/canvas/write");
 const { CURRENT_CANVAS_SCHEMA_VERSION } = await import("@/lib/canvas/defaultDoc");
-const {
-  activateTutorialDatabase,
-  resetLibrarySwitchForTests,
-  TutorialIdLeakError,
-} = await import("@/features/tutorial/library-switch");
+const { activateTutorialDatabase, resetLibrarySwitchForTests, TutorialIdLeakError } = await import(
+  "@/features/tutorial/library-switch"
+);
 
 const SAMPLE_BOOK = "tutorial-book-novel";
 const SAMPLE_NOTE = "tutorial-note-research";
@@ -92,7 +90,10 @@ const writes: [string, () => Promise<unknown>][] = [
     "createChapterRow",
     () => chapters.createChapterRow({ bookId: SAMPLE_BOOK, title: "x" }, "local"),
   ],
-  ["updateChapterRow", () => chapters.updateChapterRow("tutorial-chapter-one", { title: "x" }, "local")],
+  [
+    "updateChapterRow",
+    () => chapters.updateChapterRow("tutorial-chapter-one", { title: "x" }, "local"),
+  ],
   ["deleteChapterRow", () => chapters.deleteChapterRow("tutorial-chapter-one", "local")],
   ["reorderChapterRows", () => chapters.reorderChapterRows(SAMPLE_BOOK, [], "local")],
   ["createNoteRow", () => notes.createNoteRow({ title: "x", bookId: SAMPLE_BOOK }, "local")],

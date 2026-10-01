@@ -21,9 +21,7 @@ export function LibraryLoadError({ error, onRetry }: LibraryLoadErrorProps) {
       <h3 className="text-2xl sm:text-3xl font-semibold mb-3 tracking-tight">
         {t("libraryLoad.title")}
       </h3>
-      <p className="text-muted-foreground mb-4 max-w-md leading-relaxed">
-        {t("libraryLoad.body")}
-      </p>
+      <p className="text-muted-foreground mb-4 max-w-md leading-relaxed">{t("libraryLoad.body")}</p>
       <p className="mb-8 max-w-md break-words rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-muted-foreground">
         {error}
       </p>

@@ -128,9 +128,7 @@ describe("ShortcutsHelpDialog", () => {
     const { dialog } = await openHelp(["global.showHelp", "global.gotoNotes"]);
 
     expect(within(dialog).queryByText("Go to Notes")).not.toBeInTheDocument();
-    expect(
-      within(dialog).queryByText("shortcutEditor.voice.rowLabel")
-    ).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("shortcutEditor.voice.rowLabel")).not.toBeInTheDocument();
   });
 
   it("shows the derived phrase when Dictation is on", async () => {
@@ -142,9 +140,9 @@ describe("ShortcutsHelpDialog", () => {
 
   it("shows the custom phrase instead of the default", async () => {
     useDictationStore.setState({ enabled: true, languageOverride: null });
-    useShortcutSettingsStore.getState().setCommandVoicePhrases("global.gotoNotes", "en", [
-      "open notes list",
-    ]);
+    useShortcutSettingsStore
+      .getState()
+      .setCommandVoicePhrases("global.gotoNotes", "en", ["open notes list"]);
     const { dialog } = await openHelp(["global.showHelp", "global.gotoNotes"]);
 
     expect(within(dialog).getByText("open notes list")).toBeInTheDocument();

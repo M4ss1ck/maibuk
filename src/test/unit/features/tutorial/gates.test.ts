@@ -154,7 +154,10 @@ describe("i18n: the Tutorial is complete in English and Spanish", () => {
   });
 
   it("has every sample string the Tutorial Library is built from", () => {
-    const sources = ["src/features/tutorial/sample-library.ts", "src/features/tutorial/tutorial-library.ts"]
+    const sources = [
+      "src/features/tutorial/sample-library.ts",
+      "src/features/tutorial/tutorial-library.ts",
+    ]
       .map((path) => readFileSync(join(ROOT, path), "utf8"))
       .join("\n");
     const used = new Set<string>();
@@ -173,7 +176,15 @@ describe("i18n: the Tutorial is complete in English and Spanish", () => {
     const english = leafKeys(en.tutorial)
       .map((key) => String(lookup(en.tutorial, key)))
       .join("\n");
-    for (const avoided of [/\btour\b/i, /walkthrough/i, /onboarding/i, /\bguide\b/i, /sample book/i, /demo data/i, /sandbox/i]) {
+    for (const avoided of [
+      /\btour\b/i,
+      /walkthrough/i,
+      /onboarding/i,
+      /\bguide\b/i,
+      /sample book/i,
+      /demo data/i,
+      /sandbox/i,
+    ]) {
       expect(english).not.toMatch(avoided);
     }
   });

@@ -121,7 +121,9 @@ describe("MetricsService", () => {
     activateTutorialDatabase(testDb);
     try {
       service.markActive("tutorial-book-novel");
-      service.recordEvents([{ ...buildEvent(), id: "tutorial-typed", workId: "tutorial-book-novel" }]);
+      service.recordEvents([
+        { ...buildEvent(), id: "tutorial-typed", workId: "tutorial-book-novel" },
+      ]);
       service.endSession();
       await service.flushNow();
       expect(await listEvents(testDb)).toEqual([]);

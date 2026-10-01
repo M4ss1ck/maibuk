@@ -258,9 +258,7 @@ describe("TauriBackupAdapter", () => {
     await adapter.saveBackup(filename, dump);
 
     expect(mockWriteFile.mock.calls.length).toBeGreaterThan(1);
-    const calls = mockWriteFile.mock.calls as Array<
-      [string, Uint8Array, { append?: boolean }]
-    >;
+    const calls = mockWriteFile.mock.calls as Array<[string, Uint8Array, { append?: boolean }]>;
     for (const [path] of calls) {
       expect(path).toBe(`/safe/backups/${filename}`);
     }

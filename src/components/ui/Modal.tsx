@@ -1,4 +1,11 @@
-import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { FocusScope, Overlay, useFocusManager, useModalOverlay } from "react-aria";
 import { Dialog, Heading } from "react-aria-components";
 import { useTranslation } from "react-i18next";

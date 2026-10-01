@@ -34,9 +34,7 @@ vi.mock("@/features/sync/tombstones", () => ({
   confirmTombstones: vi.fn(),
 }));
 
-const { useSyncStore, resetSyncStoreConcurrencyForTests } = await import(
-  "@/features/sync/store"
-);
+const { useSyncStore, resetSyncStoreConcurrencyForTests } = await import("@/features/sync/store");
 
 function resetSyncStore() {
   resetSyncStoreConcurrencyForTests();

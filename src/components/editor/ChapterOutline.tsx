@@ -97,7 +97,10 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
     // Enter on an outline item is a jump, not just a scroll: the caret lands
     // in the editor so the author keeps typing there.
-    editor.chain().focus(pos + 1).run();
+    editor
+      .chain()
+      .focus(pos + 1)
+      .run();
   };
 
   return (

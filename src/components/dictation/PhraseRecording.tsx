@@ -33,10 +33,7 @@ export function RecordPhraseButton({
           : "text-muted-foreground hover:text-foreground"
       }`}
     >
-      <Mic
-        className={`h-4 w-4 ${recording.recording ? "animate-pulse" : ""}`}
-        aria-hidden="true"
-      />
+      <Mic className={`h-4 w-4 ${recording.recording ? "animate-pulse" : ""}`} aria-hidden="true" />
     </button>
   );
 }

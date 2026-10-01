@@ -12,7 +12,11 @@ interface SyncControlsProps {
   defaultScope?: SyncScope;
 }
 
-export function SyncControls({ onSync, layout = "popover", defaultScope = "all" }: SyncControlsProps) {
+export function SyncControls({
+  onSync,
+  layout = "popover",
+  defaultScope = "all",
+}: SyncControlsProps) {
   const { t } = useTranslation();
   const { syncStatus, pendingDeletions, syncLog, confirmPendingDeletions, clearSyncLog } =
     useSyncStore();

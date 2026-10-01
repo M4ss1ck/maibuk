@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronUp, GripVertical, Plus, SeparatorHorizontal, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
+  Plus,
+  SeparatorHorizontal,
+  Trash2,
+} from "lucide-react";
 import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
 import { useDragAndDrop, type TextDropItem } from "react-aria-components/useDragAndDrop";
