@@ -935,6 +935,20 @@
       },
       "promptMarkdownLabel": "Preguntar al pegar Markdown",
       "promptMarkdownDescription": "Al pegar texto Markdown, preguntar si convertirlo a contenido con formato."
+    },
+    "keywords": {
+      "theme": ["oscuro", "claro", "modo", "apariencia", "sistema"],
+      "primaryColor": ["acento", "color"],
+      "appFontSize": ["zoom", "tamaño de texto"],
+      "pasteCleanupPreset": ["copiar", "pegar", "portapapeles", "formato"],
+      "alwaysOnTop": ["fijar", "ventana", "flotante"],
+      "spellCheck": ["ortografía", "diccionario"],
+      "autoSave": ["guardar", "automático"],
+      "language": ["idioma", "traducción", "español", "inglés"],
+      "backupsList": ["copia de seguridad", "restaurar"],
+      "syncNow": ["sincronizar", "sincronización", "nube"],
+      "resetDatabase": ["borrar todo", "eliminar todo"],
+      "customizeShortcuts": ["teclas", "teclado", "atajos"]
     }
   },
   "cover": {

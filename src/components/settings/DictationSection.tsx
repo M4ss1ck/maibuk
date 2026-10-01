@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
+import { SettingRow } from "@/components/settings/SettingRow";
 import { DictationLanguageTabs } from "@/components/dictation/DictationLanguageTabs";
 import { DictationVocabularySection } from "@/components/settings/DictationVocabularySection";
 import { SpokenPunctuationSection } from "@/components/settings/SpokenPunctuationSection";
@@ -78,10 +79,15 @@ export function DictationSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <span className="font-medium">{t("dictation.section.title")}</span>
+      <SettingRow
+        id="dictationEnabled"
+        className="flex items-center justify-between gap-3"
+        // The declared description renders below the row, as before, not
+        // inside it; the empty override only suppresses the in-row copy.
+        descriptionOverride={<></>}
+      >
         <Switch checked={enabled} onChange={setEnabled} label={t("dictation.section.title")} />
-      </div>
+      </SettingRow>
       <p className="text-sm text-muted-foreground">{t("dictation.section.description")}</p>
       {languages.length > 0 && (
         <DictationLanguageTabs
@@ -98,8 +104,9 @@ export function DictationSection() {
               catalogCapabilities(language);
             return (
               <div className="space-y-6">
-                <div className="space-y-2" data-tutorial="dictation.models">
-                  <h3 className="font-medium">{t("dictation.section.models")}</h3>
+                <SettingRow id="dictationModels" visuallyHiddenLabel>
+                  <div className="space-y-2" data-tutorial="dictation.models">
+                    <h3 className="font-medium">{t("dictation.section.models")}</h3>
                   {specs.map((spec) => {
                     const name = `${t(`dictation.languageNames.${language}`)}, ${t(`dictation.section.${spec.tier}`)}`;
                     const download = downloads[spec.id];
@@ -194,13 +201,18 @@ export function DictationSection() {
                       </fieldset>
                     );
                   })}
-                </div>
-                <div data-tutorial="dictation.punctuation">
-                  <SpokenPunctuationSection language={language} capabilities={capabilities} />
-                </div>
-                <div data-tutorial="dictation.vocabulary">
-                  <DictationVocabularySection language={language} />
-                </div>
+                  </div>
+                </SettingRow>
+                <SettingRow id="dictationSpokenPunctuation" visuallyHiddenLabel>
+                  <div data-tutorial="dictation.punctuation">
+                    <SpokenPunctuationSection language={language} capabilities={capabilities} />
+                  </div>
+                </SettingRow>
+                <SettingRow id="dictationVocabulary" visuallyHiddenLabel>
+                  <div data-tutorial="dictation.vocabulary">
+                    <DictationVocabularySection language={language} />
+                  </div>
+                </SettingRow>
               </div>
             );
           }}

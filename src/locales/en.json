@@ -935,6 +935,20 @@
       },
       "promptMarkdownLabel": "Prompt to convert pasted Markdown",
       "promptMarkdownDescription": "When you paste Markdown text, ask whether to convert it to formatted content."
+    },
+    "keywords": {
+      "theme": ["dark", "light", "mode", "appearance", "system"],
+      "primaryColor": ["accent", "color"],
+      "appFontSize": ["zoom", "text size"],
+      "pasteCleanupPreset": ["copy", "paste", "clipboard", "formatting"],
+      "alwaysOnTop": ["pin", "window", "float"],
+      "spellCheck": ["spelling", "dictionary"],
+      "autoSave": ["save", "automatic"],
+      "language": ["locale", "translation", "spanish", "english"],
+      "backupsList": ["backup", "restore"],
+      "syncNow": ["sync", "synchronize", "cloud"],
+      "resetDatabase": ["delete everything", "wipe"],
+      "customizeShortcuts": ["keys", "keyboard", "hotkeys"]
     }
   },
   "cover": {
