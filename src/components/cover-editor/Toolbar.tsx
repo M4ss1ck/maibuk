@@ -54,8 +54,12 @@ interface ToolbarProps {
 // The menus follow the app's React Aria menu pattern (see TextCaseMenu): a
 // menu trigger, a popover and a Menu. Arrow keys, typeahead, Escape and focus
 // restoration are React Aria's, not hand-rolled.
+const TRIGGER_BASE_CLASS =
+  "inline-flex items-center justify-center gap-1 sm:gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors outline-none focus-visible:ring-2";
 const TRIGGER_CLASS =
-  "inline-flex items-center justify-center gap-1 sm:gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium bg-transparent text-foreground transition-colors hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-muted data-pressed:bg-muted";
+  `${TRIGGER_BASE_CLASS} bg-transparent text-foreground hover:bg-muted focus-visible:ring-muted data-pressed:bg-muted`;
+const PRIMARY_TRIGGER_CLASS =
+  `${TRIGGER_BASE_CLASS} bg-primary text-primary-foreground hover:bg-primary-hover hover:text-primary-hover-foreground focus-visible:ring-primary data-pressed:bg-primary-hover`;
 const POPOVER_CLASS =
   "z-50 mt-1 rounded-lg border border-border bg-card py-1 shadow-lg outline-none";
 const ITEM_CLASS =
@@ -475,7 +479,8 @@ export function Toolbar({ onExport, bookTitle, bookAuthor, trailing }: ToolbarPr
           <Tooltip content={t("cover.export")}>
             <AriaButton
               data-tutorial="cover-designer.export"
-              className={`${TRIGGER_CLASS} bg-primary text-primary-foreground hover:bg-primary-hover hover:text-primary-hover-foreground`}
+              aria-label={t("cover.export")}
+              className={PRIMARY_TRIGGER_CLASS}
             >
               <ExportIcon className="w-4 h-4" aria-hidden="true" />
               <span className="hidden sm:inline">{t("cover.export")}</span>

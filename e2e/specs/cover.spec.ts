@@ -7,6 +7,7 @@
 import { readFile } from "node:fs/promises";
 import type { Download, Locator, Page } from "@playwright/test";
 import { PDFDocument } from "pdf-lib";
+import { capture } from "../support/capture";
 import { DOT_PNG, IMAGE_FIXTURE_DIR } from "../support/fixtures/images";
 import {
   expectFocusWithin,
@@ -263,6 +264,39 @@ test.describe("Cover layout aids @wf:cover-overlays-snapping", () => {
 });
 
 test.describe("Cover export @wf:cover-export", () => {
+  test("Export keeps the primary button colors in light and dark mode", async ({ page }) => {
+    await openCover(page);
+    const trigger = exportTrigger(page);
+    await capture(page, "cover-export-trigger", { around: [trigger] });
+    await page.setViewportSize({ width: 390, height: 800 });
+    await capture(page, "cover-export-trigger-narrow", {
+      around: [page.locator('[data-tutorial="cover-designer.export"]')],
+    });
+    await expect(trigger).toBeVisible();
+
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const colors = await trigger.evaluate((button) => {
+        const sample = document.createElement("div");
+        sample.style.backgroundColor = "var(--color-primary)";
+        sample.style.color = "var(--color-primary-foreground)";
+        document.body.append(sample);
+        const actual = getComputedStyle(button);
+        const expected = getComputedStyle(sample);
+        const result = {
+          background: actual.backgroundColor,
+          foreground: actual.color,
+          primaryBackground: expected.backgroundColor,
+          primaryForeground: expected.color,
+        };
+        sample.remove();
+        return result;
+      });
+      expect(colors.background).toBe(colors.primaryBackground);
+      expect(colors.foreground).toBe(colors.primaryForeground);
+    }
+  });
+
   test("PNG, JPG, and PDF downloads carry the Cover at the document size", async ({ page }) => {
     await openCover(page);
 
