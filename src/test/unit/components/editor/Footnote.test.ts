@@ -113,3 +113,49 @@ describe("deleteFootnote", () => {
     expect(ids(editor)).toEqual(["a", "b"]);
   });
 });
+
+// History merges an edit into the previous undo step when it comes within
+// 500 ms and touches the same place. A Footnote command is a discrete action
+// from a menu or dialog, so it is always its own step: deleting a Footnote
+// right after inserting it must not make one undo revert both (the E2E run
+// hit this in Chromium, which runs the steps faster than that).
+describe("Footnote commands as undo steps", () => {
+  it("restores a Footnote deleted right after it was inserted", () => {
+    const editor = makeEditor("<p>One</p>");
+    editor.commands.setTextSelection(4);
+
+    editor.commands.insertFootnote({ content: "The lamp." });
+    const [inserted] = collectFootnotes(editor.state.doc);
+    editor.commands.deleteFootnote({ id: inserted.id, index: 0 });
+    expect(texts(editor)).toEqual([]);
+
+    editor.commands.undo();
+    expect(texts(editor)).toEqual(["The lamp."]);
+    editor.commands.undo();
+    expect(texts(editor)).toEqual([]);
+  });
+
+  it("keeps typing and an inserted Footnote as separate steps", () => {
+    const editor = makeEditor("<p>One</p>");
+    editor.commands.setTextSelection(4);
+
+    editor.commands.insertContent(" two");
+    editor.commands.insertFootnote({ content: "Note" });
+    editor.commands.undo();
+
+    expect(texts(editor)).toEqual([]);
+    expect(editor.getText()).toBe("One two");
+  });
+
+  it("undoes an edited Footnote's text without the typing just before it", () => {
+    const editor = makeEditor(`<p>One${fn("a", "First")}</p>`);
+    editor.commands.setTextSelection(4);
+
+    editor.commands.insertContent(" more");
+    editor.commands.updateFootnote({ id: "a", index: 0 }, "Changed");
+    editor.commands.undo();
+
+    expect(texts(editor)).toEqual(["First"]);
+    expect(editor.getText()).toBe("One more");
+  });
+});
