@@ -42,7 +42,8 @@
     "bench:dictation": "vitest bench --run src/test/bench/dictation-interpreter.bench.ts --outputJson .bench/dictation.json && node scripts/dictation-bench-budget.mjs .bench/dictation.json",
     "bench:palette": "vitest bench --run src/test/bench/command-palette.bench.ts --outputJson .bench/palette.json && node scripts/palette-bench-budget.mjs .bench/palette.json",
     "bench:dictation:android": "node scripts/dictation-bench/android.mjs .bench/dictation-android.json",
-    "e2e:voice-audio": "bash scripts/e2e-voice-audio.sh"
+    "e2e:voice-audio": "bash scripts/e2e-voice-audio.sh",
+    "prototype:settings-nav": "VITE_BUILD_TARGET=web vite --open \"/settings?variant=A\""
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",

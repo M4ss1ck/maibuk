@@ -1,5 +1,5 @@
-import { useEffect, type ComponentType } from "react";
-import { useLocation } from "react-router-dom";
+import { useEffect, useRef, type ComponentType } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "@/features/settings";
 import { AsciiFieldBackground } from "@/components/settings/AsciiFieldBackground";
@@ -16,11 +16,18 @@ import { ExportSection } from "@/components/settings/ExportSection";
 import { TutorialSection } from "@/components/settings/TutorialSection";
 import { AdvancedSection } from "@/components/settings/AdvancedSection";
 import { AboutSection } from "@/components/settings/AboutSection";
-import {
-  SETTINGS_SECTIONS,
-  findSettingsRow,
-} from "@/components/settings/settings-sections";
+import { SETTINGS_SECTIONS, findSettingsRow } from "@/components/settings/settings-sections";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
+// PROTOTYPE: side navigation variants (branch prototype-settings-toc).
+import { PrototypeSwitcher } from "@/components/prototype/PrototypeSwitcher";
+import {
+  SETTINGS_NAV_VARIANTS,
+  VariantA,
+  VariantB,
+  VariantC,
+} from "@/components/settings/SettingsNav.prototype";
+
+const NAV_VARIANTS = { A: VariantA, B: VariantB, C: VariantC };
 
 const SECTION_COMPONENTS = {
   appearance: AppearanceSection,
@@ -75,9 +82,7 @@ function usePendingSettingsRow() {
       if (attempts >= 10) {
         // The row is state-dependent (e.g. a logged-out sync row) and never
         // mounted: fall back to its section's heading.
-        document
-          .querySelector<HTMLElement>(`[data-settings-section="${section.id}"]`)
-          ?.focus();
+        document.querySelector<HTMLElement>(`[data-settings-section="${section.id}"]`)?.focus();
         useSettingsRevealStore.getState().clearRow();
         return;
       }
@@ -99,6 +104,10 @@ export function Settings() {
   const { t } = useTranslation();
   const location = useLocation();
   const { primaryColor } = useSettings();
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [searchParams] = useSearchParams();
+  const variantKey = (searchParams.get("variant") ?? "A") as keyof typeof NAV_VARIANTS;
+  const NavVariant = NAV_VARIANTS[variantKey] ?? VariantA;
 
   // A control elsewhere links to Settings → Dictation by hash; scroll to it.
   // Two frames wait for the section to be in the DOM; location.key re-scrolls
@@ -116,19 +125,22 @@ export function Settings() {
   }, [location.hash, location.key]);
 
   return (
-    <div className="h-full overflow-auto relative">
+    <div ref={scrollerRef} className="h-full overflow-auto relative @container">
       <PendingSettingsRow />
       <AsciiFieldBackground color={primaryColor} />
-      <div className="relative z-10 p-4 sm:p-8 max-w-2xl bg-background @container">
-        <h1 data-route-heading className="text-xl @lg:text-2xl font-semibold mb-6 @lg:mb-8">
-          {t("settings.title")}
-        </h1>
+      <NavVariant key={variantKey} scrollerRef={scrollerRef}>
+        <div className="relative z-10 p-4 sm:p-8 w-full max-w-2xl bg-background @container">
+          <h1 data-route-heading className="text-xl @lg:text-2xl font-semibold mb-6 @lg:mb-8">
+            {t("settings.title")}
+          </h1>
 
-        {SETTINGS_SECTIONS.map((section) => {
-          const Section = SECTION_COMPONENTS[section.id];
-          return <Section key={section.id} />;
-        })}
-      </div>
+          {SETTINGS_SECTIONS.map((section) => {
+            const Section = SECTION_COMPONENTS[section.id];
+            return <Section key={section.id} />;
+          })}
+        </div>
+      </NavVariant>
+      <PrototypeSwitcher variants={SETTINGS_NAV_VARIANTS} current={variantKey} />
     </div>
   );
 }
