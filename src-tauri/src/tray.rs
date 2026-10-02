@@ -2,16 +2,11 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager,
+    AppHandle,
 };
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-fn show_main_window(app: &AppHandle) {
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.show();
-        let _ = win.set_focus();
-    }
-}
+use crate::window_restore::show_main_window;
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {

@@ -2415,6 +2415,8 @@ version = "0.10.1"
 dependencies = [
  "base64 0.22.1",
  "cpal",
+ "gdkx11",
+ "gtk",
  "jni 0.21.1",
  "libloading 0.8.9",
  "libsqlite3-sys",
