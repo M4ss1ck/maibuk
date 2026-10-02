@@ -4,8 +4,10 @@ import { useTutorialStore } from "@/features/tutorial/store";
 import {
   DictationError,
   type DictationEvent,
+  type DictationLanguage,
   type ModelFiles,
   type ModelSpec,
+  type ModelTier,
 } from "@/features/dictation/types";
 
 const { createRecognizerHost, getModelFiles } = vi.hoisted(() => ({
@@ -23,10 +25,76 @@ const { useDictationStore } = await import("@/features/dictation/store");
 const { MODEL_CATALOG } = await import("@/features/dictation/catalog");
 const { useShortcutSettingsStore } = await import("@/features/settings/shortcut-store");
 const { DEFAULT_SHORTCUT_SETTINGS } = await import("@/lib/shortcut-resolve");
+const librarySwitch = await import("@/features/tutorial/library-switch");
+
+function catalogModel(language: DictationLanguage, tier: ModelTier): ModelSpec {
+  const spec = MODEL_CATALOG.find(
+    (candidate) => candidate.languages[0] === language && candidate.tier === tier
+  );
+  if (!spec) throw new Error(`no ${tier} ${language} model in the catalog`);
+  return spec;
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+/** Model files that mark a spec complete once it installs; `hold` defers one spec's install. */
+function fakeModelFiles() {
+  const complete = new Set<string>();
+  const held = new Map<string, Promise<void>>();
+  const files: ModelFiles = {
+    install: async (spec, _onProgress, signal) => {
+      const gate = held.get(spec.id);
+      if (gate) {
+        await Promise.race([
+          gate,
+          new Promise((_settle, reject) =>
+            signal.addEventListener("abort", () => reject(new Error("aborted")))
+          ),
+        ]);
+      }
+      complete.add(spec.id);
+    },
+    isComplete: async (spec) => complete.has(spec.id),
+    remove: async (id) => {
+      complete.delete(id);
+    },
+  };
+  return {
+    files,
+    /** Defers `id`'s install until the returned gate is resolved. */
+    hold: (id: string) => {
+      const gate = deferred();
+      held.set(id, gate.promise);
+      return gate;
+    },
+  };
+}
+
+/** A host that loads and listens, so a Session can reach its picked model. */
+function listeningHost() {
+  return {
+    ...createUnsupportedHost("platform"),
+    load: vi.fn(async () => {}),
+    start: vi.fn(async () => {}),
+    stop: vi.fn(async () => {}),
+  };
+}
 
 beforeEach(() => {
   resetDictationForTests();
-  useDictationStore.setState({ enabled: true });
+  librarySwitch.resetLibrarySwitchForTests();
+  useDictationStore.setState({
+    enabled: true,
+    installed: [],
+    downloads: {},
+    preferredTier: { en: "fast", es: "fast" },
+  });
   useTutorialStore.setState({ status: "idle" });
   useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
   createRecognizerHost.mockReset();
@@ -295,5 +363,199 @@ describe("getDictation()", () => {
       kind: "error",
       code: "download_failed",
     });
+  });
+});
+
+describe("install()", () => {
+  it("makes the first model downloaded for a language that language's preference", async () => {
+    createRecognizerHost.mockResolvedValue(listeningHost());
+    getModelFiles.mockResolvedValue(fakeModelFiles().files);
+    const runtime = await getDictation();
+    const accurate = catalogModel("en", "accurate");
+
+    await runtime.install(accurate);
+
+    const state = useDictationStore.getState();
+    expect(state.installed).toEqual([accurate.id]);
+    expect(state.preferredTier).toEqual({ en: "accurate", es: "fast" });
+    expect(state.downloads).toEqual({});
+
+    // The Session runs on the model the automatic selection picked.
+    runtime.session.register({
+      id: "chapter",
+      language: () => "en",
+      showPartial() {},
+      before: () => "",
+      apply() {},
+    });
+    runtime.session.focus("chapter");
+    await runtime.session.start();
+    expect(runtime.session.getSnapshot().modelId).toBe(accurate.id);
+    await runtime.session.stop();
+  });
+
+  it("selects each Dictation Language on its own first download", async () => {
+    createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
+    getModelFiles.mockResolvedValue(fakeModelFiles().files);
+    const runtime = await getDictation();
+
+    await runtime.install(catalogModel("es", "accurate"));
+
+    expect(useDictationStore.getState().preferredTier).toEqual({ en: "fast", es: "accurate" });
+  });
+
+  it("keeps the first selection when a second model of that language lands", async () => {
+    createRecognizerHost.mockResolvedValue(listeningHost());
+    getModelFiles.mockResolvedValue(fakeModelFiles().files);
+    const runtime = await getDictation();
+    const accurate = catalogModel("en", "accurate");
+    const fast = catalogModel("en", "fast");
+
+    await runtime.install(accurate);
+    await runtime.install(fast);
+
+    const state = useDictationStore.getState();
+    expect(state.preferredTier.en).toBe("accurate");
+    expect(state.installed).toHaveLength(2);
+    expect(state.installed).toContain(accurate.id);
+    expect(state.installed).toContain(fast.id);
+
+    // Two models of one language are installed: the preference is what picks.
+    runtime.session.register({
+      id: "chapter",
+      language: () => "en",
+      showPartial() {},
+      before: () => "",
+      apply() {},
+    });
+    runtime.session.focus("chapter");
+    await runtime.session.start();
+    expect(runtime.session.getSnapshot().modelId).toBe(accurate.id);
+    await runtime.session.stop();
+  });
+
+  it("keeps the author's tier while a second model of that language downloads", async () => {
+    createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
+    const { files, hold } = fakeModelFiles();
+    getModelFiles.mockResolvedValue(files);
+    const runtime = await getDictation();
+    const fast = catalogModel("en", "fast");
+    const accurate = catalogModel("en", "accurate");
+
+    await runtime.install(fast);
+    const gate = hold(accurate.id);
+    const installing = runtime.install(accurate);
+    // The author answers Fast again while Accurate is still downloading.
+    useDictationStore.getState().setPreferredTier("en", "fast");
+    gate.resolve();
+    await installing;
+
+    const state = useDictationStore.getState();
+    expect(state.preferredTier).toEqual({ en: "fast", es: "fast" });
+    expect(state.installed).toContain(accurate.id);
+  });
+
+  it("gives overlapping downloads of one language to the first that completes", async () => {
+    createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
+    const { files, hold } = fakeModelFiles();
+    getModelFiles.mockResolvedValue(files);
+    const runtime = await getDictation();
+    const accurate = catalogModel("en", "accurate");
+    const fast = catalogModel("en", "fast");
+    // Holds the read-back every download finishes with, so the second
+    // completion lands while the first install's refresh is still pending.
+    const readGate = deferred();
+    const isComplete = files.isComplete;
+    files.isComplete = async (spec) => {
+      await readGate.promise;
+      return isComplete(spec);
+    };
+    const accurateGate = hold(accurate.id);
+    const fastGate = hold(fast.id);
+
+    const accurateInstall = runtime.install(accurate);
+    const fastInstall = runtime.install(fast);
+    accurateGate.resolve();
+    await vi.waitFor(() => expect(useDictationStore.getState().preferredTier.en).toBe("accurate"));
+
+    fastGate.resolve();
+    await vi.waitFor(() => expect(useDictationStore.getState().downloads).toEqual({}));
+
+    // Both downloads are read while neither refresh has run: the first
+    // completion's selection is what the second one sees.
+    const state = useDictationStore.getState();
+    expect(state.preferredTier.en).toBe("accurate");
+    expect(state.installed).toContain(accurate.id);
+    expect(state.installed).toContain(fast.id);
+    readGate.resolve();
+    await Promise.all([accurateInstall, fastInstall]);
+  });
+
+  it("persists the automatic selection with the device's Dictation record", async () => {
+    createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
+    getModelFiles.mockResolvedValue(fakeModelFiles().files);
+    const runtime = await getDictation();
+
+    await runtime.install(catalogModel("en", "accurate"));
+
+    const saved = JSON.parse(localStorage.getItem("maibuk-dictation") ?? "{}") as {
+      state?: { preferredTier?: unknown };
+    };
+    expect(saved.state?.preferredTier).toEqual({ en: "accurate", es: "fast" });
+  });
+
+  it("leaves every preference alone when a download fails", async () => {
+    createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
+    getModelFiles.mockResolvedValue({
+      install: async () => {
+        throw new DictationError("download_failed");
+      },
+      isComplete: async () => false,
+      remove: async () => {},
+    } satisfies ModelFiles);
+    const runtime = await getDictation();
+
+    await expect(runtime.install(catalogModel("en", "accurate"))).rejects.toThrow(
+      "download_failed"
+    );
+
+    const state = useDictationStore.getState();
+    expect(state.installed).toEqual([]);
+    expect(state.preferredTier).toEqual({ en: "fast", es: "fast" });
+    expect(state.downloads).toEqual({});
+  });
+
+  it("leaves every preference alone when a download is cancelled", async () => {
+    createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
+    const { files, hold } = fakeModelFiles();
+    getModelFiles.mockResolvedValue(files);
+    const runtime = await getDictation();
+    const accurate = catalogModel("en", "accurate");
+    hold(accurate.id);
+
+    const installing = runtime.install(accurate);
+    runtime.cancelInstall(accurate.id);
+
+    await expect(installing).rejects.toMatchObject({ code: "cancelled" });
+    const state = useDictationStore.getState();
+    expect(state.installed).toEqual([]);
+    expect(state.preferredTier).toEqual({ en: "fast", es: "fast" });
+    expect(state.downloads).toEqual({});
+  });
+
+  it("refuses a download while the Tutorial runs and changes no preference", async () => {
+    createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
+    const { files } = fakeModelFiles();
+    getModelFiles.mockResolvedValue(files);
+    const runtime = await getDictation();
+    librarySwitch.activateTutorialDatabase({} as never);
+
+    await expect(runtime.install(catalogModel("en", "accurate"))).rejects.toMatchObject({
+      code: "tutorial_active",
+    });
+
+    const state = useDictationStore.getState();
+    expect(state.installed).toEqual([]);
+    expect(state.preferredTier).toEqual({ en: "fast", es: "fast" });
   });
 });

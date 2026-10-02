@@ -206,6 +206,26 @@ async function build(): Promise<DictationRuntime> {
           spec.files.reduce((sum, f) => sum + f.bytes, 0)
         );
         await models.install(spec, progress, controller.signal);
+        // Publish the model and its selection together so overlapping downloads
+        // see the first completion before the asynchronous installed-model refresh.
+        useDictationStore.setState((state) => {
+          const installedModels = models
+            .available()
+            .filter((candidate) => state.installed.includes(candidate.id));
+          const preferredTier = { ...state.preferredTier };
+          for (const language of spec.languages) {
+            const hasInstalledModel = installedModels.some((candidate) =>
+              candidate.languages.includes(language)
+            );
+            if (!hasInstalledModel) preferredTier[language] = spec.tier;
+          }
+          return {
+            installed: state.installed.includes(spec.id)
+              ? state.installed
+              : [...state.installed, spec.id],
+            preferredTier,
+          };
+        });
       } catch (error) {
         // The session notifies for engine errors; the download reports its own
         // failure the same way, then the caller still sees the rejection.
