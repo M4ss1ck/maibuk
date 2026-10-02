@@ -685,7 +685,7 @@ Every test and hook runs on one timeout, `TEST_TIMEOUT_MS` (60 s), and every `wa
 
 - **A test never sets its own timeout.** The setup file fails a test whose timeout is not the suite's; a file that truly needs longer goes in `TIMEOUT_EXCEPTIONS` with its reason. A timeout literal anywhere in a test file (`{ timeout: N }`, `}, N);`) needs a `// time-budget: <why>` comment on the line above (`test-time-budget.test.ts`).
 - **A slow test gets cheaper, not a bigger limit.** Split a sweep into one test per case (see `navigating-commands.test.tsx`), query once instead of per keypress, render the section instead of the page.
-- **The CI summary names the next timeouts.** The time budget reporter (`src/test/support/time-budget-reporter.ts`) runs on the merged CI report and annotates every test past half its timeout. It never fails the run: wall time on a shared runner is noise, and the timeout stays the only failure. Act on its list before a test crosses the line.
+- **The CI summary names the next timeouts.** The time budget reporter (`src/test/support/time-budget-reporter.ts`) runs on the merged CI report and annotates every test past half its timeout. The same summary is printed in the step log, retrievable with `gh run view --log`. It never fails the run: wall time on a shared runner is noise, and the timeout stays the only failure. Act on its list before a test crosses the line.
 
 ### TDD Workflow
 

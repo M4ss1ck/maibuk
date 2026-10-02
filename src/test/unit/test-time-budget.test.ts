@@ -176,7 +176,7 @@ describe("TimeBudgetReporter", () => {
     { name: "skipped", timeout: 60_000 },
   ]);
 
-  it("annotates tight tests and writes the job summary on GitHub Actions", () => {
+  it("annotates tight tests, and prints and writes the job summary on GitHub Actions", () => {
     const summaryFile = join(mkdtempSync(join(tmpdir(), "budget-")), "summary.md");
     const lines: string[] = [];
     new TimeBudgetReporter({
@@ -185,14 +185,18 @@ describe("TimeBudgetReporter", () => {
       log: (line) => lines.push(line),
     }).onTestRunEnd([run]);
 
-    expect(lines).toHaveLength(1);
+    expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(
       /^::warning file=src\/test\/integration\/slow\.test\.tsx,.*::slow took 40\.0 s/
     );
-    expect(readFileSync(summaryFile, "utf8")).toContain("| 67% | 40.0 s | 60.0 s |");
+    const summary = readFileSync(summaryFile, "utf8");
+    expect(summary).toContain("| 67% | 40.0 s | 60.0 s |");
+    // The step log carries the summary verbatim: the job summary is not
+    // readable back through the GitHub API.
+    expect(lines[1]).toBe(summary);
   });
 
-  it("still writes the summary on GitHub Actions when every test has room", () => {
+  it("still prints and writes the summary on GitHub Actions when every test has room", () => {
     const summaryFile = join(mkdtempSync(join(tmpdir(), "budget-")), "summary.md");
     const lines: string[] = [];
     new TimeBudgetReporter({
@@ -201,8 +205,10 @@ describe("TimeBudgetReporter", () => {
       log: (line) => lines.push(line),
     }).onTestRunEnd([moduleWith([{ name: "fast", duration: 100, timeout: 60_000 }])]);
 
-    expect(lines).toEqual([]);
-    expect(readFileSync(summaryFile, "utf8")).toContain("Every test finished within 50%");
+    expect(lines).toHaveLength(1);
+    const summary = readFileSync(summaryFile, "utf8");
+    expect(summary).toContain("Every test finished within 50%");
+    expect(lines[0]).toBe(summary);
   });
 
   it("prints the table locally only when a test is tight, and never fails the run", () => {

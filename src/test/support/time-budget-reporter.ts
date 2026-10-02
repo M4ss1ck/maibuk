@@ -48,9 +48,13 @@ export default class TimeBudgetReporter implements Reporter {
 
     if (this.env.GITHUB_ACTIONS === "true") {
       for (const line of githubAnnotations(over)) this.log(line);
+      // The job summary is unreadable through the GitHub API, so the same
+      // Markdown goes to the step log, where `gh run view --log` can reach it.
+      const summary = summaryMarkdown(over);
+      this.log(summary);
       // Written even when every test has room, so the summary shows the check ran.
       const summaryFile = this.env.GITHUB_STEP_SUMMARY;
-      if (summaryFile) appendFileSync(summaryFile, summaryMarkdown(over));
+      if (summaryFile) appendFileSync(summaryFile, summary);
     } else if (over.length > 0) {
       this.log(`\n${summaryMarkdown(over)}`);
     }
