@@ -92,10 +92,15 @@ A cross-platform writing app for authors. Built with Tauri, React, and TypeScrip
 
 ### Dictation shortcuts and settings
 
+Dictation is available in the Linux desktop app and compatible web browsers.
+Web Dictation requires microphone access and cross-origin isolation; Safari/WebKit
+is currently unsupported. Native Windows and Android Dictation are not available.
+
 In Settings → Dictation, download a Dictation Model for English or Spanish.
 Start or stop Dictation with **Ctrl+Shift+Space** (**⌘+Shift+Space** on Mac);
 **Escape** stops it while writing. The floating language picker shows `auto`,
-`en`, or `es`; Auto follows the editor's Spell Check language.
+`en`, or `es`; Auto follows the editor's Spell Check language, or the app
+language in a plain text field.
 
 **Cycle Dictation language** has no Default Shortcut. Assign one in Settings →
 Customize shortcuts. It cycles Auto → downloaded languages (English, Spanish)
@@ -108,11 +113,17 @@ Downloaded models remain available to manage while Dictation is off.
 ## Tech Stack
 
 - **Frontend**: React + TypeScript + Vite
-- **Backend**: Tauri (Rust)
-- **Editor**: TipTap
-- **Database**: SQLite (via Drizzle ORM)
+- **Native shell**: Tauri (Rust)
+- **Editors**: TipTap (rich text), CodeMirror (HTML view)
+- **Storage**: SQLite (Tauri SQL plugin), sql.js (web), Drizzle ORM schema
 - **UI**: Tailwind CSS + React Aria
-- **Canvas**: Fabric.js (cover designer)
+- **State**: Zustand
+- **Localization**: i18next + react-i18next
+- **Canvas**: React Flow (`@xyflow/react`)
+- **Cover Designer**: Fabric.js
+- **Sync client**: PocketBase SDK
+- **Dictation**: Moonshine (vendored native and WebAssembly runtimes)
+- **Quality tools**: Vitest + Testing Library, Playwright, Biome
 
 ## Installation
 
@@ -120,10 +131,16 @@ Downloaded models remain available to manage while Dictation is off.
 
 #### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18 or higher)
-- [pnpm](https://pnpm.io/)
+- [Node.js](https://nodejs.org/) 22.13 or higher
+- [pnpm](https://pnpm.io/) 11.8.0, as pinned in `package.json`
+
+For native development, also install:
+
 - [Rust](https://www.rust-lang.org/tools/install)
-- [Tauri prerequisites](https://tauri.app/start/prerequisites/)
+- [Tauri platform prerequisites](https://tauri.app/start/prerequisites/)
+
+Web-only development needs Node.js and pnpm; the native toolchain and Linux
+system libraries below are not required.
 
 ##### Linux system libraries (Debian / Ubuntu / Linux Mint)
 
@@ -153,10 +170,12 @@ sudo apt install \
   libssl-dev \
   libayatana-appindicator3-dev \
   librsvg2-dev \
-  libasound2-dev
+  libasound2-dev \
+  patchelf
 ```
 
-Then verify `pkg-config` can find the libraries:
+`patchelf` is used for Linux packaging. Then verify `pkg-config` can find the
+libraries:
 
 ```bash
 pkg-config --exists webkit2gtk-4.1 && echo "OK"
@@ -167,30 +186,54 @@ For other distributions (Fedora, Arch, openSUSE), see the
 
 #### Development
 
+Install JavaScript dependencies:
+
 ```bash
-# Install dependencies
 pnpm install
-
-# Run in development mode
-pnpm tauri dev
-
-# Run tests in watch mode
-pnpm test
 ```
+
+For the native app, fetch the Dictation runtimes before starting Tauri:
+
+```bash
+pnpm fetch:dictation
+pnpm tauri dev
+```
+
+For web-only development:
+
+```bash
+pnpm fetch:dictation --web
+pnpm dev:web
+```
+
+The web app runs at `http://localhost:5173`; Tauri uses port 1420.
 
 #### Building
 
+Fetch the Dictation runtimes with `pnpm fetch:dictation` before a native build.
+Each target also needs its platform toolchain:
+
+- **Linux**: the system libraries above, plus `patchelf` for packaging.
+- **Windows cross-compilation from Linux**: the `x86_64-pc-windows-gnu` Rust
+  target, MinGW, NSIS, LLVM, Clang, and lld. The
+  [release workflow](.github/workflows/release.yml) records the package setup.
+- **Android**: a JDK, Android SDK and NDK, OpenSSL, the Android Rust targets, and
+  `JAVA_HOME`, `ANDROID_HOME`, and `NDK_HOME` configured. Follow the
+  [Tauri prerequisites](https://tauri.app/start/prerequisites/) for Android.
+  The release workflow uses JDK 21. The build script creates signing material
+  under `~/.config/maibuk/android-signing`; keep it to sign future updates.
+
 ```bash
-# Build for Linux
+# Linux bundles
 pnpm build:linux
 
-# Build for Windows (cross-compile)
+# Windows bundles (cross-compile from Linux)
 pnpm build:windows
 
-# Build for Android
+# Signed Android APKs
 pnpm build:android
 
-# Build web version
+# Static web build (fetches the web Dictation runtime automatically)
 pnpm build:web
 ```
 
@@ -257,22 +300,48 @@ pnpm test:coverage
 
 Test organization:
 
-- Unit tests: `src/test/unit/**/*.test.ts`
-- Integration tests: `src/test/integration/**/*.test.ts`
+- Unit tests: `src/test/unit/**/*.test.{ts,tsx}`
+- Integration tests: `src/test/integration/**/*.test.{ts,tsx}`
+- End-to-end tests: Playwright workflows in `e2e/specs/`
 
-CI and release pipelines enforce coverage thresholds before build and release jobs.
+### Quality checks
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test:release
+```
+
+Biome handles linting and formatting. TypeScript checks test files too; Vitest
+alone does not typecheck them. `pnpm test:release` tests the changelog generator
+offline.
+
+### End-to-end tests
+
+The local Playwright suite runs keyboard workflows in Chromium and WebKit,
+with separate phone and voice projects. The Sync lane runs against a local
+test server. See the
+[E2E guide](e2e/README.md) for browser installation, test assets, running each
+lane, and PR screenshots.
+
+E2E tests run separately from Vitest, builds, and CI. CI enforces coverage in a
+separate job while lint, typecheck, and the web build run independently. Release
+builds wait for the release quality gate, including coverage.
 
 ## Releasing
 
 Releases are cut locally with `scripts/release.sh` and built on GitHub Actions.
-The script runs from your machine:
+The script runs from your machine. Choose an unreleased semantic version
+(`MAJOR.MINOR.PATCH`) and replace the example value below before releasing:
 
 ```bash
-# Preview what would happen (no changes made)
-./scripts/release.sh 0.4.13 --dry-run
+RELEASE_VERSION=0.10.1
 
-# Cut the release
-./scripts/release.sh 0.4.13
+# Preview what would happen (no changes made)
+./scripts/release.sh "$RELEASE_VERSION" --dry-run
+
+# Cut the chosen release
+./scripts/release.sh "$RELEASE_VERSION"
 ```
 
 What it does:
@@ -305,7 +374,8 @@ configuration the script falls back to a grouped list of commit messages and
 never errors out. Configure it via a local `.env` file (git-ignored; copy
 `.env.example` to get started):
 
-Both providers are OpenAI-compatible HTTP APIs and require an API key.
+Both providers are OpenAI-compatible HTTP APIs and require an API key, plus
+`curl` and `jq` installed locally.
 
 | Variable                | Purpose                                                                                  |
 | ----------------------- | ---------------------------------------------------------------------------------------- |
@@ -335,27 +405,24 @@ instead of quietly degrading the changelog.
 
 ## Project Structure
 
-```
+```text
 maibuk/
-├── src/                    # React frontend source
-│   ├── components/         # UI components
-│   │   ├── editor/         # Text editor components
-│   │   ├── cover-editor/   # Cover designer components
-│   │   ├── export/         # Export dialog components
-│   │   └── ui/             # Reusable UI components
-│   ├── features/           # Feature modules
-│   │   ├── books/          # Book management
-│   │   ├── chapters/       # Chapter management
-│   │   ├── covers/         # Cover design
-│   │   ├── export/         # EPUB/PDF generation
-│   │   └── settings/       # App settings
-│   ├── hooks/              # Custom React hooks
-│   ├── lib/                # Utilities and database
-│   └── pages/              # Page components
-├── src-tauri/              # Tauri/Rust backend
-│   └── src/                # Rust source code
-├── public/                 # Static assets
-└── scripts/                # Build scripts
+├── src/                    # Shared React frontend
+│   ├── components/         # UI primitives and feature-specific components
+│   ├── features/           # Books, Notes, Canvas, Sync, Dictation, and other modules
+│   ├── hooks/              # Shared React hooks
+│   ├── lib/
+│   │   ├── db/             # Database initialization and schema
+│   │   └── platform/       # Tauri and web adapters
+│   ├── locales/            # English and Spanish strings
+│   ├── pages/              # Route-level components
+│   └── test/               # Unit and integration tests
+├── src-tauri/              # Native Rust backend and Android project
+├── e2e/                    # Playwright specs, fixtures, and coverage matrix
+├── docs/adr/               # Architecture decisions
+├── public/                 # Static assets and hosting headers
+├── scripts/                # Build, release, runtime-fetch, and test tooling
+└── vendor/                 # Downloaded runtimes and test assets (not committed)
 ```
 
 ## Recommended IDE Setup
@@ -363,45 +430,47 @@ maibuk/
 - [VS Code](https://code.visualstudio.com/)
   - [Tauri Extension](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode)
   - [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
-  - [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
+  - [Biome](https://marketplace.visualstudio.com/items?itemName=biomejs.biome)
   - [Tailwind CSS IntelliSense](https://marketplace.visualstudio.com/items?itemName=bradlc.vscode-tailwindcss)
+  - [Vitest](https://marketplace.visualstudio.com/items?itemName=vitest.explorer) (optional)
+  - [Playwright Test](https://marketplace.visualstudio.com/items?itemName=ms-playwright.playwright) (optional)
 
 ## Accessibility
 
-Maibuk is built to be operated entirely from the keyboard, with a screen-reader
-compatibility baseline for the application's core surfaces. This is a v1 statement,
-not a claim of full WCAG conformance.
+Maibuk is built to be operated entirely from the keyboard. Automated accessibility
+checks cover the application's core surfaces; screen-reader compatibility also
+requires manual testing. This is not a claim of full WCAG conformance.
 
 **Platform targets**
 
-- **Web build** and **Windows (Tauri / WebView2)** with **NVDA** are the primary,
-  actively verified targets.
+- **Web build** and **Windows (Tauri / WebView2)** with **NVDA** are the primary
+  screen-reader targets. Platform compatibility requires manual testing.
 - **Linux (WebKitGTK)** with **Orca** is treated as observational only; its support
   status is not yet verified and no compatibility is claimed until a full session
   passes.
 
-**Covered in v1**
+**Automated coverage**
 
-Keyboard and screen-reader access to the application chrome and content structure:
+Keyboard behavior and accessibility checks cover:
 
 - dialogs (focus trap, Escape, and focus restoration);
 - primary navigation / sidebar;
-- the Home book grid;
+- the Book, Notes, and Canvas Galleries;
 - the chapter list;
 - editor structural navigation (pane cycling, Escape behavior, Tab indentation);
 - route-change announcements; and
 - ordinary form controls and buttons.
 
-**Excluded in v1**
+**Limits**
 
 Semantic access to the _content_ of visual canvas surfaces is out of scope:
 
-- the mind-map canvas nodes and edges (xyflow); and
+- Canvas nodes and Connections (React Flow); and
 - the cover designer artwork itself (Fabric.js).
 
-The headings, toolbars, and panels surrounding these canvases remain keyboard- and
-screen-reader-accessible; only the visual graph/artwork content lacks an alternative
-representation. A future release may add one.
+The headings, toolbars, and panels surrounding these surfaces have keyboard paths
+and accessibility checks. The visual graph/artwork content lacks an alternative
+representation.
 
 Automated checks (axe) run per route as a safety net, but automated status alone is
 not treated as evidence of screen-reader support — behavioral keyboard tests and
@@ -422,12 +491,12 @@ applies to that opening only, and reopening resets to the contextual default.
 
 ### How local edits reach sync and the screen
 
-Every Book, Chapter, and Note write goes through one narrow write path per
-entity (`src/features/books/write.ts`, `src/features/chapters/write.ts`,
-`src/features/notes/write.ts`): normalize, persist, return the stored row,
-then emit a Change on the single Change Feed
+Every Book, Chapter, Note, and Canvas write goes through one narrow write path
+per entity (`src/features/books/write.ts`, `src/features/chapters/write.ts`,
+`src/features/notes/write.ts`, `src/features/canvas/write.ts`): normalize,
+persist, return the stored row, then emit a Change on the single Change Feed
 (`src/features/sync/change-feed.ts`) shaped
-`{ entity: "book" | "note", id, origin: "local" | "remote", kind: "content" | "metadata" }`.
+`{ entity: "book" | "note" | "canvas", id, origin: "local" | "remote", kind: "content" | "metadata" }`.
 Chapter edits are reported under their containing Book's id.
 
 - Auto Sync listens to local Changes of both kinds; remote Changes never
@@ -446,15 +515,15 @@ which write failed. A failed sync does not advance the last synced time.
 
 ### Items deleted on another device
 
-Deleting a book or note marks it deleted on the server; the server keeps the
-record under the same ID. When another device still has that item, sync never
+Deleting a Book, Note, or Canvas marks it deleted on the server; the server
+keeps the record under the same ID. When another device still has that item, sync never
 uploads it as a new item (the server would reject that with
 `validation_not_unique`). Instead:
 
 - **Not edited here since the last sync:** the item appears under "Deleted on
   another device" in the sync panel. Nothing is removed until you confirm;
   confirming takes a safety backup and removes the local copy.
-- **Edited here since the last sync:** sync asks. "Keep & Restore" uploads this
+- **Edited here since the last sync:** sync asks. "Keep & Push" uploads this
   copy and restores the item on the server; "Delete Here" removes the local copy.
   Automatic sync leaves the choice for a manual sync.
 - **Push only** skips the item with a warning in the sync log; run a two-way or
@@ -463,6 +532,10 @@ uploads it as a new item (the server would reject that with
 ## Contributing
 
 Contributions are welcome. Please open a pull request.
+
+Read the [domain glossary](CONTEXT.md), [architecture decisions](docs/adr/), and
+[codebase guide](AGENTS.md) before making changes. The [E2E guide](e2e/README.md)
+covers workflow tests and screenshots for UI changes.
 
 **Keyboard & accessibility are completion requirements**: any new or modified UI must be fully operable by keyboard and backed by behavioral keyboard tests. See the "Keyboard & Accessibility Are Completion Requirements" and "Keyboard & Accessibility Test Gate" sections in [AGENTS.md](AGENTS.md) — a feature that can't be driven without a mouse is not done.
 
