@@ -172,11 +172,9 @@ function renderApp(initialPath = "/") {
 }
 
 async function settleOn(screenPath: string) {
-  await waitFor(() => expect(path).toBe(screenPath), { timeout: 10_000 });
+  await waitFor(() => expect(path).toBe(screenPath));
   // Let bindings mount and stores load from the Library.
-  await waitFor(() => expect(document.querySelector("[data-route-heading]")).not.toBeNull(), {
-    timeout: 10_000,
-  });
+  await waitFor(() => expect(document.querySelector("[data-route-heading]")).not.toBeNull());
   await new Promise((resolve) => setTimeout(resolve, 300));
 }
 
@@ -260,77 +258,95 @@ beforeEach(async () => {
   useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
 });
 
-describe("navigating Commands (issue #319)", () => {
-  it("a run changes the route iff the Command is flagged navigates", async () => {
+// One test per screen and kind keeps each well inside the suite's time
+// budget: the whole sweep in one test took 3.5 minutes on CI. The last test
+// checks the union, so the file runs in order.
+const exercised = new Set<CommandId>();
+const seen = new Set<CommandId>();
+
+// Beyond the spec's five screens, the detail screens bind the rest of the
+// navigating Commands (backToGallery, addNoteToBook, createNote).
+const SCREENS: {
+  name: string;
+  path: (ids: { book: string; note: string; canvas: string }) => string;
+}[] = [
+  { name: "Books", path: () => "/" },
+  { name: "Notes", path: () => "/notes" },
+  { name: "a Note", path: ({ note }) => `/notes/${note}` },
+  { name: "Canvases", path: () => "/canvas" },
+  { name: "a Canvas", path: ({ canvas }) => `/canvas/${canvas}` },
+  { name: "Ephemeral", path: () => "/ephemeral" },
+  { name: "Settings", path: () => "/settings" },
+  { name: "a Book", path: ({ book }) => `/book/${book}` },
+];
+// Commands flagged navigates and the rest, apart: a screen binds ~70 of the
+// rest, and each one waits for a move that must not come.
+const CASES = SCREENS.flatMap((screen) =>
+  (["flagged", "unflagged"] as const).map((kind) => ({ ...screen, kind }))
+);
+
+describe.sequential("navigating Commands (issue #319)", () => {
+  it.each(
+    CASES
+  )("a run of a $kind Command on $name changes the route iff it is flagged navigates", async ({
+    path: screenPath,
+    kind,
+  }) => {
     const book = await createBookRow({ title: "Nav Book", authorName: "Nav Author" }, "local");
     const note = await createNoteRow({ title: "Nav Note", bookId: null }, "local");
     const canvas = await createCanvasRow({ title: "Nav Canvas" }, "local");
-
-    // Beyond the spec's five screens, the detail screens bind the rest of the
-    // navigating Commands (backToGallery, addNoteToBook, createNote).
-    const screens = [
-      "/",
-      "/notes",
-      `/notes/${note.id}`,
-      "/canvas",
-      `/canvas/${canvas.id}`,
-      "/ephemeral",
-      "/settings",
-      `/book/${book.id}`,
-    ];
+    const screen = screenPath({ book: book.id, note: note.id, canvas: canvas.id });
     renderApp("/");
 
-    const exercised = new Set<CommandId>();
-    const seen = new Set<CommandId>();
+    navigateTo(screen);
+    await settleOn(screen);
+    // The Ephemeral create binding only exists with text in the buffer.
+    if (screen === "/ephemeral") {
+      useEphemeralStore.setState({ content: "<p>draft</p>", wordCount: 1 });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const bound = Object.keys(useBoundShortcutStore.getState().counts) as CommandId[];
 
-    for (const screen of screens) {
-      navigateTo(screen);
-      await settleOn(screen);
-      // The Ephemeral create binding only exists with text in the buffer.
-      if (screen === "/ephemeral") {
+    for (const id of bound) {
+      const skipReason = SKIP[id];
+      if (skipReason) continue;
+      if ((getCommand(id).navigates === true) !== (kind === "flagged")) continue;
+      if (GOTO_TARGET[id] === path) continue;
+      if (id === "ephemeral.createNote") {
         useEphemeralStore.setState({ content: "<p>draft</p>", wordCount: 1 });
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      const bound = Object.keys(useBoundShortcutStore.getState().counts) as CommandId[];
-
-      for (const id of bound) {
-        const skipReason = SKIP[id];
-        if (skipReason) continue;
-        if (GOTO_TARGET[id] === path) continue;
-        if (id === "ephemeral.createNote") {
-          useEphemeralStore.setState({ content: "<p>draft</p>", wordCount: 1 });
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-        // A previous run may have unbound this id (clearing the buffer
-        // unbinds createNote); only judge live bindings.
-        if (!(useBoundShortcutStore.getState().counts[id] ?? 0)) continue;
-        seen.add(id);
-        const before = path;
-        const outcome = await runCommand(id, { source: "palette" });
-        const inPlaceReason = IN_PLACE[id]?.(screen);
-        // Note and canvas creation navigate once the write lands. An in-place
-        // run never moves, so waiting for a move would only burn the timeout.
-        if (getCommand(id).navigates === true && !inPlaceReason) {
-          await waitFor(() => expect(path).not.toBe(before), { timeout: 5_000 }).catch(() => {});
-        } else {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-        const after = path;
-        const navigates = getCommand(id).navigates === true;
-        if (outcome === "ran" && navigates && after !== before) exercised.add(id);
-        expect(
-          after !== before,
-          `${id} on ${screen}: route ${before} -> ${after}, navigates=${navigates}, outcome=${outcome}${inPlaceReason ? ` (${inPlaceReason})` : ""}`
-        ).toBe(inPlaceReason ? false : navigates);
-        if (after !== before) {
-          navigateTo(screen);
-          await settleOn(screen);
-        }
-        await closeLeftoverDialogs();
+      // A previous run may have unbound this id (clearing the buffer
+      // unbinds createNote); only judge live bindings.
+      if (!(useBoundShortcutStore.getState().counts[id] ?? 0)) continue;
+      seen.add(id);
+      const before = path;
+      const outcome = await runCommand(id, { source: "palette" });
+      const inPlaceReason = IN_PLACE[id]?.(screen);
+      // Note and canvas creation navigate once the write lands. An in-place
+      // run never moves, so waiting for a move would only burn the timeout.
+      if (getCommand(id).navigates === true && !inPlaceReason) {
+        // time-budget: a Command that wrongly stays put must not wait 10 s per id.
+        await waitFor(() => expect(path).not.toBe(before), { timeout: 5_000 }).catch(() => {});
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
+      const after = path;
+      const navigates = getCommand(id).navigates === true;
+      if (outcome === "ran" && navigates && after !== before) exercised.add(id);
+      expect(
+        after !== before,
+        `${id} on ${screen}: route ${before} -> ${after}, navigates=${navigates}, outcome=${outcome}${inPlaceReason ? ` (${inPlaceReason})` : ""}`
+      ).toBe(inPlaceReason ? false : navigates);
+      if (after !== before) {
+        navigateTo(screen);
+        await settleOn(screen);
+      }
+      await closeLeftoverDialogs();
     }
+  });
 
-    // Every flagged Command really ran somewhere above.
+  it("ran every flagged Command on some screen", () => {
     const flagged = (Object.keys(COMMANDS) as CommandId[]).filter(
       (id) => getCommand(id).navigates === true
     );
@@ -338,5 +354,5 @@ describe("navigating Commands (issue #319)", () => {
       expect(exercised.has(id) || seen.has(id), `${id} was never exercised`).toBe(true);
       expect(exercised, `${id} never ran`).toContain(id);
     }
-  }, 300_000);
+  });
 });

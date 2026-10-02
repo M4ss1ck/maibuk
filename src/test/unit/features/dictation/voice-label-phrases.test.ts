@@ -52,11 +52,7 @@ describe.each(VOICE_LANGUAGES)("voice label phrases (%s)", (language) => {
     }
   });
 
-  // Each check builds two full phrase tables for ~200 Commands: about 1 s
-  // locally, but over 5 s on CI with coverage instrumentation.
-  it("keeps every default whole-line phrase clear of every other phrase", {
-    timeout: 30_000,
-  }, () => {
+  it("keeps every default whole-line phrase clear of every other phrase", () => {
     for (const { id, phrase } of wholeLineEntries(language)) {
       expect(
         findPhraseConflict({

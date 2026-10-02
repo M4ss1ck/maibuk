@@ -5,6 +5,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 import { version } from "./package.json";
+import { TEST_TIMEOUT_MS } from "./src/test/time-budget";
 
 const host = process.env.TAURI_DEV_HOST;
 const buildTarget = process.env.VITE_BUILD_TARGET || "tauri";
@@ -51,6 +52,10 @@ export default defineConfig(() => ({
       },
     ],
     include: ["src/test/**/*.test.ts", "src/test/**/*.test.tsx"],
+    // One budget for every test; see src/test/time-budget.ts.
+    testTimeout: TEST_TIMEOUT_MS,
+    hookTimeout: TEST_TIMEOUT_MS,
+    reporters: ["default", "./src/test/support/time-budget-reporter.ts"],
     coverage: {
       provider: "v8" as const,
       reporter: ["text", "html", "lcov"] as ("text" | "html" | "lcov")[],

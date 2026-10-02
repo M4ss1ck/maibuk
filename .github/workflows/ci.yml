@@ -96,9 +96,12 @@ jobs:
           include-hidden-files: true
           retention-days: 1
 
+  # Also runs when a shard failed: the merge prints the time budget report
+  # (tests past half their timeout), which is what explains a timeout.
   coverage:
     name: Coverage gates
     needs: tests
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
 
     steps:

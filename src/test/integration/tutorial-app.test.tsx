@@ -200,8 +200,6 @@ function renderApp(initialPath = "/") {
   );
 }
 
-const CARD_TIMEOUT = { timeout: 10_000 };
-
 function card(): HTMLElement {
   const dialog = document.querySelector<HTMLElement>("[data-tutorial-card]");
   if (!dialog) throw new Error("No Tutorial card is showing");
@@ -212,7 +210,7 @@ async function findCard(stepId: string): Promise<HTMLElement> {
   const [section, step] = stepId.split(".");
   const title = en(`tutorial.steps.${section}.${step}.title`);
   try {
-    return await screen.findByRole("dialog", { name: title }, CARD_TIMEOUT);
+    return await screen.findByRole("dialog", { name: title });
   } catch (error) {
     const anchors = [...document.querySelectorAll("[data-tutorial]")].map((el) =>
       el.getAttribute("data-tutorial")
@@ -277,8 +275,7 @@ describe("the first-launch offer", () => {
 
     const offer = await screen.findByRole(
       "dialog",
-      { name: en("tutorial.offer.title") },
-      CARD_TIMEOUT
+      { name: en("tutorial.offer.title") }
     );
     expect(offer).toHaveTextContent("5 minutes");
     await tabTo(user, within(offer).getByRole("button", { name: en("tutorial.offer.start") }));
@@ -317,13 +314,14 @@ describe("the first-launch offer", () => {
     }
 
     // Back in the author's own, empty Library, with focus on the Books heading.
-    await waitFor(() => expect(isTutorialLibraryActive()).toBe(false), CARD_TIMEOUT);
+    await waitFor(() => expect(isTutorialLibraryActive()).toBe(false));
     await waitFor(() => expect(path).toBe("/"));
     const heading = await screen.findByRole("heading", { level: 1, name: en("books.title") });
     await waitFor(() => expect(document.activeElement).toBe(heading));
     expect(useBookStore.getState().books).toEqual([]);
     expect(useTutorialStore.getState().progress.completedAt).not.toBeNull();
     expect(useSettingsStore.getState().lastPath).toBe("/");
+    // time-budget: TIMEOUT_EXCEPTIONS lists this run through every step.
   }, 120_000);
 
   it("waits for launch Auto Sync on a signed-in device before deciding", async () => {
@@ -339,11 +337,11 @@ describe("the first-launch offer", () => {
       await act(async () => {
         await runAutoSync("launch");
       });
-      await screen.findByRole("dialog", { name: en("tutorial.offer.title") }, CARD_TIMEOUT);
+      await screen.findByRole("dialog", { name: en("tutorial.offer.title") });
     } finally {
       useSyncStore.setState({ authStatus: "logged-out" });
     }
-  }, 30_000);
+  });
 
   it("is not offered to an author whose Library already has writing", async () => {
     await (async () => {
@@ -362,8 +360,7 @@ describe("the first-launch offer", () => {
     renderApp("/");
     const offer = await screen.findByRole(
       "dialog",
-      { name: en("tutorial.offer.title") },
-      CARD_TIMEOUT
+      { name: en("tutorial.offer.title") }
     );
     expect(offer).toHaveTextContent(en("tutorial.relaunchHint"));
 
@@ -373,7 +370,7 @@ describe("the first-launch offer", () => {
     expect(screen.getAllByText(en("tutorial.relaunchHint")).length).toBeGreaterThan(0);
     const heading = screen.getByRole("heading", { level: 1, name: en("books.title") });
     await waitFor(() => expect(document.activeElement).toBe(heading));
-  }, 30_000);
+  });
 });
 
 describe("the first-launch offer by keyboard", () => {
@@ -382,8 +379,7 @@ describe("the first-launch offer by keyboard", () => {
     renderApp("/");
     const offer = await screen.findByRole(
       "dialog",
-      { name: en("tutorial.offer.title") },
-      CARD_TIMEOUT
+      { name: en("tutorial.offer.title") }
     );
     await waitFor(() => expect(offer.contains(document.activeElement)).toBe(true));
 
@@ -396,7 +392,7 @@ describe("the first-launch offer by keyboard", () => {
     expect(useTutorialStore.getState().status).toBe("idle");
     const heading = screen.getByRole("heading", { level: 1, name: en("books.title") });
     await waitFor(() => expect(document.activeElement).toBe(heading));
-  }, 30_000);
+  });
 });
 
 describe("running the Tutorial again", () => {
@@ -417,7 +413,7 @@ describe("running the Tutorial again", () => {
     await findCard("books.new-book");
     await user.keyboard("{Escape}");
 
-    await waitFor(() => expect(isTutorialLibraryActive()).toBe(false), CARD_TIMEOUT);
+    await waitFor(() => expect(isTutorialLibraryActive()).toBe(false));
     await waitFor(() => expect(path).toBe("/settings"));
     await waitFor(() =>
       expect(document.activeElement).toBe(
@@ -429,7 +425,7 @@ describe("running the Tutorial again", () => {
     expect(progress.dismissedAt).toBe(1);
     expect(progress.skippedAt).toEqual({ section: "books", step: 1 });
     expect(useSettingsStore.getState().lastPath).toBe("/settings");
-  }, 60_000);
+  });
 
   it("runs one section from Settings with the arrow keys and Enter", async () => {
     dismissOffer();
@@ -461,7 +457,7 @@ describe("running the Tutorial again", () => {
     await findCard("cover-designer.export");
     await pressCardButton(user, en("tutorial.card.finish"));
 
-    await waitFor(() => expect(path).toBe("/settings"), CARD_TIMEOUT);
+    await waitFor(() => expect(path).toBe("/settings"));
     await waitFor(() =>
       expect(document.activeElement?.getAttribute("data-tutorial-trigger")).toBe(
         "settings-section-cover-designer"
@@ -470,7 +466,7 @@ describe("running the Tutorial again", () => {
     const { progress } = useTutorialStore.getState();
     expect(progress.sections["cover-designer"]?.completedAt).toEqual(expect.any(Number));
     expect(progress.completedAt).toBeNull();
-  }, 60_000);
+  });
 
   it("runs the Dictation section from Settings by keyboard; its steps point at the Dictation settings and never start the recognizer", async () => {
     dismissOffer();
@@ -508,7 +504,7 @@ describe("running the Tutorial again", () => {
       await pressCardButton(user, en(isLast ? "tutorial.card.finish" : "tutorial.card.next"));
     }
 
-    await waitFor(() => expect(path).toBe("/settings"), CARD_TIMEOUT);
+    await waitFor(() => expect(path).toBe("/settings"));
     await waitFor(() =>
       expect(document.activeElement?.getAttribute("data-tutorial-trigger")).toBe(
         "settings-section-dictation"
@@ -528,11 +524,11 @@ describe("running the Tutorial again", () => {
     await user.keyboard("{Enter}");
     await findCard("dictation.overview");
     await user.keyboard("{Escape}");
-    await waitFor(() => expect(path).toBe("/settings"), CARD_TIMEOUT);
+    await waitFor(() => expect(path).toBe("/settings"));
     expect(useTutorialStore.getState().progress.sections.dictation?.completedAt).toEqual(
       expect.any(Number)
     );
-  }, 60_000);
+  });
 
   it("Back crosses into the previous section's last step", async () => {
     dismissOffer();
@@ -552,7 +548,7 @@ describe("running the Tutorial again", () => {
     await pressCardButton(user, en("tutorial.card.back"));
     await findCard("books.remember");
     expect(path).toBe("/");
-  }, 60_000);
+  });
 
   it("g u starts it on the web, but not while the author types in a field", async () => {
     dismissOffer();
@@ -571,13 +567,13 @@ describe("running the Tutorial again", () => {
     await user.keyboard("gu");
     await findCard("books.gallery");
     expect(useBoundShortcutStore.getState().counts["tutorial.skip"]).toBeGreaterThan(0);
-  }, 60_000);
+  });
 
   it("starts this screen's section from the Keyboard shortcuts help", async () => {
     dismissOffer();
     const user = userEvent.setup();
     renderApp("/ephemeral");
-    await screen.findByRole("heading", { level: 1 }, CARD_TIMEOUT).catch(() => null);
+    await screen.findByRole("heading", { level: 1 }).catch(() => null);
     (document.activeElement as HTMLElement).blur();
     await user.keyboard("?");
     const help = await screen.findByRole("dialog", { name: en("shortcuts.title") });
@@ -593,11 +589,11 @@ describe("running the Tutorial again", () => {
     // The button that started it lived in a dialog that is gone: focus lands
     // on this screen's heading, back on the screen the run started from.
     await user.keyboard("{Escape}");
-    await waitFor(() => expect(isTutorialLibraryActive()).toBe(false), CARD_TIMEOUT);
+    await waitFor(() => expect(isTutorialLibraryActive()).toBe(false));
     await waitFor(() => expect(path).toBe("/ephemeral"));
     const heading = await screen.findByRole("heading", { level: 1 });
     await waitFor(() => expect(document.activeElement).toBe(heading));
-  }, 60_000);
+  });
 
   it("keeps every other shortcut inert and Tab inside the card while it runs", async () => {
     dismissOffer();
@@ -626,7 +622,7 @@ describe("running the Tutorial again", () => {
       expect(dialog.contains(document.activeElement)).toBe(true);
     }
     expect(visited.size).toBe(2); // Skip and Next on the first step.
-  }, 60_000);
+  });
 
   it("pauses while a Modal is open and resumes on the same step", async () => {
     dismissOffer();
@@ -648,7 +644,7 @@ describe("running the Tutorial again", () => {
     const resumed = await findCard("books.new-book");
     await waitFor(() => expect(resumed.contains(document.activeElement)).toBe(true));
     expect(useTutorialStore.getState().status).toBe("running");
-  }, 60_000);
+  });
 });
 
 // Issue #336: a Modal hides everything outside it from assistive technology.
@@ -700,7 +696,7 @@ describe("the app shell's live regions", () => {
 
     act(() => toast.error("Sync failed"));
     await expectStatusHeard("Sync failed");
-  }, 60_000);
+  });
 
   it("stay reachable while the Tutorial runs, with and without a Modal over it", async () => {
     useTutorialStore.getState().dismiss(1);
@@ -718,7 +714,7 @@ describe("the app shell's live regions", () => {
     expect(hiddenShellRegions()).toEqual([]);
     act(() => useDictationStore.setState({ announcement: "Over the Modal" }));
     await expectStatusHeard("Over the Modal");
-  }, 60_000);
+  });
 });
 
 describe("the Android back button", () => {
@@ -735,7 +731,7 @@ describe("the Android back button", () => {
       expect(runTopBackDismiss()).toBe(true);
     });
 
-    await waitFor(() => expect(isTutorialLibraryActive()).toBe(false), CARD_TIMEOUT);
+    await waitFor(() => expect(isTutorialLibraryActive()).toBe(false));
     expect(useTutorialStore.getState().progress.skippedAt).toEqual({ section: "books", step: 0 });
-  }, 60_000);
+  });
 });

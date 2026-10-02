@@ -418,6 +418,8 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `readDroppedItems()` (supported text files from React Aria drop items) | `src/hooks/useTextFileDrop.ts` |
 | `buildBook()` / `buildChapter()` (test fixtures)                                                                                                                                                                                               | `src/test/support/fixtures.ts`                                         |
 | `createTestDatabase()` (in-memory sql.js for store tests)                                                                                                                                                                                      | `src/test/support/db-test-context.ts`                                  |
+| `TEST_TIMEOUT_MS` / `ASYNC_UTIL_TIMEOUT_MS` / `TIMEOUT_EXCEPTIONS` / `allowedTimeouts()` (the suite's one time budget; tests never set their own) | `src/test/time-budget.ts` |
+| `testsOverBudget()` / `summaryMarkdown()` / `githubAnnotations()` and `TimeBudgetReporter` (tests past half their timeout, as a CI job summary and annotations; never fails the run) | `src/test/support/time-budget-report.ts` / `src/test/support/time-budget-reporter.ts` |
 | `isTypingTarget()` / `isModKey()`                                                                                                                                                                                                              | `src/lib/keyboard.ts`                                                  |
 | `BackupService` (create, prune, verify, `deleteBackups` bulk delete that reports failures)                                                                                                                                                                                                        | `src/features/backup/backup-service.ts`                                |
 | `generateSqlDump()`                                                                                                                                                                                                                            | `src/features/backup/generate-sql-dump.ts`                             |
@@ -676,6 +678,14 @@ act(() => {
 | **2 — Stores + hooks** | Zustand stores (in-memory sql.js DB), useAutoSave, useVersionCheck, useSettingsStore, useThemeStore, useSyncStore      | ✅ Done (231 tests) |
 | **3 — UI components**  | UI primitives (Button, Modal, Input, Select, Switch, Toast, Combobox)                                                  | ✅ Done (305 tests) |
 | **4 — Integration**    | Page rendering, routing, StartupRedirect, theme toggling, Layout, LoadingScreen                                        | ✅ Done (335 tests) |
+
+### Time Budget (no per-test timeouts)
+
+Every test and hook runs on one timeout, `TEST_TIMEOUT_MS` (60 s), and every `waitFor`/`findBy*` on `ASYNC_UTIL_TIMEOUT_MS` (10 s), both in `src/test/time-budget.ts`. A hosted CI runner is about 2x slower than a laptop under coverage and varies up to 1.9x between runs, so the 5 s default and the per-file raises that followed each red run left tests at 80-100% of their limit (`docs/research/ci-549-vs-548.md`).
+
+- **A test never sets its own timeout.** The setup file fails a test whose timeout is not the suite's; a file that truly needs longer goes in `TIMEOUT_EXCEPTIONS` with its reason. A timeout literal anywhere in a test file (`{ timeout: N }`, `}, N);`) needs a `// time-budget: <why>` comment on the line above (`test-time-budget.test.ts`).
+- **A slow test gets cheaper, not a bigger limit.** Split a sweep into one test per case (see `navigating-commands.test.tsx`), query once instead of per keypress, render the section instead of the page.
+- **The CI summary names the next timeouts.** The time budget reporter (`src/test/support/time-budget-reporter.ts`) runs on the merged CI report and annotates every test past half its timeout. It never fails the run: wall time on a shared runner is noise, and the timeout stays the only failure. Act on its list before a test crosses the line.
 
 ### TDD Workflow
 

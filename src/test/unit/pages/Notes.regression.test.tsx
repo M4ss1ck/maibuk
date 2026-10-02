@@ -128,13 +128,13 @@ describe("Notes repeated heading regression (behavioral)", () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => expect(scrollSpy).toHaveBeenCalled(), { timeout: 2000 });
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalled());
     expect(scrollSpy).toHaveBeenCalled();
     scrollSpy.mockClear();
 
     screen.getByText("go h2").click();
 
-    await waitFor(() => expect(scrollSpy).toHaveBeenCalled(), { timeout: 2000 });
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalled());
     expect(scrollSpy).toHaveBeenCalled();
   });
 
@@ -230,13 +230,13 @@ describe("Notes repeated heading regression (behavioral)", () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => expect(loadNoteSpy).toHaveBeenCalledTimes(1), { timeout: 2000 });
-    await waitFor(() => expect(scrollSpy).toHaveBeenCalled(), { timeout: 2000 });
+    await waitFor(() => expect(loadNoteSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalled());
     scrollSpy.mockClear();
 
     screen.getByText("go h2").click();
 
-    await waitFor(() => expect(scrollSpy).toHaveBeenCalled(), { timeout: 2000 });
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalled());
     // loadNote must not have been called again - only scroll effect ran
     expect(loadNoteSpy).toHaveBeenCalledTimes(1);
   });

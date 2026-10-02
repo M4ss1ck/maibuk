@@ -55,7 +55,7 @@ describe("Heatmap keyboard navigation", () => {
 
     expect(screen.getByRole("grid", { name: "Writing heatmap" })).toBeInTheDocument();
     expect(day(`${YEAR}-01-01`, 5)).toBeInTheDocument();
-  }, 20_000);
+  });
 
   it("moves focus between days with the arrow keys and names the focused day", async () => {
     const user = userEvent.setup({ delay: null });
@@ -87,5 +87,5 @@ describe("Heatmap keyboard navigation", () => {
     expect(day(`${YEAR}-01-02`, 0)).toHaveFocus();
     await user.keyboard("{ArrowUp}");
     expect(first).toHaveFocus();
-  }, 20_000);
+  });
 });

@@ -235,10 +235,8 @@ function renderApp(initialPath = "/") {
 }
 
 async function settleOn(screenPath: string) {
-  await waitFor(() => expect(path).toBe(screenPath), { timeout: 10_000 });
-  await waitFor(() => expect(document.querySelector("[data-route-heading]")).not.toBeNull(), {
-    timeout: 10_000,
-  });
+  await waitFor(() => expect(path).toBe(screenPath));
+  await waitFor(() => expect(document.querySelector("[data-route-heading]")).not.toBeNull());
   await new Promise((resolve) => setTimeout(resolve, 300));
 }
 
@@ -246,7 +244,7 @@ const PALETTE_NAME = "Command palette";
 
 async function openPaletteWithF1(user: ReturnType<typeof userEvent.setup>) {
   await user.keyboard("{F1}");
-  return screen.findByRole("dialog", { name: PALETTE_NAME }, { timeout: 10_000 });
+  return screen.findByRole("dialog", { name: PALETTE_NAME });
 }
 
 function paletteSearch(dialog: HTMLElement): HTMLElement {
@@ -289,8 +287,7 @@ async function awaitActiveInCurrentOptions(dialog: HTMLElement, search: HTMLElem
           .getAllByRole("option")
           .some((option) => option.id === id)
       ).toBe(true);
-    },
-    { timeout: 3000 }
+    }
   );
 }
 
@@ -319,9 +316,7 @@ async function arrowToAndChoose(
   for (let i = 0; i < 60 && !isActive(); i += 1) {
     const before = search.getAttribute("aria-activedescendant");
     await user.keyboard("{ArrowDown}");
-    await waitFor(() => expect(search.getAttribute("aria-activedescendant")).not.toBe(before), {
-      timeout: 3000,
-    });
+    await waitFor(() => expect(search.getAttribute("aria-activedescendant")).not.toBe(before));
   }
   expect(isActive()).toBe(true);
   // The caret stays in the field: React Aria holds the list in virtual focus.
@@ -372,7 +367,7 @@ afterEach(() => {
   web.value = false;
 });
 
-describe("Command Palette", { timeout: 60_000 }, () => {
+describe("Command Palette", () => {
   it("opens with F1 with focus in the search field", async () => {
     const user = userEvent.setup();
     renderApp("/");
@@ -479,12 +474,10 @@ describe("Command Palette", { timeout: 60_000 }, () => {
     // Autocomplete moves the active descendant 500 ms after typing forward, so
     // a screen reader finishes announcing the typed letter first.
     const activeOption = () => search.getAttribute("aria-activedescendant");
-    await waitFor(() => expect(activeOption()).toContain("command:global.toggleTheme"), {
-      timeout: 2000,
-    });
+    await waitFor(() => expect(activeOption()).toContain("command:global.toggleTheme"));
     const first = activeOption();
     await user.keyboard("{ArrowDown}");
-    await waitFor(() => expect(activeOption()).not.toBe(first), { timeout: 2000 });
+    await waitFor(() => expect(activeOption()).not.toBe(first));
     expect(activeOption()).toContain("command:global.themeDark");
     expect(document.activeElement).toBe(search);
   });
@@ -559,15 +552,12 @@ describe("Command Palette", { timeout: 60_000 }, () => {
         const id = search.getAttribute("aria-activedescendant");
         const options = within(dialog).getAllByRole("option");
         expect(options.some((option) => option.id === id)).toBe(true);
-      },
-      { timeout: 2000 }
+      }
     );
     for (let i = 0; i < 5 && !isActive(); i++) {
       const before = search.getAttribute("aria-activedescendant");
       await user.keyboard("{ArrowDown}");
-      await waitFor(() => expect(search.getAttribute("aria-activedescendant")).not.toBe(before), {
-        timeout: 2000,
-      });
+      await waitFor(() => expect(search.getAttribute("aria-activedescendant")).not.toBe(before));
     }
     const activeId = search.getAttribute("aria-activedescendant");
     expect(activeId).not.toBeNull();
@@ -699,7 +689,7 @@ describe("Command Palette", { timeout: 60_000 }, () => {
   it("is absent on the embed route", async () => {
     const user = userEvent.setup();
     renderApp("/embed");
-    await waitFor(() => expect(path).toBe("/embed"), { timeout: 10_000 });
+    await waitFor(() => expect(path).toBe("/embed"));
     await settleEffects();
 
     await user.keyboard("{F1}");
@@ -788,8 +778,7 @@ describe("Command Palette", { timeout: 60_000 }, () => {
       () =>
         expect(
           useBoundShortcutStore.getState().counts["commandPalette.removeRecent"]
-        ).toBeGreaterThan(0),
-      { timeout: 2000 }
+        ).toBeGreaterThan(0)
     );
   });
 
@@ -814,8 +803,7 @@ describe("Command Palette", { timeout: 60_000 }, () => {
           ) as HTMLElement | null;
           expect(element).not.toBeNull();
           return element as HTMLElement;
-        },
-        { timeout: 10_000 }
+        }
       );
       act(() => {
         editorDom.focus();
@@ -842,7 +830,7 @@ describe("Command Palette", { timeout: 60_000 }, () => {
   });
 });
 
-describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
+describe("Command Palette entities and pages", () => {
   it("lists a Book by title under Books and Enter opens the Book Editor", async () => {
     await createBookRow({ title: "Alpha", authorName: "Author" }, "local");
     await createBookRow({ title: "Beta", authorName: "Author" }, "local");
@@ -859,7 +847,7 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
     await settleEffects();
-    await waitFor(() => expect(bookEditorTitle()).toBe("Alpha"), { timeout: 10_000 });
+    await waitFor(() => expect(bookEditorTitle()).toBe("Alpha"));
     expect(path).toBe(`/book/${(useBookStore.getState().books[0] as { id: string }).id}`);
   });
 
@@ -894,12 +882,11 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
     // The palette navigates only after the open Chapter's text has landed, so
     // the move trails the dialog closing.
-    await waitFor(() => expect(path).toBe(`/book/${otherBook.id}`), { timeout: 10_000 });
-    await waitFor(() => expect(openChapterTitle()).toBe("Prologue"), { timeout: 10_000 });
+    await waitFor(() => expect(path).toBe(`/book/${otherBook.id}`));
+    await waitFor(() => expect(openChapterTitle()).toBe("Prologue"));
     // The Chapter that opened is the other Book's, not this one's.
     await waitFor(
-      () => expect(document.querySelector(".tiptap")?.textContent ?? "").toContain("Far away"),
-      { timeout: 10_000 }
+      () => expect(document.querySelector(".tiptap")?.textContent ?? "").toContain("Far away")
     );
   });
 
@@ -919,8 +906,7 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     await waitFor(() => expect(within(dialog).getAllByRole("option").length).toBeGreaterThan(1));
 
     await waitFor(
-      () => expect(search.getAttribute("aria-activedescendant")).toContain("chapter:"),
-      { timeout: 3000 }
+      () => expect(search.getAttribute("aria-activedescendant")).toContain("chapter:")
     );
     // The first result is one of the two identical-titled Chapters, and it is
     // the open Book's: its detail says which Book it belongs to.
@@ -1034,7 +1020,7 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     await arrowToAndChoose(user, dialog, search, theme);
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
-    await waitFor(() => expect(path).toBe("/settings"), { timeout: 10_000 });
+    await waitFor(() => expect(path).toBe("/settings"));
     await waitFor(() =>
       expect(document.activeElement?.closest('[data-settings-row="theme"]')).not.toBeNull()
     );
@@ -1054,7 +1040,7 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     const row = await within(dialog).findByRole("option", { name: "Export Database" });
     await arrowToAndChoose(user, dialog, search, row);
 
-    await waitFor(() => expect(path).toBe("/settings"), { timeout: 10_000 });
+    await waitFor(() => expect(path).toBe("/settings"));
     // The block is collapsed on arrival and the result opened it to focus the row.
     await waitFor(() =>
       expect(document.activeElement?.closest('[data-settings-row="exportDatabase"]')).not.toBeNull()
@@ -1146,8 +1132,7 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
         const element = document.querySelector('[data-focus-pane="editor-main"] .tiptap');
         expect(element).not.toBeNull();
         return element as HTMLElement;
-      },
-      { timeout: 10_000 }
+      }
     );
     act(() => {
       editorDom.focus();
@@ -1168,7 +1153,7 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     const row = await within(dialog).findByRole("option", { name: "Destination" });
     await arrowToAndChoose(user, dialog, search, row);
 
-    await waitFor(() => expect(path).toBe(`/notes/${note.id}`), { timeout: 10_000 });
+    await waitFor(() => expect(path).toBe(`/notes/${note.id}`));
     const after = await getDatabase();
     const afterRows = await after.select<{ content: string | null }[]>(
       "SELECT content FROM chapters WHERE id = ?",
@@ -1190,10 +1175,8 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     await arrowToAndChoose(user, dialog, search, note);
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
-    await waitFor(() => expect(path).toBe(`/notes/${useNoteStore.getState().notes[0]?.id}`), {
-      timeout: 10_000,
-    });
-    await waitFor(() => expect(bookEditorTitle()).toBe("Loose Thought"), { timeout: 10_000 });
+    await waitFor(() => expect(path).toBe(`/notes/${useNoteStore.getState().notes[0]?.id}`));
+    await waitFor(() => expect(bookEditorTitle()).toBe("Loose Thought"));
   });
 
   it("opens a Canvas from the palette", async () => {
@@ -1209,11 +1192,11 @@ describe("Command Palette entities and pages", { timeout: 60_000 }, () => {
     await arrowToAndChoose(user, dialog, search, row);
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
-    await waitFor(() => expect(path).toBe(`/canvas/${canvas.id}`), { timeout: 10_000 });
+    await waitFor(() => expect(path).toBe(`/canvas/${canvas.id}`));
   });
 });
 
-describe("Command Palette entry buttons", { timeout: 60_000 }, () => {
+describe("Command Palette entry buttons", () => {
   const BUTTON_NAME = en("shortcuts.openCommandPalette");
 
   /**
@@ -1277,7 +1260,7 @@ describe("Command Palette entry buttons", { timeout: 60_000 }, () => {
     const note = await createNoteRow({ title: "Solo", bookId: null }, "local");
     const user = userEvent.setup();
     renderApp(`/notes/${note.id}`);
-    await waitFor(() => expect(path).toBe(`/notes/${note.id}`), { timeout: 10_000 });
+    await waitFor(() => expect(path).toBe(`/notes/${note.id}`));
     await screen.findByRole("row", { name: "Solo" });
 
     expect(visiblePaletteButtons()).toHaveLength(1);
@@ -1290,7 +1273,7 @@ describe("Command Palette entry buttons", { timeout: 60_000 }, () => {
     const note = await createNoteRow({ title: "Pinned One", bookId: null, pinned: true }, "local");
     const user = userEvent.setup();
     renderApp(`/notes/${note.id}`);
-    await waitFor(() => expect(path).toBe(`/notes/${note.id}`), { timeout: 10_000 });
+    await waitFor(() => expect(path).toBe(`/notes/${note.id}`));
 
     expect(await screen.findByText("1 pinned")).toBeInTheDocument();
     expect(visiblePaletteButtons()).toHaveLength(1);
