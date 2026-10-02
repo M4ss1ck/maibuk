@@ -1,12 +1,28 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
-import { afterEach, expect } from "vitest";
+import { relative } from "node:path";
+import { cleanup, configure } from "@testing-library/react";
+import { afterEach, beforeEach, expect } from "vitest";
 // vitest-axe exports toHaveNoViolations via export type* in the .d.ts
 // barrel but as a value in the dist .js; import from the dist path
 // to satisfy both runtime and type-check.
 import { toHaveNoViolations } from "vitest-axe/dist/matchers";
+import { ASYNC_UTIL_TIMEOUT_MS, allowedTimeouts, TEST_TIMEOUT_MS } from "@/test/time-budget";
 
 expect.extend({ toHaveNoViolations });
+
+configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS });
+
+// A test picks no timeout of its own: a raise for one slow file is how the
+// suite ended up at the edge of every limit (src/test/time-budget.ts).
+beforeEach(({ task }) => {
+  const file = relative(process.cwd(), task.file.filepath);
+  const allowed = allowedTimeouts(file);
+  if (!allowed.includes(task.timeout)) {
+    throw new Error(
+      `"${task.name}" runs with a ${task.timeout} ms timeout. Tests use the suite's ${TEST_TIMEOUT_MS} ms budget: remove the override, or make the test cheaper. A file that truly needs longer goes in TIMEOUT_EXCEPTIONS (src/test/time-budget.ts) with its reason.`
+    );
+  }
+});
 
 // This setup is for the jsdom suites. A `// @vitest-environment node` suite
 // (the browser-free E2E coverage guard) has no DOM, so skip the polyfills.

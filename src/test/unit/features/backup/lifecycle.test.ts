@@ -175,6 +175,7 @@ describe("backup lifecycle", () => {
     scheduleDailyBackup();
 
     expect(mockRequestIdleCallback).toHaveBeenCalledTimes(1);
+    // time-budget: the production idle-callback deadline, not a test wait.
     expect(mockRequestIdleCallback).toHaveBeenCalledWith(expect.any(Function), { timeout: 30000 });
     expect(mockWaitForDatabaseReady).not.toHaveBeenCalled();
     expect(mockCreateBackup).not.toHaveBeenCalled();

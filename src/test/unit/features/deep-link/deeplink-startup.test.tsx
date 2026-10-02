@@ -133,9 +133,9 @@ describe("StartupRedirect deep-link cold handling", () => {
     // Before timeout, still showing LoadingScreen (no home)
     expect(screen.queryByText("home")).not.toBeInTheDocument();
     // Race timeout is 3000ms, wait for startup to continue
-    await waitFor(() => expect(screen.getByText("home")).toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.getByText("home")).toBeInTheDocument());
     expect(deepLinkMocks.releaseDeepLinkQueue).toHaveBeenCalled();
-  }, 8000);
+  });
 
   it("releases gate even when already checked (not at root)", async () => {
     deepLinkMocks.getDeepLinkBootstrap.mockResolvedValue(null);

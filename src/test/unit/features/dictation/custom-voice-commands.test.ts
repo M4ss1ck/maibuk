@@ -276,7 +276,7 @@ describe("findPhraseConflict()", () => {
         }
       }
     }
-  }, 60_000);
+  });
 
   it("refuses a demonstrative mark phrase as another Command's Voice Command", () => {
     expect(

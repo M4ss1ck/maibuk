@@ -76,9 +76,7 @@ afterEach(async () => {
   await act(() => i18n.changeLanguage("en"));
 });
 
-// Every test renders the whole section (models, tabs, vocabulary, Spoken
-// Punctuation): about 1 s locally, over 5 s on CI with coverage.
-describe("DictationSection", { timeout: 15_000 }, () => {
+describe("DictationSection", () => {
   it("explains when dictation is unsupported", () => {
     useDictationStore.setState({
       support: { supported: false, reason: "not_isolated" },
@@ -274,11 +272,7 @@ describe("DictationSection", { timeout: 15_000 }, () => {
     expect(remove).toHaveBeenCalledWith(esFast.id);
   });
 
-  // Two full renders of the section: about 1 s locally, over 5 s on CI with
-  // coverage instrumentation.
-  it("restores an off switch from persisted storage after a reload", {
-    timeout: 15_000,
-  }, async () => {
+  it("restores an off switch from persisted storage after a reload", async () => {
     const user = userEvent.setup();
     const { unmount } = render(<DictationSection />);
     const toggle = screen.getByRole("switch", { name: "Dictation" });

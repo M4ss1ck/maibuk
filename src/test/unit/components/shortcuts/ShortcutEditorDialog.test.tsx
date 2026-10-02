@@ -116,9 +116,7 @@ beforeEach(() => {
   file.pick.mockReset();
 });
 
-// Every test renders the whole virtualized Command list; under a loaded full run
-// that alone can pass the default 5s budget.
-describe("Shortcut Editor", { timeout: 20_000 }, () => {
+describe("Shortcut Editor", () => {
   it("opens with focus inside, lists sections, and Escape closes it back to the opener", async () => {
     const { user, dialog } = await openEditor();
     expect(dialog.contains(document.activeElement)).toBe(true);
@@ -408,7 +406,7 @@ async function openBoldVoice() {
   return { user, dialog, opener, field };
 }
 
-describe("Shortcut Editor: Voice commands", { timeout: 20_000 }, () => {
+describe("Shortcut Editor: Voice commands", () => {
   it("shows the Voice list on every row", async () => {
     await openEditor();
     const user = userEvent.setup();

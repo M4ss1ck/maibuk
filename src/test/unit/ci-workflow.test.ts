@@ -40,4 +40,15 @@ describe("CI workflow", () => {
     expect(coverage).toContain("vitest run --mergeReports --coverage");
     expect(coverage).not.toContain("--coverage.thresholds");
   });
+
+  // The merge runs the time budget reporter from vite.config.ts (no --reporter
+  // flag, which would replace it), and must run after a failed shard too.
+  it("reports the time budget from the merged run, even when a shard failed", () => {
+    const coverage = job("coverage");
+    expect(coverage).toContain(["if: $", "{{ !cancelled() }}"].join(""));
+    expect(coverage).not.toContain("--reporter");
+    expect(readFileSync(resolve(__dirname, "../../../vite.config.ts"), "utf8")).toContain(
+      "./src/test/support/time-budget-reporter.ts"
+    );
+  });
 });

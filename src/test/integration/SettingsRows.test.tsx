@@ -201,9 +201,7 @@ async function openCollapsedBlocks(user: ReturnType<typeof userEvent.setup>) {
 const ORPHAN_SELECTOR =
   'button, input, select, textarea, [role="switch"], [role="slider"], [role="combobox"], [role="radio"]';
 
-// Each test mounts the whole Settings page; under the full suite on CI a
-// render plus opening both collapsed blocks runs 4-8s, past the 5s default.
-describe("Settings rows", { timeout: 30_000 }, () => {
+describe("Settings rows", () => {
   beforeEach(() => {
     platformState.isWeb = true;
     platformState.isDesktop = false;
@@ -257,12 +255,13 @@ describe("Settings rows", { timeout: 30_000 }, () => {
     expect(orphans).toEqual([]);
   });
 
-  it("opens both collapsed blocks with Tab and Enter alone", async () => {
+  // Each Tab walks the whole page's focusables, so each block gets its own
+  // test, and each starts at the control just before its toggle: walking the
+  // whole page by Tab took 8 s here and over 30 s under coverage on CI.
+  it("opens the Paste Cleanup advanced block with Tab and Enter alone", async () => {
     const user = userEvent.setup();
     renderSettings();
 
-    // Start at the control just before each toggle: walking the whole page by
-    // Tab took 8 s here and over the 30 s limit under coverage (CI, release).
     screen.getByRole("switch", { name: "settings.pasteCleanup.promptMarkdownLabel" }).focus();
     await tabToButton(user, "settings.pasteCleanup.advanced");
     await user.keyboard("{Enter}");
@@ -271,6 +270,11 @@ describe("Settings rows", { timeout: 30_000 }, () => {
         name: "settings.pasteCleanup.option.demoteHeadings",
       })
     ).toBeInTheDocument();
+  });
+
+  it("opens the Advanced block with Tab and Enter alone", async () => {
+    const user = userEvent.setup();
+    renderSettings();
 
     screen.getByRole("button", { name: "tutorial.settings.startAll" }).focus();
     await tabToButton(user, "settings.advanced");
@@ -352,8 +356,7 @@ describe("Settings rows", { timeout: 30_000 }, () => {
     focusSettingsRow("syncAutoSync" as SettingsRowId);
 
     const heading = document.querySelector('[data-settings-section="sync"]') as HTMLElement;
-    // The fallback waits out 10 animation frames by design: ~300ms here,
-    // ~2.2x that on a CI runner, so waitFor's 1s default leaves no margin.
-    await waitFor(() => expect(document.activeElement).toBe(heading), { timeout: 3_000 });
+    // The fallback waits out 10 animation frames by design: ~300ms here.
+    await waitFor(() => expect(document.activeElement).toBe(heading));
   });
 });
