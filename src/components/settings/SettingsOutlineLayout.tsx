@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useState, type ReactNode, type RefObject } from "react";
 import { SettingsOutline } from "@/components/settings/SettingsOutline";
 import { SettingsSectionMenu } from "@/components/settings/SettingsSectionMenu";
 import { useSettingsOutline } from "@/components/settings/useSettingsOutline";
@@ -9,6 +9,9 @@ import { useSettingsOutline } from "@/components/settings/useSettingsOutline";
 const WIDE_REM = 58;
 // Height of the section menu bar (h-11 plus its 2px progress line).
 const MENU_BAR_PX = 46;
+// The progress line changes on every scroll frame; the tree re-renders only
+// when the selection or the sections change.
+const MemoizedSettingsOutline = memo(SettingsOutline);
 
 function useIsWide(scrollerRef: RefObject<HTMLElement | null>) {
   const [wide, setWide] = useState(true);
@@ -52,7 +55,7 @@ export function SettingsOutlineLayout({
       />
       <div className="relative z-10 flex items-start">
         {children}
-        <SettingsOutline present={present} selection={selection} onJump={jumpTo} />
+        <MemoizedSettingsOutline present={present} selection={selection} onJump={jumpTo} />
       </div>
     </>
   );
