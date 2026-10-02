@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-10-02
+
+### Added
+- Searchable section outline in Settings and a compact section menu on narrow panels
+
+### Changed
+- Unified Settings sections into a single card, title, and divider rhythm
+- Improved Settings outline rendering performance while scrolling
+
+### Fixed
+- Anchored text and image menus to their trigger element
+- Kept the app inert for the full tutorial run when it starts from a closing modal
+- Made every footnote insert, edit, and delete its own undo step
+- Added accessible expand controls to Settings outline sections
+- Editor shortcuts and deletion keys now use the current caret position immediately after a caret move
+- Pressing Escape right after extending a selection now preserves the last selection step
+
 ## [0.10.0] - 2026-10-01
 
 ### Added
