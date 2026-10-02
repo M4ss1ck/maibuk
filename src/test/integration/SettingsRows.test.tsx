@@ -261,6 +261,9 @@ describe("Settings rows", { timeout: 30_000 }, () => {
     const user = userEvent.setup();
     renderSettings();
 
+    // Start at the control just before each toggle: walking the whole page by
+    // Tab took 8 s here and over the 30 s limit under coverage (CI, release).
+    screen.getByRole("switch", { name: "settings.pasteCleanup.promptMarkdownLabel" }).focus();
     await tabToButton(user, "settings.pasteCleanup.advanced");
     await user.keyboard("{Enter}");
     expect(
@@ -269,6 +272,7 @@ describe("Settings rows", { timeout: 30_000 }, () => {
       })
     ).toBeInTheDocument();
 
+    screen.getByRole("button", { name: "tutorial.settings.startAll" }).focus();
     await tabToButton(user, "settings.advanced");
     await user.keyboard("{Enter}");
     expect(
