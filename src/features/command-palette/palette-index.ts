@@ -113,10 +113,7 @@ interface PreparedPaletteItem {
 const labelCollator = new Intl.Collator(undefined, { sensitivity: "base" });
 
 function fold(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLocaleLowerCase();
+  return s.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
 }
 
 function sectionOf(item: PaletteItem): PaletteSectionId {
@@ -231,7 +228,7 @@ function scoreEntry(
   entry: PreparedPaletteItem,
   trimmed: string,
   foldedQuery: string,
-  chapterBoostBookId: string | null,
+  chapterBoostBookId: string | null
 ): ScoredEntry | null {
   // Single-character queries skip the ordered scan: fuzzysort's own
   // bitflags check rejects entries missing the character faster.
@@ -360,9 +357,7 @@ export function searchPalette(index: PaletteIndex, query: PaletteQuery): Palette
       ? query.openBookId
       : null;
   const recentPosition =
-    query.page === "root" && query.recent.length > 0
-      ? new Map<string, number>()
-      : null;
+    query.page === "root" && query.recent.length > 0 ? new Map<string, number>() : null;
   if (recentPosition) {
     for (let i = 0; i < query.recent.length; i += 1) {
       const key = query.recent[i];

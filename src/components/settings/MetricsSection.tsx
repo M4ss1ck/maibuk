@@ -9,6 +9,7 @@ import { getDatabase } from "@/lib/db";
 import { metricsService } from "@/lib/metrics/MetricsService";
 import { Button, Modal, Switch } from "@/components/ui";
 import { SettingRow } from "@/components/settings/SettingRow";
+import { SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 import type { SettingsRowId } from "@/components/settings/settings-sections";
 
 const METRIC_CATEGORIES: MetricsCategory[] = ["writing", "time", "engagement"];
@@ -93,60 +94,51 @@ export function MetricsSection() {
     : "";
 
   return (
-    <div className="space-y-4">
-      <div>
-        <p tabIndex={-1} data-settings-section="metrics" className="font-medium">
-          {t("settings.metrics.title")}
-        </p>
-        <p className="text-sm text-muted-foreground">{t("settings.metrics.description")}</p>
-      </div>
-
-      <div className="divide-y divide-border">
-        {METRIC_CATEGORIES.map((category) => {
-          const measuredDate = formatMeasuredDate(measuringSince[category]);
-          return (
-            <SettingRow
-              key={category}
-              id={CATEGORY_ROW_IDS[category]}
-              className="flex flex-col gap-2 py-3 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4"
-              labelExtra={
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {measuredDate
-                    ? t("settings.metrics.measuringSince", {
-                        date: measuredDate,
-                      })
-                    : t("settings.metrics.notMeasuredYet")}
-                </p>
-              }
-            >
-              <Switch
-                checked={metrics.enabled[category]}
-                onChange={(enabled) => handleCategoryChange(category, enabled)}
-                label={t(`settings.metrics.${category}.label`)}
-              />
-            </SettingRow>
-          );
-        })}
-
-        <SettingRow
-          id="metricsSync"
-          className="flex flex-col gap-2 py-3 @lg:flex-row @lg:items-center @lg:justify-between @lg:gap-4"
-          labelExtra={
-            authStatus !== "logged-in" ? (
+    <>
+      {METRIC_CATEGORIES.map((category) => {
+        const measuredDate = formatMeasuredDate(measuringSince[category]);
+        return (
+          <SettingRow
+            key={category}
+            id={CATEGORY_ROW_IDS[category]}
+            className={SETTINGS_ROW_CLASS}
+            labelExtra={
               <p className="mt-1 text-xs text-muted-foreground">
-                {t("settings.metrics.syncRequiresAuth")}
+                {measuredDate
+                  ? t("settings.metrics.measuringSince", {
+                      date: measuredDate,
+                    })
+                  : t("settings.metrics.notMeasuredYet")}
               </p>
-            ) : undefined
-          }
-        >
-          <Switch
-            checked={metrics.syncMetrics}
-            onChange={setMetricsSyncEnabled}
-            label={t("settings.metrics.sync.label")}
-            disabled={authStatus !== "logged-in"}
-          />
-        </SettingRow>
-      </div>
+            }
+          >
+            <Switch
+              checked={metrics.enabled[category]}
+              onChange={(enabled) => handleCategoryChange(category, enabled)}
+              label={t(`settings.metrics.${category}.label`)}
+            />
+          </SettingRow>
+        );
+      })}
+
+      <SettingRow
+        id="metricsSync"
+        className={SETTINGS_ROW_CLASS}
+        labelExtra={
+          authStatus !== "logged-in" ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("settings.metrics.syncRequiresAuth")}
+            </p>
+          ) : undefined
+        }
+      >
+        <Switch
+          checked={metrics.syncMetrics}
+          onChange={setMetricsSyncEnabled}
+          label={t("settings.metrics.sync.label")}
+          disabled={authStatus !== "logged-in"}
+        />
+      </SettingRow>
 
       <Modal
         isOpen={pendingDisable !== null}
@@ -171,7 +163,7 @@ export function MetricsSection() {
           })}
         </p>
       </Modal>
-    </div>
+    </>
   );
 
   function shutdownIfNoCategoriesRemain(category: MetricsCategory, enabled: boolean) {

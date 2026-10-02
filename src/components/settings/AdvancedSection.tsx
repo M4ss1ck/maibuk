@@ -5,16 +5,11 @@ import { Button, Modal } from "@/components/ui";
 import { ChevronDownIcon } from "@/components/icons";
 import { exportDatabase, importDatabase, resetDatabase } from "@/lib/db";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
-import {
-  getFileSystem,
-  IS_TAURI,
-  getDialog,
-  getWebDialog,
-  createBackup,
-} from "@/lib/platform";
+import { getFileSystem, IS_TAURI, getDialog, getWebDialog, createBackup } from "@/lib/platform";
 import { BackupService } from "@/features/backup/backup-service";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 import { SettingRow } from "@/components/settings/SettingRow";
+import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 
 export function AdvancedSection() {
   const { t } = useTranslation();
@@ -127,69 +122,62 @@ export function AdvancedSection() {
   };
 
   return (
-    <section
-      data-tutorial="settings.advanced"
-      className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5"
-    >
-      <button
-        type="button"
-        onClick={() => setAdvancedOpen(!advancedOpen)}
-        aria-expanded={advancedOpen}
-        className="flex items-center justify-between w-full text-left"
+    <>
+      <SettingsSection
+        sectionId="advanced"
+        title={t("settings.advanced")}
+        tone="destructive"
+        data-tutorial="settings.advanced"
+        renderTitle={(heading) => (
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen(!advancedOpen)}
+            aria-expanded={advancedOpen}
+            className="flex items-center justify-between w-full text-left"
+          >
+            {heading}
+            <ChevronDownIcon
+              className={`w-5 h-5 text-muted-foreground transition-transform ${advancedOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+        )}
       >
-        <h2
-          tabIndex={-1}
-          data-settings-section="advanced"
-          className="text-lg text-destructive font-medium"
-        >
-          {t("settings.advanced")}
-        </h2>
-        <ChevronDownIcon
-          className={`w-5 h-5 text-muted-foreground transition-transform ${advancedOpen ? "rotate-180" : ""}`}
-        />
-      </button>
+        {advancedOpen && (
+          <>
+            <SettingRow id="exportDatabase" className={SETTINGS_ROW_CLASS}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleExportDatabase}
+                disabled={isExporting}
+              >
+                {isExporting ? t("common.loading") : t("settings.exportDatabaseButton")}
+              </Button>
+            </SettingRow>
 
-      {advancedOpen && (
-        <div className="mt-4 space-y-4 border-l-2 border-destructive/30 pl-4">
-          <SettingRow
-            id="exportDatabase"
-            className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4"
-          >
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleExportDatabase}
-              disabled={isExporting}
+            <SettingRow id="importDatabase" className={SETTINGS_ROW_CLASS}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleImportDatabase}
+                disabled={isImporting}
+              >
+                {isImporting ? t("common.loading") : t("settings.importDatabaseButton")}
+              </Button>
+            </SettingRow>
+
+            <SettingRow
+              id="resetDatabase"
+              labelClassName="font-medium text-destructive"
+              className={SETTINGS_ROW_CLASS}
             >
-              {isExporting ? t("common.loading") : t("settings.exportDatabaseButton")}
-            </Button>
-          </SettingRow>
-
-          <SettingRow
-            id="importDatabase"
-            className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4"
-          >
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleImportDatabase}
-              disabled={isImporting}
-            >
-              {isImporting ? t("common.loading") : t("settings.importDatabaseButton")}
-            </Button>
-          </SettingRow>
-
-          <SettingRow
-            id="resetDatabase"
-            labelClassName="font-medium text-destructive"
-            className="flex flex-col @lg:flex-row @lg:items-center justify-between py-2 gap-2 @lg:gap-4"
-          >
-            <Button variant="destructive" size="sm" onClick={() => setResetModalOpen(true)}>
-              {t("settings.resetDatabaseButton")}
-            </Button>
-          </SettingRow>
-        </div>
-      )}
+              <Button variant="destructive" size="sm" onClick={() => setResetModalOpen(true)}>
+                {t("settings.resetDatabaseButton")}
+              </Button>
+            </SettingRow>
+          </>
+        )}
+      </SettingsSection>
 
       <Modal
         isOpen={resetModalOpen}
@@ -208,6 +196,6 @@ export function AdvancedSection() {
       >
         <p className="text-muted-foreground">{t("settings.resetDatabaseConfirm")}</p>
       </Modal>
-    </section>
+    </>
   );
 }

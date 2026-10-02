@@ -33,6 +33,7 @@ import { SelectionKept } from "@/components/editor/extensions/SelectionKept";
 import { AutoClose } from "@/components/editor/extensions/AutoClose";
 import { ShortcutOverrides } from "@/components/editor/extensions/ShortcutOverrides";
 import { Dictation } from "@/components/editor/extensions/Dictation";
+import { DomSelectionSync } from "@/components/editor/extensions/DomSelectionSync";
 import type { Language } from "@/features/settings/types";
 
 export interface RichTextExtensionsOptions {
@@ -60,6 +61,7 @@ export function createRichTextExtensions({
   nameHeadingsOnOpen = true,
 }: RichTextExtensionsOptions = {}): Extensions {
   return [
+    DomSelectionSync,
     ShortcutOverrides,
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },

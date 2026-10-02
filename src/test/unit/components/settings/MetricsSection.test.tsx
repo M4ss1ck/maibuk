@@ -166,7 +166,7 @@ describe("MetricsSection", () => {
       "flex-col",
       "@lg:flex-row",
       "@lg:items-center",
-      "@lg:justify-between",
+      "justify-between",
       "@lg:gap-4"
     );
     expect(row).not.toHaveClass("sm:flex-row");

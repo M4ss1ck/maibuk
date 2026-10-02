@@ -112,16 +112,15 @@ describe("buildCommandItems", () => {
 
   it("finds Always on Top by 'pin' and the dictation toggle by 'microphone'", () => {
     function lookup(locale: Record<string, unknown>, key: string): unknown {
-      return key.split(".").reduce<unknown>(
-        (node, part) =>
-          node && typeof node === "object"
-            ? (node as Record<string, unknown>)[part]
-            : undefined,
-        locale
-      );
+      return key
+        .split(".")
+        .reduce<unknown>(
+          (node, part) =>
+            node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined,
+          locale
+        );
     }
-    const realT =
-      (locale: Record<string, unknown>) =>
+    const realT = (locale: Record<string, unknown>) =>
       ((key: string, options?: Record<string, unknown>) => {
         const value = lookup(locale, key);
         if (options?.returnObjects === true) return value as readonly string[];
@@ -152,11 +151,9 @@ describe("buildCommandItems", () => {
       language: "es",
       customVoice: {},
     });
-    expect(
-      spanish.find((item) => item.id === "global.toggleAlwaysOnTop")?.terms
-    ).toContain("fijar");
-    expect(spanish.find((item) => item.id === "dictation.toggle")?.terms).toContain(
-      "micrófono"
+    expect(spanish.find((item) => item.id === "global.toggleAlwaysOnTop")?.terms).toContain(
+      "fijar"
     );
+    expect(spanish.find((item) => item.id === "dictation.toggle")?.terms).toContain("micrófono");
   });
 });

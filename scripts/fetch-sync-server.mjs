@@ -158,7 +158,11 @@ export async function fetchSyncServer(root) {
   const paths = syncServerPaths(root);
   for (const [what, fetched, path] of [
     [`PocketBase ${POCKETBASE_VERSION}`, fetchedBinary, paths.binary],
-    [`maibuk-sync migrations @ ${MAIBUK_SYNC_COMMIT.slice(0, 12)}`, fetchedMigrations, paths.migrationsDir],
+    [
+      `maibuk-sync migrations @ ${MAIBUK_SYNC_COMMIT.slice(0, 12)}`,
+      fetchedMigrations,
+      paths.migrationsDir,
+    ],
   ]) {
     console.log(`${fetched ? "fetched" : "cached "} ${what} -> ${relative(root, path)}`);
   }

@@ -1,9 +1,6 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  findSettingsRow,
-  type SettingsRowId,
-} from "@/components/settings/settings-sections";
+import { findSettingsRow, type SettingsRowId } from "@/components/settings/settings-sections";
 
 interface SettingRowProps {
   id: SettingsRowId;
@@ -76,9 +73,7 @@ export function SettingRow({
         <p className="sr-only">{row ? translate(row.labelKey) : id}</p>
         {descriptionOverride ??
           (row?.descriptionKey ? (
-            <p className="text-sm text-muted-foreground">
-              {translate(row.descriptionKey)}
-            </p>
+            <p className="text-sm text-muted-foreground">{translate(row.descriptionKey)}</p>
           ) : null)}
         {labelExtra}
         {children}

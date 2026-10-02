@@ -1,4 +1,5 @@
 import { Node, mergeAttributes } from "@tiptap/core";
+import { closeHistory } from "@tiptap/pm/history";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import { FootnoteView } from "@/components/editor/FootnoteView";
@@ -120,11 +121,15 @@ export const Footnote = Node.create<FootnoteOptions>({
     return ReactNodeViewRenderer(FootnoteView);
   },
 
+  // Each command is its own undo step: history would otherwise merge it into
+  // an edit made within 500 ms at the same place, and one undo would revert
+  // both (delete right after insert reads as nothing happening).
   addCommands() {
     return {
       insertFootnote:
         (attributes: { content: string }) =>
-        ({ commands }: { commands: any }) => {
+        ({ tr, commands }: { tr: any; commands: any }) => {
+          closeHistory(tr);
           const id = `fn-${Date.now()}`;
           return commands.insertContent({
             type: this.name,
@@ -136,7 +141,7 @@ export const Footnote = Node.create<FootnoteOptions>({
         ({ tr, dispatch }) => {
           const footnote = findFootnote(tr.doc, target);
           if (!footnote) return false;
-          if (dispatch) tr.setNodeAttribute(footnote.pos, "content", content);
+          if (dispatch) closeHistory(tr).setNodeAttribute(footnote.pos, "content", content);
           return true;
         },
       deleteFootnote:
@@ -145,7 +150,10 @@ export const Footnote = Node.create<FootnoteOptions>({
           const footnote = findFootnote(tr.doc, target);
           if (!footnote) return false;
           if (dispatch)
-            tr.delete(footnote.pos, footnote.pos + tr.doc.nodeAt(footnote.pos)!.nodeSize);
+            closeHistory(tr).delete(
+              footnote.pos,
+              footnote.pos + tr.doc.nodeAt(footnote.pos)!.nodeSize
+            );
           return true;
         },
     };

@@ -56,10 +56,8 @@ interface ToolbarProps {
 // restoration are React Aria's, not hand-rolled.
 const TRIGGER_BASE_CLASS =
   "inline-flex items-center justify-center gap-1 sm:gap-2 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors outline-none focus-visible:ring-2";
-const TRIGGER_CLASS =
-  `${TRIGGER_BASE_CLASS} bg-transparent text-foreground hover:bg-muted focus-visible:ring-muted data-pressed:bg-muted`;
-const PRIMARY_TRIGGER_CLASS =
-  `${TRIGGER_BASE_CLASS} bg-primary text-primary-foreground hover:bg-primary-hover hover:text-primary-hover-foreground focus-visible:ring-primary data-pressed:bg-primary-hover`;
+const TRIGGER_CLASS = `${TRIGGER_BASE_CLASS} bg-transparent text-foreground hover:bg-muted focus-visible:ring-muted data-pressed:bg-muted`;
+const PRIMARY_TRIGGER_CLASS = `${TRIGGER_BASE_CLASS} bg-primary text-primary-foreground hover:bg-primary-hover hover:text-primary-hover-foreground focus-visible:ring-primary data-pressed:bg-primary-hover`;
 const POPOVER_CLASS =
   "z-50 mt-1 rounded-lg border border-border bg-card py-1 shadow-lg outline-none";
 const ITEM_CLASS =

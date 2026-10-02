@@ -169,9 +169,7 @@ describe("Item Menu shows each action's Shortcut", () => {
 
 function GridCard({ name, onDelete }: { name: string; onDelete: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  useItemCommands(ref, [
-    { commandId: "common.delete", onAction: onDelete },
-  ]);
+  useItemCommands(ref, [{ commandId: "common.delete", onAction: onDelete }]);
   return (
     <GridListItem id={name} ref={ref} textValue={name}>
       {name}

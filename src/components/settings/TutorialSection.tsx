@@ -3,6 +3,7 @@ import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { Check, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SettingRow } from "@/components/settings/SettingRow";
+import { SettingsSection, SETTINGS_ROWS_CLASS } from "@/components/settings/SettingsSection";
 import { requestTutorial } from "@/features/tutorial/controller";
 import { TUTORIAL_SECTIONS, TUTORIAL_SETTINGS_ROW_STEP } from "@/features/tutorial/sections";
 import { useTutorialStore } from "@/features/tutorial/store";
@@ -27,19 +28,12 @@ export function TutorialSection({ returnTo = "/settings" }: TutorialSectionProps
   };
 
   return (
-    <section className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5">
-      <h2
-        tabIndex={-1}
-        data-settings-section="tutorial"
-        className="text-lg text-primary font-medium mb-4"
-      >
-        {t("tutorial.settings.title")}
-      </h2>
-      <div data-tutorial={TUTORIAL_SETTINGS_ROW_STEP}>
+    <SettingsSection sectionId="tutorial" title={t("tutorial.settings.title")}>
+      <div data-tutorial={TUTORIAL_SETTINGS_ROW_STEP} className={SETTINGS_ROWS_CLASS}>
         <SettingRow
           id="tutorialStart"
           labelHidden
-          className="mb-4 flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between"
+          className="py-3 flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between"
         >
           <Button
             type="button"
@@ -58,39 +52,39 @@ export function TutorialSection({ returnTo = "/settings" }: TutorialSectionProps
           dependencies={[i18n.resolvedLanguage]}
           selectionMode="none"
           onAction={(key) => start(key as TutorialSectionId)}
-          className="grid gap-1 @lg:grid-cols-2"
+          className="py-3 grid gap-1 @lg:grid-cols-2"
         >
-        {(section) => {
-          const name = translate(section.nameKey);
-          const done = sections[section.id]?.completedAt != null;
-          return (
-            <ListBoxItem
-              id={section.id}
-              textValue={name}
-              data-tutorial-trigger={`settings-section-${section.id}`}
-              className={({ isFocusVisible }) =>
-                `flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted ${
-                  isFocusVisible ? "outline-2 outline-offset-2 outline-primary" : "outline-none"
-                }`
-              }
-            >
-              <span>
-                {translate("tutorial.settings.sectionRow", {
-                  section: name,
-                  steps: translate("tutorial.settings.steps", { count: section.steps.length }),
-                })}
-              </span>
-              {done && (
-                <span className="inline-flex items-center gap-1 text-xs text-success">
-                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                  {t("tutorial.settings.done")}
+          {(section) => {
+            const name = translate(section.nameKey);
+            const done = sections[section.id]?.completedAt != null;
+            return (
+              <ListBoxItem
+                id={section.id}
+                textValue={name}
+                data-tutorial-trigger={`settings-section-${section.id}`}
+                className={({ isFocusVisible }) =>
+                  `flex cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted ${
+                    isFocusVisible ? "outline-2 outline-offset-2 outline-primary" : "outline-none"
+                  }`
+                }
+              >
+                <span>
+                  {translate("tutorial.settings.sectionRow", {
+                    section: name,
+                    steps: translate("tutorial.settings.steps", { count: section.steps.length }),
+                  })}
                 </span>
-              )}
-            </ListBoxItem>
-          );
-        }}
-      </ListBox>
+                {done && (
+                  <span className="inline-flex items-center gap-1 text-xs text-success">
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                    {t("tutorial.settings.done")}
+                  </span>
+                )}
+              </ListBoxItem>
+            );
+          }}
+        </ListBox>
       </div>
-    </section>
+    </SettingsSection>
   );
 }

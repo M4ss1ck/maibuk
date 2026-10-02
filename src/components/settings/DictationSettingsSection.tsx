@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { DictationSection } from "@/components/settings/DictationSection";
+import { SettingsSection } from "@/components/settings/SettingsSection";
 
 /**
  * The Dictation settings section: the shell (with the Tutorial anchor and
@@ -10,19 +11,13 @@ export function DictationSettingsSection() {
   const { t } = useTranslation();
 
   return (
-    <section
+    <SettingsSection
       id="dictation"
-      className="mb-6 @lg:mb-8 rounded-xl border border-border p-4 @lg:p-5"
+      sectionId="dictation"
+      title={t("dictation.section.title")}
+      titleAttributes={{ "data-tutorial": "dictation.overview" }}
     >
-      <h2
-        tabIndex={-1}
-        data-settings-section="dictation"
-        className="text-lg text-primary font-medium mb-4"
-        data-tutorial="dictation.overview"
-      >
-        {t("dictation.section.title")}
-      </h2>
       <DictationSection />
-    </section>
+    </SettingsSection>
   );
 }

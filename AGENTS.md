@@ -400,6 +400,10 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `applyAccentColor(color)` (sets `--color-primary`, hover, and their readable foregrounds without writing settings; used for commit and preview) | `src/features/settings/accent-color.ts` |
 | `SETTINGS_SECTIONS` / `findSettingsRow(id)` / `SettingsRowId` (every Settings section in screen order with its declared rows; the Command Palette reads this too) | `src/components/settings/settings-sections.ts` (+ one `.rows.ts` beside each section component) |
 | `SettingRow` (one Settings row: `data-settings-row` anchor, label/description from the declaration) | `src/components/settings/SettingRow.tsx` |
+| `SettingsSection` / `SETTINGS_ROWS_CLASS` / `SETTINGS_ROW_CLASS` (every Settings section: one card, an h2 title with `data-settings-section`, an optional description, rows in one `divide-y` stack of `py-3` rows; a nested group of rows uses `SETTINGS_ROWS_CLASS`; `settings-section-source.test.ts` refuses a hand-written `<section>`) | `src/components/settings/SettingsSection.tsx` |
+| `SettingsOutlineLayout` / `SettingsOutline` / `SettingsSectionMenu` / `useSettingsOutline(scrollerRef, topInset)` (the Settings outline: a React Aria Tree with search beside the sections from a 58rem panel, a "Settings / Section" menu bar below it; the current section is the first starting in view, a clicked entry stays current until the author scrolls, rows are current only when clicked; row entries go through `focusSettingsRow`) | `src/components/settings/` |
+| `buildOutline()` / `firstStartingInView()` / `reduceOutlinePin()` (pure outline entries with accent-insensitive search, the scroll-spy pick, and the click pin) | `src/features/settings/outline.ts` |
+| `data-ascii-quiet` / `quietness(rects, x, y, pad, feather)` (an element the Settings ASCII field keeps its cursor effect off, glyphs untouched; the outline carries it) | `src/components/settings/AsciiFieldBackground.tsx` / `asciiBanner.helpers.ts` |
 | `focusSettingsRow(id)` (asks the Settings page to reveal and focus a row's control) | `src/features/settings/focus-row.ts` |
 | `useSettingsRevealStore` (pending row, Advanced / Paste Cleanup advanced open state) | `src/features/settings/settings-reveal-store.ts` |
 | `SETTINGS_KEY_ROWS` (every Settings store key classified as its row or `internal`) | `src/features/settings/settings-rows-keys.ts` |
@@ -720,6 +724,7 @@ Any change that adds or modifies interactive UI is **not done** until behavioral
 pnpm test:e2e                                     # guard, guard self-tests, e2e typecheck, web build, Playwright
 pnpm test:e2e --project=chromium                  # one browser
 pnpm test:e2e --project=phone                     # the @touch specs on a phone
+pnpm test:e2e --project=voice                     # the audio specs (voice-*, dictation*), one at a time
 pnpm test:e2e specs/books-create.spec.ts          # one file
 pnpm test:e2e --grep @wf:books-create             # one matrix workflow
 pnpm test:e2e --repeat-each=3                     # the acceptance run

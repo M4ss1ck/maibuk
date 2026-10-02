@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  preparePaletteIndex,
-  searchPalette,
-} from "@/features/command-palette/palette-index";
+import { preparePaletteIndex, searchPalette } from "@/features/command-palette/palette-index";
 import type { PaletteItemKind, PalettePage } from "@/features/command-palette/palette-index";
 import {
   PALETTE_BENCH_OPEN_BOOK_ID,
@@ -39,7 +36,9 @@ describe("palette bench fixture", () => {
       new Set(["command", "page", "book", "chapter", "note", "canvas", "settingsRow"])
     );
     const targets = new Set<PalettePage>(
-      items.flatMap((entry) => (entry.kind === "page" && entry.targetPage ? [entry.targetPage] : []))
+      items.flatMap((entry) =>
+        entry.kind === "page" && entry.targetPage ? [entry.targetPage] : []
+      )
     );
     expect(targets).toEqual(new Set(["root", "chapters", "books", "notes", "canvases"]));
   });

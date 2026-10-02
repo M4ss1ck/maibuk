@@ -24,7 +24,18 @@ const textNodes = (page: Page) => page.locator(".react-flow__node-text");
 const noteRefs = (page: Page) => page.locator(".react-flow__node-noteRef");
 
 /** Opens a Canvas from the gallery the way an author would: Tab in, arrows, Enter. */
-async function openCanvas(page: Page, name: RegExp) {
+/**
+ * The URL changes while the Canvas is still loading, and its shortcuts bind
+ * only once it is ready; the tool toolbar renders at that same moment. A key
+ * pressed before it was dropped (WebKit, 1 of 40 runs).
+ */
+async function expectCanvasReady(page: Page) {
+  await expect(page).toHaveURL(/\/canvas\/[\w-]+$/);
+  await expect(page.getByRole("toolbar", { name: "Tools" })).toBeVisible();
+}
+
+// `ready: false` for a Canvas that never loads, which renders no toolbar.
+async function openCanvas(page: Page, name: RegExp, { ready = true } = {}) {
   await page.goto("/canvas");
   const grid = page.getByRole("grid", { name: "Canvases" });
   const row = grid.getByRole("row", { name });
@@ -32,7 +43,8 @@ async function openCanvas(page: Page, name: RegExp) {
   await page.keyboard.press("Home");
   await pressUntilFocused(page, "ArrowRight", row, { max: 12 });
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/canvas\/[\w-]+$/);
+  if (ready) await expectCanvasReady(page);
+  else await expect(page).toHaveURL(/\/canvas\/[\w-]+$/);
 }
 
 const openMap = (page: Page) => openCanvas(page, /Map/);
@@ -257,7 +269,7 @@ test.describe("no notes @wf:canvas-note-ref", () => {
     await page.goto("/canvas");
     await tabTo(page, page.getByRole("button", { name: "New canvas" }).first(), { max: 40 });
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/canvas\/[\w-]+$/);
+    await expectCanvasReady(page);
 
     await page.keyboard.press("n");
     await expect(page.getByRole("dialog", { name: "Add note reference" })).toBeVisible();
@@ -351,7 +363,7 @@ test.describe("no connect targets @wf:canvas-connect", () => {
     await page.goto("/canvas");
     await tabTo(page, page.getByRole("button", { name: "New canvas" }).first(), { max: 40 });
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/canvas\/[\w-]+$/);
+    await expectCanvasReady(page);
 
     await page.keyboard.press("t");
     await page.keyboard.press("Escape");
@@ -581,7 +593,7 @@ test.describe("Missing and unreadable Canvas @wf:canvas-missing", () => {
   });
 
   test("a Canvas that cannot be read can be replaced with an empty one", async ({ page }) => {
-    await openCanvas(page, /Broken map/);
+    await openCanvas(page, /Broken map/, { ready: false });
     await expect(page.getByText("This canvas could not be read")).toBeVisible();
 
     await tabTo(page, page.getByRole("button", { name: "Replace with empty canvas" }), { max: 40 });

@@ -22,6 +22,27 @@ if (!baseURL) {
   );
 }
 
+// Specs that play audio into the Dictation model through Chromium's fake
+// microphone. The recognizer works in real time: starved of CPU by parallel
+// tests it drops audio and mishears ("Go to Notes" came back as "Bowdoin
+// oats"), so these run in their own project, one at a time.
+const AUDIO_SPECS = /[\\/](voice-|dictation)[^\\/]*\.spec\.ts$/;
+
+const chromiumWithFakeMicrophone = {
+  ...devices["Desktop Chrome"],
+  ...shared,
+  launchOptions: {
+    args: [
+      "--use-fake-ui-for-media-stream",
+      "--use-fake-device-for-media-stream",
+      `--use-file-for-fake-audio-capture=${resolve(
+        import.meta.dirname,
+        "../vendor/moonshine/audio/two_cities_short.wav"
+      )}`,
+    ],
+  },
+};
+
 export default defineConfig<{ macPlatform: boolean }>({
   testDir: "./specs",
   // The Sync lane's specs need a sync server; run-sync.mjs runs them with
@@ -49,20 +70,17 @@ export default defineConfig<{ macPlatform: boolean }>({
       // The fake microphone is a Chromium flag; the WebKit-only edge runs in
       // its own project (tagged @webkit-only) and never here.
       grepInvert: /@webkit-only|@touch/,
-      use: {
-        ...devices["Desktop Chrome"],
-        ...shared,
-        launchOptions: {
-          args: [
-            "--use-fake-ui-for-media-stream",
-            "--use-fake-device-for-media-stream",
-            `--use-file-for-fake-audio-capture=${resolve(
-              import.meta.dirname,
-              "../vendor/moonshine/audio/two_cities_short.wav"
-            )}`,
-          ],
-        },
-      },
+      // A project's testIgnore replaces the config's, so the Sync lane stays out here too.
+      testIgnore: ["sync/**", AUDIO_SPECS],
+      use: chromiumWithFakeMicrophone,
+    },
+    {
+      // The audio specs: Chromium, one worker, alongside the other projects.
+      name: "voice",
+      grepInvert: /@webkit-only|@touch/,
+      testMatch: AUDIO_SPECS,
+      workers: 1,
+      use: chromiumWithFakeMicrophone,
     },
     {
       name: "webkit",

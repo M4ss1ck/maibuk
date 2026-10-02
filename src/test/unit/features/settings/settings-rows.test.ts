@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import en from "@/locales/en.json";
 import es from "@/locales/es.json";
-import {
-  SETTINGS_SECTIONS,
-  findSettingsRow,
-} from "@/components/settings/settings-sections";
+import { SETTINGS_SECTIONS, findSettingsRow } from "@/components/settings/settings-sections";
 import { rowOnPlatform, type SettingsRowDef } from "@/features/settings/rows";
 import { SETTINGS_KEY_ROWS } from "@/features/settings/settings-rows-keys";
 
@@ -39,12 +36,8 @@ describe("settings rows", () => {
       expect(typeof lookup(en, row.labelKey), `${row.id}.labelKey`).toBe("string");
       expect(typeof lookup(es, row.labelKey), `${row.id}.labelKey`).toBe("string");
       if (row.descriptionKey) {
-        expect(typeof lookup(en, row.descriptionKey), `${row.id}.descriptionKey`).toBe(
-          "string"
-        );
-        expect(typeof lookup(es, row.descriptionKey), `${row.id}.descriptionKey`).toBe(
-          "string"
-        );
+        expect(typeof lookup(en, row.descriptionKey), `${row.id}.descriptionKey`).toBe("string");
+        expect(typeof lookup(es, row.descriptionKey), `${row.id}.descriptionKey`).toBe("string");
       }
       if (row.keywordsKey) {
         // Keywords live under settings.keywords.<rowId> as string arrays.

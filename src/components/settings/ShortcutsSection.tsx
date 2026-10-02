@@ -3,25 +3,15 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui";
 import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
 import { SettingRow } from "@/components/settings/SettingRow";
+import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 
 export function ShortcutsSection() {
   const { t } = useTranslation();
   const [showShortcutEditor, setShowShortcutEditor] = useState(false);
 
   return (
-    <section className="mb-6 @lg:mb-8">
-      <h2
-        tabIndex={-1}
-        data-settings-section="shortcuts"
-        className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3"
-      >
-        {t("shortcuts.title")}
-      </h2>
-      <SettingRow
-        id="customizeShortcuts"
-        labelHidden
-        className="flex flex-col @lg:flex-row @lg:items-center justify-between py-3 gap-2 @lg:gap-4"
-      >
+    <SettingsSection sectionId="shortcuts" title={t("shortcuts.title")}>
+      <SettingRow id="customizeShortcuts" labelHidden className={SETTINGS_ROW_CLASS}>
         <Button
           variant="secondary"
           data-tutorial="settings.shortcuts dictation.voice-commands"
@@ -34,6 +24,6 @@ export function ShortcutsSection() {
         isOpen={showShortcutEditor}
         onClose={() => setShowShortcutEditor(false)}
       />
-    </section>
+    </SettingsSection>
   );
 }

@@ -34,9 +34,7 @@ describe("buildSettingsItems()", () => {
     const declared = allRows().filter((row) => rowOnPlatform(row, "desktop"));
 
     expect(items).toHaveLength(declared.length);
-    expect(items.map((item) => item.key)).toEqual(
-      declared.map((row) => `settingsRow:${row.id}`)
-    );
+    expect(items.map((item) => item.key)).toEqual(declared.map((row) => `settingsRow:${row.id}`));
     expect(items.every((item) => item.kind === "settingsRow")).toBe(true);
     expect(items.every((item) => item.state === "runnable")).toBe(true);
     // Every declared row id is unique across sections, so no key collides.
@@ -91,14 +89,15 @@ describe("buildSettingsItems()", () => {
     expect(built.filter((id) => !declared.includes(id))).toEqual([]);
   });
 
-  it.each(["web", "desktop", "android"] as const)(
-    "keeps every row that %s actually has",
-    (platform: SettingsPlatform) => {
-      const items = buildSettingsItems({ t, platform });
-      for (const row of allRows()) {
-        const present = items.some((item) => item.id === row.id);
-        expect(present, `${row.id} on ${platform}`).toBe(rowOnPlatform(row, platform));
-      }
+  it.each([
+    "web",
+    "desktop",
+    "android",
+  ] as const)("keeps every row that %s actually has", (platform: SettingsPlatform) => {
+    const items = buildSettingsItems({ t, platform });
+    for (const row of allRows()) {
+      const present = items.some((item) => item.id === row.id);
+      expect(present, `${row.id} on ${platform}`).toBe(rowOnPlatform(row, platform));
     }
-  );
+  });
 });

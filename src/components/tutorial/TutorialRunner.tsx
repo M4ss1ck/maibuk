@@ -443,8 +443,30 @@ export function TutorialRunner() {
  */
 export function TutorialBoundary({ children }: { children: ReactNode }) {
   const active = useTutorialStore((state) => state.status !== "idle");
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Not a JSX `inert` prop: React Aria also sets `inert` on whatever sits
+  // outside an open Modal and puts back what it found when the Modal closes.
+  // A Modal closing as a run starts (the Tutorial offer, the Command Palette)
+  // would clear React's attribute, and React never writes it again. So the
+  // boundary holds it for the whole run and restores it if anything clears it.
+  useLayoutEffect(() => {
+    const boundary = ref.current;
+    if (!boundary || !active) return;
+    const hold = () => {
+      if (!boundary.hasAttribute("inert")) boundary.setAttribute("inert", "");
+    };
+    hold();
+    const observer = new MutationObserver(hold);
+    observer.observe(boundary, { attributes: true, attributeFilter: ["inert"] });
+    return () => {
+      observer.disconnect();
+      boundary.removeAttribute("inert");
+    };
+  }, [active]);
+
   return (
-    <div className="contents" inert={active || undefined} data-tutorial-boundary="">
+    <div ref={ref} className="contents" data-tutorial-boundary="">
       {children}
     </div>
   );

@@ -3,6 +3,7 @@ import {
   CHARSET,
   FALLBACK_RGB,
   cellIntensity,
+  quietness,
   hexToRgb,
   parseArt,
   randomGlyph,
@@ -96,5 +97,31 @@ describe("randomGlyph()", () => {
     for (const ch of "MAIBUK") {
       expect(CHARSET).toContain(ch);
     }
+  });
+});
+
+describe("quietness()", () => {
+  const rect = { left: 100, top: 100, right: 200, bottom: 300 };
+
+  it("is 1 inside a rect and within the pad around it", () => {
+    expect(quietness([rect], 150, 200, 16, 48)).toBe(1);
+    expect(quietness([rect], 216, 200, 16, 48)).toBe(1);
+  });
+
+  it("eases to 0 across the feather", () => {
+    expect(quietness([rect], 240, 200, 16, 48)).toBeCloseTo(0.5);
+    expect(quietness([rect], 264, 200, 16, 48)).toBe(0);
+    expect(quietness([rect], 500, 500, 16, 48)).toBe(0);
+  });
+
+  it("measures corners by distance, not per axis", () => {
+    // 30 px right and 40 px below the corner: 50 px away, 34 past the pad.
+    expect(quietness([rect], 230, 340, 16, 48)).toBeCloseTo(1 - 34 / 48);
+  });
+
+  it("takes the quietest of several rects, and 0 with none", () => {
+    const far = { left: 1000, top: 0, right: 1100, bottom: 50 };
+    expect(quietness([far, rect], 150, 200, 16, 48)).toBe(1);
+    expect(quietness([], 150, 200, 16, 48)).toBe(0);
   });
 });

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
 import { SettingRow } from "@/components/settings/SettingRow";
+import { SETTINGS_ROWS_CLASS } from "@/components/settings/SettingsSection";
 import { DictationLanguageTabs } from "@/components/dictation/DictationLanguageTabs";
 import { DictationVocabularySection } from "@/components/settings/DictationVocabularySection";
 import { SpokenPunctuationSection } from "@/components/settings/SpokenPunctuationSection";
@@ -78,176 +79,187 @@ export function DictationSection() {
   const languages = [...byLanguage.keys()];
 
   return (
-    <div className="space-y-4">
-      <SettingRow
-        id="dictationEnabled"
-        className="flex items-center justify-between gap-3"
-        // The declared description renders below the row, as before, not
-        // inside it; the empty override only suppresses the in-row copy.
-        descriptionOverride={<></>}
-      >
-        <Switch checked={enabled} onChange={setEnabled} label={t("dictation.section.title")} />
-      </SettingRow>
-      <p className="text-sm text-muted-foreground">{t("dictation.section.description")}</p>
-      {languages.length > 0 && (
-        <DictationLanguageTabs
-          languages={languages}
-          selected={languages.includes(chosen) ? chosen : languages[0]}
-          onChange={setChosen}
-          ariaLabel={t("dictation.language")}
-          tutorialAnchor="dictation.language"
+    <>
+      <div className="py-3">
+        <SettingRow
+          id="dictationEnabled"
+          className="flex items-center justify-between gap-3"
+          // The declared description renders below the row, as before, not
+          // inside it; the empty override only suppresses the in-row copy.
+          descriptionOverride={<></>}
         >
-          {(language) => {
-            const specs = byLanguage.get(language) ?? [];
-            const capabilities =
-              (pickModel(language, specs, installed, preferred) ?? specs[0])?.capabilities ??
-              catalogCapabilities(language);
-            return (
-              <div className="space-y-6">
-                <SettingRow id="dictationModels" visuallyHiddenLabel>
-                  <div className="space-y-2" data-tutorial="dictation.models">
-                    <h3 className="font-medium">{t("dictation.section.models")}</h3>
-                  {specs.map((spec) => {
-                    const name = `${t(`dictation.languageNames.${language}`)}, ${t(`dictation.section.${spec.tier}`)}`;
-                    const download = downloads[spec.id];
-                    const isInstalled = installed.includes(spec.id);
-                    const inUse = isInstalled && preferred[language] === spec.tier;
-                    return (
-                      <fieldset
-                        key={spec.id}
-                        aria-label={name}
-                        className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"
-                      >
-                        <div className="min-w-48 flex-1">
-                          <div className="font-medium">
-                            {t(`dictation.section.${spec.tier}`)} ·{" "}
-                            {t("dictation.section.size", { size: sizeMb(spec) })}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {t(`dictation.section.${spec.tier}Hint`)}
-                          </div>
-                          {!spec.capabilities.punctuation && (
-                            <div className="text-sm text-muted-foreground">
-                              {t("dictation.section.noPunctuation")}
-                            </div>
-                          )}
-                        </div>
-                        {download && (
-                          <progress
-                            key="progress"
-                            className="h-2 w-40 appearance-none overflow-hidden rounded-lg bg-border [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-border [&::-webkit-progress-value]:bg-primary"
-                            max={100}
-                            value={Math.round((download.done / download.total) * 100)}
-                            aria-valuenow={Math.round((download.done / download.total) * 100)}
-                            aria-label={t("dictation.section.progress", {
-                              done: Math.round(download.done / MB),
-                              total: Math.round(download.total / MB),
-                            })}
-                          />
-                        )}
-                        {!download && isInstalled && inUse && (
-                          <span key="in-use" className="text-sm">
-                            {t("dictation.section.inUse", {
-                              language: t(`dictation.languages.${language}`),
-                            })}
-                          </span>
-                        )}
-                        {!download && isInstalled && !inUse && (
-                          <Button
-                            key="use"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              setPreferred(language, spec.tier);
-                              // The button becomes text; keep focus in the row.
-                              actionRefs.current.get(spec.id)?.focus();
-                            }}
+          <Switch checked={enabled} onChange={setEnabled} label={t("dictation.section.title")} />
+        </SettingRow>
+        <p className="text-sm text-muted-foreground">{t("dictation.section.description")}</p>
+      </div>
+      {languages.length > 0 && (
+        <div className="py-3">
+          <DictationLanguageTabs
+            languages={languages}
+            selected={languages.includes(chosen) ? chosen : languages[0]}
+            onChange={setChosen}
+            ariaLabel={t("dictation.language")}
+            tutorialAnchor="dictation.language"
+          >
+            {(language) => {
+              const specs = byLanguage.get(language) ?? [];
+              const capabilities =
+                (pickModel(language, specs, installed, preferred) ?? specs[0])?.capabilities ??
+                catalogCapabilities(language);
+              return (
+                <div className={SETTINGS_ROWS_CLASS}>
+                  <SettingRow id="dictationModels" visuallyHiddenLabel className="py-3">
+                    <div className="space-y-2" data-tutorial="dictation.models">
+                      <h3 className="font-medium">{t("dictation.section.models")}</h3>
+                      {specs.map((spec) => {
+                        const name = `${t(`dictation.languageNames.${language}`)}, ${t(`dictation.section.${spec.tier}`)}`;
+                        const download = downloads[spec.id];
+                        const isInstalled = installed.includes(spec.id);
+                        const inUse = isInstalled && preferred[language] === spec.tier;
+                        return (
+                          <fieldset
+                            key={spec.id}
+                            aria-label={name}
+                            className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"
                           >
-                            {t("dictation.section.useThis", {
-                              language: t(`dictation.languages.${language}`),
-                            })}
-                          </Button>
-                        )}
-                        {/* One action button whose label follows the row's state
+                            <div className="min-w-48 flex-1">
+                              <div className="font-medium">
+                                {t(`dictation.section.${spec.tier}`)} ·{" "}
+                                {t("dictation.section.size", { size: sizeMb(spec) })}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {t(`dictation.section.${spec.tier}Hint`)}
+                              </div>
+                              {!spec.capabilities.punctuation && (
+                                <div className="text-sm text-muted-foreground">
+                                  {t("dictation.section.noPunctuation")}
+                                </div>
+                              )}
+                            </div>
+                            {download && (
+                              <progress
+                                key="progress"
+                                className="h-2 w-40 appearance-none overflow-hidden rounded-lg bg-border [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-border [&::-webkit-progress-value]:bg-primary"
+                                max={100}
+                                value={Math.round((download.done / download.total) * 100)}
+                                aria-valuenow={Math.round((download.done / download.total) * 100)}
+                                aria-label={t("dictation.section.progress", {
+                                  done: Math.round(download.done / MB),
+                                  total: Math.round(download.total / MB),
+                                })}
+                              />
+                            )}
+                            {!download && isInstalled && inUse && (
+                              <span key="in-use" className="text-sm">
+                                {t("dictation.section.inUse", {
+                                  language: t(`dictation.languages.${language}`),
+                                })}
+                              </span>
+                            )}
+                            {!download && isInstalled && !inUse && (
+                              <Button
+                                key="use"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                  setPreferred(language, spec.tier);
+                                  // The button becomes text; keep focus in the row.
+                                  actionRefs.current.get(spec.id)?.focus();
+                                }}
+                              >
+                                {t("dictation.section.useThis", {
+                                  language: t(`dictation.languages.${language}`),
+                                })}
+                              </Button>
+                            )}
+                            {/* One action button whose label follows the row's state
                     (Download, Cancel, Remove), so focus stays on it. */}
-                        <Button
-                          key="action"
-                          ref={(el) => {
-                            if (el) actionRefs.current.set(spec.id, el);
-                            else actionRefs.current.delete(spec.id);
-                          }}
-                          variant={download ? "secondary" : isInstalled ? "ghost" : "primary"}
-                          size="sm"
-                          onClick={() =>
-                            void getDictation()
-                              .then((r) =>
+                            <Button
+                              key="action"
+                              ref={(el) => {
+                                if (el) actionRefs.current.set(spec.id, el);
+                                else actionRefs.current.delete(spec.id);
+                              }}
+                              variant={download ? "secondary" : isInstalled ? "ghost" : "primary"}
+                              size="sm"
+                              onClick={() =>
+                                void getDictation()
+                                  .then((r) =>
+                                    download
+                                      ? r.cancelInstall(spec.id)
+                                      : isInstalled
+                                        ? r.remove(spec.id)
+                                        : r.install(spec)
+                                  )
+                                  .catch(() => {})
+                              }
+                            >
+                              {t(
                                 download
-                                  ? r.cancelInstall(spec.id)
+                                  ? "dictation.section.cancel"
                                   : isInstalled
-                                    ? r.remove(spec.id)
-                                    : r.install(spec)
-                              )
-                              .catch(() => {})
-                          }
-                        >
-                          {t(
-                            download
-                              ? "dictation.section.cancel"
-                              : isInstalled
-                                ? "dictation.section.remove"
-                                : "dictation.section.download"
-                          )}
-                        </Button>
-                      </fieldset>
-                    );
-                  })}
-                  </div>
-                </SettingRow>
-                <SettingRow id="dictationSpokenPunctuation" visuallyHiddenLabel>
-                  <div data-tutorial="dictation.punctuation">
-                    <SpokenPunctuationSection language={language} capabilities={capabilities} />
-                  </div>
-                </SettingRow>
-                <SettingRow id="dictationVocabulary" visuallyHiddenLabel>
-                  <div data-tutorial="dictation.vocabulary">
-                    <DictationVocabularySection language={language} />
-                  </div>
-                </SettingRow>
-              </div>
-            );
-          }}
-        </DictationLanguageTabs>
+                                    ? "dictation.section.remove"
+                                    : "dictation.section.download"
+                              )}
+                            </Button>
+                          </fieldset>
+                        );
+                      })}
+                    </div>
+                  </SettingRow>
+                  <SettingRow id="dictationSpokenPunctuation" visuallyHiddenLabel className="py-3">
+                    <div data-tutorial="dictation.punctuation">
+                      <SpokenPunctuationSection language={language} capabilities={capabilities} />
+                    </div>
+                  </SettingRow>
+                  <SettingRow id="dictationVocabulary" visuallyHiddenLabel className="py-3">
+                    <div data-tutorial="dictation.vocabulary">
+                      <DictationVocabularySection language={language} />
+                    </div>
+                  </SettingRow>
+                </div>
+              );
+            }}
+          </DictationLanguageTabs>
+        </div>
       )}
-      {device && (
-        <p className="text-sm text-muted-foreground">{t("dictation.section.device", { device })}</p>
+      {(device ||
+        (recent && (recent.medianLatencyMs !== null || recent.medianInterpreterMs !== null))) && (
+        <div className="py-3 space-y-1">
+          {device && (
+            <p className="text-sm text-muted-foreground">
+              {t("dictation.section.device", { device })}
+            </p>
+          )}
+          {recent && recent.medianLatencyMs !== null && (
+            <p className="text-sm text-muted-foreground">
+              {t("dictation.section.recent", {
+                lines: recent.lines,
+                ms: recent.medianLatencyMs,
+              })}
+            </p>
+          )}
+          {recent && recent.medianInterpreterMs !== null && (
+            <p className="text-sm text-muted-foreground">
+              {t("dictation.section.interpreter", {
+                median: formatMs(recent.medianInterpreterMs),
+                max: formatMs(recent.maxInterpreterMs ?? recent.medianInterpreterMs),
+                count: recent.spokenPunctuationCount,
+                voice: recent.voiceCommandCount,
+                scratch: recent.scratchCount,
+              })}
+            </p>
+          )}
+          {recent && recent.medianInterpreterMs !== null && (
+            <p className="text-sm text-muted-foreground">
+              {t("dictation.section.voiceUnavailable", {
+                count: recent.voiceCommandUnavailableCount,
+              })}{" "}
+              {t("dictation.section.voiceRefused", { count: recent.voiceCommandRefusedCount })}
+            </p>
+          )}
+        </div>
       )}
-      {recent && recent.medianLatencyMs !== null && (
-        <p className="text-sm text-muted-foreground">
-          {t("dictation.section.recent", {
-            lines: recent.lines,
-            ms: recent.medianLatencyMs,
-          })}
-        </p>
-      )}
-      {recent && recent.medianInterpreterMs !== null && (
-        <p className="text-sm text-muted-foreground">
-          {t("dictation.section.interpreter", {
-            median: formatMs(recent.medianInterpreterMs),
-            max: formatMs(recent.maxInterpreterMs ?? recent.medianInterpreterMs),
-            count: recent.spokenPunctuationCount,
-            voice: recent.voiceCommandCount,
-            scratch: recent.scratchCount,
-          })}
-        </p>
-      )}
-      {recent && recent.medianInterpreterMs !== null && (
-        <p className="text-sm text-muted-foreground">
-          {t("dictation.section.voiceUnavailable", {
-            count: recent.voiceCommandUnavailableCount,
-          })}{" "}
-          {t("dictation.section.voiceRefused", { count: recent.voiceCommandRefusedCount })}
-        </p>
-      )}
-    </div>
+    </>
   );
 }

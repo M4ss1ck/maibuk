@@ -1985,6 +1985,23 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "settings-outline",
+    area: "settings",
+    workflow:
+      "Settings outline beside the sections: search filters sections and rows, arrows move through the tree, Enter jumps to a section heading or focuses a row's control; on a narrow panel the section menu bar jumps instead; asserts: focus on heading/control, current entry, menu arrow focus; persists: no",
+    edges: [
+      "Search narrows to matching rows; Escape clears",
+      "Enter on a row focuses its control",
+      "Narrow panel: section menu, Escape returns focus to its button",
+    ],
+    terms: [],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "metrics-collect",
     area: "metrics",
     workflow:

@@ -27,10 +27,7 @@ function indent(direction: "increase" | "decrease"): EditorCommand {
       const lift = loose.liftListItem;
       return lift ? lift("listItem") : false;
     }
-    return run(direction === "increase" ? "increaseIndent" : "decreaseIndent")(
-      editor,
-      commands
-    );
+    return run(direction === "increase" ? "increaseIndent" : "decreaseIndent")(editor, commands);
   };
 }
 

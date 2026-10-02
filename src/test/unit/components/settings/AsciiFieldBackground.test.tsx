@@ -71,3 +71,48 @@ describe("AsciiFieldBackground", () => {
     expect(env.raf).not.toHaveBeenCalled();
   });
 });
+
+describe("AsciiFieldBackground — quiet zone", () => {
+  function renderWithQuietZone() {
+    const { container } = render(
+      <div>
+        <AsciiFieldBackground />
+        <nav data-ascii-quiet />
+      </div>
+    );
+    const quiet = container.querySelector<HTMLElement>("[data-ascii-quiet]")!;
+    quiet.getBoundingClientRect = () =>
+      ({ left: 500, top: 50, right: 700, bottom: 450, width: 200, height: 400 }) as DOMRect;
+    return quiet;
+  }
+
+  it("ignores a cursor over the outline", async () => {
+    env = setupAsciiCanvas();
+    renderWithQuietZone();
+    await waitFor(() => expect(env.ctx.fillText).toHaveBeenCalled());
+    env.raf.mockClear();
+
+    moveMouse(600, 200);
+    expect(env.raf).not.toHaveBeenCalled();
+  });
+
+  it("still lights up away from the outline, but never under it", async () => {
+    env = setupAsciiCanvas();
+    renderWithQuietZone();
+    await waitFor(() => expect(env.ctx.fillText).toHaveBeenCalled());
+
+    // Just outside the pad: the shimmer runs, with the outline's cells at rest.
+    moveMouse(470, 200);
+    expect(env.raf).toHaveBeenCalled();
+    env.ctx.fillText.mockClear();
+    const styles: string[] = [];
+    env.ctx.fillText.mockImplementation((_glyph: string, x: number, y: number) => {
+      if (x > 520 && x < 680 && y > 100 && y < 400) styles.push(env.ctx.fillStyle);
+    });
+    env.flushFrame(performance.now());
+
+    expect(styles.length).toBeGreaterThan(0);
+    expect(new Set(styles).size).toBe(1);
+    expect(styles[0]).toMatch(/,0\.13\)$/);
+  });
+});

@@ -1,8 +1,5 @@
 import { SETTINGS_SECTIONS } from "@/components/settings/settings-sections";
-import type {
-  PaletteItem,
-  PaletteTranslate,
-} from "@/features/command-palette/palette-index";
+import type { PaletteItem, PaletteTranslate } from "@/features/command-palette/palette-index";
 import {
   rowOnPlatform,
   type SettingsPlatform,

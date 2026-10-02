@@ -135,7 +135,9 @@ describe("Settings page — container-aware layout", () => {
     expect(wrapper).toHaveClass("@container");
     // Page-shell padding stays a viewport decision.
     expect(wrapper).toHaveClass("p-4", "sm:p-8");
-    expect(document.querySelector(".overflow-auto")).not.toHaveClass("@container");
+    // The scroll area is a container too: the outline beside the sections
+    // appears once the panel (not the viewport) is wide enough.
+    expect(document.querySelector(".overflow-auto")).toHaveClass("@container");
   });
 
   it("scrolls to the Dictation section when linked by hash", async () => {
@@ -176,7 +178,7 @@ describe("Settings page — container-aware layout", () => {
     expect(heading).toHaveClass("text-xl", "@lg:text-2xl");
     expect(heading).not.toHaveClass("sm:text-2xl");
 
-    const section = screen.getByText("settings.appearance").closest("section");
+    const section = screen.getByRole("heading", { name: "settings.appearance" }).closest("section");
     expect(section).not.toBeNull();
     expect(section).toHaveClass("p-4", "@lg:p-5", "mb-6", "@lg:mb-8");
     expect(section).not.toHaveClass("sm:p-5");
@@ -219,7 +221,7 @@ describe("Settings page — container-aware layout", () => {
   it("uses container variants for setting rows", () => {
     renderSettings();
 
-    const themeRow = screen.getByRole("button", { name: "settings.light" }).closest(".py-2");
+    const themeRow = screen.getByRole("button", { name: "settings.light" }).closest(".py-3");
     expect(themeRow).not.toBeNull();
     expect(themeRow).toHaveClass(
       "flex-col",
@@ -236,6 +238,33 @@ describe("Settings page — container-aware layout", () => {
     expect(syncRow).not.toBeNull();
     expect(syncRow).toHaveClass("@xl:flex-row", "@xl:items-center", "@xl:gap-4");
     expect(syncRow).not.toHaveClass("sm:flex-row");
+  });
+
+  it("renders every section as the same card with an h2 title", () => {
+    renderSettings();
+
+    const headings = [...document.querySelectorAll<HTMLElement>("[data-settings-section]")];
+    // Every section the web build shows (Window is desktop-only).
+    expect(headings.map((h) => h.dataset.settingsSection)).toEqual([
+      "appearance",
+      "general",
+      "shortcuts",
+      "sync",
+      "backups",
+      "metrics",
+      "editor",
+      "dictation",
+      "export",
+      "tutorial",
+      "advanced",
+      "about",
+    ]);
+    const cardClass = headings[0].closest("section")?.className;
+    expect(cardClass).toContain("rounded-xl");
+    for (const heading of headings) {
+      expect(heading.tagName).toBe("H2");
+      expect(heading.closest("section")?.className).toBe(cardClass);
+    }
   });
 
   it("sizes the sync server input from the container instead of the viewport", () => {

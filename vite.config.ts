@@ -198,6 +198,12 @@ export default defineConfig(() => ({
         "src/components/settings/asciiBanner.helpers.ts",
         "src/components/settings/AsciiBanner.tsx",
         "src/components/settings/AsciiFieldBackground.tsx",
+        "src/features/settings/outline.ts",
+        "src/components/settings/SettingsSection.tsx",
+        "src/components/settings/SettingsOutline.tsx",
+        "src/components/settings/SettingsSectionMenu.tsx",
+        "src/components/settings/SettingsOutlineLayout.tsx",
+        "src/components/settings/useSettingsOutline.ts",
         "src/features/settings/AppSettingsProvider.tsx",
         // Phase 13: Infinite Canvas
         "src/features/canvas/serialization.ts",

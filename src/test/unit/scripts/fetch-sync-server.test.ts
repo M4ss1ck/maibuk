@@ -63,7 +63,9 @@ describe("fetch-sync-server pins", () => {
   it("accepts the pinned digest and rejects any other", () => {
     const bytes = Buffer.from("abc");
     expect(() => verifyDigest("x", bytes, sha256(bytes))).not.toThrow();
-    expect(() => verifyDigest("x", bytes, "0".repeat(64))).toThrow(/^x: sha256 [0-9a-f]{64}, pinned 0{64}$/);
+    expect(() => verifyDigest("x", bytes, "0".repeat(64))).toThrow(
+      /^x: sha256 [0-9a-f]{64}, pinned 0{64}$/
+    );
   });
 });
 
@@ -103,7 +105,10 @@ describe("sweepStaleRuns", () => {
   it("never kills a recycled pid that is not PocketBase", () => {
     root = mkdtempSync(join(tmpdir(), "sweep-"));
     // This test process stands in for an unrelated process that reused the pid.
-    const dir = run("run-recycled", { "owner.pid": deadPid(), "pocketbase.pid": String(process.pid) });
+    const dir = run("run-recycled", {
+      "owner.pid": deadPid(),
+      "pocketbase.pid": String(process.pid),
+    });
     expect(sweepStaleRuns(root)).toBe(1);
     expect(existsSync(dir)).toBe(false);
     expect(process.kill(process.pid, 0)).toBe(true);
