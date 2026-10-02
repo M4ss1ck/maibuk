@@ -323,6 +323,26 @@ test.describe("image insert @wf:editor-image-insert", () => {
 });
 
 test.describe("image menu @wf:editor-image-menu", () => {
+  test("the image menu is positioned beside the selected image", async ({ page }) => {
+    await openEditor(page);
+    await page.keyboard.press("End");
+    await insertImageByUrl(page, "A lamp");
+    const menu = await openImageMenu(page);
+    await capture(page, "image-menu-position");
+    await expect(page.getByRole("menu", { name: "Editor options" })).toHaveCount(0);
+    const image = await editorText(page).locator("figure[data-image]").boundingBox();
+    expect(image).not.toBeNull();
+    await expect.poll(async () => (await menu.boundingBox())?.x).toBeGreaterThan(image!.x - 8);
+    await expect.poll(async () => (await menu.boundingBox())?.x).toBeLessThan(image!.x + 8);
+    // A tall image may require the menu to flip above its bottom anchor.
+    await expect.poll(async () => (await menu.boundingBox())?.y).toBeGreaterThan(image!.y);
+    const menuBox = await menu.boundingBox();
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(1280);
+    expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(800);
+    await page.keyboard.press("Escape");
+    await expect(editorText(page)).toBeFocused();
+  });
+
   test("Shift+F10 aligns the selected image; the menu closes and persists", async ({ page }) => {
     await openEditor(page);
     await page.keyboard.press("End");

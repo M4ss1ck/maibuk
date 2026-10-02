@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui";
 import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
-import { findImageNodeAtPos } from "@/components/editor/editor-context-menu-utils";
+import { clampPosition, findImageNodeAtPos } from "@/components/editor/editor-context-menu-utils";
 import { useShortcuts } from "@/lib/shortcuts";
 
 interface ImageContextMenuProps {
@@ -47,7 +47,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
     pos: number,
     nodeAttrs: Record<string, unknown>,
     anchor: { top: number; left: number }
-  ) => setMenu({ pos, nodeAttrs, anchor });
+  ) => setMenu({ pos, nodeAttrs, anchor: clampPosition(anchor.left, anchor.top) });
 
   // Context menu handler (capture phase to run before SpellCheckPopover)
   useEffect(() => {
@@ -123,8 +123,8 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
     };
 
     const dom = editor.view.dom;
-    dom.addEventListener("keydown", handleKeyDown);
-    return () => dom.removeEventListener("keydown", handleKeyDown);
+    dom.addEventListener("keydown", handleKeyDown, true);
+    return () => dom.removeEventListener("keydown", handleKeyDown, true);
   }, [editor]);
 
   const closeMenu = () => setMenu(null);
@@ -270,7 +270,7 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
           className="pointer-events-none fixed h-px w-px opacity-0"
           style={{ top: menu?.anchor.top ?? 0, left: menu?.anchor.left ?? 0 }}
         />
-        <Popover placement="bottom start" className="z-50">
+        <Popover triggerRef={anchorRef} placement="bottom start" className="z-50">
           <Menu
             aria-label={t("editor.imageOptions")}
             onAction={handleAction}

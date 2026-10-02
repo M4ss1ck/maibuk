@@ -750,7 +750,7 @@ export const ROWS: MatrixRow[] = [
     area: "editor",
     workflow:
       "Shift+F10 / ContextMenu key opens editor context menu; arrow, Enter runs action (e.g., Paste without formatting, Remove formatting); asserts: Menu focus; Esc returns to caret",
-    edges: [],
+    edges: ["menu is positioned beside the editor caret"],
     terms: [],
     shortcuts: [],
     routes: ["/book/:bookId"],
@@ -813,7 +813,9 @@ export const ROWS: MatrixRow[] = [
     id: "editor-image-menu",
     area: "editor",
     workflow: "Image context menu by keyboard: resize/align/delete; persists: yes",
-    edges: [],
+    edges: [
+      "image menu is positioned beside the selected image; only one menu opens, fits the viewport, and Esc returns focus",
+    ],
     terms: [],
     shortcuts: [],
     routes: ["/book/:bookId"],
