@@ -3,6 +3,7 @@ import {
   INITIAL_OUTLINE_PIN,
   buildOutline,
   firstStartingInView,
+  planOutlineMotion,
   reduceOutlinePin,
   type OutlinePin,
 } from "@/features/settings/outline";
@@ -153,5 +154,74 @@ describe("reduceOutlinePin()", () => {
       { type: "jump", selection: other }
     );
     expect(state.pinned).toEqual(other);
+  });
+});
+
+describe("planOutlineMotion()", () => {
+  const layout = (entries: [string, number][]) => ({
+    order: entries.map(([key]) => key),
+    tops: new Map(entries),
+  });
+
+  // Appearance (rows a1, a2) is open, then General becomes current: the
+  // Appearance rows close and General's row g1 opens.
+  const before = layout([
+    ["appearance", 0],
+    ["a1", 20],
+    ["a2", 40],
+    ["general", 60],
+    ["editor", 80],
+  ]);
+  const after = layout([
+    ["appearance", 0],
+    ["general", 20],
+    ["g1", 40],
+    ["editor", 60],
+  ]);
+
+  it("slides kept entries from their old place and leaves still ones alone", () => {
+    const { moves } = planOutlineMotion(before, after);
+    expect(moves).toEqual([
+      { key: "general", dy: 40 },
+      { key: "editor", dy: 20 },
+    ]);
+  });
+
+  it("lists a new row as entering, not moving", () => {
+    expect(planOutlineMotion(before, after).enters).toEqual(["g1"]);
+  });
+
+  it("folds a closing row into the kept entry above it", () => {
+    const { exits } = planOutlineMotion(before, after);
+    expect(exits).toEqual([
+      { key: "a1", top: 20, dy: 0 },
+      { key: "a2", top: 40, dy: 0 },
+    ]);
+  });
+
+  it("closing rows follow their heading when it moves", () => {
+    const { exits } = planOutlineMotion(
+      layout([
+        ["appearance", 0],
+        ["general", 20],
+        ["g1", 40],
+      ]),
+      layout([
+        ["appearance", 0],
+        ["a1", 20],
+        ["general", 40],
+      ])
+    );
+    expect(exits).toEqual([{ key: "g1", top: 40, dy: 20 }]);
+  });
+
+  it("starts an interrupted entry where it is on screen, not where it last landed", () => {
+    // General was mid-slide, still drawn 30px below its last layout top.
+    const { moves } = planOutlineMotion(before, after, new Map([["general", 30]]));
+    expect(moves.find((move) => move.key === "general")?.dy).toBe(70);
+  });
+
+  it("an unchanged outline plans nothing", () => {
+    expect(planOutlineMotion(before, before)).toEqual({ moves: [], enters: [], exits: [] });
   });
 });

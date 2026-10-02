@@ -291,6 +291,49 @@ describe("Settings rows", () => {
     expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
   });
 
+  it("glides to a requested row instead of jumping, and focus does not jump first", async () => {
+    const original = Element.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    try {
+      renderSettings();
+      focusSettingsRow("theme");
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
+      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    } finally {
+      focus.mockRestore();
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it("jumps to a requested row under reduced motion", async () => {
+    const original = Element.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const media = vi.spyOn(window, "matchMedia").mockImplementation(
+      (query: string) =>
+        ({
+          matches: query.includes("reduce"),
+          media: query,
+          addEventListener() {},
+          removeEventListener() {},
+          addListener() {},
+          removeListener() {},
+        }) as unknown as MediaQueryList
+    );
+    try {
+      renderSettings();
+      focusSettingsRow("theme");
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "auto" });
+    } finally {
+      media.mockRestore();
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it("re-renders no section to request a row", async () => {
     renderSettings();
     const group = screen.getByRole("group", { name: "settings.theme" });
