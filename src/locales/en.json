@@ -817,7 +817,6 @@
     "customDictionaryTitle": "Custom Dictionary",
     "customDictionaryEmpty": "No custom words yet",
     "removeWord": "Remove",
-    "updateAvailable": "{{version}} available",
     "advanced": "Advanced",
     "exportDatabase": "Export Database",
     "exportDatabaseDescription": "Save your books, notes, canvases, and version history to a file",
@@ -1189,6 +1188,7 @@
     "toggleTheme": "Cycle theme",
     "toggleShortcutHints": "Toggle shortcut hints",
     "toggleAlwaysOnTop": "Toggle always on top",
+    "openReleaseNotes": "Show what's new",
     "openCommandPalette": "Open command palette",
     "syncNow": "Sync now",
     "newBook": "Create new book",
@@ -1274,6 +1274,7 @@
     "skipTutorial": "Skip the Tutorial",
     "areaTutorial": "Tutorial",
     "keywords": {
+      "openReleaseNotes": ["release notes", "changelog", "version", "update", "about"],
       "toggleAlwaysOnTop": ["pin", "float", "window", "stay on top"],
       "toggleTheme": ["dark", "light", "mode", "appearance"],
       "syncNow": ["upload", "download", "cloud", "backup"],
@@ -2040,5 +2041,23 @@
     "title": "Maibuk couldn't open your Library",
     "body": "Your work is still on this device. Nothing was changed or deleted. Try again, or restart Maibuk if it keeps failing.",
     "retry": "Try again"
+  },
+  "releases": {
+    "title": "What's new",
+    "badge": "Maibuk {{release}}, What's new",
+    "badgeWithUpdate": "Maibuk {{release}}, What's new, an update is available",
+    "new": "New",
+    "download": "Download {{release}}",
+    "olderReleases": "Older Releases are on GitHub",
+    "notesRegion": "Release Notes",
+    "sections": {
+      "added": "Added",
+      "changed": "Changed",
+      "deprecated": "Deprecated",
+      "removed": "Removed",
+      "fixed": "Fixed",
+      "other": "Other",
+      "security": "Security"
+    }
   }
 }

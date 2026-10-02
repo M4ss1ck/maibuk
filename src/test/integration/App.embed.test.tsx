@@ -52,11 +52,17 @@ vi.mock("../../features/backup/lifecycle", () => ({
   scheduleDailyBackup: mockScheduleDailyBackup,
 }));
 
+const mockInstallReleaseCheck = vi.hoisted(() => vi.fn(() => () => {}));
+vi.mock("@/features/releases/release-check", () => ({
+  installReleaseCheck: mockInstallReleaseCheck,
+}));
+
 import App from "@/App";
 
 describe("App embed route behavior", () => {
   beforeEach(() => {
     mockScheduleDailyBackup.mockReset();
+    mockInstallReleaseCheck.mockClear();
   });
 
   it("keeps startup wrappers on regular routes", () => {
@@ -70,6 +76,7 @@ describe("App embed route behavior", () => {
     expect(screen.getByTestId("path-tracker")).toBeInTheDocument();
     expect(screen.getByTestId("global-shortcuts")).toBeInTheDocument();
     expect(screen.getByTestId("toast-viewport")).toBeInTheDocument();
+    expect(mockInstallReleaseCheck).toHaveBeenCalledTimes(1);
   });
 
   it("removes startup wrappers and side effects on /embed", () => {
@@ -85,5 +92,6 @@ describe("App embed route behavior", () => {
     expect(screen.queryByTestId("toast-viewport")).not.toBeInTheDocument();
     expect(screen.getByText("embed-view")).toBeInTheDocument();
     expect(mockScheduleDailyBackup).not.toHaveBeenCalled();
+    expect(mockInstallReleaseCheck).not.toHaveBeenCalled();
   });
 });

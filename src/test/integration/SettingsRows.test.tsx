@@ -46,9 +46,6 @@ vi.mock("@/i18n", () => ({
   detectSystemLocale: vi.fn().mockResolvedValue("en"),
 }));
 
-vi.mock("@/features/version", () => ({
-  useVersionCheck: () => ({ latestVersion: null, isOutdated: false }),
-}));
 
 vi.mock("@/lib/platform", () => ({
   get IS_WEB() {

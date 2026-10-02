@@ -98,7 +98,11 @@ export default defineConfig(() => ({
         "src/features/sync/store.ts",
         "src/hooks/useAutoSave.ts",
         "src/hooks/useItemContextMenu.ts",
-        "src/features/version/useVersionCheck.ts",
+        "src/features/releases/release-notes.ts",
+        "src/features/releases/release-check.ts",
+        "src/features/releases/compare.ts",
+        "src/components/releases/ReleaseNotesDialog.tsx",
+        "src/components/releases/ReleaseBadge.tsx",
         // Phase 3: UI components
         "src/components/ui/Button.tsx",
         "src/components/ui/ColorPickerControl.tsx",

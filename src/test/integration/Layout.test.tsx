@@ -44,8 +44,10 @@ const translations = {
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { version?: string }) => {
-      if (key === "settings.updateAvailable") return `Update ${options?.version}`;
+    t: (key: string, options?: { release?: string }) => {
+      if (key === "releases.badge") return `Maibuk ${options?.release}, What's new`;
+      if (key === "releases.badgeWithUpdate")
+        return `Maibuk ${options?.release}, What's new, an update is available`;
       return (
         translations[i18nState.language as keyof typeof translations][
           key as keyof (typeof translations)["en"]
@@ -57,12 +59,10 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
-vi.mock("@/features/version", () => ({
-  useVersionCheck: () => ({ latestVersion: "v99.0.0", isOutdated: true }),
-}));
 
 import { Layout } from "@/components/Layout";
-import { APP_VERSION, DOWNLOAD_PAGE } from "@/constants";
+import { APP_VERSION } from "@/constants";
+import { useReleaseStore } from "@/features/releases/store";
 import { useThemeStore } from "@/features/theme/store";
 import { useSettingsStore } from "@/features/settings/store";
 import { runTopBackDismiss } from "@/lib/platform/backDismiss";
@@ -288,15 +288,28 @@ describe("Layout", () => {
     expect(screen.getByRole("button", { name: "Cerrar menú de navegación" })).toBeInTheDocument();
   });
 
-  it("preserves version, update, and theme controls", async () => {
+  it("opens the Release Notes from the Release badge and keeps the theme controls", async () => {
     const user = userEvent.setup();
+    useReleaseStore.setState({ newerReleases: [], isNotesOpen: false });
     renderLayout();
 
-    expect(screen.getByText(APP_VERSION)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Update v99.0.0" })).toHaveAttribute(
-      "href",
-      DOWNLOAD_PAGE
-    );
+    const badge = screen.getByRole("button", { name: `Maibuk ${APP_VERSION}, What's new` });
+    expect(badge).toHaveTextContent(APP_VERSION);
+    badge.focus();
+    await user.keyboard("{Enter}");
+    expect(useReleaseStore.getState().isNotesOpen).toBe(true);
+
+    act(() => {
+      useReleaseStore.setState({
+        isNotesOpen: false,
+        newerReleases: [{ number: "99.0.0", date: null, sections: [] }],
+      });
+    });
+    expect(
+      screen.getByRole("button", {
+        name: `Maibuk ${APP_VERSION}, What's new, an update is available`,
+      })
+    ).toHaveTextContent("releases.new");
 
     await user.click(screen.getByRole("button", { name: "Dark" }));
     expect(useThemeStore.getState().theme).toBe("dark");
