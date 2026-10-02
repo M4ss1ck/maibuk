@@ -45,6 +45,7 @@ terminal you control. A slim container often also needs `libnss3`, `libnspr4`,
 ```bash
 pnpm test:e2e                                     # everything: guard, typecheck, build, all projects
 pnpm test:e2e --project=chromium                  # one browser (chromium or webkit)
+pnpm test:e2e --project=voice                     # the audio specs, one at a time
 pnpm test:e2e --project=phone                     # the touch specs on a phone
 pnpm test:e2e specs/books-create.spec.ts          # one file
 pnpm test:e2e specs/books.spec.ts -g "Esc cancels"  # one test by title
@@ -99,10 +100,18 @@ run at once and a leftover never blocks a run. Running
 
 | Project | Engine | Runs |
 | --- | --- | --- |
-| `chromium` | Chromium | every spec |
+| `chromium` | Chromium | every spec except the audio specs |
+| `voice` | Chromium with the fake microphone, one worker | the audio specs: `voice-*.spec.ts` and `dictation*.spec.ts` |
 | `webkit` | WebKit (the engine of the Linux and macOS desktop shells) | every spec except `@chromium-only` |
 | `mac-platform` | Chromium reporting a Mac `navigator.platform` | only tests tagged `@mac-platform` |
 | `phone` | Chromium as a Pixel 7: 412x839 viewport, touch, `isMobile` | only tests tagged `@touch` |
+
+`voice` runs the specs that play audio into the Dictation model, one at a
+time, while the other projects run in parallel. The recognizer works in real
+time: starved of CPU by parallel tests it drops audio and mishears (a run heard
+"Go to Notes" as "Bowdoin oats"), so a spec that plays audio belongs in a file
+named `voice-*.spec.ts` or `dictation*.spec.ts`. `--project=chromium` no longer
+runs them; add `--project=voice`.
 
 `mac-platform` proves the platform-dependent labels (⌘, ⌥) and the Mod
 bindings. It is not real macOS. Specs press `ControlOrMeta`; a spec that also

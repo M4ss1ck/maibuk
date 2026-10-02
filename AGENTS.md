@@ -724,6 +724,7 @@ Any change that adds or modifies interactive UI is **not done** until behavioral
 pnpm test:e2e                                     # guard, guard self-tests, e2e typecheck, web build, Playwright
 pnpm test:e2e --project=chromium                  # one browser
 pnpm test:e2e --project=phone                     # the @touch specs on a phone
+pnpm test:e2e --project=voice                     # the audio specs (voice-*, dictation*), one at a time
 pnpm test:e2e specs/books-create.spec.ts          # one file
 pnpm test:e2e --grep @wf:books-create             # one matrix workflow
 pnpm test:e2e --repeat-each=3                     # the acceptance run
