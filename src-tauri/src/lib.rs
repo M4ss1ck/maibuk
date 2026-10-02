@@ -3,6 +3,8 @@ mod backup;
 mod dictation;
 mod library_db;
 mod tray;
+#[cfg(desktop)]
+mod window_restore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -10,13 +12,9 @@ pub fn run() {
 
     #[cfg(desktop)]
     let builder = builder
+        .manage(window_restore::PendingWindowRestore::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            use tauri::Manager;
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.unminimize();
-                let _ = win.show();
-                let _ = win.set_focus();
-            }
+            window_restore::show_main_window(app);
         }))
         .plugin(tauri_plugin_deep_link::init());
 
@@ -88,6 +86,7 @@ pub fn run() {
                         let _ = win.show();
                     }
                 }
+                window_restore::complete_startup(app.handle());
             }
 
             Ok(())
