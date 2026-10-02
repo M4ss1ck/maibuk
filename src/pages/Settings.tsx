@@ -64,9 +64,15 @@ function usePendingSettingsRow() {
       attempts += 1;
       const rowElement = document.querySelector(`[data-settings-row="${pendingRowId}"]`);
       if (rowElement) {
-        // jsdom has no layout; the call is a no-op guard there.
-        rowElement.scrollIntoView?.({ block: "center" });
-        rowElement.querySelector<HTMLElement>(FOCUSABLE_IN_ROW)?.focus();
+        // jsdom has no layout; the call is a no-op guard there. Focus first
+        // without scrolling, so the glide is the only movement.
+        rowElement.querySelector<HTMLElement>(FOCUSABLE_IN_ROW)?.focus({ preventScroll: true });
+        rowElement.scrollIntoView?.({
+          block: "center",
+          behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+            ? "auto"
+            : "smooth",
+        });
         useSettingsRevealStore.getState().clearRow();
         return;
       }

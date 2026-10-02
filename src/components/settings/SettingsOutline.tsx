@@ -14,6 +14,11 @@ import { SETTINGS_SECTIONS, type SettingsRowId } from "@/components/settings/set
 import type { SettingsSectionId } from "@/components/settings/SettingsSection";
 import { buildOutline, type OutlineSelection } from "@/features/settings/outline";
 import { currentSettingsPlatform } from "@/features/settings/rows";
+import {
+  OUTLINE_EASING,
+  OUTLINE_MOTION_MS,
+  useOutlineMotion,
+} from "@/components/settings/useOutlineMotion";
 
 interface SettingsOutlineProps {
   present: readonly SettingsSectionId[];
@@ -60,21 +65,19 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
     [outline, opened]
   );
 
-  // Keep the current entry visible inside the tree without scrolling the page.
-  const treeRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const tree = treeRef.current;
-    const key = selection.row
-      ? rowKey(selection.section ?? "", selection.row)
-      : sectionKey(selection.section ?? "");
-    const item = tree?.querySelector<HTMLElement>(`[data-key="${key}"]`);
-    if (!tree || !item) return;
-    const top =
-      item.getBoundingClientRect().top - tree.getBoundingClientRect().top + tree.scrollTop;
-    if (top < tree.scrollTop) tree.scrollTop = top - 8;
-    else if (top + item.offsetHeight > tree.scrollTop + tree.clientHeight)
-      tree.scrollTop = top + item.offsetHeight - tree.clientHeight + 8;
-  }, [selection]);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const markerRef = useRef<HTMLDivElement>(null);
+  const ghostsRef = useRef<HTMLDivElement>(null);
+  const currentKey = selection.section ? sectionKey(selection.section) : null;
+  useOutlineMotion({
+    scrollerRef,
+    markerRef,
+    ghostsRef,
+    currentKey,
+    visibleKey:
+      selection.section && selection.row ? rowKey(selection.section, selection.row) : currentKey,
+    query,
+  });
 
   const onExpandedChange = (keys: Set<Key>) => {
     if (query) return;
@@ -122,81 +125,103 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
           {t("settings.outline.noMatches")}
         </p>
       ) : (
-        <Tree
-          ref={treeRef}
-          aria-label={t("settings.outline.label")}
-          expandedKeys={expandedKeys}
-          onExpandedChange={onExpandedChange}
-          onAction={onAction}
-          className="mt-4 overflow-auto scrollbar-themed border-l border-border outline-none"
+        // The scroll box is the entries' offset parent: the marker and the
+        // ghosts of closing rows share their coordinates.
+        <div
+          ref={scrollerRef}
+          className="relative mt-4 min-h-0 overflow-auto scrollbar-themed border-l border-border"
         >
-          {outline.map((section) => {
-            const isCurrent = section.id === selection.section;
-            return (
-              <TreeItem
-                key={section.id}
-                id={sectionKey(section.id)}
-                textValue={section.label}
-                aria-label={
-                  isCurrent && !selection.row
-                    ? `${section.label}, ${t("settings.outline.current")}`
-                    : section.label
-                }
-                className={({ isFocusVisible }) =>
-                  `-ml-px block cursor-pointer border-l-2 py-1 pl-3 pr-2 text-sm outline-none transition-colors ${
-                    isCurrent
-                      ? "border-primary text-foreground font-medium"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  } ${isFocusVisible ? "ring-2 ring-inset ring-primary rounded-sm" : ""}`
-                }
-              >
-                <TreeItemContent>
-                  {({ isExpanded }) => (
-                    <span className="flex items-center gap-1">
-                      <span className="min-w-0 flex-1 truncate">{section.label}</span>
-                      {/* React Aria's expand button: the one way a screen reader
+          <div
+            ref={markerRef}
+            aria-hidden="true"
+            data-outline-marker
+            className="pointer-events-none absolute top-0 -left-px w-0.5 bg-primary opacity-0 transition-[transform,height,opacity] motion-reduce:transition-none"
+            style={{
+              transitionDuration: `${OUTLINE_MOTION_MS}ms`,
+              transitionTimingFunction: OUTLINE_EASING,
+            }}
+          />
+          <div
+            ref={ghostsRef}
+            aria-hidden="true"
+            inert
+            className="pointer-events-none absolute inset-0"
+          />
+          <Tree
+            aria-label={t("settings.outline.label")}
+            expandedKeys={expandedKeys}
+            onExpandedChange={onExpandedChange}
+            onAction={onAction}
+            className="outline-none"
+          >
+            {outline.map((section) => {
+              const isCurrent = section.id === selection.section;
+              return (
+                <TreeItem
+                  key={section.id}
+                  id={sectionKey(section.id)}
+                  textValue={section.label}
+                  aria-label={
+                    isCurrent && !selection.row
+                      ? `${section.label}, ${t("settings.outline.current")}`
+                      : section.label
+                  }
+                  className={({ isFocusVisible }) =>
+                    `-ml-px block cursor-pointer border-l-2 border-transparent py-1 pl-3 pr-2 text-sm outline-none transition-colors ${
+                      isCurrent
+                        ? "text-foreground font-medium"
+                        : "text-muted-foreground hover:text-foreground"
+                    } ${isFocusVisible ? "ring-2 ring-inset ring-primary rounded-sm" : ""}`
+                  }
+                >
+                  <TreeItemContent>
+                    {({ isExpanded }) => (
+                      <span className="flex items-center gap-1">
+                        <span className="min-w-0 flex-1 truncate">{section.label}</span>
+                        {/* React Aria's expand button: the one way a screen reader
                           user opens or closes a section's rows. Out of the Tab
                           order; ArrowRight/ArrowLeft do the same from the row. */}
-                      <AriaButton
-                        slot="chevron"
-                        className="shrink-0 rounded p-0.5 text-muted-foreground/70 outline-none hover:text-foreground"
+                        <AriaButton
+                          slot="chevron"
+                          className="shrink-0 rounded p-0.5 text-muted-foreground/70 outline-none hover:text-foreground"
+                        >
+                          <ChevronRight
+                            aria-hidden="true"
+                            className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                          />
+                        </AriaButton>
+                      </span>
+                    )}
+                  </TreeItemContent>
+                  {section.rows.map((row) => {
+                    const rowCurrent = isCurrent && row.id === selection.row;
+                    return (
+                      <TreeItem
+                        key={row.id}
+                        id={rowKey(section.id, row.id)}
+                        textValue={row.label}
+                        aria-label={
+                          rowCurrent ? `${row.label}, ${t("settings.outline.current")}` : row.label
+                        }
+                        className={({ isFocusVisible }) =>
+                          `block cursor-pointer truncate py-0.5 pl-6 pr-2 text-xs outline-none transition-colors ${
+                            rowCurrent
+                              ? "text-primary font-medium"
+                              : "text-muted-foreground hover:text-foreground"
+                          } ${isFocusVisible ? "ring-2 ring-inset ring-primary rounded-sm" : ""}`
+                        }
                       >
-                        <ChevronRight
-                          aria-hidden="true"
-                          className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                        />
-                      </AriaButton>
-                    </span>
-                  )}
-                </TreeItemContent>
-                {section.rows.map((row) => {
-                  const rowCurrent = isCurrent && row.id === selection.row;
-                  return (
-                    <TreeItem
-                      key={row.id}
-                      id={rowKey(section.id, row.id)}
-                      textValue={row.label}
-                      aria-label={
-                        rowCurrent ? `${row.label}, ${t("settings.outline.current")}` : row.label
-                      }
-                      className={({ isFocusVisible }) =>
-                        `block cursor-pointer truncate py-0.5 pl-6 pr-2 text-xs outline-none transition-colors ${
-                          rowCurrent
-                            ? "text-primary font-medium"
-                            : "text-muted-foreground hover:text-foreground"
-                        } ${isFocusVisible ? "ring-2 ring-inset ring-primary rounded-sm" : ""}`
-                      }
-                    >
-                      <TreeItemContent>
-                        <span title={row.label}>{row.label}</span>
-                      </TreeItemContent>
-                    </TreeItem>
-                  );
-                })}
-              </TreeItem>
-            );
-          })}
-        </Tree>
+                        <TreeItemContent>
+                          <span title={row.label}>{row.label}</span>
+                        </TreeItemContent>
+                      </TreeItem>
+                    );
+                  })}
+                </TreeItem>
+              );
+            })}
+          </Tree>
+        </div>
       )}
     </nav>
   );

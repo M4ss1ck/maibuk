@@ -109,3 +109,59 @@ export function reduceOutlinePin(state: OutlinePin, event: OutlinePinEvent): Out
       return state.jumping || !state.pinned ? state : INITIAL_OUTLINE_PIN;
   }
 }
+
+/** How one kept outline entry slides when the entries change (FLIP). */
+export interface OutlineMove {
+  key: string;
+  /** Start offset from the new position, in px; it animates back to 0. */
+  dy: number;
+}
+
+/** How a removed entry's ghost leaves: from its old top, by `dy`, fading out. */
+export interface OutlineExit {
+  key: string;
+  top: number;
+  dy: number;
+}
+
+/**
+ * Moves that turn an abrupt outline change into motion. Tops are layout
+ * positions (no transforms) in the outline's scroll content; `offsets` are
+ * the transforms still applied by an interrupted animation, so a move starts
+ * where the entry is on screen, not where it last landed. New entries appear
+ * in place (`enters`); a removed entry's ghost follows the nearest kept entry
+ * above it, so closing rows fold up with their heading.
+ */
+export function planOutlineMotion(
+  previous: { order: readonly string[]; tops: ReadonlyMap<string, number> },
+  next: { order: readonly string[]; tops: ReadonlyMap<string, number> },
+  offsets: ReadonlyMap<string, number> = new Map()
+): { moves: OutlineMove[]; enters: string[]; exits: OutlineExit[] } {
+  const moves: OutlineMove[] = [];
+  const enters: string[] = [];
+  for (const key of next.order) {
+    const from = previous.tops.get(key);
+    const to = next.tops.get(key);
+    if (to === undefined) continue;
+    if (from === undefined) {
+      enters.push(key);
+      continue;
+    }
+    const dy = from + (offsets.get(key) ?? 0) - to;
+    if (Math.abs(dy) >= 0.5) moves.push({ key, dy });
+  }
+
+  const exits: OutlineExit[] = [];
+  let shift = 0;
+  for (const key of previous.order) {
+    const from = previous.tops.get(key);
+    if (from === undefined) continue;
+    const to = next.tops.get(key);
+    if (to !== undefined) {
+      shift = to - from - (offsets.get(key) ?? 0);
+      continue;
+    }
+    exits.push({ key, top: from, dy: shift });
+  }
+  return { moves, enters, exits };
+}
