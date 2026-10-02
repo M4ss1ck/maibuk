@@ -40,6 +40,33 @@ describe("useShortcuts modal blocking", () => {
     vi.useRealTimers();
   });
 
+  it("gates shortcuts on dialog changes without rendering the subscribing screen", async () => {
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+    const renderScreen = vi.fn();
+    const { unmount } = renderHook(() => {
+      renderScreen();
+      useShortcuts([{ id: "common.save", onTrigger }]);
+    });
+    const renders = renderScreen.mock.calls.length;
+
+    act(() => useModalStore.getState().register("first"));
+    act(() => useModalStore.getState().register("second"));
+    act(() => useModalStore.getState().unregister("first"));
+    expect(press({ key: "s", ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(onTrigger).not.toHaveBeenCalled();
+    act(() => useModalStore.getState().unregister("second"));
+    expect(press({ key: "s", ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+    expect(renderScreen).toHaveBeenCalledTimes(renders);
+
+    unmount();
+    act(() => useModalStore.getState().register("after-unmount"));
+    act(() => useModalStore.getState().unregister("after-unmount"));
+    expect(press({ key: "s", ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+  });
+
   it("does not fire shortcuts while any modal is open (listener removed)", async () => {
     useModalStore.setState({ modalIds: ["modal-1"], openCount: 1 });
 

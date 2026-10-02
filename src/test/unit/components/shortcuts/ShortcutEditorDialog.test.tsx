@@ -7,11 +7,16 @@ import { useModalStore } from "@/components/ui/modal-store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { DEFAULT_SHORTCUT_SETTINGS, serializeShortcutFile } from "@/lib/shortcut-resolve";
 
+const translate = vi.hoisted(() =>
+  vi.fn((key: string, options?: Record<string, unknown>) =>
+    options ? `${key} ${JSON.stringify(options)}` : key
+  )
+);
+
 vi.mock("react-i18next", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({
-    t: (key: string, options?: Record<string, unknown>) =>
-      options ? `${key} ${JSON.stringify(options)}` : key,
+    t: translate,
     i18n: { language: "en" },
   }),
 }));
@@ -117,6 +122,32 @@ beforeEach(() => {
 });
 
 describe("Shortcut Editor", () => {
+  it("does not build Command rows while closed and preserves the query on reopening", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const view = render(<ShortcutEditorDialog isOpen={false} onClose={onClose} />);
+    translate.mockClear();
+
+    view.rerender(<ShortcutEditorDialog isOpen={false} onClose={onClose} />);
+    expect(translate).not.toHaveBeenCalledWith("shortcuts.syncNow");
+
+    view.rerender(<ShortcutEditorDialog isOpen onClose={onClose} />);
+    await user.type(screen.getByRole("searchbox"), "sync");
+    expect(translate).toHaveBeenCalledWith("shortcuts.syncNow");
+
+    translate.mockClear();
+    view.rerender(<ShortcutEditorDialog isOpen={false} onClose={onClose} />);
+    act(() => {
+      useShortcutSettingsStore.getState().setCommandShortcuts("global.syncNow", [["Mod+Alt+y"]]);
+    });
+    expect(translate).not.toHaveBeenCalledWith("shortcuts.syncNow");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    view.rerender(<ShortcutEditorDialog isOpen onClose={onClose} />);
+    expect(screen.getByRole("searchbox")).toHaveValue("sync");
+    expect(screen.getByRole("dialog")).toHaveTextContent("CtrlAltY");
+  });
+
   it("opens with focus inside, lists sections, and Escape closes it back to the opener", async () => {
     const { user, dialog } = await openEditor();
     expect(dialog.contains(document.activeElement)).toBe(true);
