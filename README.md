@@ -7,15 +7,88 @@ A cross-platform writing app for authors. Built with Tauri, React, and TypeScrip
 
 ![Maibuk launch film: typing in the Book Editor, then Notes, Canvas, Cover Designer, Version history, Dictation, accent colors and themes, ending on the Maibuk logo](https://github.com/user-attachments/assets/09098692-9a1f-40d5-b6da-278b21f8f430)
 
-## Features
+## Highlights
 
-- **Rich text editor** powered by TipTap, with formatting, tables, links, and images
-- **Book and chapter management** to organize your writing
-- **Cover designer** with an integrated canvas editor
-- **EPUB and PDF export**
-- **Dark and light themes**
-- **Auto-save**
-- **Find and replace**
+- **Rich text writing** with Book and Chapter management, auto-save, and Focus Mode
+- **Notes and Canvas** for organizing the writing around your Books
+- **Cover Designer** with Templates and Size Presets
+- **EPUB, PDF, Markdown, and image export**
+- **Version history and Backups**
+- **Encrypted Sync** between your devices
+- **Dictation and Voice Commands**
+- **Command Palette and Custom Shortcuts**
+
+<details>
+<summary>Full feature list</summary>
+
+### Writing
+
+- Rich text formatting, tables, links, images, and code blocks
+- Book and Chapter management
+- Book Status, archiving, and Target Word Count
+- Chapter Types and Chapter Status
+- Auto-save and Save Status
+- Find and replace
+- Focus Mode
+- Outline and collapsible headings
+- Scene Breaks and Footnotes
+- Spell Check, Custom Dictionary, and Word Lookup
+- Symbols, emoji, and Text Case
+- Paste Cleanup and Markdown paste
+- HTML view
+- Editor zoom, width, and page padding
+- Reading Position
+
+### Notes and Canvas
+
+- Book Notes and Unfiled Notes
+- Tags, pinning, search, and filtering
+- Internal Links and Backlinks
+- Ephemeral
+- Canvas with Text Nodes, Note References, Connections, and Drawings
+
+### Covers, import, and export
+
+- Cover Designer with Templates, Size Presets, and layers
+- EPUB, Markdown, and plain-text Import
+- EPUB Compatibility Report
+- EPUB and PDF Book Export
+- Markdown, PDF, and image Export for Chapters and Notes
+- PNG, JPG, and PDF Cover Export
+
+### History, Backups, and Sync
+
+- Named Versions and automatic Checkpoints
+- Version Compare and Restore
+- Manual and automatic Backups
+- Backup retention and Restore
+- Database Files and Reset Library
+- Encrypted Sync and Auto Sync
+- Sync Scope and Sync Direction
+- Conflict resolution and Deletion Review
+- Sync Log
+
+### Dictation
+
+- English and Spanish Dictation Models
+- Spoken Punctuation
+- Voice Commands and Click by Name
+- Dictation Vocabulary
+- Phrase Recording
+
+### Navigation and customization
+
+- Command Palette
+- Custom Shortcuts and Shortcut Files
+- Single-key Shortcuts switch
+- Light, dark, and system themes
+- Custom accent color
+- Editor fonts and toolbar customization
+- English and Spanish interface
+- Tutorial
+- Writing Metrics and Streaks
+
+</details>
 
 ### Dictation shortcuts and settings
 
