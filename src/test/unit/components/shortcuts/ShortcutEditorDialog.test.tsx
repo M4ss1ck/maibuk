@@ -650,3 +650,31 @@ describe("Shortcut Editor: Voice commands", () => {
     expect(voice()).toEqual({ "editor.italic": { en: ["slanted words"] } });
   });
 });
+
+describe("nested row controls by keyboard", () => {
+  // These GridList rows carry no row-level onAction: the assertion is that the
+  // nested Voice button's own action (opening the Voice dialog) runs and no
+  // row activation happens alongside it.
+  it.each(["{Enter}", " "])(
+    "%s on a row's Voice button opens Voice commands, never the row",
+    async (key) => {
+      const { user } = await openEditor();
+      await focusRow(user, "editor.bold");
+      for (let press = 0; press < 8; press += 1) {
+        if (
+          /^shortcutEditor\.voice\.open/.test(
+            document.activeElement?.getAttribute("aria-label") ?? ""
+          )
+        )
+          break;
+        await user.keyboard("{ArrowRight}");
+      }
+      expectFocusName(/^shortcutEditor\.voice\.open/);
+      await user.keyboard(key);
+      const dialog = await findDialogTitled(
+        'shortcutEditor.voice.title {"command":"editor.bold"}'
+      );
+      expect(dialog).toBeInTheDocument();
+    }
+  );
+});

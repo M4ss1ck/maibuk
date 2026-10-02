@@ -106,3 +106,35 @@ describe("CanvasGallery search persistence", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/canvas/c2");
   });
 });
+
+describe("nested row controls by keyboard", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useSettingsStore.setState({ canvasSearch: "" });
+  });
+
+  async function tabToPin(
+    user: ReturnType<typeof userEvent.setup>,
+    row: HTMLElement,
+    pin: HTMLElement
+  ) {
+    row.focus();
+    for (let step = 0; step < 12 && document.activeElement !== pin; step++) {
+      await user.keyboard("{Tab}");
+    }
+    expect(pin).toHaveFocus();
+  }
+
+  it.each(["{Enter}", " "])("%s on a card's Pin button pins, never opens the canvas", async (key) => {
+    const user = userEvent.setup();
+    render(<CanvasGallery />);
+
+    const rows = await screen.findAllByRole("row");
+    const pin = (await screen.findAllByRole("button", { name: "canvas.pinCanvas" }))[0];
+    await tabToPin(user, rows[0], pin);
+    await user.keyboard(key);
+
+    expect(canvasState.updateCanvas).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});

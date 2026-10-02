@@ -493,23 +493,45 @@ export function NotesList({
     </GridListItem>
   );
 
+  const renderTreeNotes = (notes: NoteWithBook[], label: string) => (
+    <GridList
+      aria-label={label}
+      keyboardNavigationBehavior="tab"
+      selectedKeys={currentNoteId ? [currentNoteId] : []}
+      selectionMode="single"
+      selectionBehavior="replace"
+      className="space-y-1"
+    >
+      {notes.map(renderTreeNote)}
+    </GridList>
+  );
+
   const renderTreeNote = (note: NoteWithBook) => (
-    <NoteListItem
+    <GridListItem
       key={note.id}
-      note={note}
-      isSelected={currentNoteId === note.id}
-      onSelect={activateNote}
-      onDelete={requestDelete}
-      onDuplicate={onDuplicateNote}
-      onRename={(targetNote, title) => onRenameNote?.(targetNote.id, title)}
-      onTogglePinned={() => togglePinned(note)}
-      moveTargets={moveTargets}
-      onMove={moveNote}
-      draggable={treeGroupMode === "book" && !isSearchActive ? true : undefined}
-      onDragStart={(e) => handleDragStart(e, note.id)}
-      onDragEnd={handleDragEnd}
-      isDragging={draggedId === note.id}
-    />
+      id={note.id}
+      textValue={note.title || t("notes.untitled")}
+      onAction={() => activateNote(note)}
+      className={({ isFocusVisible }) =>
+        `rounded-md ${isFocusVisible ? "ring-2 ring-primary ring-offset-1" : ""}`
+      }
+    >
+      <NoteListItem
+        note={note}
+        isSelected={currentNoteId === note.id}
+        onSelect={activateNote}
+        onDelete={requestDelete}
+        onDuplicate={onDuplicateNote}
+        onRename={(targetNote, title) => onRenameNote?.(targetNote.id, title)}
+        onTogglePinned={() => togglePinned(note)}
+        moveTargets={moveTargets}
+        onMove={moveNote}
+        draggable={treeGroupMode === "book" && !isSearchActive ? true : undefined}
+        onDragStart={(e) => handleDragStart(e, note.id)}
+        onDragEnd={handleDragEnd}
+        isDragging={draggedId === note.id}
+      />
+    </GridListItem>
   );
 
   // Namespace group keys by mode so identical ids across book/tag/date groups
@@ -551,6 +573,8 @@ export function NotesList({
               <button
                 type="button"
                 onClick={() => toggleGroup(group.id, defaultCollapsed)}
+                aria-label={title}
+                aria-expanded={!isCollapsed}
                 className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
               >
                 {isCollapsed ? (
@@ -588,7 +612,7 @@ export function NotesList({
             {!isCollapsed && (
               <div className="ml-5">
                 {group.notes.length > 0 ? (
-                  <div className="space-y-1">{group.notes.map(renderTreeNote)}</div>
+                  renderTreeNotes(group.notes, title)
                 ) : (
                   <p className="px-2 py-2 text-xs text-muted-foreground">{t("notes.noNotesYet")}</p>
                 )}
@@ -611,6 +635,8 @@ export function NotesList({
               <button
                 type="button"
                 onClick={() => toggleGroup(group.id)}
+                aria-label={group.title}
+                aria-expanded={!isCollapsed}
                 className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
               >
                 {isCollapsed ? (
@@ -626,7 +652,7 @@ export function NotesList({
               </span>
             </div>
             {!isCollapsed && (
-              <div className="ml-5 space-y-1">{group.notes.map(renderTreeNote)}</div>
+              <div className="ml-5">{renderTreeNotes(group.notes, group.title)}</div>
             )}
           </div>
         );
@@ -648,6 +674,8 @@ export function NotesList({
             <button
               type="button"
               onClick={() => toggleGroup(group.id)}
+              aria-label={title}
+              aria-expanded={!isCollapsed}
               className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
             >
               {isCollapsed ? (
@@ -662,7 +690,7 @@ export function NotesList({
               {group.notes.length}
             </span>
           </div>
-          {!isCollapsed && <div className="ml-5 space-y-1">{group.notes.map(renderTreeNote)}</div>}
+          {!isCollapsed && <div className="ml-5">{renderTreeNotes(group.notes, title)}</div>}
         </div>
       );
     });

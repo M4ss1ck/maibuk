@@ -162,6 +162,135 @@ describe("NotesList", () => {
     await user.keyboard("{Enter}");
     expect(onSelectNote).toHaveBeenCalledWith(notes[1]);
   });
+  describe("row actions by keyboard", () => {
+    function renderActionList() {
+      const props = {
+        onSelectNote: vi.fn(),
+        onRenameNote: vi.fn(),
+        onDuplicateNote: vi.fn(),
+        onDeleteNote: vi.fn(),
+      };
+      render(
+        <NotesList
+          notes={[buildNote({ id: "a", title: "Alpha" })]}
+          currentNoteId={null}
+          onCreateNote={vi.fn()}
+          onReorderNotes={vi.fn()}
+          {...props}
+        />
+      );
+      const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
+      return { props, row };
+    }
+
+    async function tabTo(user: ReturnType<typeof userEvent.setup>, row: HTMLElement, name: string) {
+      row.focus();
+      const target = within(row).getByRole("button", { name });
+      for (let step = 0; step < 6 && document.activeElement !== target; step++) {
+        await user.keyboard("{Tab}");
+      }
+      expect(target).toHaveFocus();
+    }
+
+    function renderTree() {
+      const onSelectNote = vi.fn();
+      const onRenameNote = vi.fn();
+      const notes = [
+        buildNote({ id: "a", title: "Alpha" }),
+        buildNote({ id: "b", title: "Bravo" }),
+      ];
+      useSettingsStore.setState({ notesListView: "tree", notesTreeGroupMode: "tag" });
+      for (const note of notes) note.tags.push("draft");
+      render(
+        <NotesList
+          notes={notes}
+          currentNoteId={null}
+          onSelectNote={onSelectNote}
+          onRenameNote={onRenameNote}
+          onCreateNote={vi.fn()}
+          onReorderNotes={vi.fn()}
+        />
+      );
+      return { notes, onSelectNote };
+    }
+
+    it("tree view: arrows move between Notes and Enter opens the focused one", async () => {
+      const user = userEvent.setup();
+      const { notes, onSelectNote } = renderTree();
+      expect(screen.getByRole("button", { name: "draft" })).toHaveAttribute(
+        "aria-expanded",
+        "true"
+      );
+      const rows = within(screen.getByRole("grid", { name: "draft" })).getAllByRole("row");
+      rows[0].focus();
+      await user.keyboard("{ArrowDown}");
+      expect(rows[1]).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(onSelectNote).toHaveBeenCalledWith(notes[1]);
+    });
+
+    it("tree view: Enter on a Note's Edit button renames, never opens the Note", async () => {
+      const user = userEvent.setup();
+      const { onSelectNote } = renderTree();
+      const row = within(screen.getByRole("grid", { name: "draft" })).getAllByRole("row")[0];
+      await tabTo(user, row, "common.edit");
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.getByDisplayValue("Alpha")).toHaveFocus());
+      expect(onSelectNote).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      "{Enter}",
+      " ",
+    ])("%s on the row's Edit button renames, never opens the Note", async (key) => {
+      const user = userEvent.setup();
+      const { props, row } = renderActionList();
+      await tabTo(user, row, "common.edit");
+      await user.keyboard(key);
+      await waitFor(() =>
+        expect(screen.getByRole("textbox", { name: "common.rename" })).toHaveFocus()
+      );
+      expect(props.onSelectNote).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      "{Enter}",
+      "{Escape}",
+    ])("%s in the rename field hands focus back to the row", async (key) => {
+      const user = userEvent.setup();
+      const { row } = renderActionList();
+      await tabTo(user, row, "common.edit");
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.getByDisplayValue("Alpha")).toHaveFocus());
+      await user.keyboard(key);
+      await waitFor(() => expect(row).toHaveFocus());
+    });
+
+    it.each([
+      "{Enter}",
+      " ",
+    ])("%s on the row's Duplicate button duplicates, never opens the Note", async (key) => {
+      const user = userEvent.setup();
+      const { props, row } = renderActionList();
+      await tabTo(user, row, "notes.duplicate");
+      await user.keyboard(key);
+      expect(props.onDuplicateNote).toHaveBeenCalledTimes(1);
+      expect(props.onSelectNote).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      "{Enter}",
+      " ",
+    ])("%s on the row's Delete button asks to delete, never opens the Note", async (key) => {
+      const user = userEvent.setup();
+      const { props, row } = renderActionList();
+      await tabTo(user, row, "common.delete");
+      await user.keyboard(key);
+      await screen.findByRole("dialog", { name: "notes.deleteConfirm" });
+      expect(props.onSelectNote).not.toHaveBeenCalled();
+    });
+  });
+
   it("renders list and tree view toggle in the title bar", () => {
     const onCreateNote = vi.fn();
 

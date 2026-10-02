@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { SEED_BOOK, SEED_NOTES, SEED_NOTE_TAGS } from "../support/seed/names";
 import { expect, test } from "../support/test";
@@ -306,6 +307,29 @@ test.describe("Notes list grouping, view and sort @wf:notes-list-group-sort", ()
       "true"
     );
   });
+
+  test("tree view: arrows move between Notes and Enter opens the focused one", async ({ page }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await tabTo(page, page.getByRole("button", { name: "Tree", exact: true }), { max: 60 });
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByTestId(/^book-group-/).first()).toBeVisible();
+    await capture(page, "notes-tree-view");
+
+    // Each group is its own grid: Tab reaches it, arrows move inside it.
+    const unfiled = page.getByRole("grid", { name: "Unfiled" });
+    await tabTo(page, unfiled.getByRole("row").first(), { max: 30 });
+    await pressUntilFocused(
+      page,
+      "ArrowDown",
+      unfiled.getByRole("row", { name: SEED_NOTES.harborNotes })
+    );
+    await capture(page, "notes-tree-row-focused");
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("heading", { name: SEED_NOTES.harborNotes, level: 1 })
+    ).toBeVisible();
+  });
 });
 
 test.describe("Note Item Menu @wf:notes-item-menu", () => {
@@ -381,6 +405,36 @@ test.describe("Note Item Menu @wf:notes-item-menu", () => {
     await page.keyboard.press("Enter");
     const bookGroup = page.getByTestId(/^book-group-/).filter({ hasText: SEED_BOOK.title });
     await expect(bookGroup).toContainText(SEED_NOTES.tideTables);
+  });
+
+  test("a row's own Edit, Duplicate and Delete buttons act on Enter, never open the Note", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    const opened = page.url();
+    const row = notesListRow(page, SEED_NOTES.harborNotes);
+    const rowButton = (name: string) => row.getByRole("button", { name, exact: true });
+
+    await tabTo(page, notesListRow(page, SEED_NOTES.keeperLog), { max: 60 });
+    await pressUntilFocused(page, "ArrowDown", row);
+    await tabTo(page, rowButton("Edit"), { max: 3 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("textbox", { name: "Rename" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(row).toBeFocused();
+
+    await tabTo(page, rowButton("Duplicate note"), { max: 3 });
+    await page.keyboard.press("Enter");
+    await expect(notesListRow(page, `${SEED_NOTES.harborNotes} (copy)`)).toBeVisible();
+
+    await tabTo(page, row, { max: 10, backwards: true });
+    await tabTo(page, rowButton("Delete"), { max: 4 });
+    await page.keyboard.press("Enter");
+    await expect(deleteDialog(page)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(row).toBeFocused();
+
+    expect(page.url()).toBe(opened);
   });
 
   test("Deleting from the Item Menu can be cancelled @wf:notes-item-menu", async ({ page }) => {

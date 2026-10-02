@@ -1196,7 +1196,7 @@ export const ROWS: MatrixRow[] = [
     area: "notes",
     workflow:
       "Notes list: group by book/date/tag; list vs tree view; sort menu by keyboard; asserts: Menu focus; persists: yes",
-    edges: [],
+    edges: ["Tree view: arrows move, Enter opens a Note"],
     terms: ["Note", "Book", "Tag"],
     shortcuts: [],
     routes: ["/notes", "/notes/:noteId"],
@@ -1209,7 +1209,7 @@ export const ROWS: MatrixRow[] = [
     area: "notes",
     workflow:
       "Note Item Menu via ⋯ and Shift+F10: rename, duplicate, pin/unpin, move to Book, delete; asserts: Menu focus; restore to ⋯; persists: yes",
-    edges: ["Delete confirm Cancel"],
+    edges: ["Delete confirm Cancel", "Row Edit/Duplicate/Delete buttons act on Enter"],
     terms: ["Note", "Item Menu", "Pinned", "Book Note"],
     shortcuts: [],
     routes: ["/notes", "/notes/:noteId"],
