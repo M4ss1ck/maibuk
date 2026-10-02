@@ -67,6 +67,25 @@ describe("useShortcuts modal blocking", () => {
     expect(onTrigger).toHaveBeenCalledTimes(1);
   });
 
+  it("does not fire a shortcut with the key that closed the last dialog", async () => {
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+    renderHook(() => useShortcuts([{ id: "common.save", onTrigger }]));
+    act(() => useModalStore.getState().register("dialog"));
+
+    const control = document.createElement("button");
+    document.body.append(control);
+    control.addEventListener("keydown", () => useModalStore.getState().unregister("dialog"));
+    try {
+      expect(press({ key: "s", ctrlKey: true }, control).defaultPrevented).toBe(false);
+      expect(onTrigger).not.toHaveBeenCalled();
+      expect(press({ key: "s", ctrlKey: true }, control).defaultPrevented).toBe(true);
+      expect(onTrigger).toHaveBeenCalledTimes(1);
+    } finally {
+      control.remove();
+    }
+  });
+
   it("does not fire shortcuts while any modal is open (listener removed)", async () => {
     useModalStore.setState({ modalIds: ["modal-1"], openCount: 1 });
 

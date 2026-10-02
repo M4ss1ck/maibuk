@@ -155,13 +155,22 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
     // Modal changes gate listeners, not rendered UI. Subscribing through the
     // React hook would render every screen that binds a Command on open and
     // close, blowing the Command Palette's frame budget (#376).
+    // The gate reopens synchronously, so a key that closes the last dialog
+    // would still reach the bubble listener added mid-dispatch. That key
+    // belonged to the dialog and must not also run a Command behind it.
+    let inFlight: KeyboardEvent | null = null;
+    const trackKeyDown = (event: KeyboardEvent) => {
+      inFlight = event;
+    };
     const syncModalScope = () => {
       removeListeners();
       sequenceRef.current = null;
       if (useModalStore.getState().modalIds.length > 0) return;
+      if (inFlight && inFlight.eventPhase !== Event.NONE) handled.add(inFlight);
       window.addEventListener("keydown", handleCaptureKeyDown, true);
       window.addEventListener("keydown", handleKeyDown);
     };
+    window.addEventListener("keydown", trackKeyDown, true);
     const unsubscribe = useModalStore.subscribe((state, previous) => {
       if (state.modalIds.length !== previous.modalIds.length) syncModalScope();
     });
@@ -169,6 +178,7 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
     return () => {
       unsubscribe();
       removeListeners();
+      window.removeEventListener("keydown", trackKeyDown, true);
     };
   }, [options.enabled, options.sequenceTimeout]);
 }
