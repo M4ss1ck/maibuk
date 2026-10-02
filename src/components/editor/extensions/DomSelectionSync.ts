@@ -32,10 +32,16 @@ interface DomObserverView extends EditorView {
  * Delete, Enter, or formatting shortcut pressed inside that moment acted on
  * the old caret. Flushing the observer applies ProseMirror's own reading of
  * the DOM selection (node views and node selections included).
+ *
+ * It runs as a DOM event handler, not `handleKeyDown`: ProseMirror calls the
+ * editor's own `editorProps.handleKeyDown` before any plugin's, and the Book
+ * Editor's Escape there moves focus to the Chapter list, after which the
+ * pending selection is never read (a selection extended just before Escape
+ * lost its last step).
  */
 export const DomSelectionSync = Extension.create({
   name: "domSelectionSync",
-  // Ahead of every keymap, so they all see the caret the author sees.
+  // First among the DOM event handlers too.
   priority: 10000,
 
   addProseMirrorPlugins() {
@@ -43,11 +49,13 @@ export const DomSelectionSync = Extension.create({
       new Plugin({
         key: new PluginKey("domSelectionSync"),
         props: {
-          handleKeyDown(view, event) {
-            if (!PASSIVE_KEYS.has(event.key) && view.hasFocus()) {
-              (view as DomObserverView).domObserver?.flush?.();
-            }
-            return false;
+          handleDOMEvents: {
+            keydown(view, event) {
+              if (!PASSIVE_KEYS.has(event.key) && view.hasFocus()) {
+                (view as DomObserverView).domObserver?.flush?.();
+              }
+              return false;
+            },
           },
         },
       }),

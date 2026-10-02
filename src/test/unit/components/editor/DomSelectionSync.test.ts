@@ -32,6 +32,22 @@ afterEach(() => {
   }
 });
 
+// Editor props run before every plugin's handleKeyDown. Editor.tsx's own
+// Escape (leave the text for the Chapter list) is one: it moved focus away
+// before the sync ran, so a selection extended just before Escape lost its
+// last step (editor-text-case, 3 of 20 Chromium runs).
+const leaveOnEscape = {
+  handleKeyDown(
+    view: { state: { selection: { from: number; to: number } }; dom: HTMLElement },
+    event: KeyboardEvent
+  ) {
+    if (event.key !== "Escape") return false;
+    seen.push(view.state.selection.to);
+    view.dom.blur();
+    return true;
+  },
+};
+
 function mount(withSync: boolean) {
   const host = document.createElement("div");
   document.body.append(host);
@@ -39,11 +55,19 @@ function mount(withSync: boolean) {
     element: host,
     extensions: withSync ? [StarterKit, KeymapProbe, DomSelectionSync] : [StarterKit, KeymapProbe],
     content: "<p>The storm came without warning.</p>",
+    editorProps: leaveOnEscape,
   });
   editors.push(editor);
   editor.view.focus();
   editor.commands.setTextSelection(1);
   return editor;
+}
+
+/** Extends only the DOM selection, the way a native Shift+ArrowRight does. */
+function extendDomSelection(editor: Editor, chars: number) {
+  const text = editor.view.dom.querySelector("p")!.firstChild!;
+  const selection = document.getSelection()!;
+  selection.setBaseAndExtent(text, 0, text, chars);
 }
 
 /** Moves only the DOM caret, the way a native End does, before selectionchange. */
@@ -81,6 +105,16 @@ describe("DomSelectionSync", () => {
     moveDomCaretToEnd(editor);
     press(editor, "b", { ctrlKey: true });
     expect(seen).toEqual([END, END, END]);
+  });
+
+  it("syncs before the editor's own key props, so Escape keeps the whole selection", () => {
+    const editor = mount(true);
+
+    extendDomSelection(editor, 3);
+    press(editor, "Escape");
+
+    expect(seen).toEqual([4]);
+    expect(editor.state.selection.to).toBe(4);
   });
 
   it("is what makes the difference: without it the keymap sees the stale caret", () => {
