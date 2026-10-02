@@ -216,6 +216,30 @@ test.describe("keyboard reorder @wf:chapters-reorder-keyboard", () => {
     await expect(grid(page).getByRole("row")).toHaveText([/Arrival/, /The Lamp/, /Storm/]);
     await expect(handle).toBeFocused();
   });
+
+  // The drag parks the editor's selection and puts it back (#377); Tabbing
+  // back into the text must find the caret where the author left it.
+  test("the editor keeps its caret through a reorder", async ({ page }) => {
+    await openBook(page, { toEditor: true });
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.type(" Tidemark");
+    await page.keyboard.press("Escape");
+    await expectFocusWithin(pane(page));
+
+    await focusRowAction(page, "Arrival", "Reorder");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      page.getByRole("button", { name: "Insert between The Lamp and Storm" })
+    ).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(row(page, "Arrival")).toBeFocused();
+    await expect(grid(page).getByRole("row")).toHaveText([/The Lamp/, /Arrival/, /Storm/]);
+
+    await tabTo(page, editorText(page), { max: 80 });
+    await page.keyboard.type("!");
+    await expect(editorText(page)).toContainText("Tidemark!");
+  });
 });
 
 test.describe("deleting a Chapter @wf:chapters-delete", () => {

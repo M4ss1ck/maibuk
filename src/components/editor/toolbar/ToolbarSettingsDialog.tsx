@@ -13,6 +13,7 @@ import { Button as AriaButton } from "react-aria-components/Button";
 import { useDragAndDrop, type TextDropItem } from "react-aria-components/useDragAndDrop";
 import { Button, Modal, Switch, Tooltip, TooltipGroup } from "@/components/ui";
 import { useSettingsStore } from "@/features/settings/store";
+import { useParkSelectionWhileDragging } from "@/hooks/useParkSelectionWhileDragging";
 import { TOOLBAR_GROUP_META } from "@/components/editor/toolbar/toolbar-groups";
 import type { ToolbarEntry, ToolbarSection } from "@/features/settings/toolbar-config";
 
@@ -128,13 +129,18 @@ function ToolbarSectionGrid({ section, entries, announceMove }: ToolbarSectionGr
   const moveToolbarEntry = useSettingsStore((state) => state.moveToolbarEntry);
   const moveToolbarEntryTo = useSettingsStore((state) => state.moveToolbarEntryTo);
 
+  // The Modal already makes the editor inert, so a caret left there would
+  // slow every keyboard move of the drag.
+  const dragHandlers = useParkSelectionWhileDragging({
+    onDragStart: () => setIsDragging(true),
+    onDragEnd: () => setIsDragging(false),
+  });
   const { dragAndDropHooks } = useDragAndDrop({
     getItems: (keys) =>
       [...keys].map((key) => ({
         [TOOLBAR_DND_TYPE]: JSON.stringify({ section, id: String(key) }),
       })),
-    onDragStart: () => setIsDragging(true),
-    onDragEnd: () => setIsDragging(false),
+    ...dragHandlers,
     onReorder: (e) => {
       const key = [...e.keys][0];
       if (key === undefined) return;

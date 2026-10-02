@@ -19,6 +19,8 @@ const {
   mockSetShowChapterOutline,
   mockToastError,
   textFileDropOptions,
+  mockParkSelection,
+  mockRestoreSelection,
 } = vi.hoisted(() => ({
   storeState: { chapterListView: "normal" as "normal" | "compact", showChapterOutline: false },
   i18nState: { language: "en" },
@@ -26,6 +28,12 @@ const {
   mockSetShowChapterOutline: vi.fn(),
   mockToastError: vi.fn(),
   textFileDropOptions: { current: null as Record<string, unknown> | null },
+  mockParkSelection: vi.fn(),
+  mockRestoreSelection: vi.fn(),
+}));
+
+vi.mock("@/lib/park-selection", () => ({
+  parkInertSelection: mockParkSelection,
 }));
 
 vi.mock("@/components/ui/Toast", () => ({
@@ -232,6 +240,7 @@ function mockGridLayout() {
 describe("ChapterList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockParkSelection.mockReturnValue(mockRestoreSelection);
     HTMLElement.prototype.scrollIntoView = vi.fn();
     storeState.chapterListView = "normal";
     storeState.showChapterOutline = false;
@@ -307,6 +316,42 @@ describe("ChapterList", () => {
       expect(onReorder).toHaveBeenCalledTimes(1);
       expect(onReorder).toHaveBeenCalledWith(["ch-2", "ch-1", "ch-3"]);
       expect(screen.getByRole("row", { name: "First" })).toHaveFocus();
+    });
+
+    // The caret an author left in the editor is parked for the drag (#377);
+    // parkInertSelection() is tested in park-selection.test.ts (jsdom), and
+    // the caret's return in Chromium and WebKit by the
+    // chapters-reorder-keyboard E2E row.
+    describe("the editor's selection", () => {
+      it("is parked when Enter lifts the row and restored on Escape", async () => {
+        const user = userEvent.setup();
+        renderCL();
+        screen.getAllByRole("button", { name: "chapters.reorder" })[0].focus();
+
+        await user.keyboard("{Enter}");
+        await waitFor(() => expect(mockParkSelection).toHaveBeenCalledTimes(1));
+        await user.keyboard("{ArrowDown}");
+        expect(mockRestoreSelection).not.toHaveBeenCalled();
+        await user.keyboard("{Escape}");
+
+        expect(mockRestoreSelection).toHaveBeenCalledTimes(1);
+        expect(mockParkSelection).toHaveBeenCalledTimes(1);
+      });
+
+      it("is restored after a drop", async () => {
+        const user = userEvent.setup();
+        const onReorder = vi.fn();
+        render(<ReorderHarness initialChapters={defaultChapters} onReorder={onReorder} />);
+        screen.getAllByRole("button", { name: "chapters.reorder" })[0].focus();
+
+        await user.keyboard("{Enter}");
+        await arrowToDropTarget(user, "Insert between Chapter 2 and Chapter 3");
+        expect(mockRestoreSelection).not.toHaveBeenCalled();
+        await user.keyboard("{Enter}");
+
+        expect(onReorder).toHaveBeenCalledWith(["ch-2", "ch-1", "ch-3"]);
+        expect(mockRestoreSelection).toHaveBeenCalledTimes(1);
+      });
     });
   });
 

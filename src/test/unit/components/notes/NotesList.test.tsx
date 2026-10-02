@@ -29,6 +29,12 @@ import {
 
 installPointerEvent();
 
+const { mockParkSelection, mockRestoreSelection } = vi.hoisted(() => ({
+  mockParkSelection: vi.fn(),
+  mockRestoreSelection: vi.fn(),
+}));
+vi.mock("@/lib/park-selection", () => ({ parkInertSelection: mockParkSelection }));
+
 vi.mock("../../../../lib/platform", () => ({
   IS_ANDROID: false,
   IS_TAURI: false,
@@ -865,6 +871,32 @@ describe("NotesList reorder", () => {
   }
 
   describe("by keyboard", () => {
+    // A caret left in the Note editor is parked for the drag (#377).
+    it("parks the editor's selection while a Note is lifted, and restores it on drop or cancel", async () => {
+      mockParkSelection.mockReset().mockReturnValue(mockRestoreSelection);
+      mockRestoreSelection.mockReset();
+      const user = userEvent.setup();
+      renderReorderList([
+        buildNote({ id: "a", title: "Alpha" }),
+        buildNote({ id: "b", title: "Bravo" }),
+      ]);
+
+      await tabToHandle(user, "b");
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(mockParkSelection).toHaveBeenCalledTimes(1));
+      await arrowTo(user, "Insert before Alpha");
+      expect(mockRestoreSelection).not.toHaveBeenCalled();
+      await endDrag(user, "{Escape}");
+      expect(mockRestoreSelection).toHaveBeenCalledTimes(1);
+
+      await tabToHandle(user, "b");
+      await user.keyboard("{Enter}");
+      await arrowTo(user, "Insert before Alpha");
+      await endDrag(user, "{Enter}");
+      expect(mockParkSelection).toHaveBeenCalledTimes(2);
+      expect(mockRestoreSelection).toHaveBeenCalledTimes(2);
+    });
+
     it("moves a Note within its section: Enter lifts, arrows pick the gap, Enter drops", async () => {
       const user = userEvent.setup();
       const props = renderReorderList([

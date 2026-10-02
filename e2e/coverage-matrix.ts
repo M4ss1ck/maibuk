@@ -494,7 +494,7 @@ export const ROWS: MatrixRow[] = [
     area: "chapters",
     workflow:
       "React Aria DnD keyboard path: focus row, start drag with Enter, arrows, Enter drops; asserts: Announcements, final order; persists: yes",
-    edges: ["Esc cancels drag", "order unchanged"],
+    edges: ["Esc cancels drag", "order unchanged", "the editor keeps its caret"],
     terms: ["Chapter"],
     shortcuts: [],
     routes: ["/book/:bookId"],

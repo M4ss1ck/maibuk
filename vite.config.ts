@@ -98,6 +98,8 @@ export default defineConfig(() => ({
         "src/features/sync/store.ts",
         "src/hooks/useAutoSave.ts",
         "src/hooks/useItemContextMenu.ts",
+        "src/hooks/useParkSelectionWhileDragging.ts",
+        "src/lib/park-selection.ts",
         "src/features/releases/release-notes.ts",
         "src/features/releases/release-check.ts",
         "src/features/releases/compare.ts",
