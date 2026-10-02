@@ -2,7 +2,7 @@ import { Extension, type Editor } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
-import { liftTarget } from "@tiptap/pm/transform";
+import { liftTarget, Transform } from "@tiptap/pm/transform";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { dictationHub } from "@/features/dictation/hub";
 import type { DictationTarget, ScratchOutcome } from "@/features/dictation/session";
@@ -35,6 +35,14 @@ export interface DictatedRange {
    * without a sentence end scratches back to its lines one at a time.
    */
   lines: { from: number; to: number }[];
+  /**
+   * Set on the new paragraph, line break, or list item a line ended with.
+   * The range spans only the break, so scratch removes it by joining the two
+   * sides back. `tail` is the text after the break in its block when it was
+   * dictated; scratch refuses once that changed, so text the author typed
+   * on the new line is never merged into the line above.
+   */
+  layout?: { tail: string };
 }
 
 /** Plugin state: the in-progress line plus the dictated history for scratch that. */
@@ -73,6 +81,7 @@ function sameHistory(a: readonly DictatedRange[], b: readonly DictatedRange[]): 
       a[i].to !== b[i].to ||
       a[i].text !== b[i].text ||
       a[i].dirty !== b[i].dirty ||
+      a[i].layout !== b[i].layout ||
       a[i].lines.length !== b[i].lines.length ||
       a[i].lines.some((l, j) => l.from !== b[i].lines[j].from || l.to !== b[i].lines[j].to)
     )
@@ -99,12 +108,17 @@ export function textBeforeCaret(editor: Editor): string {
   );
 }
 
-function isInListItem(doc: ProseMirrorNode, pos: number): boolean {
+/** Bulleted and numbered lists use `listItem`; checklists (Notes, Quick Note) use `taskItem`. */
+const LIST_ITEM_TYPES = new Set(["listItem", "taskItem"]);
+
+/** The innermost list item around `pos`, of whichever list kind. */
+function listItemAt(doc: ProseMirrorNode, pos: number): ProseMirrorNode | null {
   const $pos = doc.resolve(pos);
   for (let depth = $pos.depth; depth > 0; depth -= 1) {
-    if ($pos.node(depth).type.name === "listItem") return true;
+    const node = $pos.node(depth);
+    if (LIST_ITEM_TYPES.has(node.type.name)) return node;
   }
-  return false;
+  return null;
 }
 
 /** Sentence start in the current textblock, for Spanish auto-openers. Shares the interpreter's boundary rule. */
@@ -163,6 +177,8 @@ function mergeIntoOpenSentence(
   const first = added[0];
   const last = history[history.length - 1];
   if (last.dirty || last.from >= last.to) return keep;
+  // A break is its own scratch step: never merge into it or over it.
+  if (first.layout || last.layout) return keep;
   // Never cross a complete sentence: one scratch removes one sentence.
   if (/[.!?]/.test(last.text)) return keep;
   let blockStart: number;
@@ -266,14 +282,24 @@ export function extractDictatedSentences(
 
 /** The last dictated span scratch that would remove, without removing it. */
 export function lastDictatedRange(
-  state: EditorState
+  state: EditorState,
+  { skipLayout = false }: { skipLayout?: boolean } = {}
 ): { from: number; to: number } | "empty" | "refused" {
-  const history = dictationPluginKey.getState(state)?.history ?? [];
+  let history = dictationPluginKey.getState(state)?.history ?? [];
+  if (skipLayout) {
+    let end = history.length;
+    while (end > 0 && history[end - 1].layout) end -= 1;
+    history = history.slice(0, end);
+  }
   if (history.length === 0) return "empty";
   const last = history[history.length - 1];
   const doc = state.doc;
   if (last.from < 0 || last.to > doc.content.size || last.from >= last.to) return "refused";
   if (last.dirty || doc.textBetween(last.from, last.to, "\n", "\n") !== last.text) return "refused";
+  if (last.layout) {
+    const tailEnd = doc.resolve(last.to).end();
+    if (doc.textBetween(last.to, tailEnd, "\n", "\n") !== last.layout.tail) return "refused";
+  }
   // An entry without a sentence end is an unfinished sentence: only its last
   // dictated line is in reach, like scratch that removes it.
   if (!/[.!?]/.test(last.text)) {
@@ -294,7 +320,8 @@ export function markLastDictated(editor: Editor, run: VoiceCommandRun): VoiceOut
   const markName = VOICE_MARKS[run.id];
   const type = markName ? editor.schema.marks[markName] : undefined;
   if (!type) return "ignored";
-  const range = lastDictatedRange(editor.state);
+  // A trailing break has no words: "bold that" means the text before it.
+  const range = lastDictatedRange(editor.state, { skipLayout: true });
   if (range === "empty" || range === "refused") return range;
   let { from, to } = range;
   // The span's separating spaces and hard breaks stay plain, so the mark
@@ -369,6 +396,31 @@ export function resetDictationHistory(editor: Editor): void {
   );
 }
 
+const LAYOUT_EDIT_KINDS = new Set<DictationEdit["kind"]>(["paragraph", "line_break", "list_item"]);
+
+/**
+ * The scratch entry for a break a line ended with, or null when joining the
+ * two sides back would not restore the document exactly as it was (a lift
+ * out of a list, a wrap with no split): scratch then never pretends to undo it.
+ */
+function trailingBreakEntry(
+  doc: ProseMirrorNode,
+  before: { doc: ProseMirrorNode; pos: number },
+  caret: number
+): DictatedRange | null {
+  const from = before.pos;
+  if (from >= caret) return null;
+  if (!new Transform(doc).delete(from, caret).doc.eq(before.doc)) return null;
+  return {
+    from,
+    to: caret,
+    text: doc.textBetween(from, caret, "\n", "\n"),
+    dirty: false,
+    lines: [{ from, to: caret }],
+    layout: { tail: doc.textBetween(caret, doc.resolve(caret).end(), "\n", "\n") },
+  };
+}
+
 /** Apply a finished line in one transaction and one undo step. */
 export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): void {
   if (edits.length === 0) return;
@@ -385,7 +437,13 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
   const carryStoredMarks = () => {
     if (storedMarks && storedMarks.length > 0) tr.setStoredMarks(storedMarks);
   };
+  const finalEdit = edits[edits.length - 1];
+  const endsWithBreak = LAYOUT_EDIT_KINDS.has(finalEdit.kind);
+  let beforeBreak: { doc: ProseMirrorNode; pos: number } | null = null;
   for (const edit of edits) {
+    if (edit === finalEdit && endsWithBreak && tr.selection.empty) {
+      beforeBreak = { doc: tr.doc, pos: tr.selection.from };
+    }
     if (edit.kind === "paragraph") {
       tr.deleteSelection();
       tr.split(tr.selection.from, 1, [{ type: state.schema.nodes.paragraph }]);
@@ -397,14 +455,15 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
     } else if (edit.kind === "list_item") {
       tr.deleteSelection();
       const pos = tr.selection.from;
-      if (isInListItem(tr.doc, pos)) {
+      const item = listItemAt(tr.doc, pos);
+      if (item) {
         const $at = tr.doc.resolve(pos);
         if ($at.parent.content.size === 0) {
           // Empty list item: match Enter. In a nested list lift the list
           // item itself out of its list (like liftListItem), so it moves up
           // one level as an empty item; at the top level lift the empty
           // paragraph out (like liftEmptyBlock).
-          const itemType = state.schema.nodes.listItem;
+          const itemType = item.type;
           const $from = tr.selection.$from;
           const itemRange = $from.blockRange(
             $from,
@@ -427,7 +486,14 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
         } else {
           // Split the current list item, like pressing Enter inside it.
           // Depth 2 splits listItem + paragraph (prosemirror-schema-list).
-          if (tr.doc.resolve(pos).depth >= 2) tr.split(pos, 2);
+          // A new Task Item starts unchecked, as TipTap's Enter makes it; the
+          // override applies only when depth 2 really is the Task Item.
+          const $split = tr.doc.resolve(pos);
+          const itemAfter =
+            item.type.name === "taskItem" && $split.node($split.depth - 1) === item
+              ? [{ type: item.type, attrs: { ...item.attrs, checked: false } }]
+              : undefined;
+          if ($split.depth >= 2) tr.split(pos, 2, itemAfter);
           else tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
         }
       } else {
@@ -489,10 +555,12 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
     }
   }
   const endPos = tr.selection.from;
+  const breakEntry = beforeBreak && trailingBreakEntry(tr.doc, beforeBreak, endPos);
   // Map the caret with assoc -1 so it stays before the inserted text
   // (the default assoc 1 lands after it, leaving an empty span).
   const mappedStart = tr.mapping.map(startPos, -1);
-  const added = extractDictatedSentences(tr.doc, mappedStart, endPos);
+  const added = extractDictatedSentences(tr.doc, mappedStart, breakEntry?.from ?? endPos);
+  if (breakEntry) added.push(breakEntry);
   tr.setMeta(dictationPluginKey, { partial: "", added, openersInserted });
   editor.view.dispatch(tr);
 }
@@ -540,6 +608,7 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
                   text: entry.text,
                   dirty: entry.dirty,
                   lines: lines.length > 0 || from >= to ? lines : [{ from, to }],
+                  ...(entry.layout ? { layout: entry.layout } : {}),
                 };
                 if (
                   !isDictation &&

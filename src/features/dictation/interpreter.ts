@@ -355,7 +355,14 @@ export function interpret(input: InterpretInput): InterpretResult {
   // Built-in whole-line words (ADR 0015 order): scratch that never acts inside
   // prose, and never matches words the Vocabulary replacement wrote.
   if (isScratchTokens(tokens, table)) {
-    return { result: { kind: "scratch" }, state, spokenPunctuationCount: 0 };
+    // The charges belonged to what scratch removes (a new paragraph's
+    // capital, an open quote's no-space); the text left before the caret
+    // decides the next word. The all caps lock is the author's mode and stays.
+    return {
+      result: { kind: "scratch" },
+      state: { ...state, capitalizeNext: false, noSpaceNext: false },
+      spokenPunctuationCount: 0,
+    };
   }
 
   if (verbatim) {
