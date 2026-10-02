@@ -70,7 +70,8 @@ export default defineConfig<{ macPlatform: boolean }>({
       // The fake microphone is a Chromium flag; the WebKit-only edge runs in
       // its own project (tagged @webkit-only) and never here.
       grepInvert: /@webkit-only|@touch/,
-      testIgnore: AUDIO_SPECS,
+      // A project's testIgnore replaces the config's, so the Sync lane stays out here too.
+      testIgnore: ["sync/**", AUDIO_SPECS],
       use: chromiumWithFakeMicrophone,
     },
     {
