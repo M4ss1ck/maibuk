@@ -45,3 +45,24 @@ export const SEED_CANVAS_NODES = {
   note: "Keeper's Log",
   connection: "leads to",
 } as const;
+
+/** `perfLongChapter`: the frame-rate lane's long Chapter plus twenty short ones. */
+export const PERF_BOOK = {
+  title: "The Long Watch",
+  authorName: "Ada Marsh",
+  longChapter: "The Long Night",
+} as const;
+
+/** `perfDenseCanvas`: a grid of Text Nodes, each connected right and down. */
+export const PERF_CANVAS = {
+  title: "Dense map",
+  nodePrefix: "Station",
+} as const;
+
+export const PERF_SIZES = {
+  /** About 13,000 words: a long Chapter, not a pathological one. */
+  longChapterParagraphs: 300,
+  shortChapters: 20,
+  /** 240 Text Nodes and 458 Connections. */
+  canvasGrid: { columns: 20, rows: 12 },
+} as const;

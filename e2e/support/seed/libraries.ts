@@ -20,6 +20,7 @@ import {
 } from "./names";
 import { checkpointHistory } from "./checkpoint-history";
 import { metricsHistory } from "./metrics-history";
+import { PERF_SEED_LIBRARIES } from "./perf-libraries";
 
 async function oneBookThreeChapters(): Promise<void> {
   const book = await createBookRow({ ...SEED_BOOK }, "local");
@@ -222,6 +223,7 @@ export const SEED_LIBRARIES = {
   checkpointHistory,
   backupsPresent,
   metricsHistory,
+  ...PERF_SEED_LIBRARIES,
 } satisfies Record<string, () => Promise<void>>;
 
 export type SeedName = keyof typeof SEED_LIBRARIES;

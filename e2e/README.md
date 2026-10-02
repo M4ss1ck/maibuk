@@ -317,6 +317,108 @@ pre-sync Backup is `failBackupWrites` in `support/fault.ts`.
 **Artifacts** land in `e2e/.output/sync/` (report and test results). A
 failing test's trace holds that test's throwaway account and its Library.
 
+## Frame-rate lane
+
+`pnpm bench:frames` checks that the app holds its frame budget during the
+interactions authors perform (issue #372). It sits beside the other periodic
+lanes (`bench:palette`, `bench:dictation`): run it before a release and
+before and after a jank fix, never in CI, because frame timing on a shared
+runner is noise. It prints a budget table per scenario, writes a JSON report
+to `.bench/frames-<source>.json`, exits 1 when a scenario misses its budget,
+and exits 2 when it could not measure at all (no display, no web build, no
+adb device, an author's Library on the device).
+
+```bash
+pnpm bench:frames                                   # Chromium, every scenario, headed
+pnpm bench:frames --scenario typing                 # one scenario (repeatable, or a,b)
+pnpm bench:frames --repeat 5                        # more runs per scenario
+pnpm bench:frames --cpu-throttle 4                  # Chromium 4x slower: a mid-range phone
+pnpm bench:frames --headless                        # Chromium's new headless mode
+pnpm bench:frames --source probe --headless         # WebKit through the rAF probe
+pnpm bench:frames --source android                  # the installed debug app over adb
+pnpm bench:frames --reuse-build --raw               # skip the build; keep raw captures
+pnpm bench:frames --list                            # scenarios, warm-ups, and what each measures
+pnpm exec tsx scripts/frame-bench-budget.ts .bench/frames-chromium.json  # re-check a report
+```
+
+**Sources.** Each turns a measured window into the same normalized sample
+set, which the frame report (`src/test/support/frames/frame-report.ts`)
+judges:
+
+- `chromium`: the compositor's own `PipelineReporter` trace events over CDP,
+  measured in vsync slots; the refresh interval is the compositor's BeginFrame
+  spacing. Long animation frames come with the scripts that ran in them.
+- `probe`: an in-page `requestAnimationFrame` recorder, for engines with no
+  tracing protocol (WebKit; also `--engine chromium` to cross-check). The
+  refresh interval is a quiet page's rAF cadence. Headless WebKit ticks rAF on
+  a ~16 ms timer instead of a display, so its numbers say less than a headed
+  run; headed WebKit needs Playwright's system libraries
+  (`sudo pnpm exec playwright install-deps webkit`).
+- `android`: `dumpsys gfxinfo com.massick.maibuk framestats` (IntendedVsync to
+  FrameCompleted, flagged rows dropped), with the refresh period from
+  SurfaceFlinger. The lane drives the app's WebView over CDP, so it needs a
+  debug build (`pnpm tauri android build --debug --apk true`), and one device
+  or `ANDROID_SERIAL`. It swaps a seed Library into the install before each
+  scenario, so it only measures a test install: the first time, the Library
+  there must hold no Books, Chapters, Notes, or Canvases, and the lane then
+  marks the install as its own. Sidebar resize and the Settings outline do not
+  exist at phone width and are skipped there. A frame's duration here is
+  Android's own measure, IntendedVsync to FrameCompleted (render time), not the
+  cadence the web sources read, so compare Android runs with Android runs.
+
+Not covered yet: the Linux desktop build (Tauri on WebKitGTK). The probe
+measures WebKit through Playwright, but nothing drives the desktop binary;
+that needs a WebDriver for it (tauri-driver and WebKitWebDriver).
+
+The probe counts every rAF tick of the measured window as a frame, idle ticks
+included, so on a sparse interaction (one keystroke every 83 ms) its dropped
+percentage is diluted compared with Chromium's, which counts only the frames
+the page asked for. Compare probe runs with probe runs.
+
+Every source also records each keystroke and when the next frame starts (the
+typing and palette budgets judge it), and long animation frames where the
+engine reports them (Chromium and Android WebView; elsewhere a frame over
+50 ms stands in, without attribution). The lane builds the web app with source
+maps, so a failing scenario names the code behind its longest frames as
+`src/lib/shortcuts.ts:87 (event) via DOMWindow.onkeydown 150.5 ms`, or a
+package path for a dependency. The Android source names the bundle only.
+
+**Budget.** One table, `src/test/support/frames/budget.ts`, frozen with its
+rationale: p95 frame time at or under one refresh interval of the display
+being measured (a 180 Hz display is judged against 5.6 ms, never 16.7), dropped
+frames (over 1.5 intervals) under 1%, no long animation frame over 50 ms,
+keystroke to next frame within one interval for typing and the palette, and at
+least 60 frames, or the scenario is `not-measured`, which fails. A scenario may
+differ only there, and every difference carries a written reason
+(`frame-bench-check.test.ts` enforces it).
+
+**Scenarios.** They are measurements, not E2E specs: the keyboard contract
+and the pre-run guard cover `e2e/specs/` only, so a driver may use the mouse,
+the wheel, and `page.evaluate` where the interaction measured needs them.
+`src/test/support/frames/scenarios.ts` declares them (seed,
+warm-up, measured window, repetitions, sources that skip them, and why);
+`e2e/frames/drivers.ts` performs them, by keyboard where the interaction is
+keyboard, and by wheel or mouse drag where the interaction is a pointer
+gesture (scroll, Canvas pan and zoom, the sidebar edge). Canvas panning is a
+mouse drag of the pane, since React Flow zooms on the wheel. The Settings
+scenario scrolls the page rather than jumping by keyboard: a jump moves focus
+to the section heading, with no keyboard way back to the outline but Tab
+through every control, while scrolling makes each section current in turn and
+the outline moves at every change. They run on the
+`perfLongChapter` and `perfDenseCanvas` seeds (`support/seed/perf-libraries.ts`),
+built through the real write paths like every other seed. Repetitions run back
+to back after one warm-up; the table shows every run and the pooled verdict.
+`frame-scenarios.test.ts` fails when a scenario names a seed, budget, or driver
+that does not exist.
+
+**Comparing runs.** The report records the source, engine and version, mode
+(headed, new-headless, headless, device), device, refresh rate, CPU
+throttling, app version, and commit (`-dirty` with local changes). Compare two
+reports only when those match. For a jank fix, run the scenario on `main` and
+on the branch and paste both tables into the PR. `--raw` keeps each run's raw
+trace, framestats, or probe dump under `.bench/frames-raw/<source>/`: the
+input a parser fixture is refreshed from.
+
 ## Output
 
 Everything generated lands in `e2e/.output/` (gitignored): the web build,
