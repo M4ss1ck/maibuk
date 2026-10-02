@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-10-02
+
+### Added
+- Release Notes dialog opened from the Release number in the sidebar and Settings → About, with newer published releases marked New and a download link when available
+- `global.openReleaseNotes` command for the command palette and voice
+
+### Changed
+- Update checks now use published GitHub Releases instead of tags, so the New chip appears only after all platform builds are published
+- Settings outline now animates smoothly between sections instead of snapping
+
+### Fixed
+- Restore tray windows on first activation on Linux, including hidden, minimized, and cold-start activations before the main window exists
+
 ## [0.10.1] - 2026-10-02
 
 ### Added
