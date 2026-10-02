@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
+import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
 import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 
@@ -20,12 +21,15 @@ afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
 });
 
-function renderMenu() {
+function renderMenu(includeTextMenu = false) {
   const editor = new Editor({ extensions: createRichTextExtensions(), content: IMAGE_HTML });
   editors.push(editor);
   render(
     <>
       <EditorContent editor={editor} />
+      {includeTextMenu && (
+        <EditorContextMenu editor={editor} onInspect={vi.fn()} onLookup={vi.fn()} />
+      )}
       <ImageContextMenu editor={editor} />
     </>
   );
@@ -44,6 +48,16 @@ function imageNodePos(editor: Editor): number {
 }
 
 describe("ImageContextMenu", () => {
+  it("Shift+F10 opens only the image menu when the text menu is also mounted", async () => {
+    const user = userEvent.setup();
+    const { editor } = renderMenu(true);
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    expect(screen.getByRole("menu", { name: "editor.imageOptions" })).toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "editor.contextMenu" })).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(document.activeElement).toBe(editor.view.dom));
+  });
+
   it("opens a named menu with Shift+F10 on a selected image", async () => {
     const user = userEvent.setup();
     renderMenu();

@@ -371,6 +371,25 @@ gh pr create --title "..." --body-file /tmp/pr-body.md $(cat /tmp/<branch>/scree
 `gh` (2.99 or later) uploads each `--attach` file to GitHub and rewrites the
 body's `![...](path)` references to it, so no image is committed.
 
+## Menu positioning regression gate
+
+A native `<button>` inside React Aria's `MenuTrigger` does not register its
+positioning reference. Its fixed `top` and `left` can be correct while the
+Popover receives no calculated offsets and falls back to `position: fixed;
+top: 0; left: 0`.
+Pass that button's ref as the Popover's `triggerRef`, or use a React Aria
+Button that registers the trigger automatically. Keep the anchor inside the
+viewport, including when a tall image extends below the screen, so React Aria
+can flip the menu into the available space. Image keyboard opening claims the
+event in capture phase; the text menu respects that claim.
+
+`src/test/unit/menu-positioning.test.ts` checks native menu anchors throughout
+`src/` in the regular CI test lane. The editor and image menu E2E rows also
+assert actual browser geometry after keyboard opening; pointer and keyboard
+opening share the same positioning path. A visibility assertion alone cannot
+catch this defect. Their capture points provide light/dark before-and-after
+screenshots.
+
 ## Troubleshooting
 
 **Port already in use.** The main lane picks a free port every run, so this

@@ -234,7 +234,7 @@ export function EditorContextMenu({
     const handleKeyDown = (event: KeyboardEvent) => {
       const isContextMenuKey = event.key === "ContextMenu";
       const isShiftF10 = event.shiftKey && event.key === "F10";
-      if (!isContextMenuKey && !isShiftF10) return;
+      if (event.defaultPrevented || (!isContextMenuKey && !isShiftF10)) return;
 
       event.preventDefault();
       const pos = editor.state.selection.from;
@@ -389,7 +389,7 @@ export function EditorContextMenu({
           className="pointer-events-none fixed h-px w-px opacity-0"
           style={{ top: menu?.position.top ?? 0, left: menu?.position.left ?? 0 }}
         />
-        <Popover placement="bottom start" className="z-50">
+        <Popover triggerRef={anchorRef} placement="bottom start" className="z-50">
           <Menu
             aria-label={t("editor.contextMenu")}
             onAction={handleAction}

@@ -30,6 +30,27 @@ async function selectFirstWords(page: Page, count: number) {
 }
 
 test.describe("context menu @wf:editor-context-menu", () => {
+  for (const width of [1280, 760]) {
+    test(`the menu is positioned beside the editor caret at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await openEditor(page);
+      await page.keyboard.press("End");
+      await page.keyboard.press("Shift+F10");
+      const menu = page.getByRole("menu", { name: "Editor options" });
+      await expect(menu).toBeVisible();
+      await capture(page, `editor-menu-position-${width}`);
+      const textBox = await editorText(page).boundingBox();
+      expect(textBox).not.toBeNull();
+      await expect.poll(async () => (await menu.boundingBox())?.x).toBeGreaterThan(textBox!.x);
+      await expect.poll(async () => (await menu.boundingBox())?.y).toBeGreaterThan(textBox!.y);
+      const menuBox = await menu.boundingBox();
+      expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(width);
+      expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(800);
+      await page.keyboard.press("Escape");
+      await expect(editorText(page)).toBeFocused();
+    });
+  }
+
   test("Shift+F10 opens it at the caret; arrows move; Esc returns to the text", async ({
     page,
   }) => {
