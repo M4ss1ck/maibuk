@@ -196,6 +196,12 @@ export const COMMANDS = {
     contexts: ["global"],
     defaults: [["g", "u"]],
   },
+  "global.openReleaseNotes": {
+    labelKey: "shortcuts.openReleaseNotes",
+    contexts: ["global"],
+    defaults: [],
+    keywordsKey: "shortcuts.keywords.openReleaseNotes",
+  },
 
   "dictation.toggle": {
     labelKey: "dictation.toggle",

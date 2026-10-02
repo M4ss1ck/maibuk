@@ -5,12 +5,14 @@ import { useShortcuts } from "@/lib/shortcuts";
 import { useFocusCommands } from "@/lib/focus-commands";
 import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
+import { ReleaseNotesDialog } from "@/components/releases/ReleaseNotesDialog";
 import { noticeMessage } from "@/components/dictation/dictation-messages";
 import { toast } from "@/components/ui/Toast";
 import { getDictation } from "@/features/dictation/runtime";
 import { cycleDictationLanguage } from "@/features/dictation/language";
 import { useDictationStore } from "@/features/dictation/store";
 import { useCommandPaletteStore } from "@/features/command-palette";
+import { useReleaseStore } from "@/features/releases/store";
 import { useThemeStore, getCycledTheme } from "@/features/theme";
 import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
@@ -235,6 +237,10 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.openReleaseNotes",
+      onTrigger: () => useReleaseStore.getState().openNotes(),
+    },
+    {
       id: "global.openCommandPalette",
       allowInInput: true,
       onTrigger: () => {
@@ -282,6 +288,7 @@ export function GlobalShortcuts() {
           setShowShortcutsHelp(true);
         }}
       />
+      <ReleaseNotesDialog />
     </>
   );
 }

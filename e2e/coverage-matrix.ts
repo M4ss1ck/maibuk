@@ -138,6 +138,23 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "shell-release-notes",
+    area: "shell",
+    workflow:
+      "The Release badge in the sidebar and in Settings → About opens What's new; the Command Palette runs Show what's new; asserts: dialog focus on the notes, newest Release first, Tab contained, Escape restores focus to the badge; persists: no. The New chip and Download footer need a published newer Release, which the web build never checks for (Vitest: ReleaseNotesDialog.test.tsx, release-check.test.ts)",
+    edges: [
+      "Sidebar badge: Enter opens, Escape returns focus to the badge",
+      "Settings → About badge opens the same dialog",
+      "Command Palette: Show what's new",
+    ],
+    terms: ["Release", "Release Notes"],
+    shortcuts: ["global.openReleaseNotes"],
+    routes: ["/", "/settings"],
+    fixture: "empty",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "shell-toggle-theme",
     area: "shell",
     workflow:

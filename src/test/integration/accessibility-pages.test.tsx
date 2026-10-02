@@ -22,9 +22,6 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
-vi.mock("@/features/version", () => ({
-  useVersionCheck: () => ({ latestVersion: "v99.0.0", isOutdated: false }),
-}));
 
 vi.mock("@/lib/platform", () => ({
   IS_WEB: false,

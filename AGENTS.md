@@ -131,6 +131,7 @@ src/
 │   ├── book/            # Book settings dialog
 │   ├── canvas/          # Canvas gallery cards
 │   ├── command-palette/   # Command Palette dialog and entry button
+│   ├── releases/        # ReleaseBadge, ReleaseNotesDialog (What's new)
 │   ├── dictation/       # DictationControl, dictation messages
 │   ├── tutorial/        # TutorialRunner (Joyride + inert boundary), TutorialCard (React Aria dialog), TutorialOffer
 │   └── icons/           # Custom SVG icon components
@@ -152,7 +153,7 @@ src/
 │   ├── sync/            # store.ts, types.ts, crypto.ts, serializer.ts, client.ts, sync-engine.ts, entity-sync.ts, remote-port.ts
 │   ├── theme/           # store.ts
 │   ├── tutorial/        # Tutorial + Tutorial Library switch (ADR 0008/0009): library-switch.ts, tutorial-library.ts, sample-library.ts, sections.ts, store.ts, controller.ts
-│   ├── version/         # useVersionCheck.ts (app update checker)
+│   ├── releases/        # Release Notes: CHANGELOG.md parser, bundled notes, update check (GitHub Releases), store
 │   └── versions/        # store.ts, types.ts, useAutoCheckpoint.ts, sanitize.ts, compare.ts (book version control)
 ├── hooks/               # Shared React hooks
 ├── test/                # Test suites (unit/integration) + setup
@@ -447,6 +448,10 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `runBetweenSyncRuns(task)` (runs a task with no sync run in flight; the Tutorial switch uses it)                                                                                                                                             | `src/features/sync/sync-engine.ts`                                     |
 | `hasLaunchAutoSyncSettled()` / `onLaunchAutoSyncSettled()` (whether this launch's Auto Sync is behind us)                                                                                                                                     | `src/features/sync/auto-sync.ts`                                       |
 | `toast.info()` (text-only hint toast)                                                                                                                                                                                                        | `src/components/ui/Toast.tsx`                                          |
+| `parseChangelog()` / `parseReleaseBody()` / `BUNDLED_RELEASES` (Keep a Changelog markdown into Release Notes data, rendered as text, never HTML; the bundled CHANGELOG.md must parse with no problems, `release-notes.test.ts`) | `src/features/releases/release-notes.ts` / `bundled.ts` |
+| `installReleaseCheck()` / `useReleaseStore` (newer published Releases from GitHub `/releases`, never tags or drafts: once at launch, again on return after 30 min, never on web; the dialog's open flag) | `src/features/releases/release-check.ts` / `store.ts` |
+| `ReleaseBadge` / `NewReleaseChip` / `ReleaseNotesDialog` (the Release number button that opens What's new; the opaque New chip; the dialog, mounted once in `GlobalShortcuts`) | `src/components/releases/` |
+| `Modal` `size="lg"` (a reading width between `md` and `wide`) | `src/components/ui/Modal.tsx` |
 | `Modal` `placement="top"` (pins the panel to the top edge on every screen size; the Command Palette uses it with `unstyled`) | `src/components/ui/Modal.tsx` |
 | `useModalScope(isOpen, close?)` (modal ID registration with its own close path, removed on unregister; `Modal` passes the Escape path, other callers may omit it)                                                                                                                                                                            | `src/hooks/useModalScope.ts`                                           |
 | `useRestoreFocus(isOpen)` (returns focus to the opener after an overlay closes; call it after `useModalOverlay`, whose `inert` cleanup must run first) | `src/hooks/useRestoreFocus.ts` |
@@ -592,9 +597,9 @@ src/test/
         │   └── sync-store.test.ts
         ├── theme/
         │   └── theme-store.test.ts
-        └── version/
-            ├── compareVersions.test.ts
-            └── useVersionCheck.test.ts
+        └── releases/
+            ├── release-notes.test.ts
+            └── release-check.test.ts
 ```
 
 ### Test Patterns

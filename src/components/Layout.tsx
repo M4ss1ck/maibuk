@@ -7,12 +7,11 @@ import { useTranslation } from "react-i18next";
 import { BarChart3, Feather, Menu, NotebookPen, Workflow } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
+import { ReleaseBadge } from "@/components/releases/ReleaseBadge";
 import { CloseIcon, MaibukLogo, ProjectsIcon, SettingsIcon } from "@/components/icons";
 import { KeyboardShortcut } from "@/components/ui";
 import { useRestoreFocus } from "@/hooks";
-import { APP_VERSION, DOWNLOAD_PAGE } from "@/constants";
 import { useSettingsStore } from "@/features/settings/store";
-import { useVersionCheck } from "@/features/version";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 import { useCommandHint } from "@/lib/command-keys";
 import type { CommandId } from "@/lib/shortcut-registry";
@@ -34,8 +33,6 @@ export function Layout() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const { latestVersion, isOutdated } = useVersionCheck(APP_VERSION);
-  const updateAvailable = isOutdated && latestVersion;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const mainSidebarWidth = useSettingsStore((s) => s.mainSidebarWidth);
   const setMainSidebarWidth = useSettingsStore((s) => s.setMainSidebarWidth);
@@ -206,19 +203,7 @@ export function Layout() {
       <div className="p-4 border-t border-border space-y-3">
         <ThemeToggle />
         <div className="flex items-center justify-between gap-2">
-          <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-            {APP_VERSION}
-            {updateAvailable && (
-              <a
-                href={DOWNLOAD_PAGE}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs px-2 py-0.5 bg-update-bg text-update-text rounded-full hover:opacity-80 transition-opacity truncate"
-              >
-                {t("settings.updateAvailable", { version: latestVersion })}
-              </a>
-            )}
-          </p>
+          <ReleaseBadge variant="sidebar" />
           <CommandPaletteButton size="sm" />
         </div>
       </div>

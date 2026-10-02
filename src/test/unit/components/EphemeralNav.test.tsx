@@ -13,9 +13,6 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
-vi.mock("@/features/version", () => ({
-  useVersionCheck: () => ({ latestVersion: null, isOutdated: false }),
-}));
 
 vi.mock("@/features/settings/store", async () => {
   const { DEFAULT_SHORTCUT_SETTINGS } =

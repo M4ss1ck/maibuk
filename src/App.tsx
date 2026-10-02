@@ -29,6 +29,7 @@ import { installDictationFieldTracker } from "@/features/dictation/field-target"
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { installAuthKeepAlive } from "@/features/sync/auth-keep-alive";
 import { installAutoSync } from "@/features/sync/auto-sync";
+import { installReleaseCheck } from "@/features/releases/release-check";
 import { installViewRefresh } from "@/features/sync/view-refresh";
 import { isEmbedPath } from "@/lib/embed";
 import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
@@ -51,6 +52,7 @@ function App() {
     installAuthKeepAlive();
     installAutoSync();
     installViewRefresh();
+    installReleaseCheck();
     if (IS_ANDROID) {
       void installAndroidBackHandler();
       void installAndroidLifecycleHandler();

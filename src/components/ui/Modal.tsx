@@ -48,7 +48,7 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: "md" | "wide";
+  size?: "md" | "lg" | "wide";
   contentClassName?: string;
   panelClassName?: string;
   panelStyle?: CSSProperties;
@@ -80,7 +80,7 @@ export function Modal({
   placement = "center",
 }: ModalProps) {
   const { t } = useTranslation();
-  const sizeClass = size === "wide" ? "sm:max-w-5xl" : "sm:max-w-md";
+  const sizeClass = { md: "sm:max-w-md", lg: "sm:max-w-2xl", wide: "sm:max-w-5xl" }[size];
 
   const modalId = useModalScope(isOpen, () => onCloseRef.current());
   const modalRef = useRef<HTMLDivElement>(null);

@@ -54,9 +54,8 @@ vi.mock("@/lib/metrics/MetricsService", () => ({
   },
 }));
 
-vi.mock("@/features/version", () => ({
-  useVersionCheck: () => ({ latestVersion: null, isOutdated: false }),
-}));
+// The launch check would reach GitHub; release-check.test.ts covers it.
+vi.mock("@/features/releases/release-check", () => ({ installReleaseCheck: () => () => {} }));
 
 vi.mock("@/features/backup/lifecycle", () => ({
   scheduleDailyBackup: vi.fn(),

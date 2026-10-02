@@ -817,7 +817,6 @@
     "customDictionaryTitle": "Diccionario personalizado",
     "customDictionaryEmpty": "Aún no hay palabras",
     "removeWord": "Quitar",
-    "updateAvailable": "{{version}} disponible",
     "advanced": "Avanzado",
     "exportDatabase": "Exportar Base de Datos",
     "exportDatabaseDescription": "Guarda en un archivo tus libros, notas, lienzos e historial de versiones",
@@ -1189,6 +1188,7 @@
     "toggleTheme": "Cambiar tema",
     "toggleShortcutHints": "Alternar atajos visuales",
     "toggleAlwaysOnTop": "Alternar siempre visible",
+    "openReleaseNotes": "Mostrar novedades",
     "openCommandPalette": "Abrir paleta de comandos",
     "syncNow": "Sincronizar ahora",
     "newBook": "Crear libro nuevo",
@@ -1274,6 +1274,7 @@
     "skipTutorial": "Omitir el Tutorial",
     "areaTutorial": "Tutorial",
     "keywords": {
+      "openReleaseNotes": ["notas de la versión", "cambios", "versión", "actualización", "acerca de"],
       "toggleAlwaysOnTop": ["fijar", "flotante", "ventana", "siempre visible"],
       "toggleTheme": ["oscuro", "claro", "modo", "apariencia"],
       "syncNow": ["subir", "descargar", "nube"],
@@ -2040,5 +2041,23 @@
     "title": "Maibuk no pudo abrir tu biblioteca",
     "body": "Tu trabajo sigue en este dispositivo. No se cambió ni se borró nada. Vuelve a intentarlo, o reinicia Maibuk si sigue fallando.",
     "retry": "Reintentar"
+  },
+  "releases": {
+    "title": "Novedades",
+    "badge": "Maibuk {{release}}, Novedades",
+    "badgeWithUpdate": "Maibuk {{release}}, Novedades, hay una actualización disponible",
+    "new": "Nuevo",
+    "download": "Descargar {{release}}",
+    "olderReleases": "Las versiones anteriores están en GitHub",
+    "notesRegion": "Notas de la versión",
+    "sections": {
+      "added": "Añadido",
+      "changed": "Cambiado",
+      "deprecated": "Obsoleto",
+      "removed": "Eliminado",
+      "fixed": "Corregido",
+      "other": "Otros",
+      "security": "Seguridad"
+    }
   }
 }

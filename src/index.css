@@ -40,8 +40,10 @@
   --color-feedback-success-text: #166534;
   --color-feedback-progress-bg: #dbeafe;
   --color-feedback-progress-text: #1e40af;
-  --color-update-bg: rgba(217, 119, 6, 0.15);
-  --color-update-text: #d97706;
+  /* Opaque: the New chip sits over the Settings wordmark, which must not show through. */
+  --color-update-bg: #fef3c7;
+  --color-update-text: #92400e;
+  --color-update-border: #f59e0b;
 
   /* Preview surface */
   --color-preview-bg: #d6d3d1;
@@ -103,8 +105,9 @@
   --color-feedback-success-text: #bbf7d0;
   --color-feedback-progress-bg: rgba(37, 99, 235, 0.15);
   --color-feedback-progress-text: #bfdbfe;
-  --color-update-bg: rgba(217, 119, 6, 0.15);
-  --color-update-text: #fbbf24;
+  --color-update-bg: #451a03;
+  --color-update-text: #fcd34d;
+  --color-update-border: #b45309;
 
   /* Preview surface */
   --color-preview-bg: #292524;

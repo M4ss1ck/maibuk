@@ -506,6 +506,17 @@ _UI_: en "Current streak" / es "Racha actual"
 A kind of writing data the author chooses to collect or view: writing volume, time tracking, or engagement.
 _UI_: en "Writing volume", "Time tracking", "Engagement"
 
+## The app
+
+**Release**:
+A published build of Maibuk, known by its number (0.10.1). Not a Version: a Version is the saved state of one Book.
+_Avoid_: version, app version, build
+
+**Release Notes**:
+What changed in each Release, grouped as added, changed, and fixed.
+_UI_: en "What's new" / es "Novedades"
+_Avoid_: changelog, update log, patch notes
+
 ## Decided, not built
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
