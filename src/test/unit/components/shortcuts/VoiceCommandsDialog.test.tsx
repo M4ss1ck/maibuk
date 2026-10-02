@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PhraseRecordingResult } from "@/features/dictation/session";
@@ -209,4 +209,34 @@ describe("VoiceCommandsDialog Phrase Recording (#270)", () => {
     await act(async () => settle?.({ kind: "busy" }));
     expectStatus("Another field is recording a phrase. Stop it first.");
   });
+});
+
+describe("nested row controls by keyboard", () => {
+  it.each(["{Enter}", " "])(
+    "%s on a phrase row's Remove button removes, never edits the phrase",
+    async (key) => {
+      const user = userEvent.setup();
+      renderDialog();
+      const rowEl = screen.getAllByRole("row")[0];
+      const remove = within(rowEl).getByRole("button", { name: /^Remove / });
+      const phrase = (remove.getAttribute("aria-label") ?? "")
+        .replace(/^Remove /, "")
+        .replace(/ from .*$/, "");
+      expect(phrase.length).toBeGreaterThan(0);
+
+      rowEl.focus();
+      for (let i = 0; i < 6 && document.activeElement !== remove; i++) {
+        await user.keyboard("{ArrowRight}");
+      }
+      expect(remove).toHaveFocus();
+      await user.keyboard(key);
+
+      // The button's own action ran: the phrase is gone from the list.
+      expect(screen.queryByText(phrase)).toBeNull();
+      // The row's action (startEdit) did not run: the field still adds,
+      // it does not hold the removed phrase for editing.
+      expect(phraseField()).toHaveValue("");
+      expect(phraseField()).toHaveAccessibleName(/New voice command/);
+    }
+  );
 });

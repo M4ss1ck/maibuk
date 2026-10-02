@@ -1338,4 +1338,61 @@ describe("ChapterList", () => {
   });
 });
 
+describe("nested row controls by keyboard", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockParkSelection.mockReturnValue(mockRestoreSelection);
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    storeState.chapterListView = "normal";
+    storeState.showChapterOutline = false;
+    i18nState.language = "en";
+    textFileDropOptions.current = null;
+    useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
+  });
+
+  async function tabToButton(
+    user: ReturnType<typeof userEvent.setup>,
+    row: HTMLElement,
+    target: HTMLElement
+  ) {
+    row.focus();
+    for (let index = 0; index < 12 && document.activeElement !== target; index++) {
+      await user.tab();
+    }
+    expect(target).toHaveFocus();
+  }
+
+  it.each(["{Enter}", " "])(
+    "%s on a chapter row's Edit button edits, never selects the chapter",
+    async (key) => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id, onSelectChapter: onSelect });
+      const row = screen.getAllByRole("row")[0];
+      const edit = screen.getByRole("button", { name: "chapters.editChapter" });
+      await tabToButton(user, row, edit);
+      await user.keyboard(key);
+      expect(await screen.findByDisplayValue("First")).toBeInTheDocument();
+      expect(onSelect).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["{Enter}", " "])(
+    "%s on a chapter row's Delete button asks to delete, never selects the chapter",
+    async (key) => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id, onSelectChapter: onSelect });
+      const row = screen.getAllByRole("row")[0];
+      const del = screen.getByRole("button", { name: "chapters.deleteChapter" });
+      await tabToButton(user, row, del);
+      await user.keyboard(key);
+      expect(await screen.findByText("common.deleteConfirm")).toBeInTheDocument();
+      expect(onSelect).not.toHaveBeenCalled();
+    }
+  );
+});
+
 afterEach(() => vi.restoreAllMocks());

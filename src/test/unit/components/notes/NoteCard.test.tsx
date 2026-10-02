@@ -107,3 +107,41 @@ describe("NoteCard", () => {
     expect(screen.queryByText("My Book")).not.toBeInTheDocument();
   });
 });
+
+describe("nested row controls by keyboard", () => {
+  async function tabTo(
+    user: ReturnType<typeof userEvent.setup>,
+    row: HTMLElement,
+    target: HTMLElement
+  ) {
+    row.focus();
+    for (let step = 0; step < 8 && document.activeElement !== target; step++) {
+      await user.keyboard("{Tab}");
+    }
+    expect(target).toHaveFocus();
+  }
+
+  it.each(["{Enter}", " "])(
+    "%s on the card's Item Menu button opens the menu, never the Note",
+    async (key) => {
+      const user = userEvent.setup();
+      const onClick = vi.fn();
+      const onDelete = vi.fn();
+      render(
+        <GridList aria-label="Notes" selectionMode="none">
+          <NoteCard
+            note={buildNote({})}
+            onClick={onClick}
+            actions={[{ id: "delete", label: "Delete", onAction: onDelete }]}
+          />
+        </GridList>
+      );
+      const row = screen.getByRole("row");
+      const menuButton = screen.getByRole("button", { name: "common.moreActionsFor" });
+      await tabTo(user, row, menuButton);
+      await user.keyboard(key);
+      expect(await screen.findByRole("menu")).toBeInTheDocument();
+      expect(onClick).not.toHaveBeenCalled();
+    }
+  );
+});

@@ -299,3 +299,36 @@ describe("Home keyboard navigation", () => {
     expect(within(importButton).getByText("Import")).toHaveClass("@xl:hidden");
   });
 });
+
+describe("nested row controls by keyboard", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    storeState.books = books;
+  });
+
+  async function tabToStatus(
+    user: ReturnType<typeof userEvent.setup>,
+    row: HTMLElement,
+    target: HTMLElement
+  ) {
+    row.focus();
+    for (let step = 0; step < 10 && document.activeElement !== target; step++) {
+      await user.keyboard("{Tab}");
+    }
+    expect(target).toHaveFocus();
+  }
+
+  it.each(["{Enter}", " "])(
+    "%s on a book card's status button opens the status menu, never the Book",
+    async (key) => {
+      const user = userEvent.setup();
+      render(<Home />);
+      const rows = screen.getAllByRole("row");
+      const statusButton = within(rows[0]).getByRole("button", { name: "books.changeStatus" });
+      await tabToStatus(user, rows[0], statusButton);
+      await user.keyboard(key);
+      expect(await screen.findByRole("listbox")).toBeInTheDocument();
+      expect(mockNavigate).not.toHaveBeenCalled();
+    }
+  );
+});

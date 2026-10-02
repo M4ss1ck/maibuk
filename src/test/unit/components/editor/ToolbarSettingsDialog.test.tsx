@@ -881,3 +881,26 @@ describe("column headers and tooltips", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("toolbar.settings.moveUp");
   });
 });
+
+describe("nested row controls by keyboard", () => {
+  // These GridList rows carry no row-level onAction: the assertion is that the
+  // nested control's own action runs exactly once and the lane holds no other
+  // change (no reorder, no selection side effect).
+  it.each(["{Enter}", " "])(
+    "%s on a divider row's Remove button removes only that divider",
+    async (key) => {
+      const user = userEvent.setup();
+      renderDialog();
+      const dividerRow = findRowByName(/toolbar\.settings\.dividerLabel/);
+      const removeBtn = within(dividerRow).getByRole("button", {
+        name: "toolbar.settings.remove",
+      });
+      await tabToControl(user, dividerRow, removeBtn);
+      await user.keyboard(key);
+      const start = useSettingsStore.getState().toolbarConfig.start;
+      expect(start).toHaveLength(2);
+      expect(start.every((e) => e.kind !== "divider")).toBe(true);
+      expect(start.map((e) => e.id)).toEqual(["history", "basic-marks"]);
+    }
+  );
+});

@@ -5,6 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { collectFootnotes, Footnote } from "@/components/editor/extensions/Footnote";
 import { FootnoteList } from "@/components/editor/FootnoteList";
+import { FootnoteGrid, type FootnoteGridItem } from "@/components/editor/FootnoteGrid";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { DEFAULT_SHORTCUT_SETTINGS } from "@/lib/shortcut-resolve";
@@ -313,4 +314,64 @@ describe("FootnoteList", () => {
       expect(row("Third")).toHaveTextContent("2.Third");
     });
   });
+});
+
+describe("nested row controls by keyboard", () => {
+  const item: FootnoteGridItem = { key: "k1", id: "a", index: 0, number: 1, content: "First" };
+
+  function renderGrid() {
+    const onGoTo = vi.fn();
+    const onSave = vi.fn();
+    const onDelete = vi.fn();
+    render(
+      <FootnoteGrid
+        label="footnotes"
+        sections={[{ key: "s", items: [item] }]}
+        onGoTo={onGoTo}
+        onSave={onSave}
+        onDelete={onDelete}
+      />
+    );
+    return { onGoTo, onSave, onDelete };
+  }
+
+  async function tabToButton(
+    user: ReturnType<typeof userEvent.setup>,
+    rowEl: HTMLElement,
+    target: HTMLElement
+  ) {
+    rowEl.focus();
+    for (let i = 0; i < 10 && document.activeElement !== target; i++) {
+      await user.keyboard("{Tab}");
+    }
+    expect(target).toHaveFocus();
+  }
+
+  it.each(["{Enter}", " "])(
+    "%s on an entry's Edit button edits, never goes to the reference",
+    async (key) => {
+      const user = userEvent.setup();
+      const { onGoTo } = renderGrid();
+      const rowEl = screen.getByRole("row");
+      const edit = screen.getByRole("button", { name: "editor.editFootnote" });
+      await tabToButton(user, rowEl, edit);
+      await user.keyboard(key);
+      expect(await screen.findByRole("dialog", { name: "editor.editFootnote" })).toBeInTheDocument();
+      expect(onGoTo).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["{Enter}", " "])(
+    "%s on an entry's Delete button deletes, never goes to the reference",
+    async (key) => {
+      const user = userEvent.setup();
+      const { onGoTo, onDelete } = renderGrid();
+      const rowEl = screen.getByRole("row");
+      const del = screen.getByRole("button", { name: "editor.deleteFootnote" });
+      await tabToButton(user, rowEl, del);
+      await user.keyboard(key);
+      expect(onDelete).toHaveBeenCalledTimes(1);
+      expect(onGoTo).not.toHaveBeenCalled();
+    }
+  );
 });

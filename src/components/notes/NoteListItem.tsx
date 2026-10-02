@@ -1,5 +1,5 @@
 import type { DragEvent, KeyboardEvent } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import type { Note } from "@/features/notes";
@@ -156,7 +156,17 @@ export function NoteListItem({
     setIsEditing(false);
   };
 
+  // Enter or Escape unmounts the focused field; hand focus back to the row.
+  // A blur commit leaves focus wherever the author moved it.
+  const refocusRowAfterEdit = useRef(false);
+  useEffect(() => {
+    if (isEditing || !refocusRowAfterEdit.current) return;
+    refocusRowAfterEdit.current = false;
+    menuAnchorRef.current?.closest<HTMLElement>('[role="row"]')?.focus();
+  }, [isEditing]);
+
   const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" || event.key === "Escape") refocusRowAfterEdit.current = true;
     if (event.key === "Enter") {
       event.preventDefault();
       commitTitle();
@@ -167,6 +177,7 @@ export function NoteListItem({
   };
 
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the enclosing GridListItem's onAction is the keyboard path
     <div
       data-note-row
       data-drop-id={note.id}
@@ -187,13 +198,6 @@ export function NoteListItem({
         if (!e.currentTarget.contains(e.target as Node)) return;
         if (!isEditing) onSelect(note);
       }}
-      onKeyDown={(e) => {
-        if (!e.currentTarget.contains(e.target as Node)) return;
-        if (!isEditing && (e.key === "Enter" || e.key === " ")) {
-          e.preventDefault();
-          onSelect(note);
-        }
-      }}
     >
       {/* Line 1: title + item menu */}
       <div className="flex min-w-0 items-center gap-1">
@@ -204,6 +208,7 @@ export function NoteListItem({
             onBlur={commitTitle}
             onKeyDown={handleEditKeyDown}
             onClick={(event) => event.stopPropagation()}
+            aria-label={t("common.rename")}
             className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             autoFocus
           />
