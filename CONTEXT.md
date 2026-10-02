@@ -384,7 +384,7 @@ _Avoid_: voice typing, speech-to-text (in UI copy)
 The span from starting Dictation to stopping it. One per app at a time; it follows the caret across the editors and text fields on the page, and never types behind an open dialog. A Voice Command that changes screen or opens a dialog keeps it listening: it goes on in the editor or text field that takes the caret there, or stops and says so when none does. (ADR 0016)
 
 **Dictation Model**:
-A downloaded speech model for one language and tier (Fast or Accurate), kept on this device.
+A downloaded speech model for one language and tier (Fast or Accurate), kept on this device. When a Dictation Language has none installed, the first Dictation Model downloaded for it is automatically selected for that language; later downloads leave that choice alone.
 _Avoid_: voice pack
 
 **Dictation Language**:
