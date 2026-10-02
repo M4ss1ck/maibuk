@@ -36,6 +36,7 @@ import { CommandPaletteButton } from "@/components/command-palette/CommandPalett
 import { NoteListItem } from "@/components/notes/NoteListItem";
 import type { NoteMoveTarget } from "@/components/notes/NoteListItem";
 import { useTouchDragFromHandle } from "@/hooks/useItemContextMenu";
+import { useParkSelectionWhileDragging } from "@/hooks/useParkSelectionWhileDragging";
 import { readDroppedItems, useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
 import type { DropPoint } from "@/hooks/useTextFileDrop";
@@ -283,17 +284,20 @@ export function NotesList({
 
   const gridRef = useRef<HTMLDivElement>(null);
   const [dropTargetDelegate] = useState(() => new SectionedDropTargetDelegate(gridRef));
+  const dragHandlers = useParkSelectionWhileDragging({
+    onDragStart: (e: { keys: Set<string | number> }) => setDraggedId(String([...e.keys][0] ?? "") || null),
+    onDragEnd: () => {
+      setDraggedId(null);
+      setDropTarget(null);
+    },
+  });
   const { dragAndDropHooks } = useDragAndDrop({
     // Always passed to the GridList (swapping hooks on a mounted list breaks
     // React's hook order), and off while a search hides Notes.
     isDisabled: !canReorder,
     dropTargetDelegate,
     getItems: (keys) => [...keys].map((key) => ({ [NOTE_DND_TYPE]: String(key) })),
-    onDragStart: (e) => setDraggedId(String([...e.keys][0] ?? "") || null),
-    onDragEnd: () => {
-      setDraggedId(null);
-      setDropTarget(null);
-    },
+    ...dragHandlers,
     // Dropping among the Pinned Notes pins; among the rest unpins. `onMove`,
     // not `onReorder`: React Aria limits a reorder to the dragged row's own
     // section, and crossing sections is how a drag pins or unpins.

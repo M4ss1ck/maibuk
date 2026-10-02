@@ -34,6 +34,7 @@ import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
 import { useDragAndDrop } from "react-aria-components/useDragAndDrop";
 import { useItemContextMenu, useTouchDragFromHandle } from "@/hooks/useItemContextMenu";
+import { useParkSelectionWhileDragging } from "@/hooks/useParkSelectionWhileDragging";
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -197,7 +198,10 @@ export function ChapterList({
     if (chapter) onSelectChapter(chapter);
   };
 
+  const parkedSelection = useParkSelectionWhileDragging();
+
   const { dragAndDropHooks } = useDragAndDrop({
+    ...parkedSelection,
     getItems: (keys) =>
       [...keys].map((key) => ({
         [CHAPTER_DND_TYPE]: String(key),
