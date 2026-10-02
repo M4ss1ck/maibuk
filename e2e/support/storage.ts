@@ -202,3 +202,34 @@ export async function readLibraryBytes(page: Page): Promise<string | null> {
     return value ? toBase64(value) : null;
   });
 }
+
+/**
+ * Resets the device-local state of an app that is already running (the
+ * frame-rate lane's Android WebView, where no blank page can be served before
+ * the app boots) to a fresh device whose Tutorial offer was answered, then
+ * loads the app root. WebView localStorage outlives app restarts, so without
+ * this the last scenario's path and settings would carry over. A reload would
+ * not do: it keeps the restored path in the URL, which the app records again.
+ * The reset runs as an init script, before any app code: clearing from the
+ * running page races the app's persisted stores, which write their state
+ * straight back. A sessionStorage flag keeps it to the first load of this
+ * launch.
+ */
+export async function resetDeviceAndOpen(page: Page, rootUrl: string): Promise<void> {
+  await page.addInitScript(() => {
+    const marker = "frames-device-reset";
+    if (sessionStorage.getItem(marker)) return;
+    sessionStorage.setItem(marker, "1");
+    localStorage.clear();
+    const progress = {
+      dismissedAt: 1,
+      completedAt: null,
+      lastSection: null,
+      lastStep: null,
+      skippedAt: null,
+      sections: {},
+    };
+    localStorage.setItem("maibuk-tutorial", JSON.stringify({ state: { progress }, version: 1 }));
+  });
+  await page.goto(rootUrl);
+}

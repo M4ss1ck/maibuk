@@ -234,6 +234,14 @@ export default defineConfig(() => ({
         "src/components/editor/SelectionToolbar.tsx",
         "src/components/editor/extensions/SelectionKept.ts",
         "scripts/symbols-data/transform.ts",
+        // Frame-rate lane (issue #372): the pure Frame Report, budget, and parsers.
+        "src/test/support/frames/frame-report.ts",
+        "src/test/support/frames/attribution.ts",
+        "src/test/support/frames/budget.ts",
+        "src/test/support/frames/bench-report.ts",
+        "src/test/support/frames/cli.ts",
+        "src/test/support/frames/scenarios.ts",
+        "src/test/support/frames/sources/*.ts",
         // Deep-link / strict link-uri
         "src/features/links/link-uri.ts",
         "src/features/links/navigate.ts",

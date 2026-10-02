@@ -35,10 +35,12 @@ export function preflight({ allowPlanned }) {
 
 /**
  * The web build both Playwright configs preview; E2E_REUSE_BUILD=1 skips it.
+ * The frame-rate lane asks for source maps, to name the code behind a long
+ * animation frame.
  * The build imports the vendored Moonshine WASM, so a clean checkout fetches
  * it first (cached by digest, a no-op afterwards).
  */
-export function buildWeb() {
+export function buildWeb({ sourcemap = false } = {}) {
   if (process.env.E2E_REUSE_BUILD === "1") return;
   step("dictation WASM runtime (build input)", "node", [
     "scripts/fetch-dictation-runtime.mjs",
@@ -56,6 +58,7 @@ export function buildWeb() {
       "--emptyOutDir",
       "--logLevel",
       "warn",
+      ...(sourcemap ? ["--sourcemap"] : []),
     ],
     { VITE_BUILD_TARGET: "web" }
   );

@@ -397,6 +397,11 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `pnpm bench:dictation` / `pnpm bench:dictation:android` (periodic lane: the Dictation Command Interpreter against the ADR 0015 budget, p99 under 1 ms per line and 10 ms per phrase table rebuild, with 1,000 aliases and Vocabulary entries; Node via `vitest bench`, Android in Chrome over `adb`; both fail when a budget is missed. The gate lane checks only that the worst-case inputs still reach every path, never timings) | `src/test/bench/` / `src/test/support/dictation-bench.ts` / `scripts/dictation-bench-budget.mjs` / `scripts/dictation-bench/android.mjs` |
 | `pnpm record:dictation-phrases <en\|es>` / `pnpm conformance:dictation:phrases` (periodic lane, issue #285: record the phrase script, then per-phrase hit rate on every model, the prose set, and the names tier's exact written forms (issue #274: `score.ts --vocabulary <file>` or `--vocabulary-from-clips` for the Vocabulary baseline, `BIAS_*` for context biasing runs, see `docs/research/dictation-context-biasing.md`); script in `src/test/support/dictation-phrase-set.ts`, scoring in `dictation-phrase-score.ts`) | `scripts/dictation-phrases/` / `scripts/dictation-conformance/README.md` |
 | `pnpm bench:palette` (periodic lane: the Command Palette search index against its 16 ms keystroke budget; fails when a budget is missed) | `src/test/bench/command-palette.bench.ts` / `scripts/palette-bench-budget.mjs` |
+| `pnpm bench:frames` (periodic lane, issue #372: scripted interactions on the `perfLongChapter`/`perfDenseCanvas` seeds against the frame budget, p95 frame time within one refresh interval of the display measured, dropped frames under 1%, no long animation frame over 50 ms, keystroke to next frame within one interval; sources `chromium` (CDP trace), `probe` (rAF recorder, WebKit), `android` (gfxinfo framestats on a debug test install, never an author's Library); exits 1 on a miss, 2 when it cannot measure; never in CI. See e2e/README.md, "Frame-rate lane") | `e2e/run-frames.ts` / `e2e/frames/` / `scripts/frame-bench-budget.ts` |
+| `frameReport()` / `aggregateSamples()` / `FrameReportRefused` (the pure frame report: a normalized frame sample set and a budget in, p50/p95/p99, dropped frames, long animation frames and a `pass`/`fail`/`not-measured` verdict per line out; refuses a set with no measured refresh interval) | `src/test/support/frames/frame-report.ts` |
+| `FRAME_SCENARIOS` / `FRAME_BUDGETS` / `budgetFor()` / `checkFrameBench()` / `formatFrameBench()` (the lane's scenario declarations, the frozen budget table with a reason per override, and the report check) | `src/test/support/frames/` |
+| `parseChromiumTrace()` / `parseGfxinfoFramestats()` / `parseSurfaceFlingerLatency()` / `parseProbeDump()` / `refreshIntervalFromCadence()` / `frameProbeScript()` (the three frame sources' parsers, each tested on a captured fixture in `src/test/fixtures/frames/`, and the in-page probe) | `src/test/support/frames/sources/` / `src/test/support/frames/probe.ts` |
+| `resolveLongFrameSources()` (a long animation frame's minified script to its original `file:line (name)` through the build's source map; dependencies by package path) | `src/test/support/frames/attribution.ts` |
 | `normalizeHexColor()` / `contrastRatio()` / `readableForeground()` (hex parsing that returns null on invalid input; WCAG contrast) | `src/lib/color.ts` |
 | `applyAccentColor(color)` (sets `--color-primary`, hover, and their readable foregrounds without writing settings; used for commit and preview) | `src/features/settings/accent-color.ts` |
 | `SETTINGS_SECTIONS` / `findSettingsRow(id)` / `SettingsRowId` (every Settings section in screen order with its declared rows; the Command Palette reads this too) | `src/components/settings/settings-sections.ts` (+ one `.rows.ts` beside each section component) |
@@ -747,6 +752,10 @@ pnpm test:e2e --repeat-each=3                     # the acceptance run
 pnpm test:e2e:sync                                # Sync lane: local PocketBase + maibuk-sync migrations, specs/sync/
 ```
 
+The frame-rate lane (`pnpm bench:frames`, `e2e/frames/`) is a measurement, not
+a spec: its drivers use the wheel and mouse drags where the measured gesture
+is a pointer one, and the keyboard contract below does not apply to it.
+
 Specs live in `e2e/specs/`. The suite drives the production web build in
 Chromium and WebKit, runs locally, and is invisible to `pnpm test`,
 `pnpm test:run`, `pnpm test:coverage`, the builds, release scripts, CI, and
@@ -910,6 +919,7 @@ pnpm fetch:dictation  # Vendor the pinned Moonshine WASM release and native libs
 pnpm conformance:dictation  # Dictation latency/CPU lane, web + Rust (needs pnpm fetch:dictation --test-assets)
 pnpm bench:dictation         # Dictation Interpreter budget (ADR 0015), Node; results in .bench/
 pnpm bench:dictation:android # Same bench in Chrome on the one adb device (phone or emulator)
+pnpm bench:frames            # Frame budget per scenario (Chromium; --source probe|android); results in .bench/
 pnpm record:dictation-phrases en  # Record the Dictation phrase script (then es)
 pnpm conformance:dictation:phrases  # Per-phrase hit rate + prose triggers, native models
 pnpm screenshots -g "<test>"  # Before/after PR screenshots (e2e/README.md)
