@@ -99,12 +99,17 @@ export function textBeforeCaret(editor: Editor): string {
   );
 }
 
-function isInListItem(doc: ProseMirrorNode, pos: number): boolean {
+/** Bulleted and numbered lists use `listItem`; checklists (Notes, Quick Note) use `taskItem`. */
+const LIST_ITEM_TYPES = new Set(["listItem", "taskItem"]);
+
+/** The innermost list item around `pos`, of whichever list kind. */
+function listItemAt(doc: ProseMirrorNode, pos: number): ProseMirrorNode | null {
   const $pos = doc.resolve(pos);
   for (let depth = $pos.depth; depth > 0; depth -= 1) {
-    if ($pos.node(depth).type.name === "listItem") return true;
+    const node = $pos.node(depth);
+    if (LIST_ITEM_TYPES.has(node.type.name)) return node;
   }
-  return false;
+  return null;
 }
 
 /** Sentence start in the current textblock, for Spanish auto-openers. Shares the interpreter's boundary rule. */
@@ -397,14 +402,15 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
     } else if (edit.kind === "list_item") {
       tr.deleteSelection();
       const pos = tr.selection.from;
-      if (isInListItem(tr.doc, pos)) {
+      const item = listItemAt(tr.doc, pos);
+      if (item) {
         const $at = tr.doc.resolve(pos);
         if ($at.parent.content.size === 0) {
           // Empty list item: match Enter. In a nested list lift the list
           // item itself out of its list (like liftListItem), so it moves up
           // one level as an empty item; at the top level lift the empty
           // paragraph out (like liftEmptyBlock).
-          const itemType = state.schema.nodes.listItem;
+          const itemType = item.type;
           const $from = tr.selection.$from;
           const itemRange = $from.blockRange(
             $from,
@@ -427,7 +433,14 @@ export function applyDictationEdits(editor: Editor, edits: DictationEdit[]): voi
         } else {
           // Split the current list item, like pressing Enter inside it.
           // Depth 2 splits listItem + paragraph (prosemirror-schema-list).
-          if (tr.doc.resolve(pos).depth >= 2) tr.split(pos, 2);
+          // A new Task Item starts unchecked, as TipTap's Enter makes it; the
+          // override applies only when depth 2 really is the Task Item.
+          const $split = tr.doc.resolve(pos);
+          const itemAfter =
+            item.type.name === "taskItem" && $split.node($split.depth - 1) === item
+              ? [{ type: item.type, attrs: { ...item.attrs, checked: false } }]
+              : undefined;
+          if ($split.depth >= 2) tr.split(pos, 2, itemAfter);
           else tr.split(pos, 1, [{ type: state.schema.nodes.paragraph }]);
         }
       } else {
