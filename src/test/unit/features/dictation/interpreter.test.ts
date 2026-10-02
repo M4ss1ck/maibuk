@@ -476,8 +476,10 @@ describe("interpret() scratch that", () => {
     ).toEqual({ kind: "scratch" });
   });
 
-  it("returns a scratch result with unchanged state", () => {
-    const state = { capitalizeNext: true, noSpaceNext: false, allCaps: false };
+  it("returns a scratch result that drops the carried charges and keeps all caps", () => {
+    // The charges came from what scratch removes; the text before the caret
+    // decides the next word's capital. All caps is the author's lock.
+    const state = { capitalizeNext: true, noSpaceNext: true, allCaps: true };
     const out = interpret({
       line: "Borra eso.",
       before: "hola ",
@@ -486,7 +488,7 @@ describe("interpret() scratch that", () => {
       state,
     });
     expect(out.result).toEqual({ kind: "scratch" });
-    expect(out.state).toBe(state);
+    expect(out.state).toEqual({ capitalizeNext: false, noSpaceNext: false, allCaps: true });
     expect(out.spokenPunctuationCount).toBe(0);
   });
 

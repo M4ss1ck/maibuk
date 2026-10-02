@@ -617,3 +617,123 @@ describe("Dictation scratch that (audit probes)", () => {
     }
   });
 });
+
+describe("Dictation scratch that after a layout Command", () => {
+  it("removes the paragraph a line ended with, then the line's text", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("hola nuevo párrafo");
+      expect(editor.getHTML()).toBe("<p>Hola</p><p></p>");
+      const before = undoDepth(editor.state);
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Hola</p>");
+      expect(undoDepth(editor.state)).toBe(before + 1);
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p></p>");
+      undo(editor.state, editor.view.dispatch);
+      expect(editor.getHTML()).toBe("<p>Hola</p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("removes the paragraph after a sentence ended with punto y aparte", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("hola punto y aparte");
+      expect(editor.getHTML()).toBe("<p>Hola.</p><p></p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Hola.</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p></p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("removes a dictated line break", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("hola nueva línea");
+      expect(editor.getHTML()).toBe("<p>Hola<br></p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Hola</p>");
+      host.emitFinal("adiós");
+      expect(editor.getHTML()).toBe("<p>Hola adiós</p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("rejoins a paragraph split mid-text exactly as it was", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor("<p>uno dos</p>");
+    try {
+      editor.commands.setTextSelection(4); // after "uno"
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("nuevo párrafo");
+      expect(editor.getHTML()).toBe("<p>uno</p><p> dos</p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>uno dos</p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("removes the item a line started a bulleted list with", async () => {
+    const { host, session } = setupSession();
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("hola nuevo elemento");
+      expect(editor.getHTML()).toBe("<p>Hola</p><ul><li><p></p></li></ul><p></p>");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Hola</p><p></p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("refuses to rejoin a paragraph the author typed into", async () => {
+    const notices: SessionNotice[] = [];
+    const { host, session } = setupSession({ notices });
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("hola nuevo párrafo");
+      editor.commands.insertContent("escrito");
+      host.emitFinal("borra eso");
+      expect(editor.getHTML()).toBe("<p>Hola</p><p>escrito</p>");
+      expect(notices).toContainEqual({ kind: "scratch_refused" });
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("bold that still marks the text before a trailing paragraph", async () => {
+    const { host, session } = setupSession({ language: "en" });
+    const editor = await makeEditor();
+    try {
+      await focusEditor(editor);
+      await session.start();
+      host.emitFinal("hello new paragraph");
+      host.emitFinal("bold that");
+      expect(editor.getHTML()).toBe("<p><strong>Hello</strong></p><p></p>");
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+

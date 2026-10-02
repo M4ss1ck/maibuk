@@ -7,7 +7,7 @@ import { createRichTextExtensions } from "@/components/editor/extensions/createR
 import { attachSession, resetDictationHubForTests } from "@/features/dictation/hub";
 import { buildPhraseTable, interpret } from "@/features/dictation/interpreter";
 import { createRouter } from "@/features/dictation/router";
-import { createDictationSession } from "@/features/dictation/session";
+import { createDictationSession, type SessionNotice } from "@/features/dictation/session";
 import { createLineStats } from "@/features/dictation/stats";
 import type { DictationEvent, ModelSpec, RecognizerHost } from "@/features/dictation/types";
 
@@ -77,15 +77,17 @@ async function dictateInto(content: string, caretText: string) {
   const host = fakeHost();
   let state = { capitalizeNext: false, noSpaceNext: false, allCaps: false };
   const table = buildPhraseTable("en");
+  const notices: SessionNotice[] = [];
   const session = createDictationSession({
     host,
     modelFor: () => model,
     route: createRouter((line, before) => {
       const next = interpret({ line, before, capabilities: model.capabilities, table, state });
       state = next.state;
+      if (next.result.kind === "scratch") return { kind: "scratch" };
       return { ...next.result, spokenPunctuationCount: next.spokenPunctuationCount };
     }),
-    notify: vi.fn(),
+    notify: (n) => void notices.push(n),
     copyText: vi.fn(async () => {}),
     stats: createLineStats(),
   });
@@ -107,7 +109,7 @@ async function dictateInto(content: string, caretText: string) {
   editor.commands.focus();
   await focused;
   await session.start();
-  return { editor, host };
+  return { editor, host, notices };
 }
 
 const task = (checked: boolean, inner: string) =>
@@ -204,6 +206,61 @@ describe("Dictation new item inside a checklist", () => {
       expect(outline(editor.state.doc)).toBe(
         'taskList([ ]("a" bulletList(listItem("b") listItem("C")))) ""'
       );
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+
+describe("Dictation scratch that after a new Task Item", () => {
+  it("removes the Task Item the line added, as one undo step", async () => {
+    const { editor, host } = await dictateInto(
+      taskList(task(true, "<p>Milk</p>"), task(false, "<p>Bread</p>")),
+      "Milk"
+    );
+    try {
+      host.emitFinal("new item");
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk") [ ]("") [ ]("Bread")) ""');
+      const before = undoDepth(editor.state);
+      host.emitFinal("scratch that");
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk") [ ]("Bread")) ""');
+      expect(undoDepth(editor.state)).toBe(before + 1);
+      // The caret is back at the end of the item it was in.
+      host.emitFinal("and butter");
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk and butter") [ ]("Bread")) ""');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("removes the item's dictated text first, then the item, never text typed before", async () => {
+    const { editor, host, notices } = await dictateInto(taskList(task(true, "<p>Milk</p>")), "Milk");
+    try {
+      host.emitFinal("new item");
+      host.emitFinal("eggs");
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk") [ ]("Eggs")) ""');
+      host.emitFinal("scratch that");
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk") [ ]("")) ""');
+      host.emitFinal("scratch that");
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk")) ""');
+      // "Milk" was typed, not dictated: nothing left to scratch.
+      host.emitFinal("scratch that");
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk")) ""');
+      expect(notices).not.toContainEqual({ kind: "scratch_refused" });
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("refuses to remove an item the author typed into", async () => {
+    const { editor, host, notices } = await dictateInto(taskList(task(true, "<p>Milk</p>")), "Milk");
+    try {
+      host.emitFinal("new item");
+      editor.commands.insertContent("eggs");
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk") [ ]("eggs")) ""');
+      host.emitFinal("scratch that");
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk") [ ]("eggs")) ""');
+      expect(notices).toContainEqual({ kind: "scratch_refused" });
     } finally {
       editor.destroy();
     }
