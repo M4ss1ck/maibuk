@@ -29,15 +29,13 @@ import { Modal } from "@/components/ui/Modal";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { toast } from "@/components/ui/Toast";
 import { useModalStore } from "@/components/ui/modal-store";
-import { useBookStore } from "@/features/books/store";
-import { useCanvasStore } from "@/features/canvas/store";
-import { listChapterTitles, type ChapterTitle } from "@/features/chapters/store";
 import {
   buildCommandItems,
   buildEntityItems,
   buildPageItems,
   buildSettingsItems,
   liveRecentKeys,
+  loadPaletteEntities,
   preparePaletteIndex,
   searchPalette,
   useCommandPaletteRecentStore,
@@ -53,7 +51,6 @@ import type {
 import type { SettingsRowId } from "@/components/settings/settings-sections";
 import { focusSettingsRow } from "@/features/settings/focus-row";
 import { currentSettingsPlatform } from "@/features/settings/rows";
-import { useNoteStore } from "@/features/notes/store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { normalizeLanguage } from "@/features/settings/types";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
@@ -92,12 +89,9 @@ function OpenCommandPalette() {
   const [page, setPage] = useState<PalettePage>("root");
   const [announcement, setAnnouncement] = useState("");
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [entities, setEntities] = useState<{
-    books: ReturnType<typeof useBookStore.getState>["books"];
-    chapters: ChapterTitle[];
-    notes: ReturnType<typeof useNoteStore.getState>["notes"];
-    canvases: ReturnType<typeof useCanvasStore.getState>["canvases"];
-  } | null>(null);
+  const [entities, setEntities] = useState<Awaited<ReturnType<typeof loadPaletteEntities>> | null>(
+    null
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const removalRef = useRef(false);
   const previousCountRef = useRef(-1);
@@ -121,32 +115,13 @@ function OpenCommandPalette() {
     [snapshot, translate, i18n.language, customVoice]
   );
 
-  // Entities load once per open, in the background: the Commands are listed
-  // right away and merge in when the Library answers, so there is no spinner
-  // to flash. A store that already holds its list is not re-read.
+  // Read names once per open without refreshing the app behind the dialog.
+  // Commands and Suggested appear immediately; Library rows merge in later.
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      const bookStore = useBookStore.getState();
-      const noteStore = useNoteStore.getState();
-      const canvasStore = useCanvasStore.getState();
-      const [, , , chapters] = await Promise.all([
-        // The refresh reads the Library without flipping the store's isLoading,
-        // which would blank the page behind the palette and drop the focus its
-        // opener held.
-        bookStore.refreshBooks(),
-        noteStore.refreshNotes(),
-        canvasStore.refreshCanvases(),
-        listChapterTitles(),
-      ]);
-      if (cancelled) return;
-      setEntities({
-        books: useBookStore.getState().books,
-        chapters,
-        notes: useNoteStore.getState().notes,
-        canvases: useCanvasStore.getState().canvases,
-      });
-    })();
+    void loadPaletteEntities().then((loaded) => {
+      if (!cancelled) setEntities(loaded);
+    });
     return () => {
       cancelled = true;
     };

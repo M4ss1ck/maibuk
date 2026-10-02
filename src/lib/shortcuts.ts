@@ -37,7 +37,6 @@ type Candidate = { binding: ShortcutBinding; steps: readonly Step[] };
 export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcutsOptions = {}) {
   const shortcutsRef = useRef(shortcuts);
   const sequenceRef = useRef<{ step: Step; time: number } | null>(null);
-  const modalIdsLen = useModalStore((s) => s.modalIds.length);
   const tutorialRunning = useTutorialStore((s) => isTutorialStatusActive(s.status));
   const isLive = (binding: ShortcutBinding) =>
     binding.enabled !== false && (!tutorialRunning || isTutorialShortcut(binding));
@@ -66,11 +65,6 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
 
   useEffect(() => {
     if (options.enabled === false) return;
-    if (modalIdsLen > 0) {
-      sequenceRef.current = null;
-      return;
-    }
-
     const timeout = options.sequenceTimeout ?? 600;
     const mac = isMac();
 
@@ -154,11 +148,37 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
       handleKeyDown(event);
     };
 
-    window.addEventListener("keydown", handleCaptureKeyDown, true);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
+    const removeListeners = () => {
       window.removeEventListener("keydown", handleCaptureKeyDown, true);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [options.enabled, options.sequenceTimeout, modalIdsLen]);
+    // Modal changes gate listeners, not rendered UI. Subscribing through the
+    // React hook would render every screen that binds a Command on open and
+    // close, blowing the Command Palette's frame budget (#376).
+    // The gate reopens synchronously, so a key that closes the last dialog
+    // would still reach the bubble listener added mid-dispatch. That key
+    // belonged to the dialog and must not also run a Command behind it.
+    let inFlight: KeyboardEvent | null = null;
+    const trackKeyDown = (event: KeyboardEvent) => {
+      inFlight = event;
+    };
+    const syncModalScope = () => {
+      removeListeners();
+      sequenceRef.current = null;
+      if (useModalStore.getState().modalIds.length > 0) return;
+      if (inFlight && inFlight.eventPhase !== Event.NONE) handled.add(inFlight);
+      window.addEventListener("keydown", handleCaptureKeyDown, true);
+      window.addEventListener("keydown", handleKeyDown);
+    };
+    window.addEventListener("keydown", trackKeyDown, true);
+    const unsubscribe = useModalStore.subscribe((state, previous) => {
+      if (state.modalIds.length !== previous.modalIds.length) syncModalScope();
+    });
+    syncModalScope();
+    return () => {
+      unsubscribe();
+      removeListeners();
+      window.removeEventListener("keydown", trackKeyDown, true);
+    };
+  }, [options.enabled, options.sequenceTimeout]);
 }

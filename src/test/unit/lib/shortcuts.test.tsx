@@ -40,6 +40,52 @@ describe("useShortcuts modal blocking", () => {
     vi.useRealTimers();
   });
 
+  it("gates shortcuts on dialog changes without rendering the subscribing screen", async () => {
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+    const renderScreen = vi.fn();
+    const { unmount } = renderHook(() => {
+      renderScreen();
+      useShortcuts([{ id: "common.save", onTrigger }]);
+    });
+    const renders = renderScreen.mock.calls.length;
+
+    act(() => useModalStore.getState().register("first"));
+    act(() => useModalStore.getState().register("second"));
+    act(() => useModalStore.getState().unregister("first"));
+    expect(press({ key: "s", ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(onTrigger).not.toHaveBeenCalled();
+    act(() => useModalStore.getState().unregister("second"));
+    expect(press({ key: "s", ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+    expect(renderScreen).toHaveBeenCalledTimes(renders);
+
+    unmount();
+    act(() => useModalStore.getState().register("after-unmount"));
+    act(() => useModalStore.getState().unregister("after-unmount"));
+    expect(press({ key: "s", ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fire a shortcut with the key that closed the last dialog", async () => {
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+    renderHook(() => useShortcuts([{ id: "common.save", onTrigger }]));
+    act(() => useModalStore.getState().register("dialog"));
+
+    const control = document.createElement("button");
+    document.body.append(control);
+    control.addEventListener("keydown", () => useModalStore.getState().unregister("dialog"));
+    try {
+      expect(press({ key: "s", ctrlKey: true }, control).defaultPrevented).toBe(false);
+      expect(onTrigger).not.toHaveBeenCalled();
+      expect(press({ key: "s", ctrlKey: true }, control).defaultPrevented).toBe(true);
+      expect(onTrigger).toHaveBeenCalledTimes(1);
+    } finally {
+      control.remove();
+    }
+  });
+
   it("does not fire shortcuts while any modal is open (listener removed)", async () => {
     useModalStore.setState({ modalIds: ["modal-1"], openCount: 1 });
 

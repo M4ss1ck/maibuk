@@ -170,6 +170,9 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
     .size;
 
   const sections = useMemo(() => {
+    // A closed editor stays mounted to retain its query and filter, but must
+    // not rebuild the Command catalog when another dialog opens (#376).
+    if (!isOpen) return [];
     const needle = query.trim().toLowerCase();
     return SHORTCUT_SECTIONS.map((section) => ({
       ...section,
@@ -200,7 +203,7 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
       }),
     })).filter((section) => section.ids.length > 0);
     // `t` changes with the language; the list must follow it.
-  }, [query, filter, settings.custom, settings.voice, voiceLanguage, t]);
+  }, [isOpen, query, filter, settings.custom, settings.voice, voiceLanguage, t]);
 
   useEffect(() => {
     if (!focusTarget) return;

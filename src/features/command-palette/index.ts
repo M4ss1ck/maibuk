@@ -13,3 +13,4 @@ export type {
 export { buildSettingsItems } from "@/features/command-palette/settings-items";
 export type { BuildSettingsItemsOptions } from "@/features/command-palette/settings-items";
 export * from "@/features/command-palette/palette-index";
+export { loadPaletteEntities } from "@/features/command-palette/load-entities";

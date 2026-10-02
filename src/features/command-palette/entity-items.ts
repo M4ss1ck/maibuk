@@ -9,11 +9,11 @@ import type {
 } from "@/features/command-palette/palette-index";
 
 export interface BuildEntityItemsOptions {
-  books: readonly Book[];
+  books: readonly Pick<Book, "id" | "title">[];
   /** Chapter titles across all Books, without their content. */
   chapters: readonly ChapterTitle[];
-  notes: readonly Note[];
-  canvases: readonly Canvas[];
+  notes: readonly Pick<Note, "id" | "title" | "bookId">[];
+  canvases: readonly Pick<Canvas, "id" | "title">[];
   t: PaletteTranslate;
 }
 
