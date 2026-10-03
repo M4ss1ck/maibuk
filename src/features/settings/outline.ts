@@ -110,58 +110,52 @@ export function reduceOutlinePin(state: OutlinePin, event: OutlinePinEvent): Out
   }
 }
 
-/** How one kept outline entry slides when the entries change (FLIP). */
-export interface OutlineMove {
-  key: string;
-  /** Start offset from the new position, in px; it animates back to 0. */
-  dy: number;
-}
+/**
+ * The outline's section-change motion: one phase at a time, never overlapping.
+ * `collapsing` folds the shown section's rows away before the highlight moves;
+ * `expanding` grows the new section's rows after it. `shown` is the section
+ * whose rows are on screen, not necessarily the current selection: the rows
+ * remain the old ones through `collapsing`, and the machine rests with the new
+ * one.
+ */
+export type OutlineTransition =
+  | { phase: "idle"; shown: string | null }
+  | { phase: "collapsing"; shown: string; next: string | null }
+  | { phase: "expanding"; shown: string | null };
 
-/** How a removed entry's ghost leaves: from its old top, by `dy`, fading out. */
-export interface OutlineExit {
-  key: string;
-  top: number;
-  dy: number;
-}
+export type OutlineTransitionEvent =
+  | { type: "section"; section: string | null; animate: boolean }
+  | { type: "collapsed" }
+  | { type: "expanded" };
+
+export const INITIAL_OUTLINE_TRANSITION: OutlineTransition = { phase: "idle", shown: null };
 
 /**
- * Moves that turn an abrupt outline change into motion. Tops are layout
- * positions (no transforms) in the outline's scroll content; `offsets` are
- * the transforms still applied by an interrupted animation, so a move starts
- * where the entry is on screen, not where it last landed. New entries appear
- * in place (`enters`); a removed entry's ghost follows the nearest kept entry
- * above it, so closing rows fold up with their heading.
+ * The sequential section-change motion. A section already shown is a no-op; a
+ * quiet change (search, reduced motion) and any change that arrives while a
+ * phase runs land in `idle` — the hook reads that as "snap", cancelling what
+ * runs. From `idle` with a section already shown, an animated change enters
+ * `collapsing`; `collapsed` advances it to `expanding`, and `expanded` rests.
+ * `collapsed` and `expanded` are ignored outside their phase, so a late
+ * finish from a cancelled animation changes nothing.
  */
-export function planOutlineMotion(
-  previous: { order: readonly string[]; tops: ReadonlyMap<string, number> },
-  next: { order: readonly string[]; tops: ReadonlyMap<string, number> },
-  offsets: ReadonlyMap<string, number> = new Map()
-): { moves: OutlineMove[]; enters: string[]; exits: OutlineExit[] } {
-  const moves: OutlineMove[] = [];
-  const enters: string[] = [];
-  for (const key of next.order) {
-    const from = previous.tops.get(key);
-    const to = next.tops.get(key);
-    if (to === undefined) continue;
-    if (from === undefined) {
-      enters.push(key);
-      continue;
+export function reduceOutlineTransition(
+  state: OutlineTransition,
+  event: OutlineTransitionEvent
+): OutlineTransition {
+  switch (event.type) {
+    case "section": {
+      if (state.shown === event.section) return state;
+      if (!event.animate) return { phase: "idle", shown: event.section };
+      if (state.phase !== "idle") return { phase: "idle", shown: event.section };
+      if (state.shown === null) return { phase: "idle", shown: event.section };
+      return { phase: "collapsing", shown: state.shown, next: event.section };
     }
-    const dy = from + (offsets.get(key) ?? 0) - to;
-    if (Math.abs(dy) >= 0.5) moves.push({ key, dy });
+    case "collapsed":
+      if (state.phase !== "collapsing") return state;
+      return { phase: "expanding", shown: state.next };
+    case "expanded":
+      if (state.phase !== "expanding") return state;
+      return { phase: "idle", shown: state.shown };
   }
-
-  const exits: OutlineExit[] = [];
-  let shift = 0;
-  for (const key of previous.order) {
-    const from = previous.tops.get(key);
-    if (from === undefined) continue;
-    const to = next.tops.get(key);
-    if (to !== undefined) {
-      shift = to - from - (offsets.get(key) ?? 0);
-      continue;
-    }
-    exits.push({ key, top: from, dy: shift });
-  }
-  return { moves, enters, exits };
 }

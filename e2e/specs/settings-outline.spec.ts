@@ -5,7 +5,12 @@
 import type { Page } from "@playwright/test";
 import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { capture } from "../support/capture";
-import { recordOutlineOverflow, type OutlineFrame } from "../support/settings-outline";
+import {
+  recordOutlineOverflow,
+  recordOutlineSections,
+  type OutlineFrame,
+  type OutlineSectionFrame,
+} from "../support/settings-outline";
 import { expect, test } from "../support/test";
 
 test.use({ library: "oneBookThreeChapters" });
@@ -124,6 +129,100 @@ test.describe("Settings outline @wf:settings-outline", () => {
       worstHorizontal.hOverflow,
       `no horizontal overflow while the outline moves: ${JSON.stringify(worstHorizontal)}`
     ).toBeLessThanOrEqual(0);
+  });
+
+  // A section change runs one phase at a time: the old rows fold away before
+  // the new section's rows exist. An overlapping model would show two sections'
+  // rows at once, which is what the sampled frames below rule out.
+  test("A section change collapses the old rows before the new ones appear", async ({
+    page,
+  }) => {
+    await openSettings(page);
+    await tabTo(page, entry(page, "Appearance"), { backwards: true, max: 4 });
+    await pressUntilFocused(page, "ArrowDown", entry(page, "General"));
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "General", level: 2 })).toBeFocused();
+    // Let the jump settle so the one press moves the scroll spy once.
+    await page.waitForTimeout(700);
+
+    const frames = await recordOutlineSections(page, () => page.keyboard.press("PageDown"), 1);
+    expect(frames.length, "outline sampled per painted frame").toBeGreaterThan(30);
+    const both = frames.filter((frame) => frame.sections.length > 1);
+    expect(
+      both,
+      `no frame may hold two sections' rows at once: ${JSON.stringify(
+        frames.filter((frame) => frame.sections.length > 0).slice(0, 12)
+      )}`
+    ).toEqual([]);
+    // The change really did reach a new section, and the collapse ran first: a
+    // frame whose rows belong to the *old* section while the header is already
+    // the new one, and whose laid-out height is part way out. Folding away is
+    // what takes those intermediate values; removing the rows in one commit
+    // cannot, and the new section's own expand never touches rows that are not
+    // the current section's.
+    expect(new Set(frames.map((frame) => frame.current)).size).toBeGreaterThan(1);
+    const tallest = Math.max(...frames.map((frame) => frame.rowHeight));
+    expect(
+      frames.filter(
+        (frame) =>
+          frame.sections.some((section) => section !== frame.current) &&
+          frame.rowHeight > 0 &&
+          frame.rowHeight < tallest
+      ),
+      `the old rows folded away over frames: ${JSON.stringify(
+        frames.map((frame) => `${frame.current}/${frame.sections}=${frame.rowHeight.toFixed(1)}`)
+      )}`
+    ).not.toEqual([]);
+    // And the new section's rows end up laid out at their natural size.
+    expect(frames.at(-1)?.rowHeight).toBeGreaterThan(0);
+  });
+
+  // A change that arrives mid-phase cancels the motion and shows the current
+  // section at once: what is left on screen is that section's rows, still.
+  test("Fast scrolling shows the current section without leftover motion", async ({ page }) => {
+    await openSettings(page);
+    await tabTo(page, entry(page, "Appearance"), { backwards: true, max: 4 });
+    await pressUntilFocused(page, "ArrowDown", entry(page, "General"));
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "General", level: 2 })).toBeFocused();
+    await page.waitForTimeout(700);
+
+    const frames = await recordOutlineSections(page, () => page.keyboard.press("PageDown"), 6);
+    expect(frames.length, "outline sampled per painted frame").toBeGreaterThan(30);
+    expect(new Set(frames.map((frame) => frame.current)).size, "the presses moved the scroll spy")
+      .toBeGreaterThan(1);
+    // An interrupted change leaves no trace either: two sections' rows are never
+    // both on screen, because the new section's rows arrive with the snap that
+    // cancels the old ones.
+    expect(
+      frames.filter((frame) => frame.sections.length > 1),
+      `no frame may hold two sections' rows at once: ${JSON.stringify(frames.slice(-8))}`
+    ).toEqual([]);
+
+    // The series converges: the outline comes to rest and stays there, holding the
+    // current section's rows with nothing running. A change may still animate
+    // when the spy moves on its own; what may not survive it is leftover motion
+    // stacked on motion, which is what left rows flickering before.
+    const atRest = (frame: OutlineSectionFrame) =>
+      frame.animating === 0 &&
+      frame.sections.length === 1 &&
+      frame.sections[0] === frame.current;
+    let lastMoving = -1;
+    for (let index = frames.length - 1; index >= 0; index--) {
+      if (atRest(frames[index])) continue;
+      lastMoving = index;
+      break;
+    }
+    expect(lastMoving, "the series animated at all").toBeGreaterThanOrEqual(0);
+    const settled = frames.slice(lastMoving + 1);
+    expect(
+      settled.length,
+      `the outline came to rest within 3 frames of its last change: ${JSON.stringify(frames.slice(-10))}`
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      settled.filter((frame) => !atRest(frame)),
+      `the outline stayed at rest: ${JSON.stringify(settled.slice(0, 6))}`
+    ).toEqual([]);
   });
 
   // At 1280x600 the outline really does overflow: expanding Editor lists more

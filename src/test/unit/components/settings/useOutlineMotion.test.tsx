@@ -11,18 +11,47 @@ vi.mock("react-i18next", () => ({
 const { SettingsOutline } = await import("@/components/settings/SettingsOutline");
 
 const ROW_HEIGHT = 20;
-const present: SettingsSectionId[] = ["appearance", "general", "editor"];
+const present: SettingsSectionId[] = ["appearance", "general", "about"];
 
 interface Call {
   key: string | null;
-  ghost: boolean;
   keyframes: Keyframe[];
+  options: KeyframeAnimationOptions;
+  animation: FakeAnimation;
+}
+
+/** A controllable Web Animations stand-in: `finished` resolves on `finish()`. */
+class FakeAnimation {
+  onfinish: (() => void) | null = null;
+  oncancel: (() => void) | null = null;
+  private resolve!: () => void;
+  readonly finished: Promise<void> = new Promise((resolve) => {
+    this.resolve = resolve;
+  });
+  cancelled = false;
+
+  cancel() {
+    this.cancelled = true;
+    if (this.oncancel) this.oncancel();
+  }
+
+  finish() {
+    if (this.onfinish) this.onfinish();
+    this.resolve();
+  }
 }
 let calls: Call[];
 let reducedMotion: boolean;
 
-// jsdom has no layout: an entry's top is its place in the tree, and an
-// animation is a record of what was asked for.
+/** Runs the animations a change started to their end, as the browser would. */
+function finishAnimations(match: (call: Call) => boolean) {
+  const finished = calls.filter(match);
+  for (const call of finished) call.animation.finish();
+  return finished;
+}
+
+// jsdom has no layout: an entry spans ROW_HEIGHT px, and an animation is a
+// record of what was asked for.
 beforeEach(() => {
   calls = [];
   reducedMotion = false;
@@ -38,13 +67,14 @@ beforeEach(() => {
     configurable: true,
     get: () => ROW_HEIGHT,
   });
-  HTMLElement.prototype.animate = function (this: HTMLElement, keyframes: Keyframe[]) {
-    calls.push({
-      key: this.dataset.key ?? null,
-      ghost: this.closest("[aria-hidden]") !== null,
-      keyframes,
-    });
-    return { cancel() {}, onfinish: null } as unknown as Animation;
+  HTMLElement.prototype.animate = function (
+    this: HTMLElement,
+    keyframes: Keyframe[],
+    options: KeyframeAnimationOptions
+  ) {
+    const animation = new FakeAnimation();
+    calls.push({ key: this.dataset.key ?? null, keyframes, options, animation });
+    return animation as unknown as Animation;
   } as HTMLElement["animate"];
   HTMLElement.prototype.getAnimations = () => [];
   vi.spyOn(window, "matchMedia").mockImplementation(
@@ -67,7 +97,13 @@ afterEach(() => {
 const select = (section: string): OutlineSelection => ({ section, row: null });
 const marker = (container: HTMLElement) =>
   container.querySelector<HTMLElement>("[data-outline-marker]")!;
-const translateOf = (call: Call | undefined) => call?.keyframes[0].transform;
+const rowsOf = (section: string) =>
+  screen.queryAllByRole("row").filter((row) => row.dataset.key?.startsWith(`row:${section}:`));
+const rowKeysOf = (section: string) => rowsOf(section).map((row) => row.dataset.key);
+const collapseCalls = () => calls.filter((call) => call.options.duration === 90);
+const expandCalls = () => calls.filter((call) => call.options.duration === 130);
+const rowExpands = (section: string) =>
+  expandCalls().filter((call) => call.key?.startsWith(`row:${section}:`));
 
 function renderOutline(section: string) {
   const onJump = vi.fn();
@@ -89,34 +125,85 @@ describe("Settings outline motion", () => {
     expect(marker(container).style.opacity).toBe("1");
   });
 
-  it("a new current section slides the kept entries, fades its rows in, and fades the old rows out", async () => {
-    const { container, moveTo } = renderOutline("appearance");
-    const appearanceRows = screen.getAllByRole("row").length - present.length;
-    expect(appearanceRows).toBeGreaterThan(0);
+  it("A to B collapses A's rows, and only once they finish does B expand", async () => {
+    const { moveTo } = renderOutline("appearance");
+    const aRows = rowKeysOf("appearance");
+    expect(aRows.length).toBeGreaterThan(0);
 
     await act(async () => moveTo("general"));
 
-    // General moved up past the Appearance rows that closed.
-    const general = calls.find((call) => call.key === "section:general");
-    expect(translateOf(general)).toBe(`translateY(${appearanceRows * ROW_HEIGHT}px)`);
-    // General's rows are new: they fade in where they land.
-    const entering = calls.filter((call) => call.key?.startsWith("row:general:"));
-    expect(entering.length).toBeGreaterThan(0);
-    expect(entering.every((call) => call.keyframes[0].opacity === 0)).toBe(true);
-    // Each closed Appearance row leaves a hidden ghost that fades out.
-    const ghosts = calls.filter((call) => call.ghost);
-    expect(ghosts).toHaveLength(appearanceRows);
-    expect(ghosts.every((call) => call.keyframes.at(-1)?.opacity === 0)).toBe(true);
-    // The marker slides to General's new place.
-    expect(marker(container).style.transform).toBe(`translateY(${ROW_HEIGHT}px)`);
+    // Appearance's rows collapse to nothing; General's do not exist yet.
+    const collapsing = collapseCalls();
+    expect(collapsing.map((call) => call.key)).toEqual(aRows);
+    expect(collapsing[0].keyframes[0].height).toBe(`${ROW_HEIGHT}px`);
+    expect(collapsing.at(-1)!.keyframes.at(-1)?.height).toBe("0px");
+    expect(collapsing.every((call) => call.keyframes[0].opacity === 1)).toBe(true);
+    expect(collapsing.every((call) => call.keyframes.at(-1)?.opacity === 0)).toBe(true);
+    expect(rowsOf("general")).toEqual([]);
+    expect(rowExpands("general")).toEqual([]);
+
+    // The collapse finishes: React swaps the rows and General's grow in.
+    await act(async () => finishAnimations((call) => call.options.duration === 90));
+
+    expect(rowKeysOf("appearance")).toEqual([]);
+    const bRows = rowKeysOf("general");
+    expect(bRows.length).toBeGreaterThan(0);
+    // Exactly one grow per General row, and the phase's own rows only.
+    const expanding = rowExpands("general");
+    expect(expanding.map((call) => call.key)).toEqual(bRows);
+    expect(expanding[0].keyframes[0].height).toBe("0px");
+    expect(expanding.at(-1)!.keyframes.at(-1)?.height).toBe(`${ROW_HEIGHT}px`);
+    expect(expanding.every((call) => call.keyframes[0].opacity === 0)).toBe(true);
+    expect(expanding.every((call) => call.keyframes.at(-1)?.opacity === 1)).toBe(true);
   });
 
-  it("ghosts stay out of the accessibility tree", async () => {
+  it("a change while A collapses cancels it, shows C at once, and never shows B", async () => {
     const { moveTo } = renderOutline("appearance");
     await act(async () => moveTo("general"));
-    const names = screen.getAllByRole("row").map((row) => row.getAttribute("data-key"));
-    expect(names.some((key) => key?.startsWith("row:appearance:"))).toBe(false);
-    expect(names.every((key) => key !== null)).toBe(true);
+
+    const collapsing = collapseCalls();
+    expect(collapsing.length).toBeGreaterThan(0);
+
+    const beforeInterrupt = calls.length;
+    await act(async () => moveTo("about"));
+
+    // Every collapse was cancelled, C's rows render in place, and B never did.
+    expect(collapsing.every((call) => call.animation.cancelled)).toBe(true);
+    expect(rowsOf("general")).toEqual([]);
+    const cRows = rowKeysOf("about");
+    expect(cRows.length).toBeGreaterThan(0);
+    // Nothing animated C's rows in: the snap renders them at full size.
+    const after = calls.slice(beforeInterrupt);
+    for (const key of cRows) {
+      expect(after.filter((call) => call.key === key).length).toBe(0);
+    }
+
+    // A late finish from the cancelled collapse changes nothing.
+    const settled = calls.length;
+    await act(async () => finishAnimations(() => true));
+    expect(calls.length).toBe(settled);
+  });
+
+  it("a change while B expands cancels it and shows C with no animation", async () => {
+    const { moveTo } = renderOutline("appearance");
+    await act(async () => moveTo("general"));
+    await act(async () => finishAnimations((call) => call.options.duration === 90));
+
+    const expanding = rowExpands("general");
+    expect(expanding.length).toBeGreaterThan(0);
+
+    const beforeInterrupt = calls.length;
+    await act(async () => moveTo("about"));
+
+    expect(expanding.every((call) => call.animation.cancelled)).toBe(true);
+    const cRows = rowKeysOf("about");
+    expect(cRows.length).toBeGreaterThan(0);
+    expect(rowsOf("general")).toEqual([]);
+    // Nothing animated C's rows: the snap renders them where they land.
+    const after = calls.slice(beforeInterrupt);
+    for (const key of cRows) {
+      expect(after.filter((call) => call.key === key).length).toBe(0);
+    }
   });
 
   it("reduced motion changes the outline without animating it", async () => {
@@ -124,6 +211,9 @@ describe("Settings outline motion", () => {
     const { container, moveTo } = renderOutline("appearance");
     await act(async () => moveTo("general"));
     expect(calls).toEqual([]);
+    expect(rowsOf("general").length).toBeGreaterThan(0);
+    expect(rowsOf("appearance")).toEqual([]);
+    // The marker sits beside General's header, where it belongs.
     expect(marker(container).style.transform).toBe(`translateY(${ROW_HEIGHT}px)`);
   });
 
@@ -131,6 +221,10 @@ describe("Settings outline motion", () => {
     const user = userEvent.setup();
     renderOutline("appearance");
     await user.type(screen.getByRole("searchbox"), "a");
+    // Let the search's own frame pass: it must not have started anything.
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    });
     expect(calls).toEqual([]);
   });
 
@@ -146,18 +240,19 @@ describe("Settings outline motion", () => {
   });
 
   // React Aria's Tree commits rows in renders of its own, after the outline's
-  // layout effect; without watching the DOM they would paint before fading.
-  it("rows the tree adds outside an outline render still fade in", async () => {
+  // layout effect; without watching the DOM they would paint before growing.
+  it("rows the tree adds outside an outline render animate in", async () => {
     renderOutline("appearance");
     const tree = screen.getByRole("treegrid");
     const row = document.createElement("div");
     row.setAttribute("role", "row");
-    row.dataset.key = "row:appearance:late";
+    // General is not the shown section, so no transition owns this row.
+    row.dataset.key = "row:general:late";
     await act(async () => {
       tree.append(row);
       await Promise.resolve();
     });
-    const call = calls.find((entry) => entry.key === "row:appearance:late");
+    const call = calls.find((entry) => entry.key === "row:general:late");
     expect(call?.keyframes[0].opacity).toBe(0);
     row.remove();
   });
@@ -172,12 +267,13 @@ describe("Settings outline motion", () => {
     try {
       const { moveTo } = renderOutline("appearance");
       scrollTo.mockClear();
-      await act(async () => moveTo("editor"));
-      const editorTop = screen
+      await act(async () => moveTo("about"));
+      const aboutTop = screen
         .getAllByRole("row")
-        .findIndex((row) => row.getAttribute("data-key") === "section:editor");
+        .findIndex((row) => row.getAttribute("data-key") === "section:about");
+      const bottom = (aboutTop + 1) * ROW_HEIGHT;
       expect(scrollTo).toHaveBeenCalledWith({
-        top: (editorTop + 1) * ROW_HEIGHT - ROW_HEIGHT * 2 + 8,
+        top: bottom - ROW_HEIGHT * 2 + 8,
         behavior: "smooth",
       });
     } finally {
@@ -186,3 +282,5 @@ describe("Settings outline motion", () => {
     }
   });
 });
+
+

@@ -80,3 +80,98 @@ export async function recordOutlineOverflow(
   }
   return samples;
 }
+
+/** What one painted frame of the outline held. */
+export interface OutlineSectionFrame {
+  /** Sections whose sub-rows are in the DOM, in tree order. */
+  sections: string[];
+  /** The section whose header carries ", current". */
+  current: string | null;
+  /** Sub-rows with a running animation: motion that outlived its change. */
+  animating: number;
+  /** Laid-out height of every sub-row together: what a collapse shrinks. */
+  rowHeight: number;
+}
+
+/** Frames sampled after the last press, long enough for both phases to end. */
+const TAIL_FRAMES = 30;
+
+// A sampler that lives in the page: one `page.evaluate` per frame would cost a
+// round trip far longer than the 90ms collapse it is meant to observe.
+const START_SAMPLER = () => {
+  const scope = window as unknown as {
+    __outlineSamples?: OutlineSectionFrame[];
+    __outlineRunning?: boolean;
+  };
+  const read = (): void => {
+    const box = document.querySelector<HTMLElement>(
+      'nav[data-settings-navigation] div:has(> [role="treegrid"])'
+    );
+    const rows = [...(box?.querySelectorAll<HTMLElement>('[role="row"][data-key]') ?? [])];
+    const sections: string[] = [];
+    let current: string | null = null;
+    let animating = 0;
+    let rowHeight = 0;
+    for (const row of rows) {
+      const key = row.dataset.key ?? "";
+      if (key.startsWith("row:")) {
+        animating += row.getAnimations().length;
+        rowHeight += row.getBoundingClientRect().height;
+        const section = key.slice("row:".length).split(":")[0];
+        if (!sections.includes(section)) sections.push(section);
+      } else if (
+        key.startsWith("section:") &&
+        (row.getAttribute("aria-label") ?? "").endsWith(", current")
+      ) {
+        current = key.slice("section:".length);
+      }
+    }
+    scope.__outlineSamples ??= [];
+    scope.__outlineSamples.push({ sections, current, animating, rowHeight });
+    if (scope.__outlineRunning) requestAnimationFrame(read);
+  };
+  scope.__outlineSamples = [];
+  scope.__outlineRunning = true;
+  requestAnimationFrame(read);
+};
+
+const STOP_SAMPLER = () => {
+  const scope = window as unknown as {
+    __outlineSamples?: OutlineSectionFrame[];
+    __outlineRunning?: boolean;
+  };
+  scope.__outlineRunning = false;
+  const samples = scope.__outlineSamples ?? [];
+  scope.__outlineSamples = undefined;
+  return samples;
+};
+
+/**
+ * Records every painted frame of the section change `presses` presses cause:
+ * which sections have sub-rows in the DOM, which header is current, and how
+ * many sub-rows still have a running animation. Sampling continues for
+ * {@link TAIL_FRAMES} frames after the last press, so a caller can see both
+ * the change and the frames where the outline has settled. `press` is the
+ * caller's own `page.keyboard.press`, so the spec keeps the keyboard.
+ */
+export async function recordOutlineSections(
+  page: Page,
+  press: () => Promise<void>,
+  presses: number = 1
+): Promise<OutlineSectionFrame[]> {
+  await page.evaluate(START_SAMPLER);
+  for (let pressIndex = 0; pressIndex < presses; pressIndex++) await press();
+  await page.evaluate(
+    ([frames]) =>
+      new Promise<void>((resolve) => {
+        let left = frames;
+        const tick = () => {
+          if (--left <= 0) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+    [TAIL_FRAMES]
+  );
+  return page.evaluate(STOP_SAMPLER);
+}

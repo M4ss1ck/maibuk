@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Button as AriaButton,
@@ -12,7 +12,12 @@ import {
 import { ChevronRight, Search, X } from "lucide-react";
 import { SETTINGS_SECTIONS, type SettingsRowId } from "@/components/settings/settings-sections";
 import type { SettingsSectionId } from "@/components/settings/SettingsSection";
-import { buildOutline, type OutlineSelection } from "@/features/settings/outline";
+import {
+  INITIAL_OUTLINE_TRANSITION,
+  buildOutline,
+  reduceOutlineTransition,
+  type OutlineSelection,
+} from "@/features/settings/outline";
 import { currentSettingsPlatform } from "@/features/settings/rows";
 import {
   OUTLINE_EASING,
@@ -29,6 +34,10 @@ interface SettingsOutlineProps {
 const sectionKey = (id: string) => `section:${id}`;
 const rowKey = (section: string, row: string) => `row:${section}:${row}`;
 
+function prefersReducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
 /**
  * The Settings outline beside the sections: a search field and a tree of
  * sections, the current one listing its rows. It has no backdrop; the ASCII
@@ -43,6 +52,17 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => setOpened(new Set()), [selection.section]);
 
+  // One section change at a time: collapse the old rows, move the marker,
+  // expand the new rows. A change mid-phase cancels and snaps.
+  const [transition, dispatch] = useReducer(reduceOutlineTransition, INITIAL_OUTLINE_TRANSITION);
+  useEffect(() => {
+    dispatch({
+      type: "section",
+      section: selection.section,
+      animate: query === "" && !prefersReducedMotion(),
+    });
+  }, [selection.section, query]);
+
   const outline = useMemo(
     () =>
       buildOutline(SETTINGS_SECTIONS, {
@@ -50,9 +70,9 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
         platform: currentSettingsPlatform(),
         translate,
         query,
-        openSection: selection.section,
+        openSection: transition.shown,
       }),
-    [present, translate, query, selection.section]
+    [present, translate, query, transition.shown]
   );
 
   const expandedKeys = useMemo(
@@ -67,15 +87,20 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
-  const ghostsRef = useRef<HTMLDivElement>(null);
-  const currentKey = selection.section ? sectionKey(selection.section) : null;
+  // The marker follows the section whose rows are shown, so it stays beside the
+  // collapsing section until its rows have folded away.
+  const currentKey = transition.shown ? sectionKey(transition.shown) : null;
+  // The outline glides to the entry the page has selected, which is the new
+  // section's header while the old rows are still folding away.
+  const selectedKey = selection.section ? sectionKey(selection.section) : null;
   useOutlineMotion({
     scrollerRef,
     markerRef,
-    ghostsRef,
+    transition,
+    dispatch,
     currentKey,
     visibleKey:
-      selection.section && selection.row ? rowKey(selection.section, selection.row) : currentKey,
+      selection.section && selection.row ? rowKey(selection.section, selection.row) : selectedKey,
     query,
   });
 
@@ -144,12 +169,6 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
               transitionDuration: `${OUTLINE_MOTION_MS}ms`,
               transitionTimingFunction: OUTLINE_EASING,
             }}
-          />
-          <div
-            ref={ghostsRef}
-            aria-hidden="true"
-            inert
-            className="pointer-events-none absolute inset-0 overflow-clip"
           />
           <Tree
             aria-label={t("settings.outline.label")}
