@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2026-10-03
+
+### Changed
+- Improve Command Palette dialog opening performance by avoiding unrelated work
+- Improve keyboard reordering performance in Chapter, Notes, and Toolbar Settings by parking text selections during drags
+
+### Fixed
+- Keep Command Palette Settings search targets visible and outline scrollbar stable when the Backup list loads
+- Prevent Settings outline animation from flashing or snapping during fast scrolling and mid-change retargets
+- Make Notes row buttons such as Edit, Duplicate, and Delete respond to Enter and Space instead of opening the note
+- Make Notes tree view rows keyboard-accessible with Enter to open, Shift+F10 for the item menu, and focus return after rename
+- Fix dictation so "new item" creates a checklist item and "scratch that" removes new line breaks without deleting the sentence above
+- Keep the key that closes the last dialog from immediately triggering a Command
+
 ## [0.10.2] - 2026-10-02
 
 ### Added
