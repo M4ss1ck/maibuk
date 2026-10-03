@@ -110,58 +110,76 @@ export function reduceOutlinePin(state: OutlinePin, event: OutlinePinEvent): Out
   }
 }
 
-/** How one kept outline entry slides when the entries change (FLIP). */
-export interface OutlineMove {
-  key: string;
-  /** Start offset from the new position, in px; it animates back to 0. */
-  dy: number;
-}
+/**
+ * The outline's section-change motion: one phase at a time, never overlapping.
+ * `collapsing` folds the shown section's rows away before the highlight moves;
+ * `expanding` grows the new section's rows after it. `shown` is the section
+ * whose rows are on screen, not necessarily the current selection: the rows
+ * remain the old ones through `collapsing`, and the machine rests with the new
+ * one.
+ */
+export type OutlineTransition =
+  | { phase: "idle"; shown: string | null }
+  | { phase: "collapsing"; shown: string; next: string | null }
+  | { phase: "expanding"; shown: string | null };
 
-/** How a removed entry's ghost leaves: from its old top, by `dy`, fading out. */
-export interface OutlineExit {
-  key: string;
-  top: number;
-  dy: number;
-}
+export type OutlineTransitionEvent =
+  | { type: "section"; section: string | null; animate: boolean }
+  | { type: "collapsed" }
+  | { type: "expanded" };
+
+export const INITIAL_OUTLINE_TRANSITION: OutlineTransition = { phase: "idle", shown: null };
 
 /**
- * Moves that turn an abrupt outline change into motion. Tops are layout
- * positions (no transforms) in the outline's scroll content; `offsets` are
- * the transforms still applied by an interrupted animation, so a move starts
- * where the entry is on screen, not where it last landed. New entries appear
- * in place (`enters`); a removed entry's ghost follows the nearest kept entry
- * above it, so closing rows fold up with their heading.
+ * The sequential section-change motion. From `idle`, an animated change to a
+ * section that has never been shown enters `collapsing`; `collapsed` advances it
+ * to `expanding`, and `expanded` rests.
+ *
+ * A change that arrives mid-phase is a retarget, not a new change to start over
+ * from: the phase already running keeps the space it has and the newest target
+ * replaces the one it was going to. A collapse takes the new target as its own,
+ * a change back to the section it is folding reverses into expanding it, and a
+ * change while a section is growing reverses into folding that section away from
+ * wherever its rows have got to. There is no queue: the newest target wins.
+ *
+ * A quiet change (a search, reduced motion) settles at once from anywhere,
+ * including when it names the section the phase is already showing, where an
+ * equality check placed first would leave the phase running behind it.
+ * `collapsed` and `expanded` are ignored outside their phase, so a late finish
+ * from a superseded phase changes nothing.
  */
-export function planOutlineMotion(
-  previous: { order: readonly string[]; tops: ReadonlyMap<string, number> },
-  next: { order: readonly string[]; tops: ReadonlyMap<string, number> },
-  offsets: ReadonlyMap<string, number> = new Map()
-): { moves: OutlineMove[]; enters: string[]; exits: OutlineExit[] } {
-  const moves: OutlineMove[] = [];
-  const enters: string[] = [];
-  for (const key of next.order) {
-    const from = previous.tops.get(key);
-    const to = next.tops.get(key);
-    if (to === undefined) continue;
-    if (from === undefined) {
-      enters.push(key);
-      continue;
+export function reduceOutlineTransition(
+  state: OutlineTransition,
+  event: OutlineTransitionEvent
+): OutlineTransition {
+  switch (event.type) {
+    case "section": {
+      if (!event.animate) return { phase: "idle", shown: event.section };
+      if (state.phase === "idle") {
+        if (state.shown === event.section) return state;
+        // Nothing to fold away: the new section is simply the one shown.
+        if (state.shown === null) return { phase: "idle", shown: event.section };
+        return { phase: "collapsing", shown: state.shown, next: event.section };
+      }
+      if (state.phase === "collapsing") {
+        if (event.section === state.next) return state;
+        // Back to the section being folded: grow it again from where it is.
+        if (event.section === state.shown) return { phase: "expanding", shown: state.shown };
+        return { phase: "collapsing", shown: state.shown, next: event.section };
+      }
+      // expanding: the same section is nothing to do, anything else folds it away.
+      if (event.section === state.shown) return state;
+      // An expanding phase with no section has nothing to fold; it only settles.
+      if (state.shown === null) return { phase: "idle", shown: event.section };
+      return { phase: "collapsing", shown: state.shown, next: event.section };
     }
-    const dy = from + (offsets.get(key) ?? 0) - to;
-    if (Math.abs(dy) >= 0.5) moves.push({ key, dy });
+    case "collapsed":
+      if (state.phase !== "collapsing") return state;
+      // Nothing left to show: the fold was the whole of the change.
+      if (state.next === null) return { phase: "idle", shown: null };
+      return { phase: "expanding", shown: state.next };
+    case "expanded":
+      if (state.phase !== "expanding") return state;
+      return { phase: "idle", shown: state.shown };
   }
-
-  const exits: OutlineExit[] = [];
-  let shift = 0;
-  for (const key of previous.order) {
-    const from = previous.tops.get(key);
-    if (from === undefined) continue;
-    const to = next.tops.get(key);
-    if (to !== undefined) {
-      shift = to - from - (offsets.get(key) ?? 0);
-      continue;
-    }
-    exits.push({ key, top: from, dy: shift });
-  }
-  return { moves, enters, exits };
 }

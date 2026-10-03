@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Button as AriaButton,
@@ -12,7 +12,12 @@ import {
 import { ChevronRight, Search, X } from "lucide-react";
 import { SETTINGS_SECTIONS, type SettingsRowId } from "@/components/settings/settings-sections";
 import type { SettingsSectionId } from "@/components/settings/SettingsSection";
-import { buildOutline, type OutlineSelection } from "@/features/settings/outline";
+import {
+  INITIAL_OUTLINE_TRANSITION,
+  buildOutline,
+  reduceOutlineTransition,
+  type OutlineSelection,
+} from "@/features/settings/outline";
 import { currentSettingsPlatform } from "@/features/settings/rows";
 import {
   OUTLINE_EASING,
@@ -29,6 +34,10 @@ interface SettingsOutlineProps {
 const sectionKey = (id: string) => `section:${id}`;
 const rowKey = (section: string, row: string) => `row:${section}:${row}`;
 
+function prefersReducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
 /**
  * The Settings outline beside the sections: a search field and a tree of
  * sections, the current one listing its rows. It has no backdrop; the ASCII
@@ -43,6 +52,19 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => setOpened(new Set()), [selection.section]);
 
+  // One section change at a time: fold the old rows away, move the marker, grow
+  // the new rows in. A change mid-phase retargets the phase or reverses it,
+  // from wherever its rows have got to; a search or reduced motion settles at
+  // once.
+  const [transition, dispatch] = useReducer(reduceOutlineTransition, INITIAL_OUTLINE_TRANSITION);
+  useEffect(() => {
+    dispatch({
+      type: "section",
+      section: selection.section,
+      animate: query === "" && !prefersReducedMotion(),
+    });
+  }, [selection.section, query]);
+
   const outline = useMemo(
     () =>
       buildOutline(SETTINGS_SECTIONS, {
@@ -50,9 +72,9 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
         platform: currentSettingsPlatform(),
         translate,
         query,
-        openSection: selection.section,
+        openSection: transition.shown,
       }),
-    [present, translate, query, selection.section]
+    [present, translate, query, transition.shown]
   );
 
   const expandedKeys = useMemo(
@@ -67,15 +89,23 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
-  const ghostsRef = useRef<HTMLDivElement>(null);
-  const currentKey = selection.section ? sectionKey(selection.section) : null;
+  // The marker follows the section whose rows are shown, so it stays beside the
+  // folding section until its rows have gone, and the accessible "current"
+  // follows it: the highlight moves to the new section only once its rows are
+  // the ones on screen.
+  const currentSection = transition.shown ?? selection.section;
+  const currentKey = transition.shown ? sectionKey(transition.shown) : null;
+  // The outline glides to the entry the page has selected, which is the new
+  // section's header while the old rows are still folding away.
+  const selectedKey = selection.section ? sectionKey(selection.section) : null;
   useOutlineMotion({
     scrollerRef,
     markerRef,
-    ghostsRef,
+    transition,
+    dispatch,
     currentKey,
     visibleKey:
-      selection.section && selection.row ? rowKey(selection.section, selection.row) : currentKey,
+      selection.section && selection.row ? rowKey(selection.section, selection.row) : selectedKey,
     query,
   });
 
@@ -126,10 +156,14 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
         </p>
       ) : (
         // The scroll box is the entries' offset parent: the marker and the
-        // ghosts of closing rows share their coordinates.
+        // ghosts of closing rows share their coordinates. Sliding entries and
+        // exiting ghosts are clipped to their own boxes, so that motion never
+        // enlarges the scrollable overflow. Keep scrollbar space even when the
+        // tree fits: expanded sections can overflow in shorter windows, and
+        // inserting a scrollbar must not move the entries sideways.
         <div
           ref={scrollerRef}
-          className="relative mt-4 min-h-0 overflow-auto scrollbar-themed border-l border-border"
+          className="relative mt-4 min-h-0 overflow-y-scroll scrollbar-themed border-l border-border"
         >
           <div
             ref={markerRef}
@@ -141,21 +175,15 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
               transitionTimingFunction: OUTLINE_EASING,
             }}
           />
-          <div
-            ref={ghostsRef}
-            aria-hidden="true"
-            inert
-            className="pointer-events-none absolute inset-0"
-          />
           <Tree
             aria-label={t("settings.outline.label")}
             expandedKeys={expandedKeys}
             onExpandedChange={onExpandedChange}
             onAction={onAction}
-            className="outline-none"
+            className="outline-none overflow-clip"
           >
             {outline.map((section) => {
-              const isCurrent = section.id === selection.section;
+              const isCurrent = section.id === currentSection;
               return (
                 <TreeItem
                   key={section.id}
@@ -203,8 +231,13 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
                         aria-label={
                           rowCurrent ? `${row.label}, ${t("settings.outline.current")}` : row.label
                         }
+                        // The row's own box is the space a section change moves,
+                        // and it clips the label inside: the label keeps its size
+                        // and its padding while the row takes and gives up
+                        // height. The border box is what the fold measures and
+                        // animates, so it is stated rather than inherited.
                         className={({ isFocusVisible }) =>
-                          `block cursor-pointer truncate py-0.5 pl-6 pr-2 text-xs outline-none transition-colors ${
+                          `block overflow-hidden box-border cursor-pointer text-xs outline-none transition-colors ${
                             rowCurrent
                               ? "text-primary font-medium"
                               : "text-muted-foreground hover:text-foreground"
@@ -212,7 +245,9 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
                         }
                       >
                         <TreeItemContent>
-                          <span title={row.label}>{row.label}</span>
+                          <span className="block truncate py-0.5 pl-6 pr-2" title={row.label}>
+                            {row.label}
+                          </span>
                         </TreeItemContent>
                       </TreeItem>
                     );

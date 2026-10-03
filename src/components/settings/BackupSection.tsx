@@ -468,7 +468,7 @@ export function BackupSection() {
 
       <SettingRow id="backupsList" visuallyHiddenLabel className="py-3">
         {loading && totalCount === 0 ? (
-          <p role="status" className="text-sm text-muted-foreground">
+          <p role="status" data-settings-loading className="text-sm text-muted-foreground">
             {t("common.loading")}
           </p>
         ) : totalCount === 0 ? (

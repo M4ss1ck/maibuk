@@ -59,7 +59,8 @@ export function useSettingsOutline(scrollerRef: RefObject<HTMLElement | null>, t
     const measure = () => {
       frame = 0;
       const max = scroller.scrollHeight - scroller.clientHeight;
-      setProgress(max > 0 ? Math.min(1, scroller.scrollTop / max) : 0);
+      const progress = max > 0 ? Math.min(1, scroller.scrollTop / max) : 0;
+      setProgress(progress);
       const pinned = pin.current.pinned;
       if (pinned) {
         setSelection(pinned);

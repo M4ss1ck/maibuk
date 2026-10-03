@@ -210,6 +210,7 @@ export default defineConfig(() => ({
         "src/components/settings/AsciiBanner.tsx",
         "src/components/settings/AsciiFieldBackground.tsx",
         "src/features/settings/outline.ts",
+        "src/features/settings/outline-edge.ts",
         "src/components/settings/SettingsSection.tsx",
         "src/components/settings/SettingsOutline.tsx",
         "src/components/settings/SettingsSectionMenu.tsx",

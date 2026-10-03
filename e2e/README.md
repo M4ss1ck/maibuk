@@ -473,6 +473,22 @@ gh pr create --title "..." --body-file /tmp/pr-body.md $(cat /tmp/<branch>/scree
 `gh` (2.99 or later) uploads each `--attach` file to GitHub and rewrites the
 body's `![...](path)` references to it, so no image is committed.
 
+## Settings scrolling regression gate
+
+Settings results in the Command Palette reveal their row after initial loading
+above it finishes. Backups can grow after Settings mounts, and native WebKit does
+not preserve the target through that growth. The integration gate holds a Backup
+read unresolved past ten animation frames and verifies the request remains
+pending; success and failure release it, while an earlier Appearance row does
+not wait. The palette browser gate also starts Dictation navigation inside a Note.
+
+The outline clips animated entry/ghost overflow. In shorter windows, expanded
+rows genuinely exceed the available height; an always-present scrollbar reserves
+the same width in fitting and overflowing states. Separate browser gates sample
+painted frames at 800px and 600px heights, proving the main scroller moved and
+that legitimate overflow does not shift the outline sideways. Settled screenshots
+alone cannot detect these changes.
+
 ## Menu positioning regression gate
 
 A native `<button>` inside React Aria's `MenuTrigger` does not register its

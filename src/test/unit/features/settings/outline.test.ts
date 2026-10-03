@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   INITIAL_OUTLINE_PIN,
+  INITIAL_OUTLINE_TRANSITION,
   buildOutline,
   firstStartingInView,
-  planOutlineMotion,
   reduceOutlinePin,
+  reduceOutlineTransition,
   type OutlinePin,
+  type OutlineTransition,
 } from "@/features/settings/outline";
 import type { SettingsSectionDef } from "@/features/settings/rows";
 
@@ -157,71 +159,139 @@ describe("reduceOutlinePin()", () => {
   });
 });
 
-describe("planOutlineMotion()", () => {
-  const layout = (entries: [string, number][]) => ({
-    order: entries.map(([key]) => key),
-    tops: new Map(entries),
+describe("reduceOutlineTransition()", () => {
+  const section = (s: string | null, animate = true) =>
+    ({ type: "section", section: s, animate }) as const;
+  const collapsing: OutlineTransition = { phase: "collapsing", shown: "a", next: "b" };
+  const expanding: OutlineTransition = { phase: "expanding", shown: "b" };
+
+  it("starts from idle with nothing shown", () => {
+    expect(reduceOutlineTransition(INITIAL_OUTLINE_TRANSITION, section("a"))).toEqual({
+      phase: "idle",
+      shown: "a",
+    });
   });
 
-  // Appearance (rows a1, a2) is open, then General becomes current: the
-  // Appearance rows close and General's row g1 opens.
-  const before = layout([
-    ["appearance", 0],
-    ["a1", 20],
-    ["a2", 40],
-    ["general", 60],
-    ["editor", 80],
-  ]);
-  const after = layout([
-    ["appearance", 0],
-    ["general", 20],
-    ["g1", 40],
-    ["editor", 60],
-  ]);
-
-  it("slides kept entries from their old place and leaves still ones alone", () => {
-    const { moves } = planOutlineMotion(before, after);
-    expect(moves).toEqual([
-      { key: "general", dy: 40 },
-      { key: "editor", dy: 20 },
-    ]);
+  it("does nothing when the section is already shown", () => {
+    const state = reduceOutlineTransition(INITIAL_OUTLINE_TRANSITION, section("a"));
+    expect(reduceOutlineTransition(state, section("a"))).toBe(state);
   });
 
-  it("lists a new row as entering, not moving", () => {
-    expect(planOutlineMotion(before, after).enters).toEqual(["g1"]);
+  it("collapses the shown section before moving, carrying the next one", () => {
+    const state = reduceOutlineTransition(INITIAL_OUTLINE_TRANSITION, section("a"));
+    expect(reduceOutlineTransition(state, section("b"))).toEqual({
+      phase: "collapsing",
+      shown: "a",
+      next: "b",
+    });
   });
 
-  it("folds a closing row into the kept entry above it", () => {
-    const { exits } = planOutlineMotion(before, after);
-    expect(exits).toEqual([
-      { key: "a1", top: 20, dy: 0 },
-      { key: "a2", top: 40, dy: 0 },
-    ]);
+  it("advances collapsing to expanding on the collapse's finish", () => {
+    expect(reduceOutlineTransition(collapsing, { type: "collapsed" })).toEqual({
+      phase: "expanding",
+      shown: "b",
+    });
   });
 
-  it("closing rows follow their heading when it moves", () => {
-    const { exits } = planOutlineMotion(
-      layout([
-        ["appearance", 0],
-        ["general", 20],
-        ["g1", 40],
-      ]),
-      layout([
-        ["appearance", 0],
-        ["a1", 20],
-        ["general", 40],
-      ])
+  it("rests when the new rows have expanded", () => {
+    expect(reduceOutlineTransition(expanding, { type: "expanded" })).toEqual({
+      phase: "idle",
+      shown: "b",
+    });
+  });
+
+  // A change that lands mid-phase is not a new change to start over from: the
+  // newest target wins and the phase already running is kept, so the outline
+  // keeps the space it has and never jumps to a section it has already passed.
+  it("retargets a running collapse instead of restarting or snapping it", () => {
+    expect(reduceOutlineTransition(collapsing, section("c"))).toEqual({
+      phase: "collapsing",
+      shown: "a",
+      next: "c",
+    });
+  });
+
+  it("reverses a running collapse into expanding the section it is folding", () => {
+    expect(reduceOutlineTransition(collapsing, section("a"))).toEqual({
+      phase: "expanding",
+      shown: "a",
+    });
+  });
+
+  it("reverses a running expand into collapsing the section already shown", () => {
+    expect(reduceOutlineTransition(expanding, section("c"))).toEqual({
+      phase: "collapsing",
+      shown: "b",
+      next: "c",
+    });
+  });
+
+  it("keeps the newest target and none of the ones it replaced", () => {
+    let state = reduceOutlineTransition(INITIAL_OUTLINE_TRANSITION, section("a"));
+    state = reduceOutlineTransition(state, section("b"));
+    state = reduceOutlineTransition(state, section("c"));
+    state = reduceOutlineTransition(state, section("d"));
+    expect(reduceOutlineTransition(state, { type: "collapsed" })).toEqual({
+      phase: "expanding",
+      shown: "d",
+    });
+  });
+
+  it("changes nothing when the target is already the one on its way", () => {
+    expect(reduceOutlineTransition(collapsing, section("b"))).toBe(collapsing);
+    expect(reduceOutlineTransition(expanding, section("b"))).toBe(expanding);
+  });
+
+  it("settles instead of expanding when there is nothing left to show", () => {
+    const noTarget: OutlineTransition = { phase: "collapsing", shown: "a", next: null };
+    expect(reduceOutlineTransition(noTarget, { type: "collapsed" })).toEqual({
+      phase: "idle",
+      shown: null,
+    });
+  });
+
+  // A search or reduced motion is not motion: it lands at once, including when
+  // it names the section the phase is already busy with, which is where an
+  // equality check placed first would leave the running phase going.
+  it("settles at once for a quiet change, even when it names the shown section", () => {
+    expect(reduceOutlineTransition(expanding, section("b", false))).toEqual({
+      phase: "idle",
+      shown: "b",
+    });
+    expect(reduceOutlineTransition(collapsing, section("a", false))).toEqual({
+      phase: "idle",
+      shown: "a",
+    });
+  });
+
+  it("changes without motion straight to idle, even from a phase", () => {
+    expect(reduceOutlineTransition(collapsing, section("c", false))).toEqual({
+      phase: "idle",
+      shown: "c",
+    });
+    expect(
+      reduceOutlineTransition(
+        reduceOutlineTransition(INITIAL_OUTLINE_TRANSITION, section("a")),
+        section("b", false)
+      )
+    ).toEqual({ phase: "idle", shown: "b" });
+  });
+
+  it("accepts a null section as a shown none", () => {
+    expect(reduceOutlineTransition(INITIAL_OUTLINE_TRANSITION, section(null))).toEqual({
+      phase: "idle",
+      shown: null,
+    });
+  });
+
+  it("ignores stale collapse and expand finishes outside their phase", () => {
+    expect(reduceOutlineTransition(INITIAL_OUTLINE_TRANSITION, { type: "collapsed" })).toBe(
+      INITIAL_OUTLINE_TRANSITION
     );
-    expect(exits).toEqual([{ key: "g1", top: 40, dy: 20 }]);
-  });
-
-  it("starts an interrupted entry where it is on screen, not where it last landed", () => {
-    // General was mid-slide, still drawn 30px below its last layout top.
-    const { moves } = planOutlineMotion(before, after, new Map([["general", 30]]));
-    expect(moves.find((move) => move.key === "general")?.dy).toBe(70);
-  });
-
-  it("an unchanged outline plans nothing", () => {
-    expect(planOutlineMotion(before, before)).toEqual({ moves: [], enters: [], exits: [] });
+    expect(reduceOutlineTransition(INITIAL_OUTLINE_TRANSITION, { type: "expanded" })).toBe(
+      INITIAL_OUTLINE_TRANSITION
+    );
+    expect(reduceOutlineTransition(expanding, { type: "collapsed" })).toBe(expanding);
+    expect(reduceOutlineTransition(collapsing, { type: "expanded" })).toBe(collapsing);
   });
 });

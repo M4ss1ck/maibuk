@@ -233,3 +233,50 @@ export async function resetDeviceAndOpen(page: Page, rootUrl: string): Promise<v
   });
   await page.goto(rootUrl);
 }
+
+/**
+ * Seeds `count` rows into the web Backup adapter's IndexedDB store
+ * (`maibuk-backups`), in the shape `WebBackupAdapter` writes, so the Backup
+ * list renders a full page through the real `listBackupsPage` path. Call it
+ * before the app boots (the fixture leaves the page on the blank page); the
+ * list path itself only reads, so checksum bytes can stay dummy.
+ */
+export async function seedWebBackups(page: Page, count: number): Promise<void> {
+  await page.evaluate(async (n) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open("maibuk-backups", 2);
+      open.onupgradeneeded = () => {
+        const target = open.result;
+        if (!target.objectStoreNames.contains("backups")) {
+          const store = target.createObjectStore("backups", { keyPath: "filename" });
+          store.createIndex("createdAt", "createdAt");
+          return;
+        }
+        const store = open.transaction?.objectStore("backups");
+        if (store && !store.indexNames.contains("createdAt")) {
+          store.createIndex("createdAt", "createdAt");
+        }
+      };
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+    const tx = db.transaction("backups", "readwrite");
+    const store = tx.objectStore("backups");
+    for (let i = 0; i < n; i++) {
+      const createdAt = new Date(Date.UTC(2026, 0, i + 1, 12, 0, i)).toISOString();
+      store.put({
+        filename: `maibuk-backup-manual-${createdAt}-${i}.sql`,
+        sql: new Uint8Array([i & 0xff, 1, 2, 3]),
+        trigger: "manual",
+        createdAt,
+        sizeBytes: 4,
+        checksum: `seed-${i}`,
+      });
+    }
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }, count);
+}

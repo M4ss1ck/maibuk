@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { computeAccessibleName } from "dom-accessibility-api";
 import { MemoryRouter } from "react-router-dom";
@@ -45,7 +45,6 @@ vi.mock("@/i18n", () => ({
   },
   detectSystemLocale: vi.fn().mockResolvedValue("en"),
 }));
-
 
 vi.mock("@/lib/platform", () => ({
   get IS_WEB() {
@@ -141,6 +140,7 @@ vi.mock("@/components/settings/AsciiFieldBackground", () => ({
 }));
 
 const { Settings } = await import("@/pages/Settings");
+const { createBackup } = await import("@/lib/platform");
 const { useSettingsStore } = await import("@/features/settings/store");
 const { useDictationStore } = await import("@/features/dictation/store");
 
@@ -291,7 +291,11 @@ describe("Settings rows", () => {
     expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
   });
 
-  it("glides to a requested row instead of jumping, and focus does not jump first", async () => {
+  // A Settings section's height is not settled when the request arrives, so the
+  // reveal always jumps to where the row is now: with motion allowed (the
+  // matchMedia default, no preference requested) it must not glide, and the
+  // focus must not scroll first.
+  it("jumps to a requested row, and focus does not jump first", async () => {
     const original = Element.prototype.scrollIntoView;
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
@@ -300,36 +304,10 @@ describe("Settings rows", () => {
       renderSettings();
       focusSettingsRow("theme");
       await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "auto" });
       expect(focus).toHaveBeenCalledWith({ preventScroll: true });
     } finally {
       focus.mockRestore();
-      Element.prototype.scrollIntoView = original;
-    }
-  });
-
-  it("jumps to a requested row under reduced motion", async () => {
-    const original = Element.prototype.scrollIntoView;
-    const scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView;
-    const media = vi.spyOn(window, "matchMedia").mockImplementation(
-      (query: string) =>
-        ({
-          matches: query.includes("reduce"),
-          media: query,
-          addEventListener() {},
-          removeEventListener() {},
-          addListener() {},
-          removeListener() {},
-        }) as unknown as MediaQueryList
-    );
-    try {
-      renderSettings();
-      focusSettingsRow("theme");
-      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "auto" });
-    } finally {
-      media.mockRestore();
       Element.prototype.scrollIntoView = original;
     }
   });
@@ -398,5 +376,206 @@ describe("Settings rows", () => {
     const heading = document.querySelector('[data-settings-section="sync"]') as HTMLElement;
     // The fallback waits out 10 animation frames by design: ~300ms here.
     await waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+
+  // The Backup list loads after Settings mounts and grows its card when the
+  // entries arrive, moving every row below it. A reveal that scrolls at once
+  // lands where the row was while loading, not where it ends up.
+  describe("while the Backup list loads", () => {
+    /** A deterministic requestAnimationFrame queue: callbacks run only when run() advances. */
+    function installFrameQueue() {
+      const queue: Array<{ id: number; callback: FrameRequestCallback }> = [];
+      const live = new Set<number>();
+      let nextId = 1;
+      vi.stubGlobal(
+        "requestAnimationFrame",
+        vi.fn((callback: FrameRequestCallback): number => {
+          const id = nextId++;
+          live.add(id);
+          queue.push({ id, callback });
+          return id;
+        })
+      );
+      vi.stubGlobal(
+        "cancelAnimationFrame",
+        vi.fn((handle: number): void => {
+          live.delete(handle);
+          const index = queue.findIndex((entry) => entry.id === handle);
+          if (index >= 0) queue.splice(index, 1);
+        })
+      );
+      return {
+        run(count: number) {
+          for (let i = 0; i < count; i++) {
+            const entry = queue.shift();
+            if (!entry || !live.has(entry.id)) continue;
+            live.delete(entry.id);
+            act(() => {
+              entry.callback(performance.now());
+            });
+          }
+        },
+        restore() {
+          vi.unstubAllGlobals();
+        },
+      };
+    }
+
+    function stubScroll() {
+      const original = Element.prototype.scrollIntoView;
+      const scrollIntoView = vi.fn();
+      Element.prototype.scrollIntoView = scrollIntoView;
+      return {
+        scrollIntoView,
+        restore() {
+          Element.prototype.scrollIntoView = original;
+        },
+      };
+    }
+
+    /** Holds the Backup read pending until the test releases it. */
+    function deferBackupLoad() {
+      const emptyPage = { entries: [], totalCount: 0, totalSizeBytes: 0, page: 1, pageSize: 10 };
+      let resolveLoad!: (page: typeof emptyPage) => void;
+      let rejectLoad!: (reason?: unknown) => void;
+      const pending = new Promise<typeof emptyPage>((resolve, reject) => {
+        resolveLoad = resolve;
+        rejectLoad = reject;
+      });
+      const originalFactory = vi.mocked(createBackup).getMockImplementation();
+      if (!originalFactory) throw new Error("Backup factory mock missing");
+      vi.mocked(createBackup).mockImplementationOnce(async () => ({
+        ...(await originalFactory()),
+        listBackupsPage: () => pending,
+      }));
+      return { resolveLoad: () => resolveLoad(emptyPage), rejectLoad };
+    }
+
+    function renderWithDictationModels() {
+      useDictationStore.setState({
+        support: { supported: true },
+        installed: ["moonshine-tiny-en-260821", "moonshine-tiny-es-260824"],
+      });
+      renderSettings();
+    }
+
+    it("holds a later-row request with no scroll past 10 frames", async () => {
+      const { resolveLoad } = deferBackupLoad();
+      const frames = installFrameQueue();
+      const scroll = stubScroll();
+      try {
+        renderWithDictationModels();
+        focusSettingsRow("dictationVocabulary");
+        // Flush the reveal effect so the first frame is queued; the deferred
+        // Backup read keeps the loading marker mounted.
+        await act(async () => {});
+
+        frames.run(12);
+        expect(scroll.scrollIntoView).not.toHaveBeenCalled();
+        expect(useSettingsRevealStore.getState().pendingRowId).toBe("dictationVocabulary");
+
+        resolveLoad();
+        await act(async () => {});
+        frames.run(6);
+
+        expect(scroll.scrollIntoView).toHaveBeenCalledWith({
+          block: "center",
+          behavior: "auto",
+        });
+        const row = document.querySelector('[data-settings-row="dictationVocabulary"]');
+        expect(row).not.toBeNull();
+        expect(row?.contains(document.activeElement)).toBe(true);
+        expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
+      } finally {
+        scroll.restore();
+        frames.restore();
+      }
+    });
+
+    it("releases a later-row request when the load fails", async () => {
+      const { rejectLoad } = deferBackupLoad();
+      const frames = installFrameQueue();
+      const scroll = stubScroll();
+      try {
+        renderWithDictationModels();
+        focusSettingsRow("dictationVocabulary");
+        // Flush the reveal effect so the first frame is queued; the deferred
+        // Backup read keeps the loading marker mounted.
+        await act(async () => {});
+
+        frames.run(12);
+        expect(scroll.scrollIntoView).not.toHaveBeenCalled();
+        expect(useSettingsRevealStore.getState().pendingRowId).toBe("dictationVocabulary");
+
+        rejectLoad(new Error("Backup load failed"));
+        await act(async () => {});
+        frames.run(6);
+
+        expect(scroll.scrollIntoView).toHaveBeenCalledWith({
+          block: "center",
+          behavior: "auto",
+        });
+        expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
+      } finally {
+        scroll.restore();
+        frames.restore();
+      }
+    });
+
+    it("holds the Backup list row itself while it loads", async () => {
+      const { resolveLoad } = deferBackupLoad();
+      const frames = installFrameQueue();
+      const scroll = stubScroll();
+      try {
+        renderSettings();
+        focusSettingsRow("backupsList");
+        // Flush the reveal effect so the first frame is queued; the deferred
+        // Backup read keeps the loading marker mounted.
+        await act(async () => {});
+
+        frames.run(12);
+        expect(scroll.scrollIntoView).not.toHaveBeenCalled();
+        expect(useSettingsRevealStore.getState().pendingRowId).toBe("backupsList");
+
+        resolveLoad();
+        await act(async () => {});
+        frames.run(6);
+
+        expect(scroll.scrollIntoView).toHaveBeenCalledWith({
+          block: "center",
+          behavior: "auto",
+        });
+        expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
+      } finally {
+        scroll.restore();
+        frames.restore();
+      }
+    });
+
+    it("reveals an earlier row at once", async () => {
+      deferBackupLoad();
+      const frames = installFrameQueue();
+      const scroll = stubScroll();
+      try {
+        renderSettings();
+        const group = screen.getByRole("group", { name: "settings.theme" });
+        const firstTheme = within(group).getAllByRole("button")[0];
+
+        focusSettingsRow("theme");
+        // Flush the reveal effect so the first frame is queued.
+        await act(async () => {});
+        frames.run(3);
+
+        expect(scroll.scrollIntoView).toHaveBeenCalledWith({
+          block: "center",
+          behavior: "auto",
+        });
+        expect(document.activeElement).toBe(firstTheme);
+        expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
+      } finally {
+        scroll.restore();
+        frames.restore();
+      }
+    });
   });
 });
