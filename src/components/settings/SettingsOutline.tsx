@@ -126,7 +126,9 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
         </p>
       ) : (
         // The scroll box is the entries' offset parent: the marker and the
-        // ghosts of closing rows share their coordinates.
+        // ghosts of closing rows share their coordinates. Sliding entries and
+        // exiting ghosts are clipped to their own boxes, so that motion never
+        // enlarges the scrollable overflow and flickers a scrollbar.
         <div
           ref={scrollerRef}
           className="relative mt-4 min-h-0 overflow-auto scrollbar-themed border-l border-border"
@@ -145,14 +147,14 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
             ref={ghostsRef}
             aria-hidden="true"
             inert
-            className="pointer-events-none absolute inset-0"
+            className="pointer-events-none absolute inset-0 overflow-clip"
           />
           <Tree
             aria-label={t("settings.outline.label")}
             expandedKeys={expandedKeys}
             onExpandedChange={onExpandedChange}
             onAction={onAction}
-            className="outline-none"
+            className="outline-none overflow-clip"
           >
             {outline.map((section) => {
               const isCurrent = section.id === selection.section;

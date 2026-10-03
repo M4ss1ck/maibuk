@@ -5,6 +5,7 @@
 import type { Page } from "@playwright/test";
 import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { capture } from "../support/capture";
+import { recordOutlineOverflow, type OutlineFrame } from "../support/settings-outline";
 import { expect, test } from "../support/test";
 
 test.use({ library: "oneBookThreeChapters" });
@@ -74,6 +75,52 @@ test.describe("Settings outline @wf:settings-outline", () => {
     await expect(page.getByRole("switch", { name: "Auto-save" })).toBeFocused();
     await page.keyboard.press("Space");
     await expect(page.getByRole("switch", { name: "Auto-save" })).not.toBeChecked();
+  });
+
+  // The scrollbar repro needs the motion the outline normally animates with, so
+  // it must not be suppressed by the OS preference the rest of the suite reads.
+  test.use({ contextOptions: { reducedMotion: "no-preference" } });
+
+  test("Scrolling by keyboard never overflows the outline @wf:settings-outline", async ({
+    page,
+  }) => {
+    await openSettings(page);
+    await expect(outline(page)).toBeVisible();
+
+    // Enter on a section focuses its heading in main; PageDown from there
+    // scrolls the same content a wheel would, moving the scroll spy so the
+    // outline re-expands the arriving section mid-motion.
+    await tabTo(page, entry(page, "Appearance"), { backwards: true, max: 4 });
+    await pressUntilFocused(page, "ArrowDown", entry(page, "General"));
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "General", level: 2 })).toBeFocused();
+    // Let the initial jump settle so PageDown releases its selection pin.
+    await page.waitForTimeout(700);
+
+    const frames = await recordOutlineOverflow(page, () => page.keyboard.press("PageDown"));
+    expect(frames.length, "outline scroll box sampled while scrolling").toBeGreaterThan(1);
+    expect(
+      new Set(frames.map((f) => f.mainScrollTop)).size,
+      "PageDown moved the Settings scroller"
+    ).toBeGreaterThan(1);
+    await capture(page, "settings-outline-keyboard-scroll");
+
+    // At 1280x800 the whole tree fits, so no painted frame of its motion may
+    // report content past the box: a transient overflow is the scrollbar flash
+    // the entry slide and the fading ghosts used to cause. The two maxima can
+    // land on different frames, so each is picked on its own axis.
+    const worstOf = (axis: (f: OutlineFrame) => number): OutlineFrame =>
+      frames.reduce((a, b) => (axis(b) > axis(a) ? b : a));
+    const worstVertical = worstOf((f) => f.vOverflow);
+    const worstHorizontal = worstOf((f) => f.hOverflow);
+    expect(
+      worstVertical.vOverflow,
+      `no vertical overflow while the outline moves: ${JSON.stringify(worstVertical)}`
+    ).toBe(0);
+    expect(
+      worstHorizontal.hOverflow,
+      `no horizontal overflow while the outline moves: ${JSON.stringify(worstHorizontal)}`
+    ).toBeLessThanOrEqual(0);
   });
 });
 

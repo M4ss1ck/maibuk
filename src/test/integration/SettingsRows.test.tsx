@@ -46,7 +46,6 @@ vi.mock("@/i18n", () => ({
   detectSystemLocale: vi.fn().mockResolvedValue("en"),
 }));
 
-
 vi.mock("@/lib/platform", () => ({
   get IS_WEB() {
     return platformState.isWeb;
@@ -291,7 +290,11 @@ describe("Settings rows", () => {
     expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
   });
 
-  it("glides to a requested row instead of jumping, and focus does not jump first", async () => {
+  // A Settings section's height is not settled when the request arrives, so the
+  // reveal always jumps to where the row is now: with motion allowed (the
+  // matchMedia default, no preference requested) it must not glide, and the
+  // focus must not scroll first.
+  it("jumps to a requested row, and focus does not jump first", async () => {
     const original = Element.prototype.scrollIntoView;
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
@@ -300,36 +303,10 @@ describe("Settings rows", () => {
       renderSettings();
       focusSettingsRow("theme");
       await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "auto" });
       expect(focus).toHaveBeenCalledWith({ preventScroll: true });
     } finally {
       focus.mockRestore();
-      Element.prototype.scrollIntoView = original;
-    }
-  });
-
-  it("jumps to a requested row under reduced motion", async () => {
-    const original = Element.prototype.scrollIntoView;
-    const scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView;
-    const media = vi.spyOn(window, "matchMedia").mockImplementation(
-      (query: string) =>
-        ({
-          matches: query.includes("reduce"),
-          media: query,
-          addEventListener() {},
-          removeEventListener() {},
-          addListener() {},
-          removeListener() {},
-        }) as unknown as MediaQueryList
-    );
-    try {
-      renderSettings();
-      focusSettingsRow("theme");
-      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center", behavior: "auto" });
-    } finally {
-      media.mockRestore();
       Element.prototype.scrollIntoView = original;
     }
   });

@@ -5,6 +5,7 @@
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectFocusWithin, expectTabContained, tabTo } from "../support/keyboard";
+import { seedWebBackups } from "../support/storage";
 import { SEED_BOOK, SEED_CHAPTERS, SHELF_BOOKS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -187,6 +188,71 @@ test.describe("Command Palette settings @wf:command-palette", () => {
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
     await expectFocusWithin(page.locator('[data-settings-row="theme"]'));
+  });
+
+  test.describe("with an empty Library", () => {
+    test.use({ library: "empty", contextOptions: { reducedMotion: "no-preference" } });
+
+    // Dictation controls do not mount in the hermetic WebKit environment;
+    // Editor exercises the same reveal path in both engines.
+    for (const target of [
+      { name: "Editor", query: "spell check", rowId: "spellCheck", sectionId: "editor", tag: "" },
+      {
+        name: "Dictation",
+        query: "dictation",
+        rowId: "dictationEnabled",
+        sectionId: "dictation",
+        tag: "@chromium-only",
+      },
+    ]) {
+      test(`a late Backup list keeps the ${target.name} row landed @wf:command-palette ${target.tag}`, async ({
+        page,
+      }) => {
+        // Loading a full Backup page during a smooth jump moves the destination
+        // below the viewport. Seed real rows without artificial delays.
+        await seedWebBackups(page, 10);
+
+        await page.goto("/");
+        await expect(page.getByRole("heading", { name: "Your stories begin here" })).toBeVisible();
+
+        await openPalette(page);
+        await search(page, target.query);
+        await arrowTo(page, `settingsRow:${target.rowId}`);
+        await page.keyboard.press("Enter");
+
+        await expect(page).toHaveURL(/\/settings$/);
+        await expectFocusWithin(page.locator(`[data-settings-row="${target.rowId}"]`));
+        // The late page is on screen; capture it before judging where it landed.
+        await expect(page.getByRole("table")).toBeVisible();
+        await capture(page, `palette-settings-backup-landing-${target.sectionId}`);
+
+        const row = page.locator(`[data-settings-row="${target.rowId}"]`);
+        const heading = page.locator(`[data-settings-section="${target.sectionId}"]`);
+        const scroller = page.locator("main > div.overflow-auto");
+        await expect
+          .poll(
+            async () => {
+              const r = await row.boundingBox();
+              const h = await heading.boundingBox();
+              const s = await scroller.boundingBox();
+              if (!r || !h || !s) return "no geometry";
+              const rowState =
+                r.y >= s.y && r.y + r.height <= s.y + s.height ? "inside" : "OUTSIDE";
+              const headingState =
+                h.y >= s.y && h.y + h.height <= s.y + s.height ? "inside" : "OUTSIDE";
+              return (
+                `row ${rowState}: ${r.y.toFixed(1)}..${(r.y + r.height).toFixed(1)} ` +
+                `heading ${headingState}: ${h.y.toFixed(1)}..${(h.y + h.height).toFixed(1)} ` +
+                `scroller ${s.y.toFixed(1)}..${(s.y + s.height).toFixed(1)}`
+              );
+            },
+            {
+              message: `the ${target.name} row and heading stay inside Settings after the Backup list loads`,
+            }
+          )
+          .toMatch(/^row inside:.*heading inside:/);
+      });
+    }
   });
 });
 

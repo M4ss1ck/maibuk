@@ -473,6 +473,18 @@ gh pr create --title "..." --body-file /tmp/pr-body.md $(cat /tmp/<branch>/scree
 `gh` (2.99 or later) uploads each `--attach` file to GitHub and rewrites the
 body's `![...](path)` references to it, so no image is committed.
 
+## Settings scrolling regression gate
+
+Settings results in the Command Palette reveal their row immediately. The Backup
+list can grow after Settings mounts; a smooth scroll keeps the destination it
+measured before that growth and can leave the requested row below the viewport.
+The palette regression seeds a full Backup page and checks real row geometry.
+
+The outline's moving entries and exit ghosts clip their animated overflow to
+avoid adding temporary scrollbars. The outline regression samples overflow while
+keyboard page scrolling changes the current section, and proves the Settings
+scroll offset changed. Settled screenshots alone cannot detect that flicker.
+
 ## Menu positioning regression gate
 
 A native `<button>` inside React Aria's `MenuTrigger` does not register its
