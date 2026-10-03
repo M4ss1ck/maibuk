@@ -475,15 +475,19 @@ body's `![...](path)` references to it, so no image is committed.
 
 ## Settings scrolling regression gate
 
-Settings results in the Command Palette reveal their row immediately. The Backup
-list can grow after Settings mounts; a smooth scroll keeps the destination it
-measured before that growth and can leave the requested row below the viewport.
-The palette regression seeds a full Backup page and checks real row geometry.
+Settings results in the Command Palette reveal their row after initial loading
+above it finishes. Backups can grow after Settings mounts, and native WebKit does
+not preserve the target through that growth. The integration gate holds a Backup
+read unresolved past ten animation frames and verifies the request remains
+pending; success and failure release it, while an earlier Appearance row does
+not wait. The palette browser gate also starts Dictation navigation inside a Note.
 
-The outline's moving entries and exit ghosts clip their animated overflow to
-avoid adding temporary scrollbars. The outline regression samples overflow while
-keyboard page scrolling changes the current section, and proves the Settings
-scroll offset changed. Settled screenshots alone cannot detect that flicker.
+The outline clips animated entry/ghost overflow. In shorter windows, expanded
+rows genuinely exceed the available height; an always-present scrollbar reserves
+the same width in fitting and overflowing states. Separate browser gates sample
+painted frames at 800px and 600px heights, proving the main scroller moved and
+that legitimate overflow does not shift the outline sideways. Settled screenshots
+alone cannot detect these changes.
 
 ## Menu positioning regression gate
 

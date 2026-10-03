@@ -61,14 +61,31 @@ function usePendingSettingsRow() {
     let attempts = 0;
     let frame = 0;
     const tryFocus = () => {
-      attempts += 1;
+      // Initial loading above the target can move it after a native scroll.
+      // Wait for that layout before spending the missing-row frame budget.
+      const sectionHeading = document.querySelector(`[data-settings-section="${section.id}"]`);
+      if (sectionHeading) {
+        const loadingAbove = [...document.querySelectorAll("[data-settings-loading]")].some(
+          (marker) =>
+            (marker.compareDocumentPosition(sectionHeading) & Node.DOCUMENT_POSITION_FOLLOWING) !==
+            0
+        );
+        if (loadingAbove) {
+          frame = requestAnimationFrame(tryFocus);
+          return;
+        }
+      }
       const rowElement = document.querySelector(`[data-settings-row="${pendingRowId}"]`);
+      if (rowElement?.querySelector("[data-settings-loading]")) {
+        // The requested row itself (the Backup list) is still loading.
+        frame = requestAnimationFrame(tryFocus);
+        return;
+      }
+      attempts += 1;
       if (rowElement) {
         // jsdom has no layout; the call is a no-op guard there. Focus first
         // without scrolling, so the scroll is the only movement.
         rowElement.querySelector<HTMLElement>(FOCUSABLE_IN_ROW)?.focus({ preventScroll: true });
-        // The Backup list can grow while Settings mounts. A smooth scroll would
-        // keep its old destination and leave this row below the viewport.
         rowElement.scrollIntoView?.({ block: "center", behavior: "auto" });
         useSettingsRevealStore.getState().clearRow();
         return;

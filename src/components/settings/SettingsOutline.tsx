@@ -128,10 +128,12 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
         // The scroll box is the entries' offset parent: the marker and the
         // ghosts of closing rows share their coordinates. Sliding entries and
         // exiting ghosts are clipped to their own boxes, so that motion never
-        // enlarges the scrollable overflow and flickers a scrollbar.
+        // enlarges the scrollable overflow. Keep scrollbar space even when the
+        // tree fits: expanded sections can overflow in shorter windows, and
+        // inserting a scrollbar must not move the entries sideways.
         <div
           ref={scrollerRef}
-          className="relative mt-4 min-h-0 overflow-auto scrollbar-themed border-l border-border"
+          className="relative mt-4 min-h-0 overflow-y-scroll scrollbar-themed border-l border-border"
         >
           <div
             ref={markerRef}
