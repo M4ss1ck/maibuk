@@ -52,8 +52,10 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => setOpened(new Set()), [selection.section]);
 
-  // One section change at a time: collapse the old rows, move the marker,
-  // expand the new rows. A change mid-phase cancels and snaps.
+  // One section change at a time: fold the old rows away, move the marker, grow
+  // the new rows in. A change mid-phase retargets the phase or reverses it,
+  // from wherever its rows have got to; a search or reduced motion settles at
+  // once.
   const [transition, dispatch] = useReducer(reduceOutlineTransition, INITIAL_OUTLINE_TRANSITION);
   useEffect(() => {
     dispatch({
@@ -88,7 +90,10 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
   const scrollerRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
   // The marker follows the section whose rows are shown, so it stays beside the
-  // collapsing section until its rows have folded away.
+  // folding section until its rows have gone, and the accessible "current"
+  // follows it: the highlight moves to the new section only once its rows are
+  // the ones on screen.
+  const currentSection = transition.shown ?? selection.section;
   const currentKey = transition.shown ? sectionKey(transition.shown) : null;
   // The outline glides to the entry the page has selected, which is the new
   // section's header while the old rows are still folding away.
@@ -178,7 +183,7 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
             className="outline-none overflow-clip"
           >
             {outline.map((section) => {
-              const isCurrent = section.id === selection.section;
+              const isCurrent = section.id === currentSection;
               return (
                 <TreeItem
                   key={section.id}
@@ -226,8 +231,13 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
                         aria-label={
                           rowCurrent ? `${row.label}, ${t("settings.outline.current")}` : row.label
                         }
+                        // The row's own box is the space a section change moves,
+                        // and it clips the label inside: the label keeps its size
+                        // and its padding while the row takes and gives up
+                        // height. The border box is what the fold measures and
+                        // animates, so it is stated rather than inherited.
                         className={({ isFocusVisible }) =>
-                          `block cursor-pointer truncate py-0.5 pl-6 pr-2 text-xs outline-none transition-colors ${
+                          `block overflow-hidden box-border cursor-pointer text-xs outline-none transition-colors ${
                             rowCurrent
                               ? "text-primary font-medium"
                               : "text-muted-foreground hover:text-foreground"
@@ -235,7 +245,9 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
                         }
                       >
                         <TreeItemContent>
-                          <span title={row.label}>{row.label}</span>
+                          <span className="block truncate py-0.5 pl-6 pr-2" title={row.label}>
+                            {row.label}
+                          </span>
                         </TreeItemContent>
                       </TreeItem>
                     );

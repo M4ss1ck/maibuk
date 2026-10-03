@@ -1,20 +1,35 @@
 import { useCallback, useLayoutEffect, useRef, type RefObject } from "react";
 import type { OutlineTransition, OutlineTransitionEvent } from "@/features/settings/outline";
+import { cubicBezier, edgeKeyframes } from "@/features/settings/outline-edge";
 
-// One duration and curve for entries, the current-section marker, and the
-// outline's own scroll, so they arrive together.
+// One duration and curve for the current-section marker and the outline's own
+// scroll, so they arrive together. The rows travel on their own curves below.
 export const OUTLINE_MOTION_MS = 220;
 export const OUTLINE_EASING = "cubic-bezier(0.2, 0, 0, 1)";
-// A section change runs one phase at a time: the old rows fold away, the new
-// rows grow once they are there.
-const COLLAPSE_MS = 90;
-const EXPAND_MS = 130;
+// The edge's curve follows the direction it travels. A fold leaves at speed,
+// so the space it gives up is gone the frame it ends instead of crawling over
+// its last pixel for several frames while the marker waits; a grow starts at
+// that same speed and settles gently into place.
+export const OUTLINE_FOLD_EASING = "cubic-bezier(0.4, 0, 1, 1)";
+export const OUTLINE_GROW_EASING = "cubic-bezier(0, 0, 0.2, 1)";
+// The same curves as the strings above, applied to the one edge sweeping a
+// section's rows rather than to each row on its own.
+const FOLD_CURVE = cubicBezier(0.4, 0, 1, 1);
+const GROW_CURVE = cubicBezier(0, 0, 0.2, 1);
+// A section change runs one phase at a time: the old rows fold to nothing, then
+// the new rows grow into the space they left. A full phase is slow and even
+// rather than quick, so the entries below it travel instead of jumping.
+export const OUTLINE_PHASE_MS = 320;
+// A fold that has little distance left is shorter, so a reversal that is already
+// close to where it is going arrives instead of crawling over the last pixels.
+export const OUTLINE_REVERSAL_MIN_MS = 90;
 // Room kept around the current entry when the outline scrolls to show it.
 const SCROLL_MARGIN = 8;
 
 /** The rows the outline shows under a section: `row:<section>:<row>`. */
-const rowsOf = (scroller: HTMLElement, section: string) =>
-  [...scroller.querySelectorAll<HTMLElement>(`[role="row"][data-key^="row:${section}:"]`)];
+const rowsOf = (scroller: HTMLElement, section: string) => [
+  ...scroller.querySelectorAll<HTMLElement>(`[role="row"][data-key^="row:${section}:"]`),
+];
 
 /** The section a sub-row belongs to, or null for an entry that is a header. */
 function sectionOf(row: HTMLElement): string | null {
@@ -28,25 +43,44 @@ function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
-function measure(element: HTMLElement) {
-  const style = getComputedStyle(element);
-  return {
-    height: `${element.offsetHeight}px`,
-    paddingTop: style.paddingTop,
-    paddingBottom: style.paddingBottom,
-  };
+/**
+ * The space the row's own box occupies right now, a height animation included.
+ * Read before anything is cancelled: cancelling puts the row back to its natural
+ * height in the same tick, and a fold that follows has to start where the row
+ * paints, not where it would settle.
+ */
+function boxHeight(row: HTMLElement): number {
+  const rect = row.getBoundingClientRect().height;
+  return rect > 0 ? rect : row.offsetHeight;
+}
+
+/** One phase's length for a fold of `distance`, measured against `natural`. */
+function phaseMs(distance: number, natural: number) {
+  if (natural <= 0 || distance < 1) return 0;
+  return Math.max(OUTLINE_REVERSAL_MIN_MS, Math.round((OUTLINE_PHASE_MS * distance) / natural));
 }
 
 /**
- * The Settings outline changes section in sequence instead of all at once.
- * While the transition collapses the old section's rows, then moves the marker
- * to the new header, then expands the new rows, each step owns the outline; a
- * change that arrives mid-phase cancels every running animation and shows the
- * current section immediately, with no motion. Rows a keyboard opens or the
- * tree commits outside a transition expand in place with the same animation,
- * while a search or reduced motion changes the outline with none at all. The
- * marker keeps its own placement, and the outline still glides to keep the
- * current entry in view.
+ * The Settings outline changes section in sequence instead of all at once. The
+ * old rows fold to nothing, the marker moves to the new header, the new rows
+ * grow into the space they left: each phase owns the outline, and the entries
+ * below a moving row travel with it.
+ *
+ * Only the space a section's rows occupy is animated, and they move together
+ * behind one clip edge (`edgeKeyframes()`): the rows above the edge keep their
+ * full height, the ones below it are nothing, and at most the one row the edge
+ * crosses is cut. The row clips its contents and the label inside keeps its own
+ * size and padding, so nothing is ever scaled, stretched or faded: a row that
+ * shrinks is clipped, and a row that vanishes leaves no room behind. Neither
+ * opacity nor a transform is ever animated.
+ *
+ * A change that arrives mid-phase is intercepted rather than started over. The
+ * fold already running keeps the space it has taken and takes the newest target
+ * as its own; a change to the section being folded, or to another one while a
+ * section is growing, reverses the motion from the height the rows paint at, so
+ * nothing jumps to a height it was never at. A search and reduced motion change
+ * the outline with no motion at all, as does a section the keyboard opens while
+ * the tree adds its rows in a commit of its own.
  *
  * `scrollerRef` is the outline's positioned scroll box holding the tree;
  * `markerRef` is an absolutely positioned child of it.
@@ -71,7 +105,11 @@ export function useOutlineMotion({
   query: string;
 }) {
   const animations = useRef(new Map<HTMLElement, Animation>());
+  // The phase the outline is in, and which run of animations owns it: a finish
+  // that belongs to a run a later phase has replaced must not advance it.
   const phaseRef = useRef(transition);
+  const generation = useRef(0);
+  const runs = useRef(new Map<"collapsing" | "expanding", Animation[]>());
   const currentKeyRef = useRef<string | null>(currentKey);
   const visibleKeyRef = useRef<string | null>(visibleKey);
   const shownRef = useRef(transition.shown);
@@ -86,23 +124,41 @@ export function useOutlineMotion({
   // commits a render later must not animate either.
   const quiet = useRef(false);
   const observed = useRef<{ element: HTMLElement; observer: MutationObserver } | null>(null);
+  // The rows this grow has already started, so a late commit animates only the
+  // rows it added.
+  const grown = useRef(new Set<HTMLElement>());
+  // How many frames an expand has waited for its rows.
+  const waited = useRef(0);
+  // Frames this hook has waiting, so unmounting leaves none behind.
+  const frames = useRef(new Set<number>());
 
   const cancelAll = useCallback(() => {
     for (const animation of animations.current.values()) animation.cancel();
     animations.current.clear();
   }, []);
 
-  // Every animation this hook started, settled: a `finished` the environment
-  // does not provide counts as done, never as stuck.
+  const cancelRow = useCallback((row: HTMLElement) => {
+    const running = animations.current.get(row);
+    if (!running) return;
+    animations.current.delete(row);
+    running.cancel();
+  }, []);
+
+  // Every animation in `list`, settled: a `finished` the environment does not
+  // provide counts as done, never as stuck.
   const whenSettled = useCallback(
-    () =>
+    (list: readonly Animation[]) =>
       Promise.all(
-        [...animations.current.values()].map(
+        list.map(
           (animation) =>
             new Promise<void>((resolve) => {
               const promise: Promise<unknown> | undefined = animation.finished;
               if (!promise) resolve();
-              else promise.then(() => resolve(), () => resolve());
+              else
+                promise.then(
+                  () => resolve(),
+                  () => resolve()
+                );
             })
         )
       ),
@@ -116,13 +172,47 @@ export function useOutlineMotion({
     };
     animation.onfinish = forget;
     animation.oncancel = forget;
+    return animation;
   }, []);
 
-  const nextFrame = useCallback(
-    (step: () => void) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => step()));
+  const nextFrame = useCallback((step: () => void) => {
+    const outer = requestAnimationFrame(() => {
+      frames.current.delete(outer);
+      const inner = requestAnimationFrame(() => {
+        frames.current.delete(inner);
+        step();
+      });
+      frames.current.add(inner);
+    });
+    frames.current.add(outer);
+  }, []);
+
+  // Takes the outline over for a phase that is starting, or restarting in the
+  // other direction: anything the previous run was promised is now stale.
+  const beginPhase = useCallback((phase: "collapsing" | "expanding") => {
+    generation.current += 1;
+    runs.current.set(phase, []);
+  }, []);
+
+  // Ends the phase once the animations it started are done, unless a newer run
+  // has taken over, the phase is already over, or a late commit added rows that
+  // are moving now.
+  const settle = useCallback(
+    function settleRun(phase: "collapsing" | "expanding", event: OutlineTransitionEvent) {
+      const mine = generation.current;
+      const list = [...(runs.current.get(phase) ?? [])];
+      void whenSettled(list).then(() => {
+        if (generation.current !== mine) return;
+        if (phaseRef.current.phase !== phase) return;
+        if ((runs.current.get(phase)?.length ?? 0) > list.length) {
+          settleRun(phase, event);
+          return;
+        }
+        runs.current.delete(phase);
+        dispatch(event);
+      });
     },
-    []
+    [dispatch, whenSettled]
   );
 
   // Puts the marker beside the shown header; `animate` false snaps it there.
@@ -177,52 +267,138 @@ export function useOutlineMotion({
     else scroller.scrollTop = target;
   }, [scrollerRef]);
 
-  // Grows one row from nothing to its measured size.
-  const growRow = useCallback(
-    (row: HTMLElement) => {
-      if (!row.animate) return;
-      const natural = measure(row);
-      row.style.overflow = "hidden";
-      track(
-        row,
-        row.animate(
-          [
-            { height: "0px", paddingTop: "0px", paddingBottom: "0px", opacity: 0 },
-            {
-              height: natural.height,
-              paddingTop: natural.paddingTop,
-              paddingBottom: natural.paddingBottom,
-              opacity: 1,
-            },
-          ],
-          { duration: EXPAND_MS, easing: OUTLINE_EASING, fill: "forwards" }
-        )
-      );
+  /**
+   * Moves a section's rows as one: a single clip edge sweeps the stack from
+   * `from` to the phase's target. Each row gets its own height keyframes, but
+   * they all describe the same edge, so the rows above it are full height, the
+   * rows below it are 0, and only the row the edge crosses is cut. `painted` is
+   * the space each row occupies now, read before anything is cancelled.
+   *
+   * A fold with no distance left still has to leave the rows clipped: no
+   * animation would put the cancelled row back at its natural height until
+   * React removes it. A grow to the height it already paints needs nothing.
+   */
+  const sweepRows = useCallback(
+    (
+      rows: readonly HTMLElement[],
+      painted: readonly number[],
+      to: "fold" | "grow",
+      fill: FillMode
+    ) => {
+      for (const row of rows) cancelRow(row);
+      // Cancelling put every row back at its natural height in the same tick.
+      const naturals = rows.map((row) => boxHeight(row));
+      const from = painted.reduce((total, height) => total + height, 0);
+      const target = to === "fold" ? 0 : naturals.reduce((total, height) => total + height, 0);
+      const natural = naturals.reduce((total, height) => total + height, 0);
+      const duration = phaseMs(Math.abs(target - from), natural);
+      const created: Animation[] = [];
+      if (duration <= 0) {
+        if (to === "grow") return created;
+        for (const row of rows) {
+          if (!row.animate) continue;
+          created.push(
+            track(
+              row,
+              row.animate([{ height: "0px" }, { height: "0px" }], {
+                duration: 0,
+                fill: "forwards",
+              })
+            )
+          );
+        }
+        return created;
+      }
+      const frames = edgeKeyframes(naturals, from, target, to === "fold" ? FOLD_CURVE : GROW_CURVE);
+      for (const [index, row] of rows.entries()) {
+        if (!row.animate) continue;
+        const keyframes: Keyframe[] = frames.map((frame) => ({
+          offset: frame.offset,
+          height: `${frame.heights[index]}px`,
+        }));
+        created.push(track(row, row.animate(keyframes, { duration, easing: "linear", fill })));
+      }
+      return created;
     },
-    [track]
+    [cancelRow, track]
   );
 
-  // The expanding phase, once its rows are in the DOM: grow them, and end the
-  // phase when they are done, so a change arriving before then interrupts it.
-  const finishExpanding = useCallback(() => {
-    const section = waitingFor.current;
-    if (phaseRef.current.phase !== "expanding" || section === null) return;
-    const scroller = scrollerRef.current;
-    const rows = scroller ? rowsOf(scroller, section).filter((row) => row.isConnected) : [];
-    if (rows.length > 0) {
-      waitingFor.current = null;
-      cancelAll();
-      for (const row of rows) growRow(row);
-      void whenSettled().then(() => {
-        if (phaseRef.current.phase !== "expanding") return;
+  /**
+   * Folds a section's rows away to nothing behind one edge. Every row's height
+   * is read before the first cancellation, so a row a running fold had already
+   * taken part of carries on from the height it paints at.
+   */
+  const foldSection = useCallback(
+    (section: string) => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const rows = rowsOf(scroller, section).filter((row) => row.isConnected);
+      const painted = rows.map((row) => boxHeight(row));
+      const run = runs.current.get("collapsing") ?? [];
+      run.push(...sweepRows(rows, painted, "fold", "forwards"));
+      runs.current.set("collapsing", run);
+      if (run.length === 0) {
+        runs.current.delete("collapsing");
+        dispatch({ type: "collapsed" });
+        return;
+      }
+      settle("collapsing", { type: "collapsed" });
+    },
+    [dispatch, settle, sweepRows]
+  );
+
+  /**
+   * Grows a section's rows to their natural height behind one edge. A row the
+   * fold is still taking away reverses from the height it paints at; a row the
+   * tree has just committed grows from nothing. A commit that adds rows calls
+   * back in and only moves the ones it added.
+   */
+  const growSection = useCallback(
+    function grow(section: string) {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const rows = rowsOf(scroller, section).filter((row) => row.isConnected);
+      const fresh = rows.filter((row) => !grown.current.has(row));
+      const run = runs.current.get("expanding") ?? [];
+      if (fresh.length === 0) {
+        // Rows already growing: their own settle ends the phase when they are
+        // done. Nothing at all yet: the Tree commits rows a render later.
+        if (rows.length > 0) return;
+        if (waited.current < 1) {
+          waited.current += 1;
+          const mine = generation.current;
+          nextFrame(() => {
+            if (generation.current === mine && phaseRef.current.phase === "expanding") {
+              grow(section);
+            }
+          });
+          return;
+        }
+        waited.current = 0;
+        waitingFor.current = null;
+        runs.current.delete("expanding");
         dispatch({ type: "expanded" });
-      });
-      return;
-    }
-    // Nothing arrived to grow: the phase is over either way.
-    waitingFor.current = null;
-    dispatch({ type: "expanded" });
-  }, [cancelAll, dispatch, growRow, whenSettled]);
+        return;
+      }
+      waited.current = 0;
+      const painted = fresh.map((row) => (animations.current.has(row) ? boxHeight(row) : 0));
+      for (const row of fresh) grown.current.add(row);
+      run.push(...sweepRows(fresh, painted, "grow", "backwards"));
+      runs.current.set("expanding", run);
+      settle("expanding", { type: "expanded" });
+    },
+    [dispatch, nextFrame, settle, sweepRows]
+  );
+
+  // Grows one row the tree has added for itself: a section the keyboard opened.
+  const growRow = useCallback(
+    (row: HTMLElement) => {
+      const created = sweepRows([row], [0], "grow", "backwards");
+      if (created.length === 0) return;
+      void whenSettled(created);
+    },
+    [sweepRows, whenSettled]
+  );
 
   const runTransition = useCallback(() => {
     const scroller = scrollerRef.current;
@@ -231,97 +407,77 @@ export function useOutlineMotion({
     const previous = phaseRef.current;
     phaseRef.current = current;
 
-    // A change that interrupted a phase: everything running is cancelled and the
-    // current section is already shown, so the marker is placed and the rows
-    // React commits for it are left alone.
-    if (previous.phase !== "idle" && current.phase === "idle") {
-      waitingFor.current = null;
-      cancelAll();
-      for (const row of scroller.querySelectorAll<HTMLElement>('[role="row"][data-key]'))
-        row.style.overflow = "";
-      quiet.current = true;
-      nextFrame(() => {
-        quiet.current = false;
-      });
-      placeMarker(false);
+    // Nothing to arrive at: a search, reduced motion, or a section that has gone.
+    // Whatever was running is superseded, cancelled, and the rows React commits
+    // for this one are left alone.
+    if (current.phase === "idle") {
+      if (previous.phase !== "idle") {
+        generation.current += 1;
+        runs.current.delete("collapsing");
+        runs.current.delete("expanding");
+        waitingFor.current = null;
+        grown.current.clear();
+        waited.current = 0;
+        cancelAll();
+        quiet.current = true;
+        nextFrame(() => {
+          quiet.current = false;
+        });
+      }
+      placeMarker(previous.phase !== "idle");
       scrollToVisible();
       return;
     }
 
     if (current.phase === "collapsing") {
-      cancelAll();
+      // The same fold still running under a newer target: it carries on and
+      // arrives at that target. Nothing restarts, so nothing moves twice.
+      if (previous.phase === "collapsing" && previous.shown === current.shown) {
+        placeMarker(true);
+        scrollToVisible();
+        return;
+      }
+      // Entering the phase, or reversing into it: rows a grow is part way
+      // through are folded from where they paint, not from their natural height.
+      beginPhase("collapsing");
       waitingFor.current = null;
-      const rows = rowsOf(scroller, current.shown);
-      let started = 0;
-      for (const row of rows) {
-        if (!row.animate) continue;
-        const natural = measure(row);
-        row.style.overflow = "hidden";
-        track(
-          row,
-          row.animate(
-            [
-              {
-                height: natural.height,
-                paddingTop: natural.paddingTop,
-                paddingBottom: natural.paddingBottom,
-                opacity: 1,
-              },
-              { height: "0px", paddingTop: "0px", paddingBottom: "0px", opacity: 0 },
-            ],
-            { duration: COLLAPSE_MS, easing: OUTLINE_EASING, fill: "forwards" }
-          )
-        );
-        started++;
-      }
-      if (started === 0) dispatch({ type: "collapsed" });
-      else {
-        void whenSettled().then(() => {
-          // A newer phase moved on while these ran: this finish is stale.
-          if (phaseRef.current.phase !== "collapsing") return;
-          for (const row of animations.current.keys()) row.style.overflow = "";
-          dispatch({ type: "collapsed" });
-        });
-      }
+      grown.current.clear();
+      waited.current = 0;
+      foldSection(current.shown);
       placeMarker(true);
       scrollToVisible();
       return;
     }
 
-    if (current.phase === "expanding") {
-      cancelAll();
-      // The Tree commits the new rows a render late; the observer grows them
-      // when they arrive, and two frames without them end the phase anyway.
-      waitingFor.current = current.shown;
-      finishExpanding();
-      if (waitingFor.current !== null)
-        nextFrame(() => {
-          if (phaseRef.current.phase === "expanding") finishExpanding();
-        });
+    // `expanding` always names the section to show; there is nothing to drive if
+    // a state without one ever reaches here.
+    const section = current.shown;
+    if (section === null) {
       placeMarker(true);
       scrollToVisible();
       return;
     }
 
-    // idle: a keyboard-opened row grows where the tree adds it, through the
-    // observer below. Everything else is placed and kept in view.
-    placeMarker(previous.phase !== "idle");
+    // Entering the expand, or reversing into it: rows the fold had already taken
+    // part of grow from the height they paint at, not from nothing.
+    if (previous.phase !== "expanding" || previous.shown !== section) {
+      beginPhase("expanding");
+      grown.current.clear();
+      waited.current = 0;
+    }
+    waitingFor.current = section;
+    growSection(section);
+    placeMarker(true);
     scrollToVisible();
   }, [
+    beginPhase,
     cancelAll,
-    currentKeyRef,
-    dispatch,
-    finishExpanding,
-    growRow,
-    markerRef,
+    foldSection,
+    growSection,
     nextFrame,
     placeMarker,
-    query,
-    scrollerRef,
     scrollToVisible,
-    track,
     transition,
-    whenSettled,
   ]);
 
   // Every outline commit, and every row React Aria's Tree adds or removes in a
@@ -349,9 +505,9 @@ export function useOutlineMotion({
           for (const row of [...seen.current]) if (!row.isConnected) seen.current.delete(row);
           if (pendingVisible.current) scrollToVisible();
           // The transition's own phases drive their rows; nothing else touches
-          // them, so a change arriving mid-phase is what interrupts it.
+          // them, so a change arriving mid-phase is what redirects them.
           if (waitingFor.current !== null) {
-            finishExpanding();
+            growSection(waitingFor.current);
             return;
           }
           if (phaseRef.current.phase !== "idle") return;
@@ -375,6 +531,8 @@ export function useOutlineMotion({
     () => () => {
       observed.current?.observer.disconnect();
       observed.current = null;
+      for (const frame of frames.current) cancelAnimationFrame(frame);
+      frames.current.clear();
       cancelAll();
     },
     [cancelAll]

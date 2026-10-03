@@ -131,13 +131,22 @@ export type OutlineTransitionEvent =
 export const INITIAL_OUTLINE_TRANSITION: OutlineTransition = { phase: "idle", shown: null };
 
 /**
- * The sequential section-change motion. A section already shown is a no-op; a
- * quiet change (search, reduced motion) and any change that arrives while a
- * phase runs land in `idle` — the hook reads that as "snap", cancelling what
- * runs. From `idle` with a section already shown, an animated change enters
- * `collapsing`; `collapsed` advances it to `expanding`, and `expanded` rests.
- * `collapsed` and `expanded` are ignored outside their phase, so a late
- * finish from a cancelled animation changes nothing.
+ * The sequential section-change motion. From `idle`, an animated change to a
+ * section that has never been shown enters `collapsing`; `collapsed` advances it
+ * to `expanding`, and `expanded` rests.
+ *
+ * A change that arrives mid-phase is a retarget, not a new change to start over
+ * from: the phase already running keeps the space it has and the newest target
+ * replaces the one it was going to. A collapse takes the new target as its own,
+ * a change back to the section it is folding reverses into expanding it, and a
+ * change while a section is growing reverses into folding that section away from
+ * wherever its rows have got to. There is no queue: the newest target wins.
+ *
+ * A quiet change (a search, reduced motion) settles at once from anywhere,
+ * including when it names the section the phase is already showing, where an
+ * equality check placed first would leave the phase running behind it.
+ * `collapsed` and `expanded` are ignored outside their phase, so a late finish
+ * from a superseded phase changes nothing.
  */
 export function reduceOutlineTransition(
   state: OutlineTransition,
@@ -145,14 +154,29 @@ export function reduceOutlineTransition(
 ): OutlineTransition {
   switch (event.type) {
     case "section": {
-      if (state.shown === event.section) return state;
       if (!event.animate) return { phase: "idle", shown: event.section };
-      if (state.phase !== "idle") return { phase: "idle", shown: event.section };
+      if (state.phase === "idle") {
+        if (state.shown === event.section) return state;
+        // Nothing to fold away: the new section is simply the one shown.
+        if (state.shown === null) return { phase: "idle", shown: event.section };
+        return { phase: "collapsing", shown: state.shown, next: event.section };
+      }
+      if (state.phase === "collapsing") {
+        if (event.section === state.next) return state;
+        // Back to the section being folded: grow it again from where it is.
+        if (event.section === state.shown) return { phase: "expanding", shown: state.shown };
+        return { phase: "collapsing", shown: state.shown, next: event.section };
+      }
+      // expanding: the same section is nothing to do, anything else folds it away.
+      if (event.section === state.shown) return state;
+      // An expanding phase with no section has nothing to fold; it only settles.
       if (state.shown === null) return { phase: "idle", shown: event.section };
       return { phase: "collapsing", shown: state.shown, next: event.section };
     }
     case "collapsed":
       if (state.phase !== "collapsing") return state;
+      // Nothing left to show: the fold was the whole of the change.
+      if (state.next === null) return { phase: "idle", shown: null };
       return { phase: "expanding", shown: state.next };
     case "expanded":
       if (state.phase !== "expanding") return state;

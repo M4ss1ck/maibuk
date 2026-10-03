@@ -200,17 +200,67 @@ describe("reduceOutlineTransition()", () => {
     });
   });
 
-  it("interrupts a collapse: the next change snaps to the current section", () => {
+  // A change that lands mid-phase is not a new change to start over from: the
+  // newest target wins and the phase already running is kept, so the outline
+  // keeps the space it has and never jumps to a section it has already passed.
+  it("retargets a running collapse instead of restarting or snapping it", () => {
     expect(reduceOutlineTransition(collapsing, section("c"))).toEqual({
-      phase: "idle",
-      shown: "c",
+      phase: "collapsing",
+      shown: "a",
+      next: "c",
     });
   });
 
-  it("interrupts an expand: the next change snaps to the current section", () => {
+  it("reverses a running collapse into expanding the section it is folding", () => {
+    expect(reduceOutlineTransition(collapsing, section("a"))).toEqual({
+      phase: "expanding",
+      shown: "a",
+    });
+  });
+
+  it("reverses a running expand into collapsing the section already shown", () => {
     expect(reduceOutlineTransition(expanding, section("c"))).toEqual({
+      phase: "collapsing",
+      shown: "b",
+      next: "c",
+    });
+  });
+
+  it("keeps the newest target and none of the ones it replaced", () => {
+    let state = reduceOutlineTransition(INITIAL_OUTLINE_TRANSITION, section("a"));
+    state = reduceOutlineTransition(state, section("b"));
+    state = reduceOutlineTransition(state, section("c"));
+    state = reduceOutlineTransition(state, section("d"));
+    expect(reduceOutlineTransition(state, { type: "collapsed" })).toEqual({
+      phase: "expanding",
+      shown: "d",
+    });
+  });
+
+  it("changes nothing when the target is already the one on its way", () => {
+    expect(reduceOutlineTransition(collapsing, section("b"))).toBe(collapsing);
+    expect(reduceOutlineTransition(expanding, section("b"))).toBe(expanding);
+  });
+
+  it("settles instead of expanding when there is nothing left to show", () => {
+    const noTarget: OutlineTransition = { phase: "collapsing", shown: "a", next: null };
+    expect(reduceOutlineTransition(noTarget, { type: "collapsed" })).toEqual({
       phase: "idle",
-      shown: "c",
+      shown: null,
+    });
+  });
+
+  // A search or reduced motion is not motion: it lands at once, including when
+  // it names the section the phase is already busy with, which is where an
+  // equality check placed first would leave the running phase going.
+  it("settles at once for a quiet change, even when it names the shown section", () => {
+    expect(reduceOutlineTransition(expanding, section("b", false))).toEqual({
+      phase: "idle",
+      shown: "b",
+    });
+    expect(reduceOutlineTransition(collapsing, section("a", false))).toEqual({
+      phase: "idle",
+      shown: "a",
     });
   });
 
