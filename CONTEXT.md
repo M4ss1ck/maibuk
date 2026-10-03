@@ -550,6 +550,13 @@ A geometric figure (rectangle, ellipse, or pointer) placed on a Canvas, as oppos
 **AI Assist**:
 Help from a language model while writing.
 
+**Plugin**:
+A packaged addition to Maibuk that adds its own Commands, pages, Settings rows, or buttons without changing Maibuk itself. Maibuk's own and the author's Plugins work the same way.
+_Avoid_: extension (TipTap's word in code), add-on, mod
+
+**Built-in Plugin**:
+A Plugin that ships with Maibuk.
+
 **Canvas History**:
 Versions of a Canvas.
 
