@@ -1,0 +1,529 @@
+{
+  "run": "tauri-webkitgtk-1791077950892",
+  "engine": "tauri-webkitgtk",
+  "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "href": "tauri://localhost/probe/index.html",
+  "part": "done",
+  "t1": {
+    "csp": "default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; connect-src 'none'",
+    "mainFetch": "ok",
+    "control": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "no-error",
+          "xhr": "no-error",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "no-error",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "no-error",
+          "dynamicImport": "no-error",
+          "nestedDataWorker": "no-error",
+          "nestedBlobWorker": "no-error"
+        },
+        "violations": [],
+        "tauriInWorker": "undefined"
+      }
+    },
+    "cspFrame": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "error: TypeError Load failed",
+          "xhr": "error: Error xhr onerror",
+          "websocket": "error: SecurityError The operation is insecure.",
+          "eventsource": "error: SecurityError The operation is insecure.",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "error: NetworkError  A network error occurred.",
+          "dynamicImport": "error: TypeError Importing a module script failed.",
+          "nestedDataWorker": "error: Error worker error ",
+          "nestedBlobWorker": "error: Error err TypeError: Load failed"
+        },
+        "violations": [],
+        "tauriInWorker": "undefined"
+      }
+    }
+  },
+  "serverSeen": [
+    {
+      "at": 1791077950901,
+      "method": "GET",
+      "url": "/control/tauri-webkitgtk-1791077950892/main/fetch",
+      "origin": "tauri://localhost"
+    },
+    {
+      "at": 1791077950908,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791077950892/control/fetch",
+      "origin": "null"
+    },
+    {
+      "at": 1791077950909,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791077950892/control/xhr",
+      "origin": "null"
+    },
+    {
+      "at": 1791077950912,
+      "method": "UPGRADE",
+      "url": "/leak/tauri-webkitgtk-1791077950892/control/websocket",
+      "origin": "null",
+      "ws": true
+    },
+    {
+      "at": 1791077951037,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791077950892/control/sse",
+      "origin": "null"
+    },
+    {
+      "at": 1791077951038,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791077950892/control/importScripts.js",
+      "origin": null
+    },
+    {
+      "at": 1791077951039,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791077950892/control/import.js",
+      "origin": "null"
+    },
+    {
+      "at": 1791077951042,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791077950892/control/nested-data",
+      "origin": "null"
+    },
+    {
+      "at": 1791077951044,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791077950892/control/nested-blob",
+      "origin": "null"
+    }
+  ],
+  "t2": {
+    "top": {
+      "tauriInternals": "object",
+      "osPlatform": {
+        "ok": false,
+        "error": "Command platform not found"
+      },
+      "sqlSelect": {
+        "ok": false,
+        "error": "error returned from database: (code: 1) no such table: books"
+      }
+    },
+    "frame": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "undefined",
+      "windowIpc": "undefined",
+      "webkitIpcHandler": "object",
+      "chromeWebview": "undefined",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    },
+    "frameWithCsp": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "undefined",
+      "windowIpc": "undefined",
+      "webkitIpcHandler": "object",
+      "chromeWebview": "undefined",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    }
+  },
+  "t3": {
+    "method": "native-setter input events",
+    "results": [
+      {
+        "rows": 0,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 29,
+        "n": 72,
+        "p50": 2,
+        "p95": 3,
+        "max": 3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 20,
+        "n": 72,
+        "p50": 1,
+        "p95": 2,
+        "max": 3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 20,
+        "n": 72,
+        "p50": 1,
+        "p95": 2,
+        "max": 3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 20,
+        "n": 63,
+        "p50": 1,
+        "p95": 2,
+        "max": 2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 20,
+        "n": 63,
+        "p50": 1,
+        "p95": 1,
+        "max": 2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 19,
+        "n": 63,
+        "p50": 1,
+        "p95": 1,
+        "max": 2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 19,
+        "n": 63,
+        "p50": 1,
+        "p95": 1,
+        "max": 3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 20,
+        "n": 63,
+        "p50": 1,
+        "p95": 1,
+        "max": 2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 20,
+        "n": 63,
+        "p50": 1,
+        "p95": 1,
+        "max": 2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 31,
+        "n": 72,
+        "p50": 3,
+        "p95": 4,
+        "max": 6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 30,
+        "n": 72,
+        "p50": 3,
+        "p95": 4,
+        "max": 6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 28,
+        "n": 72,
+        "p50": 3,
+        "p95": 3,
+        "max": 6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 29,
+        "n": 63,
+        "p50": 4,
+        "p95": 5,
+        "max": 7,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 32,
+        "n": 63,
+        "p50": 4,
+        "p95": 6,
+        "max": 8,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 34,
+        "n": 63,
+        "p50": 4,
+        "p95": 6,
+        "max": 8,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 36,
+        "n": 63,
+        "p50": 5,
+        "p95": 6,
+        "max": 7,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 33,
+        "n": 63,
+        "p50": 5,
+        "p95": 7,
+        "max": 11,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 34,
+        "n": 62,
+        "p50": 4,
+        "p95": 6,
+        "max": 9,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 54,
+        "n": 72,
+        "p50": 7,
+        "p95": 9,
+        "max": 15,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 50,
+        "n": 72,
+        "p50": 7,
+        "p95": 8,
+        "max": 14,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 53,
+        "n": 72,
+        "p50": 7,
+        "p95": 8,
+        "max": 13,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 51,
+        "n": 36,
+        "p50": 7,
+        "p95": 20,
+        "max": 20,
+        "caughtUp": true,
+        "catchUpMs": 2,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 48,
+        "n": 33,
+        "p50": 7,
+        "p95": 17,
+        "max": 17,
+        "caughtUp": true,
+        "catchUpMs": 2,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 47,
+        "n": 38,
+        "p50": 10,
+        "p95": 23,
+        "max": 24,
+        "caughtUp": true,
+        "catchUpMs": 8,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 50,
+        "n": 36,
+        "p50": 8,
+        "p95": 23,
+        "max": 24,
+        "caughtUp": true,
+        "catchUpMs": 8,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 46,
+        "n": 33,
+        "p50": 8,
+        "p95": 22,
+        "max": 22,
+        "caughtUp": true,
+        "catchUpMs": 9,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 46,
+        "n": 36,
+        "p50": 9,
+        "p95": 19,
+        "max": 22,
+        "caughtUp": true,
+        "catchUpMs": 8,
+        "finalOk": true,
+        "rep": 2
+      }
+    ]
+  },
+  "done": {
+    "at": "2026-10-04T01:40:39.095Z"
+  }
+}

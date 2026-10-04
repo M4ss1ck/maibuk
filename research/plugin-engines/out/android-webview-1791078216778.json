@@ -1,0 +1,544 @@
+{
+  "run": "android-webview-1791078216778",
+  "engine": "android-webview",
+  "ua": "Mozilla/5.0 (Linux; Android 14; sdk_gphone64_x86_64 Build/UE1A.230829.050; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/113.0.5672.136 Mobile Safari/537.36",
+  "href": "http://tauri.localhost/probe/index.html",
+  "part": "done",
+  "t1": {
+    "csp": "default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; connect-src 'none'",
+    "mainFetch": "ok",
+    "control": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "no-error",
+          "xhr": "no-error",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "no-error",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "no-error",
+          "dynamicImport": "no-error",
+          "nestedDataWorker": "no-error",
+          "nestedBlobWorker": "no-error"
+        },
+        "violations": [],
+        "tauriInWorker": "undefined"
+      }
+    },
+    "cspFrame": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "error: TypeError Failed to fetch",
+          "xhr": "error: Error xhr onerror",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "error: Error es onerror",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "error: NetworkError Failed to execute 'importScripts' on 'WorkerGlobalScope': The script at 'http://127.0.0.1:8787/leak/android-webview-1791078216778/csp/importScripts.js' failed to load.",
+          "dynamicImport": "error: TypeError Failed to fetch dynamically imported module: http://127.0.0.1:8787/leak/android-webview-1791078216778/csp/import.js",
+          "nestedDataWorker": "error: SecurityError Failed to construct 'Worker': Access to the script at 'data:text/javascript,fetch(%22http%3A%2F%2F127.0.0.1%3A8787%2Fleak%2Fandroid-webview-1791078216778%2Fcsp%2Fnested-data%22).then(()%3D%3EpostMessage('ok')%2Ce%3D%3EpostMessage('err%20'%2Be))' is denied by the document's Content Security Policy.",
+          "nestedBlobWorker": "error: Error err TypeError: Failed to fetch"
+        },
+        "violations": [
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/android-webview-1791078216778/csp/fetch"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/android-webview-1791078216778/csp/xhr"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "ws://127.0.0.1:8787/leak/android-webview-1791078216778/csp/websocket"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/android-webview-1791078216778/csp/sse"
+          },
+          {
+            "directive": "script-src-elem",
+            "blocked": "http://127.0.0.1:8787/leak/android-webview-1791078216778/csp/importScripts.js"
+          },
+          {
+            "directive": "script-src-elem",
+            "blocked": "http://127.0.0.1:8787/leak/android-webview-1791078216778/csp/import.js"
+          },
+          {
+            "directive": "worker-src",
+            "blocked": "data"
+          }
+        ],
+        "tauriInWorker": "undefined"
+      }
+    }
+  },
+  "serverSeen": [
+    {
+      "at": 1791078216840,
+      "method": "GET",
+      "url": "/control/android-webview-1791078216778/main/fetch",
+      "origin": "http://tauri.localhost"
+    },
+    {
+      "at": 1791078216885,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078216778/control/fetch",
+      "origin": "null"
+    },
+    {
+      "at": 1791078216887,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078216778/control/xhr",
+      "origin": "null"
+    },
+    {
+      "at": 1791078216895,
+      "method": "UPGRADE",
+      "url": "/leak/android-webview-1791078216778/control/websocket",
+      "origin": "null",
+      "ws": true
+    },
+    {
+      "at": 1791078216897,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078216778/control/sse",
+      "origin": "null"
+    },
+    {
+      "at": 1791078216902,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078216778/control/importScripts.js",
+      "origin": null
+    },
+    {
+      "at": 1791078216904,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078216778/control/import.js",
+      "origin": "null"
+    },
+    {
+      "at": 1791078216909,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078216778/control/nested-data",
+      "origin": "null"
+    },
+    {
+      "at": 1791078216914,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078216778/control/nested-blob",
+      "origin": "null"
+    }
+  ],
+  "t2": {
+    "top": {
+      "tauriInternals": "object",
+      "osHostname": {
+        "ok": false,
+        "error": "os.hostname not allowed. Permissions associated with this command: os:allow-hostname"
+      },
+      "sqlSelect": {
+        "ok": true,
+        "value": [
+          {
+            "n": 0
+          }
+        ]
+      }
+    },
+    "frame": {
+      "timeout": true
+    },
+    "frameWithCsp": {
+      "timeout": true
+    }
+  },
+  "t3": {
+    "method": "native-setter input events",
+    "results": [
+      {
+        "rows": 0,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 33.8,
+        "n": 72,
+        "p50": 0.8,
+        "p95": 1,
+        "max": 2.6,
+        "caughtUp": true,
+        "catchUpMs": 0.1,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 28.4,
+        "n": 72,
+        "p50": 0.8,
+        "p95": 1.1,
+        "max": 2.1,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 29,
+        "n": 72,
+        "p50": 0.8,
+        "p95": 1.2,
+        "max": 2.2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 27.8,
+        "n": 69,
+        "p50": 0.6,
+        "p95": 1.6,
+        "max": 1.9,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 29.6,
+        "n": 69,
+        "p50": 0.6,
+        "p95": 1.6,
+        "max": 1.9,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 29,
+        "n": 69,
+        "p50": 0.6,
+        "p95": 1.1,
+        "max": 1.5,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 28.1,
+        "n": 69,
+        "p50": 0.6,
+        "p95": 1.2,
+        "max": 2.3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 31.5,
+        "n": 69,
+        "p50": 0.5,
+        "p95": 1,
+        "max": 1.7,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 29.2,
+        "n": 69,
+        "p50": 0.6,
+        "p95": 1.1,
+        "max": 1.8,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 43.5,
+        "n": 72,
+        "p50": 2.2,
+        "p95": 4.5,
+        "max": 6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 39.8,
+        "n": 72,
+        "p50": 2.1,
+        "p95": 4.5,
+        "max": 5,
+        "caughtUp": true,
+        "catchUpMs": 0.1,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 37.5,
+        "n": 72,
+        "p50": 2.1,
+        "p95": 3.8,
+        "max": 4.9,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 41.1,
+        "n": 69,
+        "p50": 1.9,
+        "p95": 3.2,
+        "max": 7.1,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 39.9,
+        "n": 69,
+        "p50": 2.1,
+        "p95": 4.4,
+        "max": 6.5,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 38.5,
+        "n": 69,
+        "p50": 2.1,
+        "p95": 4.4,
+        "max": 8,
+        "caughtUp": true,
+        "catchUpMs": 0.1,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 42.2,
+        "n": 69,
+        "p50": 1.9,
+        "p95": 4.4,
+        "max": 7.5,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 37.4,
+        "n": 69,
+        "p50": 1.8,
+        "p95": 4.5,
+        "max": 7.9,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 38.4,
+        "n": 70,
+        "p50": 2,
+        "p95": 5.7,
+        "max": 6.6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 70.7,
+        "n": 72,
+        "p50": 7.3,
+        "p95": 9.8,
+        "max": 18,
+        "caughtUp": true,
+        "catchUpMs": 0.6,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 73,
+        "n": 72,
+        "p50": 7.5,
+        "p95": 11.7,
+        "max": 17.4,
+        "caughtUp": true,
+        "catchUpMs": 0.5,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 70,
+        "n": 72,
+        "p50": 7.2,
+        "p95": 11.3,
+        "max": 16.4,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 72.4,
+        "n": 67,
+        "p50": 26.6,
+        "p95": 32.4,
+        "max": 33,
+        "caughtUp": true,
+        "catchUpMs": 3.3,
+        "finalOk": false,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 78.3,
+        "n": 67,
+        "p50": 26.1,
+        "p95": 34.1,
+        "max": 35.8,
+        "caughtUp": true,
+        "catchUpMs": 3.6,
+        "finalOk": false,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 77.2,
+        "n": 67,
+        "p50": 27.5,
+        "p95": 32.4,
+        "max": 33.2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": false,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 75.1,
+        "n": 67,
+        "p50": 26.1,
+        "p95": 33.7,
+        "max": 38.9,
+        "caughtUp": true,
+        "catchUpMs": 3.1,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 82.8,
+        "n": 67,
+        "p50": 26.9,
+        "p95": 35.4,
+        "max": 36.8,
+        "caughtUp": true,
+        "catchUpMs": 2.9,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 75.5,
+        "n": 66,
+        "p50": 26.8,
+        "p95": 35.8,
+        "max": 37.6,
+        "caughtUp": true,
+        "catchUpMs": 3.4,
+        "finalOk": true,
+        "rep": 2
+      }
+    ]
+  },
+  "done": {
+    "at": "2026-10-04T01:45:47.401Z"
+  }
+}

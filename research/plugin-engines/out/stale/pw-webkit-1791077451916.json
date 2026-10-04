@@ -1,0 +1,377 @@
+{
+  "run": "pw-webkit-1791077451916",
+  "engine": "webkit",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15",
+  "href": "http://127.0.0.1:8788/probe/index.html?run=pw-webkit-1791077451916",
+  "part": "done",
+  "t1": {
+    "csp": "default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; connect-src 'none'",
+    "mainFetch": "ok",
+    "control": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "no-error",
+          "xhr": "no-error",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "no-error",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "no-error",
+          "dynamicImport": "no-error",
+          "nestedDataWorker": "no-error",
+          "nestedBlobWorker": "no-error"
+        },
+        "violations": [],
+        "tauriInWorker": "undefined"
+      }
+    },
+    "cspFrame": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "error: TypeError Load failed",
+          "xhr": "error: Error xhr onerror",
+          "websocket": "error: SecurityError The operation is insecure.",
+          "eventsource": "error: SecurityError The operation is insecure.",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "error: NetworkError  A network error occurred.",
+          "dynamicImport": "error: TypeError Importing a module script failed.",
+          "nestedDataWorker": "error: Error worker error ",
+          "nestedBlobWorker": "error: Error err TypeError: Load failed"
+        },
+        "violations": [],
+        "tauriInWorker": "undefined"
+      }
+    }
+  },
+  "serverSeen": [
+    {
+      "at": 1791077451951,
+      "method": "GET",
+      "url": "/control/pw-webkit-1791077451916/main/fetch",
+      "origin": "http://127.0.0.1:8788"
+    },
+    {
+      "at": 1791077451974,
+      "method": "GET",
+      "url": "/leak/pw-webkit-1791077451916/control/fetch",
+      "origin": "null"
+    },
+    {
+      "at": 1791077451975,
+      "method": "GET",
+      "url": "/leak/pw-webkit-1791077451916/control/xhr",
+      "origin": "null"
+    },
+    {
+      "at": 1791077451978,
+      "method": "UPGRADE",
+      "url": "/leak/pw-webkit-1791077451916/control/websocket",
+      "origin": "null",
+      "ws": true
+    },
+    {
+      "at": 1791077452071,
+      "method": "GET",
+      "url": "/leak/pw-webkit-1791077451916/control/sse",
+      "origin": "null"
+    },
+    {
+      "at": 1791077452072,
+      "method": "GET",
+      "url": "/leak/pw-webkit-1791077451916/control/importScripts.js",
+      "origin": null
+    },
+    {
+      "at": 1791077452073,
+      "method": "GET",
+      "url": "/leak/pw-webkit-1791077451916/control/import.js",
+      "origin": "null"
+    },
+    {
+      "at": 1791077452075,
+      "method": "GET",
+      "url": "/leak/pw-webkit-1791077451916/control/nested-data",
+      "origin": "null"
+    },
+    {
+      "at": 1791077452078,
+      "method": "GET",
+      "url": "/leak/pw-webkit-1791077451916/control/nested-blob",
+      "origin": "null"
+    }
+  ],
+  "t2": {
+    "top": {
+      "tauriInternals": "undefined"
+    },
+    "frame": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "undefined",
+      "windowIpc": "undefined",
+      "webkitIpcHandler": "undefined",
+      "chromeWebview": "undefined",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    },
+    "frameWithCsp": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "undefined",
+      "windowIpc": "undefined",
+      "webkitIpcHandler": "undefined",
+      "chromeWebview": "undefined",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    }
+  },
+  "t3": {
+    "method": "native-setter input events",
+    "results": [
+      {
+        "rows": 0,
+        "delay": 100,
+        "startupMs": 26,
+        "n": 72,
+        "p50": 1,
+        "p95": 2,
+        "max": 2,
+        "caughtUp": true,
+        "catchUpMs": 1,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 100,
+        "startupMs": 20,
+        "n": 72,
+        "p50": 1,
+        "p95": 2,
+        "max": 5,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 100,
+        "startupMs": 20,
+        "n": 72,
+        "p50": 1,
+        "p95": 1,
+        "max": 3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "startupMs": 19,
+        "n": 64,
+        "p50": 1,
+        "p95": 1,
+        "max": 2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "startupMs": 19,
+        "n": 63,
+        "p50": 1,
+        "p95": 1,
+        "max": 2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "startupMs": 19,
+        "n": 63,
+        "p50": 1,
+        "p95": 1,
+        "max": 2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "startupMs": 29,
+        "n": 72,
+        "p50": 2,
+        "p95": 3,
+        "max": 5,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "startupMs": 28,
+        "n": 72,
+        "p50": 2,
+        "p95": 3,
+        "max": 5,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "startupMs": 28,
+        "n": 72,
+        "p50": 2,
+        "p95": 3,
+        "max": 6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "startupMs": 28,
+        "n": 63,
+        "p50": 4,
+        "p95": 5,
+        "max": 6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "startupMs": 27,
+        "n": 63,
+        "p50": 3,
+        "p95": 4,
+        "max": 4,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "startupMs": 27,
+        "n": 63,
+        "p50": 3,
+        "p95": 5,
+        "max": 6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "startupMs": 49,
+        "n": 72,
+        "p50": 6,
+        "p95": 8,
+        "max": 14,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "startupMs": 48,
+        "n": 72,
+        "p50": 6,
+        "p95": 9,
+        "max": 12,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "startupMs": 49,
+        "n": 72,
+        "p50": 6,
+        "p95": 8,
+        "max": 14,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "startupMs": 49,
+        "n": 62,
+        "p50": 18,
+        "p95": 20,
+        "max": 34,
+        "caughtUp": true,
+        "catchUpMs": 2,
+        "finalOk": false,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "startupMs": 50,
+        "n": 63,
+        "p50": 18,
+        "p95": 20,
+        "max": 34,
+        "caughtUp": true,
+        "catchUpMs": 2,
+        "finalOk": false,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "startupMs": 47,
+        "n": 63,
+        "p50": 18,
+        "p95": 20,
+        "max": 31,
+        "caughtUp": true,
+        "catchUpMs": 1,
+        "finalOk": false,
+        "rep": 2
+      }
+    ]
+  },
+  "done": {
+    "at": "2026-10-04T01:32:13.882Z"
+  }
+}

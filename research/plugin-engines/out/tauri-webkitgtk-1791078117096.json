@@ -1,0 +1,149 @@
+{
+  "run": "tauri-webkitgtk-1791078117096",
+  "engine": "tauri-webkitgtk",
+  "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "href": "tauri://localhost/probe/index.html",
+  "part": "t2",
+  "t1": {
+    "csp": "default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; connect-src 'none'",
+    "mainFetch": "ok",
+    "control": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "no-error",
+          "xhr": "no-error",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "no-error",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "no-error",
+          "dynamicImport": "no-error",
+          "nestedDataWorker": "no-error",
+          "nestedBlobWorker": "no-error"
+        },
+        "violations": [],
+        "tauriInWorker": "undefined"
+      }
+    },
+    "cspFrame": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "error: TypeError Load failed",
+          "xhr": "error: Error xhr onerror",
+          "websocket": "error: SecurityError The operation is insecure.",
+          "eventsource": "error: SecurityError The operation is insecure.",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "error: NetworkError  A network error occurred.",
+          "dynamicImport": "error: TypeError Importing a module script failed.",
+          "nestedDataWorker": "error: Error worker error ",
+          "nestedBlobWorker": "error: Error err TypeError: Load failed"
+        },
+        "violations": [],
+        "tauriInWorker": "undefined"
+      }
+    }
+  },
+  "serverSeen": [
+    {
+      "at": 1791078117109,
+      "method": "GET",
+      "url": "/control/tauri-webkitgtk-1791078117096/main/fetch",
+      "origin": "tauri://localhost"
+    },
+    {
+      "at": 1791078117118,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791078117096/control/fetch",
+      "origin": "null"
+    },
+    {
+      "at": 1791078117119,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791078117096/control/xhr",
+      "origin": "null"
+    },
+    {
+      "at": 1791078117120,
+      "method": "UPGRADE",
+      "url": "/leak/tauri-webkitgtk-1791078117096/control/websocket",
+      "origin": "null",
+      "ws": true
+    },
+    {
+      "at": 1791078117264,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791078117096/control/sse",
+      "origin": "null"
+    },
+    {
+      "at": 1791078117265,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791078117096/control/importScripts.js",
+      "origin": null
+    },
+    {
+      "at": 1791078117266,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791078117096/control/import.js",
+      "origin": "null"
+    },
+    {
+      "at": 1791078117269,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791078117096/control/nested-data",
+      "origin": "null"
+    },
+    {
+      "at": 1791078117271,
+      "method": "GET",
+      "url": "/leak/tauri-webkitgtk-1791078117096/control/nested-blob",
+      "origin": "null"
+    }
+  ],
+  "t2": {
+    "top": {
+      "tauriInternals": "object",
+      "osHostname": {
+        "ok": false,
+        "error": "os.hostname not allowed. Permissions associated with this command: os:allow-hostname"
+      },
+      "sqlSelect": {
+        "ok": false,
+        "error": "error returned from database: (code: 1) no such table: books"
+      }
+    },
+    "frame": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "undefined",
+      "windowIpc": "undefined",
+      "webkitIpcHandler": "object",
+      "chromeWebview": "undefined",
+      "rawPost": "posted",
+      "rawFetch ipc://localhost/plugin%3Aos%7Chostname": "500 Origin header is not a valid URL",
+      "rawFetch http://ipc.localhost/plugin%3Aos%7Chostname": "error TypeError: Load failed",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    },
+    "frameWithCsp": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "undefined",
+      "windowIpc": "undefined",
+      "webkitIpcHandler": "object",
+      "chromeWebview": "undefined",
+      "rawPost": "posted",
+      "rawFetch ipc://localhost/plugin%3Aos%7Chostname": "error TypeError: Load failed",
+      "rawFetch http://ipc.localhost/plugin%3Aos%7Chostname": "error TypeError: Load failed",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    }
+  }
+}

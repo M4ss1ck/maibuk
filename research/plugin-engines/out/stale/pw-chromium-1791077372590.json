@@ -1,0 +1,406 @@
+{
+  "run": "pw-chromium-1791077372590",
+  "engine": "chromium",
+  "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+  "href": "http://127.0.0.1:8788/probe/index.html?run=pw-chromium-1791077372590",
+  "part": "done",
+  "t1": {
+    "csp": "default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; connect-src 'none'",
+    "mainFetch": "ok",
+    "control": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "no-error",
+          "xhr": "no-error",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "no-error",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "no-error",
+          "dynamicImport": "no-error",
+          "nestedDataWorker": "no-error",
+          "nestedBlobWorker": "no-error"
+        },
+        "violations": [],
+        "tauriInWorker": "undefined"
+      }
+    },
+    "cspFrame": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "error: TypeError Failed to fetch",
+          "xhr": "error: Error xhr onerror",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "error: Error es onerror",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "error: NetworkError Failed to execute 'importScripts' on 'WorkerGlobalScope': The script at 'http://127.0.0.1:8787/leak/pw-chromium-1791077372590/csp/importScripts.js' failed to load.",
+          "dynamicImport": "error: TypeError Failed to fetch dynamically imported module: http://127.0.0.1:8787/leak/pw-chromium-1791077372590/csp/import.js",
+          "nestedDataWorker": "error: Error worker error ",
+          "nestedBlobWorker": "error: Error err TypeError: Failed to fetch"
+        },
+        "violations": [
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/pw-chromium-1791077372590/csp/fetch"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/pw-chromium-1791077372590/csp/xhr"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "ws://127.0.0.1:8787/leak/pw-chromium-1791077372590/csp/websocket"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/pw-chromium-1791077372590/csp/sse"
+          },
+          {
+            "directive": "script-src-elem",
+            "blocked": "http://127.0.0.1:8787/leak/pw-chromium-1791077372590/csp/importScripts.js"
+          },
+          {
+            "directive": "script-src-elem",
+            "blocked": "http://127.0.0.1:8787/leak/pw-chromium-1791077372590/csp/import.js"
+          },
+          {
+            "directive": "worker-src",
+            "blocked": "data"
+          }
+        ],
+        "tauriInWorker": "undefined"
+      }
+    }
+  },
+  "serverSeen": [
+    {
+      "at": 1791077372624,
+      "method": "GET",
+      "url": "/control/pw-chromium-1791077372590/main/fetch",
+      "origin": "http://127.0.0.1:8788"
+    },
+    {
+      "at": 1791077372641,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077372590/control/fetch",
+      "origin": "null"
+    },
+    {
+      "at": 1791077372642,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077372590/control/xhr",
+      "origin": "null"
+    },
+    {
+      "at": 1791077372643,
+      "method": "UPGRADE",
+      "url": "/leak/pw-chromium-1791077372590/control/websocket",
+      "origin": "null",
+      "ws": true
+    },
+    {
+      "at": 1791077372644,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077372590/control/sse",
+      "origin": "null"
+    },
+    {
+      "at": 1791077372645,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077372590/control/importScripts.js",
+      "origin": null
+    },
+    {
+      "at": 1791077372646,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077372590/control/import.js",
+      "origin": "null"
+    },
+    {
+      "at": 1791077372650,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077372590/control/nested-data",
+      "origin": "null"
+    },
+    {
+      "at": 1791077372654,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077372590/control/nested-blob",
+      "origin": "null"
+    }
+  ],
+  "t2": {
+    "top": {
+      "tauriInternals": "undefined"
+    },
+    "frame": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "undefined",
+      "windowIpc": "undefined",
+      "webkitIpcHandler": "undefined",
+      "chromeWebview": "undefined",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    },
+    "frameWithCsp": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "undefined",
+      "windowIpc": "undefined",
+      "webkitIpcHandler": "undefined",
+      "chromeWebview": "undefined",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    }
+  },
+  "t3": {
+    "method": "native-setter input events",
+    "results": [
+      {
+        "rows": 0,
+        "delay": 100,
+        "startupMs": 36,
+        "n": 72,
+        "p50": 0.4,
+        "p95": 0.8,
+        "max": 3.8,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 100,
+        "startupMs": 36.3,
+        "n": 72,
+        "p50": 0.5,
+        "p95": 0.6,
+        "max": 1.9,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 100,
+        "startupMs": 41.4,
+        "n": 72,
+        "p50": 0.4,
+        "p95": 0.8,
+        "max": 1.8,
+        "caughtUp": true,
+        "catchUpMs": 0.1,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "startupMs": 37.2,
+        "n": 67,
+        "p50": 0.4,
+        "p95": 0.6,
+        "max": 1.5,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "startupMs": 34.9,
+        "n": 67,
+        "p50": 0.4,
+        "p95": 0.6,
+        "max": 2.1,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "startupMs": 34.2,
+        "n": 67,
+        "p50": 0.3,
+        "p95": 0.5,
+        "max": 1.6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "startupMs": 39.2,
+        "n": 72,
+        "p50": 1.6,
+        "p95": 2.7,
+        "max": 4,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "startupMs": 42.8,
+        "n": 72,
+        "p50": 1.5,
+        "p95": 2.4,
+        "max": 4.3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "startupMs": 44.2,
+        "n": 72,
+        "p50": 1.4,
+        "p95": 2.1,
+        "max": 3.9,
+        "caughtUp": true,
+        "catchUpMs": 0.1,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "startupMs": 37.7,
+        "n": 67,
+        "p50": 1.2,
+        "p95": 2,
+        "max": 2.9,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "startupMs": 37.7,
+        "n": 67,
+        "p50": 1.1,
+        "p95": 1.4,
+        "max": 3.2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "startupMs": 39.3,
+        "n": 67,
+        "p50": 1,
+        "p95": 1.7,
+        "max": 3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "startupMs": 54.6,
+        "n": 72,
+        "p50": 5.1,
+        "p95": 8.2,
+        "max": 8.8,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "startupMs": 60.9,
+        "n": 72,
+        "p50": 4.9,
+        "p95": 7,
+        "max": 11.1,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "startupMs": 53.5,
+        "n": 72,
+        "p50": 4.7,
+        "p95": 5.8,
+        "max": 8.3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "startupMs": 53.4,
+        "n": 67,
+        "p50": 4.6,
+        "p95": 10.5,
+        "max": 11,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "startupMs": 53.1,
+        "n": 67,
+        "p50": 4.5,
+        "p95": 9.8,
+        "max": 10.6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "startupMs": 52.6,
+        "n": 67,
+        "p50": 4.7,
+        "p95": 10.8,
+        "max": 14.2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": false,
+        "rep": 2
+      }
+    ]
+  },
+  "done": {
+    "at": "2026-10-04T01:30:49.620Z"
+  }
+}

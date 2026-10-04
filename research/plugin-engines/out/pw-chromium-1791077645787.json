@@ -1,0 +1,550 @@
+{
+  "run": "pw-chromium-1791077645787",
+  "engine": "chromium",
+  "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+  "href": "http://127.0.0.1:8788/probe/index.html?run=pw-chromium-1791077645787",
+  "part": "done",
+  "t1": {
+    "csp": "default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; connect-src 'none'",
+    "mainFetch": "ok",
+    "control": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "no-error",
+          "xhr": "no-error",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "no-error",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "no-error",
+          "dynamicImport": "no-error",
+          "nestedDataWorker": "no-error",
+          "nestedBlobWorker": "no-error"
+        },
+        "violations": [],
+        "tauriInWorker": "undefined"
+      }
+    },
+    "cspFrame": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "error: TypeError Failed to fetch",
+          "xhr": "error: Error xhr onerror",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "error: Error es onerror",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "error: NetworkError Failed to execute 'importScripts' on 'WorkerGlobalScope': The script at 'http://127.0.0.1:8787/leak/pw-chromium-1791077645787/csp/importScripts.js' failed to load.",
+          "dynamicImport": "error: TypeError Failed to fetch dynamically imported module: http://127.0.0.1:8787/leak/pw-chromium-1791077645787/csp/import.js",
+          "nestedDataWorker": "error: Error worker error ",
+          "nestedBlobWorker": "error: Error err TypeError: Failed to fetch"
+        },
+        "violations": [
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/pw-chromium-1791077645787/csp/fetch"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/pw-chromium-1791077645787/csp/xhr"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "ws://127.0.0.1:8787/leak/pw-chromium-1791077645787/csp/websocket"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/pw-chromium-1791077645787/csp/sse"
+          },
+          {
+            "directive": "script-src-elem",
+            "blocked": "http://127.0.0.1:8787/leak/pw-chromium-1791077645787/csp/importScripts.js"
+          },
+          {
+            "directive": "script-src-elem",
+            "blocked": "http://127.0.0.1:8787/leak/pw-chromium-1791077645787/csp/import.js"
+          },
+          {
+            "directive": "worker-src",
+            "blocked": "data"
+          }
+        ],
+        "tauriInWorker": "undefined"
+      }
+    }
+  },
+  "serverSeen": [
+    {
+      "at": 1791077645819,
+      "method": "GET",
+      "url": "/control/pw-chromium-1791077645787/main/fetch",
+      "origin": "http://127.0.0.1:8788"
+    },
+    {
+      "at": 1791077645837,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077645787/control/fetch",
+      "origin": "null"
+    },
+    {
+      "at": 1791077645838,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077645787/control/xhr",
+      "origin": "null"
+    },
+    {
+      "at": 1791077645839,
+      "method": "UPGRADE",
+      "url": "/leak/pw-chromium-1791077645787/control/websocket",
+      "origin": "null",
+      "ws": true
+    },
+    {
+      "at": 1791077645840,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077645787/control/sse",
+      "origin": "null"
+    },
+    {
+      "at": 1791077645841,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077645787/control/importScripts.js",
+      "origin": null
+    },
+    {
+      "at": 1791077645841,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077645787/control/import.js",
+      "origin": "null"
+    },
+    {
+      "at": 1791077645845,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077645787/control/nested-data",
+      "origin": "null"
+    },
+    {
+      "at": 1791077645849,
+      "method": "GET",
+      "url": "/leak/pw-chromium-1791077645787/control/nested-blob",
+      "origin": "null"
+    }
+  ],
+  "t2": {
+    "top": {
+      "tauriInternals": "undefined"
+    },
+    "frame": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "undefined",
+      "windowIpc": "undefined",
+      "webkitIpcHandler": "undefined",
+      "chromeWebview": "undefined",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    },
+    "frameWithCsp": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "undefined",
+      "windowIpc": "undefined",
+      "webkitIpcHandler": "undefined",
+      "chromeWebview": "undefined",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    }
+  },
+  "t3": {
+    "method": "native-setter input events",
+    "results": [
+      {
+        "rows": 0,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 35.5,
+        "n": 72,
+        "p50": 0.5,
+        "p95": 0.8,
+        "max": 2.1,
+        "caughtUp": true,
+        "catchUpMs": 0.1,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 34,
+        "n": 72,
+        "p50": 0.4,
+        "p95": 0.7,
+        "max": 1.9,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 32.4,
+        "n": 72,
+        "p50": 0.4,
+        "p95": 0.7,
+        "max": 1.8,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 32.8,
+        "n": 67,
+        "p50": 0.2,
+        "p95": 0.4,
+        "max": 1.6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 31.3,
+        "n": 67,
+        "p50": 0.2,
+        "p95": 0.4,
+        "max": 1.6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 32.5,
+        "n": 67,
+        "p50": 0.2,
+        "p95": 0.5,
+        "max": 1.7,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 32,
+        "n": 67,
+        "p50": 0.2,
+        "p95": 0.5,
+        "max": 1.4,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 32,
+        "n": 67,
+        "p50": 0.2,
+        "p95": 0.4,
+        "max": 1.7,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 0,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 32.2,
+        "n": 67,
+        "p50": 0.2,
+        "p95": 0.4,
+        "max": 1.7,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 38.9,
+        "n": 72,
+        "p50": 1.5,
+        "p95": 2.2,
+        "max": 4.1,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 38.3,
+        "n": 72,
+        "p50": 1.4,
+        "p95": 2,
+        "max": 4,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 40.3,
+        "n": 72,
+        "p50": 1.4,
+        "p95": 2.1,
+        "max": 3.5,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 36.9,
+        "n": 67,
+        "p50": 1.2,
+        "p95": 1.5,
+        "max": 3.2,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 36.4,
+        "n": 67,
+        "p50": 1,
+        "p95": 2.8,
+        "max": 3.4,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 37.2,
+        "n": 67,
+        "p50": 1.1,
+        "p95": 1.5,
+        "max": 3.6,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 36.8,
+        "n": 67,
+        "p50": 1.2,
+        "p95": 2.9,
+        "max": 3.5,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 37.5,
+        "n": 67,
+        "p50": 1.1,
+        "p95": 1.4,
+        "max": 3.5,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 200,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 37.5,
+        "n": 67,
+        "p50": 1.1,
+        "p95": 1.5,
+        "max": 3.3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 53.7,
+        "n": 72,
+        "p50": 4.8,
+        "p95": 6.7,
+        "max": 9.3,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 52.8,
+        "n": 72,
+        "p50": 4.9,
+        "p95": 6.2,
+        "max": 10,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 100,
+        "echo": "last",
+        "startupMs": 53.7,
+        "n": 72,
+        "p50": 4.7,
+        "p95": 6.2,
+        "max": 8.3,
+        "caughtUp": true,
+        "catchUpMs": 0.1,
+        "finalOk": true,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 56.9,
+        "n": 67,
+        "p50": 4.7,
+        "p95": 10.3,
+        "max": 10.8,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 53.5,
+        "n": 67,
+        "p50": 4.7,
+        "p95": 10,
+        "max": 11.1,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "last",
+        "startupMs": 51.3,
+        "n": 67,
+        "p50": 4.7,
+        "p95": 10.8,
+        "max": 12,
+        "caughtUp": true,
+        "catchUpMs": 0,
+        "finalOk": false,
+        "rep": 2
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 52.7,
+        "n": 67,
+        "p50": 4.5,
+        "p95": 10.6,
+        "max": 11.7,
+        "caughtUp": true,
+        "catchUpMs": 1.4,
+        "finalOk": true,
+        "rep": 0
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 52.4,
+        "n": 67,
+        "p50": 4.7,
+        "p95": 10.5,
+        "max": 10.9,
+        "caughtUp": true,
+        "catchUpMs": 1.7,
+        "finalOk": true,
+        "rep": 1
+      },
+      {
+        "rows": 1000,
+        "delay": 0,
+        "echo": "inflight",
+        "startupMs": 52.7,
+        "n": 67,
+        "p50": 4.7,
+        "p95": 10.3,
+        "max": 11.9,
+        "caughtUp": true,
+        "catchUpMs": 1.4,
+        "finalOk": true,
+        "rep": 2
+      }
+    ]
+  },
+  "done": {
+    "at": "2026-10-04T01:35:28.293Z"
+  }
+}

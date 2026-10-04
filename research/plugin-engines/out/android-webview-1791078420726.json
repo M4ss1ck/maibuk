@@ -1,0 +1,202 @@
+{
+  "run": "android-webview-1791078420726",
+  "engine": "android-webview",
+  "ua": "Mozilla/5.0 (Linux; Android 14; sdk_gphone64_x86_64 Build/UE1A.230829.050; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/113.0.5672.136 Mobile Safari/537.36",
+  "href": "http://tauri.localhost/probe/index.html",
+  "part": "t2",
+  "t1": {
+    "csp": "default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; connect-src 'none'",
+    "mainFetch": "ok",
+    "control": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "no-error",
+          "xhr": "no-error",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "no-error",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "no-error",
+          "dynamicImport": "no-error",
+          "nestedDataWorker": "no-error",
+          "nestedBlobWorker": "no-error"
+        },
+        "violations": [],
+        "tauriInWorker": "undefined"
+      }
+    },
+    "cspFrame": {
+      "frameOrigin": "null",
+      "frameViolations": [],
+      "worker": {
+        "attempts": {
+          "fetch": "error: TypeError Failed to fetch",
+          "xhr": "error: Error xhr onerror",
+          "websocket": "error: Error ws onerror",
+          "eventsource": "error: Error es onerror",
+          "sendBeacon": "error: Error no sendBeacon in worker",
+          "importScripts": "error: NetworkError Failed to execute 'importScripts' on 'WorkerGlobalScope': The script at 'http://127.0.0.1:8787/leak/android-webview-1791078420726/csp/importScripts.js' failed to load.",
+          "dynamicImport": "error: TypeError Failed to fetch dynamically imported module: http://127.0.0.1:8787/leak/android-webview-1791078420726/csp/import.js",
+          "nestedDataWorker": "error: SecurityError Failed to construct 'Worker': Access to the script at 'data:text/javascript,fetch(%22http%3A%2F%2F127.0.0.1%3A8787%2Fleak%2Fandroid-webview-1791078420726%2Fcsp%2Fnested-data%22).then(()%3D%3EpostMessage('ok')%2Ce%3D%3EpostMessage('err%20'%2Be))' is denied by the document's Content Security Policy.",
+          "nestedBlobWorker": "error: Error err TypeError: Failed to fetch"
+        },
+        "violations": [
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/android-webview-1791078420726/csp/fetch"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/android-webview-1791078420726/csp/xhr"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "ws://127.0.0.1:8787/leak/android-webview-1791078420726/csp/websocket"
+          },
+          {
+            "directive": "connect-src",
+            "blocked": "http://127.0.0.1:8787/leak/android-webview-1791078420726/csp/sse"
+          },
+          {
+            "directive": "script-src-elem",
+            "blocked": "http://127.0.0.1:8787/leak/android-webview-1791078420726/csp/importScripts.js"
+          },
+          {
+            "directive": "script-src-elem",
+            "blocked": "http://127.0.0.1:8787/leak/android-webview-1791078420726/csp/import.js"
+          },
+          {
+            "directive": "worker-src",
+            "blocked": "data"
+          }
+        ],
+        "tauriInWorker": "undefined"
+      }
+    }
+  },
+  "serverSeen": [
+    {
+      "at": 1791078420783,
+      "method": "GET",
+      "url": "/control/android-webview-1791078420726/main/fetch",
+      "origin": "http://tauri.localhost"
+    },
+    {
+      "at": 1791078420806,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078420726/control/fetch",
+      "origin": "null"
+    },
+    {
+      "at": 1791078420808,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078420726/control/xhr",
+      "origin": "null"
+    },
+    {
+      "at": 1791078420811,
+      "method": "UPGRADE",
+      "url": "/leak/android-webview-1791078420726/control/websocket",
+      "origin": "null",
+      "ws": true
+    },
+    {
+      "at": 1791078420815,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078420726/control/sse",
+      "origin": "null"
+    },
+    {
+      "at": 1791078420818,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078420726/control/importScripts.js",
+      "origin": null
+    },
+    {
+      "at": 1791078420820,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078420726/control/import.js",
+      "origin": "null"
+    },
+    {
+      "at": 1791078420825,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078420726/control/nested-data",
+      "origin": "null"
+    },
+    {
+      "at": 1791078420830,
+      "method": "GET",
+      "url": "/leak/android-webview-1791078420726/control/nested-blob",
+      "origin": "null"
+    }
+  ],
+  "t2": {
+    "top": {
+      "tauriInternals": "object",
+      "sqlSelect": {
+        "ok": true,
+        "value": [
+          {
+            "n": 0
+          }
+        ]
+      },
+      "markersAfterFrames": [
+        {
+          "name": "probe_t2_marker_plain"
+        },
+        {
+          "name": "probe_t2_marker_csp"
+        }
+      ]
+    },
+    "frame": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "object",
+      "windowIpc": "object",
+      "webkitIpcHandler": "undefined",
+      "chromeWebview": "undefined",
+      "sqlSelect": {
+        "ok": false,
+        "error": "no reply in 3 s"
+      },
+      "sqlExecuteMarker": {
+        "ok": false,
+        "error": "no reply in 3 s"
+      },
+      "rawPost": "posted",
+      "rawFetch ipc://localhost/plugin%3Aos%7Chostname": "error TypeError: Failed to fetch",
+      "rawFetch http://ipc.localhost/plugin%3Aos%7Chostname": "500 Origin header is not a valid URL",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    },
+    "frameWithCsp": {
+      "origin": "null",
+      "href": "about:srcdoc",
+      "tauriInternals": "object",
+      "windowIpc": "object",
+      "webkitIpcHandler": "undefined",
+      "chromeWebview": "undefined",
+      "sqlSelect": {
+        "ok": false,
+        "error": "no reply in 3 s"
+      },
+      "sqlExecuteMarker": {
+        "ok": false,
+        "error": "no reply in 3 s"
+      },
+      "rawPost": "posted",
+      "rawFetch ipc://localhost/plugin%3Aos%7Chostname": "error TypeError: Failed to fetch",
+      "rawFetch http://ipc.localhost/plugin%3Aos%7Chostname": "error TypeError: Failed to fetch",
+      "worker": {
+        "ti": "undefined",
+        "ipc": "undefined"
+      }
+    }
+  }
+}
