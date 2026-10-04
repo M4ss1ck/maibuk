@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Plugin management prototype</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7fa;
+      --panel: #fff;
+      --text: #252535;
+      --line: #d8d8e3;
+      --accent: #6554c0;
+      --muted: #666675;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px system-ui;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 960px;
+      margin: auto;
+      padding: 32px 20px;
+    }
+    h1 {
+      margin: 4px 0;
+    }
+    h2 {
+      font-size: 20px;
+    }
+    p {
+      color: var(--muted);
+    }
+    button,
+    select {
+      font: inherit;
+      color: inherit;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 13px;
+      min-height: 44px;
+      cursor: pointer;
+    }
+    button:hover {
+      border-color: var(--accent);
+    }
+    :focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 3px;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+    .bar,
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .bar {
+      justify-content: space-between;
+      margin: 20px 0;
+    }
+    .card,
+    details.plugin {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      margin: 12px 0;
+    }
+    summary {
+      cursor: pointer;
+      min-height: 44px;
+      padding: 6px 0;
+    }
+    summary strong {
+      margin-right: 12px;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 2px 9px;
+      margin: 3px;
+    }
+    .facts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+    .facts span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .primary {
+      background: var(--accent);
+      color: white;
+    }
+    .danger {
+      color: #c43b4d;
+    }
+    dialog {
+      width: min(520px, 90vw);
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 24px;
+    }
+    dialog::backdrop {
+      background: #17172688;
+    }
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+    }
+    input {
+      accent-color: var(--accent);
+    }
+    #notice {
+      min-height: 30px;
+      color: var(--accent);
+    }
+    .filters label {
+      display: flex;
+      justify-content: space-between;
+    }
+    .filters {
+      max-width: 310px;
+    }
+    .small {
+      font-size: 13px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-weight: 650;
+      font-size: 13px;
+    }
+    body.dark {
+      --bg: #191922;
+      --panel: #232330;
+      --text: #eeeef5;
+      --line: #444457;
+      --muted: #b9b9cb;
+      --accent: #aa98ff;
+    }
+    @media (max-width: 540px) {
+      main {
+        padding: 18px 12px;
+      }
+      .facts {
+        grid-template-columns: 1fr 1fr;
+      }
+      .actions button {
+        flex: 1;
+      }
+      h1 {
+        font-size: 27px;
+      }
+    }
+  </style>
+  <main>
+    <div class="eyebrow">MAIBUK · PROTOTYPE</div>
+    <h1 id="title"></h1>
+    <p id="intro"></p>
+    <div class="bar">
+      <label
+        ><span id="platformLabel"></span>
+        <select id="platform">
+          <option value="desktop">Desktop</option>
+          <option value="android">Android</option>
+          <option value="web">Web</option>
+        </select></label
+      >
+      <div class="actions">
+        <select id="language" aria-label="Language">
+          <option value="en">English</option>
+          <option value="es">Español</option></select
+        ><button id="theme">◐</button><button id="reset"></button>
+      </div>
+    </div>
+    <section class="card">
+      <h2 id="walkTitle"></h2>
+      <div id="walks" class="actions"></div>
+      <p id="walkHelp"></p>
+    </section>
+    <div class="bar">
+      <h2 id="listTitle"></h2>
+      <button id="add" class="primary"></button>
+    </div>
+    <p id="directory"></p>
+    <div id="directoryActions" class="actions"></div>
+    <details class="card filters">
+      <summary id="filterTitle"></summary>
+      <div id="filters"></div>
+      <button id="all"></button>
+    </details>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <div id="list"></div>
+    <p id="foot" class="small"></p>
+  </main>
+  <dialog id="dialog" aria-labelledby="dialogTitle">
+    <h2 id="dialogTitle"></h2>
+    <p id="dialogText"></p>
+    <div id="dialogExtra"></div>
+    <div class="actions">
+      <button id="cancel"></button
+      ><button id="confirm" class="primary"></button>
+    </div>
+  </dialog>
+  <script>
+    const words = {
+      en: {
+        title: "Plugins",
+        intro:
+          "Explore listing, removal, retained data, and platform differences. Throwaway prototype: all files, credentials, approvals, and data are simulated in memory.",
+        platform: "Platform",
+        reset: "Reset demo",
+        walk: "Guided walkthroughs",
+        list: "Known Plugins",
+        add: "Add Plugin",
+        filter: "Filter by status",
+        all: "All statuses",
+        installed: "Installed",
+        available: "Available",
+        builtin: "Built-in",
+        disabled: "Disabled",
+        removed: "Removed",
+        unsupported: "Unsupported",
+        enabled: "Enabled",
+        review: "Review required",
+        modified: "Modified",
+        update: "Update available",
+        stopped: "Stopped",
+        custom: "Custom UI: accessibility not verified by Maibuk",
+        remove: "Remove",
+        reinstall: "Reinstall",
+        delete: "Delete data",
+        enable: "Review and enable",
+        disable: "Disable",
+        restart: "Restart",
+        cancel: "Cancel",
+        confirm: "Confirm",
+        data: "Library data",
+        files: "Files",
+        credentials: "Saved credentials",
+        approval: "Approved copy",
+        preferences: "Custom Shortcuts and Voice Commands",
+        kept: "Retained",
+        none: "None",
+        yes: "Present",
+        no: "Absent",
+        removeTitle: "Remove Plugin?",
+        removeText:
+          "Files, approvals, and saved credentials will be deleted. Custom Shortcuts and Voice Commands stay.",
+        thirdWarning:
+          "Maibuk cannot recover this third-party Plugin. To use it again, you must manually add its files.",
+        deleteAlso: "Also delete this Plugin’s data",
+        deleteText:
+          "Delete this Plugin’s retained Library data? This cannot be undone here. The Plugin row and Command preferences stay.",
+        approvalText:
+          "This sample requires read access to your Library. Approve this copy and enable it. Cancelling leaves it off.",
+        approve: "Approve this copy and enable",
+        unsupportedText:
+          "Unavailable on this device. This Plugin supports desktop only.",
+        reinstallText:
+          "Install the bundled copy again. Retained Library data reconnects; revoked access is not silently restored.",
+        manual: "Manually add the Plugin again to use it.",
+        empty: "No Plugins match these filters.",
+        directoryDesktop: "Plugin Directory: Documents/Maibuk/Plugins",
+        directoryAndroid:
+          "Plugins are stored privately by Maibuk. Add a zip file; the directory cannot be changed.",
+        directoryWeb:
+          "Plugins are stored in this browser. Add a zip file; supported browsers can also use a folder.",
+        open: "Open Plugin Directory",
+        change: "Change Plugin Directory",
+        folder: "Choose folder (supported browsers)",
+        reload: "Reload Plugins",
+        simulated: "Simulated action. No files were read or changed.",
+        addText:
+          "Choose a sample zip to simulate manually adding a Plugin. Existing retained data and Command preferences reconnect by Plugin id.",
+        echoWalk: "1 · Remove a Built-in",
+        thirdWalk: "2 · Remove third-party",
+        platformWalk: "3 · Unsupported Plugin",
+        stopWalk: "4 · Stopped Plugin",
+        echoHelp:
+          "Expand Echoes, remove it while retaining data, then reinstall. Remove it again with data deletion selected. Its row stays throughout.",
+        thirdHelp:
+          "Expand Word Lens and remove it. Notice the recovery warning and absence of Reinstall. Use Add Plugin to manually add Word Lens again.",
+        platformHelp:
+          "Android omits the desktop-only Built-in Terminal from the bundle. A manually added desktop-only Plugin remains visible as Unsupported and can be removed.",
+        stopHelp:
+          "Expand Slow Reader. It shows why it stopped and offers Restart. Enabled does not imply a Worker is always running.",
+        done: "Action completed.",
+        limit: "Stopped because it exceeded the runtime limit.",
+        foot: "Review prototype only. Native HTML controls stand in for the production React Aria components. No real zip extraction, directory access, permissions, or runtime enforcement.",
+        updateAction: "Simulate app update",
+        updateHelp:
+          "App update preserves removed Plugins; it does not reinstall them.",
+        sizeWarning:
+          "Plugin data exceeds 50 MB. Large data can slow Library saving on web and enlarge Backups.",
+        keep: "Keep my copy",
+        replace: "Replace with bundled copy",
+        updateText:
+          "Replacing this modified copy discards your edits. Keeping it leaves Update available without repeated prompts.",
+      },
+      es: {
+        title: "Plugins",
+        intro:
+          "Explora la lista, la eliminación, los datos conservados y las diferencias entre plataformas. Prototipo desechable: archivos, credenciales, aprobaciones y datos simulados en memoria.",
+        platform: "Plataforma",
+        reset: "Reiniciar demo",
+        walk: "Recorridos guiados",
+        list: "Plugins conocidos",
+        add: "Añadir Plugin",
+        filter: "Filtrar por estado",
+        all: "Todos los estados",
+        installed: "Instalado",
+        available: "Disponible",
+        builtin: "Integrado",
+        disabled: "Desactivado",
+        removed: "Eliminado",
+        unsupported: "No compatible",
+        enabled: "Activado",
+        review: "Revisión necesaria",
+        modified: "Modificado",
+        update: "Actualización disponible",
+        stopped: "Detenido",
+        custom:
+          "Interfaz personalizada: Maibuk no ha verificado su accesibilidad",
+        remove: "Eliminar",
+        reinstall: "Reinstalar",
+        delete: "Eliminar datos",
+        enable: "Revisar y activar",
+        disable: "Desactivar",
+        restart: "Reiniciar",
+        cancel: "Cancelar",
+        confirm: "Confirmar",
+        data: "Datos de Biblioteca",
+        files: "Archivos",
+        credentials: "Credenciales guardadas",
+        approval: "Copia aprobada",
+        preferences: "Atajos personalizados y Comandos de voz",
+        kept: "Conservados",
+        none: "Ninguno",
+        yes: "Presentes",
+        no: "Ausentes",
+        removeTitle: "¿Eliminar Plugin?",
+        removeText:
+          "Se eliminarán los archivos, las aprobaciones y las credenciales guardadas. Los Atajos personalizados y los Comandos de voz se conservan.",
+        thirdWarning:
+          "Maibuk no puede recuperar este Plugin de terceros. Para volver a usarlo, debes añadir sus archivos manualmente.",
+        deleteAlso: "Eliminar también los datos de este Plugin",
+        deleteText:
+          "¿Eliminar los datos de Biblioteca conservados de este Plugin? No se puede deshacer aquí. La fila del Plugin y las preferencias de Comandos se conservan.",
+        approvalText:
+          "Este ejemplo requiere acceso de lectura a tu Biblioteca. Aprueba esta copia y actívala. Cancelar la deja desactivada.",
+        approve: "Aprobar esta copia y activar",
+        unsupportedText:
+          "No disponible en este dispositivo. Este Plugin solo admite escritorio.",
+        reinstallText:
+          "Instala de nuevo la copia incluida. Se recuperan los datos de Biblioteca conservados; los permisos revocados no se restablecen automáticamente.",
+        manual: "Añade el Plugin manualmente para volver a usarlo.",
+        empty: "Ningún Plugin coincide con estos filtros.",
+        directoryDesktop: "Carpeta de Plugins: Documents/Maibuk/Plugins",
+        directoryAndroid:
+          "Maibuk guarda los Plugins de forma privada. Añade un archivo zip; no se puede cambiar la carpeta.",
+        directoryWeb:
+          "Los Plugins se guardan en este navegador. Añade un zip; los navegadores compatibles también pueden usar una carpeta.",
+        open: "Abrir carpeta de Plugins",
+        change: "Cambiar carpeta de Plugins",
+        folder: "Elegir carpeta (navegadores compatibles)",
+        reload: "Recargar Plugins",
+        simulated: "Acción simulada. No se han leído ni cambiado archivos.",
+        addText:
+          "Elige un zip de ejemplo para simular la instalación manual. Los datos y preferencias de Comandos conservados se recuperan por el id del Plugin.",
+        echoWalk: "1 · Eliminar un Plugin integrado",
+        thirdWalk: "2 · Eliminar uno de terceros",
+        platformWalk: "3 · Plugin no compatible",
+        stopWalk: "4 · Plugin detenido",
+        echoHelp:
+          "Abre Echoes, elimínalo conservando sus datos y reinstálalo. Elimínalo de nuevo marcando la eliminación de datos. Su fila permanece siempre.",
+        thirdHelp:
+          "Abre Word Lens y elimínalo. Observa el aviso y la ausencia de Reinstalar. Usa Añadir Plugin para añadir Word Lens manualmente.",
+        platformHelp:
+          "Android no incluye el Plugin integrado Terminal, exclusivo de escritorio. Un Plugin de escritorio añadido manualmente permanece como No compatible y se puede eliminar.",
+        stopHelp:
+          "Abre Slow Reader. Muestra por qué se detuvo y ofrece Reiniciar. Activado no significa que siempre haya un Worker ejecutándose.",
+        done: "Acción completada.",
+        limit: "Detenido por superar el límite de ejecución.",
+        foot: "Solo para revisión. Controles HTML nativos sustituyen a los componentes React Aria de producción. No hay extracción zip, acceso a carpetas, permisos ni límites reales.",
+        updateAction: "Simular actualización de la app",
+        updateHelp:
+          "La actualización respeta los Plugins eliminados; no los reinstala.",
+        sizeWarning:
+          "Los datos del Plugin superan 50 MB. Pueden ralentizar el guardado web y aumentar las Copias de seguridad.",
+        keep: "Conservar mi copia",
+        replace: "Reemplazar con la copia incluida",
+        updateText:
+          "Reemplazar esta copia modificada descarta tus cambios. Conservarla mantiene Actualización disponible sin avisos repetidos.",
+      },
+    };
+    const statuses = [
+      "installed",
+      "available",
+      "builtin",
+      "disabled",
+      "removed",
+      "unsupported",
+    ];
+    function initial(platform = "desktop") {
+      const base = (id, name, extra = {}) => ({
+        id,
+        name,
+        installed: true,
+        enabled: true,
+        builtin: false,
+        removed: false,
+        data: 2,
+        credentials: true,
+        approved: true,
+        platforms: ["desktop", "android", "web"],
+        ...extra,
+      });
+      return {
+        platform,
+        plugins: [
+          base("echoes", "Echoes", {
+            builtin: true,
+            data: 4,
+            credentials: false,
+          }),
+          base("slow", "Slow Reader", { stopped: true, data: 64 }),
+          base("terminal", "Terminal", {
+            builtin: true,
+            platforms: ["desktop"],
+            custom: true,
+          }),
+          base("lens", "Word Lens", { enabled: false }),
+          base("modified", "Writing Tools", {
+            builtin: true,
+            modified: true,
+            update: true,
+            enabled: false,
+            approved: false,
+          }),
+        ].filter((p) => !p.builtin || p.platforms.includes(platform)),
+      };
+    }
+    function tags(p, platform) {
+      return [
+        p.installed && "installed",
+        !p.installed &&
+          p.builtin &&
+          p.platforms.includes(platform) &&
+          "available",
+        p.builtin && "builtin",
+        p.installed && !p.enabled && "disabled",
+        p.removed && "removed",
+        !p.platforms.includes(platform) && "unsupported",
+      ].filter(Boolean);
+    }
+    function transition(state, id, action, erase = false) {
+      const next = structuredClone(state);
+      const p = next.plugins.find((p) => p.id === id);
+      if (!p) return next;
+      if (action === "remove") {
+        Object.assign(p, {
+          installed: false,
+          enabled: false,
+          removed: true,
+          approved: false,
+          credentials: false,
+          stopped: false,
+        });
+        if (erase) p.data = 0;
+      }
+      if (action === "delete") p.data = 0;
+      if (
+        action === "reinstall" &&
+        p.builtin &&
+        p.platforms.includes(next.platform)
+      )
+        Object.assign(p, {
+          installed: true,
+          removed: false,
+          enabled: false,
+          modified: false,
+          update: false,
+        });
+      if (
+        action === "approve" &&
+        p.installed &&
+        p.platforms.includes(next.platform)
+      )
+        Object.assign(p, { approved: true, enabled: true });
+      if (action === "disable") {
+        p.enabled = false;
+        p.stopped = false;
+      }
+      if (
+        action === "restart" &&
+        p.installed &&
+        p.enabled &&
+        p.platforms.includes(next.platform)
+      )
+        p.stopped = false;
+      if (action === "replace")
+        Object.assign(p, {
+          modified: false,
+          update: false,
+          approved: false,
+          enabled: false,
+        });
+      return next;
+    }
+  </script>
+  <script>
+    let state = initial(),
+      lang = "en",
+      selected = [...statuses],
+      scenario = "echo",
+      pending = null;
+    const $ = (id) => document.getElementById(id),
+      t = (k) => words[lang][k];
+    const el = (tag, text, cls) => {
+      const n = document.createElement(tag);
+      if (text) n.textContent = text;
+      if (cls) n.className = cls;
+      return n;
+    };
+    function button(text, fn) {
+      const b = el("button", text);
+      b.onclick = fn;
+      return b;
+    }
+    function notify(key = "done") {
+      $("notice").textContent = t(key);
+    }
+    function apply(id, action, erase) {
+      state = transition(state, id, action, erase);
+      render();
+      notify();
+    }
+    function modal(title, text, fn, extra) {
+      $("dialogTitle").textContent = title;
+      $("dialogText").textContent = text;
+      $("dialogExtra").replaceChildren();
+      if (extra) extra($("dialogExtra"));
+      pending = fn;
+      $("confirm").textContent = t("confirm");
+      $("cancel").textContent = t("cancel");
+      $("dialog").showModal();
+      $("cancel").focus();
+    }
+    $("cancel").onclick = () => $("dialog").close();
+    $("confirm").onclick = () => {
+      const fn = pending;
+      $("dialog").close();
+      fn?.();
+    };
+    function request(p, action) {
+      if (action === "remove")
+        modal(
+          t("removeTitle") + " " + p.name,
+          t("removeText") + (!p.builtin ? " " + t("thirdWarning") : ""),
+          () => apply(p.id, "remove", $("erase").checked),
+          (root) => {
+            const label = el("label");
+            const c = el("input");
+            c.type = "checkbox";
+            c.id = "erase";
+            label.append(c, el("span", t("deleteAlso")));
+            root.append(label);
+          },
+        );
+      else if (action === "delete")
+        modal(t("delete"), t("deleteText"), () => apply(p.id, "delete"));
+      else if (action === "reinstall")
+        modal(t("reinstall"), t("reinstallText"), () =>
+          apply(p.id, "reinstall"),
+        );
+      else if (action === "approve") {
+        modal(t("enable"), t("approvalText"), () => apply(p.id, "approve"));
+        $("confirm").textContent = t("approve");
+      } else if (action === "update") {
+        modal(
+          t("update"),
+          t("updateText"),
+          () => apply(p.id, "replace"),
+          (root) => root.append(button(t("keep"), () => $("dialog").close())),
+        );
+        $("confirm").textContent = t("replace");
+      } else apply(p.id, action);
+    }
+    function add() {
+      modal(
+        t("add"),
+        t("addText"),
+        () => {
+          const id = $("sample").value;
+          let p = state.plugins.find((p) => p.id === id);
+          if (p) {
+            Object.assign(p, {
+              installed: true,
+              removed: false,
+              enabled: false,
+              approved: false,
+            });
+          } else
+            state.plugins.push({
+              id: "desktop-tool",
+              name: "Desktop Tool",
+              installed: true,
+              enabled: false,
+              builtin: false,
+              removed: false,
+              data: 0,
+              credentials: false,
+              approved: false,
+              platforms: ["desktop"],
+              custom: true,
+            });
+          render();
+          notify();
+        },
+        (root) => {
+          const s = el("select");
+          s.id = "sample";
+          s.setAttribute("aria-label", t("add"));
+          for (const [value, name] of [
+            ["lens", "Word Lens.zip"],
+            ["desktop-tool", "Desktop Tool.zip"],
+          ]) {
+            const o = el("option", name);
+            o.value = value;
+            s.append(o);
+          }
+          root.append(s);
+        },
+      );
+    }
+    function render() {
+      document.documentElement.lang = lang;
+      for (const [id, key] of Object.entries({
+        title: "title",
+        intro: "intro",
+        platformLabel: "platform",
+        reset: "reset",
+        walkTitle: "walk",
+        listTitle: "list",
+        add: "add",
+        filterTitle: "filter",
+        all: "all",
+        foot: "foot",
+      }))
+        $(id).textContent = t(key);
+      $("theme").setAttribute(
+        "aria-label",
+        lang === "en" ? "Toggle light / dark" : "Cambiar tema claro / oscuro",
+      );
+      $("platform").value = state.platform;
+      $("directory").textContent = t(
+        "directory" +
+          { desktop: "Desktop", android: "Android", web: "Web" }[
+            state.platform
+          ],
+      );
+      $("directoryActions").replaceChildren();
+      const controls =
+        state.platform === "desktop"
+          ? ["open", "change", "reload"]
+          : state.platform === "web"
+            ? ["folder", "reload"]
+            : ["reload"];
+      for (const key of controls)
+        $("directoryActions").append(button(t(key), () => notify("simulated")));
+      $("directoryActions").append(
+        button(t("updateAction"), () => notify("updateHelp")),
+      );
+      $("walks").replaceChildren();
+      for (const key of ["echo", "third", "platform", "stop"])
+        $("walks").append(
+          button(t(key + "Walk"), () => {
+            scenario = key;
+            state = initial(key === "platform" ? "android" : state.platform);
+            selected = [...statuses];
+            if (key === "platform")
+              state.plugins.push({
+                id: "desktop-tool",
+                name: "Desktop Tool",
+                installed: true,
+                enabled: false,
+                builtin: false,
+                removed: false,
+                data: 0,
+                credentials: false,
+                approved: false,
+                platforms: ["desktop"],
+                custom: true,
+              });
+            render();
+            const target = document.querySelector(
+              '[data-id="' +
+                {
+                  echo: "echoes",
+                  third: "lens",
+                  platform: "desktop-tool",
+                  stop: "slow",
+                }[key] +
+                '"]',
+            );
+            if (target) {
+              target.open = true;
+              target.querySelector("summary").focus();
+            }
+          }),
+        );
+      $("walkHelp").textContent = t(scenario + "Help");
+      $("filters").replaceChildren();
+      for (const status of statuses) {
+        const label = el("label"),
+          check = el("input");
+        check.type = "checkbox";
+        check.checked = selected.includes(status);
+        check.onchange = () => {
+          selected = check.checked
+            ? [...selected, status]
+            : selected.filter((s) => s !== status);
+          render();
+        };
+        label.append(
+          check,
+          el("span", t(status)),
+          el(
+            "span",
+            String(
+              state.plugins.filter((p) =>
+                tags(p, state.platform).includes(status),
+              ).length,
+            ),
+          ),
+        );
+        $("filters").append(label);
+      }
+      const opened = new Set(
+        [...document.querySelectorAll("details.plugin[open]")].map(
+          (n) => n.dataset.id,
+        ),
+      );
+      $("list").replaceChildren();
+      const visible = state.plugins
+        .filter((p) =>
+          tags(p, state.platform).some((s) => selected.includes(s)),
+        )
+        .sort((a, b) => a.name.localeCompare(b.name));
+      if (!visible.length) $("list").append(el("p", t("empty")));
+      for (const p of visible) {
+        const d = el("details", null, "plugin");
+        d.dataset.id = p.id;
+        d.open = opened.has(p.id);
+        const summary = el("summary");
+        summary.append(el("strong", p.name));
+        const labels = [
+          ...tags(p, state.platform),
+          p.installed && p.enabled && "enabled",
+          p.installed && (!p.approved || p.modified) && "review",
+          p.installed && p.modified && "modified",
+          p.installed && p.update && "update",
+          p.stopped && "stopped",
+        ].filter(Boolean);
+        for (const key of labels) summary.append(el("span", t(key), "badge"));
+        d.append(summary);
+        if (!p.platforms.includes(state.platform))
+          d.append(el("p", t("unsupportedText")));
+        if (p.custom) d.append(el("p", t("custom"), "small"));
+        if (p.stopped) d.append(el("p", t("limit")));
+        if (p.data > 50) d.append(el("p", t("sizeWarning")));
+        const facts = el("div", null, "facts");
+        for (const [key, value] of [
+          ["data", p.data + " MB"],
+          ["files", t(p.installed ? "yes" : "no")],
+          ["credentials", t(p.credentials ? "yes" : "none")],
+          ["approval", t(p.approved ? "yes" : "none")],
+          ["preferences", t("kept")],
+        ]) {
+          const f = el("div");
+          f.append(el("span", t(key)), el("strong", value));
+          facts.append(f);
+        }
+        d.append(facts);
+        const a = el("div", null, "actions");
+        if (p.installed) {
+          if (p.platforms.includes(state.platform))
+            a.append(
+              button(t(p.enabled ? "disable" : "enable"), () =>
+                request(p, p.enabled ? "disable" : "approve"),
+              ),
+            );
+          if (p.stopped)
+            a.append(button(t("restart"), () => request(p, "restart")));
+          if (p.update)
+            a.append(button(t("update"), () => request(p, "update")));
+          a.append(button(t("remove"), () => request(p, "remove")));
+        } else if (p.builtin && p.platforms.includes(state.platform))
+          a.append(button(t("reinstall"), () => request(p, "reinstall")));
+        else if (!p.builtin) d.append(el("p", t("manual")));
+        if (!p.installed && p.data > 0)
+          a.append(button(t("delete"), () => request(p, "delete")));
+        d.append(a);
+        $("list").append(d);
+      }
+    }
+    $("add").onclick = add;
+    $("all").onclick = () => {
+      selected = [...statuses];
+      render();
+    };
+    $("reset").onclick = () => {
+      state = initial(state.platform);
+      scenario = "echo";
+      selected = [...statuses];
+      render();
+      notify();
+    };
+    $("platform").onchange = (e) => {
+      state = initial(e.target.value);
+      scenario = "echo";
+      selected = [...statuses];
+      render();
+      notify();
+    };
+    $("language").onchange = (e) => {
+      lang = e.target.value;
+      render();
+      $("notice").textContent = "";
+    };
+    $("theme").onclick = () => document.body.classList.toggle("dark");
+    render();
+  </script>
+</html>
