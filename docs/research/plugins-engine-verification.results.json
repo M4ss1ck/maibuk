@@ -1,0 +1,768 @@
+{
+  "schema": "maibuk-plugin-conformance/1",
+  "date": "2026-10-03",
+  "ticket": 407,
+  "stack": {
+    "tauri": "2.9.5",
+    "wry": "0.53.5",
+    "webkitgtk": "2.52.6",
+    "androidWebView": "113.0.5672.136",
+    "androidApi": 34,
+    "androidDevice": "sdk_gphone64_x86_64 emulator"
+  },
+  "runs": [
+    {
+      "run": "android-webview-1791078216778",
+      "engine": "android-webview",
+      "ua": "Mozilla/5.0 (Linux; Android 14; sdk_gphone64_x86_64 Build/UE1A.230829.050; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/113.0.5672.136 Mobile Safari/537.36",
+      "t1": {
+        "pass": true,
+        "violationEventsInWorker": 7,
+        "paths": {
+          "fetch": "blocked",
+          "xhr": "blocked",
+          "websocket": "blocked",
+          "eventsource": "blocked",
+          "importScripts": "blocked",
+          "dynamicImport": "blocked",
+          "nestedDataWorker": "blocked",
+          "nestedBlobWorker": "blocked"
+        }
+      },
+      "t2": {
+        "withheld": "pending private disclosure to the Tauri maintainers"
+      },
+      "t3": [
+        {
+          "rows/delay/echo": "0/100/last",
+          "p50_median": 0.8,
+          "p95_median": 1.1,
+          "p95_worst": 1.2,
+          "max": 2.6,
+          "startup": [
+            28.4,
+            33.8
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0.1
+        },
+        {
+          "rows/delay/echo": "0/0/last",
+          "p50_median": 0.6,
+          "p95_median": 1.6,
+          "p95_worst": 1.6,
+          "max": 1.9,
+          "startup": [
+            27.8,
+            29.6
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "0/0/inflight",
+          "p50_median": 0.6,
+          "p95_median": 1.1,
+          "p95_worst": 1.2,
+          "max": 2.3,
+          "startup": [
+            28.1,
+            31.5
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/100/last",
+          "p50_median": 2.1,
+          "p95_median": 4.5,
+          "p95_worst": 4.5,
+          "max": 6,
+          "startup": [
+            37.5,
+            43.5
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0.1
+        },
+        {
+          "rows/delay/echo": "200/0/last",
+          "p50_median": 2.1,
+          "p95_median": 4.4,
+          "p95_worst": 4.4,
+          "max": 8,
+          "startup": [
+            38.5,
+            41.1
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0.1
+        },
+        {
+          "rows/delay/echo": "200/0/inflight",
+          "p50_median": 1.9,
+          "p95_median": 4.5,
+          "p95_worst": 5.7,
+          "max": 7.9,
+          "startup": [
+            37.4,
+            42.2
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "1000/100/last",
+          "p50_median": 7.3,
+          "p95_median": 11.3,
+          "p95_worst": 11.7,
+          "max": 18,
+          "startup": [
+            70,
+            73
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0.6
+        },
+        {
+          "rows/delay/echo": "1000/0/last",
+          "p50_median": 26.6,
+          "p95_median": 32.4,
+          "p95_worst": 34.1,
+          "max": 35.8,
+          "startup": [
+            72.4,
+            78.3
+          ],
+          "finalOk": "0/3",
+          "catchUpMax": 3.6
+        },
+        {
+          "rows/delay/echo": "1000/0/inflight",
+          "p50_median": 26.8,
+          "p95_median": 35.4,
+          "p95_worst": 35.8,
+          "max": 38.9,
+          "startup": [
+            75.1,
+            82.8
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 3.4
+        }
+      ]
+    },
+    {
+      "run": "android-webview-1791078420726",
+      "engine": "android-webview",
+      "ua": "Mozilla/5.0 (Linux; Android 14; sdk_gphone64_x86_64 Build/UE1A.230829.050; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/113.0.5672.136 Mobile Safari/537.36",
+      "t1": {
+        "pass": true,
+        "violationEventsInWorker": 7,
+        "paths": {
+          "fetch": "blocked",
+          "xhr": "blocked",
+          "websocket": "blocked",
+          "eventsource": "blocked",
+          "importScripts": "blocked",
+          "dynamicImport": "blocked",
+          "nestedDataWorker": "blocked",
+          "nestedBlobWorker": "blocked"
+        }
+      },
+      "t2": {
+        "withheld": "pending private disclosure to the Tauri maintainers"
+      },
+      "t3": null
+    },
+    {
+      "run": "pw-chromium-1791077645787",
+      "engine": "chromium",
+      "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+      "t1": {
+        "pass": true,
+        "violationEventsInWorker": 7,
+        "paths": {
+          "fetch": "blocked",
+          "xhr": "blocked",
+          "websocket": "blocked",
+          "eventsource": "blocked",
+          "importScripts": "blocked",
+          "dynamicImport": "blocked",
+          "nestedDataWorker": "blocked",
+          "nestedBlobWorker": "blocked"
+        }
+      },
+      "t2": null,
+      "t3": [
+        {
+          "rows/delay/echo": "0/100/last",
+          "p50_median": 0.4,
+          "p95_median": 0.7,
+          "p95_worst": 0.8,
+          "max": 2.1,
+          "startup": [
+            32.4,
+            35.5
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0.1
+        },
+        {
+          "rows/delay/echo": "0/0/last",
+          "p50_median": 0.2,
+          "p95_median": 0.4,
+          "p95_worst": 0.5,
+          "max": 1.7,
+          "startup": [
+            31.3,
+            32.8
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "0/0/inflight",
+          "p50_median": 0.2,
+          "p95_median": 0.4,
+          "p95_worst": 0.5,
+          "max": 1.7,
+          "startup": [
+            32,
+            32.2
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/100/last",
+          "p50_median": 1.4,
+          "p95_median": 2.1,
+          "p95_worst": 2.2,
+          "max": 4.1,
+          "startup": [
+            38.3,
+            40.3
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/0/last",
+          "p50_median": 1.1,
+          "p95_median": 1.5,
+          "p95_worst": 2.8,
+          "max": 3.6,
+          "startup": [
+            36.4,
+            37.2
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/0/inflight",
+          "p50_median": 1.1,
+          "p95_median": 1.5,
+          "p95_worst": 2.9,
+          "max": 3.5,
+          "startup": [
+            36.8,
+            37.5
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "1000/100/last",
+          "p50_median": 4.8,
+          "p95_median": 6.2,
+          "p95_worst": 6.7,
+          "max": 10,
+          "startup": [
+            52.8,
+            53.7
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0.1
+        },
+        {
+          "rows/delay/echo": "1000/0/last",
+          "p50_median": 4.7,
+          "p95_median": 10.3,
+          "p95_worst": 10.8,
+          "max": 12,
+          "startup": [
+            51.3,
+            56.9
+          ],
+          "finalOk": "2/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "1000/0/inflight",
+          "p50_median": 4.7,
+          "p95_median": 10.5,
+          "p95_worst": 10.6,
+          "max": 11.9,
+          "startup": [
+            52.4,
+            52.7
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 1.7
+        }
+      ]
+    },
+    {
+      "run": "pw-firefox-1791077819999",
+      "engine": "firefox",
+      "ua": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0",
+      "t1": {
+        "pass": true,
+        "violationEventsInWorker": 3,
+        "paths": {
+          "fetch": "blocked",
+          "xhr": "blocked",
+          "websocket": "blocked",
+          "eventsource": "blocked",
+          "importScripts": "blocked",
+          "dynamicImport": "blocked",
+          "nestedDataWorker": "blocked",
+          "nestedBlobWorker": "blocked"
+        }
+      },
+      "t2": null,
+      "t3": [
+        {
+          "rows/delay/echo": "0/100/last",
+          "p50_median": 1,
+          "p95_median": 2,
+          "p95_worst": 2,
+          "max": 4,
+          "startup": [
+            24,
+            25
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "0/0/last",
+          "p50_median": 1,
+          "p95_median": 1,
+          "p95_worst": 2,
+          "max": 3,
+          "startup": [
+            23,
+            24
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "0/0/inflight",
+          "p50_median": 0,
+          "p95_median": 1,
+          "p95_worst": 2,
+          "max": 2,
+          "startup": [
+            23,
+            24
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 1
+        },
+        {
+          "rows/delay/echo": "200/100/last",
+          "p50_median": 2,
+          "p95_median": 4,
+          "p95_worst": 4,
+          "max": 9,
+          "startup": [
+            34,
+            36
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/0/last",
+          "p50_median": 2,
+          "p95_median": 4,
+          "p95_worst": 4,
+          "max": 8,
+          "startup": [
+            33,
+            36
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/0/inflight",
+          "p50_median": 2,
+          "p95_median": 4,
+          "p95_worst": 4,
+          "max": 7,
+          "startup": [
+            32,
+            34
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "1000/100/last",
+          "p50_median": 9,
+          "p95_median": 16,
+          "p95_worst": 17,
+          "max": 29,
+          "startup": [
+            58,
+            61
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "1000/0/last",
+          "p50_median": 11,
+          "p95_median": 20,
+          "p95_worst": 23,
+          "max": 27,
+          "startup": [
+            60,
+            69
+          ],
+          "finalOk": "2/3",
+          "catchUpMax": 10
+        },
+        {
+          "rows/delay/echo": "1000/0/inflight",
+          "p50_median": 12,
+          "p95_median": 20,
+          "p95_worst": 22,
+          "max": 24,
+          "startup": [
+            57,
+            64
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 4
+        }
+      ]
+    },
+    {
+      "run": "pw-webkit-1791077728549",
+      "engine": "webkit",
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15",
+      "t1": {
+        "pass": true,
+        "violationEventsInWorker": 0,
+        "paths": {
+          "fetch": "blocked",
+          "xhr": "blocked",
+          "websocket": "blocked",
+          "eventsource": "blocked",
+          "importScripts": "blocked",
+          "dynamicImport": "blocked",
+          "nestedDataWorker": "blocked",
+          "nestedBlobWorker": "blocked"
+        }
+      },
+      "t2": null,
+      "t3": [
+        {
+          "rows/delay/echo": "0/100/last",
+          "p50_median": 1,
+          "p95_median": 1,
+          "p95_worst": 1,
+          "max": 3,
+          "startup": [
+            21,
+            24
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 1
+        },
+        {
+          "rows/delay/echo": "0/0/last",
+          "p50_median": 1,
+          "p95_median": 1,
+          "p95_worst": 1,
+          "max": 2,
+          "startup": [
+            19,
+            20
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "0/0/inflight",
+          "p50_median": 1,
+          "p95_median": 1,
+          "p95_worst": 2,
+          "max": 2,
+          "startup": [
+            19,
+            20
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/100/last",
+          "p50_median": 2,
+          "p95_median": 3,
+          "p95_worst": 4,
+          "max": 5,
+          "startup": [
+            28,
+            31
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/0/last",
+          "p50_median": 3,
+          "p95_median": 4,
+          "p95_worst": 4,
+          "max": 7,
+          "startup": [
+            28,
+            28
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/0/inflight",
+          "p50_median": 3,
+          "p95_median": 4,
+          "p95_worst": 5,
+          "max": 6,
+          "startup": [
+            26,
+            28
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "1000/100/last",
+          "p50_median": 6,
+          "p95_median": 8,
+          "p95_worst": 8,
+          "max": 13,
+          "startup": [
+            49,
+            53
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "1000/0/last",
+          "p50_median": 18,
+          "p95_median": 20,
+          "p95_worst": 20,
+          "max": 34,
+          "startup": [
+            46,
+            49
+          ],
+          "finalOk": "0/3",
+          "catchUpMax": 2
+        },
+        {
+          "rows/delay/echo": "1000/0/inflight",
+          "p50_median": 18,
+          "p95_median": 22,
+          "p95_worst": 24,
+          "max": 39,
+          "startup": [
+            46,
+            50
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 4
+        }
+      ]
+    },
+    {
+      "run": "tauri-webkitgtk-1791077950892",
+      "engine": "tauri-webkitgtk",
+      "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+      "t1": {
+        "pass": true,
+        "violationEventsInWorker": 0,
+        "paths": {
+          "fetch": "blocked",
+          "xhr": "blocked",
+          "websocket": "blocked",
+          "eventsource": "blocked",
+          "importScripts": "blocked",
+          "dynamicImport": "blocked",
+          "nestedDataWorker": "blocked",
+          "nestedBlobWorker": "blocked"
+        }
+      },
+      "t2": {
+        "frameHasTauriInternals": false,
+        "markerTablesCreatedByFrames": null,
+        "frameWorkerHasIpc": false,
+        "leak": null,
+        "note": "first Linux run, before the marker test; frame had no __TAURI_INTERNALS__"
+      },
+      "t3": [
+        {
+          "rows/delay/echo": "0/100/last",
+          "p50_median": 1,
+          "p95_median": 2,
+          "p95_worst": 3,
+          "max": 3,
+          "startup": [
+            20,
+            29
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "0/0/last",
+          "p50_median": 1,
+          "p95_median": 1,
+          "p95_worst": 2,
+          "max": 2,
+          "startup": [
+            19,
+            20
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "0/0/inflight",
+          "p50_median": 1,
+          "p95_median": 1,
+          "p95_worst": 1,
+          "max": 3,
+          "startup": [
+            19,
+            20
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/100/last",
+          "p50_median": 3,
+          "p95_median": 4,
+          "p95_worst": 4,
+          "max": 6,
+          "startup": [
+            28,
+            31
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/0/last",
+          "p50_median": 4,
+          "p95_median": 6,
+          "p95_worst": 6,
+          "max": 8,
+          "startup": [
+            29,
+            34
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "200/0/inflight",
+          "p50_median": 5,
+          "p95_median": 6,
+          "p95_worst": 7,
+          "max": 11,
+          "startup": [
+            33,
+            36
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "1000/100/last",
+          "p50_median": 7,
+          "p95_median": 8,
+          "p95_worst": 9,
+          "max": 15,
+          "startup": [
+            50,
+            54
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 0
+        },
+        {
+          "rows/delay/echo": "1000/0/last",
+          "p50_median": 7,
+          "p95_median": 20,
+          "p95_worst": 23,
+          "max": 24,
+          "startup": [
+            47,
+            51
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 8
+        },
+        {
+          "rows/delay/echo": "1000/0/inflight",
+          "p50_median": 8,
+          "p95_median": 22,
+          "p95_worst": 23,
+          "max": 24,
+          "startup": [
+            46,
+            50
+          ],
+          "finalOk": "3/3",
+          "catchUpMax": 9
+        }
+      ]
+    },
+    {
+      "run": "tauri-webkitgtk-1791078117096",
+      "engine": "tauri-webkitgtk",
+      "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+      "t1": {
+        "pass": true,
+        "violationEventsInWorker": 0,
+        "paths": {
+          "fetch": "blocked",
+          "xhr": "blocked",
+          "websocket": "blocked",
+          "eventsource": "blocked",
+          "importScripts": "blocked",
+          "dynamicImport": "blocked",
+          "nestedDataWorker": "blocked",
+          "nestedBlobWorker": "blocked"
+        }
+      },
+      "t2": {
+        "frameHasTauriInternals": false,
+        "markerTablesCreatedByFrames": [],
+        "frameWorkerHasIpc": false,
+        "leak": false
+      },
+      "t3": null
+    }
+  ],
+  "notes": "t1.paths: blocked = control frame reached the collector and the CSP frame did not. t2 null = not applicable (no Tauri) or the run predates the marker test. t3 rows/delay/echo: remote rows / ms between keys / host echo rule."
+}
