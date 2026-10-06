@@ -534,10 +534,11 @@ uploads it as a new item (the server would reject that with
 Contributions are welcome. Please open a pull request.
 
 Read the [domain glossary](CONTEXT.md), [architecture decisions](docs/adr/), and
-[codebase guide](AGENTS.md) before making changes. The [E2E guide](e2e/README.md)
+[codebase guide](AGENTS.md) before making changes, and write and review code against the
+[coding standards](CODING_STANDARDS.md). The [E2E guide](e2e/README.md)
 covers workflow tests and screenshots for UI changes.
 
-**Keyboard & accessibility are completion requirements**: any new or modified UI must be fully operable by keyboard and backed by behavioral keyboard tests. See the "Keyboard & Accessibility Are Completion Requirements" and "Keyboard & Accessibility Test Gate" sections in [AGENTS.md](AGENTS.md) — a feature that can't be driven without a mouse is not done.
+**Keyboard & accessibility are completion requirements**: any new or modified UI must be fully operable by keyboard and backed by behavioral keyboard tests. See "Keyboard and accessibility" and its test gate in [CODING_STANDARDS.md](CODING_STANDARDS.md) — a feature that can't be driven without a mouse is not done.
 
 ## License
 

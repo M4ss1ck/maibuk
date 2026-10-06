@@ -20,7 +20,7 @@ import {
   test,
 } from "../../support/sync";
 
-// Faults during a manual Sync (issue #222, AGENTS.md feature-critical gate):
+// Faults during a manual Sync (issue #222, CODING_STANDARDS.md feature-critical gate):
 // the author reads what went wrong, a pre-sync Backup exists before anything
 // is read from the server, and local data is untouched.
 test.use({ library: "oneBookThreeChapters" });

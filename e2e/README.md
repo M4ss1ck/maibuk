@@ -118,7 +118,7 @@ bindings. It is not real macOS. Specs press `ControlOrMeta`; a spec that also
 runs on `mac-platform` presses the `mod` fixture, because `ControlOrMeta`
 follows the host OS while TipTap's Mod follows the reported platform.
 
-`phone` proves what AGENTS.md section 2, item 7 requires of touch screens:
+`phone` proves what `CODING_STANDARDS.md` ("Keyboard and accessibility", item 7) requires of touch screens:
 `(pointer: coarse)` matches and `hover:` never applies, so a control revealed only on hover stays hidden
 there. It is Chromium only: the long-press and swipe helpers send touch points
 over CDP. Desktop projects never run `@touch` tests.
@@ -436,7 +436,7 @@ browser if the terminal cannot render it; it links every trace.
 
 ## Screenshots for a PR
 
-A PR that changes what the app renders shows it (AGENTS.md, section 2, item 9).
+A PR that changes what the app renders shows it (`CODING_STANDARDS.md`, "Keyboard and accessibility", item 9).
 The spec that reaches the state takes the picture:
 
 ```ts

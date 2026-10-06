@@ -19,7 +19,7 @@ describe("E2E coverage guard", () => {
     const detail = problems.map((p) => `[${p.code}] ${p.message}`).join("\n");
     expect(
       problems,
-      `E2E coverage guard: ${problems.length} problem(s)\n${detail}\n\nEvery new route, registry shortcut, and CONTEXT.md term needs a row in e2e/coverage-matrix.ts and a tagged spec; see AGENTS.md, E2E.`
+      `E2E coverage guard: ${problems.length} problem(s)\n${detail}\n\nEvery new route, registry shortcut, and CONTEXT.md term needs a row in e2e/coverage-matrix.ts and a tagged spec; see CODING_STANDARDS.md, E2E.`
     ).toEqual([]);
   });
 });

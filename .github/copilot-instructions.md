@@ -28,7 +28,7 @@
 
 ## Maibuk-specific non-negotiables
 
-- Use existing patterns and structure from AGENTS.md.
+- Use existing patterns and structure from AGENTS.md and the documents it points to (`CODING_STANDARDS.md`, `docs/agents/`).
 - Reuse existing UI primitives and hooks before creating new ones.
 - Use i18n for user-facing strings (both English and Spanish keys).
 - Keep styling with semantic Tailwind tokens (no raw color values).

@@ -51,4 +51,11 @@ describe("CI workflow", () => {
       "./src/test/support/time-budget-reporter.ts"
     );
   });
+
+  // AGENTS.md reached 12,600 words because nothing stopped it growing.
+  it("fails a PR whose AGENTS.md is over its word budget", () => {
+    const budget = job("agents-budget");
+    expect(budget).toContain("run: node scripts/agents-word-budget.mjs AGENTS.md");
+    expect(budget).not.toMatch(/needs:|if:|continue-on-error/);
+  });
 });
