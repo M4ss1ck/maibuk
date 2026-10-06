@@ -188,7 +188,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
 
 /**
  * Glossary terms no step teaches, each with the reason. With the step terms
- * above this accounts for every term in CONTEXT.md: the coverage gate fails
+ * above this accounts for every term in GLOSSARY.md: the coverage gate fails
  * when a new term appears in neither place.
  */
 export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {

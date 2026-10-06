@@ -14,7 +14,7 @@ This file holds only what every task needs. The rest sits behind these pointers;
 
 | When                                                                                                                                       | Read                                                                                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Before naming anything (identifiers, UI copy, test names, commits) or proposing a restructure                                             | `CONTEXT.md`, `docs/adr/`, then `CODING_STANDARDS.md` "Domain language"                  |
+| Before naming anything (identifiers, UI copy, test names, commits) or proposing a restructure                                             | `GLOSSARY.md`, `docs/adr/`, then `CODING_STANDARDS.md` "Domain language"                 |
 | Before writing a hook, utility, helper, component, store, or feature module, or when asking "is there already a helper for X?"            | `docs/agents/utilities-and-components.md`                                                |
 | Before UI, styling, or layout work                                                                                                         | `docs/agents/design.md`                                                                  |
 | Before building or changing interactive UI, an action, a shortcut, or a menu entry                                                         | `CODING_STANDARDS.md` "Keyboard and accessibility"                                       |
@@ -94,4 +94,4 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 
 ### Domain docs
 
-Single-context: root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain.md`.

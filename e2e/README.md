@@ -7,7 +7,7 @@ git hooks runs it.
 
 The coverage guard is browser-free, so it also runs inside Vitest, which CI
 already runs (`src/test/unit/e2e-coverage-guard.test.ts`): CI fails when a
-route, shortcut, or CONTEXT.md term has no matrix row, or a row has no tagged
+route, shortcut, or GLOSSARY.md term has no matrix row, or a row has no tagged
 spec. Playwright itself stays a local command and never runs in CI.
 
 ## Install
@@ -151,7 +151,7 @@ weakened without the maintainer.
 
 A row has an `id`, `area`, the `workflow` and keys it drives, its `edges`
 (cancel, empty, validation, failure paths: each gets its own test), the
-CONTEXT.md `terms` and shortcut-registry `shortcuts` it exercises, the App.tsx
+GLOSSARY.md `terms` and shortcut-registry `shortcuts` it exercises, the App.tsx
 `routes` it runs on, its seed `fixture`, `tags`, and a `status`:
 
 | Status | Meaning |
@@ -177,7 +177,7 @@ else (a comment, a variable, an annotation) covers nothing:
 `pnpm test:e2e` runs `e2e/guards/run.ts` before anything else. It fails, naming
 the reason, when:
 
-- a CONTEXT.md term outside an excluded section has no row and no exclusion
+- a GLOSSARY.md term outside an excluded section has no row and no exclusion
   (`term-uncovered`), or a row names a term that does not exist (`unknown-term`);
 - a shortcut-registry id has no row and no exclusion (`shortcut-uncovered`), or
   a row's shortcut is not tagged `@sc:` by a spec carrying the row

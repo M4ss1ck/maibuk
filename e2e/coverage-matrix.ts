@@ -1,6 +1,6 @@
 // The E2E coverage matrix: the frozen minimum of keyboard workflows the suite
 // proves (issue #199). Rows may be added; none may be removed or weakened
-// without the maintainer. `e2e/guards/run.ts` checks it against CONTEXT.md,
+// without the maintainer. `e2e/guards/run.ts` checks it against GLOSSARY.md,
 // the shortcut registry, App.tsx routes, and the specs before every run.
 
 import type { Exclusion, MatrixRow } from "./guards/types";

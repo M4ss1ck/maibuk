@@ -9,16 +9,16 @@ The rules code in this repo is written and reviewed against. `/code-review` read
 
 Before naming anything or proposing a restructure, read:
 
-1. **`CONTEXT.md`**: the domain glossary. New identifiers, UI copy, test names, commit messages, and docs use its terms (Book, Checkpoint, Unfiled Note, Deleted Elsewhere...). A word listed under a term's _Avoid_ is a review flag.
+1. **`GLOSSARY.md`**: the domain glossary. New identifiers, UI copy, test names, commit messages, and docs use its terms (Book, Checkpoint, Unfiled Note, Deleted Elsewhere...). A word listed under a term's _Avoid_ is a review flag.
    - Terms in the main sections describe how the app works today.
    - Terms under **Decided, not built** have an accepted ADR the code has not caught up with. Until a change implements that ADR, new code uses the current mechanism (for example, Canvases do not sync until a Canvas adapter for Entity Sync ships). Use an ADR term only for something that already behaves as the term defines; otherwise refer to the current mechanism by its code name (`refreshBooks`) and do not coin a synonym. Implementing an ADR is its own change.
    - Terms under **Anticipated** are reserved names for features nobody has decided to build. Use them if that feature is built instead of inventing a synonym.
-   - A `_UI_` label marked _(known mismatch)_ is shipped copy that contradicts the glossary. It may be fixed in a dedicated copy change or in any change that already touches that screen; neither is required. The fix updates both locale files and, in the same commit, edits only the mismatched part of that `_UI_` line in `CONTEXT.md`: the new label replaces the old one and the _(known mismatch)_ marker goes. Correct labels on the same line stay. A label that only becomes wrong once a **Decided, not built** term ships is changed by the change implementing that ADR, not before.
+   - A `_UI_` label marked _(known mismatch)_ is shipped copy that contradicts the glossary. It may be fixed in a dedicated copy change or in any change that already touches that screen; neither is required. The fix updates both locale files and, in the same commit, edits only the mismatched part of that `_UI_` line in `GLOSSARY.md`: the new label replaces the old one and the _(known mismatch)_ marker goes. Correct labels on the same line stay. A label that only becomes wrong once a **Decided, not built** term ships is changed by the change implementing that ADR, not before.
 2. **`docs/adr/`**: architecture decisions. `status: accepted (not implemented)` means decided but not yet in the code. Do not re-propose an alternative an ADR rejected unless you can name what changed; if you do, write a new ADR that supersedes it.
 
 An existing identifier that uses an avoided word may be renamed by a change that already touches it; that change is not required to rename it, and no change renames identifiers in a sweep. A user-visible rename changes the string in both `en.json` and `es.json` in the same commit.
 
-When a new domain concept appears, add it to `CONTEXT.md` in the same change: one or two sentences saying what it is, no implementation details. Record a decision as an ADR only when it is hard to reverse, would surprise a future reader, and came from a real trade-off.
+When a new domain concept appears, add it to `GLOSSARY.md` in the same change: one or two sentences saying what it is, no implementation details. Record a decision as an ADR only when it is hard to reverse, would surprise a future reader, and came from a real trade-off.
 
 ## Keyboard and accessibility
 
@@ -119,7 +119,7 @@ While the Tutorial runs, `getDatabase()` returns an in-memory Tutorial Library (
 
 ### Tutorial steps and anchors
 
-Steps live in `src/features/tutorial/sections.ts`. A step points at the element carrying `data-tutorial="<section>.<step>"`; never at a label or class. The attribute is a space-separated list (`tutorialTargetSelector` matches with `~=`), so one element can anchor several steps, and a fallback that replaces several controls (the unsupported message in Settings → Dictation) carries all their ids. Steps never open dialogs; a step about a dialog's contents points at the control that opens it. A step picture that must follow theme and locale is an `illustration` drawn in `TutorialIllustration` from tokens and i18n, not an `image`. When a control a step points at is renamed, moved, or removed, move its `data-tutorial` attribute with it: `tutorial-app.test.tsx` renders every step on its screen and fails when a target is missing. A new glossary term in `CONTEXT.md` is either added to a step's `terms` or listed in `TUTORIAL_OUT_OF_SCOPE_TERMS` with a reason (`gates.test.ts`). While a run is active the app is `inert` and only the `tutorial.skip` shortcut works.
+Steps live in `src/features/tutorial/sections.ts`. A step points at the element carrying `data-tutorial="<section>.<step>"`; never at a label or class. The attribute is a space-separated list (`tutorialTargetSelector` matches with `~=`), so one element can anchor several steps, and a fallback that replaces several controls (the unsupported message in Settings → Dictation) carries all their ids. Steps never open dialogs; a step about a dialog's contents points at the control that opens it. A step picture that must follow theme and locale is an `illustration` drawn in `TutorialIllustration` from tokens and i18n, not an `image`. When a control a step points at is renamed, moved, or removed, move its `data-tutorial` attribute with it: `tutorial-app.test.tsx` renders every step on its screen and fails when a target is missing. A new glossary term in `GLOSSARY.md` is either added to a step's `terms` or listed in `TUTORIAL_OUT_OF_SCOPE_TERMS` with a reason (`gates.test.ts`). While a run is active the app is `inert` and only the `tutorial.skip` shortcut works.
 
 ## Known footguns
 
@@ -338,7 +338,7 @@ single file is fine while iterating (`pnpm test:e2e specs/<file>`). A gap whose
 right interaction is undecided may stay `not-accepted` with a real GitHub issue
 and `test.fail` citing it. Playwright never runs in CI (timing). CI runs only the
 coverage guard through Vitest (`src/test/unit/e2e-coverage-guard.test.ts`),
-which fails when a route, registry shortcut, or CONTEXT.md term has no row, or a
+which fails when a route, registry shortcut, or GLOSSARY.md term has no row, or a
 row has no tagged spec. Running the specs is the author's local pre-PR check and
 the first diagnosis tool when behavior breaks.
 

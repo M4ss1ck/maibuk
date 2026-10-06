@@ -45,7 +45,7 @@ export interface MatrixRow {
   workflow: string;
   /** Edge paths; each one gets its own test. */
   edges: string[];
-  /** CONTEXT.md terms this row exercises. */
+  /** GLOSSARY.md terms this row exercises. */
   terms: string[];
   /** Shortcut registry ids; each must be tagged `@sc:<id>` in a spec carrying this row. */
   shortcuts: string[];

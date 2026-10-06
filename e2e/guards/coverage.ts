@@ -39,7 +39,7 @@ export interface SourceFile {
 export interface GuardInput {
   rows: MatrixRow[];
   exclusions: Exclusion[];
-  contextMd: string;
+  glossaryMd: string;
   shortcutRegistrySource: string;
   appRoutesSource: string;
   /** Every `e2e/specs/**` file. */
@@ -55,14 +55,14 @@ export const STORAGE_ALLOWED = ["e2e/support/storage.ts", "e2e/support/fault.ts"
 // ---------------------------------------------------------------------------
 // Parsers
 
-export interface ContextTerm {
+export interface GlossaryTerm {
   term: string;
   section: string;
 }
 
 /** `**Term**:` lines, with the `## Section` they sit under. */
-export function parseContextTerms(md: string): ContextTerm[] {
-  const terms: ContextTerm[] = [];
+export function parseGlossaryTerms(md: string): GlossaryTerm[] {
+  const terms: GlossaryTerm[] = [];
   let section = "";
   for (const line of md.split("\n")) {
     const heading = /^## (.+)$/.exec(line);
@@ -76,7 +76,7 @@ export function parseContextTerms(md: string): ContextTerm[] {
   return terms;
 }
 
-export function parseContextSections(md: string): string[] {
+export function parseGlossarySections(md: string): string[] {
   return [...md.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim());
 }
 
@@ -338,9 +338,9 @@ export function checkCoverage(input: GuardInput): Problem[] {
   const problems: Problem[] = [];
   const add = (code: ProblemCode, message: string) => problems.push({ code, message });
 
-  const contextTerms = parseContextTerms(input.contextMd);
-  const termNames = new Set(contextTerms.map((t) => t.term));
-  const sections = new Set(parseContextSections(input.contextMd));
+  const glossaryTerms = parseGlossaryTerms(input.glossaryMd);
+  const termNames = new Set(glossaryTerms.map((t) => t.term));
+  const sections = new Set(parseGlossarySections(input.glossaryMd));
   const shortcutIds = parseShortcutIds(input.shortcutRegistrySource);
   const shortcutSet = new Set(shortcutIds);
   const keyless = new Set(parseKeylessCommandIds(input.shortcutRegistrySource));
@@ -422,7 +422,7 @@ export function checkCoverage(input: GuardInput): Problem[] {
 
     for (const term of row.terms) {
       if (!termNames.has(term))
-        add("unknown-term", `row ${row.id} lists "${term}", not a CONTEXT.md term`);
+        add("unknown-term", `row ${row.id} lists "${term}", not a GLOSSARY.md term`);
     }
     for (const id of row.shortcuts) {
       if (!shortcutSet.has(id))
@@ -491,7 +491,7 @@ export function checkCoverage(input: GuardInput): Problem[] {
         if (!sections.has(exclusion.section)) {
           add(
             "unknown-section",
-            `exclusion names CONTEXT.md section "${exclusion.section}", which does not exist`
+            `exclusion names GLOSSARY.md section "${exclusion.section}", which does not exist`
           );
         }
         excludedSections.add(exclusion.section);
@@ -499,7 +499,7 @@ export function checkCoverage(input: GuardInput): Problem[] {
       case "term":
         for (const item of exclusion.items) {
           if (!termNames.has(item))
-            add("unknown-term", `exclusion lists "${item}", not a CONTEXT.md term`);
+            add("unknown-term", `exclusion lists "${item}", not a GLOSSARY.md term`);
           excluded.term.add(item);
         }
         break;
@@ -524,11 +524,11 @@ export function checkCoverage(input: GuardInput): Problem[] {
 
   // Coverage: every term, shortcut, and route has a row or an exclusion.
   const rowTerms = new Set(input.rows.flatMap((r) => r.terms));
-  for (const { term, section } of contextTerms) {
+  for (const { term, section } of glossaryTerms) {
     if (excludedSections.has(section) || excluded.term.has(term) || rowTerms.has(term)) continue;
     add(
       "term-uncovered",
-      `CONTEXT.md term "${term}" (${section}) has no matrix row and no exclusion`
+      `GLOSSARY.md term "${term}" (${section}) has no matrix row and no exclusion`
     );
   }
   const rowShortcuts = new Set(input.rows.flatMap((r) => r.shortcuts));
