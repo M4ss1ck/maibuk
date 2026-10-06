@@ -4,8 +4,8 @@ import { expect, test } from "../support/test";
 import { longPress, swipe } from "../support/touch";
 
 // Phone: an item's actions are reached without hover, from its ⋯ button or a
-// long-press, and a touch drag belongs to the Reorder handle (AGENTS.md
-// section 2, item 7). Runs only in the `phone` project, driven by touch.
+// long-press, and a touch drag belongs to the Reorder handle (CODING_STANDARDS.md,
+// "Keyboard and accessibility", item 7). Runs only in the `phone` project, driven by touch.
 
 const [arrival, lamp, storm] = SEED_CHAPTERS;
 

@@ -4,8 +4,8 @@ import { SEED_NOTES } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
 // Phone: the sidebar folds into the navigation menu, and the Notes Gallery is
-// how notes are reached (AGENTS.md section 2, item 7). Runs only in the
-// `phone` project, driven by touch.
+// how notes are reached (CODING_STANDARDS.md, "Keyboard and accessibility",
+// item 7). Runs only in the `phone` project, driven by touch.
 
 test.use({ library: "notesWithLinksAndTags" });
 

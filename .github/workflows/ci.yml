@@ -50,6 +50,24 @@ jobs:
       - name: Build web target
         run: pnpm build:web
 
+  # Every agent session loads AGENTS.md whole, so it has a word budget; the
+  # reference material lives behind its pointers (issue #421).
+  agents-budget:
+    name: AGENTS.md word budget
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+
+      - name: Check the AGENTS.md word budget
+        run: node scripts/agents-word-budget.mjs AGENTS.md
+
   # The suite in parallel shards. Each shard records its results and coverage
   # as a blob; the coverage job merges them and enforces the thresholds on the
   # whole, since a shard alone covers a third of the code.

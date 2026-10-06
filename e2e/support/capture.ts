@@ -1,5 +1,5 @@
-// Screenshot capture points for PR evidence (AGENTS.md "Visual changes ship
-// screenshots"). A spec already drives the app to the state worth showing, so
+// Screenshot capture points for PR evidence (CODING_STANDARDS.md, "Keyboard
+// and accessibility", item 9). A spec already drives the app to the state worth showing, so
 // it calls `capture` there; the call is a no-op unless E2E_CAPTURE_DIR is set,
 // which keeps normal runs fast and the suite's behavior unchanged.
 // scripts/pr-screenshots.sh sets it for the base and the branch.
