@@ -533,7 +533,7 @@ uploads it as a new item (the server would reject that with
 
 Contributions are welcome. Please open a pull request.
 
-Read the [domain glossary](CONTEXT.md), [architecture decisions](docs/adr/), and
+Read the [domain glossary](GLOSSARY.md), [architecture decisions](docs/adr/), and
 [codebase guide](AGENTS.md) before making changes, and write and review code against the
 [coding standards](CODING_STANDARDS.md). The [E2E guide](e2e/README.md)
 covers workflow tests and screenshots for UI changes.

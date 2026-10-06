@@ -1,5 +1,5 @@
 // `tsx e2e/guards/run.ts [--allow-planned]`: the pre-run guard. Reads the
-// matrix, CONTEXT.md, the shortcut registry, App.tsx routes and every e2e
+// matrix, GLOSSARY.md, the shortcut registry, App.tsx routes and every e2e
 // file, and exits 1 with one line per problem. `pnpm test:e2e` runs it before
 // Playwright and never passes --allow-planned.
 

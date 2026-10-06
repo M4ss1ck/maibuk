@@ -11,7 +11,7 @@ import type { GuardInput, SourceFile } from "./coverage";
 /** Everything checkCoverage needs except allowPlanned. */
 export type GuardInputs = Omit<GuardInput, "allowPlanned">;
 
-/** Reads the matrix, CONTEXT.md, the shortcut registry, App.tsx routes and
+/** Reads the matrix, GLOSSARY.md, the shortcut registry, App.tsx routes and
  * every e2e file under `root` (the repository root). */
 export function collectGuardInputs(root: string): GuardInputs {
   function read(path: string): string {
@@ -42,7 +42,7 @@ export function collectGuardInputs(root: string): GuardInputs {
   return {
     rows: ROWS,
     exclusions: EXCLUSIONS,
-    contextMd: read("CONTEXT.md"),
+    glossaryMd: read("GLOSSARY.md"),
     shortcutRegistrySource: read("src/lib/shortcut-registry.ts"),
     appRoutesSource: read("src/App.tsx"),
     specs,

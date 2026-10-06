@@ -14,7 +14,7 @@ import {
 import { TUTORIAL_SECTION_IDS, type TutorialPosition } from "@/features/tutorial/types";
 
 const ROOT = process.cwd();
-const glossary = readFileSync(join(ROOT, "CONTEXT.md"), "utf8");
+const glossary = readFileSync(join(ROOT, "GLOSSARY.md"), "utf8");
 
 /** Every defined term above "Relationships": the main sections and "Decided, not built". */
 function glossaryTerms(): string[] {

@@ -35,7 +35,7 @@ Keep Maibuk's own `useShortcuts` and add an override layer. No library is a clea
 7. **Build the recorder as a labelled text field with Escape to cancel and Tab to leave.** Announce the captured combo and any conflict through a `role="status"` live region (the pattern already in `src/components/RouteAnnouncer.tsx:42` and `ToolbarSettingsDialog.tsx:105`). Suspend `useShortcuts` while recording: its window capture listener runs before any element handler. Details in section 5.
 8. **Ship a "single-key shortcuts" switch before, or with, remapping.** WCAG 2.1.4 (Level A) covers Maibuk's `?`, all `g` sequences, `j`/`k`, `1-9`, and the Canvas letters `V P E T N L`, which are window-level and not "active only on focus" (section 5.1). A switch that turns them off meets the criterion on its own; remapping to include a modifier also meets it.
 9. **Refuse or warn on keys the platform keeps.** On the web build, Chromium and Firefox reserve Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Shift+N/T/W and tab switching in a normal tab (section 4.3), so `home.newBook` (`Ctrl+N`, `shortcut-registry.ts:64`) cannot fire in a browser tab. Under Tauri those keys reach the page. Warn on Ctrl+Alt+key on Windows (AltGr). Put the list in one constant keyed by `IS_WEB`/`IS_TAURI`.
-10. **Name it and gate it.** Add a `CONTEXT.md` term for an author-changed shortcut (the glossary already bans "hotkey" and "keybinding" for Bound Shortcut, `CONTEXT.md:378-381`), an `e2e/coverage-matrix.ts` row, and unit tests for merge, normalization, conflict detection, and the recorder's key handling. Decide whether overrides are device-local (keyboards are per device, like ADR 0004's position state) or travel with the Library; that is a decision for Andy, not something this research settles.
+10. **Name it and gate it.** Add a `GLOSSARY.md` term for an author-changed shortcut (the glossary already bans "hotkey" and "keybinding" for Bound Shortcut, `GLOSSARY.md:378-381`), an `e2e/coverage-matrix.ts` row, and unit tests for merge, normalization, conflict detection, and the recorder's key handling. Decide whether overrides are device-local (keyboards are per device, like ADR 0004's position state) or travel with the Library; that is a decision for Andy, not something this research settles.
 
 ---
 
@@ -282,7 +282,7 @@ WCAG SC 2.1.2 No Keyboard Trap: "If keyboard focus can be moved to a component o
 | WCAG 2.1.4 | Character-only shortcuts always on | "Single-key shortcuts" switch now; remap later |
 | Help dialog | `ShortcutsHelpDialog.tsx` lists Bound Shortcuts from the registry | Show effective keys and mark overridden ones |
 | Tests / gates | `shortcut-bindings.test.ts`, coverage matrix, keyboard test gate | Unit tests for merge, normalizer, conflicts, matcher; recorder keyboard tests (Escape restores focus, Tab leaves); E2E row with `@wf:` tag; `mac-platform` project for Mod |
-| Domain | `Bound Shortcut` in `CONTEXT.md:378-381` | New term for an author-changed shortcut; ADR if the storage or sync decision is hard to reverse |
+| Domain | `Bound Shortcut` in `GLOSSARY.md:378-381` | New term for an author-changed shortcut; ADR if the storage or sync decision is hard to reverse |
 
 Open decision for Andy: overrides device-local (keyboard layouts are per device, matching ADR 0004's position state) or part of settings that travel in an Export. The research does not decide it.
 

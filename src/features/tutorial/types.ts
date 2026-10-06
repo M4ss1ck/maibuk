@@ -42,7 +42,7 @@ export interface TutorialStep {
   /** Optional illustration the card draws from app tokens and i18n. */
   illustration?: TutorialIllustrationId;
   link?: TutorialStepLink;
-  /** Glossary terms (CONTEXT.md) this step teaches; the coverage gate reads them. */
+  /** Glossary terms (GLOSSARY.md) this step teaches; the coverage gate reads them. */
   terms: readonly string[];
 }
 

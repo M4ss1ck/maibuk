@@ -16,7 +16,7 @@ import {
 } from "./coverage";
 import type { MatrixRow } from "./types";
 
-const CONTEXT = `# App
+const GLOSSARY = `# App
 
 ## Library
 
@@ -85,7 +85,7 @@ function input(overrides: Partial<GuardInput> = {}): GuardInput {
     exclusions: [
       { kind: "context-section", section: "Sync", reason: "out of scope", owner: "Vitest" },
     ],
-    contextMd: CONTEXT,
+    glossaryMd: GLOSSARY,
     shortcutRegistrySource: REGISTRY,
     appRoutesSource: APP,
     specs: [{ path: "e2e/specs/books.spec.ts", source: GOOD_SPEC }],
@@ -146,11 +146,11 @@ describe("checkCoverage", () => {
     assert.deepEqual(checkCoverage(input()), []);
   });
 
-  it("rejects a CONTEXT.md term with no row and no exclusion", () => {
+  it("rejects a GLOSSARY.md term with no row and no exclusion", () => {
     assert.deepEqual(codes({ rows: [row({ terms: ["Book"] })] }), ["term-uncovered"]);
   });
 
-  it("rejects a term that is not in CONTEXT.md", () => {
+  it("rejects a term that is not in GLOSSARY.md", () => {
     assert.ok(
       codes({ rows: [row({ terms: ["Book", "Gallery", "Bok"] })] }).includes("unknown-term")
     );

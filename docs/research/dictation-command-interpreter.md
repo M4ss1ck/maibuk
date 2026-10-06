@@ -29,7 +29,7 @@ Pinned refs used below:
 5. **Phrases are bindings of Commands, stored like Custom Shortcuts.** Extend ADR 0012's device-local layer with a per-language phrase list per Command, defaults in a registry-side data file keyed by Dictation language (not by UI locale), a `voice` flag on the Commands that may take phrases, and conflict detection on normalized phrases. Punctuation and layout phrases become Commands in a new "Dictation" section so one editor, one file format, and one conflict check cover everything (section 4).
 6. **v1 dispatches only Commands that need no KeyboardEvent.** Registry handlers today receive the `KeyboardEvent` and some read `event.key`, `event.code`, or `event.target` (`src/pages/Home.tsx:136-190`). Editor Commands already have event-free runners in `EDITOR_COMMANDS` (`src/components/editor/editor-commands.ts:33-65`). Start with those plus Dictation's own Commands; app-level Commands need an explicit voice entry point and come later.
 7. **Change the `DictationTarget` contract, not `RecognizerHost`.** `commit(text)` becomes `apply(edits)` in one ProseMirror transaction with `closeHistory`, so one spoken line stays one undo step. The `RecognizerHost` protocol (ADR 0013) is untouched in v1; word timestamps (section 2.5) would change it and need their own ADR.
-8. **Two ADRs.** One for "phrases are a second binding kind in the Custom Shortcuts layer, keyed by Dictation language" (extends ADR 0012), one for "the interpreter is deterministic text rules over finished lines; no grammar-constrained decoding and no intent model" (the trade-off in section 3). `CONTEXT.md` moves Voice Command and Dictation Command Interpreter out of Anticipated and gains a term for the phrase itself.
+8. **Two ADRs.** One for "phrases are a second binding kind in the Custom Shortcuts layer, keyed by Dictation language" (extends ADR 0012), one for "the interpreter is deterministic text rules over finished lines; no grammar-constrained decoding and no intent model" (the trade-off in section 3). `GLOSSARY.md` moves Voice Command and Dictation Command Interpreter out of Anticipated and gains a term for the phrase itself.
 
 **Top risks:** recognition of short command phrases is poor in the probe, but the probe used a synthetic voice and Andy's own dictation in both languages has been accurate, so the misses most likely reflect the TTS assets (section 2.4); English prose words that are also punctuation words ("period", "colon") need the whole-line rule or the escape; authors will want alias phrases for consistent mishearings.
 
@@ -37,7 +37,7 @@ Pinned refs used below:
 
 ## Decisions (2026-09-28)
 
-Settled with Andy after this research. Where they differ from the recommendations above, the decisions win; sections 5.3 to 5.5 describe the rejected "punctuation as Commands" design and are kept as the record of why. Glossary: `CONTEXT.md` (Dictation Language, Dictation Command Interpreter, Spoken Punctuation, Voice Command, Dictation Vocabulary). ADRs: 0014 and 0015.
+Settled with Andy after this research. Where they differ from the recommendations above, the decisions win; sections 5.3 to 5.5 describe the rejected "punctuation as Commands" design and are kept as the record of why. Glossary: `GLOSSARY.md` (Dictation Language, Dictation Command Interpreter, Spoken Punctuation, Voice Command, Dictation Vocabulary). ADRs: 0014 and 0015.
 
 **Two layers, not one.** Voice Commands are a second way to run registry Commands, next to Shortcuts. Spoken Punctuation (punctuation, paragraph, line, list item, `cap`/`mayúscula <word>`, the escape word "literal", "scratch that"/"borra eso") is Dictation configuration, not Commands: listed in Settings → Dictation, each entry switchable off and open to custom aliases per Dictation Language. No Shortcuts for Spoken Punctuation.
 
@@ -398,7 +398,7 @@ export function normalizePhrase(text: string): string;   // shared by matching, 
 
 ### 5.8 Domain and ADRs
 
-- `CONTEXT.md`: move **Voice Command** and **Dictation Command Interpreter** from Anticipated to the Dictation section when built. Add a term for the phrase that triggers a Command (candidates: "Voice Phrase", or Talon's "Spoken Form"; the glossary forbids "keybinding" for keys, so pick one word now). Add **Escape Word** and **Scratch That** only if they appear in UI copy. Add each new term to a Tutorial step or `TUTORIAL_OUT_OF_SCOPE_TERMS` (AGENTS.md, Tutorial steps).
+- `GLOSSARY.md`: move **Voice Command** and **Dictation Command Interpreter** from Anticipated to the Dictation section when built. Add a term for the phrase that triggers a Command (candidates: "Voice Phrase", or Talon's "Spoken Form"; the glossary forbids "keybinding" for keys, so pick one word now). Add **Escape Word** and **Scratch That** only if they appear in UI copy. Add each new term to a Tutorial step or `TUTORIAL_OUT_OF_SCOPE_TERMS` (AGENTS.md, Tutorial steps).
 - **ADR A (extends 0012):** phrases are a second binding kind in the device-local Custom Shortcuts layer, keyed by Dictation language, with defaults outside the locale files. Hard to reverse (stored shape, file format), and it surprises a reader who expects phrases in `en.json`.
 - **ADR B:** the interpreter is deterministic rules over finished lines; rejected: grammar-constrained decoding (Moonshine cannot), an intent model (fuzzy, extra model), fuzzy string matching (prose triggers actions), and a generic parser library.
 - **No ADR 0013 change** in v1. Word timestamps later would need one.
@@ -423,7 +423,7 @@ export function normalizePhrase(text: string): string;   // shared by matching, 
 3. **Spanish openers: explicit phrases only, auto only, or both (recommended)?** And which default phrases: "abre/cierra interrogación", "signo de interrogación", "punto y aparte", "punto y seguido"?
 4. **Escape word per language:** "literal"/"literal", or voice access's "type"/"escribe"?
 5. **App-tier Voice Commands (go to Notes, Sync now) in scope for the first release, or editor tier only?**
-6. **Name for the phrase binding** in `CONTEXT.md` and UI: "Voice Phrase", "Spoken Form", or something else.
+6. **Name for the phrase binding** in `GLOSSARY.md` and UI: "Voice Phrase", "Spoken Form", or something else.
 7. **Do Custom phrases travel in the same Shortcut File** as keys (recommended), or a separate file?
 8. **Should "scratch that" remove several lines when repeated** (Dragon allows "<n> times"), and how many ranges to keep?
 
