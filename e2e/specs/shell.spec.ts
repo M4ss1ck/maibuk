@@ -97,6 +97,94 @@ test.describe("primary navigation @wf:shell-nav-sidebar", () => {
   });
 });
 
+test.describe("main sidebar keyboard resize @wf:shell-nav-sidebar-resize", () => {
+  const sidebar = (page: Page) => page.getByRole("complementary", { name: "Navigation sidebar" });
+  const handle = (page: Page) => sidebar(page).getByRole("separator", { name: "Resize sidebar" });
+  const sidebarWidth = async (page: Page) => (await sidebar(page).boundingBox())?.width;
+
+  async function expectWidth(page: Page, width: number) {
+    await expect(handle(page)).toHaveAttribute("aria-valuenow", String(width));
+    await expect(handle(page)).toHaveAttribute("aria-valuetext", `${width} pixels`);
+    await expect.poll(() => sidebarWidth(page)).toBe(width);
+  }
+
+  async function press(page: Page, key: string, times: number) {
+    for (let i = 0; i < times; i++) await page.keyboard.press(key);
+  }
+
+  test("arrows resize the sidebar from its separator within the limits and the width persists", async ({
+    page,
+  }) => {
+    await openHome(page);
+    await capture(page, "main-sidebar-resize", { around: [sidebar(page)] });
+
+    await tabTo(page, handle(page));
+    await expect(handle(page)).toBeFocused();
+    await capture(page, "main-sidebar-resize-focused", { around: [sidebar(page)] });
+    await expectWidth(page, 280);
+
+    // Tab and Shift+Tab leave and return without resizing.
+    await page.keyboard.press("Tab");
+    await expect(handle(page)).not.toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(handle(page)).toBeFocused();
+    await expectWidth(page, 280);
+
+    // The sidebar sits on the left, so ArrowRight widens it.
+    await page.keyboard.press("ArrowRight");
+    await expectWidth(page, 296);
+    await press(page, "ArrowLeft", 2);
+    await expectWidth(page, 264);
+
+    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("ArrowDown");
+    await expectWidth(page, 264);
+    await expect(handle(page)).toBeFocused();
+
+    await press(page, "ArrowRight", 16);
+    await expectWidth(page, 480);
+    await press(page, "ArrowLeft", 20);
+    await expectWidth(page, 200);
+    await expect(handle(page)).toBeFocused();
+
+    await press(page, "ArrowRight", 3);
+    await expectWidth(page, 248);
+
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+    await expectWidth(page, 248);
+  });
+
+  test.describe("narrow viewport", () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+
+    test("the hidden sidebar's separator is not a Tab stop", async ({ page }) => {
+      await openHome(page);
+      await capture(page, "main-sidebar-resize-narrow");
+      // The desktop sidebar is display: none here, so only includeHidden finds it.
+      const hiddenHandle = page.getByRole("separator", {
+        name: "Resize sidebar",
+        includeHidden: true,
+      });
+      await expect(hiddenHandle).toHaveCount(1);
+      await expect(hiddenHandle).toBeHidden();
+
+      const menu = page.getByRole("button", { name: "Open navigation menu" });
+      await tabTo(page, menu);
+      // A full cycle through the page never lands on the separator.
+      for (let i = 0; i < 60; i++) {
+        await page.keyboard.press("Tab");
+        await expect(hiddenHandle).not.toBeFocused();
+        if (await isFocusWithin(menu)) break;
+      }
+
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("button", { name: "Close navigation menu" })).toBeFocused();
+      await expect(page.getByRole("dialog").getByRole("separator")).toHaveCount(0);
+    });
+  });
+});
+
 test.describe("g sequences @wf:shell-goto-sequences", () => {
   test("g p, g n, g c, g e, g m, g s go to each screen @sc:global.gotoProjects @sc:global.gotoNotes @sc:global.gotoCanvas @sc:global.gotoEphemeral @sc:global.gotoMetrics @sc:global.gotoSettings @palette-entry", async ({
     page,

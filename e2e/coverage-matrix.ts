@@ -112,6 +112,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "shell-nav-sidebar-resize",
+    area: "shell",
+    workflow:
+      "Tab to the main sidebar's resize separator, ArrowRight widens and ArrowLeft narrows it by 16px within 200-480px, vertical arrows do nothing; asserts: focus stays on the separator, rendered width, aria-valuenow; persists: yes",
+    edges: ["Narrow viewport: the hidden sidebar's separator is not a Tab stop"],
+    terms: [],
+    shortcuts: [],
+    routes: ["/"],
+    fixture: "empty",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "shell-goto-sequences",
     area: "shell",
     workflow: "g p, g n, g c, g e, g m, g s from Home; asserts: URL + heading per route",

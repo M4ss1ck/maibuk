@@ -41,6 +41,9 @@ export function clampEditorZoom(percent: number): number {
   return Math.max(EDITOR_ZOOM_MIN, Math.min(EDITOR_ZOOM_MAX, snapped));
 }
 
+export const MAIN_SIDEBAR_MIN_WIDTH = 200;
+export const MAIN_SIDEBAR_MAX_WIDTH = 480;
+
 export const EDITOR_CONTENT_WIDTH_MIN = 480;
 export const EDITOR_CONTENT_WIDTH_MAX = 1400;
 export const EDITOR_CONTENT_WIDTH_STEP = 20;

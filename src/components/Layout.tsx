@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FocusScope, Overlay, useModalOverlay } from "react-aria";
+import { FocusScope, Overlay, useModalOverlay, useMove } from "react-aria";
 import { Dialog, RouterProvider } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { Outlet, useHref, useLocation, useNavigate } from "react-router-dom";
@@ -9,9 +9,10 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import { ReleaseBadge } from "@/components/releases/ReleaseBadge";
 import { CloseIcon, MaibukLogo, ProjectsIcon, SettingsIcon } from "@/components/icons";
-import { KeyboardShortcut } from "@/components/ui";
+import { KeyboardShortcut, Tooltip } from "@/components/ui";
 import { useRestoreFocus } from "@/hooks";
 import { useSettingsStore } from "@/features/settings/store";
+import { MAIN_SIDEBAR_MAX_WIDTH, MAIN_SIDEBAR_MIN_WIDTH } from "@/features/settings/types";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 import { useCommandHint } from "@/lib/command-keys";
 import type { CommandId } from "@/lib/shortcut-registry";
@@ -22,6 +23,9 @@ const NAV_TUTORIAL_ANCHORS: Record<string, string | undefined> = {
   "/metrics": "books.metrics",
   "/settings": "books.settings",
 };
+
+/** One keyboard resize press moves the sidebar this many pixels. */
+const KEYBOARD_RESIZE_STEP = 16;
 
 function NavShortcut({ id, className }: { id: CommandId; className?: string }) {
   const hint = useCommandHint(id);
@@ -120,8 +124,7 @@ export function Layout() {
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         if (!isResizing.current) return;
-        const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
-        setMainSidebarWidth(newWidth);
+        setMainSidebarWidth(startWidth + moveEvent.clientX - startX);
       };
 
       const onMouseUp = () => {
@@ -139,6 +142,20 @@ export function Layout() {
     },
     [mainSidebarWidth, setMainSidebarWidth]
   );
+
+  // React Aria owns the separator's keyboard handling and reports ArrowLeft as
+  // deltaX -1 and ArrowRight as +1. The sidebar sits on the left, so a
+  // rightward move widens it, matching the pointer drag. Read the width from
+  // the store, not the render, so presses between renders all count. Ignore
+  // the vertical arrows useMove also reports.
+  const { moveProps } = useMove({
+    onMove: (event) => {
+      if (event.deltaX === 0) return;
+      setMainSidebarWidth(
+        useSettingsStore.getState().mainSidebarWidth + event.deltaX * KEYBOARD_RESIZE_STEP
+      );
+    },
+  });
 
   const sidebarContent = (mobile: boolean) => (
     <>
@@ -259,11 +276,23 @@ export function Layout() {
         className="hidden md:flex relative shrink-0 h-full border-r border-border flex-col bg-background"
       >
         {sidebarContent(false)}
-        <div
-          onMouseDown={handleResizeStart}
-          data-tutorial="books.remember"
-          className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
-        />
+        <Tooltip content={t("nav.resizeSidebar")}>
+          {/* biome-ignore lint/a11y/useSemanticElements: a focusable window-splitter separator; <hr> cannot take focus or a value. */}
+          <div
+            role="separator"
+            tabIndex={0}
+            aria-orientation="vertical"
+            aria-label={t("nav.resizeSidebar")}
+            aria-valuenow={mainSidebarWidth}
+            aria-valuemin={MAIN_SIDEBAR_MIN_WIDTH}
+            aria-valuemax={MAIN_SIDEBAR_MAX_WIDTH}
+            aria-valuetext={t("nav.sidebarWidthValue", { width: mainSidebarWidth })}
+            onMouseDown={handleResizeStart}
+            onKeyDown={moveProps.onKeyDown}
+            data-tutorial="books.remember"
+            className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          />
+        </Tooltip>
       </aside>
 
       <main
