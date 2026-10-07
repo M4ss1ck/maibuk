@@ -521,6 +521,21 @@ _Avoid_: changelog, update log, patch notes
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
 
+**Plugin**:
+A packaged addition to Maibuk that adds its own Commands, pages, Settings rows, or buttons without changing Maibuk itself, and reaches the author's work only through the Plugin Permissions it was granted. Maibuk's own and the author's Plugins work the same way (ADR 0019).
+_Avoid_: extension (TipTap's word in code), add-on, mod
+
+**Built-in Plugin**:
+A Plugin that ships with Maibuk. It is copied into the Plugin Directory and starts with its Plugin Permissions granted, which the author can revoke like any other.
+
+**Plugin Directory**:
+The folder on this device that Maibuk loads Plugins from, chosen in Settings (ADR 0020).
+_Avoid_: plugins folder, extensions folder
+
+**Plugin Permission**:
+One kind of access a Plugin declares, such as reading the Library or reaching a named web host, and that the author grants or revokes.
+_Avoid_: grant, scope, capability (Tauri's word in code)
+
 ## Relationships
 
 - A **Library** holds many **Books**, **Notes**, and **Canvases**.
@@ -536,6 +551,7 @@ Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widen
 - The **Tutorial** runs in a **Tutorial Library**, never in the author's **Library**; ending it brings back the author's own.
 - A **Dictation Session** uses one **Dictation Model** and inserts into whichever editor or text field has the caret.
 - A **Command** may also have **Voice Commands**; **Spoken Punctuation** and the **Dictation Vocabulary** are not Commands, and all three are kept per **Dictation Language**.
+- A **Plugin** is loaded from the **Plugin Directory** and reaches the **Library** only through its **Plugin Permissions**; the data it keeps is in the **Library** and its **Backups**, but it is not a **Synced Item**.
 
 ## Anticipated
 
@@ -549,13 +565,6 @@ A geometric figure (rectangle, ellipse, or pointer) placed on a Canvas, as oppos
 
 **AI Assist**:
 Help from a language model while writing.
-
-**Plugin**:
-A packaged addition to Maibuk that adds its own Commands, pages, Settings rows, or buttons without changing Maibuk itself. Maibuk's own and the author's Plugins work the same way.
-_Avoid_: extension (TipTap's word in code), add-on, mod
-
-**Built-in Plugin**:
-A Plugin that ships with Maibuk.
 
 **Canvas History**:
 Versions of a Canvas.
