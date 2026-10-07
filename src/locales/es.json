@@ -85,7 +85,9 @@
     "designCover": "Diseñar Portada",
     "focusMode": "Modo Enfocado (F11)",
     "downloadApp": "Descargar App",
-    "bookNotes": "Notas del Libro"
+    "bookNotes": "Notas del Libro",
+    "resizeSidebar": "Redimensionar barra lateral",
+    "sidebarWidthValue": "{{width}} píxeles"
   },
   "bookNotes": {
     "quickPlaceholder": "Escribe una nota rápida...",
@@ -1600,7 +1602,7 @@
         },
         "remember": {
           "title": "Maibuk recuerda tu diseño",
-          "body": "Arrastra este borde para cambiar el ancho de la barra lateral. El tamaño de los paneles, los filtros y la pantalla en la que estabas se recuerdan en este dispositivo, y cada capítulo se vuelve a abrir en el punto donde leías."
+          "body": "Arrastra este borde, o enfócalo y usa las flechas, para cambiar el ancho de la barra lateral. El tamaño de los paneles, los filtros y la pantalla en la que estabas se recuerdan en este dispositivo, y cada capítulo se vuelve a abrir en el punto donde leías."
         }
       },
       "book-editor": {

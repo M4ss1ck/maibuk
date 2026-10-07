@@ -87,6 +87,13 @@ describe("locale key coverage", () => {
     expect(es.backup.trigger.close).toBeTruthy();
   });
 
+  it("defines the main sidebar resize label and width value in both locales", () => {
+    expect(en.nav.resizeSidebar).toBe("Resize sidebar");
+    expect(es.nav.resizeSidebar).toBe("Redimensionar barra lateral");
+    expect(en.nav.sidebarWidthValue).toContain("{{width}}");
+    expect(es.nav.sidebarWidthValue).toContain("{{width}}");
+  });
+
   it("defines the side panel width value interpolation key in both locales", () => {
     expect(en.bookSidePanel.widthValue).toContain("{{width}}");
     expect(es.bookSidePanel.widthValue).toContain("{{width}}");

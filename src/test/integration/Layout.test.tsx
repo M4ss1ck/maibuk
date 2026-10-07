@@ -20,6 +20,7 @@ const translations = {
     "nav.closeMenu": "Close navigation menu",
     "panes.navSidebar": "Navigation sidebar",
     "panes.mainContent": "Main content",
+    "nav.resizeSidebar": "Resize sidebar",
     "settings.light": "Light",
     "settings.dark": "Dark",
     "settings.system": "System",
@@ -36,6 +37,7 @@ const translations = {
     "nav.closeMenu": "Cerrar menú de navegación",
     "panes.navSidebar": "Barra lateral de navegación",
     "panes.mainContent": "Contenido principal",
+    "nav.resizeSidebar": "Redimensionar barra lateral",
     "settings.light": "Claro",
     "settings.dark": "Oscuro",
     "settings.system": "Sistema",
@@ -44,7 +46,11 @@ const translations = {
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { release?: string }) => {
+    t: (key: string, options?: { release?: string; width?: number }) => {
+      if (key === "nav.sidebarWidthValue")
+        return i18nState.language === "es"
+          ? `${options?.width} píxeles`
+          : `${options?.width} pixels`;
       if (key === "releases.badge") return `Maibuk ${options?.release}, What's new`;
       if (key === "releases.badgeWithUpdate")
         return `Maibuk ${options?.release}, What's new, an update is available`;
@@ -346,5 +352,93 @@ describe("Layout", () => {
     fireEvent.mouseUp(document);
     fireEvent.mouseMove(document, { clientX: 100 });
     expect(useSettingsStore.getState().mainSidebarWidth).toBe(480);
+  });
+
+  function getResizeHandle() {
+    return screen.getByRole("separator", { name: translations.en["nav.resizeSidebar"] });
+  }
+
+  async function tabToResizeHandle(user: ReturnType<typeof userEvent.setup>) {
+    const handle = getResizeHandle();
+    for (let i = 0; i < 20 && document.activeElement !== handle; i++) {
+      await user.tab();
+    }
+    expect(handle).toHaveFocus();
+    return handle;
+  }
+
+  it("reaches the resize handle with Tab and leaves it with Tab and Shift+Tab", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+
+    const handle = await tabToResizeHandle(user);
+    await user.tab({ shift: true });
+    expect(handle).not.toHaveFocus();
+    await user.tab();
+    expect(handle).toHaveFocus();
+    await user.tab();
+    expect(handle).not.toHaveFocus();
+  });
+
+  it("widens with ArrowRight and narrows with ArrowLeft in 16px steps, keeping focus", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+    const sidebar = screen.getByRole("complementary", { name: "Navigation sidebar" });
+
+    const handle = await tabToResizeHandle(user);
+    expect(handle).toHaveAttribute("aria-valuetext", "280 pixels");
+
+    await user.keyboard("{ArrowRight}");
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(296);
+    expect(sidebar).toHaveStyle({ width: "296px" });
+    expect(handle).toHaveAttribute("aria-valuetext", "296 pixels");
+    expect(handle).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}{ArrowLeft}");
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(264);
+    expect(sidebar).toHaveStyle({ width: "264px" });
+    expect(handle).toHaveFocus();
+  });
+
+  it("clamps keyboard resizing to the 200 and 480 pixel limits", async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ mainSidebarWidth: 472 });
+    renderLayout();
+
+    const handle = await tabToResizeHandle(user);
+    await user.keyboard("{ArrowRight}{ArrowRight}");
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(480);
+    expect(handle).toHaveAttribute("aria-valuenow", "480");
+
+    act(() => useSettingsStore.setState({ mainSidebarWidth: 208 }));
+    await user.keyboard("{ArrowLeft}{ArrowLeft}");
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(200);
+    expect(handle).toHaveAttribute("aria-valuenow", "200");
+    expect(handle).toHaveFocus();
+  });
+
+  it("leaves the width unchanged on vertical arrows", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+
+    const handle = await tabToResizeHandle(user);
+    await user.keyboard("{ArrowUp}{ArrowDown}");
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(280);
+    expect(handle).toHaveFocus();
+  });
+
+  it("names the resize handle in Spanish", async () => {
+    i18nState.language = "es";
+    renderLayout();
+
+    const handle = screen.getByRole("separator", {
+      name: translations.es["nav.resizeSidebar"],
+    });
+    expect(handle).toHaveAttribute("aria-valuetext", "280 píxeles");
+  });
+
+  it("keeps the Tutorial anchor on the resize handle", () => {
+    renderLayout();
+    expect(getResizeHandle()).toHaveAttribute("data-tutorial", "books.remember");
   });
 });

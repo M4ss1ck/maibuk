@@ -40,6 +40,8 @@ import {
   type PasteStructuralOptionKey,
   type PasteCleanupRule,
   type MetricsCategory,
+  MAIN_SIDEBAR_MAX_WIDTH,
+  MAIN_SIDEBAR_MIN_WIDTH,
 } from "@/features/settings/types";
 import { normalizeMetrics } from "@/features/metrics/settings";
 import {
@@ -353,7 +355,12 @@ export const useSettingsStore = create<SettingsStore>()(
       setBookSidePanelTab: (bookSidePanelTab) => set({ bookSidePanelTab }),
       setHideKeyboardHints: (hideKeyboardHints) => set({ hideKeyboardHints }),
       setMainSidebarWidth: (mainSidebarWidth) =>
-        set({ mainSidebarWidth: Math.max(200, Math.min(480, mainSidebarWidth)) }),
+        set({
+          mainSidebarWidth: Math.max(
+            MAIN_SIDEBAR_MIN_WIDTH,
+            Math.min(MAIN_SIDEBAR_MAX_WIDTH, mainSidebarWidth)
+          ),
+        }),
       setSidebarWidth: (sidebarWidth) =>
         set({ sidebarWidth: Math.max(200, Math.min(480, sidebarWidth)) }),
       setNotesSidebarWidth: (notesSidebarWidth) =>
