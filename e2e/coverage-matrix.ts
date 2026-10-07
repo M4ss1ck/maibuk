@@ -20,6 +20,12 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "none: nothing to test",
   },
   {
+    kind: "term",
+    items: ["Plugin", "Built-in Plugin", "Plugin Directory", "Plugin Permission"],
+    reason: "Decided, not built (ADR 0019, ADR 0020): no Plugin UI exists yet",
+    owner: "Plugin platform v1 implementation (#425) replaces this with rows",
+  },
+  {
     kind: "shortcut",
     items: ["global.toggleAlwaysOnTop"],
     reason: "Tauri-only window behavior; the web build has no always-on-top",
