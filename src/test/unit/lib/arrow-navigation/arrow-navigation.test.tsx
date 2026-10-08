@@ -2,7 +2,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Button, GridList, GridListItem, Toolbar } from "react-aria-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { installArrowNavigation } from "@/lib/arrow-navigation";
+import { installArrowNavigation, keepTabInRowForm } from "@/lib/arrow-navigation";
 import { pressKey } from "@/lib/focus-commands";
 
 // jsdom has no layout: each element reads its rect from `data-rect`
@@ -366,6 +366,53 @@ describe("arrow navigation (ADR 0025)", () => {
 
       await user.keyboard("{ArrowRight}");
       expect(button("Editor action")).toHaveFocus();
+    });
+  });
+
+  // React Aria sends a Tab pressed anywhere in a list out of the list (it
+  // focuses the list's last tabbable, then lets the browser move on). jsdom's
+  // user-event picks the next element itself, so the browser half is proven by
+  // the chapters-rename-type and chapters-delete E2E rows; this pins which Tab
+  // presses the form keeps from the list.
+  describe("keepTabInRowForm: a small form inside a list row", () => {
+    function RowForm({ onListKey }: { onListKey: () => void }) {
+      return (
+        <div onKeyDown={(event) => event.key === "Tab" && onListKey()}>
+          <div onKeyDown={keepTabInRowForm}>
+            <button type="button">Chapter Type</button>
+            <button type="button">Save</button>
+            <button type="button">Cancel</button>
+          </div>
+        </div>
+      );
+    }
+
+    it("keeps Tab and Shift+Tab between its own controls from the list", async () => {
+      const user = userEvent.setup();
+      const onListKey = vi.fn();
+      render(<RowForm onListKey={onListKey} />);
+      act(() => button("Chapter Type").focus());
+
+      await user.tab();
+      await user.tab();
+      await user.tab({ shift: true });
+      await user.tab({ shift: true });
+      expect(button("Chapter Type")).toHaveFocus();
+      expect(onListKey).not.toHaveBeenCalled();
+    });
+
+    it("lets the list take Tab past its last control and Shift+Tab before its first", async () => {
+      const user = userEvent.setup();
+      const onListKey = vi.fn();
+      render(<RowForm onListKey={onListKey} />);
+
+      act(() => button("Cancel").focus());
+      await user.tab();
+      expect(onListKey).toHaveBeenCalledTimes(1);
+
+      act(() => button("Chapter Type").focus());
+      await user.tab({ shift: true });
+      expect(onListKey).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -21,6 +21,7 @@ import { AddIcon } from "@/components/icons/AddIcon";
 import { useSettingsStore } from "@/features/settings/store";
 import { readDroppedItems, useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile, DropPoint } from "@/hooks/useTextFileDrop";
+import { rowFormProps } from "@/lib/arrow-navigation";
 import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
 import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
@@ -604,7 +605,7 @@ export function ChapterList({
                 >
                   {(anchorRef) =>
                     editingId === chapter.id ? (
-                      <div className="p-2">
+                      <div className="p-2" {...rowFormProps}>
                         <input
                           type="text"
                           value={editTitle}
@@ -730,7 +731,10 @@ export function ChapterList({
 
                         {/* Delete confirmation */}
                         {deleteConfirmId === chapter.id && (
-                          <div className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2">
+                          <div
+                            className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2"
+                            {...rowFormProps}
+                          >
                             <span className="text-xs">{t("common.deleteConfirm")}</span>
                             <AriaButton
                               onPress={() => handleDelete(chapter.id)}

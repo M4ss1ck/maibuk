@@ -16,6 +16,7 @@ import {
 } from "./stops";
 
 export { cyclePanes, landInPane, PANE_CYCLED_EVENT, visiblePanes } from "./panes";
+export { keepFocusRestoreInRowForm, keepTabInRowForm, rowFormProps } from "./row-form";
 
 function isArrowKey(key: string): key is ArrowKey {
   return key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight";

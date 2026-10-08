@@ -41,10 +41,10 @@ async function focusChapter(page: Page, title: string, key: "ArrowUp" | "ArrowDo
   await pressUntilFocused(page, key, row(page, title));
 }
 
-/** Focuses a row, then Tabs to one of its actions (Reorder, Edit, Delete). */
+/** Focuses a row, then arrows Right to one of its actions (Reorder, Edit, Delete). */
 async function focusRowAction(page: Page, title: string, action: string) {
   await focusChapter(page, title);
-  await tabTo(page, rowAction(page, title, action), { max: 6 });
+  await pressUntilFocused(page, "ArrowRight", rowAction(page, title, action), { max: 6 });
 }
 
 test.describe("adding a Chapter @wf:chapters-add", () => {
@@ -150,7 +150,7 @@ test.describe("renaming and Chapter Type @wf:chapters-rename-type", () => {
     await expect(editorText(page)).toBeVisible();
     await page.keyboard.press("Escape");
     await focusChapter(page, "The Beacon");
-    await tabTo(page, rowAction(page, "The Beacon", "Edit Chapter"));
+    await pressUntilFocused(page, "ArrowRight", rowAction(page, "The Beacon", "Edit Chapter"));
     await page.keyboard.press("Enter");
     await expect(row(page, "The Beacon").getByRole("textbox")).toHaveValue("The Beacon");
     await expect(
@@ -280,7 +280,7 @@ test.describe("deleting a Chapter @wf:chapters-delete", () => {
     await openBook(page);
     await tabTo(page, grid(page).getByRole("row", { selected: true }));
     await expect(row(page, CURRENT)).toBeFocused();
-    await tabTo(page, rowAction(page, CURRENT, "Delete Chapter"));
+    await pressUntilFocused(page, "ArrowRight", rowAction(page, CURRENT, "Delete Chapter"));
     await page.keyboard.press("Enter");
     await expect(page.getByRole("button", { name: "No", exact: true })).toBeFocused();
 

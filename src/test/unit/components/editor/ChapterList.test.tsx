@@ -859,6 +859,30 @@ describe("ChapterList", () => {
       expect(screen.getByText("First")).toBeInTheDocument();
     });
 
+    it("keeps focus on Chapter Type after a pick, so Tab goes on to Save", async () => {
+      // The pick list is portaled outside the Chapter list; React Aria would
+      // treat focus coming back to the trigger as re-entering the list and
+      // move it to the row, leaving the form unreachable.
+      const user = userEvent.setup();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id, onUpdateChapter: vi.fn() });
+      await openChapterMenu(user);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.getByDisplayValue("First")).toHaveFocus());
+
+      await user.tab();
+      const chapterType = screen.getByRole("button", { name: /chapters\.chapterType/ });
+      expect(chapterType).toHaveFocus();
+      await user.keyboard("{Enter}");
+      await screen.findByRole("listbox");
+      await user.keyboard("{ArrowDown}{Enter}");
+      await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+
+      await waitFor(() => expect(chapterType).toHaveFocus());
+      await user.tab();
+      expect(screen.getByRole("button", { name: "common.save" })).toHaveFocus();
+    });
+
     it("returns focus to the row after cancelling an edit with Escape", async () => {
       const user = userEvent.setup();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];

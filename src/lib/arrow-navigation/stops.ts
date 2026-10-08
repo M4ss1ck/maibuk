@@ -74,7 +74,7 @@ function isVerticalKey(key: ArrowKey): boolean {
   return key === "ArrowUp" || key === "ArrowDown";
 }
 
-function focusablesIn(root: Element, tabbable: boolean): HTMLElement[] {
+export function focusablesIn(root: Element, tabbable: boolean): HTMLElement[] {
   const walker = getFocusableTreeWalker(root, { tabbable });
   walker.currentNode = root;
   const found: HTMLElement[] = [];
