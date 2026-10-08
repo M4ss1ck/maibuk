@@ -35,7 +35,7 @@ export function HistoryMenuButton({
       <MenuTrigger isOpen={menuOpen} onOpenChange={setMenuOpen}>
         <AriaButton
           className="inline-flex h-9 w-7 items-center justify-center rounded-r-lg border-l border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          aria-label={t("common.more")}
+          aria-label={t("versions.moreActions")}
         >
           <ChevronDown className="h-3.5 w-3.5" />
         </AriaButton>

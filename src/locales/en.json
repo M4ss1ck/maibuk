@@ -1405,6 +1405,7 @@
     }
   },
   "versions": {
+    "moreActions": "More version actions",
     "title": "Version history",
     "saveVersion": "Save version",
     "showHistory": "Show history",

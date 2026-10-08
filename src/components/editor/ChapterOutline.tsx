@@ -1,5 +1,5 @@
 import type { Editor } from "@tiptap/core";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Toolbar } from "react-aria-components";
 import { Tooltip } from "@/components/ui";
@@ -73,6 +73,17 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
 
   if (items.length === 0) return null;
 
+  // The outline sits inside its Chapter's row, and React Aria turns an Enter
+  // or Space that bubbles out of a row's button, or the click it produces,
+  // into the row's action (CanvasCard's stopRowActionKey).
+  const keepRowFromActing = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+  };
+  const jumpTo = (event: MouseEvent<HTMLButtonElement>, pos: number) => {
+    event.stopPropagation();
+    navigate(pos);
+  };
+
   const navigate = (pos: number) => {
     const dom = editor.view.nodeDOM(pos);
     const el = dom instanceof HTMLElement ? dom : (dom?.parentElement ?? null);
@@ -97,7 +108,8 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
             <Tooltip key={item.pos} content={t("toc.sceneBreak")}>
               <button
                 type="button"
-                onClick={() => navigate(item.pos)}
+                onClick={(event) => jumpTo(event, item.pos)}
+                onKeyDown={keepRowFromActing}
                 style={{ paddingLeft: "1.75rem" }}
                 className={`w-full text-left py-0.5 rounded text-xs italic tracking-widest transition-colors ${
                   isActive
@@ -114,7 +126,8 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
           <button
             key={item.pos}
             type="button"
-            onClick={() => navigate(item.pos)}
+            onClick={(event) => jumpTo(event, item.pos)}
+            onKeyDown={keepRowFromActing}
             style={{ paddingLeft: `${1.75 + (item.level - 1) * 0.75}rem` }}
             className={`block w-full text-left py-0.5 pr-1 rounded text-xs truncate transition-colors ${
               isActive

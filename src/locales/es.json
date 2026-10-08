@@ -1405,6 +1405,7 @@
     }
   },
   "versions": {
+    "moreActions": "Más acciones de versión",
     "title": "Historial de versiones",
     "saveVersion": "Guardar versión",
     "showHistory": "Mostrar historial",

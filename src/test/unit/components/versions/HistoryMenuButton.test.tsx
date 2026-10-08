@@ -10,7 +10,7 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => {
       const map: Record<string, string> = {
-        "common.more": "More",
+        "versions.moreActions": "More version actions",
         "versions.openHistory": "Open version history",
         "versions.saveVersion": "Save version",
         "versions.showHistory": "Show history",
@@ -58,7 +58,7 @@ describe("HistoryMenuButton", () => {
 
     // The open menu is modal and hides the rest of the page from the
     // accessibility tree, so hold the trigger from before it opens.
-    const trigger = screen.getByRole("button", { name: "More" });
+    const trigger = screen.getByRole("button", { name: "More version actions" });
     await user.click(trigger);
     expect(await screen.findByRole("menu")).toBeInTheDocument();
 
@@ -70,7 +70,7 @@ describe("HistoryMenuButton", () => {
     const user = userEvent.setup();
     const { onOpenPanel, onSaveVersion } = renderButton();
 
-    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(screen.getByRole("button", { name: "More version actions" }));
     await user.click(screen.getByRole("menuitem", { name: /Save version/ }));
 
     expect(onSaveVersion).toHaveBeenCalledTimes(1);
@@ -82,7 +82,7 @@ describe("HistoryMenuButton", () => {
     const user = userEvent.setup();
     const { onOpenPanel, onSaveVersion } = renderButton();
 
-    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(screen.getByRole("button", { name: "More version actions" }));
     await user.click(screen.getByRole("menuitem", { name: /Show history/ }));
 
     expect(onOpenPanel).toHaveBeenCalledTimes(1);
@@ -94,7 +94,7 @@ describe("HistoryMenuButton", () => {
     const user = userEvent.setup();
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(screen.getByRole("button", { name: "More version actions" }));
     await user.keyboard("{Escape}");
 
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
@@ -104,7 +104,7 @@ describe("HistoryMenuButton", () => {
     const user = userEvent.setup();
     renderButton();
 
-    const trigger = screen.getByRole("button", { name: "More" });
+    const trigger = screen.getByRole("button", { name: "More version actions" });
     await user.click(trigger);
     const saveItem = await screen.findByRole("menuitem", { name: /Save version/ });
     // The Menu focuses its first item a frame after it opens.
@@ -121,7 +121,7 @@ describe("HistoryMenuButton", () => {
     renderButton();
 
     const outside = screen.getByRole("button", { name: "Outside" });
-    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(screen.getByRole("button", { name: "More version actions" }));
     expect(await screen.findByRole("menu")).toBeInTheDocument();
     await user.click(outside);
 
@@ -145,7 +145,7 @@ describe("HistoryMenuButton", () => {
     const user = userEvent.setup();
     renderButton();
 
-    screen.getByRole("button", { name: "More" }).focus();
+    screen.getByRole("button", { name: "More version actions" }).focus();
     await user.keyboard("{Enter}");
 
     const saveItem = screen.getByRole("menuitem", { name: /Save version/ });
@@ -156,7 +156,7 @@ describe("HistoryMenuButton", () => {
     const user = userEvent.setup();
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(screen.getByRole("button", { name: "More version actions" }));
     const saveItem = screen.getByRole("menuitem", { name: /Save version/ });
     const historyItem = screen.getByRole("menuitem", { name: /Show history/ });
     saveItem.focus();
@@ -175,7 +175,7 @@ describe("HistoryMenuButton", () => {
     const user = userEvent.setup();
     renderButton();
 
-    const trigger = screen.getByRole("button", { name: "More" });
+    const trigger = screen.getByRole("button", { name: "More version actions" });
     trigger.focus();
     await user.keyboard("{Enter}");
     // The Menu focuses its first item a frame after it opens; Escape must come
