@@ -235,6 +235,45 @@ describe("notes list model", () => {
     ]);
   });
 
+  it("lists each date group's Notes most recently edited first, whatever their manual order", () => {
+    const now = new Date("2026-06-12T12:00:00Z");
+    const at = (iso: string) => Date.parse(iso) / 1000;
+    // The store hands Notes over pinned first, then in manual order.
+    const pinnedMorning = note({
+      id: "pinned",
+      title: "Alpha",
+      pinned: true,
+      contentUpdatedAt: at("2026-06-12T07:00:00Z"),
+    });
+    const todayNine = note({
+      id: "nine",
+      title: "Bravo",
+      contentUpdatedAt: at("2026-06-12T09:00:00Z"),
+    });
+    const todayNoon = note({
+      id: "noon",
+      title: "Charlie",
+      contentUpdatedAt: at("2026-06-12T11:00:00Z"),
+    });
+    const march = note({
+      id: "march",
+      title: "Delta",
+      contentUpdatedAt: at("2025-03-01T08:00:00Z"),
+    });
+    const october = note({
+      id: "october",
+      title: "Echo",
+      contentUpdatedAt: at("2025-10-01T08:00:00Z"),
+    });
+
+    const groups = buildDateNoteGroups([pinnedMorning, todayNine, todayNoon, march, october], now);
+
+    expect(groups.map((group) => [group.id, group.notes.map((n) => n.id)])).toEqual([
+      ["today", ["noon", "nine", "pinned"]],
+      ["2025", ["october", "march"]],
+    ]);
+  });
+
   it("filters by contentUpdatedAt date range, ignoring updatedAt", () => {
     const retagged = note({
       id: "retagged",
