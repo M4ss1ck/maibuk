@@ -2262,6 +2262,24 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "dictation-bar-size",
+    area: "editor",
+    workflow:
+      "Settings → Dictation: arrows pick the Dictation bar size (Hidden, Compact, Full; Full by default) from previews drawn at the bar's real size; the Chapter's bar takes that size; persists: yes (device-local)",
+    edges: [
+      "Compact draws the editor's bar at its preview's size, under three quarters of Full's width",
+      "the collapse button folds the bar to the microphone and back by Enter, keeps focus, and stays collapsed on Ephemeral",
+      "the microphone starts and stops a Session while collapsed",
+      "Hidden shows no bar until a Session starts, then only a microphone, gone again after Escape",
+    ],
+    terms: ["Dictation Bar"],
+    shortcuts: ["dictation.toggleBar"],
+    routes: ["/settings", "/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "dictation-settings",
     area: "settings",
     workflow:

@@ -1743,7 +1743,7 @@
       "dictation": {
         "overview": {
           "title": "Dictado",
-          "body": "El dictado convierte tu voz en texto en el editor donde está el cursor, sin conexión, en este dispositivo. Empieza una sesión de dictado con el botón del micrófono al pie del editor; sigue al cursor hasta que la detengas. Cada línea terminada pasa por reglas fijas que convierten palabras como «coma» en puntuación antes de llegar a tu texto."
+          "body": "El dictado convierte tu voz en texto en el editor donde está el cursor, sin conexión, en este dispositivo. Empieza una sesión de dictado con el micrófono de la barra de dictado al pie del editor, o con su atajo; sigue al cursor hasta que la detengas. Aquí abajo puedes hacer la barra compacta u ocultarla. Cada línea terminada pasa por reglas fijas que convierten palabras como «coma» en puntuación antes de llegar a tu texto."
         },
         "models": {
           "title": "Modelos de dictado",
@@ -1885,6 +1885,14 @@
     }
   },
   "dictation": {
+    "bar": {
+      "toggle": "Contraer o expandir la barra de dictado",
+      "collapse": "Contraer la barra de dictado",
+      "expand": "Expandir la barra de dictado",
+      "size": "Tamaño de la barra de dictado",
+      "sizeDescription": "Cuánto de la barra de dictado muestra el editor. Oculta muestra solo el micrófono mientras dictas.",
+      "sizes": { "hidden": "Oculta", "compact": "Compacta", "full": "Completa" }
+    },
     "toggle": "Iniciar o detener el dictado",
     "recordPhrase": "Grabar frase",
     "phraseRecording": {

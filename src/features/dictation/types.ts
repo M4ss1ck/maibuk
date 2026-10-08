@@ -6,6 +6,9 @@ import type { Language } from "@/features/settings/types";
 export type DictationLanguage = Language;
 export type EngineId = "moonshine";
 export type ModelTier = "fast" | "accurate";
+/** How much of the Dictation Bar an editor screen shows. */
+export const DICTATION_BAR_SIZES = ["hidden", "compact", "full"] as const;
+export type DictationBarSize = (typeof DICTATION_BAR_SIZES)[number];
 export type DictationPlatform = "web" | "tauri-linux";
 
 export interface ModelFile {

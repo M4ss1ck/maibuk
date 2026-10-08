@@ -1743,7 +1743,7 @@
       "dictation": {
         "overview": {
           "title": "Dictation",
-          "body": "Dictation turns your speech into text in whichever editor has the caret, offline, on this device. Start a dictation session with the microphone button at the bottom of the editor; it follows the caret until you stop it. Each finished line goes through fixed rules that turn spoken words like “new paragraph” into a break before it reaches your text."
+          "body": "Dictation turns your speech into text in whichever editor has the caret, offline, on this device. Start a dictation session with the microphone on the dictation bar at the bottom of the editor, or with its shortcut; it follows the caret until you stop it. Below, you can make the bar compact or hide it. Each finished line goes through fixed rules that turn spoken words like “new paragraph” into a break before it reaches your text."
         },
         "models": {
           "title": "Dictation models",
@@ -1885,6 +1885,14 @@
     }
   },
   "dictation": {
+    "bar": {
+      "toggle": "Collapse or expand the dictation bar",
+      "collapse": "Collapse dictation bar",
+      "expand": "Expand dictation bar",
+      "size": "Dictation bar size",
+      "sizeDescription": "How much of the dictation bar the editor shows. Hidden shows only the microphone while you dictate.",
+      "sizes": { "hidden": "Hidden", "compact": "Compact", "full": "Full" }
+    },
     "toggle": "Start or stop dictation",
     "recordPhrase": "Record phrase",
     "phraseRecording": {

@@ -69,6 +69,7 @@ beforeEach(() => {
     downloads: {},
     preferredTier: { en: "fast", es: "fast" },
     languageOverride: null,
+    barSize: "full",
   });
 });
 
@@ -444,3 +445,44 @@ describe("DictationSection", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("Dictation bar size", () => {
+  const group = () => screen.getByRole("radiogroup", { name: "Dictation bar size" });
+
+  it("offers Hidden, Compact, and Full with Full picked by default", () => {
+    render(<DictationSection />);
+    const options = within(group()).getAllByRole("radio");
+    expect(options.map((o) => o.getAttribute("value"))).toEqual(["hidden", "compact", "full"]);
+    expect(within(group()).getByRole("radio", { name: "Full" })).toBeChecked();
+    // Compact and Full show the bar itself; Hidden is a word.
+    expect(group().querySelectorAll("[data-dictation-bar-preview]")).toHaveLength(2);
+    expect(group()).toHaveTextContent("Hidden");
+  });
+
+  it("picks a size with the arrow keys", async () => {
+    const user = userEvent.setup();
+    render(<DictationSection />);
+    await user.tab();
+    await user.tab();
+    const full = within(group()).getByRole("radio", { name: "Full" });
+    expect(full).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
+    expect(within(group()).getByRole("radio", { name: "Compact" })).toHaveFocus();
+    expect(useDictationStore.getState().barSize).toBe("compact");
+
+    await user.keyboard("{ArrowLeft}");
+    expect(within(group()).getByRole("radio", { name: "Hidden" })).toBeChecked();
+    expect(useDictationStore.getState().barSize).toBe("hidden");
+  });
+
+  it("is not offered while Dictation is off", async () => {
+    const user = userEvent.setup();
+    render(<DictationSection />);
+    expect(group()).toBeInTheDocument();
+    await user.tab();
+    await user.keyboard(" ");
+    expect(screen.queryByRole("radiogroup", { name: "Dictation bar size" })).toBeNull();
+  });
+});
+

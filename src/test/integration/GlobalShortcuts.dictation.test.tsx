@@ -15,7 +15,7 @@ const { GlobalShortcuts } = await import("@/components/GlobalShortcuts");
 const { useBoundShortcutStore } = await import("@/lib/bound-shortcuts");
 const { useDictationStore } = await import("@/features/dictation/store");
 
-const { DictationControl } = await import("@/components/dictation/DictationControl");
+const { DictationBar } = await import("@/components/dictation/DictationBar");
 const { DictationLiveRegion } = await import("@/components/dictation/DictationLiveRegion");
 const { useShortcutSettingsStore } = await import("@/features/settings/shortcut-store");
 const { MODEL_CATALOG } = await import("@/features/dictation/catalog");
@@ -80,7 +80,7 @@ describe("Cycle Dictation language", () => {
       <MemoryRouter initialEntries={[path]}>
         <GlobalShortcuts />
         <textarea aria-label="writing" />
-        <DictationControl />
+        <DictationBar />
         <DictationLiveRegion />
       </MemoryRouter>
     );
@@ -219,5 +219,50 @@ describe("Cycle Dictation language", () => {
     await user.keyboard("{Control>}{Shift>}l {/Shift}{/Control}");
     expect(toggle).not.toHaveBeenCalled();
     expect(setLanguage).not.toHaveBeenCalled();
+  });
+});
+
+describe("Collapse or expand the dictation bar", () => {
+  function renderEditor() {
+    return render(
+      <MemoryRouter initialEntries={["/book/b1"]}>
+        <GlobalShortcuts />
+        <textarea aria-label="writing" />
+        <DictationBar />
+      </MemoryRouter>
+    );
+  }
+
+  beforeEach(() => {
+    useDictationStore.setState({ barSize: "full", barCollapsed: false });
+    useShortcutSettingsStore
+      .getState()
+      .setCommandShortcuts("dictation.toggleBar", [["Mod+Shift+b"]]);
+  });
+
+  it("collapses and expands from typing with its assigned shortcut", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.tab();
+    expect(screen.getByRole("textbox", { name: "writing" })).toHaveFocus();
+    await user.keyboard("{Control>}{Shift>}b{/Shift}{/Control}");
+    expect(screen.getByRole("button", { name: "Expand dictation bar" })).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+    expect(screen.getByRole("textbox", { name: "writing" })).toHaveFocus();
+    await user.keyboard("{Control>}{Shift>}b{/Shift}{/Control}");
+    expect(screen.getByRole("button", { name: "Collapse dictation bar" })).toBeInTheDocument();
+  });
+
+  it("is bound only while the bar is shown, and not when the bar is Hidden", () => {
+    const { unmount } = renderEditor();
+    expect(useBoundShortcutStore.getState().counts["dictation.toggleBar"]).toBe(1);
+    act(() => useDictationStore.getState().setBarSize("hidden"));
+    expect(useBoundShortcutStore.getState().counts["dictation.toggleBar"] ?? 0).toBe(0);
+    act(() => useDictationStore.getState().setBarSize("compact"));
+    expect(useBoundShortcutStore.getState().counts["dictation.toggleBar"]).toBe(1);
+    unmount();
+    expect(useBoundShortcutStore.getState().counts["dictation.toggleBar"] ?? 0).toBe(0);
   });
 });

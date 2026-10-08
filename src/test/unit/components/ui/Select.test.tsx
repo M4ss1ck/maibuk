@@ -173,4 +173,36 @@ describe("Select", () => {
       expect(wrapper).toBeInTheDocument();
     });
   });
+
+  describe("chip variant", () => {
+    it("picks by keyboard and gives its list a readable width", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(
+        <Select
+          variant="chip"
+          value="apple"
+          onChange={onChange}
+          options={[
+            { value: "apple", label: "ap", accessibleName: "Apple" },
+            { value: "banana", label: "ba", accessibleName: "Banana" },
+          ]}
+          ariaLabel="Fruit"
+        />
+      );
+      const trigger = screen.getByRole("button", { name: /Fruit/ });
+      expect(trigger).toHaveTextContent("ap");
+      expect(trigger).not.toHaveClass("min-w-35");
+
+      await user.tab();
+      expect(trigger).toHaveFocus();
+      await user.keyboard("{Enter}");
+      const listbox = screen.getByRole("listbox");
+      // The list does not shrink to the narrow trigger.
+      expect(listbox.closest("[data-trigger]")).toHaveClass("min-w-32");
+      await user.keyboard("{ArrowDown}{Enter}");
+      expect(onChange).toHaveBeenCalledWith("banana");
+      await waitFor(() => expect(trigger).toHaveFocus());
+    });
+  });
 });

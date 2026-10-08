@@ -32,7 +32,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
-import { DictationControl } from "@/components/dictation";
+import { DictationBar } from "@/components/dictation";
 import { useBookStore } from "@/features/books/store";
 import { CanvasToolPanel } from "@/features/canvas/CanvasToolPanel";
 import { ConnectToDialog } from "@/features/canvas/ConnectToDialog";
@@ -685,7 +685,7 @@ function CanvasEditor() {
         )}
       </Modal>
 
-      <DictationControl />
+      <DictationBar />
     </div>
   );
 }
