@@ -467,6 +467,16 @@ test.describe("resizing the Notes list by keyboard @wf:resize-handles-keyboard",
   }) => {
     await openNote(page, SEED_NOTES.keeperLog);
     await f6To(page, notesListPane(page));
+    const pane = page.locator('[data-focus-pane="notes-sidebar"]');
+    await expect(pane).toHaveAttribute("data-pane-active", "");
+    const handle = page.getByRole("separator", { name: "Resize notes list" });
+    await tabTo(page, handle, { max: 30 });
+    // The handle sits on the Pane's edge: only its own focus ring shows there.
+    // Soft, so a screenshot run on the base still reaches the capture.
+    await expect.soft(pane).not.toHaveAttribute("data-pane-active", "");
+    await capture(page, "resize-handle-focus", {
+      around: [handle, notesListRow(page, SEED_NOTES.keeperLog)],
+    });
     await resizeByKeyboard(page, "Resize notes list");
   });
 });

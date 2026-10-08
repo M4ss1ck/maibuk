@@ -60,6 +60,7 @@ export function PaneFocusFrame() {
   const hideKeyboardHints = useSettingsStore((state) => state.hideKeyboardHints);
   const { isFocusVisible: keyboardModality } = useFocusVisible();
   const [pane, setPane] = useState<HTMLElement | null>(null);
+  const [onResizeHandle, setOnResizeHandle] = useState(false);
   const [badge, setBadge] = useState<Badge | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const paneRef = useRef<HTMLElement | null>(null);
@@ -70,7 +71,11 @@ export function PaneFocusFrame() {
       const next = target instanceof Element ? target.closest<HTMLElement>(PANE_SELECTOR) : null;
       const previous = paneRef.current;
       paneRef.current = next;
+      // A resize handle sits on its Pane's edge, right where the ring is drawn:
+      // it keeps its own focus ring alone. The Pane is still tracked, so the
+      // next move slides from it.
       setPane(next);
+      setOnResizeHandle(target instanceof Element && target.matches('[role="separator"]'));
       if (previous && next && previous !== next && frameRef.current && isFocusVisible()) {
         slide(frameRef.current, previous, next);
       }
@@ -93,7 +98,7 @@ export function PaneFocusFrame() {
   // header hid its top edge). One observer, on the active Pane only.
   useEffect(() => {
     const frame = frameRef.current;
-    if (!pane || !keyboardModality || !frame) return;
+    if (!pane || !keyboardModality || onResizeHandle || !frame) return;
     pane.setAttribute("data-pane-active", "");
     const follow = () => place(frame, pane.getBoundingClientRect());
     follow();
@@ -107,7 +112,7 @@ export function PaneFocusFrame() {
       observer?.disconnect();
       window.removeEventListener("resize", follow);
     };
-  }, [pane, keyboardModality]);
+  }, [pane, keyboardModality, onResizeHandle]);
 
   useEffect(() => {
     if (badge && badge.pane !== pane) setBadge(null);

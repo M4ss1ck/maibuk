@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -14,7 +14,7 @@ vi.mock("@/features/settings/store", () => ({
 }));
 
 import { PaneFocusFrame } from "@/components/PaneFocusFrame";
-import { cyclePanes } from "@/lib/arrow-navigation";
+import { cyclePanes, installArrowNavigation } from "@/lib/arrow-navigation";
 
 function Fixture() {
   return (
@@ -22,6 +22,8 @@ function Fixture() {
       <PaneFocusFrame />
       <section data-focus-pane="list" tabIndex={-1} aria-label="Notes list">
         <button type="button">In list</button>
+        {/* biome-ignore lint/a11y/useSemanticElements: a focusable resize handle, as ResizeHandle renders it. */}
+        <div role="separator" aria-label="Resize list" aria-valuenow={300} tabIndex={0} />
       </section>
       <section data-focus-pane="editor" tabIndex={-1} aria-label="Note editor">
         <button type="button">In editor</button>
@@ -97,6 +99,22 @@ describe("PaneFocusFrame", () => {
     expect(frame.style.opacity).toBe("0");
   });
 
+  it("leaves a focused resize handle its own focus ring, without the Pane's ring over it", () => {
+    render(<Fixture />);
+    const frame = screen.getByTestId("pane-frame");
+    keyboardFocus(button("In list"));
+    expect(pane("list")).toHaveAttribute("data-pane-active");
+
+    keyboardFocus(screen.getByRole("separator", { name: "Resize list" }));
+    expect(pane("list")).not.toHaveAttribute("data-pane-active");
+    expect(frame.style.opacity).toBe("0");
+
+    // Back on a control, the ring returns without a slide: focus never left the Pane.
+    keyboardFocus(button("In list"));
+    expect(pane("list")).toHaveAttribute("data-pane-active");
+    expect(animate).not.toHaveBeenCalled();
+  });
+
   it("does not ring or slide for pointer input", async () => {
     const user = userEvent.setup();
     render(<Fixture />);
@@ -153,6 +171,22 @@ describe("PaneFocusFrame", () => {
 
     keyboardFocus(button("In editor"));
     expect(screen.queryByTestId("pane-badge")).toBeNull();
+  });
+
+  it("keeps the badge when F6 lands on a resize handle in the Pane it names", () => {
+    // Pane memory is what makes F6 return to the handle.
+    const uninstall = installArrowNavigation();
+    onTestFinished(uninstall);
+    render(<Fixture />);
+    keyboardFocus(screen.getByRole("separator", { name: "Resize list" }));
+    keyboardFocus(button("In editor"));
+    fireEvent.keyDown(document.body, { key: "F6" });
+    // Shift+F6 back: the list's last-used control is its resize handle.
+    act(() => {
+      cyclePanes(false);
+    });
+    expect(screen.getByRole("separator", { name: "Resize list" })).toHaveFocus();
+    expect(screen.getByTestId("pane-badge")).toHaveTextContent("panes.badge:Notes list");
   });
 
   it("shows no badge when keyboard hints are hidden", () => {
