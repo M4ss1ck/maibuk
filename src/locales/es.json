@@ -1456,7 +1456,8 @@
     "notesSidebar": "Lista de notas",
     "notesContent": "Editor de notas",
     "bookTitleBar": "Barra de título del libro",
-    "noteTitleBar": "Barra de título de la nota"
+    "noteTitleBar": "Barra de título de la nota",
+    "badge": "{{name}} · F6 panel siguiente"
   },
   "backup": {
     "title": "Copias de seguridad",

@@ -1456,7 +1456,8 @@
     "notesSidebar": "Notes list",
     "notesContent": "Note editor",
     "bookTitleBar": "Book title bar",
-    "noteTitleBar": "Note title bar"
+    "noteTitleBar": "Note title bar",
+    "badge": "{{name}} · F6 next pane"
   },
   "backup": {
     "title": "Backups",

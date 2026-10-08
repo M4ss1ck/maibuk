@@ -1603,8 +1603,19 @@ li.footnote-item,
   animation: fade-in 0.12s ease-out forwards;
 }
 
+/* Pane frame: the ring on the Pane holding keyboard focus (PaneFocusFrame) */
+[data-pane-active] {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, transparent);
+  outline-offset: -2px;
+}
+
+.pane-badge-enter {
+  animation: fade-in 0.12s ease-out forwards;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
+  .pane-badge-enter,
   .modal-backdrop-enter,
   .modal-panel-enter,
   .toast-enter,

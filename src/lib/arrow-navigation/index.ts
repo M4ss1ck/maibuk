@@ -15,7 +15,7 @@ import {
   widgetOf,
 } from "./stops";
 
-export { cyclePanes, landInPane, visiblePanes } from "./panes";
+export { cyclePanes, landInPane, PANE_CYCLED_EVENT, visiblePanes } from "./panes";
 
 function isArrowKey(key: string): key is ArrowKey {
   return key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight";

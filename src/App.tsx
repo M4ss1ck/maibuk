@@ -18,6 +18,7 @@ import { PathTracker } from "@/components/PathTracker";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { ToastViewport } from "@/components/ui";
 import { ClickBadges, DictationLiveRegion } from "@/components/dictation";
+import { PaneFocusFrame } from "@/components/PaneFocusFrame";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { DeepLinkHandler } from "@/components/DeepLinkHandler";
@@ -79,6 +80,7 @@ function App() {
         <PathTracker />
         <RouteAnnouncer />
         <GlobalShortcuts />
+        <PaneFocusFrame />
         <CommandPalette />
         <TutorialBoundary>
           <Routes>

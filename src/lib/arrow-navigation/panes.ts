@@ -103,6 +103,9 @@ export function landInPane(pane: HTMLElement): void {
   (first instanceof HTMLElement ? first : pane).focus();
 }
 
+/** Fired on `document` after F6 lands in a Pane; `detail` is the Pane. The Pane frame names it. */
+export const PANE_CYCLED_EVENT = "maibuk:pane-cycled";
+
 /** F6 (forward) and Shift+F6: land in the next or previous visible Pane. */
 export function cyclePanes(forward: boolean): HTMLElement | null {
   const panes = visiblePanes();
@@ -116,5 +119,6 @@ export function cyclePanes(forward: boolean): HTMLElement | null {
         : panes[panes.length - 1]
       : panes[(index + (forward ? 1 : -1) + panes.length) % panes.length];
   landInPane(next);
+  document.dispatchEvent(new CustomEvent<HTMLElement>(PANE_CYCLED_EVENT, { detail: next }));
   return next;
 }
