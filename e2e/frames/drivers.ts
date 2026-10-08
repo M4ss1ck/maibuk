@@ -10,8 +10,8 @@
 // window) brings the screen back to where `measure` starts.
 
 import { expect, type Locator, type Page } from "@playwright/test";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
-import { PERF_BOOK, PERF_CANVAS } from "../support/seed/names";
+import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { PERF_BOOK, PERF_CANVAS, PERF_MANY_CHAPTERS_BOOK } from "../support/seed/names";
 
 export interface FrameDriverContext {
   page: Page;
@@ -26,6 +26,11 @@ export interface FrameDriver {
   arrange?(ctx: FrameDriverContext): Promise<void>;
   /** The measured window. */
   measure(ctx: FrameDriverContext): Promise<void>;
+  /**
+   * After the measured window: in-page handler durations, in ms, for the
+   * budget's handler-time line. Only scenarios that budget it have one.
+   */
+  handlerSamples?(ctx: FrameDriverContext): Promise<number[]>;
 }
 
 /** Resolves on the page's next animation frame. */
@@ -72,18 +77,24 @@ async function dragBy(
 const editorText = (page: Page) =>
   page.getByRole("textbox", { name: `Text of ${PERF_BOOK.longChapter}` });
 
-/** Opens the perf Book from the Books gallery; the editor opens its last Chapter. */
-async function openPerfBook({ page, open }: FrameDriverContext): Promise<void> {
+/** Opens a seeded Book from the Books gallery; the editor opens its last Chapter. */
+async function openBook(
+  { page, open }: FrameDriverContext,
+  title: string,
+  text: Locator
+): Promise<void> {
   await open("/");
-  const card = page
-    .getByRole("grid", { name: "Books" })
-    .getByRole("row", { name: new RegExp(PERF_BOOK.title) });
+  const card = page.getByRole("grid", { name: "Books" }).getByRole("row", { name: title });
   await expect(card).toBeVisible();
   await page.keyboard.press("1");
   await expect(card).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(editorText(page)).toBeFocused({ timeout: 30_000 });
+  await expect(text).toBeFocused({ timeout: 30_000 });
 }
+
+/** Opens the perf Book; the editor opens its last Chapter. */
+const openPerfBook = (ctx: FrameDriverContext) =>
+  openBook(ctx, PERF_BOOK.title, editorText(ctx.page));
 
 const typing: FrameDriver = {
   async prepare(ctx) {
@@ -198,7 +209,9 @@ const settingsOutline: FrameDriver = {
     const appearance = outlineEntry(page, "Appearance");
     for (let i = 0; i < 40; i++) {
       await wheelTicks(page, 0, -400, 1);
-      if ((await appearance.getAttribute("aria-label").catch(() => null)) === "Appearance, current") {
+      if (
+        (await appearance.getAttribute("aria-label").catch(() => null)) === "Appearance, current"
+      ) {
         break;
       }
     }
@@ -245,12 +258,12 @@ const chapterRow = (page: Page, title: string) =>
 
 /** Focuses Log 1's Reorder button from the Chapter list. */
 async function focusFirstReorder(page: Page): Promise<Locator> {
-  // Each of the 21 rows has three buttons in the Tab order.
-  await tabTo(page, chapterGrid(page).getByRole("row", { selected: true }), { max: 120 });
+  // The list is one Tab stop; its row buttons are reached by ArrowRight.
+  await tabTo(page, chapterGrid(page).getByRole("row", { selected: true }), { max: 40 });
   await page.keyboard.press("Home");
   await expect(chapterRow(page, "Log 1")).toBeFocused();
   const handle = chapterRow(page, "Log 1").getByRole("button", { name: "Reorder" });
-  await tabTo(page, handle, { max: 6 });
+  await pressUntilFocused(page, "ArrowRight", handle, { max: 6 });
   return handle;
 }
 
@@ -267,7 +280,7 @@ const chapterReorder: FrameDriver = {
   },
   async arrange({ page }) {
     // A cancelled reorder (the warm-up's, or the last run's) leaves focus on
-    // the handle; from inside the grid, Tab walks row buttons, not rows.
+    // the handle, where the measured window starts.
     const handle = chapterRow(page, "Log 1").getByRole("button", { name: "Reorder" });
     if (!(await handle.evaluate((el) => el === document.activeElement))) {
       await focusFirstReorder(page);
@@ -323,6 +336,105 @@ const palette: FrameDriver = {
   },
 };
 
+/** Presses `key` (F6 or Shift+F6) until focus is inside `pane`. */
+async function cycleTo(page: Page, key: string, pane: Locator): Promise<void> {
+  for (let i = 0; i < 6 && !(await isFocusWithin(pane)); i++) {
+    await page.keyboard.press(key);
+  }
+  await expectFocusWithin(pane);
+}
+
+/** Arrow leaves per measured window. */
+const ARROW_LEAVES = 20;
+
+declare global {
+  interface Window {
+    /** Set here, filled by src/lib/arrow-navigation: one entry per arrow that moved focus. */
+    __maibukArrowLeaveMs?: number[];
+  }
+}
+
+/**
+ * Shift+F6 to a long list, then ArrowRight out of its row into the text
+ * beside it, timing each arrow that moves focus in the page. The first leave
+ * walks the selected row's buttons; F6 then lands on the last-used button,
+ * so later rounds leave with one arrow. `list` and `text` are CSS locators:
+ * a role query walks the whole 21,000-element Notes list on every focus
+ * check, and in the measured window that work would land in the frames.
+ */
+function arrowLeave(
+  reach: (ctx: FrameDriverContext) => Promise<void>,
+  list: (page: Page) => Locator,
+  text: (page: Page) => Locator
+): FrameDriver {
+  async function round(page: Page) {
+    await cycleTo(page, "Shift+F6", list(page));
+    await sleep(150);
+    await pressUntilFocused(page, "ArrowRight", text(page), { max: 8 });
+    await sleep(150);
+  }
+  return {
+    async prepare(ctx) {
+      await reach(ctx);
+      await round(ctx.page);
+      await sleep(300);
+    },
+    async arrange({ page }) {
+      await expect(text(page)).toBeFocused();
+      await page.evaluate(() => {
+        window.__maibukArrowLeaveMs = [];
+      });
+      await sleep(300);
+    },
+    async measure({ page }) {
+      for (let i = 0; i < ARROW_LEAVES; i++) await round(page);
+    },
+    async handlerSamples({ page }) {
+      return page.evaluate(() => window.__maibukArrowLeaveMs ?? []);
+    },
+  };
+}
+
+const notesGallery = (page: Page) => page.getByRole("grid", { name: "Notes" });
+const noteText = (page: Page) => page.locator('.ProseMirror[aria-label="Text"]');
+
+/** Opens the first Note in the Notes Gallery. */
+async function openFirstNote({ page, open }: FrameDriverContext): Promise<void> {
+  await open("/notes");
+  const first = notesGallery(page).getByRole("row").first();
+  await expect(first).toBeVisible({ timeout: 30_000 });
+  await tabTo(page, first, { max: 40 });
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Enter");
+  await expect(noteText(page)).toBeVisible({ timeout: 30_000 });
+}
+
+const manyChaptersText = (page: Page) => page.locator('.ProseMirror[aria-label^="Text of "]');
+const openManyChaptersBook = (ctx: FrameDriverContext) =>
+  openBook(ctx, PERF_MANY_CHAPTERS_BOOK.title, manyChaptersText(ctx.page));
+
+/** F6 presses per measured window, and the pause after each. */
+const PANE_STEPS = 24;
+const PANE_STEP_MS = 250;
+
+const paneSlide: FrameDriver = {
+  async prepare(ctx) {
+    await openManyChaptersBook(ctx);
+    for (let i = 0; i < 6; i++) {
+      await ctx.page.keyboard.press("F6");
+      await sleep(PANE_STEP_MS);
+    }
+    await sleep(300);
+  },
+  async measure({ page }) {
+    for (let i = 0; i < PANE_STEPS; i++) {
+      await page.keyboard.press("F6");
+      await sleep(PANE_STEP_MS);
+    }
+    await sleep(200);
+  },
+};
+
 export const FRAME_DRIVERS: Record<string, FrameDriver> = {
   typing,
   scroll,
@@ -331,4 +443,16 @@ export const FRAME_DRIVERS: Record<string, FrameDriver> = {
   "sidebar-resize": sidebarResize,
   "chapter-reorder": chapterReorder,
   palette,
+  "arrow-leave-notes": arrowLeave(
+    openFirstNote,
+    (page) => page.locator('[data-focus-pane="notes-sidebar"]'),
+    noteText
+  ),
+  "arrow-leave-chapters": arrowLeave(
+    openManyChaptersBook,
+    // The phone drawer renders a second, hidden Chapter list.
+    (page) => page.locator('[data-focus-pane="chapter-list"]').filter({ visible: true }),
+    manyChaptersText
+  ),
+  "pane-slide": paneSlide,
 };

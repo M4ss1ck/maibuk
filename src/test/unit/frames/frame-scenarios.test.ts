@@ -44,6 +44,25 @@ describe("frame scenarios", () => {
     }
   });
 
+  it("time arrow handlers exactly where the budget judges handler time", () => {
+    for (const scenario of FRAME_SCENARIOS) {
+      const judged = FRAME_BUDGETS[scenario.id].overrides.handlerP95Ms !== undefined;
+      expect(typeof FRAME_DRIVERS[scenario.id].handlerSamples === "function", scenario.id).toBe(
+        judged
+      );
+    }
+  });
+
+  it("judge the arrow leave on both long lists and the Pane slide by dropped frames", () => {
+    expect(FRAME_BUDGETS["arrow-leave-notes"].overrides.handlerP95Ms).toBe(2);
+    expect(FRAME_BUDGETS["arrow-leave-chapters"].overrides.handlerP95Ms).toBe(2);
+    expect(FRAME_SCENARIOS.find((s) => s.id === "arrow-leave-notes")?.seed).toBe("perfManyNotes");
+    expect(FRAME_SCENARIOS.find((s) => s.id === "arrow-leave-chapters")?.seed).toBe(
+      "perfManyChapters"
+    );
+    expect(FRAME_BUDGETS["pane-slide"].overrides).toEqual({});
+  });
+
   it("give every skipped source a reason, and the Android source a named seed", () => {
     for (const scenario of FRAME_SCENARIOS) {
       for (const reason of Object.values(scenario.skip ?? {})) {

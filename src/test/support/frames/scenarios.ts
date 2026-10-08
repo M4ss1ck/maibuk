@@ -97,6 +97,50 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
     repetitions: 3,
     recordsInput: true,
   },
+  {
+    id: "arrow-leave-notes",
+    title: "Arrow leave from a long Notes list",
+    seed: "perfManyNotes",
+    warmUp:
+      "Open a Note from the Notes Gallery, Shift+F6 to the Notes list and ArrowRight past the row's buttons into the note's text.",
+    measured:
+      "Twenty times: Shift+F6 back to the Notes list (it lands on the last-used row button), then ArrowRight out of the row into the note's text. Each arrow that moves focus is timed in the page.",
+    repetitions: 3,
+    recordsInput: false,
+    skip: {
+      android:
+        "a phone shows one Pane at a time (the lists are a drawer below md), so there is no Pane to cross into",
+    },
+  },
+  {
+    id: "arrow-leave-chapters",
+    title: "Arrow leave from a long Chapter list",
+    seed: "perfManyChapters",
+    warmUp:
+      "Open the Book of 100 Chapters, Shift+F6 to the Chapter list and ArrowRight past the row's buttons into the Chapter's text.",
+    measured:
+      "Twenty times: Shift+F6 back to the Chapter list (it lands on the last-used row button), then ArrowRight out of the row into the Chapter's text. Each arrow that moves focus is timed in the page.",
+    repetitions: 3,
+    recordsInput: false,
+    skip: {
+      android:
+        "a phone shows one Pane at a time (the lists are a drawer below md), so there is no Pane to cross into",
+    },
+  },
+  {
+    id: "pane-slide",
+    title: "Pane frame slide on F6",
+    seed: "perfManyChapters",
+    warmUp: "Open the Book of 100 Chapters and press F6 through every Pane once.",
+    measured:
+      "Press F6 24 times, 250 ms apart: each press slides the Pane frame (about 180 ms) to the next Pane and shows the badge.",
+    repetitions: 3,
+    recordsInput: false,
+    skip: {
+      android:
+        "a phone shows one Pane at a time (the lists are a drawer below md), so there is no Pane to cross into",
+    },
+  },
 ];
 
 export function scenariosFor(source: FrameSource, only?: string[]): FrameScenario[] {
