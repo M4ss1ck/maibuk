@@ -209,6 +209,12 @@ export const COMMANDS = {
     defaults: [["Mod+Shift+Space"]],
     keywordsKey: "shortcuts.keywords.dictationToggle",
   },
+  // Bound by the Dictation Bar, so it is live only where the bar is shown.
+  "dictation.toggleBar": {
+    labelKey: "dictation.bar.toggle",
+    contexts: ["global"],
+    defaults: [],
+  },
   "dictation.cycleLanguage": {
     labelKey: "dictation.cycleLanguage",
     contexts: ["global"],

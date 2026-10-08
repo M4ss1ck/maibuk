@@ -5,6 +5,7 @@ import { Switch } from "@/components/ui/Switch";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SETTINGS_ROWS_CLASS } from "@/components/settings/SettingsSection";
 import { DictationLanguageTabs } from "@/components/dictation/DictationLanguageTabs";
+import { DictationBarSizeRow } from "@/components/settings/DictationBarSizeRow";
 import { DictationVocabularySection } from "@/components/settings/DictationVocabularySection";
 import { SpokenPunctuationSection } from "@/components/settings/SpokenPunctuationSection";
 import { MODEL_CATALOG, modelsFor } from "@/features/dictation/catalog";
@@ -92,6 +93,7 @@ export function DictationSection() {
         </SettingRow>
         <p className="text-sm text-muted-foreground">{t("dictation.section.description")}</p>
       </div>
+      {enabled && <DictationBarSizeRow />}
       {languages.length > 0 && (
         <div className="py-3">
           <DictationLanguageTabs

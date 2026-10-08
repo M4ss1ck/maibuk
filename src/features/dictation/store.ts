@@ -8,11 +8,13 @@ import {
   type SpokenPunctuationLanguageSettings,
   type SpokenPunctuationSettings,
 } from "@/features/dictation/spoken-punctuation";
-import type {
-  DictationLanguage,
-  ModelSpec,
-  ModelTier,
-  SupportReport,
+import {
+  DICTATION_BAR_SIZES,
+  type DictationBarSize,
+  type DictationLanguage,
+  type ModelSpec,
+  type ModelTier,
+  type SupportReport,
 } from "@/features/dictation/types";
 import {
   defaultVocabularySettings,
@@ -25,6 +27,12 @@ import {
 export interface DictationStoreState {
   enabled: boolean;
   setEnabled: (enabled: boolean) => void;
+  /** The Dictation Bar's size, set in Settings; this device only. */
+  barSize: DictationBarSize;
+  setBarSize: (size: DictationBarSize) => void;
+  /** The Dictation Bar folded to its microphone; it keeps barSize. */
+  barCollapsed: boolean;
+  toggleBarCollapsed: () => void;
   snapshot: SessionSnapshot;
   support: SupportReport | null;
   installed: string[];
@@ -87,6 +95,10 @@ export const useDictationStore = create<DictationStoreState>()(
     (set) => ({
       enabled: true,
       setEnabled: (enabled) => set({ enabled }),
+      barSize: "full",
+      setBarSize: (barSize) => set({ barSize }),
+      barCollapsed: false,
+      toggleBarCollapsed: () => set((state) => ({ barCollapsed: !state.barCollapsed })),
       snapshot: {
         status: "idle",
         language: null,
@@ -220,6 +232,8 @@ export const useDictationStore = create<DictationStoreState>()(
       partialize: (state) => ({
         preferredTier: state.preferredTier,
         enabled: state.enabled,
+        barSize: state.barSize,
+        barCollapsed: state.barCollapsed,
         spokenPunctuation: state.spokenPunctuation,
         vocabulary: state.vocabulary,
       }),
@@ -229,6 +243,8 @@ export const useDictationStore = create<DictationStoreState>()(
       merge: (persisted, current) => ({
         ...current,
         ...(persisted as Partial<DictationStoreState> | undefined),
+        barSize: normalizeBarSize((persisted as { barSize?: unknown } | undefined)?.barSize),
+        barCollapsed: (persisted as { barCollapsed?: unknown } | undefined)?.barCollapsed === true,
         spokenPunctuation: normalizeSpokenPunctuationSettings(
           (persisted as { spokenPunctuation?: unknown } | undefined)?.spokenPunctuation
         ),
@@ -239,6 +255,12 @@ export const useDictationStore = create<DictationStoreState>()(
     }
   )
 );
+
+function normalizeBarSize(value: unknown): DictationBarSize {
+  return DICTATION_BAR_SIZES.includes(value as DictationBarSize)
+    ? (value as DictationBarSize)
+    : "full";
+}
 
 /**
  * The Dictation Language a phrase editor opens on: the one the author picked

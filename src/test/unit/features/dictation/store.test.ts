@@ -246,3 +246,54 @@ describe("Dictation Vocabulary settings", () => {
     expect(useDictationStore.getState().vocabulary).toEqual(defaultVocabularySettings());
   });
 });
+
+describe("Dictation Bar settings", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useDictationStore.setState({ barSize: "full", barCollapsed: false });
+  });
+
+  it("starts Full and expanded", () => {
+    expect(useDictationStore.getInitialState()).toMatchObject({
+      barSize: "full",
+      barCollapsed: false,
+    });
+  });
+
+  it("sets the size and toggles the collapse, which keeps the size", () => {
+    const { setBarSize, toggleBarCollapsed } = useDictationStore.getState();
+    setBarSize("compact");
+    toggleBarCollapsed();
+    expect(useDictationStore.getState()).toMatchObject({ barSize: "compact", barCollapsed: true });
+    toggleBarCollapsed();
+    expect(useDictationStore.getState()).toMatchObject({ barSize: "compact", barCollapsed: false });
+  });
+
+  it("persists the size and the collapse", () => {
+    const { setBarSize, toggleBarCollapsed } = useDictationStore.getState();
+    setBarSize("hidden");
+    toggleBarCollapsed();
+    const saved = JSON.parse(localStorage.getItem("maibuk-dictation")!);
+    expect(saved.state).toMatchObject({ barSize: "hidden", barCollapsed: true });
+  });
+
+  it("defaults a legacy or hand-edited record to Full and expanded", async () => {
+    localStorage.setItem(
+      "maibuk-dictation",
+      JSON.stringify({ state: { barSize: "huge", barCollapsed: "yes" }, version: 0 })
+    );
+    await act(async () => {
+      await useDictationStore.persist.rehydrate();
+    });
+    expect(useDictationStore.getState()).toMatchObject({ barSize: "full", barCollapsed: false });
+
+    localStorage.setItem(
+      "maibuk-dictation",
+      JSON.stringify({ state: { preferredTier: { en: "fast", es: "fast" } }, version: 0 })
+    );
+    await act(async () => {
+      await useDictationStore.persist.rehydrate();
+    });
+    expect(useDictationStore.getState()).toMatchObject({ barSize: "full", barCollapsed: false });
+  });
+});

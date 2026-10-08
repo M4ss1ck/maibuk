@@ -10,6 +10,11 @@ export const DICTATION_SECTION = {
       descriptionKey: "dictation.section.description",
     },
     {
+      id: "dictationBarSize",
+      labelKey: "dictation.bar.size",
+      descriptionKey: "dictation.bar.sizeDescription",
+    },
+    {
       id: "dictationModels",
       labelKey: "dictation.section.models",
       reveal: { kind: "dictationLanguage" },

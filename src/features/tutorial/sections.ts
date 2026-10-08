@@ -133,7 +133,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
     steps: [
       step(
         "dictation.overview",
-        ["Dictation", "Dictation Session", "Dictation Command Interpreter"],
+        ["Dictation", "Dictation Session", "Dictation Command Interpreter", "Dictation Bar"],
         { illustration: "dictation" }
       ),
       step("dictation.models", ["Dictation Model"]),

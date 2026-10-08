@@ -28,6 +28,29 @@ interface SelectProps<T> {
   triggerClassName?: string;
   id?: string;
   ariaLabel?: string;
+  /**
+   * "chip" is a narrow stacked trigger (the value over a small chevron), the
+   * size of the editor toolbar's language button; its list keeps a readable
+   * width instead of matching the trigger.
+   */
+  variant?: "default" | "chip";
+}
+
+/**
+ * The trigger's classes, shared with a static look-alike (a preview of a
+ * control in Settings) so it is drawn at the real size.
+ */
+export function selectTriggerClassName({
+  variant = "default",
+  minWidth = "default",
+  triggerClassName = "",
+}: Pick<SelectProps<string>, "variant" | "minWidth" | "triggerClassName">): string {
+  const minWidthClass = minWidth === "default" && variant === "default" ? "min-w-35" : "";
+  return `${
+    variant === "chip"
+      ? "flex flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none text-foreground hover:bg-muted/20 data-pressed:bg-muted/20"
+      : `relative flex w-full ${minWidthClass} items-center gap-1 px-3 py-1.5 pr-8 text-sm text-left border border-border rounded-lg bg-background text-foreground`
+  } cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${triggerClassName}`;
 }
 
 export function Select<T extends string | number>({
@@ -40,8 +63,9 @@ export function Select<T extends string | number>({
   triggerClassName = "",
   id,
   ariaLabel,
+  variant = "default",
 }: SelectProps<T>) {
-  const minWidthClass = minWidth === "default" ? "min-w-35" : "";
+  const chip = variant === "chip";
 
   return (
     <RACSelect
@@ -53,15 +77,13 @@ export function Select<T extends string | number>({
       id={id}
       aria-label={ariaLabel}
     >
-      <Button
-        className={`relative flex w-full ${minWidthClass} items-center gap-1 px-3 py-1.5 pr-8 text-sm text-left border border-border rounded-lg bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${triggerClassName}`}
-      >
+      <Button className={selectTriggerClassName({ variant, minWidth, triggerClassName })}>
         <SelectValue>
           {({ selectedItem, selectedText, isPlaceholder }) => {
             const selected = selectedItem as SelectOption<T> | null;
             if (selected?.accessibleName) {
               return (
-                <span className="min-w-0 flex-1 truncate">
+                <span className={chip ? "" : "min-w-0 flex-1 truncate"}>
                   <span aria-hidden="true">{selected.label}</span>
                   <span className="sr-only">{selected.accessibleName}</span>
                 </span>
@@ -73,14 +95,18 @@ export function Select<T extends string | number>({
           }}
         </SelectValue>
         {endAdornment && <span className="shrink-0 text-muted-foreground">{endAdornment}</span>}
-        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-          <ChevronIcon className="h-4 w-4 text-muted-foreground" />
-        </span>
+        {chip ? (
+          <ChevronIcon className="h-2.5 w-2.5" />
+        ) : (
+          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+            <ChevronIcon className="h-4 w-4 text-muted-foreground" />
+          </span>
+        )}
       </Button>
 
       <Popover
         placement="bottom end"
-        className="z-50 max-h-60 w-(--trigger-width) overflow-auto rounded-lg bg-background border border-border shadow-lg focus:outline-none"
+        className={`z-50 max-h-60 ${chip ? "min-w-32" : "w-(--trigger-width)"} overflow-auto rounded-lg bg-background border border-border shadow-lg focus:outline-none`}
       >
         <ListBox items={options} className="outline-none">
           {(option) => (

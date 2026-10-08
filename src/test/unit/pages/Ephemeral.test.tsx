@@ -54,7 +54,7 @@ vi.mock("@/lib/platform", () => ({
 }));
 
 vi.mock("@/components/dictation", () => ({
-  DictationControl: () => <div data-testid="dictation-control" />,
+  DictationBar: () => <div data-testid="dictation-control" />,
 }));
 
 // Stub the heavy TipTap editor with a textarea that mirrors its callbacks.

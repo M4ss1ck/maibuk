@@ -236,6 +236,10 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
       page.getByRole("group", { name: "English, Fast" }).getByText("Used for English")
     ).toBeVisible();
 
+    // Back on, the switch is followed by the Dictation bar size radios, also
+    // inputs: Tab past both before navigating.
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("radio", { name: "Full" })).toBeFocused();
     await page.keyboard.press("Tab");
     await openChapter(page);
     await expect(page.getByRole("button", { name: /Start dictation/ })).toBeVisible();
