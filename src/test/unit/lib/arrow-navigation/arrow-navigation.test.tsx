@@ -3,6 +3,11 @@ import userEvent from "@testing-library/user-event";
 import {
   Button,
   GridList,
+  ListBox,
+  ListBoxItem,
+  Popover,
+  Select,
+  SelectValue,
   GridListItem,
   Toolbar,
   Tree,
@@ -298,6 +303,40 @@ describe("arrow navigation (ADR 0025)", () => {
     act(() => button("Option").focus());
     await user.keyboard("{ArrowRight}");
     expect(button("Option")).toHaveFocus();
+  });
+
+  it("leaves an open React Aria Select's options their arrows", async () => {
+    const user = userEvent.setup();
+    render(
+      <main>
+        <section data-focus-pane="bar" tabIndex={-1} aria-label="Bar" data-rect="0 0 400 300">
+          <Select aria-label="Font">
+            <Button data-rect="10 5 80 35">
+              <SelectValue />
+            </Button>
+            <Popover>
+              <ListBox>
+                <ListBoxItem id="serif">Serif</ListBoxItem>
+                <ListBoxItem id="sans">Sans</ListBoxItem>
+              </ListBox>
+            </Popover>
+          </Select>
+          <button type="button" data-rect="300 5 330 35">
+            Target
+          </button>
+        </section>
+      </main>
+    );
+    act(() => screen.getByRole("button", { name: /Font/ }).focus());
+    await user.keyboard("{ArrowDown}");
+    const option = await screen.findByRole("option", { name: "Serif" });
+    expect(option).toHaveFocus();
+
+    // Two rules hold this: the option is inside the popover (an arrow owner),
+    // and the popover is the topmost layer, which no arrow leaves.
+    await user.keyboard("{ArrowRight}");
+    expect(option).toHaveFocus();
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
   });
 
   it("leaves a surface marked data-owns-arrows its arrows, focused or inside", async () => {
