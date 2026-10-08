@@ -189,6 +189,31 @@ describe("arrow navigation (ADR 0025)", () => {
     expect(text).toHaveFocus();
   });
 
+  it("leaves a surface marked data-owns-arrows its arrows, focused or inside", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <NotesFixture />
+        <div data-owns-arrows="" tabIndex={-1} data-testid="stage" data-rect="300 80 1000 800">
+          <button type="button" data-rect="400 100 440 140">
+            Node
+          </button>
+        </div>
+      </>
+    );
+    const onKey = vi.fn();
+    window.addEventListener("keydown", onKey);
+    act(() => screen.getByTestId("stage").focus());
+    await user.keyboard("{ArrowUp}");
+    expect(screen.getByTestId("stage")).toHaveFocus();
+    act(() => button("Node").focus());
+    await user.keyboard("{ArrowLeft}");
+    expect(button("Node")).toHaveFocus();
+    // The keys still reach the page's own handlers (the Cover Designer nudge).
+    expect(onKey).toHaveBeenCalledTimes(2);
+    window.removeEventListener("keydown", onKey);
+  });
+
   it("does no layout reads for keys it does not handle", async () => {
     const user = userEvent.setup();
     render(<NotesFixture />);

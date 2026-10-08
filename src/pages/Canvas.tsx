@@ -579,6 +579,8 @@ function CanvasEditor() {
 
       <main ref={surfaceRef} className="relative min-h-0 flex-1" data-tutorial="canvas.surface">
         <ReactFlow
+          // Arrows move the focused node (ADR 0025: the Canvas surface owns them).
+          data-owns-arrows=""
           colorMode={theme}
           className={connecting ? "canvas-connecting" : undefined}
           style={{ backgroundColor: "transparent" }}
