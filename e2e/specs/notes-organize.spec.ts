@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { Download, Page } from "@playwright/test";
 import { PDFDocument } from "pdf-lib";
-import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { SEED_BOOK, SEED_NOTES } from "../support/seed/names";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
@@ -180,12 +180,12 @@ test.describe("Notes list keyboard reorder @wf:notes-reorder-keyboard", () => {
   const inOrder = (...titles: string[]) =>
     titles.map((title) => new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 
-  /** From the open Note's row, arrows to `title` and Tabs into its Reorder button. */
+  /** From the open Note's row, arrows to `title` and then Right into its Reorder button. */
   async function focusReorder(page: Page, title: string) {
     await tabTo(page, notesListRow(page, SEED_NOTES.keeperLog), { max: 60 });
     await pressUntilFocused(page, "ArrowDown", notesListRow(page, title), { max: 5 });
     const handle = notesListRow(page, title).getByRole("button", { name: "Reorder" });
-    await pressUntilFocused(page, "Tab", handle, { max: 6 });
+    await pressUntilFocused(page, "ArrowRight", handle, { max: 6 });
     return handle;
   }
 
@@ -418,11 +418,14 @@ test.describe("Note Last Edited @wf:notes-last-edited", () => {
     await chooseFromItemMenu(page, "Pin");
     await expect(lastEdited(page, "2 hours ago")).toBeVisible();
 
-    // Tagging is metadata too. The title bar now sits before the Notes list in
-    // document order and the editor swallows Tab, so F6 reaches the header.
-    await page.keyboard.press("F6");
-    await page.keyboard.press("F6");
-    await tabTo(page, addTag(page), { max: 6 });
+    // Tagging is metadata too. F6 reaches the title bar Pane, and arrows move
+    // along it by position to Add tag (ADR 0025).
+    const titleBar = page.getByRole("banner", { name: "Note title bar" });
+    for (let i = 0; i < 3 && !(await isFocusWithin(titleBar)); i++) {
+      await page.keyboard.press("F6");
+    }
+    await expectFocusWithin(titleBar);
+    await pressUntilFocused(page, "ArrowLeft", addTag(page), { max: 4 });
     await page.keyboard.press("Enter");
     await page.keyboard.type("sharp");
     await page.keyboard.press("Enter");

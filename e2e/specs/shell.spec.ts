@@ -231,16 +231,17 @@ test.describe("F6 regions @wf:shell-cycle-panes @sc:global.cyclePanesForward @sc
     const sidebar = page.getByRole("complementary", { name: "Navigation sidebar" });
     const main = page.getByRole("main", { name: "Main content" });
 
+    // F6 lands inside each Pane, on a control, so arrows act at once (ADR 0025).
     await page.keyboard.press("F6");
-    await expect(sidebar).toBeFocused();
+    await expectFocusWithin(sidebar);
     await page.keyboard.press("F6");
-    await expect(main).toBeFocused();
+    await expectFocusWithin(main);
     await page.keyboard.press("F6");
-    await expect(sidebar).toBeFocused();
+    await expectFocusWithin(sidebar);
     await page.keyboard.press("Shift+F6");
-    await expect(main).toBeFocused();
+    await expectFocusWithin(main);
     await page.keyboard.press("Shift+F6");
-    await expect(sidebar).toBeFocused();
+    await expectFocusWithin(sidebar);
   });
 
   test("in the Book Editor, F6 cycles the title bar, the chapter list, and the editor and wraps", async ({
@@ -421,7 +422,7 @@ test.describe("help lists this screen's shortcuts @wf:shell-help-bound-per-scree
     await openSeedBook(page);
     // The title bar is its own pane above the row; F6 from the editor reaches it.
     await page.keyboard.press("F6");
-    await expect(page.getByRole("banner", { name: "Book title bar" })).toBeFocused();
+    await expectFocusWithin(page.getByRole("banner", { name: "Book title bar" }));
     await tabTo(page, page.getByRole("button", { name: "Design Cover" }), { max: 80 });
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/cover$/);
