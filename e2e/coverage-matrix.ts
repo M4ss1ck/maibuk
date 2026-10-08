@@ -2710,6 +2710,32 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "arrow-leave-notes-gallery",
+    area: "notes",
+    workflow:
+      "Notes Gallery: Right moves card by card by position, Left from the first card leaves for the navigation sidebar; asserts: focus after each arrow; persists: no",
+    edges: ["Right at the last card keeps focus instead of wrapping"],
+    terms: [],
+    shortcuts: [],
+    routes: ["/notes"],
+    fixture: "notesWithLinksAndTags",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "arrow-leave-canvas-gallery",
+    area: "canvas",
+    workflow:
+      "Canvas Gallery: Right moves card by card by position, Left from the first card leaves for the navigation sidebar; asserts: focus after each arrow; persists: no",
+    edges: ["Right at the last card keeps focus instead of wrapping"],
+    terms: [],
+    shortcuts: [],
+    routes: ["/canvas"],
+    fixture: "canvasWithNodes",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "arrow-leave-galleries",
     area: "books",
     workflow:

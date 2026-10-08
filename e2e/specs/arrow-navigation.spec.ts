@@ -379,6 +379,69 @@ test.describe("the Pane frame @wf:pane-frame", () => {
   });
 });
 
+// The Notes and Canvas galleries are the same 2D card grid as the Books one:
+// Left/Right by position, leaving at the side edges instead of wrapping.
+const galleryCards = (page: Page, grid: string) =>
+  page.getByRole("grid", { name: grid }).getByRole("row");
+
+async function focusFirstCard(page: Page, path: string, grid: string) {
+  await page.goto(path);
+  const first = galleryCards(page, grid).first();
+  await expect(first).toBeVisible();
+  await tabTo(page, first, { max: 40 });
+  await page.keyboard.press("Home");
+  await expect(first).toBeFocused();
+}
+
+async function crossGalleryEdges(page: Page, path: string, grid: string) {
+  await focusFirstCard(page, path, grid);
+  const cards = galleryCards(page, grid);
+  await page.keyboard.press("ArrowRight");
+  await expect(cards.nth(1)).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(cards.first()).toBeFocused();
+
+  await page.keyboard.press("ArrowLeft");
+  await expectFocusWithin(page.getByRole("complementary", { name: "Navigation sidebar" }));
+}
+
+async function stopAtLastCard(page: Page, path: string, grid: string) {
+  await focusFirstCard(page, path, grid);
+  const last = galleryCards(page, grid).last();
+  await pressUntilFocused(page, "ArrowRight", last, { max: 10 });
+
+  await page.keyboard.press("ArrowRight");
+  await expect(last).toBeFocused();
+}
+
+test.describe("leaving the Notes gallery @wf:arrow-leave-notes-gallery", () => {
+  test.use({ library: "notesWithLinksAndTags" });
+
+  test("Right moves card by card, and Left from the first card leaves for the sidebar", async ({
+    page,
+  }) => {
+    await crossGalleryEdges(page, "/notes", "Notes");
+  });
+
+  test("Right at the last card keeps focus instead of wrapping", async ({ page }) => {
+    await stopAtLastCard(page, "/notes", "Notes");
+  });
+});
+
+test.describe("leaving the Canvas gallery @wf:arrow-leave-canvas-gallery", () => {
+  test.use({ library: "canvasWithNodes" });
+
+  test("Right moves card by card, and Left from the first card leaves for the sidebar", async ({
+    page,
+  }) => {
+    await crossGalleryEdges(page, "/canvas", "Canvases");
+  });
+
+  test("Right at the last card keeps focus instead of wrapping", async ({ page }) => {
+    await stopAtLastCard(page, "/canvas", "Canvases");
+  });
+});
+
 /** Tabs to a resize handle, presses Right twice, and checks the width grew and survives a reload. */
 async function resizeByKeyboard(page: Page, name: string) {
   const handle = page.getByRole("separator", { name });
