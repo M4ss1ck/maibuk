@@ -342,15 +342,15 @@ describe("Layout", () => {
     const handle = container.querySelector(".cursor-col-resize");
     expect(handle).not.toBeNull();
 
-    fireEvent.mouseDown(handle as Element, { clientX: 100 });
-    fireEvent.mouseMove(document, { clientX: 150 });
+    fireEvent.pointerDown(handle as Element, { clientX: 100 });
+    fireEvent.pointerMove(document, { clientX: 150 });
     expect(useSettingsStore.getState().mainSidebarWidth).toBe(330);
 
-    fireEvent.mouseMove(document, { clientX: 1000 });
+    fireEvent.pointerMove(document, { clientX: 1000 });
     expect(useSettingsStore.getState().mainSidebarWidth).toBe(480);
 
-    fireEvent.mouseUp(document);
-    fireEvent.mouseMove(document, { clientX: 100 });
+    fireEvent.pointerUp(document);
+    fireEvent.pointerMove(document, { clientX: 100 });
     expect(useSettingsStore.getState().mainSidebarWidth).toBe(480);
   });
 

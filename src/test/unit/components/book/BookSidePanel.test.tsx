@@ -137,11 +137,11 @@ describe("BookSidePanel", () => {
 
     const handle = panel.querySelector(".cursor-col-resize");
     expect(handle).not.toBeNull();
-    fireEvent.mouseDown(handle as Element, { clientX: 100 });
-    fireEvent.mouseMove(document, { clientX: 50 });
+    fireEvent.pointerDown(handle as Element, { clientX: 100 });
+    fireEvent.pointerMove(document, { clientX: 50 });
     // The panel sits on the right, so dragging left widens it.
     expect(onResize).toHaveBeenLastCalledWith(410);
-    fireEvent.mouseUp(document);
+    fireEvent.pointerUp(document);
   });
 
   it("resizes by keyboard arrows through a focusable separator", async () => {

@@ -122,22 +122,38 @@ describe("ResizeHandle", () => {
     expect(handle).toHaveFocus();
   });
 
-  it("resizes on a mouse drag, clamped to the range", () => {
+  it("resizes on a pointer drag, clamped to the range", () => {
     const onResize = vi.fn();
     const { container } = render(<Harness side="right" onResize={onResize} />);
     const handle = container.querySelector(".cursor-col-resize");
     expect(handle).not.toBeNull();
 
-    fireEvent.mouseDown(handle as Element, { clientX: 100 });
-    fireEvent.mouseMove(document, { clientX: 150 });
+    fireEvent.pointerDown(handle as Element, { clientX: 100 });
+    fireEvent.pointerMove(document, { clientX: 150 });
     expect(onResize).toHaveBeenLastCalledWith(330);
 
-    fireEvent.mouseMove(document, { clientX: 1000 });
+    fireEvent.pointerMove(document, { clientX: 1000 });
     expect(onResize).toHaveBeenLastCalledWith(480);
 
-    fireEvent.mouseUp(document);
-    fireEvent.mouseMove(document, { clientX: 100 });
+    fireEvent.pointerUp(document);
+    fireEvent.pointerMove(document, { clientX: 100 });
     expect(onResize).toHaveBeenLastCalledWith(480);
+  });
+
+  it("resizes on a touch drag, and a cancelled touch ends the drag", () => {
+    const onResize = vi.fn();
+    const { container } = render(<Harness side="right" onResize={onResize} />);
+    const handle = container.querySelector(".cursor-col-resize") as Element;
+    // A touch on the handle drags it instead of scrolling the page.
+    expect(handle).toHaveClass("touch-none");
+
+    fireEvent.pointerDown(handle, { clientX: 100, pointerType: "touch" });
+    fireEvent.pointerMove(document, { clientX: 140, pointerType: "touch" });
+    expect(onResize).toHaveBeenLastCalledWith(320);
+
+    fireEvent.pointerCancel(document, { pointerType: "touch" });
+    fireEvent.pointerMove(document, { clientX: 200, pointerType: "touch" });
+    expect(onResize).toHaveBeenCalledTimes(1);
   });
 
   it("drags a right panel in the opposite direction", () => {
@@ -145,10 +161,10 @@ describe("ResizeHandle", () => {
     const { container } = render(<Harness side="left" onResize={onResize} />);
     const handle = container.querySelector(".cursor-col-resize");
 
-    fireEvent.mouseDown(handle as Element, { clientX: 200 });
-    fireEvent.mouseMove(document, { clientX: 150 });
+    fireEvent.pointerDown(handle as Element, { clientX: 200 });
+    fireEvent.pointerMove(document, { clientX: 150 });
     expect(onResize).toHaveBeenLastCalledWith(330);
 
-    fireEvent.mouseUp(document);
+    fireEvent.pointerUp(document);
   });
 });

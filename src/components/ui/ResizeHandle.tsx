@@ -3,7 +3,7 @@ import {
   useCallback,
   useRef,
   type KeyboardEventHandler,
-  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useMove } from "react-aria";
@@ -50,30 +50,33 @@ export const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(functi
   // A right panel's handle sits on its left edge, so the direction flips.
   const direction = side === "right" ? 1 : -1;
 
-  const handleMouseDown = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>) => {
+  // Pointer events, so a finger drags the handle as a mouse does.
+  const handlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
       event.preventDefault();
       isResizing.current = true;
       const startX = event.clientX;
       const startWidth = valueRef.current;
 
-      const onMouseMove = (moveEvent: MouseEvent) => {
+      const onPointerMove = (moveEvent: PointerEvent) => {
         if (!isResizing.current) return;
         onResize(clamp(startWidth + direction * (moveEvent.clientX - startX), min, max));
       };
 
-      const onMouseUp = () => {
+      const onPointerEnd = () => {
         isResizing.current = false;
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerEnd);
+        document.removeEventListener("pointercancel", onPointerEnd);
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
       };
 
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerEnd);
+      document.addEventListener("pointercancel", onPointerEnd);
     },
     [direction, min, max, onResize]
   );
@@ -111,11 +114,11 @@ export const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(functi
       aria-valuemin={min}
       aria-valuemax={max}
       aria-valuetext={t("nav.sidebarWidthValue", { width: value })}
-      onMouseDown={handleMouseDown}
+      onPointerDown={handlePointerDown}
       onKeyDown={handleKeyDown}
       className={`absolute top-0 ${
         side === "right" ? "right-0" : "left-0"
-      } w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+      } w-1.5 h-full cursor-col-resize touch-none hover:bg-primary/30 active:bg-primary/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
         className ?? ""
       }`}
     />
