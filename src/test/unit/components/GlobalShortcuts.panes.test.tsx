@@ -69,14 +69,15 @@ describe("GlobalShortcuts pane cycling", () => {
     const outside = document.querySelector("button")!;
     outside.focus();
 
+    // A Pane with a control lands on it; an empty Pane takes focus itself.
     await user.keyboard("{F6}");
-    expect(pane("first")).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Inside first" })).toHaveFocus();
     await user.keyboard("{F6}");
     expect(pane("second")).toHaveFocus();
     await user.keyboard("{F6}");
     expect(pane("third")).toHaveFocus();
     await user.keyboard("{F6}");
-    expect(pane("first")).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Inside first" })).toHaveFocus();
   });
 
   it("cycles in reverse and wraps with Shift+F6", async () => {
@@ -146,11 +147,11 @@ describe("GlobalShortcuts pane cycling", () => {
       pane("editor").focus();
 
       await user.keyboard("{F6}");
-      expect(pane("inner")).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Row" })).toHaveFocus();
       await user.keyboard("{F6}");
       expect(pane("editor")).toHaveFocus();
       await user.keyboard("{F6}");
-      expect(pane("inner")).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Row" })).toHaveFocus();
     });
 
     it("moves on from focus inside the inner pane instead of staying there", async () => {
@@ -161,7 +162,7 @@ describe("GlobalShortcuts pane cycling", () => {
       await user.keyboard("{F6}");
       expect(pane("editor")).toHaveFocus();
       await user.keyboard("{Shift>}{F6}{/Shift}");
-      expect(pane("inner")).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Row" })).toHaveFocus();
     });
 
     it("treats focus on the wrapper as being in its inner pane", async () => {
@@ -200,10 +201,11 @@ describe("GlobalShortcuts pane cycling", () => {
       render(<TextFixture />);
       pane("chapters").focus();
 
+      // The editor lands in its text, never on the Footnotes control inside it.
       await user.keyboard("{F6}");
-      expect(pane("editor")).toHaveFocus();
+      expect(screen.getByTestId("text")).toHaveFocus();
       await user.keyboard("{F6}");
-      expect(pane("footnotes")).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Entry" })).toHaveFocus();
       await user.keyboard("{F6}");
       expect(pane("chapters")).toHaveFocus();
     });
@@ -214,15 +216,88 @@ describe("GlobalShortcuts pane cycling", () => {
       screen.getByTestId("text").focus();
 
       await user.keyboard("{F6}");
-      expect(pane("footnotes")).toHaveFocus();
-
-      screen.getByRole("button", { name: "Entry" }).focus();
+      expect(screen.getByRole("button", { name: "Entry" })).toHaveFocus();
       await user.keyboard("{F6}");
       expect(pane("chapters")).toHaveFocus();
       await user.keyboard("{Shift>}{F6}{/Shift}");
-      expect(pane("footnotes")).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Entry" })).toHaveFocus();
+      // The editor remembers its text, not the Footnotes control used since.
       await user.keyboard("{Shift>}{F6}{/Shift}");
-      expect(pane("editor")).toHaveFocus();
+      expect(screen.getByTestId("text")).toHaveFocus();
+    });
+  });
+
+  describe("landing (ADR 0025 rule 8)", () => {
+    function LandingFixture({ withLast = true }: { withLast?: boolean }) {
+      return (
+        <>
+          <GlobalShortcuts />
+          <section data-focus-pane="list" tabIndex={-1} aria-label="List">
+            <input aria-label="Search" />
+            <button type="button">Sort</button>
+            <button type="button" data-focus-pane-entry="">
+              Entry
+            </button>
+            {withLast && <button type="button">Last used</button>}
+          </section>
+          <section data-focus-pane="editor" tabIndex={-1} aria-label="Editor">
+            <input aria-label="Title" />
+          </section>
+        </>
+      );
+    }
+
+    it("lands on the Pane's declared entry before its first control", async () => {
+      const user = userEvent.setup();
+      render(<LandingFixture />);
+      pane("editor").focus();
+
+      await user.keyboard("{F6}");
+      expect(screen.getByRole("button", { name: "Entry" })).toHaveFocus();
+    });
+
+    it("returns to the control last used in the Pane", async () => {
+      const user = userEvent.setup();
+      render(<LandingFixture />);
+      screen.getByRole("button", { name: "Last used" }).focus();
+
+      await user.keyboard("{F6}");
+      expect(screen.getByRole("textbox", { name: "Title" })).toHaveFocus();
+      await user.keyboard("{Shift>}{F6}{/Shift}");
+      expect(screen.getByRole("button", { name: "Last used" })).toHaveFocus();
+    });
+
+    it("falls back to the entry when the remembered control is gone", async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<LandingFixture />);
+      screen.getByRole("button", { name: "Last used" }).focus();
+      await user.keyboard("{F6}");
+      rerender(<LandingFixture withLast={false} />);
+
+      await user.keyboard("{Shift>}{F6}{/Shift}");
+      expect(screen.getByRole("button", { name: "Entry" })).toHaveFocus();
+    });
+
+    it("skips text entry for the first control, and takes it when it is all there is", async () => {
+      const user = userEvent.setup();
+      render(
+        <>
+          <GlobalShortcuts />
+          <section data-focus-pane="bar" tabIndex={-1} aria-label="Bar">
+            <input aria-label="Name" />
+            <button type="button">Action</button>
+          </section>
+          <section data-focus-pane="editor" tabIndex={-1} aria-label="Editor">
+            <input aria-label="Title" />
+          </section>
+        </>
+      );
+      pane("editor").focus();
+
+      await user.keyboard("{F6}");
+      expect(screen.getByRole("button", { name: "Action" })).toHaveFocus();
+      await user.keyboard("{F6}");
+      expect(screen.getByRole("textbox", { name: "Title" })).toHaveFocus();
     });
   });
 
