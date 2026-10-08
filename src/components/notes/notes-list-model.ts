@@ -287,7 +287,8 @@ export function buildDateNoteGroups(notes: NoteWithBook[], now = new Date()): Da
   const thisWeek: NoteWithBook[] = [];
   const years = new Map<string, NoteWithBook[]>();
 
-  for (const note of notes) {
+  // Most recently edited first within each group, not the manual order notes arrive in.
+  for (const note of sortNotesBy(notes, "date-desc")) {
     const updated = noteDate(note).getTime();
     if (updated >= todayStart && updated < tomorrowStart) {
       today.push(note);
