@@ -46,6 +46,8 @@ export interface FrameSampleSet {
   frames: FrameSample[];
   longAnimationFrames: LongAnimationFrame[];
   inputs?: InputSample[];
+  /** Durations, in ms, of a keyboard handler's work measured inside the page. */
+  handlerMs?: number[];
 }
 
 export interface FrameBudget {
@@ -63,6 +65,10 @@ export interface FrameBudget {
   inputP95Intervals?: number;
   /** Below this many keystrokes the input line is `not-measured`. */
   minInputs?: number;
+  /** p95 limit, in ms, on the page-side handler durations in `handlerMs`. */
+  handlerP95Ms?: number;
+  /** Below this many handler samples the handler line is `not-measured`. */
+  minHandlerSamples?: number;
 }
 
 export type Verdict = "pass" | "fail" | "not-measured";
@@ -72,7 +78,8 @@ export type BudgetLineId =
   | "p95-frame-time"
   | "dropped-frames"
   | "long-animation-frames"
-  | "input-to-next-frame";
+  | "input-to-next-frame"
+  | "handler-time";
 
 export interface BudgetLine {
   id: BudgetLineId;
@@ -99,6 +106,8 @@ export interface FrameStats {
   worstLongAnimationFrameMs: number;
   inputs: number;
   inputP95Ms: number;
+  handlerSamples: number;
+  handlerP95Ms: number;
 }
 
 export interface FrameReport {
@@ -178,6 +187,7 @@ export function frameReport(samples: FrameSampleSet, budget: FrameBudget): Frame
   const inputDelays = (samples.inputs ?? [])
     .map((input) => input.nextFrameMs - input.atMs)
     .sort((a, b) => a - b);
+  const handlerDurations = [...(samples.handlerMs ?? [])].sort((a, b) => a - b);
 
   const stats: FrameStats = {
     refreshIntervalMs: interval,
@@ -193,6 +203,8 @@ export function frameReport(samples: FrameSampleSet, budget: FrameBudget): Frame
     worstLongAnimationFrameMs: longFrames[0]?.durationMs ?? 0,
     inputs: inputDelays.length,
     inputP95Ms: percentileOfSorted(inputDelays, 95),
+    handlerSamples: handlerDurations.length,
+    handlerP95Ms: percentileOfSorted(handlerDurations, 95),
   };
 
   const measured = stats.frames >= budget.minFrames;
@@ -237,6 +249,20 @@ export function frameReport(samples: FrameSampleSet, budget: FrameBudget): Frame
       limitMs: inputLimitMs,
     });
   }
+  if (budget.handlerP95Ms !== undefined) {
+    const enough = measured && stats.handlerSamples >= (budget.minHandlerSamples ?? 1);
+    lines.push({
+      id: "handler-time",
+      verdict: enough
+        ? stats.handlerP95Ms <= budget.handlerP95Ms
+          ? "pass"
+          : "fail"
+        : "not-measured",
+      actual: stats.handlerP95Ms,
+      limit: budget.handlerP95Ms,
+      limitMs: budget.handlerP95Ms,
+    });
+  }
 
   return {
     verdict: worstVerdict(lines.map((line) => line.verdict)),
@@ -269,6 +295,7 @@ export function aggregateSamples(runs: FrameSampleSet[]): FrameSampleSet {
     longAnimationFrames: [],
     inputs: [],
   };
+  if (runs.some((run) => run.handlerMs !== undefined)) pooled.handlerMs = [];
   let cursor = 0;
   for (const run of runs) {
     const first = Math.min(
@@ -284,6 +311,7 @@ export function aggregateSamples(runs: FrameSampleSet[]): FrameSampleSet {
     for (const i of run.inputs ?? []) {
       pooled.inputs?.push({ atMs: i.atMs + shift, nextFrameMs: i.nextFrameMs + shift });
     }
+    for (const duration of run.handlerMs ?? []) pooled.handlerMs?.push(duration);
     const last = Math.max(
       cursor,
       ...run.frames.map((f) => f.startMs + f.durationMs + shift),

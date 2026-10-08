@@ -59,10 +59,24 @@ export const PERF_CANVAS = {
   nodePrefix: "Station",
 } as const;
 
+/** `perfManyNotes`: Notes titled with this prefix and a number. */
+export const PERF_NOTES = { titlePrefix: "Watch note" } as const;
+
+/** `perfManyChapters`: a Book whose Chapters are numbered with this prefix. */
+export const PERF_MANY_CHAPTERS_BOOK = {
+  title: "The Hundred Logs",
+  authorName: "Ada Marsh",
+  chapterPrefix: "Log",
+} as const;
+
 export const PERF_SIZES = {
   /** About 13,000 words: a long Chapter, not a pathological one. */
   longChapterParagraphs: 300,
   shortChapters: 20,
   /** 240 Text Nodes and 458 Connections. */
   canvasGrid: { columns: 20, rows: 12 },
+  /** Enough Notes to make the Notes list scroll and virtualize. */
+  manyNotes: 500,
+  /** Enough Chapters to make the Outline long. */
+  manyChapters: 100,
 } as const;

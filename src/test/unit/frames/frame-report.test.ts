@@ -283,6 +283,84 @@ describe("frameReport()", () => {
       expect(report.lines.map((line) => line.id)).not.toContain("input-to-next-frame");
     });
   });
+
+  describe("keyboard handler time", () => {
+    const HANDLER: FrameBudget = { ...BUDGET, handlerP95Ms: 8, minHandlerSamples: 20 };
+
+    it("passes when the handler p95 is under the limit", () => {
+      // 0.5..7.5 repeated five times: the 38th of 40 is 7.5.
+      const report = frameReport(
+        {
+          refreshIntervalMs: HZ60,
+          frames: frames(100),
+          longAnimationFrames: [],
+          handlerMs: Array.from({ length: 40 }, (_, i) => (i % 8) + 0.5),
+        },
+        HANDLER
+      );
+      expect(verdicts(report)["handler-time"]).toBe("pass");
+      expect(report.stats.handlerSamples).toBe(40);
+      expect(report.stats.handlerP95Ms).toBe(7.5);
+      const line = report.lines.find((l) => l.id === "handler-time");
+      expect(line).toMatchObject({ actual: 7.5, limit: 8, limitMs: 8 });
+    });
+
+    it("fails when the handler p95 is over the limit", () => {
+      const report = frameReport(
+        {
+          refreshIntervalMs: HZ60,
+          frames: frames(100),
+          longAnimationFrames: [],
+          handlerMs: Array.from({ length: 40 }, (_, i) => (i < 35 ? 4 : 30)),
+        },
+        HANDLER
+      );
+      expect(verdicts(report)["handler-time"]).toBe("fail");
+      expect(report.verdict).toBe("fail");
+      expect(report.stats.handlerP95Ms).toBe(30);
+    });
+
+    it("is not-measured when too few handler samples were recorded", () => {
+      const report = frameReport(
+        {
+          refreshIntervalMs: HZ60,
+          frames: frames(100),
+          longAnimationFrames: [],
+          handlerMs: [4],
+        },
+        HANDLER
+      );
+      expect(verdicts(report)["handler-time"]).toBe("not-measured");
+      expect(report.verdict).toBe("not-measured");
+    });
+
+    it("is not-measured when the frames are below minFrames", () => {
+      const report = frameReport(
+        {
+          refreshIntervalMs: HZ60,
+          frames: frames(59),
+          longAnimationFrames: [],
+          handlerMs: Array.from({ length: 40 }, () => 4),
+        },
+        HANDLER
+      );
+      expect(verdicts(report)["handler-time"]).toBe("not-measured");
+    });
+
+    it("leaves the line out of scenarios that do not budget handler time", () => {
+      const report = frameReport(
+        {
+          refreshIntervalMs: HZ60,
+          frames: frames(100),
+          longAnimationFrames: [],
+          handlerMs: [4],
+        },
+        BUDGET
+      );
+      expect(report.lines.map((line) => line.id)).not.toContain("handler-time");
+      expect(report.stats.handlerSamples).toBe(1);
+    });
+  });
 });
 
 describe("aggregateSamples()", () => {
@@ -300,6 +378,21 @@ describe("aggregateSamples()", () => {
     expect(pooled.inputs).toHaveLength(2);
     // Pooled frames stay in presentation order, so the report accepts them.
     expect(frameReport(pooled, { ...BUDGET, minFrames: 1 }).stats.frames).toBe(2);
+  });
+
+  it("pools handler durations across runs and omits the key when no run has any", () => {
+    const withHandler = (offset: number, handlerMs: number[]): FrameSampleSet => ({
+      refreshIntervalMs: HZ60,
+      frames: [{ startMs: offset, durationMs: HZ60 }],
+      longAnimationFrames: [],
+      handlerMs,
+    });
+    const pooled = aggregateSamples([withHandler(5000, [4, 6]), withHandler(100, [8])]);
+    expect(pooled.handlerMs).toEqual([4, 6, 8]);
+    const without = aggregateSamples([
+      { refreshIntervalMs: HZ60, frames: [], longAnimationFrames: [] },
+    ]);
+    expect("handlerMs" in without).toBe(false);
   });
 
   it("averages refresh intervals within 1% and refuses runs on different displays", () => {
