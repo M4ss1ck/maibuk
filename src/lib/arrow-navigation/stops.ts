@@ -91,11 +91,19 @@ function isTwoDimensional(widget: Element): boolean {
   return widget.getAttribute("data-layout") === "grid";
 }
 
-function hasNeighbor(el: Element, items: Element[], key: ArrowKey): boolean {
+// The nearest item in the same visual row (Left/Right) or column (Up/Down).
+function neighbor(item: Element, items: Element[], key: ArrowKey): HTMLElement | null {
+  const from = item.getBoundingClientRect();
+  const vertical = isVerticalKey(key);
   const others = items
-    .filter((item) => item !== el)
-    .map((item) => ({ rect: item.getBoundingClientRect(), id: item }));
-  return pickInDirection(el.getBoundingClientRect(), others, DIRECTION[key]) !== null;
+    .filter((other): other is HTMLElement => other !== item && other instanceof HTMLElement)
+    .map((other) => ({ rect: other.getBoundingClientRect(), id: other }))
+    .filter(({ rect }) =>
+      vertical
+        ? Math.min(rect.right, from.right) > Math.max(rect.left, from.left)
+        : Math.min(rect.bottom, from.bottom) > Math.max(rect.top, from.top)
+    );
+  return pickInDirection(from, others, DIRECTION[key]);
 }
 
 export type ArrowOutcome =
@@ -148,11 +156,7 @@ export function arrowOutcome(el: HTMLElement, key: ArrowKey): ArrowOutcome {
 
   // Grid lists and list boxes. Up/Down never leave a list or grid.
   if (vertical) return { kind: "inside" };
-  if (isTwoDimensional(widget)) {
-    const items = [...widget.querySelectorAll('[role="row"], [role="option"]')];
-    const item = el.closest('[role="row"], [role="option"]') ?? el;
-    return hasNeighbor(item, items, key) ? { kind: "inside" } : { kind: "edge" };
-  }
+  if (isTwoDimensional(widget)) return gridOutcome(el, widget, key);
   if (orientation(widget) === "horizontal") return { kind: "inside" };
   const row = el.closest('[role="row"]');
   if (!row) return { kind: "edge" };
@@ -163,6 +167,19 @@ export function arrowOutcome(el: HTMLElement, key: ArrowKey): ArrowOutcome {
   return children.length === 0 || children[children.length - 1] === el
     ? { kind: "edge" }
     : { kind: "inside" };
+}
+
+// A 2D card grid moves Left/Right between cards by position and leaves at
+// its side edges, where React Aria would wrap to the next visual row. React
+// Aria Components forces "tab" navigation in `layout="grid"`, so a card's
+// own buttons are Tab stops and their arrows stay React Aria's.
+function gridOutcome(el: HTMLElement, widget: Element, key: ArrowKey): ArrowOutcome {
+  const item = el.closest('[role="row"], [role="option"]');
+  if (!item || !widget.contains(item)) return { kind: "edge" };
+  if (el !== item) return { kind: "inside" };
+  const items = [...widget.querySelectorAll('[role="row"], [role="option"]')];
+  const to = neighbor(item, items, key);
+  return to ? { kind: "move", to } : { kind: "edge" };
 }
 
 /**

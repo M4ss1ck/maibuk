@@ -81,6 +81,31 @@ function NotesFixture({ rename = false }: { rename?: boolean }) {
   );
 }
 
+function GalleryFixture() {
+  const card = (n: number, rect: string, buttonRect: string) => (
+    <GridListItem id={`c${n}`} textValue={`Card ${n}`} data-rect={rect}>
+      Card {n}
+      <Button aria-label={`Menu ${n}`} data-rect={buttonRect} />
+    </GridListItem>
+  );
+  return (
+    <main>
+      <section data-focus-pane="gallery" tabIndex={-1} aria-label="Gallery" data-rect="0 0 220 220">
+        <GridList aria-label="Books" layout="grid" data-rect="0 0 220 220">
+          {card(1, "0 0 100 100", "80 0 100 20")}
+          {card(2, "110 0 210 100", "190 0 210 20")}
+          {card(3, "0 110 100 210", "80 110 100 130")}
+        </GridList>
+      </section>
+      <aside data-focus-pane="side" tabIndex={-1} aria-label="Side" data-rect="300 0 500 400">
+        <button type="button" data-rect="310 10 400 40">
+          Side action
+        </button>
+      </aside>
+    </main>
+  );
+}
+
 const row = (name: string) => screen.getByRole("row", { name });
 const button = (name: string) => screen.getByRole("button", { name });
 
@@ -212,6 +237,52 @@ describe("arrow navigation (ADR 0025)", () => {
     // The keys still reach the page's own handlers (the Cover Designer nudge).
     expect(onKey).toHaveBeenCalledTimes(2);
     window.removeEventListener("keydown", onKey);
+  });
+
+  describe("a 2D card grid", () => {
+    it("moves Right between cards by position, then leaves at the side edge instead of wrapping", async () => {
+      const user = userEvent.setup();
+      render(<GalleryFixture />);
+      act(() => row("Card 1").focus());
+
+      await user.keyboard("{ArrowRight}");
+      expect(row("Card 2")).toHaveFocus();
+      await user.keyboard("{ArrowRight}");
+      expect(button("Side action")).toHaveFocus();
+    });
+
+    it("moves Left between cards and stays at the left edge with nothing beyond", async () => {
+      const user = userEvent.setup();
+      render(<GalleryFixture />);
+      act(() => row("Card 2").focus());
+
+      await user.keyboard("{ArrowLeft}");
+      expect(row("Card 1")).toHaveFocus();
+      await user.keyboard("{ArrowLeft}");
+      expect(row("Card 1")).toHaveFocus();
+    });
+
+    it("from the last card of a visual row, Right leaves rather than wrapping to the next row", async () => {
+      const user = userEvent.setup();
+      render(<GalleryFixture />);
+      act(() => row("Card 3").focus());
+
+      await user.keyboard("{ArrowRight}");
+      expect(button("Side action")).toHaveFocus();
+    });
+
+    it("moves Up and Down by position and never leaves the grid that way", async () => {
+      const user = userEvent.setup();
+      render(<GalleryFixture />);
+      act(() => row("Card 1").focus());
+
+      await user.keyboard("{ArrowDown}");
+      expect(row("Card 3")).toHaveFocus();
+      await user.keyboard("{ArrowDown}");
+      expect(row("Card 3")).toHaveFocus();
+      await user.keyboard("{ArrowUp}");
+      expect(row("Card 1")).toHaveFocus();
+    });
   });
 
   it("does no layout reads for keys it does not handle", async () => {
