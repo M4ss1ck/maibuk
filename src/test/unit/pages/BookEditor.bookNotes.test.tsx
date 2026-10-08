@@ -8,6 +8,7 @@ const {
   mockBookSidePanel,
   mockSetShowNotesChapter,
   mockSetBookSidePanelTab,
+  mockSetSidebarWidth,
   mockSettings,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -23,6 +24,7 @@ const {
   mockBookSidePanel: vi.fn((_props: Record<string, unknown>) => null),
   mockSetShowNotesChapter: vi.fn(),
   mockSetBookSidePanelTab: vi.fn(),
+  mockSetSidebarWidth: vi.fn(),
   mockSettings: { showNotesChapter: true },
 }));
 
@@ -90,7 +92,9 @@ vi.mock("../../../features/settings/store", async () => {
     await vi.importActual<typeof import("@/lib/shortcut-resolve")>("@/lib/shortcut-resolve");
   const state: Record<string, unknown> = {
     sidebarWidth: 256,
-    setSidebarWidth: vi.fn(),
+    setSidebarWidth: mockSetSidebarWidth,
+    notesSidebarWidth: 280,
+    setNotesSidebarWidth: vi.fn(),
     showInlineFootnotes: true,
     get showNotesChapter() {
       return mockSettings.showNotesChapter;
@@ -154,6 +158,7 @@ describe("BookEditor book notes panel", () => {
     mockNavigate.mockClear();
     mockSetShowNotesChapter.mockClear();
     mockSetBookSidePanelTab.mockClear();
+    mockSetSidebarWidth.mockClear();
     mockSettings.showNotesChapter = true;
   });
 
@@ -199,5 +204,16 @@ describe("BookEditor book notes panel", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/notes/n1", {
       state: { returnTo: "/book/book-1", returnLabel: "Draft" },
     });
+  });
+
+  it("widens the chapter sidebar with ArrowRight on the resize handle", async () => {
+    const user = userEvent.setup();
+    render(<BookEditor />);
+
+    const handle = screen.getByRole("separator", { name: "nav.resizeChaptersSidebar" });
+    handle.focus();
+    await user.keyboard("{ArrowRight}");
+
+    expect(mockSetSidebarWidth).toHaveBeenCalledWith(272);
   });
 });

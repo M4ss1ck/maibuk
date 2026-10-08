@@ -14,4 +14,5 @@ export { Select } from "@/components/ui/Select";
 export { Switch } from "@/components/ui/Switch";
 export { ToastViewport, toast } from "@/components/ui/Toast";
 export { ReorderHandle } from "@/components/ui/ReorderHandle";
+export { ResizeHandle } from "@/components/ui/ResizeHandle";
 export { Tooltip, TooltipGroup } from "@/components/ui/Tooltip";

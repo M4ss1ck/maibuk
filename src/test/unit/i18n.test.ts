@@ -95,7 +95,7 @@ describe("locale key coverage", () => {
   });
 
   it("defines the side panel width value interpolation key in both locales", () => {
-    expect(en.bookSidePanel.widthValue).toContain("{{width}}");
-    expect(es.bookSidePanel.widthValue).toContain("{{width}}");
+    expect(en.nav.sidebarWidthValue).toContain("{{width}}");
+    expect(es.nav.sidebarWidthValue).toContain("{{width}}");
   });
 });

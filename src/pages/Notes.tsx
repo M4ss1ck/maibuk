@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { ResizeHandle } from "@/components/ui";
 import { useNoteStore } from "@/features/notes";
 import type { Note, ReorderNoteItem, UpdateNoteInput } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
@@ -31,7 +32,6 @@ export function Notes() {
   const setNotesSidebarWidth = useSettingsStore((s) => s.setNotesSidebarWidth);
   const lastNoteId = useSettingsStore((s) => s.lastNoteId);
   const setLastNoteId = useSettingsStore((s) => s.setLastNoteId);
-  const isResizing = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { noteId } = useParams();
@@ -180,36 +180,6 @@ export function Notes() {
     setLastNoteId(duplicated.id);
   };
 
-  // Sidebar drag-resize handler
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      isResizing.current = true;
-      const startX = e.clientX;
-      const startWidth = notesSidebarWidth;
-
-      const onMouseMove = (moveEvent: MouseEvent) => {
-        if (!isResizing.current) return;
-        const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
-        setNotesSidebarWidth(newWidth);
-      };
-
-      const onMouseUp = () => {
-        isResizing.current = false;
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    },
-    [notesSidebarWidth, setNotesSidebarWidth]
-  );
-
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* the note title bar portals here so it spans the whole app width */}
@@ -235,9 +205,14 @@ export function Notes() {
             onRenameNote={(id, title) => updateNote({ id, title })}
             onImportFiles={handleImportFiles}
           />
-          <div
-            onMouseDown={handleResizeStart}
-            className="hidden md:block absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+          <ResizeHandle
+            side="right"
+            value={notesSidebarWidth}
+            min={200}
+            max={480}
+            onResize={setNotesSidebarWidth}
+            label={t("nav.resizeNotesSidebar")}
+            className="hidden md:block"
           />
         </section>
         <main

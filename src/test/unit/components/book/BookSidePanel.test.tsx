@@ -7,7 +7,8 @@ import { BookSidePanel } from "@/components/book/BookSidePanel";
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { width?: number }) => {
-      if (key === "bookSidePanel.widthValue") return `${options?.width} pixels`;
+      if (key === "nav.sidebarWidthValue") return `${options?.width} pixels`;
+      if (key === "nav.sidebarWidthValue") return `${options?.width} pixels`;
       const map: Record<string, string> = {
         "bookSidePanel.footnotes": "Footnotes",
         "bookSidePanel.notes": "Notes",
@@ -38,7 +39,7 @@ const baseProps = {
   onTabChange: vi.fn(),
   onClose: vi.fn(),
   width: 280,
-  onResizeStart: vi.fn(),
+  onResize: vi.fn(),
   chapters: [],
   currentChapterId: null,
   onSelectChapter: vi.fn(),
@@ -125,16 +126,10 @@ describe("BookSidePanel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("applies the given width and starts a resize on the handle", () => {
-    const onResizeStart = vi.fn();
+  it("applies the given width and resizes by dragging the left edge", () => {
+    const onResize = vi.fn();
     render(
-      <BookSidePanel
-        {...baseProps}
-        isOpen
-        activeTab="footnotes"
-        width={360}
-        onResizeStart={onResizeStart}
-      />
+      <BookSidePanel {...baseProps} isOpen activeTab="footnotes" width={360} onResize={onResize} />
     );
 
     const panel = screen.getByRole("complementary");
@@ -142,30 +137,45 @@ describe("BookSidePanel", () => {
 
     const handle = panel.querySelector(".cursor-col-resize");
     expect(handle).not.toBeNull();
-    fireEvent.mouseDown(handle as Element);
-    expect(onResizeStart).toHaveBeenCalled();
+    fireEvent.mouseDown(handle as Element, { clientX: 100 });
+    fireEvent.mouseMove(document, { clientX: 50 });
+    // The panel sits on the right, so dragging left widens it.
+    expect(onResize).toHaveBeenLastCalledWith(410);
+    fireEvent.mouseUp(document);
   });
 
-  it("resizes by keyboard arrows through a focusable separator", () => {
-    const onResizeKey = vi.fn();
-    render(
-      <BookSidePanel
-        {...baseProps}
-        isOpen
-        activeTab="footnotes"
-        width={280}
-        onResizeKey={onResizeKey}
-      />
-    );
+  it("resizes by keyboard arrows through a focusable separator", async () => {
+    const user = userEvent.setup();
+    const onResize = vi.fn();
+    const Harness = () => {
+      const [width, setWidth] = useState(280);
+      return (
+        <BookSidePanel
+          {...baseProps}
+          isOpen
+          activeTab="footnotes"
+          width={width}
+          onResize={(next) => {
+            onResize(next);
+            setWidth(next);
+          }}
+        />
+      );
+    };
+    render(<Harness />);
 
     const handle = screen.getByRole("separator", { name: "Resize panel" });
     expect(handle).toHaveAttribute("aria-valuenow", "280");
 
-    fireEvent.keyDown(handle, { key: "ArrowLeft" });
-    expect(onResizeKey).toHaveBeenCalledWith(16);
+    handle.focus();
+    // The panel sits on the right, so ArrowLeft widens and ArrowRight narrows.
+    await user.keyboard("{ArrowLeft}");
+    expect(onResize).toHaveBeenLastCalledWith(296);
+    expect(handle).toHaveAttribute("aria-valuenow", "296");
 
-    fireEvent.keyDown(handle, { key: "ArrowRight" });
-    expect(onResizeKey).toHaveBeenCalledWith(-16);
+    await user.keyboard("{ArrowRight}");
+    expect(onResize).toHaveBeenLastCalledWith(280);
+    expect(handle).toHaveAttribute("aria-valuenow", "280");
   });
 
   it("exposes a localized width value that updates after a keyboard resize", async () => {
@@ -178,7 +188,7 @@ describe("BookSidePanel", () => {
           isOpen
           activeTab="footnotes"
           width={width}
-          onResizeKey={(delta) => setWidth((current) => current + delta)}
+          onResize={setWidth}
         />
       );
     };

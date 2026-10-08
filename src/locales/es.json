@@ -87,7 +87,9 @@
     "downloadApp": "Descargar App",
     "bookNotes": "Notas del Libro",
     "resizeSidebar": "Redimensionar barra lateral",
-    "sidebarWidthValue": "{{width}} píxeles"
+    "sidebarWidthValue": "{{width}} píxeles",
+    "resizeNotesSidebar": "Redimensionar lista de notas",
+    "resizeChaptersSidebar": "Redimensionar lista de capítulos"
   },
   "bookNotes": {
     "quickPlaceholder": "Escribe una nota rápida...",
@@ -99,8 +101,7 @@
   "bookSidePanel": {
     "footnotes": "Notas al pie",
     "notes": "Notas",
-    "resize": "Redimensionar panel",
-    "widthValue": "{{width}} píxeles"
+    "resize": "Redimensionar panel"
   },
   "metrics": {
     "title": "Métricas",

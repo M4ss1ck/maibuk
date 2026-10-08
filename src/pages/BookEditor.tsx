@@ -17,7 +17,7 @@ import { Editor, ChapterList, SaveStatus, type EditorTutorialAnchors } from "@/c
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { BookSidePanel } from "@/components/book/BookSidePanel";
 import { TruncatedText } from "@/components/ui/TruncatedText";
-import { Tooltip, TooltipGroup } from "@/components/ui";
+import { ResizeHandle, Tooltip, TooltipGroup } from "@/components/ui";
 import type { EditorStats } from "@/components/editor/Editor";
 import type { EditorHandle } from "@/components/editor/Editor";
 import { useEditSession } from "@/features/edit-session";
@@ -149,7 +149,6 @@ export function BookEditor() {
   const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
   const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
   const setNotesSidebarWidth = useSettingsStore((s) => s.setNotesSidebarWidth);
-  const isResizing = useRef(false);
   const showInlineFootnotes = useSettingsStore((s) => s.showInlineFootnotes);
   const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
   const setShowNotesChapter = useSettingsStore((s) => s.setShowNotesChapter);
@@ -728,73 +727,6 @@ export function BookEditor() {
   const toggleFocusMode = useCallback(() => {
     setFocusMode((prev) => !prev);
   }, []);
-
-  // Sidebar drag-resize handler
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      isResizing.current = true;
-      const startX = e.clientX;
-      const startWidth = sidebarWidth;
-
-      const onMouseMove = (moveEvent: MouseEvent) => {
-        if (!isResizing.current) return;
-        const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
-        setSidebarWidth(newWidth);
-      };
-
-      const onMouseUp = () => {
-        isResizing.current = false;
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    },
-    [sidebarWidth]
-  );
-
-  // Notes/footnotes side panel drag-resize handler. The panel sits on the right,
-  // so dragging its left edge leftwards widens it (inverted delta).
-  const handleNotesResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      isResizing.current = true;
-      const startX = e.clientX;
-      const startWidth = notesSidebarWidth;
-
-      const onMouseMove = (moveEvent: MouseEvent) => {
-        if (!isResizing.current) return;
-        const newWidth = Math.max(200, Math.min(480, startWidth - (moveEvent.clientX - startX)));
-        setNotesSidebarWidth(newWidth);
-      };
-
-      const onMouseUp = () => {
-        isResizing.current = false;
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    },
-    [notesSidebarWidth, setNotesSidebarWidth]
-  );
-
-  // Keyboard resize: the panel sits on the right, so ArrowLeft widens it.
-  const handleNotesResizeKey = useCallback(
-    (delta: number) => setNotesSidebarWidth(notesSidebarWidth + delta),
-    [notesSidebarWidth, setNotesSidebarWidth]
-  );
 
   // Handle book info update
   const handleUpdateBookInfo = useCallback(
@@ -1384,9 +1316,13 @@ export function BookEditor() {
                 tutorialAnchors
               />
               {showSidebar && (
-                <div
-                  onMouseDown={handleResizeStart}
-                  className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+                <ResizeHandle
+                  side="right"
+                  value={sidebarWidth}
+                  min={200}
+                  max={480}
+                  onResize={setSidebarWidth}
+                  label={t("nav.resizeChaptersSidebar")}
                 />
               )}
             </div>
@@ -1479,8 +1415,7 @@ export function BookEditor() {
           onTabChange={setBookSidePanelTab}
           onClose={() => setShowNotesChapter(false)}
           width={notesSidebarWidth}
-          onResizeStart={handleNotesResizeStart}
-          onResizeKey={handleNotesResizeKey}
+          onResize={setNotesSidebarWidth}
           chapters={chapters}
           currentChapterId={currentChapter?.id ?? null}
           onSelectChapter={handleSelectChapter}
