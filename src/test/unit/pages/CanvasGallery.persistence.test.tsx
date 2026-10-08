@@ -77,6 +77,9 @@ describe("CanvasGallery search persistence", () => {
     const { container } = render(<CanvasGallery />);
 
     expect(container.firstElementChild).toHaveClass("@container");
+    expect(screen.getByRole("grid", { name: "canvas.collectionLabel" })).toHaveAttribute(
+      "data-focus-pane-entry"
+    );
 
     const grid = screen.getByText("Alpha").closest(".grid");
     expect(grid).not.toBeNull();
@@ -120,12 +123,15 @@ describe("nested row controls by keyboard", () => {
   ) {
     row.focus();
     for (let step = 0; step < 12 && document.activeElement !== pin; step++) {
-      await user.keyboard("{Tab}");
+      await user.tab();
     }
     expect(pin).toHaveFocus();
   }
 
-  it.each(["{Enter}", " "])("%s on a card's Pin button pins, never opens the canvas", async (key) => {
+  it.each([
+    "{Enter}",
+    " ",
+  ])("%s on a card's Pin button pins, never opens the canvas", async (key) => {
     const user = userEvent.setup();
     render(<CanvasGallery />);
 

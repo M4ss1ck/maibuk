@@ -155,6 +155,7 @@ describe("NotesList", () => {
     const rows = screen.getAllByRole("row").filter((row) => row.hasAttribute("data-key"));
     rows[0].focus();
     expect(rows[0]).toHaveFocus();
+    expect(screen.getByRole("grid", { name: "Notes" })).toHaveAttribute("data-focus-pane-entry");
 
     await user.keyboard("{ArrowDown}");
     expect(rows[1]).toHaveFocus();
@@ -183,11 +184,15 @@ describe("NotesList", () => {
       return { props, row };
     }
 
-    async function tabTo(user: ReturnType<typeof userEvent.setup>, row: HTMLElement, name: string) {
+    async function arrowToButton(
+      user: ReturnType<typeof userEvent.setup>,
+      row: HTMLElement,
+      name: string
+    ) {
       row.focus();
       const target = within(row).getByRole("button", { name });
       for (let step = 0; step < 6 && document.activeElement !== target; step++) {
-        await user.keyboard("{Tab}");
+        await user.keyboard("{ArrowRight}");
       }
       expect(target).toHaveFocus();
     }
@@ -233,7 +238,7 @@ describe("NotesList", () => {
       const user = userEvent.setup();
       const { onSelectNote } = renderTree();
       const row = within(screen.getByRole("grid", { name: "draft" })).getAllByRole("row")[0];
-      await tabTo(user, row, "common.edit");
+      await arrowToButton(user, row, "common.edit");
       await user.keyboard("{Enter}");
       await waitFor(() => expect(screen.getByDisplayValue("Alpha")).toHaveFocus());
       expect(onSelectNote).not.toHaveBeenCalled();
@@ -245,12 +250,23 @@ describe("NotesList", () => {
     ])("%s on the row's Edit button renames, never opens the Note", async (key) => {
       const user = userEvent.setup();
       const { props, row } = renderActionList();
-      await tabTo(user, row, "common.edit");
+      await arrowToButton(user, row, "common.edit");
       await user.keyboard(key);
       await waitFor(() =>
         expect(screen.getByRole("textbox", { name: "common.rename" })).toHaveFocus()
       );
       expect(props.onSelectNote).not.toHaveBeenCalled();
+    });
+
+    it("types a space in the rename field instead of feeding the list's typeahead", async () => {
+      const user = userEvent.setup();
+      const { props, row } = renderActionList();
+      await arrowToButton(user, row, "common.edit");
+      await user.keyboard("{Enter}");
+      const field = await screen.findByRole("textbox", { name: "common.rename" });
+      await user.clear(field);
+      await user.type(field, "Two words{Enter}");
+      expect(props.onRenameNote).toHaveBeenCalledWith(expect.anything(), "Two words");
     });
 
     it.each([
@@ -259,7 +275,7 @@ describe("NotesList", () => {
     ])("%s in the rename field hands focus back to the row", async (key) => {
       const user = userEvent.setup();
       const { row } = renderActionList();
-      await tabTo(user, row, "common.edit");
+      await arrowToButton(user, row, "common.edit");
       await user.keyboard("{Enter}");
       await waitFor(() => expect(screen.getByDisplayValue("Alpha")).toHaveFocus());
       await user.keyboard(key);
@@ -272,7 +288,7 @@ describe("NotesList", () => {
     ])("%s on the row's Duplicate button duplicates, never opens the Note", async (key) => {
       const user = userEvent.setup();
       const { props, row } = renderActionList();
-      await tabTo(user, row, "notes.duplicate");
+      await arrowToButton(user, row, "notes.duplicate");
       await user.keyboard(key);
       expect(props.onDuplicateNote).toHaveBeenCalledTimes(1);
       expect(props.onSelectNote).not.toHaveBeenCalled();
@@ -284,7 +300,7 @@ describe("NotesList", () => {
     ])("%s on the row's Delete button asks to delete, never opens the Note", async (key) => {
       const user = userEvent.setup();
       const { props, row } = renderActionList();
-      await tabTo(user, row, "common.delete");
+      await arrowToButton(user, row, "common.delete");
       await user.keyboard(key);
       await screen.findByRole("dialog", { name: "notes.deleteConfirm" });
       expect(props.onSelectNote).not.toHaveBeenCalled();
@@ -960,11 +976,13 @@ describe("NotesList reorder", () => {
   };
   const handleOf = (id: string) => within(noteRow(id)).getByRole("button", { name: "Reorder" });
 
-  /** Tab from the row into its controls until its reorder button has focus. */
-  async function tabToHandle(user: ReturnType<typeof userEvent.setup>, id: string) {
+  /** Arrow from the row into its controls until its reorder button has focus. */
+  async function arrowToHandle(user: ReturnType<typeof userEvent.setup>, id: string) {
     noteRow(id).focus();
     const handle = handleOf(id);
-    for (let i = 0; i < 8 && document.activeElement !== handle; i++) await user.tab();
+    for (let i = 0; i < 8 && document.activeElement !== handle; i++) {
+      await user.keyboard("{ArrowRight}");
+    }
     expect(handle).toHaveFocus();
   }
 
@@ -1010,7 +1028,7 @@ describe("NotesList reorder", () => {
         buildNote({ id: "b", title: "Bravo" }),
       ]);
 
-      await tabToHandle(user, "b");
+      await arrowToHandle(user, "b");
       await user.keyboard("{Enter}");
       await waitFor(() => expect(mockParkSelection).toHaveBeenCalledTimes(1));
       await arrowTo(user, "Insert before Alpha");
@@ -1018,7 +1036,7 @@ describe("NotesList reorder", () => {
       await endDrag(user, "{Escape}");
       expect(mockRestoreSelection).toHaveBeenCalledTimes(1);
 
-      await tabToHandle(user, "b");
+      await arrowToHandle(user, "b");
       await user.keyboard("{Enter}");
       await arrowTo(user, "Insert before Alpha");
       await endDrag(user, "{Enter}");
@@ -1034,7 +1052,7 @@ describe("NotesList reorder", () => {
         buildNote({ id: "c", title: "Charlie" }),
       ]);
 
-      await tabToHandle(user, "c");
+      await arrowToHandle(user, "c");
       await user.keyboard("{Enter}");
       await arrowTo(user, "Insert before Alpha");
       await endDrag(user, "{Enter}");
@@ -1056,7 +1074,7 @@ describe("NotesList reorder", () => {
         buildNote({ id: "c", title: "Charlie" }),
       ]);
 
-      await tabToHandle(user, "c");
+      await arrowToHandle(user, "c");
       await user.keyboard("{Enter}");
       await arrowTo(user, "Insert before Alpha");
       await endDrag(user, "{Enter}");
@@ -1076,7 +1094,7 @@ describe("NotesList reorder", () => {
         buildNote({ id: "c", title: "Charlie" }),
       ]);
 
-      await tabToHandle(user, "a");
+      await arrowToHandle(user, "a");
       await user.keyboard("{Enter}");
       await arrowTo(user, "Insert after Charlie", "{ArrowDown}");
       await endDrag(user, "{Enter}");
@@ -1096,7 +1114,7 @@ describe("NotesList reorder", () => {
         buildNote({ id: "c", title: "Charlie" }),
       ]);
 
-      await tabToHandle(user, "a");
+      await arrowToHandle(user, "a");
       await user.keyboard("{Enter}");
       await arrowTo(user, "Insert before Charlie", "{ArrowDown}");
       await endDrag(user, "{Enter}");
@@ -1115,7 +1133,7 @@ describe("NotesList reorder", () => {
         buildNote({ id: "b", title: "Bravo" }),
       ]);
 
-      await tabToHandle(user, "b");
+      await arrowToHandle(user, "b");
       await user.keyboard("{Enter}");
       // React Aria moves focus to the first drop target once the drag starts.
       await waitFor(() => expect(handleOf("b")).not.toHaveFocus());
@@ -1139,7 +1157,7 @@ describe("NotesList reorder", () => {
         buildNote({ id: "b", title: "Bravo" }),
       ]);
 
-      await tabToHandle(user, "b");
+      await arrowToHandle(user, "b");
       await user.keyboard("{Enter}");
       await arrowTo(user, "Insert before Alpha");
       await endDrag(user, "{Escape}");
@@ -1465,13 +1483,16 @@ describe("NotesList item menu", () => {
     expect(props.onReassignNoteBook).toHaveBeenCalledWith("a", "book-a");
   });
 
-  // jsdom applies no CSS: with a mouse the ⋯ button is display:none and Tab
-  // skips it, on touch the hover icons are; both sit in the row's tab order.
-  async function tabFromFirstRowTo(user: ReturnType<typeof userEvent.setup>, name: string) {
+  // jsdom applies no CSS: with a mouse the ⋯ button is display:none and arrows
+  // still reach it, on touch the hover icons are; both sit in the row's arrow
+  // order.
+  async function arrowFromFirstRowTo(user: ReturnType<typeof userEvent.setup>, name: string) {
     const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
     row.focus();
     const target = screen.getAllByRole("button", { name })[0];
-    for (let step = 0; step < 6 && document.activeElement !== target; step++) await user.tab();
+    for (let step = 0; step < 6 && document.activeElement !== target; step++) {
+      await user.keyboard("{ArrowRight}");
+    }
     expect(target).toHaveFocus();
     return row;
   }
@@ -1480,7 +1501,7 @@ describe("NotesList item menu", () => {
     const user = userEvent.setup();
     const props = renderMenuList();
 
-    const row = await tabFromFirstRowTo(user, "common.edit");
+    const row = await arrowFromFirstRowTo(user, "common.edit");
     const inRow = within(row);
     expect(inRow.getByRole("button", { name: "notes.duplicate" })).toBeInTheDocument();
     expect(inRow.getByRole("button", { name: "common.edit" }).parentElement).toHaveClass(
@@ -1497,11 +1518,11 @@ describe("NotesList item menu", () => {
     expect(props.onDeleteNote).not.toHaveBeenCalled();
   });
 
-  it("reaches the ⋯ button from its row with Tab and opens it with Enter", async () => {
+  it("reaches the ⋯ button from its row with an arrow key and opens it with Enter", async () => {
     const user = userEvent.setup();
     renderMenuList();
 
-    await tabFromFirstRowTo(user, "common.moreActionsFor");
+    await arrowFromFirstRowTo(user, "common.moreActionsFor");
     await user.keyboard("{Enter}");
 
     expect(await screen.findByRole("menu")).toBeInTheDocument();
@@ -1530,7 +1551,7 @@ describe("NotesList item menu", () => {
     const user = userEvent.setup();
     renderMenuList();
 
-    const row = await tabFromFirstRowTo(user, "common.moreActionsFor");
+    const row = await arrowFromFirstRowTo(user, "common.moreActionsFor");
     await user.keyboard("{Enter}");
     await screen.findByRole("menu");
     await user.keyboard("{Escape}");

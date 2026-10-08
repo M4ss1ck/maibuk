@@ -131,6 +131,9 @@ describe("NotesGallery", () => {
     const user = userEvent.setup();
     render(<NotesGallery />);
 
+    expect(screen.getByRole("grid", { name: "notes.collectionLabel" })).toHaveAttribute(
+      "data-focus-pane-entry"
+    );
     expect(document.body).toHaveFocus();
     await user.keyboard("{ArrowDown}");
 

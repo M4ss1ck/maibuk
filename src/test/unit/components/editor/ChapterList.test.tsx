@@ -208,6 +208,14 @@ async function tabToControl(user: ReturnType<typeof userEvent.setup>, control: H
   expect(control).toHaveFocus();
 }
 
+/** Arrow from a focused row into its nested controls. */
+async function arrowToControl(user: ReturnType<typeof userEvent.setup>, control: HTMLElement) {
+  for (let index = 0; index < 10 && document.activeElement !== control; index++) {
+    await user.keyboard("{ArrowRight}");
+  }
+  expect(control).toHaveFocus();
+}
+
 /**
  * The delete confirmation focuses No one frame after it opens. A Tab pressed
  * before that frame can land after it and move focus off No, so wait first.
@@ -513,6 +521,8 @@ describe("ChapterList", () => {
       const chapters = [buildChapter({ id: "ch-1", title: "A very long chapter title", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id });
 
+      expect(screen.getByRole("grid")).toHaveAttribute("data-focus-pane-entry");
+
       const title = screen.getByText("A very long chapter title");
       const actions = screen.getByRole("button", { name: "chapters.editChapter" }).parentElement;
 
@@ -536,8 +546,8 @@ describe("ChapterList", () => {
       );
     });
 
-    it("Tab reaches drag handle, edit, delete, item menu, and outline controls", async () => {
-      // jsdom applies no CSS; in the app Tab skips whichever set is display:none.
+    it("arrows reach drag handle, edit, delete, item menu, and outline controls", async () => {
+      // jsdom applies no CSS; in the app whichever set is display:none is skipped.
       const user = userEvent.setup();
       const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
       renderCL({ chapters, currentChapterId: chapters[0].id, editor: { state: {} } });
@@ -552,7 +562,7 @@ describe("ChapterList", () => {
         "common.moreActionsFor",
         "toc.showOutline",
       ]) {
-        await user.tab();
+        await user.keyboard("{ArrowRight}");
         expect(screen.getByRole("button", { name })).toHaveFocus();
       }
     });
@@ -605,7 +615,7 @@ describe("ChapterList", () => {
       // React Aria's GridList takes focus back to the row the menu belongs to.
       const row = screen.getByRole("row", { name: "First" });
       await waitFor(() => expect(row.contains(document.activeElement)).toBe(true));
-      await tabToControl(user, trigger);
+      await arrowToControl(user, trigger);
     });
   });
 
@@ -1350,49 +1360,49 @@ describe("nested row controls by keyboard", () => {
     useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
   });
 
-  async function tabToButton(
+  async function arrowToButton(
     user: ReturnType<typeof userEvent.setup>,
     row: HTMLElement,
     target: HTMLElement
   ) {
     row.focus();
     for (let index = 0; index < 12 && document.activeElement !== target; index++) {
-      await user.tab();
+      await user.keyboard("{ArrowRight}");
     }
     expect(target).toHaveFocus();
   }
 
-  it.each(["{Enter}", " "])(
-    "%s on a chapter row's Edit button edits, never selects the chapter",
-    async (key) => {
-      const user = userEvent.setup();
-      const onSelect = vi.fn();
-      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
-      renderCL({ chapters, currentChapterId: chapters[0].id, onSelectChapter: onSelect });
-      const row = screen.getAllByRole("row")[0];
-      const edit = screen.getByRole("button", { name: "chapters.editChapter" });
-      await tabToButton(user, row, edit);
-      await user.keyboard(key);
-      expect(await screen.findByDisplayValue("First")).toBeInTheDocument();
-      expect(onSelect).not.toHaveBeenCalled();
-    }
-  );
+  it.each([
+    "{Enter}",
+    " ",
+  ])("%s on a chapter row's Edit button edits, never selects the chapter", async (key) => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+    renderCL({ chapters, currentChapterId: chapters[0].id, onSelectChapter: onSelect });
+    const row = screen.getAllByRole("row")[0];
+    const edit = screen.getByRole("button", { name: "chapters.editChapter" });
+    await arrowToButton(user, row, edit);
+    await user.keyboard(key);
+    expect(await screen.findByDisplayValue("First")).toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 
-  it.each(["{Enter}", " "])(
-    "%s on a chapter row's Delete button asks to delete, never selects the chapter",
-    async (key) => {
-      const user = userEvent.setup();
-      const onSelect = vi.fn();
-      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
-      renderCL({ chapters, currentChapterId: chapters[0].id, onSelectChapter: onSelect });
-      const row = screen.getAllByRole("row")[0];
-      const del = screen.getByRole("button", { name: "chapters.deleteChapter" });
-      await tabToButton(user, row, del);
-      await user.keyboard(key);
-      expect(await screen.findByText("common.deleteConfirm")).toBeInTheDocument();
-      expect(onSelect).not.toHaveBeenCalled();
-    }
-  );
+  it.each([
+    "{Enter}",
+    " ",
+  ])("%s on a chapter row's Delete button asks to delete, never selects the chapter", async (key) => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+    renderCL({ chapters, currentChapterId: chapters[0].id, onSelectChapter: onSelect });
+    const row = screen.getAllByRole("row")[0];
+    const del = screen.getByRole("button", { name: "chapters.deleteChapter" });
+    await arrowToButton(user, row, del);
+    await user.keyboard(key);
+    expect(await screen.findByText("common.deleteConfirm")).toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });
 
 afterEach(() => vi.restoreAllMocks());

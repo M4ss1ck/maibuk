@@ -285,7 +285,8 @@ export function NotesList({
   const gridRef = useRef<HTMLDivElement>(null);
   const [dropTargetDelegate] = useState(() => new SectionedDropTargetDelegate(gridRef));
   const dragHandlers = useParkSelectionWhileDragging({
-    onDragStart: (e: { keys: Set<string | number> }) => setDraggedId(String([...e.keys][0] ?? "") || null),
+    onDragStart: (e: { keys: Set<string | number> }) =>
+      setDraggedId(String([...e.keys][0] ?? "") || null),
     onDragEnd: () => {
       setDraggedId(null);
       setDropTarget(null);
@@ -496,7 +497,6 @@ export function NotesList({
   const renderTreeNotes = (notes: NoteWithBook[], label: string) => (
     <GridList
       aria-label={label}
-      keyboardNavigationBehavior="tab"
       selectedKeys={currentNoteId ? [currentNoteId] : []}
       selectionMode="single"
       selectionBehavior="replace"
@@ -768,7 +768,7 @@ export function NotesList({
             <GridList
               ref={gridRef}
               aria-label={t("notes.title")}
-              keyboardNavigationBehavior="tab"
+              data-focus-pane-entry=""
               dependencies={[
                 currentNoteId,
                 draggedId,

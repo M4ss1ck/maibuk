@@ -90,6 +90,7 @@ export function CanvasGallery() {
       ) : (
         <GridList
           aria-label={t("canvas.collectionLabel")}
+          data-focus-pane-entry=""
           items={filteredCanvases}
           layout="grid"
           selectionMode="none"

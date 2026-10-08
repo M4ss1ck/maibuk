@@ -513,6 +513,7 @@ export function NotesGallery() {
           ref={gridRef}
           data-tutorial="notes.gallery"
           aria-label={t("notes.collectionLabel")}
+          data-focus-pane-entry=""
           items={filteredNotes}
           layout="grid"
           selectionMode="none"

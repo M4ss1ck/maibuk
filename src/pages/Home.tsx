@@ -391,6 +391,7 @@ export function Home() {
             <GridList
               ref={gridRef}
               aria-label={t("books.collectionLabel")}
+              data-focus-pane-entry=""
               items={visibleBooks}
               layout="grid"
               selectionMode="none"

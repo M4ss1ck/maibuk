@@ -235,7 +235,6 @@ export function FootnoteGrid<Item extends FootnoteGridItem>({
       <GridList
         ref={gridRef}
         aria-label={label}
-        keyboardNavigationBehavior="tab"
         onAction={(key) => {
           const item = byKey.get(String(key));
           if (item) onGoTo(item);

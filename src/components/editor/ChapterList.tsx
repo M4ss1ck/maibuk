@@ -500,7 +500,7 @@ export function ChapterList({
         <GridList
           key={chapters.length === 0 ? "empty" : "populated"}
           aria-label={t("chapters.title")}
-          keyboardNavigationBehavior="tab"
+          data-focus-pane-entry=""
           items={chapters}
           dependencies={[
             currentChapterId,
@@ -612,6 +612,9 @@ export function ChapterList({
                           className="w-full px-2 py-1 text-sm border border-border rounded mb-2 bg-background text-foreground"
                           autoFocus
                           onKeyDown={(e) => {
+                            // The field keeps its keys: the list's typeahead
+                            // would otherwise swallow a space typed after a letter.
+                            e.stopPropagation();
                             if (e.key === "Enter") handleUpdate();
                             if (e.key === "Escape") cancelEditing();
                           }}

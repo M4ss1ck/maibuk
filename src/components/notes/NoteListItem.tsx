@@ -165,7 +165,18 @@ export function NoteListItem({
     menuAnchorRef.current?.closest<HTMLElement>('[role="row"]')?.focus();
   }, [isEditing]);
 
+  // The row is one Tab stop and its buttons are reached with arrows (ADR 0025).
+  // With React Aria's default "arrow" navigation the row's onAction fires for an
+  // Enter or Space that bubbles out of a native button, and usePress cancels the
+  // button's own click; stopping the key here keeps each button acting on its own.
+  const keepRowFromActing = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+  };
+
   const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    // The field keeps its keys: the list's typeahead would otherwise swallow
+    // a space typed after a letter.
+    event.stopPropagation();
     if (event.key === "Enter" || event.key === "Escape") refocusRowAfterEdit.current = true;
     if (event.key === "Enter") {
       event.preventDefault();
@@ -221,6 +232,7 @@ export function NoteListItem({
                 <Tooltip content={t("common.edit")}>
                   <button
                     type="button"
+                    onKeyDown={keepRowFromActing}
                     onClick={(event) => {
                       event.stopPropagation();
                       setDraftTitle(note.title);
@@ -237,6 +249,7 @@ export function NoteListItem({
                 <Tooltip content={t("notes.duplicate")}>
                   <button
                     type="button"
+                    onKeyDown={keepRowFromActing}
                     onClick={(event) => {
                       event.stopPropagation();
                       onDuplicate(note);
@@ -252,6 +265,7 @@ export function NoteListItem({
                 <Tooltip content={t("common.delete")}>
                   <button
                     type="button"
+                    onKeyDown={keepRowFromActing}
                     onClick={(event) => {
                       event.stopPropagation();
                       onDelete(note.id);

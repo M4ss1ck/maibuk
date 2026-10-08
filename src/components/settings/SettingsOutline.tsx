@@ -177,6 +177,7 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
           />
           <Tree
             aria-label={t("settings.outline.label")}
+            data-focus-pane-entry=""
             expandedKeys={expandedKeys}
             onExpandedChange={onExpandedChange}
             onAction={onAction}
