@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, History } from "lucide-react";
+import { Button as AriaButton, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { Tooltip } from "@/components/ui";
 
 interface HistoryMenuButtonProps {
@@ -18,158 +19,60 @@ export function HistoryMenuButton({
 }: HistoryMenuButtonProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const saveItemRef = useRef<HTMLButtonElement>(null);
-  const historyItemRef = useRef<HTMLButtonElement>(null);
-
-  const menuItems = [saveItemRef, historyItemRef];
-
-  useEffect(() => {
-    if (!menuOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (target instanceof Node && rootRef.current?.contains(target)) {
-        return;
-      }
-      setMenuOpen(false);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeMenuRestoreFocus();
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown, true);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [menuOpen]);
-
-  const closeMenuRestoreFocus = () => {
-    setMenuOpen(false);
-    triggerRef.current?.focus();
-  };
-
-  const focusMenuItem = (index: number) => {
-    menuItems[index]?.current?.focus();
-  };
-
-  const openMenu = () => {
-    setMenuOpen(true);
-  };
-
-  const openMenuAndFocusFirst = () => {
-    openMenu();
-    window.requestAnimationFrame(() => focusMenuItem(0));
-  };
-
-  const runSave = () => {
-    onSaveVersion();
-    setMenuOpen(false);
-  };
-
-  const runOpen = () => {
-    onOpenPanel();
-    setMenuOpen(false);
-  };
-
-  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    const currentIndex = menuItems.findIndex((item) => item.current === event.currentTarget);
-
-    switch (event.key) {
-      case "ArrowDown":
-        event.preventDefault();
-        focusMenuItem((currentIndex + 1) % menuItems.length);
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        focusMenuItem((currentIndex - 1 + menuItems.length) % menuItems.length);
-        break;
-      case "Escape":
-        event.preventDefault();
-        closeMenuRestoreFocus();
-        break;
-    }
-  };
-
-  const handleButtonKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      openMenuAndFocusFirst();
-    }
-  };
 
   return (
-    <div
-      ref={rootRef}
-      className="relative inline-flex items-center rounded-lg border border-border bg-card"
-    >
+    <div className="relative inline-flex items-center rounded-lg border border-border bg-card">
       <Tooltip content={t("versions.title")} shortcut="bookEditor.versionHistory">
         <button
           type="button"
           onClick={onOpenPanel}
-          onKeyDown={handleButtonKeyDown}
           className="inline-flex h-9 w-9 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label={t("versions.openHistory")}
         >
           <History className="h-4 w-4" />
         </button>
       </Tooltip>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setMenuOpen((open) => !open)}
-        onKeyDown={handleButtonKeyDown}
-        className="inline-flex h-9 w-7 items-center justify-center rounded-r-lg border-l border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        aria-label={t("common.more")}
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-      >
-        <ChevronDown className="h-3.5 w-3.5" />
-      </button>
-
-      {menuOpen && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-50 mt-1 min-w-56 rounded-lg border border-border bg-background p-1 shadow-lg"
+      <MenuTrigger isOpen={menuOpen} onOpenChange={setMenuOpen}>
+        <AriaButton
+          className="inline-flex h-9 w-7 items-center justify-center rounded-r-lg border-l border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          aria-label={t("common.more")}
         >
-          <div role="none">
-            <button
-              ref={saveItemRef}
-              type="button"
-              role="menuitem"
-              onClick={runSave}
-              onKeyDown={handleMenuKeyDown}
-              className="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted focus:bg-muted focus-visible:outline-none"
+          <ChevronDown className="h-3.5 w-3.5" />
+        </AriaButton>
+        <Popover
+          placement="bottom end"
+          className="z-50 mt-1 min-w-56 rounded-lg border border-border bg-card py-1 shadow-lg focus:outline-none"
+        >
+          <Menu
+            aria-label={t("versions.title")}
+            onAction={(key) => (key === "save" ? onSaveVersion() : onOpenPanel())}
+            className="outline-none"
+          >
+            <MenuItem
+              id="save"
+              data-command="bookEditor.saveVersion"
+              textValue={t("versions.saveVersion")}
+              className="flex w-full cursor-pointer items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm text-foreground outline-none data-focused:bg-muted"
             >
               <span>{t("versions.saveVersion")}</span>
               <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                 {saveVersionShortcut}
               </kbd>
-            </button>
-          </div>
-          <div role="none">
-            <button
-              ref={historyItemRef}
-              type="button"
-              role="menuitem"
-              onClick={runOpen}
-              onKeyDown={handleMenuKeyDown}
-              className="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted focus:bg-muted focus-visible:outline-none"
+            </MenuItem>
+            <MenuItem
+              id="history"
+              data-command="bookEditor.versionHistory"
+              textValue={t("versions.showHistory")}
+              className="flex w-full cursor-pointer items-center justify-between gap-3 rounded px-3 py-2 text-left text-sm text-foreground outline-none data-focused:bg-muted"
             >
               <span>{t("versions.showHistory")}</span>
               <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                 {panelShortcut}
               </kbd>
-            </button>
-          </div>
-        </div>
-      )}
+            </MenuItem>
+          </Menu>
+        </Popover>
+      </MenuTrigger>
     </div>
   );
 }
