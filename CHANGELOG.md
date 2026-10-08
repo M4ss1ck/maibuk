@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.4] - 2026-10-08
+
+### Added
+- Dictation Bar size options (Hidden, Compact, Full) and a collapse caret that shrinks it to the microphone; Full remains the default
+- Keyboard arrow navigation between widgets and panes, including position-based movement, edge exits, F6 pane entry, and a visible pane focus frame
+- Keyboard-operable resize handles for every panel, with arrow-key resizing, spoken width, and touch dragging
+
+### Changed
+- Lists and card grids are now one Tab stop, with row or card buttons reached by arrow keys and edge exits
+- Panel resize handles now update panel width live during pointer drag without re-rendering the whole screen
+- Large list and gallery arrow navigation now avoids full row or card checks, keeping movement responsive
+
+### Fixed
+- Dictation bar settings button now opens the Dictation section instead of landing on the Editor section
+- Pane focus ring now hides when typing, using the pointer, or pressing Escape until keyboard focus moves again
+- Escape on a focused resize handle now returns focus to the previous control instead of falling through
+- Notes list date groups now sort by most recently edited first
+- Arrow navigation keeps outline headings inside their Chapter row, lets Left leave an open Settings section, and lands in the editor text instead of the font size control
+
 ## [0.10.3] - 2026-10-03
 
 ### Changed
