@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
+import { installPaneMemory } from "@/lib/arrow-navigation/panes";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -37,6 +38,20 @@ function Harness({
         onResize?.(width);
       }}
     />
+  );
+}
+
+/** The handle inside the Pane it resizes, the way every screen places it. */
+function PaneHarness() {
+  return (
+    <>
+      <button type="button">Outside</button>
+      <section data-focus-pane="panel" tabIndex={-1} aria-label="Panel">
+        <button type="button">First</button>
+        <button type="button">Second</button>
+        <Harness side="right" />
+      </section>
+    </>
   );
 }
 
@@ -166,5 +181,83 @@ describe("ResizeHandle", () => {
     expect(onResize).toHaveBeenLastCalledWith(330);
 
     fireEvent.pointerUp(document);
+  });
+
+  describe("Escape", () => {
+    let uninstall: (() => void) | undefined;
+    afterEach(() => {
+      uninstall?.();
+      uninstall = undefined;
+    });
+
+    it("returns focus to the panel control used before the handle, keeping the width", async () => {
+      const user = userEvent.setup();
+      render(<PaneHarness />);
+
+      screen.getByRole("button", { name: "Second" }).focus();
+      await user.tab();
+      const handle = getHandle();
+      expect(handle).toHaveFocus();
+      await user.keyboard("{ArrowRight}");
+
+      await user.keyboard("{Escape}");
+      expect(screen.getByRole("button", { name: "Second" })).toHaveFocus();
+      expect(handle).toHaveAttribute("aria-valuenow", "296");
+    });
+
+    it("lands in the panel it resizes when focus arrived from outside the panel", async () => {
+      const user = userEvent.setup();
+      uninstall = installPaneMemory();
+      render(<PaneHarness />);
+
+      screen.getByRole("button", { name: "Outside" }).focus();
+      // F6 or a Tutorial step can land on the handle from another Pane, and
+      // Pane memory then names the handle as the Pane's last used control.
+      getHandle().focus();
+
+      await user.keyboard("{Escape}");
+      expect(screen.getByRole("button", { name: "First" })).toHaveFocus();
+    });
+
+    it("keeps the Escape it handles from the panel around it", async () => {
+      const user = userEvent.setup();
+      const onPanelEscape = vi.fn();
+      render(
+        <section
+          data-focus-pane="panel"
+          tabIndex={-1}
+          aria-label="Panel"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") onPanelEscape();
+          }}
+        >
+          <button type="button">First</button>
+          <Harness side="left" />
+        </section>
+      );
+
+      await user.tab();
+      await user.tab();
+      await user.keyboard("{Escape}");
+      expect(screen.getByRole("button", { name: "First" })).toHaveFocus();
+      expect(onPanelEscape).not.toHaveBeenCalled();
+
+      await user.keyboard("{Escape}");
+      expect(onPanelEscape).toHaveBeenCalledTimes(1);
+    });
+
+    it("lands in the panel when the control used before the handle is gone", async () => {
+      const user = userEvent.setup();
+      uninstall = installPaneMemory();
+      render(<PaneHarness />);
+
+      const second = screen.getByRole("button", { name: "Second" });
+      second.focus();
+      await user.tab();
+      second.remove();
+
+      await user.keyboard("{Escape}");
+      expect(screen.getByRole("button", { name: "First" })).toHaveFocus();
+    });
   });
 });

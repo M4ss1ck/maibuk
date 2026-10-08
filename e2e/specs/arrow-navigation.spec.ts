@@ -442,7 +442,10 @@ test.describe("leaving the Canvas gallery @wf:arrow-leave-canvas-gallery", () =>
   });
 });
 
-/** Tabs to a resize handle, presses Right twice, and checks the width grew and survives a reload. */
+/**
+ * Tabs to a resize handle, presses Right twice, checks the width grew, leaves
+ * with Escape into the list's Pane, and checks the width survives a reload.
+ */
 async function resizeByKeyboard(page: Page, name: string) {
   const handle = page.getByRole("separator", { name });
   await tabTo(page, handle, { max: 30 });
@@ -455,6 +458,15 @@ async function resizeByKeyboard(page: Page, name: string) {
     .toBeGreaterThan(before);
   const after = await handle.getAttribute("aria-valuenow");
 
+  // The handle keeps every arrow, so Escape is the way back into the list:
+  // onto a control in it, not the bare Pane frame.
+  const pane = handle.locator("xpath=ancestor::*[@data-focus-pane][1]");
+  await page.keyboard.press("Escape");
+  await expect(handle).not.toBeFocused();
+  await expectFocusWithin(pane);
+  await expect(page.locator("[data-focus-pane]:focus")).toHaveCount(0);
+  await expect(handle).toHaveAttribute("aria-valuenow", after ?? "");
+
   await page.reload();
   await expect(page.getByRole("separator", { name })).toHaveAttribute("aria-valuenow", after ?? "");
 }
@@ -462,7 +474,7 @@ async function resizeByKeyboard(page: Page, name: string) {
 test.describe("resizing the Notes list by keyboard @wf:resize-handles-keyboard", () => {
   test.use({ library: "notesWithLinksAndTags" });
 
-  test("the handle is a Tab stop, arrows widen the list, and the width survives a reload", async ({
+  test("the handle is a Tab stop, arrows widen the list, Escape leaves it, and the width survives a reload", async ({
     page,
   }) => {
     await openNote(page, SEED_NOTES.keeperLog);
@@ -484,7 +496,7 @@ test.describe("resizing the Notes list by keyboard @wf:resize-handles-keyboard",
 test.describe("resizing the Chapter list by keyboard @wf:resize-handles-keyboard", () => {
   test.use({ library: "oneBookThreeChapters" });
 
-  test("the handle is a Tab stop, arrows widen the list, and the width survives a reload", async ({
+  test("the handle is a Tab stop, arrows widen the list, Escape leaves it, and the width survives a reload", async ({
     page,
   }) => {
     await openBook(page);

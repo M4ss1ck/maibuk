@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { tabTo } from "../support/keyboard";
+import { expectFocusWithin, tabTo } from "../support/keyboard";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -103,7 +103,7 @@ test.describe("Book side panel tabs @wf:sidepanel-open-tabs", () => {
 });
 
 test.describe("Book side panel keyboard resize @wf:sidepanel-resize", () => {
-  test("arrows resize the panel from the separator and the width persists", async ({ page }) => {
+  test("arrows resize the panel from the separator, Escape leaves it, and the width persists", async ({ page }) => {
     await openPanel(page);
     const handle = resizeHandle(page);
 
@@ -121,6 +121,12 @@ test.describe("Book side panel keyboard resize @wf:sidepanel-resize", () => {
     await page.keyboard.press("ArrowRight");
     await expect(handle).toHaveAttribute("aria-valuenow", "240");
     await expect.poll(async () => (await panel(page).boundingBox())?.width).toBe(240);
+
+    // The first Escape leaves the separator for the panel; the panel stays open.
+    await page.keyboard.press("Escape");
+    await expect(handle).not.toBeFocused();
+    await expectFocusWithin(panel(page));
+    await expect(handle).toHaveAttribute("aria-valuenow", "240");
 
     await page.reload();
     await expect(panelTab(page, "Notes")).toBeFocused();

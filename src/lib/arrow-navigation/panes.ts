@@ -82,17 +82,21 @@ function tryFocus(el: HTMLElement | undefined, pane: HTMLElement): boolean {
  * Focuses where entering `pane` should land: the control last used there,
  * else the Pane's declared entry (`data-focus-pane-entry`), else its first
  * arrow stop that is not text entry, else its first tabbable, else the Pane.
+ * `except` is never a landing spot: a control leaving for its own Pane's
+ * content (a resize handle on Escape) passes itself.
  */
-export function landInPane(pane: HTMLElement): void {
-  if (tryFocus(lastFocused.get(pane), pane)) return;
+export function landInPane(pane: HTMLElement, except?: HTMLElement): void {
+  const allowed = (candidate: Element) => candidate !== except && isOwnedBy(candidate, pane);
+  const last = lastFocused.get(pane);
+  if (last !== except && tryFocus(last, pane)) return;
   const entry = [...pane.querySelectorAll<HTMLElement>("[data-focus-pane-entry]")].find(
-    (candidate) => isOwnedBy(candidate, pane) && !isOutsideLayer(candidate)
+    (candidate) => allowed(candidate) && !isOutsideLayer(candidate)
   );
   if (entry) {
     landOn(entry);
     return;
   }
-  const stop = stopsIn(pane).find((candidate) => isOwnedBy(candidate, pane));
+  const stop = stopsIn(pane).find(allowed);
   if (stop) {
     landOn(stop);
     return;
@@ -100,7 +104,7 @@ export function landInPane(pane: HTMLElement): void {
   const walker = getFocusableTreeWalker(pane, { tabbable: true });
   walker.currentNode = pane;
   let first = walker.nextNode();
-  while (first && !isOwnedBy(first as Element, pane)) first = walker.nextNode();
+  while (first && !allowed(first as Element)) first = walker.nextNode();
   (first instanceof HTMLElement ? first : pane).focus();
 }
 
