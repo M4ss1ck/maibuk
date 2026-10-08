@@ -4,6 +4,7 @@
 // (useGridListItem, useToolbar); the integration test runs real React Aria
 // widgets, so an upgrade that changes their keys fails there.
 import { getFocusableTreeWalker } from "react-aria/private/focus/FocusScope";
+import { isTabbable } from "react-aria/private/utils/isFocusable";
 import { isOutsideLayer } from "@/lib/top-layer";
 import { type Direction, pickInDirection } from "./geometry";
 
@@ -208,22 +209,75 @@ function gridOutcome(el: HTMLElement, widget: Element, key: ArrowKey): ArrowOutc
   return to ? { kind: "move", to } : { kind: "edge" };
 }
 
+// Every element React Aria's tabbable selector can match, before its
+// visibility and inert checks: a superset.
+const TABBABLE_CANDIDATE =
+  "input, select, textarea, button, a[href], area[href], summary, iframe, object, embed, audio[controls], video[controls], [contenteditable], permission, [tabindex]";
+
+function isStopNode(node: Element): boolean {
+  return isTabbable(node) && !isOutsideLayer(node) && !ownsArrows(node);
+}
+
+/**
+ * The first element in `widget` that makes it an arrow stop, skipping
+ * nested composite widgets. A list's first row button usually qualifies, so
+ * the walk ends within a row or two.
+ */
+function firstStopNode(widget: Element): Element | null {
+  const walker = document.createTreeWalker(widget, NodeFilter.SHOW_ELEMENT, {
+    acceptNode: (node) =>
+      (node as Element).matches(COMPOSITE)
+        ? NodeFilter.FILTER_REJECT
+        : (node as Element).matches(TABBABLE_CANDIDATE)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_SKIP,
+  });
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (isStopNode(node as Element)) return node as Element;
+  }
+  return null;
+}
+
 /**
  * The arrow stops inside `scope`: its tabbable elements, one per composite
  * widget (the widget element stands for all its items), minus arrow owners
  * and anything outside the current layer.
+ *
+ * A widget's subtree is never walked past its first tabbable item: a list
+ * of 500 Notes holds 21,000 elements and 3,000 row buttons, and checking
+ * each (React Aria's check reads computed styles) cost 70 ms per arrow. Only
+ * a toolbar nests inside another widget (the Chapter outline in its row), so
+ * only toolbars are looked up inside one. Arrow owners' subtrees (the editor
+ * text) are skipped whole.
  */
 export function stopsIn(scope: Element): Element[] {
-  const stops: Element[] = [];
-  const seen = new Set<Element>();
-  for (const node of focusablesIn(scope, true)) {
-    if (isOutsideLayer(node) || ownsArrows(node)) continue;
-    const stop = widgetOf(node);
-    if (seen.has(stop)) continue;
-    seen.add(stop);
-    stops.push(stop);
-  }
-  return stops;
+  const found: { stop: Element; at: Element }[] = [];
+  const walker = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT, {
+    acceptNode(node) {
+      const el = node as Element;
+      if (el.matches(COMPOSITE)) {
+        // An empty list is itself the Tab stop.
+        const own = isStopNode(el) ? el : firstStopNode(el);
+        if (own) found.push({ stop: el, at: own });
+        for (const toolbar of el.querySelectorAll('[role="toolbar"]')) {
+          const at = firstStopNode(toolbar);
+          if (at) found.push({ stop: toolbar, at });
+        }
+        return NodeFilter.FILTER_REJECT;
+      }
+      if (el.matches(TABBABLE_CANDIDATE)) {
+        if (isTextEntry(el)) return NodeFilter.FILTER_REJECT;
+        if (isStopNode(el)) found.push({ stop: el, at: el });
+      }
+      return NodeFilter.FILTER_SKIP;
+    },
+  });
+  walker.nextNode();
+  // Document order of each stop's first tabbable item, as a Tab walk meets them.
+  found.sort((a, b) =>
+    a.at.compareDocumentPosition(b.at) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+  );
+  return found.map(({ stop }) => stop);
 }
 
 /**

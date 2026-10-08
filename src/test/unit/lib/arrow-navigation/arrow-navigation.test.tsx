@@ -505,6 +505,81 @@ describe("arrow navigation (ADR 0025)", () => {
     expect(rectReads).toBe(0);
   });
 
+  it("checks a long list's visibility once, not once per row button, when an arrow leaves it", async () => {
+    const user = userEvent.setup();
+    const ids = Array.from({ length: 200 }, (_, i) => `n${i}`);
+    render(
+      <main>
+        <section data-focus-pane="list" tabIndex={-1} aria-label="List" data-rect="0 0 300 800">
+          <GridList aria-label="Notes" data-rect="0 0 300 800">
+            {ids.map((id, i) => (
+              <GridListItem key={id} id={id} textValue={id} data-rect={`0 ${i} 300 ${i + 1}`}>
+                {id}
+                <Button aria-label={`Edit ${id}`} />
+                <Button aria-label={`Delete ${id}`} />
+              </GridListItem>
+            ))}
+          </GridList>
+        </section>
+        <section
+          data-focus-pane="editor"
+          tabIndex={-1}
+          aria-label="Editor"
+          data-rect="300 0 1000 800"
+        >
+          <button type="button" data-rect="310 5 340 35">
+            Bold
+          </button>
+        </section>
+      </main>
+    );
+    act(() => button("Delete n0").focus());
+    // The visibility check reads computed styles (jsdom has no checkVisibility).
+    let styleReads = 0;
+    const realStyle = window.getComputedStyle;
+    window.getComputedStyle = (...args) => {
+      if (new Error().stack?.includes("/src/lib/arrow-navigation/")) styleReads += 1;
+      return realStyle(...args);
+    };
+    try {
+      await user.keyboard("{ArrowRight}");
+    } finally {
+      window.getComputedStyle = realStyle;
+    }
+    expect(button("Bold")).toHaveFocus();
+    // Each check walks up a few ancestors; 400 row buttons would cost thousands.
+    expect(styleReads).toBeLessThan(100);
+  });
+
+  it("counts an empty list, which is itself the Tab stop, as an arrow stop", async () => {
+    const user = userEvent.setup();
+    render(
+      <main>
+        <section
+          data-focus-pane="editor"
+          tabIndex={-1}
+          aria-label="Editor"
+          data-rect="0 0 1000 800"
+        >
+          <button type="button" data-rect="10 5 40 35">
+            Bold
+          </button>
+          <GridList
+            aria-label="Notes"
+            data-rect="10 100 600 300"
+            renderEmptyState={() => "No notes"}
+          >
+            {[]}
+          </GridList>
+        </section>
+      </main>
+    );
+    act(() => button("Bold").focus());
+
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("grid", { name: "Notes" })).toHaveFocus();
+  });
+
   it("from nothing focused, Down lands on the main area's entry and Up on its last stop", async () => {
     const user = userEvent.setup();
     render(<NotesFixture />);
