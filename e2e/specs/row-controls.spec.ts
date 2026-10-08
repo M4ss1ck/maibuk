@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -277,7 +277,7 @@ test.describe("Version history row controls @wf:versions-preview", () => {
     await expect(page.getByRole("textbox", { name: /^Text of / })).toBeFocused();
     const chapters = page.getByRole("complementary", { name: "Chapter list" });
     for (let i = 0; i < 3; i++) {
-      if (await chapters.evaluate((el) => el.contains(document.activeElement))) break;
+      if (await isFocusWithin(chapters)) break;
       await page.keyboard.press("Escape");
     }
     await page.keyboard.press("g");
