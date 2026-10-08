@@ -156,7 +156,10 @@ export function arrowOutcome(el: HTMLElement, key: ArrowKey): ArrowOutcome {
     const expanded = row.getAttribute("aria-expanded");
     if (key === "ArrowRight") return expanded === "false" ? { kind: "inside" } : { kind: "edge" };
     const topLevel = (row.getAttribute("aria-level") ?? "1") === "1";
-    return expanded !== "true" && topLevel && row === el ? { kind: "edge" } : { kind: "inside" };
+    // A row its tree keeps open (the Settings section on screen) cannot
+    // collapse, so Left leaves from it as from a collapsed one.
+    const collapsible = expanded === "true" && !row.hasAttribute("data-keeps-open");
+    return !collapsible && topLevel && row === el ? { kind: "edge" } : { kind: "inside" };
   }
 
   // Grid lists and list boxes. Up/Down never leave a list or grid.

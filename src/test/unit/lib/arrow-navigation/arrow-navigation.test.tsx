@@ -1,6 +1,14 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Button, GridList, GridListItem, Toolbar } from "react-aria-components";
+import {
+  Button,
+  GridList,
+  GridListItem,
+  Toolbar,
+  Tree,
+  TreeItem,
+  TreeItemContent,
+} from "react-aria-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installArrowNavigation, keepTabInRowForm } from "@/lib/arrow-navigation";
 import { pressKey } from "@/lib/focus-commands";
@@ -413,6 +421,57 @@ describe("arrow navigation (ADR 0025)", () => {
       act(() => button("Chapter Type").focus());
       await user.tab({ shift: true });
       expect(onListKey).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // The Settings outline keeps the section on screen open: Left cannot
+  // collapse it, so Left leaves from it as from a collapsed section.
+  describe("a tree whose open section cannot collapse", () => {
+    function OutlineTree({ keepsOpen }: { keepsOpen: boolean }) {
+      return (
+        <main>
+          <section data-focus-pane="main" tabIndex={-1} aria-label="Main" data-rect="0 0 1000 800">
+            <button type="button" data-rect="10 10 200 40">
+              Light
+            </button>
+            <Tree
+              aria-label="Settings sections"
+              expandedKeys={new Set(["appearance"])}
+              data-rect="700 0 1000 300"
+            >
+              <TreeItem
+                id="appearance"
+                textValue="Appearance"
+                data-keeps-open={keepsOpen ? "" : undefined}
+                data-rect="700 0 1000 30"
+              >
+                <TreeItemContent>Appearance</TreeItemContent>
+                <TreeItem id="theme" textValue="Theme" data-rect="700 30 1000 60">
+                  <TreeItemContent>Theme</TreeItemContent>
+                </TreeItem>
+              </TreeItem>
+            </Tree>
+          </section>
+        </main>
+      );
+    }
+
+    it("leaves Left from the open top-level section it marks as kept open", async () => {
+      const user = userEvent.setup();
+      render(<OutlineTree keepsOpen />);
+      act(() => row("Appearance").focus());
+
+      await user.keyboard("{ArrowLeft}");
+      expect(button("Light")).toHaveFocus();
+    });
+
+    it("leaves an ordinary open section's Left to the tree, which collapses it", async () => {
+      const user = userEvent.setup();
+      render(<OutlineTree keepsOpen={false} />);
+      act(() => row("Appearance").focus());
+
+      await user.keyboard("{ArrowLeft}");
+      expect(row("Appearance")).toHaveFocus();
     });
   });
 
