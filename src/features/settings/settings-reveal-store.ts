@@ -1,8 +1,15 @@
 import { create } from "zustand";
 
+/**
+ * Where a revealed row lands: centered ("row", a Command Palette result), or
+ * with its section's heading at the top ("section", a link to a section).
+ */
+export type SettingsRowAlign = "row" | "section";
+
 interface SettingsRevealState {
   pendingRowId: string | null;
-  requestRow: (id: string) => void;
+  pendingAlign: SettingsRowAlign;
+  requestRow: (id: string, align?: SettingsRowAlign) => void;
   clearRow: () => void;
   advancedOpen: boolean;
   setAdvancedOpen: (open: boolean) => void;
@@ -18,8 +25,9 @@ interface SettingsRevealState {
  */
 export const useSettingsRevealStore = create<SettingsRevealState>()((set) => ({
   pendingRowId: null,
-  requestRow: (id) => set({ pendingRowId: id }),
-  clearRow: () => set({ pendingRowId: null }),
+  pendingAlign: "row",
+  requestRow: (id, align = "row") => set({ pendingRowId: id, pendingAlign: align }),
+  clearRow: () => set({ pendingRowId: null, pendingAlign: "row" }),
   advancedOpen: false,
   setAdvancedOpen: (open) => set({ advancedOpen: open }),
   pasteCleanupAdvancedOpen: false,

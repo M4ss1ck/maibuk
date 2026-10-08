@@ -312,6 +312,28 @@ describe("Settings rows", () => {
     }
   });
 
+  // A section link (the Dictation bar's settings button) puts the section's
+  // heading at the top, so the section above does not fill the screen.
+  it("jumps a section-aligned request to its section's heading", async () => {
+    const original = Element.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      renderSettings();
+      focusSettingsRow("theme", { align: "section" });
+      const group = screen.getByRole("group", { name: "settings.theme" });
+      await waitFor(() => expect(group.contains(document.activeElement)).toBe(true));
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView.mock.contexts[0]).toBe(
+        document.querySelector('[data-settings-section="appearance"]')
+      );
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "auto" });
+      expect(useSettingsRevealStore.getState()).toMatchObject({ pendingRowId: null, pendingAlign: "row" });
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it("re-renders no section to request a row", async () => {
     renderSettings();
     const group = screen.getByRole("group", { name: "settings.theme" });

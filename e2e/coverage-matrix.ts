@@ -2251,6 +2251,7 @@ export const ROWS: MatrixRow[] = [
       "Cycle Dictation language, bound in the Shortcut Editor, cycles the picker Auto -> en -> Auto and announces each step",
       "the bar keeps the same width across picker values",
       "with no model downloaded, Mod+Shift+Space shows the no-model hint and the mic leads to Settings",
+      "the settings button opens Settings with the Dictation heading at the top and its switch focused, even while the Backup list above loads",
       "WebKit shows no dictation control (not cross-origin isolated without credentialless)",
     ],
     terms: ["Dictation", "Dictation Session", "Dictation Language"],

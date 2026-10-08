@@ -7,6 +7,7 @@ import { installedDictationLanguages, setDictationLanguage } from "@/features/di
 import { getDictation } from "@/features/dictation/runtime";
 import { useDictationStore } from "@/features/dictation/store";
 import type { DictationLanguage } from "@/features/dictation/types";
+import { focusSettingsRow } from "@/features/settings/focus-row";
 import { useCommandHint } from "@/lib/command-keys";
 import type { FormattedShortcut } from "@/lib/shortcut-keys";
 
@@ -41,7 +42,10 @@ export function DictationControl() {
   const listening = snapshot.status === "listening" || snapshot.status === "stopping";
   const loading = snapshot.status === "loading";
   const noModel = languages.length === 0;
-  const openSettings = () => navigate("/settings#dictation");
+  const openSettings = () => {
+    focusSettingsRow("dictationEnabled", { align: "section" });
+    navigate("/settings");
+  };
 
   const label = noModel
     ? t("dictation.downloadModel")

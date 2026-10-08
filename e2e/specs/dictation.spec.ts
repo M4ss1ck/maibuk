@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { seedWebBackups } from "../support/storage";
 import { expect, test } from "../support/test";
 
 // Dictation (spec docs/plans/2026-09-27-voice-dictation-design.md). Chromium
@@ -63,6 +64,12 @@ async function openChapter(page: Page) {
 async function reachControl(page: Page, target: Locator) {
   await page.keyboard.press("Escape");
   await tabTo(page, target, { backwards: true, max: 120 });
+}
+
+/** Settings opened on Dictation: its heading on screen and its switch focused. */
+async function expectDictationSettingsShown(page: Page) {
+  await expect(page.getByRole("switch", { name: "Dictation" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Dictation", exact: true })).toBeInViewport();
 }
 
 /**
@@ -368,7 +375,25 @@ test.describe("@wf:dictation-toggle @wf:dictation-interpreter-stats @sc:dictatio
     await expect(mic).toBeVisible();
     await reachControl(page, mic);
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { name: "Dictation", exact: true })).toBeVisible();
+    await expectDictationSettingsShown(page);
+  });
+
+  // Regression: the bar's link scrolled before the Backup list above Dictation
+  // finished loading, so the list's growth left the page on the Editor section.
+  // Without Backups nothing grows, so the bug needs them seeded to show.
+  test("the bar's settings button lands on the Dictation section", async ({ page }) => {
+    await page.goto("/");
+    await seedWebBackups(page, 20);
+    await openChapter(page);
+
+    await reachControl(page, page.getByRole("button", { name: "Dictation settings" }));
+    await page.keyboard.press("Enter");
+    await expectDictationSettingsShown(page);
+    // The heading sits at the top of the screen, not under the Editor section.
+    const heading = await page.getByRole("heading", { name: "Dictation", exact: true }).boundingBox();
+    const viewport = page.viewportSize();
+    expect(heading && viewport && heading.y < viewport.height / 4).toBe(true);
+    await capture(page, "dictation-settings-from-bar");
   });
 });
 
