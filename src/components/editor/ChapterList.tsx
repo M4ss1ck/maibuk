@@ -755,11 +755,7 @@ export function ChapterList({
                     )
                   }
                 </ChapterItemGestures>
-                {isActive && editor && showChapterOutline && (
-                  <div className="list-none">
-                    <ChapterOutline editor={editor} />
-                  </div>
-                )}
+                {isActive && editor && showChapterOutline && <ChapterOutline editor={editor} />}
               </GridListItem>
             );
           }}

@@ -1,11 +1,13 @@
-import { afterEach, describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { GridList, GridListItem } from "react-aria-components";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { ChapterOutline } from "@/components/editor/ChapterOutline";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { installArrowNavigation } from "@/lib/arrow-navigation";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -82,6 +84,57 @@ describe("ChapterOutline", () => {
     // Clamps at the first heading.
     await user.keyboard("{ArrowUp}");
     expect(buttons[0]).toHaveFocus();
+  });
+
+  describe("inside a Chapter list row", () => {
+    // ChapterList renders the outline inside the active Chapter's row, where
+    // React Aria would send Up/Down from any child to the next row.
+    let uninstall: () => void;
+    beforeEach(() => {
+      uninstall = installArrowNavigation();
+    });
+    afterEach(() => uninstall());
+
+    function renderInRow() {
+      render(
+        <GridList aria-label="Chapters">
+          <GridListItem id="c1" textValue="Chapter 1">
+            Chapter 1
+            <ChapterOutline
+              editor={makeEditor([
+                { level: 1, text: "One" },
+                { level: 2, text: "Two" },
+              ])}
+            />
+          </GridListItem>
+          <GridListItem id="c2" textValue="Chapter 2">
+            Chapter 2
+          </GridListItem>
+        </GridList>
+      );
+    }
+
+    it("keeps Up and Down between headings, then Down moves on to the next Chapter", async () => {
+      const user = userEvent.setup();
+      renderInRow();
+      act(() => screen.getByRole("button", { name: "One" }).focus());
+
+      await user.keyboard("{ArrowDown}");
+      expect(screen.getByRole("button", { name: "Two" })).toHaveFocus();
+      await user.keyboard("{ArrowUp}");
+      expect(screen.getByRole("button", { name: "One" })).toHaveFocus();
+      await user.keyboard("{ArrowDown}{ArrowDown}");
+      expect(screen.getByRole("row", { name: "Chapter 2" })).toHaveFocus();
+    });
+
+    it("returns Up from the first heading to its Chapter", async () => {
+      const user = userEvent.setup();
+      renderInRow();
+      act(() => screen.getByRole("button", { name: "One" }).focus());
+
+      await user.keyboard("{ArrowUp}");
+      expect(screen.getByRole("row", { name: /Chapter 1/ })).toHaveFocus();
+    });
   });
 
   it("Enter on an outline item puts the caret at that heading in the editor", async () => {

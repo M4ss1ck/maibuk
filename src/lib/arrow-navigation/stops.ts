@@ -114,8 +114,10 @@ export type ArrowOutcome =
 /**
  * What an arrow does from `el` (ADR 0025 rule 3). "inside": the widget moves
  * focus itself, so the key is left alone. "edge": the arrow leaves the
- * widget. "move": a wrapped toolbar's Up/Down, which moves by position
- * inside it. Only the 2D grid and toolbar cross-axis cases read layout.
+ * widget. "move": the module moves focus inside the widget itself, by
+ * position for a wrapped toolbar's Up/Down and in DOM order for a vertical
+ * toolbar nested in a row. Only the 2D grid and toolbar cross-axis cases
+ * read layout.
  */
 export function arrowOutcome(el: HTMLElement, key: ArrowKey): ArrowOutcome {
   const widget = widgetOf(el);
@@ -126,7 +128,10 @@ export function arrowOutcome(el: HTMLElement, key: ArrowKey): ArrowOutcome {
   if (role === "radiogroup" || role === "menubar") return { kind: "inside" };
 
   if (role === "toolbar") {
-    if (vertical === (orientation(widget) === "vertical")) return { kind: "inside" };
+    if (vertical === (orientation(widget) === "vertical")) {
+      const row = vertical ? widget.parentElement?.closest('[role="row"]') : null;
+      return row instanceof HTMLElement ? nestedOutcome(el, widget, row, key) : { kind: "inside" };
+    }
     const items = focusablesIn(widget, false);
     const to = pickInDirection(
       el.getBoundingClientRect(),
@@ -167,6 +172,24 @@ export function arrowOutcome(el: HTMLElement, key: ArrowKey): ArrowOutcome {
   return children.length === 0 || children[children.length - 1] === el
     ? { kind: "edge" }
     : { kind: "inside" };
+}
+
+// A vertical toolbar inside a grid-list row (the Chapter outline). React
+// Aria's row capture handler sends Up/Down from anything in the row to the
+// next row, so the module moves between the toolbar's items itself. Up from
+// the first item returns to its own row; Down from the last is left to the
+// row, which moves on to the next one. DOM order only: no layout reads.
+function nestedOutcome(
+  el: HTMLElement,
+  widget: Element,
+  row: HTMLElement,
+  key: ArrowKey
+): ArrowOutcome {
+  const items = focusablesIn(widget, false);
+  const forward = key === "ArrowDown";
+  const to = items[items.indexOf(el) + (forward ? 1 : -1)];
+  if (to) return { kind: "move", to };
+  return forward ? { kind: "inside" } : { kind: "move", to: row };
 }
 
 // A 2D card grid moves Left/Right between cards by position and leaves at

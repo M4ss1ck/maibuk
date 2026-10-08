@@ -106,6 +106,47 @@ function GalleryFixture() {
   );
 }
 
+// The Chapter outline: a vertical toolbar of headings inside its Chapter's row.
+function OutlineFixture() {
+  return (
+    <main>
+      <section
+        data-focus-pane="chapters"
+        tabIndex={-1}
+        aria-label="Chapters"
+        data-rect="0 0 300 800"
+      >
+        <GridList aria-label="Chapter list" data-rect="0 0 300 300">
+          <GridListItem id="c1" textValue="Chapter 1" data-rect="0 0 300 120">
+            Chapter 1
+            <Toolbar aria-label="Outline" orientation="vertical" data-rect="0 30 300 90">
+              <button type="button" data-rect="0 30 300 60">
+                Heading A
+              </button>
+              <button type="button" data-rect="0 60 300 90">
+                Heading B
+              </button>
+            </Toolbar>
+          </GridListItem>
+          <GridListItem id="c2" textValue="Chapter 2" data-rect="0 120 300 150">
+            Chapter 2
+          </GridListItem>
+        </GridList>
+      </section>
+      <section
+        data-focus-pane="editor"
+        tabIndex={-1}
+        aria-label="Editor"
+        data-rect="300 0 1000 800"
+      >
+        <button type="button" data-rect="310 10 400 40">
+          Editor action
+        </button>
+      </section>
+    </main>
+  );
+}
+
 const row = (name: string) => screen.getByRole("row", { name });
 const button = (name: string) => screen.getByRole("button", { name });
 
@@ -282,6 +323,49 @@ describe("arrow navigation (ADR 0025)", () => {
       expect(row("Card 3")).toHaveFocus();
       await user.keyboard("{ArrowUp}");
       expect(row("Card 1")).toHaveFocus();
+    });
+  });
+
+  describe("a vertical widget inside a list row (the Chapter outline)", () => {
+    it("moves Down and Up between its items with no layout reads", async () => {
+      const user = userEvent.setup();
+      render(<OutlineFixture />);
+      act(() => button("Heading A").focus());
+      rectReads = 0;
+
+      // React Aria's row would send Down to Chapter 2; the outline keeps it.
+      await user.keyboard("{ArrowDown}");
+      expect(button("Heading B")).toHaveFocus();
+      await user.keyboard("{ArrowUp}");
+      expect(button("Heading A")).toHaveFocus();
+      expect(rectReads).toBe(0);
+    });
+
+    it("returns Up from its first item to its own row", async () => {
+      const user = userEvent.setup();
+      render(<OutlineFixture />);
+      act(() => button("Heading A").focus());
+
+      await user.keyboard("{ArrowUp}");
+      expect(row("Chapter 1")).toHaveFocus();
+    });
+
+    it("moves Down from its last item on to the next row", async () => {
+      const user = userEvent.setup();
+      render(<OutlineFixture />);
+      act(() => button("Heading B").focus());
+
+      await user.keyboard("{ArrowDown}");
+      expect(row("Chapter 2")).toHaveFocus();
+    });
+
+    it("leaves Right to the Pane beside it", async () => {
+      const user = userEvent.setup();
+      render(<OutlineFixture />);
+      act(() => button("Heading A").focus());
+
+      await user.keyboard("{ArrowRight}");
+      expect(button("Editor action")).toHaveFocus();
     });
   });
 

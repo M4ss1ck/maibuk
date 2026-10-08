@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/core";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Toolbar } from "react-aria-components";
 import { Tooltip } from "@/components/ui";
 
 interface OutlineItem {
@@ -51,7 +52,6 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
   const { t } = useTranslation();
   const [items, setItems] = useState<OutlineItem[]>(() => buildOutline(editor));
   const [activePos, setActivePos] = useState<number | null>(() => findActivePos(editor));
-  const listRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     const updateItems = () => setItems(buildOutline(editor));
@@ -73,24 +73,6 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
 
   if (items.length === 0) return null;
 
-  // Move focus between heading buttons with the arrow keys instead of letting
-  // the browser scroll the list container.
-  const handleArrowKeys = (event: KeyboardEvent<HTMLUListElement>) => {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    const buttons = Array.from(
-      listRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []
-    );
-    if (buttons.length === 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    const next =
-      event.key === "ArrowDown"
-        ? Math.min(current + 1, buttons.length - 1)
-        : Math.max((current < 0 ? buttons.length : current) - 1, 0);
-    buttons[next]?.focus();
-  };
-
   const navigate = (pos: number) => {
     const dom = editor.view.nodeDOM(pos);
     const el = dom instanceof HTMLElement ? dom : (dom?.parentElement ?? null);
@@ -104,48 +86,48 @@ export function ChapterOutline({ editor }: ChapterOutlineProps) {
   };
 
   return (
-    <ul ref={listRef} className="py-1 pr-2" onKeyDown={handleArrowKeys}>
+    // A vertical toolbar: React Aria moves Up/Down between headings, and the
+    // arrow-navigation module keeps them inside it when it sits in a Chapter
+    // list row (ADR 0025).
+    <Toolbar orientation="vertical" aria-label={t("toc.outline")} className="py-1 pr-2">
       {items.map((item) => {
         const isActive = activePos === item.pos;
         if (item.type === "sceneBreak") {
           return (
-            <li key={item.pos}>
-              <Tooltip content={t("toc.sceneBreak")}>
-                <button
-                  type="button"
-                  onClick={() => navigate(item.pos)}
-                  style={{ paddingLeft: "1.75rem" }}
-                  className={`w-full text-left py-0.5 rounded text-xs italic tracking-widest transition-colors ${
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground/70 hover:bg-muted/50"
-                  }`}
-                >
-                  * * *
-                </button>
-              </Tooltip>
-            </li>
+            <Tooltip key={item.pos} content={t("toc.sceneBreak")}>
+              <button
+                type="button"
+                onClick={() => navigate(item.pos)}
+                style={{ paddingLeft: "1.75rem" }}
+                className={`w-full text-left py-0.5 rounded text-xs italic tracking-widest transition-colors ${
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground/70 hover:bg-muted/50"
+                }`}
+              >
+                * * *
+              </button>
+            </Tooltip>
           );
         }
         return (
-          <li key={item.pos}>
-            <button
-              type="button"
-              onClick={() => navigate(item.pos)}
-              style={{ paddingLeft: `${1.75 + (item.level - 1) * 0.75}rem` }}
-              className={`block w-full text-left py-0.5 pr-1 rounded text-xs truncate transition-colors ${
-                isActive
-                  ? "bg-primary/10 text-primary font-medium"
-                  : item.level === 1
-                    ? "text-foreground/80 hover:bg-muted/50"
-                    : "text-muted-foreground hover:bg-muted/50"
-              }`}
-            >
-              {item.text || t("toc.untitledHeading")}
-            </button>
-          </li>
+          <button
+            key={item.pos}
+            type="button"
+            onClick={() => navigate(item.pos)}
+            style={{ paddingLeft: `${1.75 + (item.level - 1) * 0.75}rem` }}
+            className={`block w-full text-left py-0.5 pr-1 rounded text-xs truncate transition-colors ${
+              isActive
+                ? "bg-primary/10 text-primary font-medium"
+                : item.level === 1
+                  ? "text-foreground/80 hover:bg-muted/50"
+                  : "text-muted-foreground hover:bg-muted/50"
+            }`}
+          >
+            {item.text || t("toc.untitledHeading")}
+          </button>
         );
       })}
-    </ul>
+    </Toolbar>
   );
 }
