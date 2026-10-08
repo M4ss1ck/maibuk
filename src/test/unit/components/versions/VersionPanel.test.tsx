@@ -521,6 +521,74 @@ describe("VersionPanel", () => {
     await waitFor(() => expect(mockDeleteVersion).toHaveBeenCalledWith("version-1"));
   });
 
+  it("after a restore, focus lands on the pre-restore Checkpoint at the top of the list", async () => {
+    const user = userEvent.setup();
+    const preRestore: BookVersion = {
+      ...versions[0],
+      id: "version-pre",
+      name: "Before restoring",
+      triggerType: "pre-restore",
+    };
+    // The real store writes the pre-restore Checkpoint and reloads the list.
+    mockRestoreVersion.mockImplementation(async () => {
+      setStoreVersions([preRestore, ...versions]);
+    });
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+    await waitFor(() => expect(screen.getByRole("row", { name: "First draft" })).toHaveFocus());
+
+    await user.keyboard("r");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Restore" })).toHaveFocus());
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(screen.getByRole("row", { name: "Before restoring" })).toHaveFocus()
+    );
+    // The arrows keep working from there.
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("row", { name: "First draft" })).toHaveFocus();
+  });
+
+  it("after a delete, focus lands on the row that takes its place", async () => {
+    const user = userEvent.setup();
+    const three = manyVersions.slice(0, 3);
+    setStoreVersions(three);
+    mockDeleteVersion.mockImplementation(async (id: string) => {
+      setStoreVersions(three.filter((v) => v.id !== id));
+    });
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+    const rows = await screen.findAllByRole("row");
+    await waitFor(() => expect(rows[0]).toHaveFocus());
+    await user.keyboard("{ArrowDown}");
+    const removedName = rows[1].getAttribute("aria-label");
+    const nextName = rows[2].getAttribute("aria-label") ?? "";
+
+    await user.keyboard("{Delete}");
+    // Every other row keeps its own Delete button; the confirm is in this row.
+    await waitFor(() =>
+      expect(
+        screen.getByText("Delete this version permanently?").closest('[role="row"]')
+      ).toContainElement(document.activeElement as HTMLElement)
+    );
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(screen.getByRole("row", { name: nextName })).toHaveFocus());
+    expect(screen.queryByRole("row", { name: removedName ?? "" })).not.toBeInTheDocument();
+  });
+
   it("Escape cancels a delete and returns focus to the row", async () => {
     const user = userEvent.setup();
 

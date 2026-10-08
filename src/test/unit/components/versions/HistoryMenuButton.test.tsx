@@ -106,12 +106,14 @@ describe("HistoryMenuButton", () => {
 
     const trigger = screen.getByRole("button", { name: "More" });
     await user.click(trigger);
-    expect(screen.getByRole("menu")).toBeInTheDocument();
+    const saveItem = await screen.findByRole("menuitem", { name: /Save version/ });
+    // The Menu focuses its first item a frame after it opens.
+    await waitFor(() => expect(saveItem).toHaveFocus());
 
     await user.keyboard("{Escape}");
 
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("closes the menu when clicking outside", async () => {

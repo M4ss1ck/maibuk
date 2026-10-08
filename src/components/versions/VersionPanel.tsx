@@ -6,9 +6,11 @@ import {
   useCallback,
   useRef,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { GridList, GridListItem } from "react-aria-components/GridList";
+import { keepTabInRowForm } from "@/lib/arrow-navigation";
 import {
   Eye,
   GitCompareArrows,
@@ -143,6 +145,17 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     [rowElement]
   );
 
+  // A restore or delete removes the confirm, and the row with it, from under
+  // focus; once the list has re-rendered without it, focus goes to this row.
+  const pendingRowFocus = useRef<number | null>(null);
+  useEffect(() => {
+    if (pendingRowFocus.current === null || confirmAction || visibleVersions.length === 0) return;
+    const index = Math.min(pendingRowFocus.current, visibleVersions.length - 1);
+    pendingRowFocus.current = null;
+    setFocusedIndex(index);
+    focusRow(index);
+  }, [confirmAction, visibleVersions, focusRow]);
+
   // Closes the inline confirm and hands focus back to the Version row it was
   // opened from, so the keyboard stays on the row the author was acting on.
   const cancelConfirm = useCallback(() => {
@@ -185,6 +198,8 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
           preRestoreName: t("versions.restoredName", { name: displayName }),
         });
         toast.success(t("versions.restoreSuccess"));
+        // The reloaded list opens with the pre-restore Checkpoint on top.
+        pendingRowFocus.current = 0;
         setConfirmAction(null);
       } catch {
         toast.error(t("common.error"));
@@ -197,12 +212,14 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     async (versionId: string) => {
       try {
         await deleteVersion(versionId);
+        // The next Version slides into the deleted row's place.
+        pendingRowFocus.current = focusedIndex;
         setConfirmAction(null);
       } catch {
         toast.error(t("common.error"));
       }
     },
-    [deleteVersion, t]
+    [deleteVersion, focusedIndex, t]
   );
 
   const startRename = useCallback((version: BookVersion) => {
@@ -229,6 +246,15 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
   const keepRowFromActing = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "Enter" || event.key === " ") event.stopPropagation();
   };
+  // The inline rename and confirm are small forms: Tab moves between their
+  // controls instead of out of the list (keepTabInRowForm).
+  const routeRowFormKeys = (event: ReactKeyboardEvent<HTMLElement>) => {
+    keepRowFromActing(event);
+    keepTabInRowForm(event);
+  };
+  // The click a button's Enter produces, and a mouse click, would bubble to the
+  // row as well (CanvasCard's stopRowActionClick).
+  const keepRowFromClick = (event: ReactMouseEvent<HTMLElement>) => event.stopPropagation();
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -455,7 +481,11 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                     onHoverStart={() => setFocusedIndex(index)}
                   >
                     {isRenaming ? (
-                      <div className="flex-1 flex gap-2 items-center" onKeyDown={keepRowFromActing}>
+                      <div
+                        className="flex-1 flex gap-2 items-center"
+                        onKeyDown={routeRowFormKeys}
+                        onClick={keepRowFromClick}
+                      >
                         <Input
                           value={renameValue}
                           onChange={(e) => setRenameValue(e.target.value)}
@@ -493,7 +523,11 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                         </Button>
                       </div>
                     ) : isConfirming ? (
-                      <div className="flex-1 flex items-center gap-2" onKeyDown={keepRowFromActing}>
+                      <div
+                        className="flex-1 flex items-center gap-2"
+                        onKeyDown={routeRowFormKeys}
+                        onClick={keepRowFromClick}
+                      >
                         <span className="text-sm flex-1">
                           {confirmAction?.type === "restore"
                             ? t("versions.restoreConfirm")
@@ -551,6 +585,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                           <div
                             className="flex items-center gap-0.5 shrink-0"
                             onKeyDown={keepRowFromActing}
+                            onClick={keepRowFromClick}
                           >
                             <Tooltip content={t("versions.preview")}>
                               <Button

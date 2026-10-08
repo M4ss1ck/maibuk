@@ -245,9 +245,12 @@ test.describe("Version preview @wf:versions-preview", () => {
     await openHistory(page);
     await focusVersion(page, HISTORY.firstDraft);
 
-    await tabTo(page, row(page, HISTORY.firstDraft).getByRole("button", { name: "Preview" }), {
-      max: 6,
-    });
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      row(page, HISTORY.firstDraft).getByRole("button", { name: "Preview" }),
+      { max: 6 }
+    );
     await page.keyboard.press("Enter");
 
     await expect(panel(page).getByRole("heading", { name: HISTORY.book })).toBeVisible();
@@ -327,7 +330,14 @@ test.describe("restoring a Version @wf:versions-restore", () => {
     // the roving focus onto that row and open its Preview (the row's own
     // Preview button, not whichever control happened to keep focus).
     await pressUntilFocused(page, "ArrowUp", preRestore, { max: 20 });
-    await tabTo(page, preRestore.getByRole("button", { name: "Preview" }), { max: 4 });
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      preRestore.getByRole("button", { name: "Preview" }),
+      {
+        max: 4,
+      }
+    );
     await page.keyboard.press("Enter");
     await selectChapter(page, /^Storm/);
     await expect(panel(page).getByText(HISTORY.unsaved, { exact: false })).toBeVisible();

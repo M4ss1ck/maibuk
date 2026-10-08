@@ -8,8 +8,10 @@ import { expect, test } from "../support/test";
 // open the Note); this spec covers the other lists whose rows carry buttons.
 // Only a real browser shows this: React Aria turns an Enter or Space that
 // bubbles out of a row's button into the row's action, which jsdom does not.
-// Every check reaches the first row by Tab, Tabs to each visible button in it,
-// presses Enter or Space, and asserts the row action did not run. Whatever the
+// Every check reaches a row by keyboard, moves to each visible button in it
+// (Tab in a card gallery, whose buttons are Tab stops; arrows in a list,
+// which is one Tab stop), presses Enter or Space, and asserts the row action
+// did not run. Whatever the
 // button opened is undone with Escape (or its inline Cancel/No) before the
 // next button. A button that only changes state (pin toggles) stays toggled.
 
@@ -190,7 +192,7 @@ test.describe("Chapter list row controls @wf:chapters-navigate", () => {
     await focusLamp(page);
 
     // Reorder starts its keyboard drag instead of selecting.
-    await tabTo(page, rowButton(page, LAMP, "Reorder"), { max: 8 });
+    await pressUntilFocused(page, "ArrowRight", rowButton(page, LAMP, "Reorder"), { max: 8 });
     await page.keyboard.press("Enter");
     await expect(page.getByRole("button", { name: /Insert between/ }).first()).toBeVisible();
     await expectStormStillOpen(page);
@@ -198,7 +200,7 @@ test.describe("Chapter list row controls @wf:chapters-navigate", () => {
     await expect(page.getByRole("button", { name: /Insert between/ })).toHaveCount(0);
 
     // Edit opens its inline rename instead of selecting.
-    await tabTo(page, rowButton(page, LAMP, "Edit Chapter"), { max: 8 });
+    await pressUntilFocused(page, "ArrowRight", rowButton(page, LAMP, "Edit Chapter"), { max: 8 });
     await page.keyboard.press("Enter");
     await expect(row(page, LAMP).getByRole("textbox")).toBeFocused();
     await expectStormStillOpen(page);
@@ -207,7 +209,9 @@ test.describe("Chapter list row controls @wf:chapters-navigate", () => {
 
     // Delete asks inline instead of selecting. Its Yes button would remove
     // the row, so it is never pressed; No closes the confirm.
-    await tabTo(page, rowButton(page, LAMP, "Delete Chapter"), { max: 8 });
+    await pressUntilFocused(page, "ArrowRight", rowButton(page, LAMP, "Delete Chapter"), {
+      max: 8,
+    });
     await page.keyboard.press("Enter");
     const no = page.getByRole("button", { name: "No", exact: true });
     await expect(no).toBeFocused();
@@ -224,21 +228,23 @@ test.describe("Chapter list row controls @wf:chapters-navigate", () => {
 
     // Space may or may not lift the row for a drag; either way the selection
     // must not move, and Escape leaves no drop target behind.
-    await tabTo(page, rowButton(page, LAMP, "Reorder"), { max: 8 });
+    await pressUntilFocused(page, "ArrowRight", rowButton(page, LAMP, "Reorder"), { max: 8 });
     await page.keyboard.press("Space");
     await expectStormStillOpen(page);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: /Insert between/ })).toHaveCount(0);
     await expectStormStillOpen(page);
 
-    await tabTo(page, rowButton(page, LAMP, "Edit Chapter"), { max: 8 });
+    await pressUntilFocused(page, "ArrowRight", rowButton(page, LAMP, "Edit Chapter"), { max: 8 });
     await page.keyboard.press("Space");
     await expect(row(page, LAMP).getByRole("textbox")).toBeFocused();
     await expectStormStillOpen(page);
     await page.keyboard.press("Escape");
     await expect(row(page, LAMP)).toBeFocused();
 
-    await tabTo(page, rowButton(page, LAMP, "Delete Chapter"), { max: 8 });
+    await pressUntilFocused(page, "ArrowRight", rowButton(page, LAMP, "Delete Chapter"), {
+      max: 8,
+    });
     await page.keyboard.press("Space");
     const no = page.getByRole("button", { name: "No", exact: true });
     await expect(no).toBeFocused();
@@ -248,4 +254,70 @@ test.describe("Chapter list row controls @wf:chapters-navigate", () => {
     await expectStormStillOpen(page);
     await expect(page).toHaveURL(/\/book\//);
   });
+});
+
+test.describe("Version history row controls @wf:versions-preview", () => {
+  test.use({ library: "checkpointHistory" });
+
+  const FIRST_DRAFT = "First draft";
+  const panel = (page: Page) => page.getByRole("dialog", { name: "Version history" });
+  const row = (page: Page) => panel(page).getByRole("row", { name: FIRST_DRAFT, exact: true });
+  const rowButton = (page: Page, name: string) =>
+    row(page).getByRole("button", { name, exact: true });
+  // The row action opens Compare; seeing its heading means it ran.
+  const compareText = (page: Page) =>
+    panel(page).getByText("Comparing this version to the current document");
+
+  async function openHistoryAtFirstDraft(page: Page) {
+    await page.goto("/");
+    const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
+    await expect(card).toHaveCount(1);
+    await page.keyboard.press("1");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("textbox", { name: /^Text of / })).toBeFocused();
+    const chapters = page.getByRole("complementary", { name: "Chapter list" });
+    for (let i = 0; i < 3; i++) {
+      if (await chapters.evaluate((el) => el.contains(document.activeElement))) break;
+      await page.keyboard.press("Escape");
+    }
+    await page.keyboard.press("g");
+    await page.keyboard.press("v");
+    await expect(panel(page)).toBeVisible();
+    await pressUntilFocused(page, "ArrowDown", row(page), { max: 8 });
+  }
+
+  for (const key of ["Enter", "Space"] as const) {
+    test(`${key} on Preview, Restore, Rename and Delete never opens Compare`, async ({ page }) => {
+      await openHistoryAtFirstDraft(page);
+
+      await pressUntilFocused(page, "ArrowRight", rowButton(page, "Preview"), { max: 6 });
+      await page.keyboard.press(key);
+      await expect(panel(page).getByRole("button", { name: "Back" })).toBeFocused();
+      await expect(compareText(page)).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(row(page)).toBeFocused();
+
+      await pressUntilFocused(page, "ArrowRight", rowButton(page, "Restore"), { max: 6 });
+      await page.keyboard.press(key);
+      await expect(panel(page).getByText(/Restore this version\?/)).toBeVisible();
+      await expect(compareText(page)).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(row(page)).toBeFocused();
+
+      await pressUntilFocused(page, "ArrowRight", rowButton(page, "Rename"), { max: 6 });
+      await page.keyboard.press(key);
+      await expect(row(page).getByRole("textbox")).toBeFocused();
+      await expect(compareText(page)).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(row(page)).toBeFocused();
+
+      await pressUntilFocused(page, "ArrowRight", rowButton(page, "Delete"), { max: 6 });
+      await page.keyboard.press(key);
+      await expect(panel(page).getByText(/Delete this version/)).toBeVisible();
+      await expect(compareText(page)).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(row(page)).toBeFocused();
+      await expect(row(page)).toBeVisible();
+    });
+  }
 });
