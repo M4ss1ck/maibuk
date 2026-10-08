@@ -339,19 +339,23 @@ test.describe("the Pane frame @wf:pane-frame", () => {
     await f6To(page, notesListPane(page));
 
     const pane = page.locator('[data-focus-pane="notes-sidebar"]');
-    await expect(pane).toHaveAttribute("data-pane-active", "");
+    // Soft, so a screenshot run on the base (no frame yet) still reaches the
+    // capture and shows the "before".
+    await expect.soft(pane).toHaveAttribute("data-pane-active", "");
     const badge = page.getByTestId("pane-badge");
-    await expect(badge).toHaveText("Notes list · F6 next pane");
+    await expect.soft(badge).toHaveText("Notes list · F6 next pane");
     await capture(page, "pane-frame-notes-list");
 
-    // An arrow into another Pane moves the ring with it.
-    for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowRight");
+    // An arrow into another Pane moves the ring with it: past the row's four
+    // buttons, the fifth Right slides the frame to the note editor.
+    for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await capture(page, "pane-frame-mid-slide", { freezeAnimationsAt: 90 });
     await expect(noteText(page)).toBeFocused();
-    await expect(page.locator('[data-focus-pane="notes-content"]')).toHaveAttribute(
-      "data-pane-active",
-      ""
-    );
+    const editorPane = page.locator('[data-focus-pane="notes-content"]');
+    await expect(editorPane).toHaveAttribute("data-pane-active", "");
     await expect(pane).not.toHaveAttribute("data-pane-active", "");
+    await capture(page, "pane-frame-note-editor");
   });
 
   test("with keyboard hints hidden, F6 still rings the Pane but shows no badge", async ({
