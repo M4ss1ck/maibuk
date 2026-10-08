@@ -475,6 +475,26 @@ describe("arrow navigation (ADR 0025)", () => {
     });
   });
 
+  it("times each arrow that moves focus for the frame-rate lane, only when it asks", async () => {
+    const user = userEvent.setup();
+    render(<NotesFixture />);
+    act(() => button("Bold").focus());
+    const samples: number[] = [];
+    window.__maibukArrowLeaveMs = samples;
+    try {
+      // Inside the toolbar: React Aria moves focus, nothing is timed.
+      await user.keyboard("{ArrowRight}");
+      expect(samples).toHaveLength(0);
+      // Up leaves the toolbar for the title bar: one sample.
+      await user.keyboard("{ArrowUp}");
+      expect(button("Back")).toHaveFocus();
+      expect(samples).toHaveLength(1);
+      expect(samples[0]).toBeGreaterThanOrEqual(0);
+    } finally {
+      delete window.__maibukArrowLeaveMs;
+    }
+  });
+
   it("does no layout reads for keys it does not handle", async () => {
     const user = userEvent.setup();
     render(<NotesFixture />);

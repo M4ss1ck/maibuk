@@ -68,6 +68,16 @@ function leave(active: HTMLElement, key: ArrowKey, layer: HTMLElement): boolean 
   return true;
 }
 
+declare global {
+  interface Window {
+    /**
+     * Set by the frame-rate lane's arrow scenarios (e2e/frames): each arrow
+     * that moves focus pushes how long handling it took, in ms.
+     */
+    __maibukArrowLeaveMs?: number[];
+  }
+}
+
 /**
  * The window keydown handler. Runs in the capture phase, before React
  * Aria's own handlers, because those always swallow arrows (a toolbar even at
@@ -75,6 +85,18 @@ function leave(active: HTMLElement, key: ArrowKey, layer: HTMLElement): boolean 
  * Keys it does not act on cost no layout reads.
  */
 export function handleArrowKey(event: KeyboardEvent): void {
+  const samples = window.__maibukArrowLeaveMs;
+  if (!samples) {
+    routeArrowKey(event);
+    return;
+  }
+  const handledBefore = event.defaultPrevented;
+  const start = performance.now();
+  routeArrowKey(event);
+  if (!handledBefore && event.defaultPrevented) samples.push(performance.now() - start);
+}
+
+function routeArrowKey(event: KeyboardEvent): void {
   if (!isArrowKey(event.key)) return;
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
   if (event.isComposing || event.defaultPrevented) return;
