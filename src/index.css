@@ -1603,8 +1603,13 @@ li.footnote-item,
   animation: fade-in 0.12s ease-out forwards;
 }
 
+.pane-badge-enter {
+  animation: fade-in 0.12s ease-out forwards;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
+  .pane-badge-enter,
   .modal-backdrop-enter,
   .modal-panel-enter,
   .toast-enter,

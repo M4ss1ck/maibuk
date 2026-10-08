@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { keepRowFromActing } from "@/lib/arrow-navigation";
 import { Network, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Canvas } from "@/features/canvas/types";
@@ -35,9 +36,6 @@ export function CanvasCard({
   // A card action must not read as activating the whole card: React Aria's
   // GridListItem treats a bubbled Enter/Space (or the click it produces) as the
   // row's action, so a nested button would navigate instead of acting.
-  const stopRowActionKey = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === "Enter" || event.key === " ") event.stopPropagation();
-  };
   const stopRowActionClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
   };
@@ -103,7 +101,7 @@ export function CanvasCard({
               variant="destructive"
               size="sm"
               className="flex-1"
-              onKeyDown={stopRowActionKey}
+              onKeyDown={keepRowFromActing}
               onClick={(event) => {
                 stopRowActionClick(event);
                 setConfirmingDelete(false);
@@ -116,7 +114,7 @@ export function CanvasCard({
               variant="ghost"
               size="sm"
               className="flex-1"
-              onKeyDown={stopRowActionKey}
+              onKeyDown={keepRowFromActing}
               onClick={(event) => {
                 stopRowActionClick(event);
                 setConfirmingDelete(false);
@@ -132,7 +130,7 @@ export function CanvasCard({
             variant="ghost"
             size="sm"
             aria-label={canvas.pinned ? t("canvas.unpinCanvas") : t("canvas.pinCanvas")}
-            onKeyDown={stopRowActionKey}
+            onKeyDown={keepRowFromActing}
             onClick={(event) => {
               stopRowActionClick(event);
               onTogglePinned();
@@ -144,7 +142,7 @@ export function CanvasCard({
             variant="ghost"
             size="sm"
             aria-label={t("canvas.renameCanvas")}
-            onKeyDown={stopRowActionKey}
+            onKeyDown={keepRowFromActing}
             onClick={(event) => {
               stopRowActionClick(event);
               setRenaming(true);
@@ -156,7 +154,7 @@ export function CanvasCard({
             variant="ghost"
             size="sm"
             aria-label={t("canvas.deleteCanvas")}
-            onKeyDown={stopRowActionKey}
+            onKeyDown={keepRowFromActing}
             onClick={(event) => {
               stopRowActionClick(event);
               setConfirmingDelete(true);

@@ -163,8 +163,9 @@ describe("formatFrameBench()", () => {
       ])
     );
     expect(text).toContain(
-      "| scroll (2 runs) | 240 | 16.7 | 16.7 | 16.7 | 0.00% (0) | 16.7 | 0 | – | pass |"
+      "| scroll (2 runs) | 240 | 16.7 | 16.7 | 16.7 | 0.00% (0) | 16.7 | 0 | – | – | pass |"
     );
+    expect(text).toContain("handler time (p95)");
     expect(text).toContain("|   run 2 | 120 |");
     expect(text).toContain("typing: long-animation-frames fail");
     expect(text).toContain(

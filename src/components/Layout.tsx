@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FocusScope, Overlay, useModalOverlay, useMove } from "react-aria";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog, RouterProvider } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { Outlet, useHref, useLocation, useNavigate } from "react-router-dom";
@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import { ReleaseBadge } from "@/components/releases/ReleaseBadge";
 import { CloseIcon, MaibukLogo, ProjectsIcon, SettingsIcon } from "@/components/icons";
-import { KeyboardShortcut, Tooltip } from "@/components/ui";
+import { KeyboardShortcut, ResizeHandle, Tooltip } from "@/components/ui";
 import { useRestoreFocus } from "@/hooks";
 import { useSettingsStore } from "@/features/settings/store";
 import { MAIN_SIDEBAR_MAX_WIDTH, MAIN_SIDEBAR_MIN_WIDTH } from "@/features/settings/types";
@@ -24,9 +24,6 @@ const NAV_TUTORIAL_ANCHORS: Record<string, string | undefined> = {
   "/settings": "books.settings",
 };
 
-/** One keyboard resize press moves the sidebar this many pixels. */
-const KEYBOARD_RESIZE_STEP = 16;
-
 function NavShortcut({ id, className }: { id: CommandId; className?: string }) {
   const hint = useCommandHint(id);
   if (!hint) return null;
@@ -40,7 +37,6 @@ export function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const mainSidebarWidth = useSettingsStore((s) => s.mainSidebarWidth);
   const setMainSidebarWidth = useSettingsStore((s) => s.setMainSidebarWidth);
-  const isResizing = useRef(false);
   const mobileDialogRef = useRef<HTMLDivElement>(null);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
@@ -114,48 +110,6 @@ export function Layout() {
       shortcut: "global.gotoSettings",
     },
   ];
-
-  const handleResizeStart = useCallback(
-    (event: React.MouseEvent) => {
-      event.preventDefault();
-      isResizing.current = true;
-      const startX = event.clientX;
-      const startWidth = mainSidebarWidth;
-
-      const onMouseMove = (moveEvent: MouseEvent) => {
-        if (!isResizing.current) return;
-        setMainSidebarWidth(startWidth + moveEvent.clientX - startX);
-      };
-
-      const onMouseUp = () => {
-        isResizing.current = false;
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    },
-    [mainSidebarWidth, setMainSidebarWidth]
-  );
-
-  // React Aria owns the separator's keyboard handling and reports ArrowLeft as
-  // deltaX -1 and ArrowRight as +1. The sidebar sits on the left, so a
-  // rightward move widens it, matching the pointer drag. Read the width from
-  // the store, not the render, so presses between renders all count. Ignore
-  // the vertical arrows useMove also reports.
-  const { moveProps } = useMove({
-    onMove: (event) => {
-      if (event.deltaX === 0) return;
-      setMainSidebarWidth(
-        useSettingsStore.getState().mainSidebarWidth + event.deltaX * KEYBOARD_RESIZE_STEP
-      );
-    },
-  });
 
   const sidebarContent = (mobile: boolean) => (
     <>
@@ -277,20 +231,14 @@ export function Layout() {
       >
         {sidebarContent(false)}
         <Tooltip content={t("nav.resizeSidebar")}>
-          {/* biome-ignore lint/a11y/useSemanticElements: a focusable window-splitter separator; <hr> cannot take focus or a value. */}
-          <div
-            role="separator"
-            tabIndex={0}
-            aria-orientation="vertical"
-            aria-label={t("nav.resizeSidebar")}
-            aria-valuenow={mainSidebarWidth}
-            aria-valuemin={MAIN_SIDEBAR_MIN_WIDTH}
-            aria-valuemax={MAIN_SIDEBAR_MAX_WIDTH}
-            aria-valuetext={t("nav.sidebarWidthValue", { width: mainSidebarWidth })}
-            onMouseDown={handleResizeStart}
-            onKeyDown={moveProps.onKeyDown}
+          <ResizeHandle
+            side="right"
+            value={mainSidebarWidth}
+            min={MAIN_SIDEBAR_MIN_WIDTH}
+            max={MAIN_SIDEBAR_MAX_WIDTH}
+            onResize={setMainSidebarWidth}
+            label={t("nav.resizeSidebar")}
             data-tutorial="books.remember"
-            className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           />
         </Tooltip>
       </aside>

@@ -71,14 +71,14 @@ function getDragHandle(row: HTMLElement): HTMLElement {
   return within(row).getByRole("button", { name: "toolbar.settings.dragHandle" });
 }
 
-async function tabToControl(
+async function arrowToControl(
   user: ReturnType<typeof userEvent.setup>,
   row: HTMLElement,
   control: HTMLElement
 ) {
   row.focus();
   for (let index = 0; index < 10 && document.activeElement !== control; index++) {
-    await user.tab();
+    await user.keyboard("{ArrowRight}");
   }
   expect(control).toHaveFocus();
 }
@@ -145,7 +145,7 @@ it("toggles group floating visibility via keyboard Space when eligible", async (
   });
   expect(sw).toHaveAttribute("aria-checked", "true");
 
-  await tabToControl(user, basicMarksRow, sw);
+  await arrowToControl(user, basicMarksRow, sw);
   await user.keyboard(" ");
 
   const updated = useSettingsStore.getState().toolbarConfig.start[2];
@@ -357,7 +357,7 @@ describe("keyboard operation of every control", () => {
     });
     expect(sw).toHaveAttribute("aria-checked", "true");
 
-    await tabToControl(user, basicMarksRow, sw);
+    await arrowToControl(user, basicMarksRow, sw);
     await user.keyboard(" ");
     expect(sw).toHaveAttribute("aria-checked", "false");
   });
@@ -369,7 +369,7 @@ describe("keyboard operation of every control", () => {
     const moveDown = within(dividerRow).getByRole("button", { name: "toolbar.settings.moveDown" });
     expect(moveDown).not.toBeDisabled();
 
-    await tabToControl(user, dividerRow, moveDown);
+    await arrowToControl(user, dividerRow, moveDown);
     await user.keyboard("{Enter}");
 
     const start = useSettingsStore.getState().toolbarConfig.start;
@@ -383,7 +383,7 @@ describe("keyboard operation of every control", () => {
     const dividerRow = findRowByName(/toolbar\.settings\.dividerLabel/);
     const removeBtn = within(dividerRow).getByRole("button", { name: "toolbar.settings.remove" });
 
-    await tabToControl(user, dividerRow, removeBtn);
+    await arrowToControl(user, dividerRow, removeBtn);
     await user.keyboard("{Enter}");
 
     const start = useSettingsStore.getState().toolbarConfig.start;
@@ -656,7 +656,7 @@ describe("keyboard drag-and-drop (React Aria)", () => {
       name: "toolbar.settings.dragHandle",
     });
 
-    await tabToControl(user, historyRow, dragHandle);
+    await arrowToControl(user, historyRow, dragHandle);
   });
 });
 
@@ -886,21 +886,21 @@ describe("nested row controls by keyboard", () => {
   // These GridList rows carry no row-level onAction: the assertion is that the
   // nested control's own action runs exactly once and the lane holds no other
   // change (no reorder, no selection side effect).
-  it.each(["{Enter}", " "])(
-    "%s on a divider row's Remove button removes only that divider",
-    async (key) => {
-      const user = userEvent.setup();
-      renderDialog();
-      const dividerRow = findRowByName(/toolbar\.settings\.dividerLabel/);
-      const removeBtn = within(dividerRow).getByRole("button", {
-        name: "toolbar.settings.remove",
-      });
-      await tabToControl(user, dividerRow, removeBtn);
-      await user.keyboard(key);
-      const start = useSettingsStore.getState().toolbarConfig.start;
-      expect(start).toHaveLength(2);
-      expect(start.every((e) => e.kind !== "divider")).toBe(true);
-      expect(start.map((e) => e.id)).toEqual(["history", "basic-marks"]);
-    }
-  );
+  it.each([
+    "{Enter}",
+    " ",
+  ])("%s on a divider row's Remove button removes only that divider", async (key) => {
+    const user = userEvent.setup();
+    renderDialog();
+    const dividerRow = findRowByName(/toolbar\.settings\.dividerLabel/);
+    const removeBtn = within(dividerRow).getByRole("button", {
+      name: "toolbar.settings.remove",
+    });
+    await arrowToControl(user, dividerRow, removeBtn);
+    await user.keyboard(key);
+    const start = useSettingsStore.getState().toolbarConfig.start;
+    expect(start).toHaveLength(2);
+    expect(start.every((e) => e.kind !== "divider")).toBe(true);
+    expect(start.map((e) => e.id)).toEqual(["history", "basic-marks"]);
+  });
 });

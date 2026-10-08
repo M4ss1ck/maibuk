@@ -71,7 +71,7 @@ test.describe("Notes Gallery browsing @wf:notes-gallery-browse", () => {
     await expect(page.getByRole("heading", { name: SEED_NOTES.keeperLog, level: 1 })).toBeVisible();
   });
 
-  test("ArrowDown from the page enters the first Gallery card @sc:notes.enterList", async ({
+  test("ArrowDown from the page enters the first Gallery card @wf:notes-gallery-browse", async ({
     page,
   }) => {
     await page.goto("/notes");
@@ -417,18 +417,17 @@ test.describe("Note Item Menu @wf:notes-item-menu", () => {
 
     await tabTo(page, notesListRow(page, SEED_NOTES.keeperLog), { max: 60 });
     await pressUntilFocused(page, "ArrowDown", row);
-    await tabTo(page, rowButton("Edit"), { max: 3 });
+    await pressUntilFocused(page, "ArrowRight", rowButton("Edit"), { max: 3 });
     await page.keyboard.press("Enter");
     await expect(page.getByRole("textbox", { name: "Rename" })).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(row).toBeFocused();
 
-    await tabTo(page, rowButton("Duplicate note"), { max: 3 });
+    await pressUntilFocused(page, "ArrowRight", rowButton("Duplicate note"), { max: 3 });
     await page.keyboard.press("Enter");
     await expect(notesListRow(page, `${SEED_NOTES.harborNotes} (copy)`)).toBeVisible();
 
-    await tabTo(page, row, { max: 10, backwards: true });
-    await tabTo(page, rowButton("Delete"), { max: 4 });
+    await pressUntilFocused(page, "ArrowRight", rowButton("Delete"), { max: 4 });
     await page.keyboard.press("Enter");
     await expect(deleteDialog(page)).toBeVisible();
     await page.keyboard.press("Escape");

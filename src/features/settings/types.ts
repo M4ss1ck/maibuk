@@ -44,6 +44,10 @@ export function clampEditorZoom(percent: number): number {
 export const MAIN_SIDEBAR_MIN_WIDTH = 200;
 export const MAIN_SIDEBAR_MAX_WIDTH = 480;
 
+/** Resize bounds of the Notes list, the Chapter list, and the Book side panel. */
+export const SIDE_PANEL_MIN_WIDTH = 200;
+export const SIDE_PANEL_MAX_WIDTH = 480;
+
 export const EDITOR_CONTENT_WIDTH_MIN = 480;
 export const EDITOR_CONTENT_WIDTH_MAX = 1400;
 export const EDITOR_CONTENT_WIDTH_STEP = 20;

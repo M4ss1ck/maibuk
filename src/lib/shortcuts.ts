@@ -140,11 +140,14 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
 
     // React Spectrum pressables (React Aria menus, listboxes, toolbars) call
     // stopPropagation() on keydown, which hides modifier shortcuts while one of
-    // their controls has focus. Those combos are handled in the capture phase,
-    // where that cannot reach. Bare keys stay on the bubble listener so those
-    // controls keep their arrow, Enter, Space, and typeahead keys.
+    // their controls has focus. Those combos, and function keys (F6 lands on a
+    // Pane's control and must still move on), are handled in the capture
+    // phase, where that cannot reach. Other bare keys stay on the bubble
+    // listener so those controls keep their arrow, Enter, Space, and
+    // typeahead keys.
     const handleCaptureKeyDown = (event: KeyboardEvent) => {
-      if (!event.ctrlKey && !event.metaKey && !event.altKey) return;
+      const functionKey = /^F\d{1,2}$/.test(event.key);
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && !functionKey) return;
       handleKeyDown(event);
     };
 

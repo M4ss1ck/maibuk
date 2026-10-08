@@ -317,15 +317,11 @@ export const COMMANDS = {
     labelKey: "shortcuts.moveSelectionNext",
     contexts: ["bookList"],
     defaults: [["j"]],
-    fixed: [["ArrowDown"], ["ArrowRight"]],
-    fixedReasonKey: FIXED_NAVIGATION,
   },
   "bookList.moveSelectionPrevious": {
     labelKey: "shortcuts.moveSelectionPrevious",
     contexts: ["bookList"],
     defaults: [["k"]],
-    fixed: [["ArrowUp"], ["ArrowLeft"]],
-    fixedReasonKey: FIXED_NAVIGATION,
   },
   "bookList.openSelected": {
     labelKey: "shortcuts.openSelected",
@@ -856,14 +852,6 @@ export const COMMANDS = {
     contexts: ["notes"],
     defaults: [["Mod+Shift+f"]],
     voice: { phrases: { en: ["advanced filters"], es: ["filtros avanzados"] } },
-  },
-  "notes.enterList": {
-    labelKey: "shortcuts.enterNotesList",
-    contexts: ["notes"],
-    defaults: [],
-    fixed: [["ArrowDown"], ["ArrowRight"], ["ArrowUp"], ["ArrowLeft"]],
-    fixedReasonKey: FIXED_NAVIGATION,
-    sealed: true,
   },
   "notes.newNote": {
     labelKey: "notes.newNote",

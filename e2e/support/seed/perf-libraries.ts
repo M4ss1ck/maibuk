@@ -9,7 +9,8 @@ import { createBookRow, updateBookWordCountRow } from "@/features/books/write";
 import { createCanvasRow, updateCanvasDocRow } from "@/features/canvas/write";
 import { CURRENT_CANVAS_SCHEMA_VERSION, type CanvasDoc } from "@/features/canvas/types";
 import { createChapterRow, updateChapterRow } from "@/features/chapters/write";
-import { PERF_BOOK, PERF_CANVAS, PERF_SIZES } from "./names";
+import { createNoteRow } from "@/features/notes/write";
+import { PERF_BOOK, PERF_CANVAS, PERF_MANY_CHAPTERS_BOOK, PERF_NOTES, PERF_SIZES } from "./names";
 
 const WORDS =
   "the lamp held through the long gale while salt spray hissed on hot glass and the keeper counted every slow turn of the lens until grey dawn found the harbor quiet again with gulls crying over broken rope and tide pools full of cold light".split(
@@ -121,4 +122,42 @@ async function perfDenseCanvas(): Promise<void> {
   await updateCanvasDocRow(canvas.id, denseCanvasDoc(), "local");
 }
 
-export const PERF_SEED_LIBRARIES = { perfLongChapter, perfDenseCanvas };
+/** `perfManyNotes`: many short Notes, to stress a long, scrolling Notes list. */
+async function perfManyNotes(): Promise<void> {
+  const next = random(2372);
+  for (let i = 1; i <= PERF_SIZES.manyNotes; i++) {
+    await createNoteRow(
+      { title: `${PERF_NOTES.titlePrefix} ${i}`, content: `<p>${sentence(next)}</p>` },
+      "local"
+    );
+  }
+}
+
+/** `perfManyChapters`: one Book of many short Chapters, to stress the Outline. */
+async function perfManyChapters(): Promise<void> {
+  const book = await createBookRow(
+    { title: PERF_MANY_CHAPTERS_BOOK.title, authorName: PERF_MANY_CHAPTERS_BOOK.authorName },
+    "local"
+  );
+  let words = 0;
+  for (let i = 1; i <= PERF_SIZES.manyChapters; i++) {
+    const chapter = await createChapterRow(
+      { bookId: book.id, title: `${PERF_MANY_CHAPTERS_BOOK.chapterPrefix} ${i}` },
+      "local"
+    );
+    const saved = await updateChapterRow(
+      chapter.id,
+      { content: `<p>Entry ${i}: the lamp was lit at dusk.</p>` },
+      "local"
+    );
+    words += saved?.wordCount ?? 0;
+  }
+  await updateBookWordCountRow(book.id, words);
+}
+
+export const PERF_SEED_LIBRARIES = {
+  perfLongChapter,
+  perfDenseCanvas,
+  perfManyNotes,
+  perfManyChapters,
+};

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route, useNavigate } from "react-router-dom";
 
 vi.mock("../../../i18n", () => ({
@@ -239,5 +240,53 @@ describe("Notes repeated heading regression (behavioral)", () => {
     await waitFor(() => expect(scrollSpy).toHaveBeenCalled());
     // loadNote must not have been called again - only scroll effect ran
     expect(loadNoteSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("widens the notes sidebar with ArrowRight on the resize handle", async () => {
+    const { useNoteStore } = await import("@/features/notes/store");
+    const { useBookStore } = await import("@/features/books/store");
+    const { useSettingsStore } = await import("@/features/settings/store");
+
+    useNoteStore.setState({
+      notes: [],
+      currentNote: null,
+      isLoading: false,
+      error: null,
+      loadNotes: vi.fn(async () => {}),
+      loadNote: vi.fn(async () => {}),
+      createNote: vi.fn(async () => null),
+      updateNote: vi.fn(async () => {}),
+      deleteNote: vi.fn(async () => {}),
+      reorderNotes: vi.fn(async () => {}),
+      setCurrentNote: vi.fn(),
+    } as never);
+
+    useBookStore.setState({
+      books: [],
+      currentBook: null,
+      isLoading: false,
+      error: null,
+      loadBooks: vi.fn(async () => {}),
+    } as never);
+
+    useSettingsStore.setState({ notesSidebarWidth: 280, lastNoteId: null } as never);
+
+    const { Notes } = await import("@/pages/Notes");
+
+    render(
+      <MemoryRouter initialEntries={["/notes"]}>
+        <Routes>
+          <Route path="/notes" element={<Notes />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const user = userEvent.setup();
+    const handle = screen.getByRole("separator", { name: "nav.resizeNotesSidebar" });
+    handle.focus();
+    await user.keyboard("{ArrowRight}");
+
+    expect(useSettingsStore.getState().notesSidebarWidth).toBe(296);
+    expect(handle).toHaveAttribute("aria-valuenow", "296");
   });
 });

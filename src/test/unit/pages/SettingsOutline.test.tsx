@@ -18,7 +18,6 @@ vi.mock("../../../i18n", () => ({
   detectSystemLocale: vi.fn().mockResolvedValue("en"),
 }));
 
-
 vi.mock("../../../lib/platform", () => ({
   IS_WEB: true,
   IS_TAURI: false,
@@ -135,6 +134,7 @@ describe("Settings outline", () => {
 
   it("lists every section the screen renders, by name", () => {
     renderSettings();
+    expect(outlineTree()).toHaveAttribute("data-focus-pane-entry");
     expect(rowNames()).toEqual([
       "settings.appearance",
       "settings.general",

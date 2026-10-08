@@ -267,9 +267,9 @@ describe("FootnoteList", () => {
   it("offers the same actions on the hover buttons for pointer devices", async () => {
     const user = await renderList();
     await focusRow(user, "Third");
-    await user.tab();
+    await user.keyboard("{ArrowRight}");
     expect(within(row("Third")).getByRole("button", { name: "editor.editFootnote" })).toHaveFocus();
-    await user.tab();
+    await user.keyboard("{ArrowRight}");
     const remove = within(row("Third")).getByRole("button", { name: "editor.deleteFootnote" });
     expect(remove).toHaveFocus();
 
@@ -335,43 +335,43 @@ describe("nested row controls by keyboard", () => {
     return { onGoTo, onSave, onDelete };
   }
 
-  async function tabToButton(
+  async function arrowToButton(
     user: ReturnType<typeof userEvent.setup>,
     rowEl: HTMLElement,
     target: HTMLElement
   ) {
     rowEl.focus();
     for (let i = 0; i < 10 && document.activeElement !== target; i++) {
-      await user.keyboard("{Tab}");
+      await user.keyboard("{ArrowRight}");
     }
     expect(target).toHaveFocus();
   }
 
-  it.each(["{Enter}", " "])(
-    "%s on an entry's Edit button edits, never goes to the reference",
-    async (key) => {
-      const user = userEvent.setup();
-      const { onGoTo } = renderGrid();
-      const rowEl = screen.getByRole("row");
-      const edit = screen.getByRole("button", { name: "editor.editFootnote" });
-      await tabToButton(user, rowEl, edit);
-      await user.keyboard(key);
-      expect(await screen.findByRole("dialog", { name: "editor.editFootnote" })).toBeInTheDocument();
-      expect(onGoTo).not.toHaveBeenCalled();
-    }
-  );
+  it.each([
+    "{Enter}",
+    " ",
+  ])("%s on an entry's Edit button edits, never goes to the reference", async (key) => {
+    const user = userEvent.setup();
+    const { onGoTo } = renderGrid();
+    const rowEl = screen.getByRole("row");
+    const edit = screen.getByRole("button", { name: "editor.editFootnote" });
+    await arrowToButton(user, rowEl, edit);
+    await user.keyboard(key);
+    expect(await screen.findByRole("dialog", { name: "editor.editFootnote" })).toBeInTheDocument();
+    expect(onGoTo).not.toHaveBeenCalled();
+  });
 
-  it.each(["{Enter}", " "])(
-    "%s on an entry's Delete button deletes, never goes to the reference",
-    async (key) => {
-      const user = userEvent.setup();
-      const { onGoTo, onDelete } = renderGrid();
-      const rowEl = screen.getByRole("row");
-      const del = screen.getByRole("button", { name: "editor.deleteFootnote" });
-      await tabToButton(user, rowEl, del);
-      await user.keyboard(key);
-      expect(onDelete).toHaveBeenCalledTimes(1);
-      expect(onGoTo).not.toHaveBeenCalled();
-    }
-  );
+  it.each([
+    "{Enter}",
+    " ",
+  ])("%s on an entry's Delete button deletes, never goes to the reference", async (key) => {
+    const user = userEvent.setup();
+    const { onGoTo, onDelete } = renderGrid();
+    const rowEl = screen.getByRole("row");
+    const del = screen.getByRole("button", { name: "editor.deleteFootnote" });
+    await arrowToButton(user, rowEl, del);
+    await user.keyboard(key);
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onGoTo).not.toHaveBeenCalled();
+  });
 });

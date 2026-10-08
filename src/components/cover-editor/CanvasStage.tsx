@@ -257,9 +257,14 @@ export function CanvasStage({ className = "" }: CanvasStageProps) {
   }, [selectedId]);
 
   return (
+    // The stage owns the arrow keys (they nudge the selection), and is
+    // focusable so a click here leaves focus on it rather than on the page,
+    // where arrows would move focus instead (ADR 0025).
     <div
       ref={containerRef}
-      className={`flex items-center justify-center bg-muted/30 overflow-hidden ${className}`}
+      tabIndex={-1}
+      data-owns-arrows=""
+      className={`flex items-center justify-center bg-muted/30 overflow-hidden outline-none ${className}`}
     >
       <div className="shadow-2xl">
         <canvas ref={elRef} />

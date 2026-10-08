@@ -27,7 +27,9 @@ export function LayersPanel() {
   const ordered = [...scene.layers].reverse();
 
   return (
-    <div className="flex flex-col h-full">
+    // Arrows nudge the selected object from the layer list too, so the list
+    // owns them rather than moving focus between layers (ADR 0025).
+    <div className="flex flex-col h-full" data-owns-arrows="">
       <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b border-border">
         {t("cover.layers.title")}
       </div>

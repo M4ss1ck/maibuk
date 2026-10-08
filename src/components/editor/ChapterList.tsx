@@ -21,6 +21,7 @@ import { AddIcon } from "@/components/icons/AddIcon";
 import { useSettingsStore } from "@/features/settings/store";
 import { readDroppedItems, useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile, DropPoint } from "@/hooks/useTextFileDrop";
+import { rowFormProps } from "@/lib/arrow-navigation";
 import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
 import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
@@ -500,7 +501,7 @@ export function ChapterList({
         <GridList
           key={chapters.length === 0 ? "empty" : "populated"}
           aria-label={t("chapters.title")}
-          keyboardNavigationBehavior="tab"
+          data-focus-pane-entry=""
           items={chapters}
           dependencies={[
             currentChapterId,
@@ -604,7 +605,7 @@ export function ChapterList({
                 >
                   {(anchorRef) =>
                     editingId === chapter.id ? (
-                      <div className="p-2">
+                      <div className="p-2" {...rowFormProps}>
                         <input
                           type="text"
                           value={editTitle}
@@ -612,6 +613,9 @@ export function ChapterList({
                           className="w-full px-2 py-1 text-sm border border-border rounded mb-2 bg-background text-foreground"
                           autoFocus
                           onKeyDown={(e) => {
+                            // The field keeps its keys: the list's typeahead
+                            // would otherwise swallow a space typed after a letter.
+                            e.stopPropagation();
                             if (e.key === "Enter") handleUpdate();
                             if (e.key === "Escape") cancelEditing();
                           }}
@@ -727,7 +731,10 @@ export function ChapterList({
 
                         {/* Delete confirmation */}
                         {deleteConfirmId === chapter.id && (
-                          <div className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2">
+                          <div
+                            className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2"
+                            {...rowFormProps}
+                          >
                             <span className="text-xs">{t("common.deleteConfirm")}</span>
                             <AriaButton
                               onPress={() => handleDelete(chapter.id)}
@@ -752,11 +759,7 @@ export function ChapterList({
                     )
                   }
                 </ChapterItemGestures>
-                {isActive && editor && showChapterOutline && (
-                  <div className="list-none">
-                    <ChapterOutline editor={editor} />
-                  </div>
-                )}
+                {isActive && editor && showChapterOutline && <ChapterOutline editor={editor} />}
               </GridListItem>
             );
           }}

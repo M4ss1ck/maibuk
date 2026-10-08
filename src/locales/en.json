@@ -87,7 +87,9 @@
     "downloadApp": "Download App",
     "bookNotes": "Book Notes",
     "resizeSidebar": "Resize sidebar",
-    "sidebarWidthValue": "{{width}} pixels"
+    "sidebarWidthValue": "{{width}} pixels",
+    "resizeNotesSidebar": "Resize notes list",
+    "resizeChaptersSidebar": "Resize chapter list"
   },
   "bookNotes": {
     "quickPlaceholder": "Write a quick note...",
@@ -99,8 +101,7 @@
   "bookSidePanel": {
     "footnotes": "Footnotes",
     "notes": "Notes",
-    "resize": "Resize panel",
-    "widthValue": "{{width}} pixels"
+    "resize": "Resize panel"
   },
   "metrics": {
     "title": "Metrics",
@@ -688,6 +689,7 @@
     }
   },
   "toc": {
+    "outline": "Outline",
     "sceneBreak": "Scene break",
     "untitledHeading": "Untitled heading",
     "showOutline": "Show outline",
@@ -1215,7 +1217,6 @@
     "moveSelectionNext": "Next book",
     "moveSelectionPrevious": "Previous book",
     "leavePanel": "Leave the current panel",
-    "enterNotesList": "Move into the notes list",
     "clearSelection": "Clear selection",
     "backToCanvasGallery": "Back to Canvases",
     "sendBackward": "Send backward",
@@ -1404,6 +1405,7 @@
     }
   },
   "versions": {
+    "moreActions": "More version actions",
     "title": "Version history",
     "saveVersion": "Save version",
     "showHistory": "Show history",
@@ -1456,7 +1458,8 @@
     "notesSidebar": "Notes list",
     "notesContent": "Note editor",
     "bookTitleBar": "Book title bar",
-    "noteTitleBar": "Note title bar"
+    "noteTitleBar": "Note title bar",
+    "badge": "{{name}} · F6 next pane"
   },
   "backup": {
     "title": "Backups",

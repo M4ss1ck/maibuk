@@ -1,4 +1,5 @@
 import type { DragEvent, KeyboardEvent } from "react";
+import { keepRowFromActing } from "@/lib/arrow-navigation";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
@@ -166,6 +167,9 @@ export function NoteListItem({
   }, [isEditing]);
 
   const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    // The field keeps its keys: the list's typeahead would otherwise swallow
+    // a space typed after a letter.
+    event.stopPropagation();
     if (event.key === "Enter" || event.key === "Escape") refocusRowAfterEdit.current = true;
     if (event.key === "Enter") {
       event.preventDefault();
@@ -221,6 +225,7 @@ export function NoteListItem({
                 <Tooltip content={t("common.edit")}>
                   <button
                     type="button"
+                    onKeyDown={keepRowFromActing}
                     onClick={(event) => {
                       event.stopPropagation();
                       setDraftTitle(note.title);
@@ -237,6 +242,7 @@ export function NoteListItem({
                 <Tooltip content={t("notes.duplicate")}>
                   <button
                     type="button"
+                    onKeyDown={keepRowFromActing}
                     onClick={(event) => {
                       event.stopPropagation();
                       onDuplicate(note);
@@ -252,6 +258,7 @@ export function NoteListItem({
                 <Tooltip content={t("common.delete")}>
                   <button
                     type="button"
+                    onKeyDown={keepRowFromActing}
                     onClick={(event) => {
                       event.stopPropagation();
                       onDelete(note.id);

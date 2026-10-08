@@ -58,6 +58,25 @@ export const FRAME_BUDGETS: Readonly<Record<string, ScenarioBudget>> = {
         "the query is typed letter by letter; fewer than 8 means the palette never had focus",
     },
   },
+  "arrow-leave-notes": {
+    overrides: { handlerP95Ms: 2, minHandlerSamples: 10 },
+    reasons: {
+      handlerP95Ms:
+        "keyboard arrow navigation plan, criterion 11: an arrow that leaves a widget finds its target in under 2 ms at p95, with 500 Notes in the list",
+      minHandlerSamples:
+        "half the twenty leaves of one run, so a driver that stopped leaving the list is not-measured",
+    },
+  },
+  "arrow-leave-chapters": {
+    overrides: { handlerP95Ms: 2, minHandlerSamples: 10 },
+    reasons: {
+      handlerP95Ms:
+        "keyboard arrow navigation plan, criterion 11: an arrow that leaves a widget finds its target in under 2 ms at p95, with 100 Chapters in the list",
+      minHandlerSamples:
+        "half the twenty leaves of one run, so a driver that stopped leaving the list is not-measured",
+    },
+  },
+  "pane-slide": { overrides: {}, reasons: {} },
 };
 
 export function budgetFor(scenarioId: string): FrameBudget {

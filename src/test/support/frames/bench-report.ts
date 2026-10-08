@@ -95,7 +95,8 @@ const ms = (value: number) => value.toFixed(1);
 function row(label: string, report: FrameReport, verdict: string): string {
   const s = report.stats;
   const input = report.lines.some((l) => l.id === "input-to-next-frame") ? ms(s.inputP95Ms) : "–";
-  return `| ${label} | ${s.frames} | ${ms(s.p50Ms)} | ${ms(s.p95Ms)} | ${ms(s.p99Ms)} | ${s.droppedPct.toFixed(2)}% (${s.missedVsyncs}) | ${ms(s.worstMs)} | ${s.longAnimationFrames} | ${input} | ${verdict} |`;
+  const handler = report.lines.some((l) => l.id === "handler-time") ? ms(s.handlerP95Ms) : "–";
+  return `| ${label} | ${s.frames} | ${ms(s.p50Ms)} | ${ms(s.p95Ms)} | ${ms(s.p99Ms)} | ${s.droppedPct.toFixed(2)}% (${s.missedVsyncs}) | ${ms(s.worstMs)} | ${s.longAnimationFrames} | ${input} | ${handler} | ${verdict} |`;
 }
 
 /** The markdown budget table, failing lines, and top long-frame scripts. */
@@ -114,13 +115,13 @@ export function formatFrameBench(
     `Frame budget (issue #372): ${env.source} via ${env.engine} ${env.engineVersion}, ${env.mode}${device}`,
     `Refresh ${refresh}; CPU throttling ${env.cpuThrottling}x; app ${env.appVersion} @ ${env.commit}`,
     "",
-    "| scenario | frames | p50 ms | p95 ms | p99 ms | dropped (missed vsyncs) | worst ms | LoAF > 50 ms | key→frame p95 ms | verdict |",
-    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    "| scenario | frames | p50 ms | p95 ms | p99 ms | dropped (missed vsyncs) | worst ms | LoAF > 50 ms | key→frame p95 ms | handler time (p95) | verdict |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
   ];
   for (const scenario of check.scenarios) {
     if (!scenario.aggregate) {
       out.push(
-        `| ${scenario.id} | – | – | – | – | – | – | – | – | ${scenario.verdict.toUpperCase()}: ${scenario.reason} |`
+        `| ${scenario.id} | – | – | – | – | – | – | – | – | – | ${scenario.verdict.toUpperCase()}: ${scenario.reason} |`
       );
       continue;
     }

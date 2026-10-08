@@ -17,7 +17,7 @@ import { Editor, ChapterList, SaveStatus, type EditorTutorialAnchors } from "@/c
 import type { Editor as TiptapEditor } from "@tiptap/core";
 import { BookSidePanel } from "@/components/book/BookSidePanel";
 import { TruncatedText } from "@/components/ui/TruncatedText";
-import { Tooltip, TooltipGroup } from "@/components/ui";
+import { ResizeHandle, Tooltip, TooltipGroup } from "@/components/ui";
 import type { EditorStats } from "@/components/editor/Editor";
 import type { EditorHandle } from "@/components/editor/Editor";
 import { useEditSession } from "@/features/edit-session";
@@ -53,7 +53,12 @@ import { DictationControl } from "@/components/dictation";
 import { deriveNoteTitle } from "@/components/book/deriveNoteTitle";
 import { useNoteStore } from "@/features/notes";
 import { useSettingsStore } from "@/features/settings/store";
-import { normalizeLanguage, type Language } from "@/features/settings/types";
+import {
+  normalizeLanguage,
+  SIDE_PANEL_MAX_WIDTH,
+  SIDE_PANEL_MIN_WIDTH,
+  type Language,
+} from "@/features/settings/types";
 import {
   History,
   Menu,
@@ -149,7 +154,6 @@ export function BookEditor() {
   const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
   const notesSidebarWidth = useSettingsStore((s) => s.notesSidebarWidth);
   const setNotesSidebarWidth = useSettingsStore((s) => s.setNotesSidebarWidth);
-  const isResizing = useRef(false);
   const showInlineFootnotes = useSettingsStore((s) => s.showInlineFootnotes);
   const showNotesChapter = useSettingsStore((s) => s.showNotesChapter);
   const setShowNotesChapter = useSettingsStore((s) => s.setShowNotesChapter);
@@ -729,73 +733,6 @@ export function BookEditor() {
     setFocusMode((prev) => !prev);
   }, []);
 
-  // Sidebar drag-resize handler
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      isResizing.current = true;
-      const startX = e.clientX;
-      const startWidth = sidebarWidth;
-
-      const onMouseMove = (moveEvent: MouseEvent) => {
-        if (!isResizing.current) return;
-        const newWidth = Math.max(200, Math.min(480, startWidth + moveEvent.clientX - startX));
-        setSidebarWidth(newWidth);
-      };
-
-      const onMouseUp = () => {
-        isResizing.current = false;
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    },
-    [sidebarWidth]
-  );
-
-  // Notes/footnotes side panel drag-resize handler. The panel sits on the right,
-  // so dragging its left edge leftwards widens it (inverted delta).
-  const handleNotesResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      isResizing.current = true;
-      const startX = e.clientX;
-      const startWidth = notesSidebarWidth;
-
-      const onMouseMove = (moveEvent: MouseEvent) => {
-        if (!isResizing.current) return;
-        const newWidth = Math.max(200, Math.min(480, startWidth - (moveEvent.clientX - startX)));
-        setNotesSidebarWidth(newWidth);
-      };
-
-      const onMouseUp = () => {
-        isResizing.current = false;
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    },
-    [notesSidebarWidth, setNotesSidebarWidth]
-  );
-
-  // Keyboard resize: the panel sits on the right, so ArrowLeft widens it.
-  const handleNotesResizeKey = useCallback(
-    (delta: number) => setNotesSidebarWidth(notesSidebarWidth + delta),
-    [notesSidebarWidth, setNotesSidebarWidth]
-  );
-
   // Handle book info update
   const handleUpdateBookInfo = useCallback(
     async (input: Parameters<typeof updateBook>[1]) => {
@@ -1302,16 +1239,17 @@ export function BookEditor() {
             {/* Mobile drawer */}
             <FocusScope contain={showMobileChapters}>
               {/* The drawer is a dialog only while open: role and aria-modal are
-                  set together, so aria-modal never appears without the role. Biome
-                  cannot resolve the conditional role, and a static role="dialog"
-                  is not an option - restoreChaptersFocus() skips focus restore
-                  when the active element is inside [role="dialog"], so a
-                  permanent role strands focus in the closed drawer. */}
-              {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: role="dialog" is applied by the same condition as aria-modal */}
+                  set together, so aria-modal never appears without the role. A
+                  static role="dialog" is not an option - restoreChaptersFocus()
+                  skips focus restore when the active element is inside
+                  [role="dialog"], so a permanent dialog role strands focus in
+                  the closed drawer. The closed drawer is a labelled Pane, so it
+                  carries role="region" (its aria-label needs a role). */}
+              {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: role is resolved by the same condition as aria-modal, which Biome cannot infer */}
               <div
                 ref={mobilePaneRef}
                 {...(showMobileChapters ? mobileChaptersOverlayProps : {})}
-                role={showMobileChapters ? "dialog" : undefined}
+                role={showMobileChapters ? "dialog" : "region"}
                 aria-modal={showMobileChapters ? true : undefined}
                 aria-hidden={showMobileChapters ? undefined : true}
                 inert={!showMobileChapters}
@@ -1383,9 +1321,13 @@ export function BookEditor() {
                 tutorialAnchors
               />
               {showSidebar && (
-                <div
-                  onMouseDown={handleResizeStart}
-                  className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+                <ResizeHandle
+                  side="right"
+                  value={sidebarWidth}
+                  min={SIDE_PANEL_MIN_WIDTH}
+                  max={SIDE_PANEL_MAX_WIDTH}
+                  onResize={setSidebarWidth}
+                  label={t("nav.resizeChaptersSidebar")}
                 />
               )}
             </div>
@@ -1478,8 +1420,7 @@ export function BookEditor() {
           onTabChange={setBookSidePanelTab}
           onClose={() => setShowNotesChapter(false)}
           width={notesSidebarWidth}
-          onResizeStart={handleNotesResizeStart}
-          onResizeKey={handleNotesResizeKey}
+          onResize={setNotesSidebarWidth}
           chapters={chapters}
           currentChapterId={currentChapter?.id ?? null}
           onSelectChapter={handleSelectChapter}

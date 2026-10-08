@@ -274,12 +274,6 @@ export function NotesGallery() {
     searchInput.select();
   }, []);
 
-  const focusNote = useCallback((noteId: string) => {
-    const rows = gridRef.current?.querySelectorAll<HTMLElement>("[data-key]");
-    const row = [...(rows ?? [])].find((candidate) => candidate.dataset.key === noteId);
-    row?.focus();
-  }, []);
-
   useShortcuts(
     [
       {
@@ -298,20 +292,6 @@ export function NotesGallery() {
         id: "notes.advancedFilters",
         allowInInput: true,
         onTrigger: openAdvancedFilters,
-      },
-      {
-        id: "notes.enterList",
-        preventDefault: false,
-        onTrigger: (event) => {
-          if (document.activeElement !== document.body) return;
-          const target =
-            event?.key === "ArrowUp" || event?.key === "ArrowLeft"
-              ? filteredNotes[filteredNotes.length - 1]
-              : filteredNotes[0];
-          if (!target) return;
-          event?.preventDefault();
-          focusNote(target.id);
-        },
       },
       {
         id: "notes.newNote",
@@ -513,6 +493,7 @@ export function NotesGallery() {
           ref={gridRef}
           data-tutorial="notes.gallery"
           aria-label={t("notes.collectionLabel")}
+          data-focus-pane-entry=""
           items={filteredNotes}
           layout="grid"
           selectionMode="none"

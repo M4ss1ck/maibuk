@@ -169,7 +169,9 @@ for (const scenario of scenariosFor(source, only)) {
         await driver.arrange?.(target.ctx);
         await collector.begin(target.page);
         await driver.measure(target.ctx);
-        result.runs.push(await collector.end(target.page));
+        const run = await collector.end(target.page);
+        if (driver.handlerSamples) run.handlerMs = await driver.handlerSamples(target.ctx);
+        result.runs.push(run);
         if (rawDir) {
           mkdirSync(rawDir, { recursive: true });
           writeFileSync(

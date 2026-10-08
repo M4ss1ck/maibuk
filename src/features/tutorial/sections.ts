@@ -202,7 +202,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Shortcut Conflict": "appears only while recording a Shortcut inside the Shortcut Editor",
   "Shortcut File": "its buttons are inside the Shortcut Editor, which the Tutorial does not open",
   Release: "app metadata, not part of writing: the badge in the sidebar and Settings names it",
-  "Release Notes": "app metadata, not part of writing; it lives in a dialog, and steps never open dialogs",
+  "Release Notes":
+    "app metadata, not part of writing; it lives in a dialog, and steps never open dialogs",
   "Sync Base": "internal state a sync compares against; nothing on screen shows it",
   Deferred: "only named in the Sync Log after an automatic run; no control to point at",
   Tombstone: "lives inside the Deletion Review dialog; steps never open dialogs",
@@ -217,6 +218,7 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Built-in Plugin": "decided, not built (ADR 0019); there is no Plugin in the app to point at",
   "Plugin Directory": "decided, not built (ADR 0020); there is no Plugin in the app to point at",
   "Plugin Permission": "decided, not built (ADR 0019); there is no Plugin in the app to point at",
+  Pane: "a keyboard concept: F6 and the arrow keys move between Panes, and a Tutorial run keeps the app inert, so no step can show focus travelling",
   "Command Palette":
     "Opened from any screen with F1 or its button; the Tutorial runs keep the app inert and the palette refuses to open during a run, so no step can show it.",
 };

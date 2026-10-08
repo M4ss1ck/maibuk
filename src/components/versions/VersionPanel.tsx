@@ -1,5 +1,20 @@
-import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
+import {
+  lazy,
+  Suspense,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
+import { GridList, GridListItem } from "react-aria-components/GridList";
+import {
+  keepFocusRestoreInRowForm,
+  keepRowFromActing,
+  keepTabInRowForm,
+} from "@/lib/arrow-navigation";
 import {
   Eye,
   GitCompareArrows,
@@ -80,6 +95,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -106,9 +122,43 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     [setPage, totalPages, currentPage]
   );
 
-  const focusRow = useCallback((index: number) => {
-    document.getElementById(`version-row-${index}`)?.focus();
-  }, []);
+  // The GridList owns roving focus (ADR 0025), so a row is addressed by its
+  // Version id through the list ref rather than a hand-written DOM id.
+  const rowElement = useCallback(
+    (index: number): HTMLElement | null => {
+      const id = visibleVersions[index]?.id;
+      if (!id) return null;
+      return (
+        Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="row"]') ?? []).find(
+          (el) => el.dataset.key === id
+        ) ?? null
+      );
+    },
+    [visibleVersions]
+  );
+
+  const focusRow = useCallback(
+    (index: number) => {
+      // React Aria renders a GridList's rows one commit after the list mounts,
+      // so a row addressable only next frame is looked up then (ChapterList's
+      // focusChapterRow follows the same rule).
+      requestAnimationFrame(() => {
+        rowElement(index)?.focus();
+      });
+    },
+    [rowElement]
+  );
+
+  // A restore or delete removes the confirm, and the row with it, from under
+  // focus; once the list has re-rendered without it, focus goes to this row.
+  const pendingRowFocus = useRef<number | null>(null);
+  useEffect(() => {
+    if (pendingRowFocus.current === null || confirmAction || visibleVersions.length === 0) return;
+    const index = Math.min(pendingRowFocus.current, visibleVersions.length - 1);
+    pendingRowFocus.current = null;
+    setFocusedIndex(index);
+    focusRow(index);
+  }, [confirmAction, visibleVersions, focusRow]);
 
   // Closes the inline confirm and hands focus back to the Version row it was
   // opened from, so the keyboard stays on the row the author was acting on.
@@ -152,6 +202,8 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
           preRestoreName: t("versions.restoredName", { name: displayName }),
         });
         toast.success(t("versions.restoreSuccess"));
+        // The reloaded list opens with the pre-restore Checkpoint on top.
+        pendingRowFocus.current = 0;
         setConfirmAction(null);
       } catch {
         toast.error(t("common.error"));
@@ -164,12 +216,14 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     async (versionId: string) => {
       try {
         await deleteVersion(versionId);
+        // The next Version slides into the deleted row's place.
+        pendingRowFocus.current = focusedIndex;
         setConfirmAction(null);
       } catch {
         toast.error(t("common.error"));
       }
     },
-    [deleteVersion, t]
+    [deleteVersion, focusedIndex, t]
   );
 
   const startRename = useCallback((version: BookVersion) => {
@@ -188,6 +242,17 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     },
     [renameVersion, renameValue, t]
   );
+
+  // Row buttons stop Enter and Space from running the row (keepRowFromActing).
+  // The inline rename and confirm are small forms: Tab moves between their
+  // controls instead of out of the list (keepTabInRowForm).
+  const routeRowFormKeys = (event: ReactKeyboardEvent<HTMLElement>) => {
+    keepRowFromActing(event);
+    keepTabInRowForm(event);
+  };
+  // The click a button's Enter produces, and a mouse click, would bubble to the
+  // row as well (CanvasCard's stopRowActionClick).
+  const keepRowFromClick = (event: ReactMouseEvent<HTMLElement>) => event.stopPropagation();
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -218,20 +283,6 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
       }
 
       switch (e.key) {
-        case "ArrowDown": {
-          e.preventDefault();
-          const next = Math.min(focusedIndex + 1, visibleVersions.length - 1);
-          setFocusedIndex(next);
-          document.getElementById(`version-row-${next}`)?.focus();
-          break;
-        }
-        case "ArrowUp": {
-          e.preventDefault();
-          const next = Math.max(focusedIndex - 1, 0);
-          setFocusedIndex(next);
-          document.getElementById(`version-row-${next}`)?.focus();
-          break;
-        }
         case "PageDown":
           if (currentPage < totalPages) {
             e.preventDefault();
@@ -244,17 +295,6 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
             goToPage(currentPage - 1);
           }
           break;
-        case "Enter": {
-          // Only a Version row opens Compare. When focus is on one of the row's
-          // action buttons (or the confirm controls) Enter must press that
-          // control, not the row.
-          const active = document.activeElement;
-          if (!(active instanceof HTMLElement) || !active.id.startsWith("version-row-")) break;
-          e.preventDefault();
-          const v = visibleVersions[focusedIndex];
-          if (v) void handleCompare(v);
-          break;
-        }
         case "r":
         case "R": {
           e.preventDefault();
@@ -293,7 +333,6 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     focusedIndex,
     renamingId,
     confirmAction,
-    handleCompare,
     startRename,
     currentPage,
     totalPages,
@@ -308,9 +347,15 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     if (!isOpen || compare || previewSnapshot) return;
     if (visibleVersions.length === 0) return;
     const active = document.activeElement;
-    if (active instanceof HTMLElement && active.closest('[id^="version-row-"]')) return;
-    document.getElementById("version-row-0")?.focus();
-  }, [isOpen, compare, previewSnapshot, visibleVersions]);
+    if (
+      active instanceof HTMLElement &&
+      active.closest('[role="row"]') &&
+      listRef.current?.contains(active)
+    ) {
+      return;
+    }
+    focusRow(0);
+  }, [isOpen, compare, previewSnapshot, visibleVersions, focusRow]);
 
   // Preview and Compare replace the list. Focus moves onto their Back control
   // so Escape/Tab act there, and returns to the Version row when it is closed.
@@ -330,19 +375,11 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     }
   }, [isOpen, showingSubview, focusRow, focusedIndex]);
 
-  // An inline restore/delete confirmation takes focus on its confirm control so
-  // Enter confirms and Escape (cancelConfirm) returns the row.
-  useEffect(() => {
-    if (!isOpen || !confirmAction) return;
-    document.getElementById("version-confirm")?.focus();
-  }, [isOpen, confirmAction]);
-
   // Scroll focused row into view
   useEffect(() => {
     if (!isOpen || compare || previewSnapshot) return;
-    const el = document.getElementById(`version-row-${focusedIndex}`);
-    el?.scrollIntoView({ block: "nearest" });
-  }, [focusedIndex, isOpen, compare, previewSnapshot]);
+    rowElement(focusedIndex)?.scrollIntoView({ block: "nearest" });
+  }, [focusedIndex, isOpen, compare, previewSnapshot, rowElement]);
 
   const isInitialLoading = isLoading && visibleVersions.length === 0 && totalCount === 0;
 
@@ -401,192 +438,229 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
         <div className="text-center py-8 text-muted-foreground">{t("versions.empty")}</div>
       ) : (
         <div className="flex flex-col gap-3">
-          <ul
-            aria-label={t("versions.title")}
-            className={`flex flex-col gap-1 transition-opacity ${isLoading ? "opacity-60" : ""}`}
+          {/* The row with focus is the one r, Delete and F2 act on. React focus
+              events bubble through portals (a row's tooltips), so only this
+              list's rows count. GridList does not forward aria-busy, so the
+              wrapper carries it. */}
+          <div
             aria-busy={isLoading}
+            onFocusCapture={(event) => {
+              const row = (event.target as HTMLElement).closest<HTMLElement>(
+                '[role="row"][data-key]'
+              );
+              if (!row || !listRef.current?.contains(row)) return;
+              const index = visibleVersions.findIndex((v) => v.id === row.dataset.key);
+              if (index >= 0) setFocusedIndex(index);
+            }}
           >
-            {visibleVersions.map((version, index) => {
-              const isFocused = focusedIndex === index;
-              const isConfirming = confirmAction?.versionId === version.id;
-              const isRenaming = renamingId === version.id;
+            <GridList
+              ref={listRef}
+              aria-label={t("versions.title")}
+              className={`flex flex-col gap-1 transition-opacity ${isLoading ? "opacity-60" : ""}`}
+              disallowTypeAhead
+              onAction={(key) => {
+                const version = visibleVersions.find((candidate) => candidate.id === key);
+                if (version) void handleCompare(version);
+              }}
+            >
+              {visibleVersions.map((version, index) => {
+                const isFocused = focusedIndex === index;
+                const isConfirming = confirmAction?.versionId === version.id;
+                const isRenaming = renamingId === version.id;
 
-              return (
-                <li
-                  key={version.id}
-                  id={`version-row-${index}`}
-                  tabIndex={-1}
-                  aria-label={version.name ?? t("versions.autoCheckpoint")}
-                  className={`flex items-center gap-2 px-2 py-2 rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
-                    isFocused ? "bg-muted ring-1 ring-primary/30" : "hover:bg-muted/50"
-                  }`}
-                  onFocus={() => setFocusedIndex(index)}
-                  onMouseEnter={() => setFocusedIndex(index)}
-                >
-                  {isRenaming ? (
-                    <div className="flex-1 flex gap-2 items-center">
-                      <Input
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            void handleRename(version.id);
-                          }
-                          if (e.key === "Escape") {
-                            e.preventDefault();
+                return (
+                  <GridListItem
+                    key={version.id}
+                    id={version.id}
+                    textValue={version.name ?? t("versions.autoCheckpoint")}
+                    className={`flex items-center gap-2 px-2 py-2 rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+                      isFocused ? "bg-muted ring-1 ring-primary/30" : "hover:bg-muted/50"
+                    }`}
+                    onHoverStart={() => setFocusedIndex(index)}
+                  >
+                    {isRenaming ? (
+                      <div
+                        className="flex-1 flex gap-2 items-center"
+                        ref={keepFocusRestoreInRowForm}
+                        onKeyDown={routeRowFormKeys}
+                        onClick={keepRowFromClick}
+                      >
+                        <Input
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            e.stopPropagation();
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void handleRename(version.id);
+                            }
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              setRenamingId(null);
+                              focusRow(focusedIndex);
+                            }
+                          }}
+                          autoFocus
+                          className="flex-1"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void handleRename(version.id)}
+                        >
+                          <Check className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
                             setRenamingId(null);
                             focusRow(focusedIndex);
-                          }
-                        }}
-                        autoFocus
-                        className="flex-1"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void handleRename(version.id)}
-                      >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setRenamingId(null);
-                          focusRow(focusedIndex);
-                        }}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : isConfirming ? (
-                    <div className="flex-1 flex items-center gap-2">
-                      <span className="text-sm flex-1">
-                        {confirmAction?.type === "restore"
-                          ? t("versions.restoreConfirm")
-                          : t("versions.deleteConfirm")}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={cancelConfirm}
-                        aria-label={t("common.cancel")}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        id="version-confirm"
-                        variant={confirmAction?.type === "restore" ? "primary" : "destructive"}
-                        size="sm"
-                        aria-label={
-                          confirmAction?.type === "restore"
-                            ? t("versions.restore")
-                            : t("versions.delete")
-                        }
-                        onClick={() => {
-                          if (confirmAction?.type === "restore") {
-                            void handleRestore(version);
-                          } else {
-                            void handleDelete(version.id);
-                          }
-                        }}
-                      >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium truncate">
-                            {version.name ?? t("versions.autoCheckpoint")}
-                          </span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
-                            {t(`versions.trigger.${version.triggerType}`)}
-                          </span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatRelativeTime(version.createdAt, i18n.language)} ·{" "}
-                          {version.wordCount} {t("common.words")}
-                        </div>
+                          }}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
                       </div>
-
-                      <TooltipGroup>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <Tooltip content={t("versions.preview")}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void handlePreview(version)}
-                              aria-label={t("versions.preview")}
-                              className="px-1.5"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          </Tooltip>
-                          <Tooltip content={t("versions.compare")}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void handleCompare(version)}
-                              aria-label={t("versions.compare")}
-                              className="px-1.5"
-                            >
-                              <GitCompareArrows className="w-4 h-4" />
-                            </Button>
-                          </Tooltip>
-                          <Tooltip content={t("versions.restore")}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setConfirmAction({
-                                  type: "restore",
-                                  versionId: version.id,
-                                })
-                              }
-                              aria-label={t("versions.restore")}
-                              className="px-1.5"
-                            >
-                              <RotateCcw className="w-4 h-4" />
-                            </Button>
-                          </Tooltip>
-                          <Tooltip content={t("versions.rename")}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => startRename(version)}
-                              aria-label={t("versions.rename")}
-                              className="px-1.5"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                          </Tooltip>
-                          <Tooltip content={t("versions.delete")}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setConfirmAction({
-                                  type: "delete",
-                                  versionId: version.id,
-                                })
-                              }
-                              aria-label={t("versions.delete")}
-                              className="px-1.5"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </Tooltip>
+                    ) : isConfirming ? (
+                      <div
+                        className="flex-1 flex items-center gap-2"
+                        ref={keepFocusRestoreInRowForm}
+                        onKeyDown={routeRowFormKeys}
+                        onClick={keepRowFromClick}
+                      >
+                        <span className="text-sm flex-1">
+                          {confirmAction?.type === "restore"
+                            ? t("versions.restoreConfirm")
+                            : t("versions.deleteConfirm")}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={cancelConfirm}
+                          aria-label={t("common.cancel")}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          id="version-confirm"
+                          // The confirm takes focus so Enter confirms and Escape
+                          // (cancelConfirm) returns to the row.
+                          autoFocus
+                          variant={confirmAction?.type === "restore" ? "primary" : "destructive"}
+                          size="sm"
+                          aria-label={
+                            confirmAction?.type === "restore"
+                              ? t("versions.restore")
+                              : t("versions.delete")
+                          }
+                          onClick={() => {
+                            if (confirmAction?.type === "restore") {
+                              void handleRestore(version);
+                            } else {
+                              void handleDelete(version.id);
+                            }
+                          }}
+                        >
+                          <Check className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">
+                              {version.name ?? t("versions.autoCheckpoint")}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">
+                              {t(`versions.trigger.${version.triggerType}`)}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatRelativeTime(version.createdAt, i18n.language)} ·{" "}
+                            {version.wordCount} {t("common.words")}
+                          </div>
                         </div>
-                      </TooltipGroup>
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+
+                        <TooltipGroup>
+                          <div
+                            className="flex items-center gap-0.5 shrink-0"
+                            onKeyDown={keepRowFromActing}
+                            onClick={keepRowFromClick}
+                          >
+                            <Tooltip content={t("versions.preview")}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void handlePreview(version)}
+                                aria-label={t("versions.preview")}
+                                className="px-1.5"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </Tooltip>
+                            <Tooltip content={t("versions.compare")}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void handleCompare(version)}
+                                aria-label={t("versions.compare")}
+                                className="px-1.5"
+                              >
+                                <GitCompareArrows className="w-4 h-4" />
+                              </Button>
+                            </Tooltip>
+                            <Tooltip content={t("versions.restore")}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setConfirmAction({
+                                    type: "restore",
+                                    versionId: version.id,
+                                  })
+                                }
+                                aria-label={t("versions.restore")}
+                                className="px-1.5"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </Button>
+                            </Tooltip>
+                            <Tooltip content={t("versions.rename")}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => startRename(version)}
+                                aria-label={t("versions.rename")}
+                                className="px-1.5"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                            </Tooltip>
+                            <Tooltip content={t("versions.delete")}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setConfirmAction({
+                                    type: "delete",
+                                    versionId: version.id,
+                                  })
+                                }
+                                aria-label={t("versions.delete")}
+                                className="px-1.5"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </Tooltip>
+                          </div>
+                        </TooltipGroup>
+                      </>
+                    )}
+                  </GridListItem>
+                );
+              })}
+            </GridList>
+          </div>
           {totalPages > 1 && (
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
               <Button

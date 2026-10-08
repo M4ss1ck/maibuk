@@ -30,7 +30,7 @@ const baseProps = {
   onTabChange: vi.fn(),
   onClose: vi.fn(),
   width: 280,
-  onResizeStart: vi.fn(),
+  onResize: vi.fn(),
   chapters: [],
   currentChapterId: null,
   onSelectChapter: vi.fn(),

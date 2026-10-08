@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesGallery } from "@/pages/NotesGallery";
-import { runCommand } from "@/lib/command-runner";
+import { installArrowNavigation } from "@/lib/arrow-navigation";
 import { useSettingsStore } from "@/features/settings/store";
 import { DEFAULT_NOTES_FILTERS } from "@/components/notes/notes-list-model";
 
@@ -129,12 +129,18 @@ describe("NotesGallery", () => {
 
   it("enters the note grid with an arrow key before anything has been tabbed to", async () => {
     const user = userEvent.setup();
+    // The arrow-navigation module lands on the Gallery, the Pane entry (ADR 0025 rule 7).
+    const uninstall = installArrowNavigation();
     render(<NotesGallery />);
 
+    expect(screen.getByRole("grid", { name: "notes.collectionLabel" })).toHaveAttribute(
+      "data-focus-pane-entry"
+    );
     expect(document.body).toHaveFocus();
     await user.keyboard("{ArrowDown}");
 
     expect(screen.getAllByRole("row")[0]).toHaveFocus();
+    uninstall();
   });
 
   it("makes note search the first Tab stop", async () => {
@@ -144,14 +150,6 @@ describe("NotesGallery", () => {
     await user.tab();
 
     expect(screen.getByPlaceholderText("notes.search")).toHaveFocus();
-  });
-
-  it("runs enterList through runCommand and focuses the first note", async () => {
-    render(<NotesGallery />);
-
-    expect(document.body).toHaveFocus();
-    expect(await runCommand("notes.enterList", { source: "voice" })).toBe("ran");
-    expect(screen.getAllByRole("row")[0]).toHaveFocus();
   });
 
   it("creates a note and opens its editor from the empty state", async () => {

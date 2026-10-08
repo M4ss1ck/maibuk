@@ -35,7 +35,7 @@ const bookCard = (page: Page) => page.getByRole("grid", { name: "Books" }).getBy
 const editorText = (page: Page) => page.getByRole("textbox", { name: /^Text of / });
 const chapterList = (page: Page) => page.getByRole("complementary", { name: "Chapter list" });
 const panel = (page: Page) => page.getByRole("dialog", { name: "Version history" });
-const row = (page: Page, name: string) => panel(page).getByRole("listitem", { name, exact: true });
+const row = (page: Page, name: string) => panel(page).getByRole("row", { name, exact: true });
 const toast = (page: Page, text: string) => page.getByRole("status").filter({ hasText: text });
 
 /** Enters the seeded Book from the Gallery and leaves focus in the editor. */
@@ -245,9 +245,12 @@ test.describe("Version preview @wf:versions-preview", () => {
     await openHistory(page);
     await focusVersion(page, HISTORY.firstDraft);
 
-    await tabTo(page, row(page, HISTORY.firstDraft).getByRole("button", { name: "Preview" }), {
-      max: 6,
-    });
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      row(page, HISTORY.firstDraft).getByRole("button", { name: "Preview" }),
+      { max: 6 }
+    );
     await page.keyboard.press("Enter");
 
     await expect(panel(page).getByRole("heading", { name: HISTORY.book })).toBeVisible();
@@ -327,7 +330,14 @@ test.describe("restoring a Version @wf:versions-restore", () => {
     // the roving focus onto that row and open its Preview (the row's own
     // Preview button, not whichever control happened to keep focus).
     await pressUntilFocused(page, "ArrowUp", preRestore, { max: 20 });
-    await tabTo(page, preRestore.getByRole("button", { name: "Preview" }), { max: 4 });
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      preRestore.getByRole("button", { name: "Preview" }),
+      {
+        max: 4,
+      }
+    );
     await page.keyboard.press("Enter");
     await selectChapter(page, /^Storm/);
     await expect(panel(page).getByText(HISTORY.unsaved, { exact: false })).toBeVisible();

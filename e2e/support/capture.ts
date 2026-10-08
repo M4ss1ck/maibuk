@@ -14,6 +14,12 @@ const PADDING = 24;
 interface CaptureOptions {
   /** Crop to the union of these elements plus padding; omit for the viewport. */
   around?: Locator[];
+  /**
+   * Pause every running animation this many ms in, for both shots, to show
+   * motion mid-way (the Pane frame's slide). Call it right after the key
+   * that starts the animation; it fails when nothing is animating.
+   */
+  freezeAnimationsAt?: number;
 }
 
 /**
@@ -28,6 +34,18 @@ export async function capture(page: Page, name: string, options: CaptureOptions 
   mkdirSync(dir, { recursive: true });
   const project = test.info().project.name;
   const html = page.locator("html");
+  const frozen = options.freezeAnimationsAt;
+  if (frozen !== undefined) {
+    const paused = await page.evaluate((at) => {
+      const running = document.getAnimations().filter((a) => a.playState === "running");
+      for (const animation of running) {
+        animation.pause();
+        animation.currentTime = at;
+      }
+      return running.length;
+    }, frozen);
+    if (paused === 0) throw new Error(`capture ${name}: no running animation to freeze`);
+  }
 
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
@@ -36,11 +54,16 @@ export async function capture(page: Page, name: string, options: CaptureOptions 
     await page.screenshot({
       path: resolve(dir, `${name}.${project}.${scheme}.png`),
       clip: await clipAround(page, options.around),
-      animations: "disabled",
+      animations: frozen === undefined ? "disabled" : "allow",
       caret: "hide",
     });
   }
   await page.emulateMedia({ colorScheme: "light" });
+  if (frozen !== undefined) {
+    await page.evaluate(() => {
+      for (const animation of document.getAnimations()) animation.finish();
+    });
+  }
 }
 
 async function clipAround(page: Page, around: Locator[] | undefined) {

@@ -58,7 +58,6 @@ export function Home() {
     () => filterBooksByStatus(books, statusFilter),
     [books, statusFilter]
   );
-  const actionsRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const previousBookIdsRef = useRef<string[]>([]);
   const activatedBookIdsRef = useRef(new Set<string>());
@@ -115,32 +114,11 @@ export function Home() {
   // Enter on a focused book card opens it through the card's own link.
   useBoundShortcutIds(["bookList.openSelected"], visibleBooks.length > 0);
 
-  const moveSelectionFromBody = (event: KeyboardEvent) => {
-    const activeElement = document.activeElement;
-    const isEnteringFromActions =
-      event.key === "ArrowDown" &&
-      activeElement instanceof HTMLElement &&
-      actionsRef.current?.contains(activeElement);
-    if (activeElement !== document.body && !isEnteringFromActions) return;
-    const target =
-      visibleBooks.find((book) => book.id === focusedBookIdRef.current) ??
-      (event.key === "ArrowUp" || event.key === "ArrowLeft"
-        ? visibleBooks[visibleBooks.length - 1]
-        : visibleBooks[0]);
-    if (!target) return;
-    event.preventDefault();
-    focusBook(target.id);
-  };
-
   useShortcuts([
     {
       id: "bookList.moveSelectionNext",
       preventDefault: false,
       onTrigger: (event) => {
-        if (event && (event.key === "ArrowDown" || event.key === "ArrowRight")) {
-          moveSelectionFromBody(event);
-          return;
-        }
         const activeBookId = (document.activeElement as HTMLElement | null)?.dataset.key;
         const currentIndex = visibleBooks.findIndex((book) => book.id === activeBookId);
         const targetIndex =
@@ -155,10 +133,6 @@ export function Home() {
       id: "bookList.moveSelectionPrevious",
       preventDefault: false,
       onTrigger: (event) => {
-        if (event && (event.key === "ArrowUp" || event.key === "ArrowLeft")) {
-          moveSelectionFromBody(event);
-          return;
-        }
         const activeBookId = (document.activeElement as HTMLElement | null)?.dataset.key;
         const currentIndex = visibleBooks.findIndex((book) => book.id === activeBookId);
         const targetIndex =
@@ -282,11 +256,7 @@ export function Home() {
           <h1 data-route-heading className="text-xl @xl:text-2xl font-semibold">
             {t("books.title")}
           </h1>
-          <Toolbar
-            ref={actionsRef}
-            aria-label={t("books.actions")}
-            className="flex flex-wrap items-center gap-2"
-          >
+          <Toolbar aria-label={t("books.actions")} className="flex flex-wrap items-center gap-2">
             {books.length > 0 && (
               <BookStatusFilter
                 value={statusFilter}
@@ -391,6 +361,7 @@ export function Home() {
             <GridList
               ref={gridRef}
               aria-label={t("books.collectionLabel")}
+              data-focus-pane-entry=""
               items={visibleBooks}
               layout="grid"
               selectionMode="none"

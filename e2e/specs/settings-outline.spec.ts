@@ -538,6 +538,9 @@ test.describe("Settings outline @wf:settings-outline", () => {
     test.use({ viewport: { width: 1280, height: 600 } });
 
     test("Keyboard scrolling keeps the scrollbar width steady at 1280x600", async ({ page }) => {
+      // 28 presses of 45 recorded frames each is 21 s at 60 Hz before setup;
+      // the default 30 s left WebKit timing out on one run in five.
+      test.setTimeout(60_000);
       await openSettings(page);
       await expect(outline(page)).toBeVisible();
 

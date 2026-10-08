@@ -177,6 +177,7 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
           />
           <Tree
             aria-label={t("settings.outline.label")}
+            data-focus-pane-entry=""
             expandedKeys={expandedKeys}
             onExpandedChange={onExpandedChange}
             onAction={onAction}
@@ -189,6 +190,10 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
                   key={section.id}
                   id={sectionKey(section.id)}
                   textValue={section.label}
+                  // The section on screen stays open, and a search keeps every
+                  // section open, so Left cannot fold it; arrow navigation then
+                  // lets Left leave the outline (ADR 0025).
+                  data-keeps-open={section.open || query ? "" : undefined}
                   aria-label={
                     isCurrent && !selection.row
                       ? `${section.label}, ${t("settings.outline.current")}`

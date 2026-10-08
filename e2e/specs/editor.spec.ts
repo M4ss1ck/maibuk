@@ -378,16 +378,24 @@ test.describe("toolbar navigation @wf:editor-toolbar-nav", () => {
   });
 
   test('the header "More" overflow menu opens and runs an action by keyboard', async ({ page }) => {
+    // The overflow menu replaces the title bar's own buttons only when the
+    // header is narrow (below its @4xl container width); 820 px still lays
+    // out the desktop editor with its Chapter list.
+    await page.setViewportSize({ width: 820, height: 800 });
     await openEditor(page);
     await page.keyboard.press("Escape");
     await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
-    const more = page.getByRole("button", { name: "More" });
+    const more = page
+      .getByRole("banner", { name: "Book title bar" })
+      .getByRole("button", { name: "More", exact: true });
     // The title bar sits above the Chapter list in document order, so Shift+Tab
     // walks back into the header to the More overflow menu.
     await tabTo(page, more, { backwards: true });
     await page.keyboard.press("Enter");
 
-    const item = page.getByRole("button", { name: "Book Notes" });
+    // At this width the title bar keeps its own Book Notes button too; the
+    // overflow menu's item renders after it.
+    const item = page.getByRole("button", { name: "Book Notes" }).last();
     await expect(item).toBeVisible();
     await tabTo(page, item);
     await page.keyboard.press("Enter");
@@ -627,7 +635,14 @@ test.describe("toolbar settings @wf:editor-toolbar-settings @sc:editor.toolbarSe
     const startRows = dialog.getByRole("grid", { name: "Start" }).getByRole("row");
     const before = await startRows.allTextContents();
 
-    await tabTo(page, startRows.first().getByRole("button", { name: "Move down" }));
+    // A group list is one Tab stop; a row's controls are reached by arrows.
+    await tabTo(page, startRows.first());
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      startRows.first().getByRole("button", { name: "Move down" }),
+      { max: 8 }
+    );
     await page.keyboard.press("Enter");
 
     const after = await startRows.allTextContents();
@@ -654,8 +669,13 @@ test.describe("toolbar settings @wf:editor-toolbar-settings @sc:editor.toolbarSe
     await page.keyboard.press("Control+Shift+,");
     const dialog = page.getByRole("dialog", { name: "Customize toolbar" });
 
-    const historySwitch = dialog.getByRole("switch", { name: "Show in toolbar" }).first();
-    await tabTo(page, historySwitch);
+    const historyRow = dialog
+      .getByRole("row")
+      .filter({ has: page.getByRole("switch", { name: "Show in toolbar" }) })
+      .first();
+    const historySwitch = historyRow.getByRole("switch", { name: "Show in toolbar" });
+    await tabTo(page, historyRow);
+    await pressUntilFocused(page, "ArrowRight", historySwitch, { max: 8 });
     await page.keyboard.press("Space");
     await expect(historySwitch).not.toBeChecked();
     await page.keyboard.press("Escape");
@@ -675,8 +695,13 @@ test.describe("toolbar settings @wf:editor-toolbar-settings @sc:editor.toolbarSe
     await page.keyboard.press("Control+Shift+,");
     const dialog = page.getByRole("dialog", { name: "Customize toolbar" });
 
-    const historySwitch = dialog.getByRole("switch", { name: "Show in toolbar" }).first();
-    await tabTo(page, historySwitch);
+    const historyRow = dialog
+      .getByRole("row")
+      .filter({ has: page.getByRole("switch", { name: "Show in toolbar" }) })
+      .first();
+    const historySwitch = historyRow.getByRole("switch", { name: "Show in toolbar" });
+    await tabTo(page, historyRow);
+    await pressUntilFocused(page, "ArrowRight", historySwitch, { max: 8 });
     await page.keyboard.press("Space");
     await expect(historySwitch).not.toBeChecked();
 

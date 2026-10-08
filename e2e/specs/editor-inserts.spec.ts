@@ -244,7 +244,14 @@ test.describe("following a link @wf:editor-follow-link @sc:editor.followLink", (
     // Delete the linked Chapter through its Item actions.
     await page.keyboard.press("Escape");
     const row = await focusChapterRow(page, "Tidewatch");
-    await tabTo(page, row.getByRole("button", { name: "Delete Chapter" }), { max: 6 });
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      row.getByRole("button", { name: "Delete Chapter" }),
+      {
+        max: 6,
+      }
+    );
     await page.keyboard.press("Enter");
     await expect(page.getByRole("button", { name: "No", exact: true })).toBeFocused();
     await page.keyboard.press("Shift+Tab");
@@ -433,9 +440,9 @@ const footnoteList = (page: Page) =>
 /** Tab stays in the text (it indents), so F6 moves on to the Footnotes after it. */
 async function focusFootnoteList(page: Page) {
   await expect(editorText(page)).toBeFocused();
+  // F6 lands inside the Footnotes Pane, on its list, so arrows move at once (ADR 0025).
   await page.keyboard.press("F6");
-  await expect(page.getByRole("region", { name: "Footnotes" })).toBeFocused();
-  await page.keyboard.press("Tab");
+  await expectFocusWithin(page.getByRole("region", { name: "Footnotes" }));
   await expect(footnoteList(page).getByRole("row").first()).toBeFocused();
 }
 
@@ -452,24 +459,34 @@ async function chooseFootnoteAction(page: Page, footnote: string, action: string
 
 /** The title bar's More menu (a narrow toolbar has its own More). */
 const titleBarMore = (page: Page) =>
-  page.getByRole("banner", { name: "Book title bar" }).getByRole("button", { name: "More" });
+  page
+    .getByRole("banner", { name: "Book title bar" })
+    .getByRole("button", { name: "More", exact: true });
 
-/** Opens the Book side panel from the More menu and switches to Footnotes. */
+/** Opens the Book side panel from the title bar's Book Notes button and switches to Footnotes. */
 async function openFootnotesTab(page: Page) {
   await page.keyboard.press("Escape");
   // The title bar sits above the Chapter list in document order, so Shift+Tab
-  // walks back into the header to the More overflow menu.
-  await tabTo(page, titleBarMore(page), { max: 60, backwards: true });
-  return openFootnotesTabFromMore(page);
+  // walks back into the header. On a wide screen Book Notes is its own button;
+  // the More overflow menu only shows on a narrow one.
+  const bookNotes = page
+    .getByRole("banner", { name: "Book title bar" })
+    .getByRole("button", { name: "Book Notes" });
+  await tabTo(page, bookNotes, { max: 60, backwards: true });
+  await page.keyboard.press("Enter");
+  return switchSidePanelToFootnotes(page);
 }
 
-/** From the focused More menu button, opens the Book side panel on Footnotes. */
+/** From the focused More menu button (a narrow screen), opens the Book side panel on Footnotes. */
 async function openFootnotesTabFromMore(page: Page) {
   await expect(titleBarMore(page)).toBeFocused();
   await page.keyboard.press("Enter");
   await tabTo(page, page.getByRole("button", { name: "Book Notes" }), { max: 10 });
   await page.keyboard.press("Enter");
+  return switchSidePanelToFootnotes(page);
+}
 
+async function switchSidePanelToFootnotes(page: Page) {
   const panel = page.getByRole("complementary", { name: "Book side panel" });
   await expect(panel).toBeVisible();
   // Focus lands inside the panel: on its active tab (Notes) on a wide screen,
@@ -683,7 +700,7 @@ test.describe("footnotes on a phone @wf:editor-footnote", () => {
 
     // On a phone Escape opens the Chapters dialog; F6 moves on to the title bar.
     await page.keyboard.press("F6");
-    await expect(page.getByRole("banner", { name: "Book title bar" })).toBeFocused();
+    await expectFocusWithin(page.getByRole("banner", { name: "Book title bar" }));
     await tabTo(page, titleBarMore(page), { max: 10 });
     const panel = await openFootnotesTabFromMore(page);
     await expect(panel).toBeVisible();
@@ -799,7 +816,9 @@ test.describe("outline @wf:editor-outline", () => {
     await expect(outline).toBeVisible();
     await expect(chapterList(page).getByRole("button", { name: "* * *" })).toBeVisible();
 
-    await tabTo(page, outline);
+    // The outline sits in the active Chapter's row: Right walks the row's
+    // buttons and then its headings.
+    await pressUntilFocused(page, "ArrowRight", outline, { max: 8 });
     await page.keyboard.press("Enter");
 
     await expect(editorText(page)).toBeFocused();
@@ -817,7 +836,7 @@ test.describe("outline @wf:editor-outline", () => {
       page.getByRole("grid", { name: "Chapters" }).getByRole("row", { selected: true })
     );
     const toggle = row.getByRole("button", { name: /outline$/ });
-    await tabTo(page, toggle, { max: 6 });
+    await pressUntilFocused(page, "ArrowRight", toggle, { max: 6 });
 
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
     await expect(chapterList(page).getByRole("button", { name: "Untitled heading" })).toHaveCount(
