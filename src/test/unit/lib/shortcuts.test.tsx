@@ -165,6 +165,32 @@ describe("useShortcuts modal blocking", () => {
     pressable.remove();
   });
 
+  it("fires F6 and Shift+F6 even when a pressable stops keydown propagation", async () => {
+    // F6 lands on a Pane's control, often a React Aria button; the next F6
+    // must still move on (ADR 0025).
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const forward = vi.fn();
+    const backward = vi.fn();
+    renderHook(() =>
+      useShortcuts([
+        { id: "global.cyclePanesForward", onTrigger: forward },
+        { id: "global.cyclePanesBackward", onTrigger: backward },
+      ])
+    );
+    const pressable = document.createElement("button");
+    pressable.addEventListener("keydown", (event) => event.stopPropagation());
+    document.body.appendChild(pressable);
+    pressable.focus();
+
+    press({ key: "F6" }, pressable);
+    press({ key: "F6", shiftKey: true }, pressable);
+
+    expect(forward).toHaveBeenCalledTimes(1);
+    expect(backward).toHaveBeenCalledTimes(1);
+    pressable.remove();
+  });
+
   it("preserves sequence matching when no modal is open", async () => {
     useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
 
