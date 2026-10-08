@@ -18,6 +18,7 @@ import { TutorialSection } from "@/components/settings/TutorialSection";
 import { AdvancedSection } from "@/components/settings/AdvancedSection";
 import { AboutSection } from "@/components/settings/AboutSection";
 import { SETTINGS_SECTIONS, findSettingsRow } from "@/components/settings/settings-sections";
+import { focusSettingsRow } from "@/features/settings/focus-row";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 
 const SECTION_COMPONENTS = {
@@ -50,6 +51,7 @@ function usePendingSettingsRow() {
       return;
     }
     const { section, row } = found;
+    const align = useSettingsRevealStore.getState().pendingAlign;
     if (row.reveal?.kind === "advanced") {
       useSettingsRevealStore.getState().setAdvancedOpen(true);
     } else if (row.reveal?.kind === "pasteCleanupAdvanced") {
@@ -86,7 +88,13 @@ function usePendingSettingsRow() {
         // jsdom has no layout; the call is a no-op guard there. Focus first
         // without scrolling, so the scroll is the only movement.
         rowElement.querySelector<HTMLElement>(FOCUSABLE_IN_ROW)?.focus({ preventScroll: true });
-        rowElement.scrollIntoView?.({ block: "center", behavior: "auto" });
+        if (align === "section") {
+          document
+            .querySelector(`[data-settings-section="${section.id}"]`)
+            ?.scrollIntoView?.({ block: "start", behavior: "auto" });
+        } else {
+          rowElement.scrollIntoView?.({ block: "center", behavior: "auto" });
+        }
         useSettingsRevealStore.getState().clearRow();
         return;
       }
@@ -117,19 +125,13 @@ export function Settings() {
   const { primaryColor } = useSettings();
   const scrollerRef = useRef<HTMLDivElement>(null);
 
-  // A control elsewhere links to Settings → Dictation by hash; scroll to it.
-  // Two frames wait for the section to be in the DOM; location.key re-scrolls
-  // on a repeated navigation to the same hash.
+  // A link to /settings#<section id> opens that section through the row
+  // request, which waits for the loading above it: a scroll fired at mount
+  // landed short once the Backup list grew. location.key repeats it on a
+  // second navigation to the same hash.
   useEffect(() => {
-    if (location.hash !== "#dictation") return;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.getElementById("dictation")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      });
-    });
+    const section = SETTINGS_SECTIONS.find((s) => `#${s.id}` === location.hash);
+    if (section) focusSettingsRow(section.rows[0].id, { align: "section" });
   }, [location.hash, location.key]);
 
   return (

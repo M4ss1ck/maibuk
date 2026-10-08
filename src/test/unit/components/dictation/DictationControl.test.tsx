@@ -13,6 +13,7 @@ vi.mock("@/features/dictation/runtime", () => ({
   }),
 }));
 const { useDictationStore } = await import("@/features/dictation/store");
+const { useSettingsRevealStore } = await import("@/features/settings/settings-reveal-store");
 const { DictationControl } = await import("@/components/dictation/DictationControl");
 const { DictationLiveRegion } = await import("@/components/dictation/DictationLiveRegion");
 
@@ -40,6 +41,7 @@ function renderControl() {
 }
 
 beforeEach(() => {
+  useSettingsRevealStore.getState().clearRow();
   toggle.mockClear();
   setLanguage.mockClear();
   useDictationStore.setState({
@@ -143,10 +145,11 @@ describe("DictationControl", () => {
     expect(screen.getByRole("button", { name: /download a dictation model/i })).toHaveFocus();
     await user.keyboard("{Enter}");
     expect(await screen.findByText("settings page")).toBeInTheDocument();
+    expect(useSettingsRevealStore.getState().pendingRowId).toBe("dictationEnabled");
     expect(toggle).not.toHaveBeenCalled();
   });
 
-  it("the settings button opens Settings", async () => {
+  it("the settings button opens Settings on the Dictation section", async () => {
     const user = userEvent.setup();
     renderControl();
     await user.tab();
@@ -154,6 +157,12 @@ describe("DictationControl", () => {
     await user.tab();
     await user.keyboard("{Enter}");
     expect(await screen.findByText("settings page")).toBeInTheDocument();
+    // The row request waits for Settings to finish loading before it scrolls,
+    // which a bare hash link did not.
+    expect(useSettingsRevealStore.getState()).toMatchObject({
+      pendingRowId: "dictationEnabled",
+      pendingAlign: "section",
+    });
   });
 
   it("announces through a polite live region", () => {

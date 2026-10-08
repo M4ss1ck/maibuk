@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { resolvedLanguage: "en" } }),
@@ -137,19 +138,18 @@ describe("Settings page — container-aware layout", () => {
     expect(document.querySelector(".overflow-auto")).toHaveClass("@container");
   });
 
-  it("scrolls to the Dictation section when linked by hash", async () => {
-    const original = Element.prototype.scrollIntoView;
-    const scrollIntoView = vi.fn();
-    // jsdom has no layout; stub so the section's scroll does not throw.
-    Element.prototype.scrollIntoView = scrollIntoView;
+  // Regression: the hash scrolled two frames after mount, before the Backup
+  // list above Dictation had loaded; its growth left the page on Editor. The
+  // hash now goes through the row request, which waits for that loading
+  // (SettingsRows.test covers the request's scroll and focus).
+  it("requests the Dictation section's first row when linked by hash", () => {
+    const requestRow = vi.spyOn(useSettingsRevealStore.getState(), "requestRow");
     try {
       renderSettings(["/settings#dictation"]);
-      expect(document.getElementById("dictation")).not.toBeNull();
-      // The page waits two animation frames before scrolling the section into view.
-      await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
-      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+      expect(requestRow).toHaveBeenCalledWith("dictationEnabled", "section");
     } finally {
-      Element.prototype.scrollIntoView = original;
+      requestRow.mockRestore();
+      useSettingsRevealStore.getState().clearRow();
     }
   });
 
