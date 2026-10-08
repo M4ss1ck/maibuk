@@ -139,9 +139,10 @@ describe("BookSidePanel", () => {
     expect(handle).not.toBeNull();
     fireEvent.pointerDown(handle as Element, { clientX: 100 });
     fireEvent.pointerMove(document, { clientX: 50 });
-    // The panel sits on the right, so dragging left widens it.
-    expect(onResize).toHaveBeenLastCalledWith(410);
+    // The panel sits on the right, so dragging left widens it, live.
+    expect(panel).toHaveStyle({ width: "410px", minWidth: "410px" });
     fireEvent.pointerUp(document);
+    expect(onResize).toHaveBeenLastCalledWith(410);
   });
 
   it("resizes by keyboard arrows through a focusable separator", async () => {

@@ -342,16 +342,23 @@ describe("Layout", () => {
     const handle = container.querySelector(".cursor-col-resize");
     expect(handle).not.toBeNull();
 
+    const sidebar = screen.getByRole("complementary", { name: translations.en["panes.navSidebar"] });
+    const before = useSettingsStore.getState().mainSidebarWidth;
+
     fireEvent.pointerDown(handle as Element, { clientX: 100 });
     fireEvent.pointerMove(document, { clientX: 150 });
-    expect(useSettingsStore.getState().mainSidebarWidth).toBe(330);
+    // The drag moves the sidebar itself; the setting is written once, on release.
+    expect(sidebar).toHaveStyle({ width: "330px" });
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(before);
 
     fireEvent.pointerMove(document, { clientX: 1000 });
-    expect(useSettingsStore.getState().mainSidebarWidth).toBe(480);
+    expect(sidebar).toHaveStyle({ width: "480px" });
 
     fireEvent.pointerUp(document);
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(480);
     fireEvent.pointerMove(document, { clientX: 100 });
     expect(useSettingsStore.getState().mainSidebarWidth).toBe(480);
+    expect(sidebar).toHaveStyle({ width: "480px" });
   });
 
   function getResizeHandle() {
