@@ -71,7 +71,7 @@ test.describe("Notes Gallery browsing @wf:notes-gallery-browse", () => {
     await expect(page.getByRole("heading", { name: SEED_NOTES.keeperLog, level: 1 })).toBeVisible();
   });
 
-  test("ArrowDown from the page enters the first Gallery card @sc:notes.enterList", async ({
+  test("ArrowDown from the page enters the first Gallery card @wf:notes-gallery-browse", async ({
     page,
   }) => {
     await page.goto("/notes");

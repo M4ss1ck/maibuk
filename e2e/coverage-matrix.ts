@@ -1176,7 +1176,7 @@ export const ROWS: MatrixRow[] = [
     workflow: "Notes Gallery: arrow through cards, Enter opens; asserts: activeElement",
     edges: ["Empty state", "ArrowDown from the page enters the first card"],
     terms: ["Gallery", "Note"],
-    shortcuts: ["notes.enterList"],
+    shortcuts: [],
     routes: ["/notes"],
     fixture: "notesWithLinksAndTags",
     tags: [],

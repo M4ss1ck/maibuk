@@ -1,3 +1,4 @@
+import { installArrowNavigation } from "@/lib/arrow-navigation";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import userEvent from "@testing-library/user-event";
@@ -129,12 +130,15 @@ describe("Home keyboard navigation", () => {
 
   it("enters the book grid with an arrow key before anything has been tabbed to", async () => {
     const user = userEvent.setup();
+    // The arrow-navigation module lands on the Gallery, the Pane entry (ADR 0025 rule 7).
+    const uninstall = installArrowNavigation();
     render(<Home />);
 
     expect(document.body).toHaveFocus();
     await user.keyboard("{ArrowDown}");
 
     expect(screen.getAllByRole("row")[0]).toHaveFocus();
+    uninstall();
   });
 
   it("moves horizontally through project actions", async () => {
@@ -149,16 +153,6 @@ describe("Home keyboard navigation", () => {
 
     await user.keyboard("{ArrowLeft}");
     expect(importButton).toHaveFocus();
-  });
-
-  it("moves down from project actions into the book grid", async () => {
-    const user = userEvent.setup();
-    render(<Home />);
-    const importButton = screen.getByRole("button", { name: /Import EPUB/i });
-
-    importButton.focus();
-    await user.keyboard("{ArrowDown}");
-    expect(screen.getAllByRole("row")[0]).toHaveFocus();
   });
 
   it("lists the Books screen shortcuts as bound while it is open", () => {

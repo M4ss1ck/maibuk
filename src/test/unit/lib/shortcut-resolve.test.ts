@@ -52,11 +52,7 @@ describe("editableShortcuts", () => {
 
 describe("effectiveShortcuts", () => {
   it("puts Fixed Shortcuts before the editable ones", () => {
-    expect(effectiveShortcuts("bookList.moveSelectionNext", {}, false)).toEqual([
-      ["ArrowDown"],
-      ["ArrowRight"],
-      ["j"],
-    ]);
+    expect(effectiveShortcuts("common.redo", {}, false)).toEqual([["Mod+Shift+z"], ["Mod+y"]]);
   });
 
   it("is fixed-only for a Command with no defaults", () => {
@@ -69,8 +65,8 @@ describe("isFixedShortcut", () => {
   it("matches against the Fixed Shortcuts by identity", () => {
     expect(isFixedShortcut("common.undo", ["Mod+z"])).toBe(true);
     expect(isFixedShortcut("common.undo", ["Mod+y"])).toBe(false);
-    expect(isFixedShortcut("bookList.moveSelectionNext", ["ArrowDown"])).toBe(true);
-    expect(isFixedShortcut("bookList.moveSelectionNext", ["j"])).toBe(false);
+    expect(isFixedShortcut("common.redo", ["Mod+Shift+z"])).toBe(true);
+    expect(isFixedShortcut("common.redo", ["Mod+y"])).toBe(false);
   });
 });
 
