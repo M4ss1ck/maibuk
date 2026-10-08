@@ -2779,7 +2779,11 @@ export const ROWS: MatrixRow[] = [
     area: "shell",
     workflow:
       "The Pane the keyboard enters keeps a ring; F6 also names it in a badge for a moment; an arrow into another Pane moves the ring; asserts: ring on the Pane, badge text; persists: no",
-    edges: ["With keyboard hints hidden (g h), F6 rings the Pane but shows no badge"],
+    edges: [
+      "With keyboard hints hidden (g h), F6 rings the Pane but shows no badge",
+      "Escape hides the ring and keeps focus; the next arrow rings the Pane again",
+      "Typing in the note's text hides the ring; F6 rings the next Pane",
+    ],
     terms: ["Pane"],
     shortcuts: [],
     routes: ["/notes", "/notes/:noteId"],

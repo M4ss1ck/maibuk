@@ -27,6 +27,8 @@ function Fixture() {
       </section>
       <section data-focus-pane="editor" tabIndex={-1} aria-label="Note editor">
         <button type="button">In editor</button>
+        {/* biome-ignore lint/a11y/useSemanticElements: a contenteditable textbox, as the TipTap editor renders it. */}
+        <div role="textbox" aria-label="Text" aria-multiline="true" contentEditable tabIndex={0} />
       </section>
     </>
   );
@@ -203,5 +205,60 @@ describe("PaneFocusFrame", () => {
     keyboardFocus(button("In list"));
     keyboardFocus(button("In editor"));
     expect(screen.queryByTestId("pane-badge")).toBeNull();
+  });
+
+  it("hides the ring once the author types in the Pane, and brings it back when the keyboard moves focus", async () => {
+    const user = userEvent.setup();
+    render(<Fixture />);
+    const frame = screen.getByTestId("pane-frame");
+    const text = screen.getByRole("textbox", { name: "Text" });
+    keyboardFocus(text);
+    expect(pane("editor")).toHaveAttribute("data-pane-active");
+
+    await user.keyboard("a");
+    expect(pane("editor")).not.toHaveAttribute("data-pane-active");
+    expect(frame.style.opacity).toBe("0");
+
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(button("In editor")).toHaveFocus();
+    expect(pane("editor")).toHaveAttribute("data-pane-active");
+    expect(frame.style.opacity).toBe("1");
+  });
+
+  it("hides the ring when the author acts on a control with Enter or Space", async () => {
+    const user = userEvent.setup();
+    render(<Fixture />);
+    keyboardFocus(button("In list"));
+    await user.keyboard("{Enter}");
+    expect(pane("list")).not.toHaveAttribute("data-pane-active");
+
+    keyboardFocus(button("In editor"));
+    expect(pane("editor")).toHaveAttribute("data-pane-active");
+    await user.keyboard(" ");
+    expect(pane("editor")).not.toHaveAttribute("data-pane-active");
+  });
+
+  it("keeps the ring for navigation keys and modifiers that do not move focus", () => {
+    render(<Fixture />);
+    const text = screen.getByRole("textbox", { name: "Text" });
+    keyboardFocus(text);
+    // jsdom cannot move a caret, so the keys are dispatched rather than typed.
+    for (const key of ["ArrowLeft", "Home", "End", "PageDown", "Shift", "Control", "F6", "Tab"]) {
+      fireEvent.keyDown(text, { key });
+    }
+    expect(pane("editor")).toHaveAttribute("data-pane-active");
+  });
+
+  it("lets Escape hide the ring wherever focus sits, even when a control stops the key", async () => {
+    const user = userEvent.setup();
+    render(<Fixture />);
+    keyboardFocus(button("In list"));
+    // React Aria lists stop Escape when it clears a selection.
+    button("In list").addEventListener("keydown", (event) => event.stopPropagation());
+    await user.keyboard("{Escape}");
+    expect(pane("list")).not.toHaveAttribute("data-pane-active");
+    expect(screen.getByTestId("pane-frame").style.opacity).toBe("0");
+    // Focus stays put: Escape hides the ring, it does not drop the author's place.
+    expect(button("In list")).toHaveFocus();
   });
 });

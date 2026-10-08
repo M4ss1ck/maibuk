@@ -11,6 +11,28 @@ import { PANE_CYCLED_EVENT, PANE_SELECTOR } from "@/lib/arrow-navigation";
 const SLIDE_MS = 180;
 const BADGE_MS = 1500;
 
+// Keys that move focus or only modify another key. Every other key is the
+// author working where focus already is (typing, Enter, Space, a shortcut,
+// Escape), so the ring has done its job and goes until focus moves again.
+const NAVIGATION_KEYS = new Set([
+  "Tab",
+  "F6",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+  "Shift",
+  "Control",
+  "Alt",
+  "AltGraph",
+  "Meta",
+  "CapsLock",
+]);
+
 function prefersReducedMotion(): boolean {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
@@ -52,8 +74,9 @@ interface Badge {
  * Shows which Pane holds keyboard focus: a frame slides to a Pane the
  * keyboard moves into and stays over it as its ring while focus stays and the
  * modality is keyboard (the Pane carries `data-pane-active` meanwhile), and
- * F6 also names the Pane briefly. Pointer input hides the ring. Mounted once
- * beside GlobalShortcuts.
+ * F6 also names the Pane briefly. Pointer input hides the ring, and so does
+ * any key that is not navigation, Escape included, until the keyboard moves
+ * focus again. Mounted once beside GlobalShortcuts.
  */
 export function PaneFocusFrame() {
   const { t } = useTranslation();
@@ -61,6 +84,7 @@ export function PaneFocusFrame() {
   const { isFocusVisible: keyboardModality } = useFocusVisible();
   const [pane, setPane] = useState<HTMLElement | null>(null);
   const [onResizeHandle, setOnResizeHandle] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [badge, setBadge] = useState<Badge | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const paneRef = useRef<HTMLElement | null>(null);
@@ -75,6 +99,7 @@ export function PaneFocusFrame() {
       // it keeps its own focus ring alone. The Pane is still tracked, so the
       // next move slides from it.
       setPane(next);
+      setDismissed(false);
       setOnResizeHandle(target instanceof Element && target.matches('[role="separator"]'));
       if (previous && next && previous !== next && frameRef.current && isFocusVisible()) {
         slide(frameRef.current, previous, next);
@@ -85,11 +110,18 @@ export function PaneFocusFrame() {
       paneRef.current = null;
       setPane(null);
     };
+    // Capture at the window: React Aria stops Escape when a list clears its
+    // selection, and the editor stops keys it binds.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!NAVIGATION_KEYS.has(event.key)) setDismissed(true);
+    };
     document.addEventListener("focusin", onFocusIn);
     document.addEventListener("focusout", onFocusOut);
+    window.addEventListener("keydown", onKeyDown, true);
     return () => {
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
+      window.removeEventListener("keydown", onKeyDown, true);
     };
   }, []);
 
@@ -98,7 +130,7 @@ export function PaneFocusFrame() {
   // header hid its top edge). One observer, on the active Pane only.
   useEffect(() => {
     const frame = frameRef.current;
-    if (!pane || !keyboardModality || onResizeHandle || !frame) return;
+    if (!pane || !keyboardModality || onResizeHandle || dismissed || !frame) return;
     pane.setAttribute("data-pane-active", "");
     const follow = () => place(frame, pane.getBoundingClientRect());
     follow();
@@ -112,7 +144,7 @@ export function PaneFocusFrame() {
       observer?.disconnect();
       window.removeEventListener("resize", follow);
     };
-  }, [pane, keyboardModality, onResizeHandle]);
+  }, [pane, keyboardModality, onResizeHandle, dismissed]);
 
   useEffect(() => {
     if (badge && badge.pane !== pane) setBadge(null);
