@@ -6,7 +6,13 @@
 
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  describeFocus,
+  expectFocusWithin,
+  isFocusWithin,
+  pressUntilFocused,
+  tabTo,
+} from "../support/keyboard";
 import { SEED_NOTES } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -376,6 +382,45 @@ test.describe("the Pane frame @wf:pane-frame", () => {
       ""
     );
     await expect(page.getByTestId("pane-badge")).toBeHidden();
+  });
+
+  test("Escape hides the ring without moving focus, and the next arrow brings it back", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await f6To(page, notesListPane(page));
+    const pane = page.locator('[data-focus-pane="notes-sidebar"]');
+    await expect(pane).toHaveAttribute("data-pane-active", "");
+    const before = await describeFocus(page);
+
+    await page.keyboard.press("Escape");
+    await expect(pane).not.toHaveAttribute("data-pane-active", "");
+    await expect(page.getByTestId("pane-frame")).toHaveCSS("opacity", "0");
+    expect(await describeFocus(page)).toBe(before);
+    await capture(page, "pane-frame-escaped");
+
+    await page.keyboard.press("ArrowDown");
+    await expect(pane).toHaveAttribute("data-pane-active", "");
+  });
+
+  test("typing in the note's text hides the ring; F6 to another Pane rings it again", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await f6To(page, notesListPane(page));
+    // Past the row's four buttons, the fifth Right crosses into the text.
+    for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowRight");
+    await expect(noteText(page)).toBeFocused();
+    const editorPane = page.locator('[data-focus-pane="notes-content"]');
+    await expect(editorPane).toHaveAttribute("data-pane-active", "");
+
+    await page.keyboard.type("x");
+    await expect(editorPane).not.toHaveAttribute("data-pane-active", "");
+    await expect(page.getByTestId("pane-frame")).toHaveCSS("opacity", "0");
+    await capture(page, "pane-frame-typing");
+
+    await page.keyboard.press("F6");
+    await expect(page.locator("[data-pane-active]")).toHaveCount(1);
   });
 });
 

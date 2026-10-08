@@ -479,7 +479,7 @@ _UI_: en "Command palette" / es "Paleta de comandos"
 _Avoid_: command bar, quick open, launcher, search (reserved for searching Library content)
 
 **Pane**:
-One area of a screen that the author moves focus between with F6 and Shift+F6, such as the Notes list, the note editor, or the navigation sidebar. When the keyboard moves focus into another Pane, the outline travels there and stays on the Pane holding focus; F6 also names the Pane briefly. The Book side panel is a Pane.
+One area of a screen that the author moves focus between with F6 and Shift+F6, such as the Notes list, the note editor, or the navigation sidebar. When the keyboard moves focus into another Pane, the outline travels there and stays on the Pane holding focus until the author types, acts on a control, or presses Escape; the next keyboard move brings it back. F6 also names the Pane briefly. The Book side panel is a Pane.
 _UI_: en "pane" / es "panel"
 _Avoid_: region, area, section
 
