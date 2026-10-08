@@ -1,4 +1,5 @@
 import type { DragEvent, KeyboardEvent } from "react";
+import { keepRowFromActing } from "@/lib/arrow-navigation";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
@@ -164,14 +165,6 @@ export function NoteListItem({
     refocusRowAfterEdit.current = false;
     menuAnchorRef.current?.closest<HTMLElement>('[role="row"]')?.focus();
   }, [isEditing]);
-
-  // The row is one Tab stop and its buttons are reached with arrows (ADR 0025).
-  // With React Aria's default "arrow" navigation the row's onAction fires for an
-  // Enter or Space that bubbles out of a native button, and usePress cancels the
-  // button's own click; stopping the key here keeps each button acting on its own.
-  const keepRowFromActing = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key === "Enter" || event.key === " ") event.stopPropagation();
-  };
 
   const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     // The field keeps its keys: the list's typeahead would otherwise swallow

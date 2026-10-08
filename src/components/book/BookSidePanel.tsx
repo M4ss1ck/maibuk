@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SIDE_PANEL_MAX_WIDTH, SIDE_PANEL_MIN_WIDTH } from "@/features/settings/types";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog, Tab, TabList, TabPanel, TabPanels, Tabs } from "react-aria-components";
 import { useTranslation } from "react-i18next";
@@ -225,8 +226,8 @@ export function BookSidePanel({
         <ResizeHandle
           side="left"
           value={width}
-          min={200}
-          max={480}
+          min={SIDE_PANEL_MIN_WIDTH}
+          max={SIDE_PANEL_MAX_WIDTH}
           onResize={onResize}
           label={t("bookSidePanel.resize")}
         />

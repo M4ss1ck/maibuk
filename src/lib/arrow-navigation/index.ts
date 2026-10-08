@@ -2,8 +2,8 @@
 // nearest arrow stop, then across Panes (ADR 0025). The only hand-written
 // focus movement in the app: widgets keep React Aria's own arrow handling.
 import { topmostLayer } from "@/lib/top-layer";
-import { pickInDirection, pickPane } from "./geometry";
-import { installPaneMemory, landInPane, paneOf, visiblePanes } from "./panes";
+import { pickInDirection, pickPane } from "@/lib/arrow-navigation/geometry";
+import { installPaneMemory, landInPane, paneOf, visiblePanes } from "@/lib/arrow-navigation/panes";
 import {
   type ArrowKey,
   arrowOutcome,
@@ -13,10 +13,21 @@ import {
   ownsArrows,
   stopsIn,
   widgetOf,
-} from "./stops";
+} from "@/lib/arrow-navigation/stops";
 
-export { cyclePanes, landInPane, PANE_CYCLED_EVENT, visiblePanes } from "./panes";
-export { keepFocusRestoreInRowForm, keepTabInRowForm, rowFormProps } from "./row-form";
+export {
+  cyclePanes,
+  landInPane,
+  PANE_CYCLED_EVENT,
+  PANE_SELECTOR,
+  visiblePanes,
+} from "@/lib/arrow-navigation/panes";
+export {
+  keepFocusRestoreInRowForm,
+  keepRowFromActing,
+  keepTabInRowForm,
+  rowFormProps,
+} from "@/lib/arrow-navigation/row-form";
 
 function isArrowKey(key: string): key is ArrowKey {
   return key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight";

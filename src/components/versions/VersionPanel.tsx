@@ -10,7 +10,11 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { GridList, GridListItem } from "react-aria-components/GridList";
-import { keepTabInRowForm } from "@/lib/arrow-navigation";
+import {
+  keepFocusRestoreInRowForm,
+  keepRowFromActing,
+  keepTabInRowForm,
+} from "@/lib/arrow-navigation";
 import {
   Eye,
   GitCompareArrows,
@@ -239,13 +243,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
     [renameVersion, renameValue, t]
   );
 
-  // The row is one Tab stop and its buttons are reached with arrows (ADR 0025).
-  // React Aria's default "arrow" navigation fires the row's onAction for an Enter
-  // or Space that bubbles out of a native button, so stopping the key at the
-  // buttons' wrapper keeps each button acting on its own.
-  const keepRowFromActing = (event: ReactKeyboardEvent<HTMLElement>) => {
-    if (event.key === "Enter" || event.key === " ") event.stopPropagation();
-  };
+  // Row buttons stop Enter and Space from running the row (keepRowFromActing).
   // The inline rename and confirm are small forms: Tab moves between their
   // controls instead of out of the list (keepTabInRowForm).
   const routeRowFormKeys = (event: ReactKeyboardEvent<HTMLElement>) => {
@@ -483,6 +481,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                     {isRenaming ? (
                       <div
                         className="flex-1 flex gap-2 items-center"
+                        ref={keepFocusRestoreInRowForm}
                         onKeyDown={routeRowFormKeys}
                         onClick={keepRowFromClick}
                       >
@@ -525,6 +524,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                     ) : isConfirming ? (
                       <div
                         className="flex-1 flex items-center gap-2"
+                        ref={keepFocusRestoreInRowForm}
                         onKeyDown={routeRowFormKeys}
                         onClick={keepRowFromClick}
                       >

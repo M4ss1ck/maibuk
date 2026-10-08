@@ -1,6 +1,7 @@
-// A small form inside a collection row: an inline rename, a delete confirm.
+// Controls inside a collection row: the row's own buttons, and a small form
+// such as an inline rename or a delete confirm.
 import type { KeyboardEvent } from "react";
-import { focusablesIn } from "./stops";
+import { focusablesIn } from "@/lib/arrow-navigation/stops";
 
 /**
  * The `onKeyDown` of a small form inside a collection row. React Aria treats a
@@ -34,6 +35,16 @@ export function keepFocusRestoreInRowForm(form: HTMLElement | null): (() => void
   if (!form) return;
   form.addEventListener(RESTORE_FOCUS_EVENT, stopRestoreFocus);
   return () => form.removeEventListener(RESTORE_FOCUS_EVENT, stopRestoreFocus);
+}
+
+/**
+ * The `onKeyDown` of a button inside a collection row. The row is one Tab
+ * stop and its buttons are reached with arrows (ADR 0025); with React Aria's
+ * "arrow" navigation the row's onAction fires for an Enter or Space that
+ * bubbles out of a native button, so the key stops at the button.
+ */
+export function keepRowFromActing(event: KeyboardEvent<HTMLElement>): void {
+  if (event.key === "Enter" || event.key === " ") event.stopPropagation();
 }
 
 /** Spread on a small form inside a collection row: Tab and popover focus stay with the form. */

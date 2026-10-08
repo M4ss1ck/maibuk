@@ -6,9 +6,8 @@ import { useFocusVisible } from "react-aria";
 import { isFocusVisible } from "react-aria/private/interactions/useFocusVisible";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
-import { PANE_CYCLED_EVENT } from "@/lib/arrow-navigation";
+import { PANE_CYCLED_EVENT, PANE_SELECTOR } from "@/lib/arrow-navigation";
 
-const PANE = "[data-focus-pane]";
 const SLIDE_MS = 180;
 const BADGE_MS = 1500;
 
@@ -64,7 +63,7 @@ export function PaneFocusFrame() {
   useEffect(() => {
     const onFocusIn = (event: FocusEvent) => {
       const target = event.target;
-      const next = target instanceof Element ? target.closest<HTMLElement>(PANE) : null;
+      const next = target instanceof Element ? target.closest<HTMLElement>(PANE_SELECTOR) : null;
       const previous = paneRef.current;
       paneRef.current = next;
       setPane(next);
@@ -113,16 +112,19 @@ export function PaneFocusFrame() {
 
   return (
     <>
+      {/* Square-ish on purpose: it traces Pane edges, which have no radius. */}
       <div
         ref={frameRef}
         aria-hidden="true"
         className="fixed z-50 pointer-events-none rounded-sm border-2 border-primary opacity-0 origin-top-left"
       />
       {badge && (
+        // A test id because the badge is aria-hidden: screen readers already
+        // hear the focused control, so it has no accessible name to query.
         <div
           aria-hidden="true"
           data-testid="pane-badge"
-          className="pane-badge-enter fixed z-50 pointer-events-none rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground shadow-md"
+          className="pane-badge-enter fixed z-50 pointer-events-none rounded-lg bg-primary px-2 py-1 text-xs font-medium text-primary-foreground shadow-md"
           style={{ top: badge.top, left: badge.left }}
         >
           {t("panes.badge", { name: badge.name })}

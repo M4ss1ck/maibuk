@@ -53,7 +53,12 @@ import { DictationControl } from "@/components/dictation";
 import { deriveNoteTitle } from "@/components/book/deriveNoteTitle";
 import { useNoteStore } from "@/features/notes";
 import { useSettingsStore } from "@/features/settings/store";
-import { normalizeLanguage, type Language } from "@/features/settings/types";
+import {
+  normalizeLanguage,
+  SIDE_PANEL_MAX_WIDTH,
+  SIDE_PANEL_MIN_WIDTH,
+  type Language,
+} from "@/features/settings/types";
 import {
   History,
   Menu,
@@ -1319,8 +1324,8 @@ export function BookEditor() {
                 <ResizeHandle
                   side="right"
                   value={sidebarWidth}
-                  min={200}
-                  max={480}
+                  min={SIDE_PANEL_MIN_WIDTH}
+                  max={SIDE_PANEL_MAX_WIDTH}
                   onResize={setSidebarWidth}
                   label={t("nav.resizeChaptersSidebar")}
                 />

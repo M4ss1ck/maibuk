@@ -2,9 +2,10 @@
 // focus lands when F6 or an arrow enters one (ADR 0025 rule 8).
 import { getFocusableTreeWalker } from "react-aria/private/focus/FocusScope";
 import { isOutsideLayer } from "@/lib/top-layer";
-import { landOn, stopsIn } from "./stops";
+import { landOn, stopsIn } from "@/lib/arrow-navigation/stops";
 
-const PANE = "[data-focus-pane]";
+/** Matches every Pane container. */
+export const PANE_SELECTOR = "[data-focus-pane]";
 
 function isVisiblePane(pane: HTMLElement): boolean {
   if (pane.closest('[hidden], [inert], [aria-hidden="true"], [data-closed]')) return false;
@@ -21,7 +22,7 @@ const isNested = (pane: HTMLElement) => pane.hasAttribute("data-focus-pane-neste
  * text) is a region of its own inside its outer Pane, so both stay stops.
  */
 export function visiblePanes(): HTMLElement[] {
-  const visible = [...document.querySelectorAll<HTMLElement>(PANE)].filter(isVisiblePane);
+  const visible = [...document.querySelectorAll<HTMLElement>(PANE_SELECTOR)].filter(isVisiblePane);
   return visible.filter(
     (pane) =>
       isNested(pane) ||
@@ -36,7 +37,7 @@ export function paneOf(el: Element | null, panes = visiblePanes()): HTMLElement 
   // Document order puts an outer Pane before a nested one, so the last match is the innermost.
   for (const pane of panes) if (pane === el || pane.contains(el)) found = pane;
   if (found) return found;
-  if (el instanceof HTMLElement && el.matches(PANE)) {
+  if (el instanceof HTMLElement && el.matches(PANE_SELECTOR)) {
     return panes.find((pane) => el.contains(pane)) ?? null;
   }
   return null;
@@ -47,13 +48,13 @@ const lastFocused = new WeakMap<HTMLElement, HTMLElement>();
 
 function remember(event: FocusEvent): void {
   const target = event.target;
-  if (!(target instanceof HTMLElement) || target.matches(PANE)) return;
+  if (!(target instanceof HTMLElement) || target.matches(PANE_SELECTOR)) return;
   // A nested Pane's controls are not its outer Pane's: F6 to the editor
   // returns to the text, not to the Footnotes inside it.
-  for (let pane = target.closest<HTMLElement>(PANE); pane; ) {
+  for (let pane = target.closest<HTMLElement>(PANE_SELECTOR); pane; ) {
     lastFocused.set(pane, target);
     if (isNested(pane)) break;
-    pane = pane.parentElement?.closest<HTMLElement>(PANE) ?? null;
+    pane = pane.parentElement?.closest<HTMLElement>(PANE_SELECTOR) ?? null;
   }
 }
 

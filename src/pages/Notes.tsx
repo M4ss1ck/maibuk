@@ -9,7 +9,11 @@ import { NotesList, NoteEditor, EmptyNotes } from "@/components/notes";
 import { DictationControl } from "@/components/dictation";
 import { duplicateNoteInput } from "@/components/notes/notes-list-model";
 import { useSettingsStore } from "@/features/settings/store";
-import { normalizeLanguage } from "@/features/settings/types";
+import {
+  normalizeLanguage,
+  SIDE_PANEL_MAX_WIDTH,
+  SIDE_PANEL_MIN_WIDTH,
+} from "@/features/settings/types";
 import { useShortcuts } from "@/lib/shortcuts";
 import { droppedTextToEditorHtml } from "@/features/markdown";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
@@ -208,8 +212,8 @@ export function Notes() {
           <ResizeHandle
             side="right"
             value={notesSidebarWidth}
-            min={200}
-            max={480}
+            min={SIDE_PANEL_MIN_WIDTH}
+            max={SIDE_PANEL_MAX_WIDTH}
             onResize={setNotesSidebarWidth}
             label={t("nav.resizeNotesSidebar")}
             className="hidden md:block"
