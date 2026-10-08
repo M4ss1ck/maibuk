@@ -1605,7 +1605,7 @@
         },
         "remember": {
           "title": "Maibuk remembers your layout",
-          "body": "Drag this handle, or focus it and press the arrow keys, to resize the sidebar. Panel sizes, filters and the screen you were on are remembered on this device, and every Chapter reopens at your Reading Position."
+          "body": "Drag this handle, or focus it and press the arrow keys, to resize the sidebar. Escape takes you back into the sidebar. Panel sizes, filters and the screen you were on are remembered on this device, and every Chapter reopens at your Reading Position."
         }
       },
       "book-editor": {

@@ -380,6 +380,25 @@ describe("Layout", () => {
     expect(handle).not.toHaveFocus();
   });
 
+  it("leaves the resize handle with Escape for the sidebar control used before it, keeping the width", async () => {
+    const user = userEvent.setup();
+    renderLayout();
+    const sidebar = screen.getByRole("complementary", { name: "Navigation sidebar" });
+
+    const handle = await tabToResizeHandle(user);
+    await user.tab({ shift: true });
+    const before = document.activeElement;
+    expect(sidebar).toContainElement(before as HTMLElement);
+    await user.tab();
+    expect(handle).toHaveFocus();
+    // The Tooltip wrapper still opens on focus.
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(translations.en["nav.resizeSidebar"]);
+
+    await user.keyboard("{ArrowRight}{Escape}");
+    expect(before).toHaveFocus();
+    expect(useSettingsStore.getState().mainSidebarWidth).toBe(296);
+  });
+
   it("widens with ArrowRight and narrows with ArrowLeft in 16px steps, keeping focus", async () => {
     const user = userEvent.setup();
     renderLayout();

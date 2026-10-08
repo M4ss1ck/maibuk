@@ -2,11 +2,13 @@ import {
   forwardRef,
   useCallback,
   useRef,
+  type FocusEventHandler,
   type KeyboardEventHandler,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useMove } from "react-aria";
+import { PANE_SELECTOR, landInPane } from "@/lib/arrow-navigation/panes";
 
 /** One keyboard resize press moves the panel this many pixels. */
 const KEYBOARD_RESIZE_STEP = 16;
@@ -23,6 +25,8 @@ export interface ResizeHandleProps {
   className?: string;
   /** A wrapper (e.g. Tooltip) may hand the handle its own key handling; ResizeHandle keeps it. */
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
+  /** A wrapper's focus handling (Tooltip opens on focus); ResizeHandle keeps it too. */
+  onFocus?: FocusEventHandler<HTMLDivElement>;
   [key: `data-${string}`]: string | undefined;
 }
 
@@ -35,9 +39,12 @@ function clamp(width: number, min: number, max: number): number {
  * the handle sits on: a handle on a left panel's right edge widens with
  * ArrowRight, a handle on a right panel's left edge widens with ArrowLeft.
  * React Aria owns the arrow keys; the pointer drag matches the same direction.
+ * The handle keeps every arrow (ADR 0025), so Escape is the way back into the
+ * panel it resizes: to the control used there before the handle, else where
+ * entering that Pane lands.
  */
 export const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(function ResizeHandle(
-  { side, value, min, max, onResize, label, className, onKeyDown, ...rest },
+  { side, value, min, max, onResize, label, className, onKeyDown, onFocus, ...rest },
   ref
 ) {
   const { t } = useTranslation();
@@ -49,6 +56,8 @@ export const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(functi
   // A left panel's handle sits on its right edge, so a rightward move widens it.
   // A right panel's handle sits on its left edge, so the direction flips.
   const direction = side === "right" ? 1 : -1;
+  // The control in the handle's own Pane that focus came from, for Escape.
+  const cameFrom = useRef<HTMLElement | null>(null);
 
   // Pointer events, so a finger drags the handle as a mouse does.
   const handlePointerDown = useCallback(
@@ -96,8 +105,34 @@ export const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(functi
     },
   });
 
+  const handleFocus: FocusEventHandler<HTMLDivElement> = (event) => {
+    const from = event.relatedTarget;
+    const pane = event.currentTarget.closest<HTMLElement>(PANE_SELECTOR);
+    cameFrom.current =
+      from instanceof HTMLElement && from !== pane && pane?.contains(from) ? from : null;
+    onFocus?.(event);
+  };
+
+  const leaveToPanel = (handle: HTMLElement) => {
+    const from = cameFrom.current;
+    if (from?.isConnected) {
+      from.focus();
+      if (document.activeElement === from) return;
+    }
+    const pane = handle.closest<HTMLElement>(PANE_SELECTOR);
+    if (pane) landInPane(pane, handle);
+  };
+
   const handleKeyDown: KeyboardEventHandler<HTMLDivElement> = (event) => {
-    moveProps.onKeyDown?.(event);
+    if (event.key === "Escape" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      // Consumed: Escape leaves the handle only, so a panel that closes on
+      // Escape (the Book side panel) closes on the next press, not this one.
+      event.preventDefault();
+      event.stopPropagation();
+      leaveToPanel(event.currentTarget);
+    } else {
+      moveProps.onKeyDown?.(event);
+    }
     onKeyDown?.(event);
   };
 
@@ -116,6 +151,7 @@ export const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(functi
       aria-valuetext={t("nav.sidebarWidthValue", { width: value })}
       onPointerDown={handlePointerDown}
       onKeyDown={handleKeyDown}
+      onFocus={handleFocus}
       className={`absolute top-0 ${
         side === "right" ? "right-0" : "left-0"
       } w-1.5 h-full cursor-col-resize touch-none hover:bg-primary/30 active:bg-primary/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${

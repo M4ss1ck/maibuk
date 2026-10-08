@@ -112,7 +112,7 @@ test.describe("main sidebar keyboard resize @wf:shell-nav-sidebar-resize", () =>
     for (let i = 0; i < times; i++) await page.keyboard.press(key);
   }
 
-  test("arrows resize the sidebar from its separator within the limits and the width persists", async ({
+  test("arrows resize the sidebar from its separator within the limits, Escape leaves it, and the width persists", async ({
     page,
   }) => {
     await openHome(page);
@@ -148,6 +148,16 @@ test.describe("main sidebar keyboard resize @wf:shell-nav-sidebar-resize", () =>
     await expect(handle(page)).toBeFocused();
 
     await press(page, "ArrowRight", 3);
+    await expectWidth(page, 248);
+
+    // Escape leaves the separator for the sidebar control used before it.
+    const palette = sidebar(page).getByRole("button", { name: "Open command palette" });
+    await page.keyboard.press("Shift+Tab");
+    await expect(palette).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(handle(page)).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeFocused();
     await expectWidth(page, 248);
 
     await page.reload();
