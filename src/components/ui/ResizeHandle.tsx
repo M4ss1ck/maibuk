@@ -39,6 +39,8 @@ function clamp(width: number, min: number, max: number): number {
  * the handle sits on: a handle on a left panel's right edge widens with
  * ArrowRight, a handle on a right panel's left edge widens with ArrowLeft.
  * React Aria owns the arrow keys; the pointer drag matches the same direction.
+ * A pointer drag resizes the handle's parent element directly and commits
+ * through `onResize` on release, so the handle is a direct child of the panel.
  * The handle keeps every arrow (ADR 0025), so Escape is the way back into the
  * panel it resizes: to the control used there before the handle, else where
  * entering that Pane lands.
@@ -59,17 +61,35 @@ export const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(functi
   // The control in the handle's own Pane that focus came from, for Escape.
   const cameFrom = useRef<HTMLElement | null>(null);
 
-  // Pointer events, so a finger drags the handle as a mouse does.
+  // Pointer events, so a finger drags the handle as a mouse does. The drag
+  // writes the width straight onto the panel (the handle's parent) and onto
+  // the handle's own value attributes, and commits it through `onResize` once
+  // on release. Committing per move re-rendered the whole screen around the
+  // panel on every pointer event, ~67 ms a move at 4x CPU beside a long
+  // Chapter, while the layout the width change causes costs ~3 ms.
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       event.preventDefault();
       isResizing.current = true;
+      const handle = event.currentTarget;
+      const panel = handle.parentElement;
+      // A panel that pins its minimum width inline (the Book side panel) moves it too.
+      const movesMinWidth = Boolean(panel?.style.minWidth);
       const startX = event.clientX;
       const startWidth = valueRef.current;
+      let width: number | null = null;
 
       const onPointerMove = (moveEvent: PointerEvent) => {
         if (!isResizing.current) return;
-        onResize(clamp(startWidth + direction * (moveEvent.clientX - startX), min, max));
+        const next = clamp(startWidth + direction * (moveEvent.clientX - startX), min, max);
+        if (next === width) return;
+        width = next;
+        if (panel) {
+          panel.style.width = `${next}px`;
+          if (movesMinWidth) panel.style.minWidth = `${next}px`;
+        }
+        handle.setAttribute("aria-valuenow", String(next));
+        handle.setAttribute("aria-valuetext", t("nav.sidebarWidthValue", { width: next }));
       };
 
       const onPointerEnd = () => {
@@ -79,15 +99,21 @@ export const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(functi
         document.removeEventListener("pointercancel", onPointerEnd);
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
+        delete handle.dataset.resizing;
+        if (width !== null) {
+          valueRef.current = width;
+          onResize(width);
+        }
       };
 
+      handle.dataset.resizing = "";
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
       document.addEventListener("pointermove", onPointerMove);
       document.addEventListener("pointerup", onPointerEnd);
       document.addEventListener("pointercancel", onPointerEnd);
     },
-    [direction, min, max, onResize]
+    [direction, min, max, onResize, t]
   );
 
   // React Aria reports ArrowLeft as deltaX -1 and ArrowRight as +1. Ignore the
@@ -154,7 +180,7 @@ export const ResizeHandle = forwardRef<HTMLDivElement, ResizeHandleProps>(functi
       onFocus={handleFocus}
       className={`absolute top-0 ${
         side === "right" ? "right-0" : "left-0"
-      } w-1.5 h-full cursor-col-resize touch-none hover:bg-primary/30 active:bg-primary/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+      } w-1.5 h-full cursor-col-resize touch-none hover:bg-primary/30 active:bg-primary/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:z-20 data-resizing:z-20 ${
         className ?? ""
       }`}
     />

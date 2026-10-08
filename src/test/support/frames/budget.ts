@@ -48,6 +48,7 @@ export const FRAME_BUDGETS: Readonly<Record<string, ScenarioBudget>> = {
   canvas: { overrides: {}, reasons: {} },
   "settings-outline": { overrides: {}, reasons: {} },
   "sidebar-resize": { overrides: {}, reasons: {} },
+  "chapter-list-resize": { overrides: {}, reasons: {} },
   "chapter-reorder": { overrides: {}, reasons: {} },
   palette: {
     overrides: { inputP95Intervals: 1, minInputs: 8 },

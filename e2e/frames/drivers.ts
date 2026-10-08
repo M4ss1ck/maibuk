@@ -252,6 +252,32 @@ const sidebarResize: FrameDriver = {
   },
 };
 
+const chapterListEdge = (page: Page) =>
+  page.getByRole("separator", { name: "Resize chapter list" });
+
+const chapterListResize: FrameDriver = {
+  async prepare(ctx) {
+    await openPerfBook(ctx);
+    const { page } = ctx;
+    const at = await center(chapterListEdge(page));
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await dragBy(page, at, 40, 0, 10);
+    await dragBy(page, { x: at.x + 40, y: at.y }, -40, 0, 10);
+    await page.mouse.up();
+    await sleep(300);
+  },
+  async measure({ page }) {
+    const at = await center(chapterListEdge(page));
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await dragBy(page, at, 200, 0, 100);
+    await dragBy(page, { x: at.x + 200, y: at.y }, -200, 0, 100);
+    await page.mouse.up();
+    await sleep(200);
+  },
+};
+
 const chapterGrid = (page: Page) => page.getByRole("grid", { name: "Chapters" });
 const chapterRow = (page: Page, title: string) =>
   chapterGrid(page).getByRole("row", { name: new RegExp(`^${title}\\b`) });
@@ -441,6 +467,7 @@ export const FRAME_DRIVERS: Record<string, FrameDriver> = {
   canvas,
   "settings-outline": settingsOutline,
   "sidebar-resize": sidebarResize,
+  "chapter-list-resize": chapterListResize,
   "chapter-reorder": chapterReorder,
   palette,
   "arrow-leave-notes": arrowLeave(

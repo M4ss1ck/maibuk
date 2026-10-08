@@ -79,6 +79,19 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
     },
   },
   {
+    id: "chapter-list-resize",
+    title: "Chapter list resize beside a long Chapter",
+    seed: "perfLongChapter",
+    warmUp: "Open the long Chapter and drag the Chapter list edge once.",
+    measured:
+      "Drag the Chapter list edge 200 px right and back at 125 Hz while the long Chapter is open.",
+    repetitions: 3,
+    recordsInput: false,
+    skip: {
+      android: "phones have no resizable Chapter list (it is a drawer below md)",
+    },
+  },
+  {
     id: "chapter-reorder",
     title: "Keyboard Chapter reorder",
     seed: "perfLongChapter",

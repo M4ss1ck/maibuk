@@ -137,50 +137,96 @@ describe("ResizeHandle", () => {
     expect(handle).toHaveFocus();
   });
 
-  it("resizes on a pointer drag, clamped to the range", () => {
+  it("resizes the panel live during a pointer drag and commits once on release", () => {
     const onResize = vi.fn();
-    const { container } = render(<Harness side="right" onResize={onResize} />);
-    const handle = container.querySelector(".cursor-col-resize");
-    expect(handle).not.toBeNull();
+    render(
+      <div data-testid="panel" style={{ width: "280px" }}>
+        <Harness side="right" onResize={onResize} />
+      </div>
+    );
+    const panel = screen.getByTestId("panel");
+    const handle = getHandle();
 
-    fireEvent.pointerDown(handle as Element, { clientX: 100 });
+    fireEvent.pointerDown(handle, { clientX: 100 });
     fireEvent.pointerMove(document, { clientX: 150 });
-    expect(onResize).toHaveBeenLastCalledWith(330);
+    // The drag moves the panel's own width, never the store: one commit per
+    // move re-rendered the whole page and dropped most frames (issue #372 lane).
+    expect(panel).toHaveStyle({ width: "330px" });
+    expect(handle).toHaveAttribute("aria-valuenow", "330");
+    expect(handle).toHaveAttribute("aria-valuetext", "330 pixels");
+    expect(onResize).not.toHaveBeenCalled();
 
     fireEvent.pointerMove(document, { clientX: 1000 });
-    expect(onResize).toHaveBeenLastCalledWith(480);
+    expect(panel).toHaveStyle({ width: "480px" });
 
     fireEvent.pointerUp(document);
-    fireEvent.pointerMove(document, { clientX: 100 });
+    expect(onResize).toHaveBeenCalledTimes(1);
     expect(onResize).toHaveBeenLastCalledWith(480);
+
+    fireEvent.pointerMove(document, { clientX: 100 });
+    expect(panel).toHaveStyle({ width: "480px" });
+    expect(onResize).toHaveBeenCalledTimes(1);
   });
 
-  it("resizes on a touch drag, and a cancelled touch ends the drag", () => {
+  it("moves a panel's inline minimum width along with its width", () => {
+    render(
+      <div data-testid="panel" style={{ width: "280px", minWidth: "280px" }}>
+        <Harness side="right" />
+      </div>
+    );
+    const panel = screen.getByTestId("panel");
+
+    fireEvent.pointerDown(getHandle(), { clientX: 100 });
+    fireEvent.pointerMove(document, { clientX: 60 });
+    expect(panel).toHaveStyle({ width: "240px", minWidth: "240px" });
+    fireEvent.pointerUp(document);
+  });
+
+  it("commits nothing for a press without a move", () => {
     const onResize = vi.fn();
-    const { container } = render(<Harness side="right" onResize={onResize} />);
-    const handle = container.querySelector(".cursor-col-resize") as Element;
+    render(<Harness side="right" onResize={onResize} />);
+
+    fireEvent.pointerDown(getHandle(), { clientX: 100 });
+    fireEvent.pointerUp(document);
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it("marks itself as resizing only while a drag is in progress", () => {
+    render(<Harness side="right" />);
+    const handle = getHandle();
+    expect(handle).not.toHaveAttribute("data-resizing");
+
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    expect(handle).toHaveAttribute("data-resizing");
+    fireEvent.pointerUp(document);
+    expect(handle).not.toHaveAttribute("data-resizing");
+  });
+
+  it("resizes on a touch drag, and a cancelled touch commits where it stopped", () => {
+    const onResize = vi.fn();
+    render(<Harness side="right" onResize={onResize} />);
+    const handle = getHandle();
     // A touch on the handle drags it instead of scrolling the page.
     expect(handle).toHaveClass("touch-none");
 
     fireEvent.pointerDown(handle, { clientX: 100, pointerType: "touch" });
     fireEvent.pointerMove(document, { clientX: 140, pointerType: "touch" });
+    fireEvent.pointerCancel(document, { pointerType: "touch" });
+    expect(onResize).toHaveBeenCalledTimes(1);
     expect(onResize).toHaveBeenLastCalledWith(320);
 
-    fireEvent.pointerCancel(document, { pointerType: "touch" });
     fireEvent.pointerMove(document, { clientX: 200, pointerType: "touch" });
     expect(onResize).toHaveBeenCalledTimes(1);
   });
 
   it("drags a right panel in the opposite direction", () => {
     const onResize = vi.fn();
-    const { container } = render(<Harness side="left" onResize={onResize} />);
-    const handle = container.querySelector(".cursor-col-resize");
+    render(<Harness side="left" onResize={onResize} />);
 
-    fireEvent.pointerDown(handle as Element, { clientX: 200 });
+    fireEvent.pointerDown(getHandle(), { clientX: 200 });
     fireEvent.pointerMove(document, { clientX: 150 });
-    expect(onResize).toHaveBeenLastCalledWith(330);
-
     fireEvent.pointerUp(document);
+    expect(onResize).toHaveBeenLastCalledWith(330);
   });
 
   describe("Escape", () => {
