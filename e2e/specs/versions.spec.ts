@@ -35,7 +35,7 @@ const bookCard = (page: Page) => page.getByRole("grid", { name: "Books" }).getBy
 const editorText = (page: Page) => page.getByRole("textbox", { name: /^Text of / });
 const chapterList = (page: Page) => page.getByRole("complementary", { name: "Chapter list" });
 const panel = (page: Page) => page.getByRole("dialog", { name: "Version history" });
-const row = (page: Page, name: string) => panel(page).getByRole("listitem", { name, exact: true });
+const row = (page: Page, name: string) => panel(page).getByRole("row", { name, exact: true });
 const toast = (page: Page, text: string) => page.getByRole("status").filter({ hasText: text });
 
 /** Enters the seeded Book from the Gallery and leaves focus in the editor. */

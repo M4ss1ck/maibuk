@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { installArrowNavigation } from "@/lib/arrow-navigation";
 import type { BookSnapshot } from "@/features/sync/types";
 import type { BookVersion } from "@/features/versions/types";
 
@@ -266,6 +267,7 @@ describe("VersionPanel", () => {
   });
 
   it("moves focus through the version rows with the arrow keys", async () => {
+    const user = userEvent.setup();
     setStoreVersions(manyVersions);
 
     render(
@@ -277,16 +279,16 @@ describe("VersionPanel", () => {
       />
     );
 
-    const rows = await screen.findAllByRole("listitem");
+    const rows = await screen.findAllByRole("row");
     await waitFor(() => expect(rows[0]).toHaveFocus());
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    await user.keyboard("{ArrowDown}");
 
-    expect(document.getElementById("version-row-1")).toHaveFocus();
+    expect(rows[1]).toHaveFocus();
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp" }));
+    await user.keyboard("{ArrowUp}");
 
-    expect(document.getElementById("version-row-0")).toHaveFocus();
+    expect(rows[0]).toHaveFocus();
   });
 
   it("keeps compare controls fixed while the compare body owns scrolling", async () => {
@@ -315,6 +317,7 @@ describe("VersionPanel", () => {
   });
 
   it("opens compare from the focused row when Enter is pressed", async () => {
+    const user = userEvent.setup();
     mockFlushBeforeCompare.mockResolvedValue(undefined);
     mockSerializeBook.mockResolvedValue(JSON.stringify(snapshot("Current")));
     mockGetVersionSnapshot.mockResolvedValue(JSON.stringify(snapshot("Saved")));
@@ -328,10 +331,10 @@ describe("VersionPanel", () => {
       />
     );
 
-    const rows = await screen.findAllByRole("listitem");
-    await waitFor(() => expect(rows[0]).toHaveFocus());
+    const row = await screen.findByRole("row", { name: "First draft" });
+    await waitFor(() => expect(row).toHaveFocus());
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    await user.keyboard("{Enter}");
 
     await waitFor(() => expect(mockFlushBeforeCompare).toHaveBeenCalledTimes(1));
   });
@@ -349,15 +352,42 @@ describe("VersionPanel", () => {
       />
     );
 
-    const rows = await screen.findAllByRole("listitem");
-    await waitFor(() => expect(rows[0]).toHaveFocus());
-    await user.tab();
+    const row = await screen.findByRole("row", { name: "First draft" });
+    await waitFor(() => expect(row).toHaveFocus());
+    // ADR 0025: a row's actions are reached by arrows, not Tab.
+    await user.keyboard("{ArrowRight}");
     expect(screen.getByRole("button", { name: "Preview" })).toHaveFocus();
 
     await user.keyboard("{Enter}");
 
     expect(await screen.findByRole("heading", { name: "First draft" })).toBeInTheDocument();
     expect(mockSerializeBook).not.toHaveBeenCalled();
+  });
+
+  it("Enter on a Version row's Restore button opens the restore confirm, not Compare", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+
+    const row = await screen.findByRole("row", { name: "First draft" });
+    await waitFor(() => expect(row).toHaveFocus());
+    await user.keyboard("{ArrowRight}");
+    await user.keyboard("{ArrowRight}");
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("button", { name: "Restore" })).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Restore" })).toHaveFocus());
+    expect(screen.getByText("Restore this version?")).toBeInTheDocument();
+    expect(mockFlushBeforeCompare).not.toHaveBeenCalled();
   });
 
   it("focuses the preview's Back control and returns focus to the row when it closes", async () => {
@@ -373,9 +403,9 @@ describe("VersionPanel", () => {
       />
     );
 
-    const rows = await screen.findAllByRole("listitem");
-    await waitFor(() => expect(rows[0]).toHaveFocus());
-    await user.tab();
+    const row = await screen.findByRole("row", { name: "First draft" });
+    await waitFor(() => expect(row).toHaveFocus());
+    await user.keyboard("{ArrowRight}");
     await user.keyboard("{Enter}");
 
     const back = await screen.findByRole("button", { name: "Back" });
@@ -383,10 +413,15 @@ describe("VersionPanel", () => {
 
     await user.keyboard("{Escape}");
 
-    await waitFor(() => expect(screen.getByRole("listitem")).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("row", { name: "First draft" })).toHaveFocus());
   });
 
-  it("moves focus to the inline confirmation and Escape returns it to the row", async () => {
+  it("closing Compare with Escape returns focus to the row it opened from", async () => {
+    const user = userEvent.setup();
+    mockFlushBeforeCompare.mockResolvedValue(undefined);
+    mockSerializeBook.mockResolvedValue(JSON.stringify(snapshot("Current")));
+    mockGetVersionSnapshot.mockResolvedValue(JSON.stringify(snapshot("Saved")));
+
     render(
       <VersionPanel
         isOpen
@@ -396,16 +431,184 @@ describe("VersionPanel", () => {
       />
     );
 
-    const rows = await screen.findAllByRole("listitem");
-    await waitFor(() => expect(rows[0]).toHaveFocus());
+    const row = await screen.findByRole("row", { name: "First draft" });
+    await waitFor(() => expect(row).toHaveFocus());
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "r" }));
+    await user.keyboard("{Enter}");
+
+    const back = await screen.findByRole("button", { name: "Back" });
+    await waitFor(() => expect(back).toHaveFocus());
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.getByRole("row", { name: "First draft" })).toHaveFocus());
+  });
+
+  it("moves focus to the inline confirmation and Escape returns it to the row", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+
+    const row = await screen.findByRole("row", { name: "First draft" });
+    await waitFor(() => expect(row).toHaveFocus());
+
+    await user.keyboard("r");
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Restore" })).toHaveFocus());
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await user.keyboard("{Escape}");
 
+    await waitFor(() => expect(screen.getByRole("row", { name: "First draft" })).toHaveFocus());
+    expect(mockRestoreVersion).not.toHaveBeenCalled();
+  });
+
+  it("r on a row opens the restore confirm and Enter restores that version", async () => {
+    const user = userEvent.setup();
+    mockRestoreVersion.mockResolvedValue(undefined);
+
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+
+    const row = await screen.findByRole("row", { name: "First draft" });
+    await waitFor(() => expect(row).toHaveFocus());
+
+    await user.keyboard("r");
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Restore" })).toHaveFocus());
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(mockRestoreVersion).toHaveBeenCalledWith("version-1", expect.anything())
+    );
+  });
+
+  it("Delete on a row opens the delete confirm and confirming deletes that version", async () => {
+    const user = userEvent.setup();
+    mockDeleteVersion.mockResolvedValue(undefined);
+
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+
+    const row = await screen.findByRole("row", { name: "First draft" });
+    await waitFor(() => expect(row).toHaveFocus());
+
+    await user.keyboard("{Delete}");
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Delete" })).toHaveFocus());
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(mockDeleteVersion).toHaveBeenCalledWith("version-1"));
+  });
+
+  it("Escape cancels a delete and returns focus to the row", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+
+    const row = await screen.findByRole("row", { name: "First draft" });
+    await waitFor(() => expect(row).toHaveFocus());
+
+    await user.keyboard("{Delete}");
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Delete" })).toHaveFocus());
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.getByRole("row", { name: "First draft" })).toHaveFocus());
+    expect(mockDeleteVersion).not.toHaveBeenCalled();
+  });
+
+  it("F2 opens rename on the focused row and the field keeps its keys", async () => {
+    const user = userEvent.setup();
+    const uninstall = installArrowNavigation();
+    try {
+      render(
+        <VersionPanel
+          isOpen
+          onClose={() => {}}
+          bookId="book-1"
+          flushBeforeCompare={mockFlushBeforeCompare}
+        />
+      );
+
+      const row = await screen.findByRole("row", { name: "First draft" });
+      await waitFor(() => expect(row).toHaveFocus());
+
+      await user.keyboard("{F2}");
+
+      const input = screen.getByRole("textbox");
+      await waitFor(() => expect(input).toHaveFocus());
+
+      await user.clear(input);
+      await user.type(input, "a b");
+      expect(input).toHaveValue("a b");
+
+      // A caret key inside the field does not move focus out of it.
+      await user.keyboard("{ArrowLeft}");
+      expect(input).toHaveFocus();
+
+      await user.keyboard("{Escape}");
+
+      await waitFor(() => expect(screen.getByRole("row", { name: "First draft" })).toHaveFocus());
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("PageDown and PageUp page the list from the keyboard", async () => {
+    const user = userEvent.setup();
+    setStoreVersions(manyVersions);
+
+    render(
+      <VersionPanel
+        isOpen
+        onClose={() => {}}
+        bookId="book-1"
+        flushBeforeCompare={mockFlushBeforeCompare}
+      />
+    );
+
+    const rows = await screen.findAllByRole("row");
     await waitFor(() => expect(rows[0]).toHaveFocus());
+
+    await user.keyboard("{PageDown}");
+
+    await waitFor(() => expect(setPageSpy).toHaveBeenCalledWith(2));
+    expect(await screen.findByText("Page 2 of 3")).toBeInTheDocument();
+
+    await user.keyboard("{PageUp}");
+
+    await waitFor(() => expect(setPageSpy).toHaveBeenCalledWith(1));
+    expect(await screen.findByText("Page 1 of 3")).toBeInTheDocument();
   });
 
   it("requests page 1 on open and renders the store's page slice", async () => {
