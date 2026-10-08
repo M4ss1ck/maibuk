@@ -378,6 +378,9 @@ export function Editor({
         // A bare contenteditable has no role or name for assistive tech.
         role: "textbox",
         "aria-multiline": "true",
+        // F6 into the editor's Pane, or an arrow crossing into it, lands in
+        // the text rather than on the toolbar's first control (ADR 0025).
+        "data-focus-pane-entry": "",
       },
       handleKeyDown: (view, event) => {
         if (event.key !== "Escape") return false;

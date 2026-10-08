@@ -222,6 +222,23 @@ describe("Editor", () => {
     }
   });
 
+  it("is where F6 lands in its Pane, ahead of the toolbar's controls", async () => {
+    // A Pane holding an editor lands in its text: that is where the author
+    // types, and the toolbar's first control is a font select (ADR 0025 rule 8).
+    render(
+      <section data-focus-pane="editor" tabIndex={-1} aria-label="Editor">
+        <button type="button">Font Size</button>
+        <Editor content="<p>Hello</p>" onUpdate={vi.fn()} />
+      </section>
+    );
+    const text = await screen.findByRole("textbox");
+    const { landInPane } = await import("@/lib/arrow-navigation");
+
+    act(() => landInPane(screen.getByRole("region", { name: "Editor" })));
+
+    expect(text).toHaveFocus();
+  });
+
   it("does not rerender the toolbar when typing updates parent statistics", async () => {
     let editor: TiptapEditor | null = null;
     const onEditorReady = (instance: TiptapEditor | null) => {
