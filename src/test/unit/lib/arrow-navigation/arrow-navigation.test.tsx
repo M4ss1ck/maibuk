@@ -263,6 +263,43 @@ describe("arrow navigation (ADR 0025)", () => {
     expect(text).toHaveFocus();
   });
 
+  it("leaves a Select trigger and anything in an open popover their arrows", async () => {
+    const user = userEvent.setup();
+    render(
+      <main>
+        <section data-focus-pane="bar" tabIndex={-1} aria-label="Bar" data-rect="0 0 400 40">
+          <button type="button" data-rect="10 5 40 35">
+            Plain
+          </button>
+          <button type="button" aria-haspopup="listbox" data-rect="50 5 80 35">
+            Font
+          </button>
+          <div data-trigger="Select" data-rect="50 40 200 200">
+            <button type="button" data-rect="60 50 190 70">
+              Option
+            </button>
+          </div>
+          <button type="button" data-rect="300 5 330 35">
+            Target
+          </button>
+        </section>
+      </main>
+    );
+    // From an ordinary button the arrow moves on, past the trigger: an owner
+    // is never a target either.
+    act(() => button("Plain").focus());
+    await user.keyboard("{ArrowRight}");
+    expect(button("Target")).toHaveFocus();
+
+    act(() => button("Font").focus());
+    await user.keyboard("{ArrowRight}");
+    expect(button("Font")).toHaveFocus();
+
+    act(() => button("Option").focus());
+    await user.keyboard("{ArrowRight}");
+    expect(button("Option")).toHaveFocus();
+  });
+
   it("leaves a surface marked data-owns-arrows its arrows, focused or inside", async () => {
     const user = userEvent.setup();
     render(
@@ -298,6 +335,40 @@ describe("arrow navigation (ADR 0025)", () => {
       expect(row("Card 2")).toHaveFocus();
       await user.keyboard("{ArrowRight}");
       expect(button("Side action")).toHaveFocus();
+    });
+
+    it("reads only the two cards involved when Right moves between cards of a large gallery", async () => {
+      const user = userEvent.setup();
+      // 60 cards, five to a visual row of 110 px columns.
+      const cards = Array.from({ length: 60 }, (_, i) => {
+        const left = (i % 5) * 110;
+        const top = Math.floor(i / 5) * 110;
+        return { n: i + 1, rect: `${left} ${top} ${left + 100} ${top + 100}` };
+      });
+      render(
+        <main>
+          <section
+            data-focus-pane="gallery"
+            tabIndex={-1}
+            aria-label="Gallery"
+            data-rect="0 0 560 1400"
+          >
+            <GridList aria-label="Books" layout="grid" data-rect="0 0 560 1400">
+              {cards.map(({ n, rect }) => (
+                <GridListItem key={n} id={`c${n}`} textValue={`Card ${n}`} data-rect={rect}>
+                  Card {n}
+                </GridListItem>
+              ))}
+            </GridList>
+          </section>
+        </main>
+      );
+      act(() => row("Card 7").focus());
+      rectReads = 0;
+
+      await user.keyboard("{ArrowRight}");
+      expect(row("Card 8")).toHaveFocus();
+      expect(rectReads).toBeLessThanOrEqual(2);
     });
 
     it("moves Left between cards and stays at the left edge with nothing beyond", async () => {

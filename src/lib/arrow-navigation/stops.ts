@@ -6,7 +6,7 @@
 import { getFocusableTreeWalker } from "react-aria/private/focus/FocusScope";
 import { isTabbable } from "react-aria/private/utils/isFocusable";
 import { isOutsideLayer } from "@/lib/top-layer";
-import { type Direction, pickInDirection } from "./geometry";
+import { type Direction, pickInDirection } from "@/lib/arrow-navigation/geometry";
 
 export type ArrowKey = "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight";
 
@@ -90,21 +90,6 @@ export function focusablesIn(root: Element, tabbable: boolean): HTMLElement[] {
 /** A 2D card grid: React Aria `layout="grid"`, which moves Up/Down by position. */
 function isTwoDimensional(widget: Element): boolean {
   return widget.getAttribute("data-layout") === "grid";
-}
-
-// The nearest item in the same visual row (Left/Right) or column (Up/Down).
-function neighbor(item: Element, items: Element[], key: ArrowKey): HTMLElement | null {
-  const from = item.getBoundingClientRect();
-  const vertical = isVerticalKey(key);
-  const others = items
-    .filter((other): other is HTMLElement => other !== item && other instanceof HTMLElement)
-    .map((other) => ({ rect: other.getBoundingClientRect(), id: other }))
-    .filter(({ rect }) =>
-      vertical
-        ? Math.min(rect.right, from.right) > Math.max(rect.left, from.left)
-        : Math.min(rect.bottom, from.bottom) > Math.max(rect.top, from.top)
-    );
-  return pickInDirection(from, others, DIRECTION[key]);
 }
 
 export type ArrowOutcome =
@@ -199,14 +184,20 @@ function nestedOutcome(
 // A 2D card grid moves Left/Right between cards by position and leaves at
 // its side edges, where React Aria would wrap to the next visual row. React
 // Aria Components forces "tab" navigation in `layout="grid"`, so a card's
-// own buttons are Tab stops and their arrows stay React Aria's.
+// own buttons are Tab stops and their arrows stay React Aria's. Cards flow in
+// DOM order, so the card beside one is its DOM neighbor when the two share a
+// visual row: two rect reads, whatever the gallery's size.
 function gridOutcome(el: HTMLElement, widget: Element, key: ArrowKey): ArrowOutcome {
   const item = el.closest('[role="row"], [role="option"]');
   if (!item || !widget.contains(item)) return { kind: "edge" };
   if (el !== item) return { kind: "inside" };
   const items = [...widget.querySelectorAll('[role="row"], [role="option"]')];
-  const to = neighbor(item, items, key);
-  return to ? { kind: "move", to } : { kind: "edge" };
+  const beside = items[items.indexOf(item) + (key === "ArrowRight" ? 1 : -1)];
+  if (!(beside instanceof HTMLElement)) return { kind: "edge" };
+  const from = item.getBoundingClientRect();
+  const to = beside.getBoundingClientRect();
+  const sameRow = Math.min(to.bottom, from.bottom) > Math.max(to.top, from.top);
+  return sameRow ? { kind: "move", to: beside } : { kind: "edge" };
 }
 
 // Every element React Aria's tabbable selector can match, before its
