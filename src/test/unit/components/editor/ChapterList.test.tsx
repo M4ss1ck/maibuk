@@ -224,7 +224,18 @@ async function confirmationFocused(noButton: HTMLElement) {
   await waitFor(() => expect(noButton).toHaveFocus());
 }
 
+// React Aria starts a keyboard drag a frame after Enter lifts the row
+// (DragManager's requestAnimationFrame) and then focuses the first drop
+// target. jsdom runs frames on a fixed clock, so an arrow pressed before that
+// frame moves the row focus instead.
+async function waitForDropTarget() {
+  await waitFor(() =>
+    expect(document.activeElement?.getAttribute("aria-label")).toMatch(/^Insert /)
+  );
+}
+
 async function arrowToDropTarget(user: ReturnType<typeof userEvent.setup>, accessibleName: string) {
+  await waitForDropTarget();
   for (
     let index = 0;
     index < 10 && document.activeElement?.getAttribute("aria-label") !== accessibleName;
@@ -296,6 +307,7 @@ describe("ChapterList", () => {
       dragButtons[0].focus();
 
       await user.keyboard("{Enter}");
+      await waitForDropTarget();
       await user.keyboard("{ArrowDown}");
       await user.keyboard("{Escape}");
 
@@ -338,6 +350,7 @@ describe("ChapterList", () => {
 
         await user.keyboard("{Enter}");
         await waitFor(() => expect(mockParkSelection).toHaveBeenCalledTimes(1));
+        await waitForDropTarget();
         await user.keyboard("{ArrowDown}");
         expect(mockRestoreSelection).not.toHaveBeenCalled();
         await user.keyboard("{Escape}");
