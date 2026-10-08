@@ -15,46 +15,50 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
-// One frame travels from the old Pane's outline to the new one. Two rect
-// reads per Pane change, and only transform and opacity animate.
+function place(frame: HTMLElement, rect: DOMRect): void {
+  frame.style.left = `${rect.left}px`;
+  frame.style.top = `${rect.top}px`;
+  frame.style.width = `${rect.width}px`;
+  frame.style.height = `${rect.height}px`;
+}
+
+// The frame travels from the old Pane's outline to the new one. Two rect
+// reads per Pane change, and only transform animates.
 function slide(frame: HTMLElement, from: HTMLElement, to: HTMLElement): void {
   if (typeof frame.animate !== "function" || prefersReducedMotion()) return;
-  const a = from.getBoundingClientRect();
-  const b = to.getBoundingClientRect();
-  if (b.width === 0 || b.height === 0) return;
-  frame.style.left = `${b.left}px`;
-  frame.style.top = `${b.top}px`;
-  frame.style.width = `${b.width}px`;
-  frame.style.height = `${b.height}px`;
+  const fromRect = from.getBoundingClientRect();
+  const toRect = to.getBoundingClientRect();
+  if (toRect.width === 0 || toRect.height === 0) return;
+  place(frame, toRect);
   frame.animate(
     [
       {
-        transform: `translate(${a.left - b.left}px, ${a.top - b.top}px) scale(${a.width / b.width}, ${a.height / b.height})`,
+        transform: `translate(${fromRect.left - toRect.left}px, ${fromRect.top - toRect.top}px) scale(${fromRect.width / toRect.width}, ${fromRect.height / toRect.height})`,
         opacity: 1,
       },
-      { transform: "none", opacity: 1, offset: 0.8 },
-      { transform: "none", opacity: 0 },
+      { transform: "none", opacity: 1 },
     ],
     { duration: SLIDE_MS, easing: "ease-out" }
   );
 }
 
 interface Badge {
+  /** The Pane it names; the badge goes as soon as focus leaves it. */
+  pane: HTMLElement;
   name: string;
-  top: number;
-  left: number;
 }
 
 /**
  * Shows which Pane holds keyboard focus: a frame slides to a Pane the
- * keyboard moves into, the Pane then keeps a ring (`data-pane-active`) while
- * focus stays and the modality is keyboard, and F6 also names the Pane
- * briefly. Pointer input hides the ring. Mounted once beside GlobalShortcuts.
+ * keyboard moves into and stays over it as its ring while focus stays and the
+ * modality is keyboard (the Pane carries `data-pane-active` meanwhile), and
+ * F6 also names the Pane briefly. Pointer input hides the ring. Mounted once
+ * beside GlobalShortcuts.
  */
 export function PaneFocusFrame() {
   const { t } = useTranslation();
   const hideKeyboardHints = useSettingsStore((state) => state.hideKeyboardHints);
-  const { isFocusVisible: keyboard } = useFocusVisible();
+  const { isFocusVisible: keyboardModality } = useFocusVisible();
   const [pane, setPane] = useState<HTMLElement | null>(null);
   const [badge, setBadge] = useState<Badge | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -84,11 +88,30 @@ export function PaneFocusFrame() {
     };
   }, []);
 
+  // The ring is the frame itself, kept over the active Pane: an outline on the
+  // Pane would be painted over by its own children's backgrounds (a sticky
+  // header hid its top edge). One observer, on the active Pane only.
   useEffect(() => {
-    if (!pane || !keyboard) return;
+    const frame = frameRef.current;
+    if (!pane || !keyboardModality || !frame) return;
     pane.setAttribute("data-pane-active", "");
-    return () => pane.removeAttribute("data-pane-active");
-  }, [pane, keyboard]);
+    const follow = () => place(frame, pane.getBoundingClientRect());
+    follow();
+    frame.style.opacity = "1";
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(follow) : null;
+    observer?.observe(pane);
+    window.addEventListener("resize", follow);
+    return () => {
+      pane.removeAttribute("data-pane-active");
+      frame.style.opacity = "0";
+      observer?.disconnect();
+      window.removeEventListener("resize", follow);
+    };
+  }, [pane, keyboardModality]);
+
+  useEffect(() => {
+    if (badge && badge.pane !== pane) setBadge(null);
+  }, [badge, pane]);
 
   useEffect(() => {
     if (hideKeyboardHints) return;
@@ -97,8 +120,7 @@ export function PaneFocusFrame() {
       const cycled = (event as CustomEvent<HTMLElement>).detail;
       const name = cycled?.getAttribute("aria-label");
       if (!name) return;
-      const rect = cycled.getBoundingClientRect();
-      setBadge({ name, top: rect.top + 8, left: rect.left + 8 });
+      setBadge({ pane: cycled, name });
       clearTimeout(timer);
       timer = setTimeout(() => setBadge(null), BADGE_MS);
     };
@@ -116,16 +138,20 @@ export function PaneFocusFrame() {
       <div
         ref={frameRef}
         aria-hidden="true"
-        className="fixed z-50 pointer-events-none rounded-sm border-2 border-primary opacity-0 origin-top-left"
+        // A test id because the frame is aria-hidden decoration with no name.
+        data-testid="pane-frame"
+        style={{ opacity: 0 }}
+        className="fixed z-50 pointer-events-none rounded-sm border-2 border-primary/70 origin-top-left"
       />
       {badge && (
         // A test id because the badge is aria-hidden: screen readers already
         // hear the focused control, so it has no accessible name to query.
+        // It sits in one fixed caption spot, like VoiceOver's caption panel,
+        // never over the Pane's own controls where focus just landed.
         <div
           aria-hidden="true"
           data-testid="pane-badge"
-          className="pane-badge-enter fixed z-50 pointer-events-none rounded-lg bg-primary px-2 py-1 text-xs font-medium text-primary-foreground shadow-md"
-          style={{ top: badge.top, left: badge.left }}
+          className="pane-badge-enter fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none rounded-lg bg-primary px-2 py-1 text-xs font-medium text-primary-foreground shadow-md"
         >
           {t("panes.badge", { name: badge.name })}
         </div>

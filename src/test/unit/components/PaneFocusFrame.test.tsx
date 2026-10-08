@@ -83,6 +83,20 @@ describe("PaneFocusFrame", () => {
     expect(options).toMatchObject({ duration: 180 });
   });
 
+  it("draws the ring as a frame over the active Pane, so the Pane's own children cannot cover an edge", async () => {
+    const user = userEvent.setup();
+    render(<Fixture />);
+    const frame = screen.getByTestId("pane-frame");
+    expect(frame.style.opacity).toBe("0");
+
+    keyboardFocus(button("In list"));
+    expect(frame.style.opacity).toBe("1");
+    expect(frame.style).toMatchObject({ left: "0px", top: "0px", width: "100px", height: "100px" });
+
+    await user.click(button("In list"));
+    expect(frame.style.opacity).toBe("0");
+  });
+
   it("does not ring or slide for pointer input", async () => {
     const user = userEvent.setup();
     render(<Fixture />);
@@ -126,6 +140,18 @@ describe("PaneFocusFrame", () => {
     act(() => {
       vi.advanceTimersByTime(1500);
     });
+    expect(screen.queryByTestId("pane-badge")).toBeNull();
+  });
+
+  it("clears the badge as soon as focus leaves the Pane it names", () => {
+    render(<Fixture />);
+    fireEvent.keyDown(document.body, { key: "F6" });
+    act(() => {
+      cyclePanes(true);
+    });
+    expect(screen.getByTestId("pane-badge")).toHaveTextContent("panes.badge:Notes list");
+
+    keyboardFocus(button("In editor"));
     expect(screen.queryByTestId("pane-badge")).toBeNull();
   });
 
