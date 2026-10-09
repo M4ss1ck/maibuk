@@ -4,7 +4,7 @@
 
 **Maibuk** is a cross-platform writing application for book authors. One React frontend runs as a native desktop and Android app (Tauri 2, Rust) and as a web app (sql.js and browser APIs).
 
-Stack: React 19 and TypeScript 5.8, Vite 7, Tailwind CSS 4, Zustand 5, React Router 7, TipTap 3 (editor), React Aria (accessible UI), Fabric.js 7 (Cover Designer), SQLite through the Tauri plugin or sql.js with a Drizzle schema, i18next (English and Spanish), pnpm 10.
+Stack: React 19 and TypeScript 7, Vite 7, Tailwind CSS 4, Zustand 5, React Router 7, TipTap 3 (editor), React Aria (accessible UI), Fabric.js 7 (Cover Designer), SQLite through the Tauri plugin or sql.js with a Drizzle schema, i18next (English and Spanish), pnpm 10.
 
 Entry points: `src/main.tsx` (bootstrap), `src/App.tsx` (routes), `src-tauri/src/lib.rs` (Rust backend).
 
