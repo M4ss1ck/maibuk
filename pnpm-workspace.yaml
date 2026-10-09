@@ -3,3 +3,8 @@ allowBuilds:
   esbuild: true
 onlyBuiltDependencies:
   - esbuild
+peerDependencyRules:
+  # i18next types only; checked clean under TypeScript 7.
+  allowedVersions:
+    i18next>typescript: "7"
+    react-i18next>typescript: "7"

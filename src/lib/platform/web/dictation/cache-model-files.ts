@@ -26,7 +26,7 @@ async function download(
   if (!res.ok || !res.body)
     throw new DictationError("download_failed", `${file.url}: HTTP ${res.status}`);
   const crc = createCrc32c();
-  const chunks: Uint8Array[] = [];
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
   let size = 0;
   const reader = res.body.getReader();
   for (;;) {

@@ -45,7 +45,7 @@ const spec: ModelSpec = {
   capabilities: { casing: true, punctuation: true, streaming: true },
 };
 
-function serve(map: Record<string, Uint8Array | number>) {
+function serve(map: Record<string, Uint8Array<ArrayBuffer> | number>) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
