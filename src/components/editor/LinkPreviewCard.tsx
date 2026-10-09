@@ -1,18 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import {
-  BookOpen,
-  CircleAlert,
-  FileText,
-  Globe,
-  Hash,
-  Link as LinkIcon,
-  Mail,
-  NotebookPen,
-  Unlink,
-  type LucideIcon,
-} from "lucide-react";
+import { CircleAlert, Globe, Link as LinkIcon, Mail, Unlink, type LucideIcon } from "lucide-react";
 import { LINK_PREVIEW_COVER_PX } from "@/constants";
 import type { LinkPreviewData, LinkPreviewSnippet } from "@/features/links/types";
 
@@ -60,17 +49,15 @@ function getCoverThumbnail(src: string): Promise<string | null> {
   return thumbnail;
 }
 
-function iconFor(data: LinkPreviewData): LucideIcon {
+/** The type icon, or null when the card shows the target's own content. */
+function iconFor(data: LinkPreviewData): LucideIcon | null {
   switch (data.kind) {
     case "note":
-      return NotebookPen;
     case "chapter":
-      return FileText;
     case "heading":
     case "noteHeading":
-      return Hash;
     case "book":
-      return BookOpen;
+      return null;
     case "web":
       return data.scheme === "web" ? Globe : data.scheme === "mail" ? Mail : LinkIcon;
     case "missing":
@@ -295,9 +282,11 @@ export function LinkPreviewCard({
     >
       {/* Every kind's first line is 20px tall (leading-5), so a 20px slot
           centers the icon on it. */}
-      <span className="flex h-5 shrink-0 items-center">
-        <Icon aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
-      </span>
+      {Icon && (
+        <span className="flex h-5 shrink-0 items-center">
+          <Icon aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+        </span>
+      )}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <Body data={data} />
       </div>

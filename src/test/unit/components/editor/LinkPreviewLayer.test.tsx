@@ -228,6 +228,27 @@ describe("Link Preview", () => {
       );
     });
 
+    // The target's own text, or a Book's cover, says what it is; a type icon
+    // beside it is noise.
+    it.each([
+      ["a Note", "maibuk://note/n1", /word0/],
+      ["a Chapter", "maibuk://chapter/c1", "dawn"],
+      ["a Book", "maibuk://book/b1", "The Long Road"],
+    ])("shows %s's text without a type icon", async (_kind, href, text) => {
+      const preview = await previewOf(href);
+      await within(preview).findByText(text);
+      expect(preview.querySelector("svg")).toBeNull();
+    });
+
+    it.each([
+      ["a web address", "https://example.com/guide", "example.com"],
+      ["a missing target", "maibuk://note/gone", "deepLink.resourceGone"],
+    ])("keeps the type icon for %s", async (_kind, href, text) => {
+      const preview = await previewOf(href);
+      await within(preview).findByText(text);
+      expect(preview.querySelector("svg")).not.toBeNull();
+    });
+
     it("shows a Book's author and description", async () => {
       const preview = await previewOf("maibuk://book/b1");
       expect(await within(preview).findByText("The Long Road")).toBeInTheDocument();

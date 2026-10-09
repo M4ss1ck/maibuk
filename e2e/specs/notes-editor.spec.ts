@@ -202,10 +202,8 @@ test.describe("Link Preview @wf:editor-link-preview", () => {
     await expect(preview(page)).toContainText("The lamp holds through the gale.");
     await expect(noteText(page)).toBeFocused();
     await capture(page, "link-preview-note");
-    await expectIconOnFirstLine(
-      page,
-      preview(page).getByText(SEED_NOTES.keeperLog, { exact: true })
-    );
+    // A Note shows its own text; no type icon beside it.
+    await expect(preview(page).locator("svg")).toHaveCount(0);
 
     await page.keyboard.press("End");
     await expect(preview(page)).toBeHidden();
