@@ -73,8 +73,8 @@ function resolveId(rawId: string): CommandId | null {
   return resolveStoredCommandId(rawId);
 }
 
-function freshDefaults(web: boolean): ShortcutSettings {
-  return applyNewCoreDefaults(structuredClone(DEFAULT_SHORTCUT_SETTINGS), web);
+function freshDefaults(): ShortcutSettings {
+  return structuredClone(DEFAULT_SHORTCUT_SETTINGS);
 }
 
 export function defaultShortcuts(id: CommandId, web: boolean): Shortcut[] {
@@ -158,13 +158,14 @@ function orderedCandidates(
 
 /**
  * Which Plugin bindings are inactive right now (ADR 0024). No write path lets
- * a core binding take a key from an active Plugin binding without Replace, so
- * at resolution time a core binding is always the existing one; a core binding
- * therefore wins and never yields. Plugin bindings then run in their conflict
- * rank, which an update keeps for a binding the Command already held and
- * assigns fresh to a binding new in the update. A binding whose keys are
- * already owned by an active binding in an overlapping Context stays inactive
- * and does not reserve its key.
+ * a core binding take a key from an active Plugin binding without Replace, and
+ * a core Default counts as an existing binding even when an app update added
+ * it; at resolution time a core binding is therefore always the existing one
+ * and wins without yielding. Plugin bindings then run in their conflict rank,
+ * which an update keeps for a binding the Command already held and assigns
+ * fresh to a binding new in the update. A binding whose keys are already owned
+ * by an active binding in an overlapping Context stays inactive and does not
+ * reserve its key.
  */
 function activityFor(custom: CustomShortcuts, web: boolean): Activity {
   const revision = commandRegistryRevision();
@@ -234,71 +235,6 @@ export function isBindingActive(
   return !(activityFor(custom, web).inactive.get(id) ?? []).some(
     (binding) => shortcutKey(binding.shortcut) === key
   );
-}
-
-/**
- * The bindings that are active when core Defaults are treated as newcomers:
- * core Fixed and Custom Shortcuts first, then Plugin bindings in rank order.
- * A core Default colliding with one of these is stripped at load (ADR 0024).
- */
-function acceptedWithoutCoreDefaults(
-  custom: CustomShortcuts,
-  web: boolean
-): Array<{ id: CommandId; contexts: readonly ShortcutContext[]; shortcut: Shortcut }> {
-  const candidates = orderedCandidates(custom, web, (id) => [
-    ...fixedShortcuts(id),
-    ...(custom[id] ?? []),
-  ]);
-  const accepted: Array<{
-    id: CommandId;
-    contexts: readonly ShortcutContext[];
-    shortcut: Shortcut;
-  }> = [];
-  for (const candidate of candidates) {
-    if (!candidate.plugin) {
-      accepted.push(candidate);
-      continue;
-    }
-    const owner = accepted.find(
-      (other) =>
-        contextsOverlap(candidate.contexts, other.contexts) &&
-        collision(other.shortcut, candidate.shortcut) !== null
-    );
-    if (owner === undefined) accepted.push(candidate);
-  }
-  return accepted;
-}
-
-/**
- * A core Default shipped by an app update that collides with an active Plugin
- * binding is the newcomer (ADR 0024): the key is stripped from the core
- * Command and stored as its Custom Shortcuts, so the Plugin's binding stays
- * active. Core Fixed and Custom Shortcuts are existing bindings and are never
- * stripped.
- */
-export function applyNewCoreDefaults(settings: ShortcutSettings, web: boolean): ShortcutSettings {
-  const accepted = acceptedWithoutCoreDefaults(settings.custom, web);
-  let changed = false;
-  const custom = { ...settings.custom };
-  for (const id of COMMAND_IDS) {
-    if (custom[id] !== undefined) continue;
-    const defaults = defaultShortcuts(id, web);
-    if (defaults.length === 0) continue;
-    const contexts = def(id).contexts;
-    const kept = defaults.filter(
-      (shortcut) =>
-        !accepted.some(
-          (binding) =>
-            isPluginCommandId(binding.id) &&
-            contextsOverlap(contexts, binding.contexts) &&
-            collision(binding.shortcut, shortcut) !== null
-        )
-    );
-    if (kept.length === defaults.length) continue;
-    custom[id] = kept;
-    changed = true;
-  }
-  return changed ? { ...settings, custom } : settings;
 }
 
 export function effectiveShortcuts(
@@ -423,19 +359,15 @@ export function findDefaultConflicts(web: boolean): DefaultConflict[] {
   return conflicts;
 }
 
-/**
- * Whatever storage holds is made safe before any key reads it. `web` decides
- * which Defaults a new core Command would restore; it also runs the update-time
- * Default check (ADR 0024).
- */
-export function normalizeShortcuts(raw: unknown, web: boolean = false): ShortcutSettings {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return freshDefaults(web);
+/** Whatever storage holds is made safe before any key reads it. */
+export function normalizeShortcuts(raw: unknown): ShortcutSettings {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return freshDefaults();
   const record = raw as Record<string, unknown>;
 
   // A record with no version predates versioning and has the version 1 shape.
   const version = record.version ?? 1;
-  if (typeof version !== "number" || !Number.isInteger(version)) return freshDefaults(web);
-  if (version < 1 || version > SHORTCUT_SETTINGS_VERSION) return freshDefaults(web);
+  if (typeof version !== "number" || !Number.isInteger(version)) return freshDefaults();
+  if (version < 1 || version > SHORTCUT_SETTINGS_VERSION) return freshDefaults();
 
   let working = record;
   for (let v = version; v < SHORTCUT_SETTINGS_VERSION; v += 1) {
@@ -477,15 +409,12 @@ export function normalizeShortcuts(raw: unknown, web: boolean = false): Shortcut
     }
   }
 
-  return applyNewCoreDefaults(
-    {
-      version: SHORTCUT_SETTINGS_VERSION,
-      custom,
-      voice: normalizeCustomVoiceCommands(working.voice),
-      singleKeyEnabled,
-    },
-    web
-  );
+  return {
+    version: SHORTCUT_SETTINGS_VERSION,
+    custom,
+    voice: normalizeCustomVoiceCommands(working.voice),
+    singleKeyEnabled,
+  };
 }
 
 export const SHORTCUT_FILE_VERSION = 2;

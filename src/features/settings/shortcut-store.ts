@@ -20,7 +20,6 @@ import {
 import { normalizeShortcut, shortcutKey } from "@/lib/shortcut-keys";
 import {
   DEFAULT_SHORTCUT_SETTINGS,
-  applyNewCoreDefaults,
   applyPluginRenames,
   editableShortcuts,
   normalizeShortcuts,
@@ -165,7 +164,7 @@ export const useShortcutSettingsStore = create<ShortcutSettingsStore>()(
         set((state) => ({
           shortcuts: {
             ...state.shortcuts,
-            custom: normalizeShortcuts({ version: 1, custom }, IS_WEB).custom,
+            custom: normalizeShortcuts({ version: 1, custom }).custom,
             voice: normalizeCustomVoiceCommands(voice),
           },
         })),
@@ -180,8 +179,7 @@ export const useShortcutSettingsStore = create<ShortcutSettingsStore>()(
       merge: (persisted, current) => ({
         ...current,
         shortcuts: normalizeShortcuts(
-          (persisted as { shortcuts?: unknown } | undefined)?.shortcuts,
-          IS_WEB
+          (persisted as { shortcuts?: unknown } | undefined)?.shortcuts
         ),
       }),
     }
@@ -189,11 +187,9 @@ export const useShortcutSettingsStore = create<ShortcutSettingsStore>()(
 );
 
 // A Plugin that registers with renames moves its retained preferences to the
-// declared ids in the same turn, and a core Default it collides with becomes
-// the newcomer (ADR 0024).
+// declared ids in the same turn (ADR 0024).
 onCommandRegistryChange(() => {
   const state = useShortcutSettingsStore.getState();
-  const renamed = applyPluginRenames(state.shortcuts);
-  const next = applyNewCoreDefaults(renamed, IS_WEB);
+  const next = applyPluginRenames(state.shortcuts);
   if (next !== state.shortcuts) useShortcutSettingsStore.setState({ shortcuts: next });
 });

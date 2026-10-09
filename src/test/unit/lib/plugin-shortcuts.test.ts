@@ -13,12 +13,7 @@ import {
   serializeShortcutFile,
   type CustomShortcuts,
 } from "@/lib/shortcut-resolve";
-import {
-  COMMANDS,
-  registerPluginCommands,
-  type PluginRegistration,
-  type Shortcut,
-} from "@/lib/shortcut-registry";
+import { registerPluginCommands, type PluginRegistration } from "@/lib/shortcut-registry";
 
 const unregisters: Array<() => void> = [];
 afterEach(() => {
@@ -428,39 +423,26 @@ describe("Plugin Shortcut conflicts", () => {
   });
 });
 
-describe("a core Default shipped by an app update", () => {
-  /** Temporarily swaps a core Command's Defaults; the registry is static. */
-  async function withCoreDefaults<T>(
-    id: keyof typeof COMMANDS,
-    defaults: Shortcut[],
-    run: () => T | Promise<T>
-  ): Promise<T> {
-    const definition = COMMANDS[id] as unknown as { defaults: readonly Shortcut[] };
-    const original = definition.defaults;
-    definition.defaults = defaults;
-    try {
-      return await run();
-    } finally {
-      definition.defaults = original;
-    }
-  }
+describe("a core Default is an existing binding", () => {
+  const pluginId = "plugin.echoes.showReport" as const;
+  // editor.insertLink ships Mod+K as an untouched core Default.
 
-  it("strips the new core Default and leaves the Plugin binding active", async () => {
-    register("echoes", echoesRegistration({ defaults: [["Mod+Alt+k"]] }));
+  it("never strips an untouched core Default for a Plugin", () => {
+    register("echoes", echoesRegistration({ defaults: [["Mod+k"]] }));
 
-    await withCoreDefaults("global.toggleTheme", [["Mod+Alt+q"], ["Mod+Alt+k"]], () => {
-      const settings = normalizeShortcuts({
-        version: 2,
-        custom: {},
-        singleKeyEnabled: true,
-      });
-      expect(settings.custom["global.toggleTheme"]).toEqual([["Mod+Alt+q"]]);
-      expect(effectiveShortcuts(echoesId, settings.custom, false)).toEqual([["Mod+Alt+k"]]);
+    expect(custom()["editor.insertLink"]).toBeUndefined();
+    expect(effectiveShortcuts("editor.insertLink", custom(), false)).toEqual([["Mod+k"]]);
+    expect(inactiveBindings(custom(), false)).toContainEqual({
+      kind: "shortcut",
+      id: pluginId,
+      shortcut: ["Mod+k"],
+      collision: "same",
+      withId: "editor.insertLink",
     });
   });
 
-  it("strips the new core Default at store hydration too", async () => {
-    register("echoes", echoesRegistration({ defaults: [["Mod+Alt+k"]] }));
+  it("does not strip it at store hydration either", async () => {
+    register("echoes", echoesRegistration({ defaults: [["Mod+k"]] }));
     localStorage.setItem(
       SHORTCUT_STORAGE_KEY,
       JSON.stringify({
@@ -471,12 +453,19 @@ describe("a core Default shipped by an app update", () => {
       })
     );
 
-    await withCoreDefaults("global.toggleTheme", [["Mod+Alt+k"]], async () => {
-      await useShortcutSettingsStore.persist.rehydrate();
-      const { custom } = useShortcutSettingsStore.getState().shortcuts;
-      expect(custom["global.toggleTheme"]).toEqual([]);
-      expect(effectiveShortcuts(echoesId, custom, false)).toEqual([["Mod+Alt+k"]]);
-    });
+    await useShortcutSettingsStore.persist.rehydrate();
+    const { custom } = useShortcutSettingsStore.getState().shortcuts;
+    expect(custom["editor.insertLink"]).toBeUndefined();
+    expect(effectiveShortcuts("editor.insertLink", custom, false)).toEqual([["Mod+k"]]);
+  });
+
+  it("leaves the stored Custom Shortcuts unchanged when the Plugin unregisters", () => {
+    const before = structuredClone(custom());
+    const unregister = register("echoes", echoesRegistration({ defaults: [["Mod+k"]] }));
+    unregister();
+
+    expect(custom()).toEqual(before);
+    expect(effectiveShortcuts("editor.insertLink", custom(), false)).toEqual([["Mod+k"]]);
   });
 });
 
@@ -515,19 +504,16 @@ describe("no write path lets a core binding take an active Plugin key", () => {
     });
   });
 
-  it("the update-time Default check strips the core Default, not the Plugin key", () => {
-    register("echoes", echoesRegistration({ defaults: [["Mod+Alt+k"]] }));
-    const definition = COMMANDS["global.toggleTheme"] as unknown as {
-      defaults: readonly Shortcut[];
-    };
-    const original = definition.defaults;
-    definition.defaults = [["Mod+Alt+k"]];
-    try {
-      const settings = normalizeShortcuts({ version: 2, custom: {}, singleKeyEnabled: true });
-      expect(settings.custom["global.toggleTheme"]).toEqual([]);
-      expect(effectiveShortcuts(echoesId, settings.custom, false)).toEqual([["Mod+Alt+k"]]);
-    } finally {
-      definition.defaults = original;
-    }
+  it("a core Default always counts as existing, never a newcomer", () => {
+    register("echoes", echoesRegistration({ defaults: [["Mod+k"]] }));
+
+    expect(effectiveShortcuts("editor.insertLink", {}, false)).toEqual([["Mod+k"]]);
+    expect(inactiveBindings({}, false)).toContainEqual({
+      kind: "shortcut",
+      id: echoesId,
+      shortcut: ["Mod+k"],
+      collision: "same",
+      withId: "editor.insertLink",
+    });
   });
 });
