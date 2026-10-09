@@ -817,6 +817,7 @@ export const ROWS: MatrixRow[] = [
       "Esc closes list",
       "the new Link's text selects with the arrows",
       "a Note made from [[ is suggested without reopening the editor",
+      "the arrows scroll the list to an option below its fold",
     ],
     terms: ["Link"],
     shortcuts: [],

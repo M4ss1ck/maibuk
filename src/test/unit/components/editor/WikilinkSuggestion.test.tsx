@@ -11,6 +11,10 @@ vi.mock("@/i18n", () => ({
   },
 }));
 
+// jsdom has no scrollIntoView.
+const scrollIntoView = vi.fn();
+Element.prototype.scrollIntoView = scrollIntoView;
+
 const ITEMS: WikilinkCandidate[] = [
   { kind: "note", id: "n1", label: "Keeper's Log" },
   { kind: "book", id: "b1", label: "The Lighthouse Keeper" },
@@ -42,6 +46,27 @@ describe("WikilinkList", () => {
       ref.current?.onKeyDown({ event: new KeyboardEvent("keydown", { key: "ArrowUp" }) });
     });
     expect(screen.getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
+  });
+
+  // The list is capped in height; arrows moved past its fold without scrolling.
+  it("scrolls the active option into view as the arrows move it", () => {
+    const ref = createRef<WikilinkListHandle>();
+    const many: WikilinkCandidate[] = Array.from({ length: 9 }, (_, n) => ({
+      kind: "note",
+      id: `n${n}`,
+      label: `Buoy ${n}`,
+    }));
+    render(<WikilinkList ref={ref} items={many} command={vi.fn()} />);
+    scrollIntoView.mockClear();
+
+    act(() => {
+      ref.current?.onKeyDown({ event: new KeyboardEvent("keydown", { key: "ArrowUp" }) });
+    });
+
+    const last = screen.getByRole("option", { name: /Buoy 8/ });
+    expect(last).toHaveAttribute("aria-selected", "true");
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "nearest" });
+    expect(scrollIntoView.mock.contexts.at(-1)).toBe(last);
   });
 
   it("offers creating a note from the typed label", () => {

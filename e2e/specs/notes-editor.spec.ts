@@ -92,6 +92,29 @@ test.describe("wikilink suggestions @wf:editor-wikilink-suggest", () => {
     await expect(listbox.getByRole("option", { name: /^Driftwood\s*note$/ })).toBeVisible();
   });
 
+  test("the arrows scroll the list to an option below its fold", async ({ page }) => {
+    await openNote(page, SEED_NOTES.tideTables);
+    await page.keyboard.press("End");
+    const listbox = page.getByRole("listbox", { name: "Link suggestions" });
+    // Eight Notes plus "Create" is more than the list shows at once.
+    for (let n = 1; n <= 8; n++) {
+      await page.keyboard.type(` [[Buoy${n}`);
+      await expect(listbox.getByRole("option").first()).toHaveText(new RegExp(`Buoy${n}`));
+      await page.keyboard.press("Enter");
+      await expect(noteText(page).getByRole("link", { name: `Buoy${n}` })).toHaveCount(1);
+    }
+
+    await page.keyboard.type(" [[Buoy");
+    await expect(listbox.getByRole("option")).toHaveCount(9);
+    const last = listbox.getByRole("option").last();
+    await expect(last).not.toBeInViewport();
+    for (let n = 0; n < 8; n++) await page.keyboard.press("ArrowDown");
+
+    await expect(last).toHaveAttribute("aria-selected", "true");
+    await capture(page, "wikilink-suggest-scrolled", { around: [listbox] });
+    await expect(last).toBeInViewport();
+  });
+
   test("Esc closes the suggestion list without inserting", async ({ page }) => {
     await openNote(page, SEED_NOTES.tideTables);
     await page.keyboard.press("End");
