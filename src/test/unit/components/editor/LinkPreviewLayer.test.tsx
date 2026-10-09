@@ -5,7 +5,6 @@ import { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
 import { LinkPreviewLayer } from "@/components/editor/LinkPreviewLayer";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
-import { Wikilink } from "@/components/editor/extensions/Wikilink";
 import { clearLinkPreviewCache } from "@/features/links/link-preview";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "../../../support/db-test-context";
@@ -21,6 +20,9 @@ vi.mock("react-i18next", () => ({
   }),
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
+
+// ProseMirror's mousedown asks for the element under a touch; jsdom has none.
+document.elementFromPoint ??= () => null;
 
 const editors: Editor[] = [];
 const LONG_TEXT = Array.from({ length: 80 }, (_, n) => `word${n}`).join(" ");
@@ -154,62 +156,6 @@ describe("Link Preview", () => {
       expect(document.activeElement).toBe(editor.view.dom);
       await new Promise((resolve) => setTimeout(resolve, 700));
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
-    });
-  });
-
-  describe("on a wikilink", () => {
-    function renderWikilinkEditor() {
-      const editor = new Editor({
-        extensions: [...createRichTextExtensions(), Wikilink],
-        // A wikilink just inserted through [[ is its own node until the Note
-        // reloads (stored, it parses back as a Link mark).
-        content: {
-          type: "doc",
-          content: [
-            {
-              type: "paragraph",
-              content: [
-                { type: "text", text: "See " },
-                { type: "wikilink", attrs: { href: "maibuk://chapter/c1", label: "Departure" } },
-                { type: "text", text: " now." },
-              ],
-            },
-          ],
-        },
-      });
-      expect(editor.state.doc.firstChild?.child(1).type.name).toBe("wikilink");
-      editors.push(editor);
-      render(
-        <>
-          <EditorContent editor={editor} />
-          <LinkPreviewLayer editor={editor} />
-        </>
-      );
-      editor.commands.setTextSelection(1);
-      editor.view.dom.focus();
-      return editor;
-    }
-
-    it("shows the target once arrows select the wikilink", async () => {
-      const user = userEvent.setup();
-      renderWikilinkEditor();
-
-      for (let i = 0; i < 5; i++) await user.keyboard("{ArrowRight}");
-
-      expect(await screen.findByRole("tooltip", { name: "linkPreview.label" })).toHaveTextContent(
-        "They left at dawn."
-      );
-    });
-
-    it("shows the target while a mouse rests on the wikilink", async () => {
-      const user = userEvent.setup();
-      renderWikilinkEditor();
-
-      await user.hover(screen.getByText("Departure"));
-
-      expect(await screen.findByRole("tooltip", { name: "linkPreview.label" })).toHaveTextContent(
-        "They left at dawn."
-      );
     });
   });
 

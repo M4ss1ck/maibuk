@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { useRestoreFocus } from "@/hooks/useRestoreFocus";
 
 // React Aria's useModalOverlay makes the page outside the dialog `inert` and
@@ -165,6 +165,24 @@ describe("useRestoreFocus", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByRole("button", { name: "First" })).toBeNull();
     expect(screen.getByRole("button", { name: "Second" })).toHaveFocus();
+  });
+
+  // Focusing the editor scrolled its scroller to the top, then ProseMirror
+  // scrolled the caret back in from below, so closing Edit Link left the
+  // Link's line at the bottom of the screen. jsdom does not scroll, so this
+  // pins the option that stops the browser from doing it.
+  it("restores focus without scrolling the page under the dialog", async () => {
+    const user = userEvent.setup();
+    render(<HandoffHarness />);
+    const editor = screen.getByRole("button", { name: "Editor" });
+    const focus = vi.spyOn(editor, "focus");
+
+    await user.tab();
+    await user.keyboard("{Enter}");
+    await user.keyboard("{Enter}");
+
+    expect(editor).toHaveFocus();
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
   });
 
   it("restores focus when the dialog component itself unmounts", async () => {

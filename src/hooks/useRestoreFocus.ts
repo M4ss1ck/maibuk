@@ -57,7 +57,10 @@ export function useRestoreFocus(
     if (!target?.isConnected || target === document.body) return;
     // Another dialog took focus meanwhile; leave it there.
     if (skipRef.current && document.activeElement?.closest?.('[role="dialog"]')) return;
-    target.focus();
+    // The page did not move under the overlay, so neither should focus.
+    // Focusing a tall editor otherwise scrolls it to the top, and ProseMirror
+    // then scrolls the caret back in from below.
+    target.focus({ preventScroll: true });
   };
 
   useEffect(() => {

@@ -23,9 +23,10 @@ type WikilinkSuggestionOptions = Omit<Partial<SuggestionOptions>, "items" | "ren
   Partial<WikilinkSuggestionConfig>;
 
 /**
- * Inline atom node for `[[ ]]` note links. Bound links render as a maibuk anchor;
- * unresolved links render with a `wikilink-broken` class and a `data-label` so the
- * UI can offer to create a note (D6).
+ * `[[` suggestions for Links. Picking one inserts a Link mark. The inline atom
+ * node only remains for stored unresolved links, which render with a
+ * `wikilink-broken` class and a `data-label` so the UI can offer to create a
+ * note (D6); a stored bound one parses back as a Link mark.
  */
 export const Wikilink = Node.create({
   name: "wikilink",
@@ -91,10 +92,19 @@ export const Wikilink = Node.create({
       Suggestion({
         editor: this.editor,
         char: "[[",
+        // A typed "]" closes the Link by hand: the list closes, the text stays.
+        allow: ({ state, range }) =>
+          !state.doc.textBetween(range.from, range.to).slice(2).includes("]"),
         ...this.options.suggestion,
         command: ({ editor, range, props }) => {
           const candidate = props as WikilinkCandidate;
-          editor.chain().focus().deleteRange(range).run();
+          // Auto-close typed "]]" after "[["; the range ends at the caret.
+          const after = editor.state.doc.textBetween(
+            range.to,
+            Math.min(range.to + 2, editor.state.doc.content.size)
+          );
+          const to = after === "]]" ? range.to + 2 : range.to;
+          editor.chain().focus().deleteRange({ from: range.from, to }).run();
           insertWikilink(editor, candidate, this.options.suggestion as WikilinkSuggestionConfig);
           return true;
         },
@@ -136,5 +146,16 @@ async function insertWikilink(
     }
   }
 
-  editor.chain().focus().insertContent({ type: "wikilink", attrs: { href, label } }).run();
+  // A Link mark, not a wikilink node: the same Link a reload parses this into,
+  // so its text selects and right click edits it. The class keeps the look.
+  editor
+    .chain()
+    .focus()
+    .insertContent({
+      type: "text",
+      text: label,
+      marks: [{ type: "link", attrs: { href, class: "wikilink" } }],
+    })
+    .unsetMark("link")
+    .run();
 }

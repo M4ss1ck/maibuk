@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FloatingPortal, autoUpdate, flip, offset, shift, useFloating } from "@floating-ui/react";
 import type { Editor } from "@tiptap/react";
-import { NodeSelection, type Transaction } from "@tiptap/pm/state";
+import type { Transaction } from "@tiptap/pm/state";
 import { LinkPreviewCard, describeLinkPreview } from "@/components/editor/LinkPreviewCard";
 import { LINK_PREVIEW_DELAY_MS } from "@/constants";
 import { loadLinkPreview } from "@/features/links/link-preview";
@@ -17,9 +17,8 @@ interface Shown {
   data: LinkPreviewData;
 }
 
-// A Link mark, or a wikilink node just inserted through [[ (an unresolved
-// wikilink has no target to preview).
-const LINK_SELECTOR = "a.editor-link, a.wikilink[href]";
+// A Link mark; [[ inserts one too. An unresolved wikilink has no target.
+const LINK_SELECTOR = "a.editor-link";
 
 /**
  * Shows a Link Preview for the Link under a resting mouse or a resting caret.
@@ -88,12 +87,6 @@ export function LinkPreviewLayer({ editor }: { editor: Editor }) {
 
     const linkAtCaret = (): HTMLElement | null => {
       const { selection } = editor.state;
-      // Arrows select a wikilink node whole instead of entering it.
-      if (selection instanceof NodeSelection) {
-        if (selection.node.type.name !== "wikilink") return null;
-        const dom = editor.view.nodeDOM(selection.from);
-        return dom instanceof Element ? dom.closest<HTMLElement>(LINK_SELECTOR) : null;
-      }
       if (!selection.empty || !editor.isActive("link")) return null;
       const { node } = editor.view.domAtPos(selection.from);
       const element = node instanceof Element ? node : node.parentElement;

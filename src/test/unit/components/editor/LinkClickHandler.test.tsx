@@ -74,6 +74,35 @@ describe("LinkClickHandler", () => {
     });
   });
 
+  // A drag that starts and ends on the same Link still fires click; it was
+  // followed, so a Link's text could not be selected with the mouse.
+  it("does not follow a Link when the click ends a drag that selected its text", async () => {
+    const user = userEvent.setup();
+    const dom = document.createElement("div");
+    document.body.appendChild(dom);
+    const editor = { view: { dom } } as unknown as import("@tiptap/react").Editor;
+    render(<LinkClickHandler editor={editor} />);
+    const link = document.createElement("a");
+    link.className = "editor-link";
+    link.href = "maibuk://chapter/chapter-1";
+    link.textContent = "Departure";
+    dom.appendChild(link);
+
+    await user.pointer([
+      { keys: "[MouseLeft>]", target: link, offset: 1 },
+      { target: link, offset: 6 },
+      { keys: "[/MouseLeft]", target: link },
+    ]);
+
+    expect(document.getSelection()?.toString()).toBe("epart");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockNavigate).not.toHaveBeenCalled();
+
+    await user.click(link);
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    dom.remove();
+  });
+
   describe("Mod+Enter follows the Link at the caret", () => {
     const editors: Editor[] = [];
 

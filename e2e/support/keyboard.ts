@@ -88,3 +88,8 @@ export async function expectTabContained(page: Page, dialog: Locator): Promise<v
     }
   }
 }
+
+/** The text the keyboard selected, as the page reports it. */
+export async function selectedText(page: Page): Promise<string> {
+  return page.evaluate(() => document.getSelection()?.toString() ?? "");
+}

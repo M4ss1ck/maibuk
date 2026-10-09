@@ -8,6 +8,7 @@ import {
 } from "../support/keyboard";
 import { DOT_PNG, IMAGE_FIXTURE_DIR } from "../support/fixtures/images";
 import { capture } from "../support/capture";
+import { scrollTopAround } from "../support/layout";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
@@ -162,6 +163,41 @@ test.describe("link dialog @wf:editor-link-dialog @sc:editor.insertLink", () => 
     await expect(dialog).toBeHidden();
     await expect(editorText(page)).toBeFocused();
     expect(await editorText(page).innerText()).toBe(before);
+  });
+
+  test("closing Edit Link leaves the text scrolled where it was", async ({ page }) => {
+    await openEditor(page);
+    await page.keyboard.press("ControlOrMeta+End");
+    for (let i = 0; i < 30; i++) await page.keyboard.press("Enter");
+    await page.keyboard.type("Charts");
+    for (let i = 0; i < 6; i++) await page.keyboard.press("Shift+ArrowLeft");
+    await page.keyboard.press("ControlOrMeta+k");
+    const insert = page.getByRole("dialog", { name: "Insert Link" });
+    await expect(insert).toBeVisible();
+    await page.keyboard.type("https://tides.example.com");
+    await tabTo(page, insert.getByRole("button", { name: "Insert", exact: true }));
+    await page.keyboard.press("Enter");
+    await expect(insert).toBeHidden();
+    // Insert leaves the Link's text selected.
+    await page.keyboard.press("End");
+    for (let i = 0; i < 30; i++) await page.keyboard.press("Enter");
+    // Back up to the Link: the caret, and so the Link's line, ends at the top.
+    for (let i = 0; i < 30; i++) await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("End");
+    await page.keyboard.press("ArrowLeft");
+    const scrollTop = () => scrollTopAround(editorText(page));
+    const before = await scrollTop();
+    expect(before).toBeGreaterThan(0);
+
+    await page.keyboard.press("ControlOrMeta+k");
+    const edit = page.getByRole("dialog", { name: "Edit Link" });
+    await expect(edit).toBeVisible();
+    await capture(page, "edit-link-current-target", { around: [edit] });
+    await page.keyboard.press("Escape");
+
+    await expect(edit).toBeHidden();
+    await expect(editorText(page)).toBeFocused();
+    expect(await scrollTop()).toBe(before);
   });
 
   test("an empty URL shows the required error and keeps the dialog open", async ({ page }) => {

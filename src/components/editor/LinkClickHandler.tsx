@@ -46,6 +46,8 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
       if (link) {
         event.preventDefault();
         event.stopPropagation();
+        // A drag that selected the Link's text ends in a click too; keep the selection.
+        if (!(document.getSelection()?.isCollapsed ?? true)) return;
 
         const href = link.getAttribute("href");
         if (href) {

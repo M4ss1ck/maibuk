@@ -139,7 +139,7 @@ export function describeLinkPreview(data: LinkPreviewData, t: TFunction): string
 
 function Breadcrumb({ items }: { items: string[] }) {
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-1 text-xs leading-5 text-muted-foreground">
       {items.map((item, index) => (
         <span key={`${index}-${item}`} className="flex min-w-0 items-center gap-x-1">
           {index > 0 && <span aria-hidden="true">›</span>}
@@ -203,7 +203,7 @@ function Address({ data }: { data: Extract<LinkPreviewData, { kind: "web" }> }) 
   const shown = middleTruncate(data.href);
   const at = data.host ? shown.indexOf(data.host) : -1;
   return (
-    <p className="line-clamp-2 break-all font-mono text-xs text-foreground">
+    <p className="line-clamp-2 break-all font-mono text-xs leading-5 text-foreground">
       {at < 0 || !data.host ? (
         shown
       ) : (
@@ -293,7 +293,11 @@ export function LinkPreviewCard({
     <div
       className={`flex gap-2.5 rounded-lg border border-border bg-card p-3 text-foreground ${className}`}
     >
-      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      {/* Every kind's first line is 20px tall (leading-5), so a 20px slot
+          centers the icon on it. */}
+      <span className="flex h-5 shrink-0 items-center">
+        <Icon aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+      </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <Body data={data} />
       </div>
