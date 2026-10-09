@@ -102,7 +102,9 @@ function buildEditor({
         right: position === 1 ? 200 : 260,
       }),
       dom,
+      posAtDOM: () => 1,
     },
+    isActive: () => false,
     on: vi.fn((event: string, listener: () => void) => {
       listeners.set(event, listener);
     }),
@@ -110,6 +112,9 @@ function buildEditor({
       listeners.delete(event);
     }),
     commands: { focus: vi.fn() },
+    chain: () => ({
+      setTextSelection: () => ({ extendMarkRange: () => ({ run: vi.fn() }) }),
+    }),
     emit(event: "focus" | "blur" | "selectionUpdate") {
       editor.isFocused = event === "focus" ? true : event === "blur" ? false : editor.isFocused;
       listeners.get(event)?.();
@@ -235,5 +240,17 @@ describe("NodeFormatBubble", () => {
     expect(bubble).toHaveStyle({ maxWidth: "304px" });
     expect(bubble).toHaveClass("overflow-x-auto");
     Object.defineProperty(window, "innerWidth", { value: originalWidth, configurable: true });
+  });
+
+  it("edits a Link on a right click or long press inside the Text Node", async () => {
+    const editor = buildEditor({ empty: true, isFocused: true });
+    editor.view.dom.innerHTML = '<p><a class="editor-link" href="maibuk://note/n1">Target</a></p>';
+    document.body.append(editor.view.dom);
+    render(<NodeFormatBubble editor={editor as never} />);
+
+    fireEvent.contextMenu(screen.getByText("Target"));
+    editor.view.dom.remove();
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Link dialog");
   });
 });

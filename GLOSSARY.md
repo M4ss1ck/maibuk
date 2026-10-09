@@ -131,12 +131,16 @@ _Avoid_: updated, modified
 A titled division inside the text of a Chapter or Note, listed in the Outline and reachable by a Link.
 
 **Link**:
-A pointer from a Note, Chapter, or Text Node to a Book, Chapter, Note, or heading that opens what it points to.
+A pointer from a Note, Chapter, or Text Node to a Book, Chapter, Note, heading, or web address that opens what it points to.
 _Avoid_: mention, reference (reserved for Note Reference)
 
 **Backlink**:
 A Link from one Note to another, seen from the Note it points to; Links from Chapters and Text Nodes have no Backlink.
 _UI_: en "Linked from" / es "Enlazado desde"
+
+**Link Preview**:
+What a Link points to, shown beside it without following it.
+_Avoid_: tooltip, hover card, peek
 
 **Ephemeral**:
 A single scratch space for writing that is never saved and can be turned into a Note.

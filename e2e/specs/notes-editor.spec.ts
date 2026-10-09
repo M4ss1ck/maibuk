@@ -1,5 +1,6 @@
-import type { Page } from "@playwright/test";
-import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import type { Locator, Page } from "@playwright/test";
+import { expectFocusWithin, pressUntilFocused, selectedText, tabTo } from "../support/keyboard";
+import { boxCenter, firstLineCenter } from "../support/layout";
 import { capture } from "../support/capture";
 import { SEED_NOTES } from "../support/seed/names";
 import { expect, test } from "../support/test";
@@ -54,6 +55,64 @@ test.describe("wikilink suggestions @wf:editor-wikilink-suggest", () => {
     await expect(page.getByText("Saved", { exact: true })).toBeVisible();
     await page.reload();
     await expect(noteText(page).locator("a.wikilink")).toHaveText("Tide Tables");
+  });
+
+  test("a Link just made from [[ is a Link whose text the arrows select", async ({ page }) => {
+    await openNote(page, SEED_NOTES.tideTables);
+    await page.keyboard.press("End");
+    await page.keyboard.type(" [[Tide");
+    await expect(page.getByRole("listbox", { name: "Link suggestions" })).toBeVisible();
+    await page.keyboard.press("Enter");
+    const link = noteText(page).getByRole("link", { name: "Tide Tables" });
+    await expect(link).toHaveCount(1);
+    await page.keyboard.type(" ok");
+    await expect(link).toHaveText("Tide Tables");
+    await expect(noteText(page)).toContainText("Tide Tables ok");
+
+    for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("Shift+ArrowLeft");
+    await page.keyboard.press("Shift+ArrowLeft");
+
+    expect(await selectedText(page)).toBe("es");
+  });
+
+  test("a Note made from [[ is suggested next time without reopening the editor", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.tideTables);
+    await page.keyboard.press("End");
+    await page.keyboard.type(" [[Driftwood");
+    const listbox = page.getByRole("listbox", { name: "Link suggestions" });
+    await expect(listbox.getByRole("option").first()).toHaveText(/Driftwood/);
+    await page.keyboard.press("Enter");
+    await expect(noteText(page).getByRole("link", { name: "Driftwood" })).toHaveCount(1);
+
+    await page.keyboard.type(" and [[Drift");
+
+    await expect(listbox.getByRole("option", { name: /^Driftwood\s*note$/ })).toBeVisible();
+  });
+
+  test("the arrows scroll the list to an option below its fold", async ({ page }) => {
+    await openNote(page, SEED_NOTES.tideTables);
+    await page.keyboard.press("End");
+    const listbox = page.getByRole("listbox", { name: "Link suggestions" });
+    // Eight Notes plus "Create" is more than the list shows at once.
+    for (let n = 1; n <= 8; n++) {
+      await page.keyboard.type(` [[Buoy${n}`);
+      await expect(listbox.getByRole("option").first()).toHaveText(new RegExp(`Buoy${n}`));
+      await page.keyboard.press("Enter");
+      await expect(noteText(page).getByRole("link", { name: `Buoy${n}` })).toHaveCount(1);
+    }
+
+    await page.keyboard.type(" [[Buoy");
+    await expect(listbox.getByRole("option")).toHaveCount(9);
+    const last = listbox.getByRole("option").last();
+    await expect(last).not.toBeInViewport();
+    for (let n = 0; n < 8; n++) await page.keyboard.press("ArrowDown");
+
+    await expect(last).toHaveAttribute("aria-selected", "true");
+    await capture(page, "wikilink-suggest-scrolled", { around: [listbox] });
+    await expect(last).toBeInViewport();
   });
 
   test("Esc closes the suggestion list without inserting", async ({ page }) => {
@@ -137,6 +196,76 @@ test.describe("following a Link to a heading @wf:editor-follow-link @sc:editor.f
 
     await expect(dawn).toBeInViewport();
     await expect(page.getByText("The linked heading no longer exists.")).toHaveCount(0);
+  });
+});
+
+test.describe("Link Preview @wf:editor-link-preview", () => {
+  const preview = (page: Page) => page.getByRole("tooltip", { name: "Link preview" });
+
+  /** The type icon sits centered on the card's first line of text. */
+  async function expectIconOnFirstLine(page: Page, firstLine: Locator) {
+    const icon = await boxCenter(preview(page).locator("svg").first());
+    expect(Math.abs(icon - (await firstLineCenter(firstLine)))).toBeLessThanOrEqual(0.5);
+  }
+
+  /** Puts the caret inside the seeded Link to Keeper's Log. */
+  async function caretInSeededLink(page: Page) {
+    await openNote(page, SEED_NOTES.harborNotes);
+    await page.keyboard.press("ControlOrMeta+Home");
+    for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowRight");
+  }
+
+  test("resting the caret in a Link previews the Note it points to, and leaving hides it", async ({
+    page,
+  }) => {
+    await caretInSeededLink(page);
+
+    await expect(preview(page)).toBeVisible();
+    await expect(preview(page)).toContainText(SEED_NOTES.keeperLog);
+    await expect(preview(page)).toContainText("The lamp holds through the gale.");
+    await expect(noteText(page)).toBeFocused();
+    await capture(page, "link-preview-note");
+    // A Note shows its own text; no type icon beside it.
+    await expect(preview(page).locator("svg")).toHaveCount(0);
+
+    await page.keyboard.press("End");
+    await expect(preview(page)).toBeHidden();
+  });
+
+  test("Escape hides it and leaves the caret where it was", async ({ page }) => {
+    await caretInSeededLink(page);
+    await expect(preview(page)).toBeVisible();
+
+    await page.keyboard.press("Escape");
+
+    await expect(preview(page)).toBeHidden();
+    await expect(noteText(page)).toBeFocused();
+    await page.keyboard.type("!");
+    await expect(noteText(page)).toContainText("Keep!er's Log");
+  });
+
+  test("a web address shows its domain", async ({ page }) => {
+    await openNote(page, SEED_NOTES.tideTables);
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.type(" Charts");
+    for (let i = 0; i < 6; i++) await page.keyboard.press("Shift+ArrowLeft");
+    await page.keyboard.press("ControlOrMeta+k");
+    const dialog = page.getByRole("dialog", { name: "Insert Link" });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.type("https://tides.example.com/charts");
+    await tabTo(page, dialog.getByRole("button", { name: "Insert", exact: true }));
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(noteText(page)).toBeFocused();
+    await page.keyboard.press("End");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+
+    await expect(preview(page)).toBeVisible();
+    await expect(preview(page)).toContainText("tides.example.com");
+    await expect(preview(page)).toContainText("https://tides.example.com/charts");
+    await capture(page, "link-preview-web");
+    await expectIconOnFirstLine(page, preview(page).locator("p").first());
   });
 });
 

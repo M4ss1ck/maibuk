@@ -800,7 +800,7 @@ export const ROWS: MatrixRow[] = [
     area: "editor",
     workflow:
       "Mod+K opens Link dialog; type URL/choose internal target (Book, Chapter, Note, Heading); Enter inserts; asserts: Dialog focus/restore to editor caret; persists: yes",
-    edges: ["Esc cancels", "invalid URL"],
+    edges: ["Esc cancels", "invalid URL", "closing Edit Link keeps the scroll position"],
     terms: ["Link", "Book", "Chapter", "Note", "Heading"],
     shortcuts: ["editor.insertLink"],
     routes: ["/book/:bookId"],
@@ -813,7 +813,12 @@ export const ROWS: MatrixRow[] = [
     area: "editor",
     workflow:
       "Type [[, suggestion list, arrows, Enter inserts Link; asserts: Listbox active option; persists: yes",
-    edges: ["Esc closes list"],
+    edges: [
+      "Esc closes list",
+      "the new Link's text selects with the arrows",
+      "a Note made from [[ is suggested without reopening the editor",
+      "the arrows scroll the list to an option below its fold",
+    ],
     terms: ["Link"],
     shortcuts: [],
     routes: ["/notes/:noteId"],
@@ -1283,6 +1288,23 @@ export const ROWS: MatrixRow[] = [
     terms: ["Tag", "Note"],
     shortcuts: [],
     routes: ["/notes"],
+    fixture: "notesWithLinksAndTags",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "editor-link-preview",
+    area: "editor",
+    workflow:
+      "Caret rests in a Link: Link Preview shows the target's title and opening text; caret leaves, it hides; asserts: tooltip text, caret stays in the editor",
+    edges: [
+      "Escape hides it",
+      "web address shows its domain",
+      "type icon centered on the first line",
+    ],
+    terms: ["Link", "Link Preview", "Note"],
+    shortcuts: [],
+    routes: ["/notes/:noteId"],
     fixture: "notesWithLinksAndTags",
     tags: [],
     status: "accepted",

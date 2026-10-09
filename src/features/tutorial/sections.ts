@@ -96,7 +96,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
       step("notes.new", ["Unfiled Note"]),
       step("notes.tree", ["Book Note", "Unfiled Note"], { route: NOTE_ROUTE }),
       step("notes.tags", ["Tag"], { route: NOTE_ROUTE }),
-      step("notes.content", ["Heading", "Link"], { route: NOTE_ROUTE }),
+      step("notes.content", ["Heading", "Link", "Link Preview"], { route: NOTE_ROUTE }),
       step("notes.backlinks", ["Link", "Backlink"], { route: NOTE_ROUTE }),
     ],
   },

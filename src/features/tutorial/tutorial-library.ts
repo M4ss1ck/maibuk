@@ -16,6 +16,7 @@ import { useNoteStore } from "@/features/notes/store";
 import { useCanvasStore } from "@/features/canvas/store";
 import { useVersionStore } from "@/features/versions/store";
 import { useEphemeralStore } from "@/features/ephemeral/store";
+import { clearLinkPreviewCache } from "@/features/links/link-preview";
 import {
   activateTutorialDatabase,
   deactivateTutorialDatabase,
@@ -82,6 +83,10 @@ export const LIBRARY_VIEWS: readonly { name: string; reload: () => Promise<void>
         error: null,
       });
     },
+  },
+  {
+    name: "linkPreviews",
+    reload: async () => clearLinkPreviewCache(),
   },
 ];
 

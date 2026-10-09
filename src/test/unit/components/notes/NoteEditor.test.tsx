@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import type { Note, UpdateNoteInput } from "@/features/notes";
+import { useNoteStore } from "@/features/notes/store";
+import type { WikilinkCandidate } from "@/features/links/wikilink-targets";
 
 const { noteI18nState, platformState, mockNoteSetAlwaysOnTop } = vi.hoisted(() => ({
   noteI18nState: { language: "en" as "en" | "es" },
@@ -60,8 +62,10 @@ vi.mock("../../../../lib/platform", () => ({
   ),
 }));
 
-const { noteNavigateMock } = vi.hoisted(() => ({
+const { noteNavigateMock, editorExtensions } = vi.hoisted(() => ({
   noteNavigateMock: vi.fn(),
+  // Every extraExtensions list the editor was rendered with, oldest first.
+  editorExtensions: [] as unknown[][],
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -74,13 +78,15 @@ vi.mock("../../../../components/editor", () => ({
     onWordCountChange,
     onEscape,
     headerContent,
+    extraExtensions,
   }: {
     onUpdate: (content: string) => void;
     onWordCountChange: (count: number) => void;
     onEscape?: () => void;
     headerContent?: React.ReactNode;
+    extraExtensions?: unknown[];
   }) => (
-    <div>
+    <div ref={() => void editorExtensions.push(extraExtensions ?? [])}>
       {headerContent}
       {/* biome-ignore lint/a11y/useSemanticElements: stands in for the contenteditable editor surface. */}
       <div
@@ -161,6 +167,34 @@ describe("NoteEditor", () => {
     });
 
     vi.useRealTimers();
+  });
+
+  // TipTap keeps the extensions an editor was created with, so a [[ list
+  // built from the first render never saw a Note made after the editor opened.
+  it("suggests a Note created after the editor opened", async () => {
+    useNoteStore.setState({ notes: [buildNote({ id: "note-1", title: "Faro" })] });
+    editorExtensions.length = 0;
+    render(<NoteEditor note={buildNote({ title: "Faro" })} onSave={vi.fn()} />);
+    const wikilink = editorExtensions[0].find(
+      (extension) => (extension as { name?: string }).name === "wikilink"
+    ) as {
+      options: { suggestion: { items: (props: { query: string }) => WikilinkCandidate[] } };
+    };
+
+    act(() => {
+      useNoteStore.setState({
+        notes: [
+          buildNote({ id: "note-1", title: "Faro" }),
+          buildNote({ id: "note-2", title: "Tide Tables" }),
+        ],
+      });
+    });
+
+    expect(wikilink.options.suggestion.items({ query: "Tide" })).toContainEqual({
+      kind: "note",
+      id: "note-2",
+      label: "Tide Tables",
+    });
   });
 
   it("saves immediately when the manual save button is clicked", async () => {

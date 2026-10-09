@@ -5,7 +5,10 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useTranslation } from "react-i18next";
+import { LinkPreviewCard } from "@/components/editor/LinkPreviewCard";
+import { loadLinkPreview } from "@/features/links/link-preview";
 import { formatLinkUri, isInternalLink } from "@/features/links/link-uri";
+import type { LinkPreviewData } from "@/features/links/types";
 
 type LinkTextMark = {
   type: string;
@@ -185,6 +188,22 @@ export function LinkDialog({
   const [loadingTargetKeys, setLoadingTargetKeys] = useState<Set<string>>(() => new Set());
 
   // Get current link and selection when dialog opens
+  // A touch screen has no hover, so this is where it shows a Link's target.
+  const [currentPreview, setCurrentPreview] = useState<LinkPreviewData | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const href = (editor.getAttributes("link").href as string | undefined) ?? "";
+    setCurrentPreview(null);
+    if (!href) return;
+    let live = true;
+    void loadLinkPreview(href).then((data) => {
+      if (live) setCurrentPreview(data);
+    });
+    return () => {
+      live = false;
+    };
+  }, [isOpen, editor]);
+
   useEffect(() => {
     if (isOpen) {
       const { from, to } = editor.state.selection;
@@ -452,6 +471,12 @@ export function LinkDialog({
       }
     >
       <div className="space-y-4">
+        {currentPreview && (
+          <section aria-label={t("linkPreview.current")} className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">{t("linkPreview.current")}</p>
+            <LinkPreviewCard data={currentPreview} className="w-full shadow-none" />
+          </section>
+        )}
         {canLinkInternally && (
           <div className="flex gap-2">
             <Button

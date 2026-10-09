@@ -1516,6 +1516,14 @@
       "unknown": "Unknown"
     }
   },
+  "linkPreview": {
+    "label": "Link preview",
+    "announce": "{{type}}: {{target}}. {{text}}",
+    "byAuthor": "by {{author}}",
+    "empty": "No text yet",
+    "address": "Address",
+    "current": "Links to"
+  },
   "deepLink": {
     "resourceGone": "The linked resource no longer exists.",
     "headingGone": "The linked heading no longer exists.",
@@ -1695,7 +1703,7 @@
         },
         "content": {
           "title": "Checklists and Links",
-          "body": "Notes use the same editor as Chapters: Headings, checklists and more. A Link points to a Book, Chapter, Note or Heading and opens it; type [[ to add one."
+          "body": "Notes use the same editor as Chapters: Headings, checklists and more. A Link points to a Book, Chapter, Note or Heading and opens it; type [[ to add one, and rest the pointer or caret on one to preview where it goes."
         },
         "backlinks": {
           "title": "Linked from",

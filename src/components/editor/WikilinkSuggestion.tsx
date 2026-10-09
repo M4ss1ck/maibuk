@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useState, forwardRef } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
 import { ReactRenderer } from "@tiptap/react";
 import type { SuggestionOptions } from "@tiptap/suggestion";
 import type { WikilinkCandidate } from "@/features/links/wikilink-targets";
@@ -17,6 +17,13 @@ export const WikilinkList = forwardRef<WikilinkListHandle, WikilinkListProps>(
   ({ items, command }, ref) => {
     const [selected, setSelected] = useState(0);
     useEffect(() => setSelected(0), [items]);
+    // The list is capped in height, so the arrows scroll the active option in.
+    const listRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+      listRef.current?.querySelectorAll('[role="option"]')[selected]?.scrollIntoView({
+        block: "nearest",
+      });
+    }, [selected]);
 
     useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }) => {
@@ -38,6 +45,7 @@ export const WikilinkList = forwardRef<WikilinkListHandle, WikilinkListProps>(
 
     return (
       <div
+        ref={listRef}
         role="listbox"
         aria-label={i18n.t("editor.linkSuggestions")}
         className="z-50 max-h-64 w-72 max-w-[calc(100vw-1rem)] overflow-auto rounded-lg border border-border bg-background shadow-lg"

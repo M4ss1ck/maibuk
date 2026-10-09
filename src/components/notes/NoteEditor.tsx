@@ -34,8 +34,6 @@ import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage, type Language } from "@/features/settings/types";
 import { IS_DESKTOP } from "@/lib/platform";
 import { useNavigate } from "react-router-dom";
-import { isInternalLink } from "@/features/links/link-uri";
-import { navigateToLinkTarget } from "@/features/links/navigate";
 import { Wikilink } from "@/components/editor/extensions";
 import { createWikilinkRenderer } from "@/components/editor/WikilinkSuggestion";
 import { buildWikilinkCandidates } from "@/features/links/wikilink-targets";
@@ -301,14 +299,16 @@ export function NoteEditor({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showTagEditor]);
 
+  // The editor keeps the extensions it was created with, so the [[ list reads
+  // the Library when asked, not the Notes and Books of the first render.
   const wikilinkExtension = useMemo(
     () =>
       Wikilink.configure({
         suggestion: {
           items: ({ query }: { query: string }) =>
             buildWikilinkCandidates(query, {
-              notes: notes.map((n) => ({ id: n.id, title: n.title })),
-              books: books.map((b) => ({ id: b.id, title: b.title })),
+              notes: useNoteStore.getState().notes.map((n) => ({ id: n.id, title: n.title })),
+              books: useBookStore.getState().books.map((b) => ({ id: b.id, title: b.title })),
               chapters: [],
               headings: [],
             }),
@@ -319,7 +319,7 @@ export function NoteEditor({
           render: createWikilinkRenderer(),
         },
       }),
-    [notes, books]
+    []
   );
 
   const internalTargets = useMemo<InternalTarget[]>(
@@ -471,27 +471,20 @@ export function NoteEditor({
       editorRef.current = editor;
       if (!editor) return;
       const dom = editor.view.dom;
+      // A bound [[ Link is a Link mark, which LinkClickHandler follows. Only a
+      // stored unresolved one is left: clicking it creates its Note.
       const onClick = (event: MouseEvent) => {
-        const target = (event.target as HTMLElement).closest("a.wikilink");
-        if (!(target instanceof HTMLAnchorElement)) return;
-        const href = target.getAttribute("href");
-        if (href && isInternalLink(href)) {
-          event.preventDefault();
-          void navigateToLinkTarget(href, navigate, (key) => toast.error(i18n.t(key)));
-        } else {
-          const broken = (event.target as HTMLElement).closest("a.wikilink-broken");
-          if (broken instanceof HTMLAnchorElement) {
-            event.preventDefault();
-            const label = broken.getAttribute("data-label") ?? broken.textContent ?? "";
-            if (!label) return;
-            void useNoteStore
-              .getState()
-              .createNote({ title: label })
-              .then((created) => {
-                navigate(`/notes/${created.id}`);
-              });
-          }
-        }
+        const broken = (event.target as HTMLElement).closest("a.wikilink-broken");
+        if (!(broken instanceof HTMLAnchorElement)) return;
+        event.preventDefault();
+        const label = broken.getAttribute("data-label") ?? broken.textContent ?? "";
+        if (!label) return;
+        void useNoteStore
+          .getState()
+          .createNote({ title: label })
+          .then((created) => {
+            navigate(`/notes/${created.id}`);
+          });
       };
       dom.addEventListener("click", onClick);
 
@@ -511,7 +504,7 @@ export function NoteEditor({
 
       editor.on("transaction", onTransaction);
     },
-    [navigate, note.id, i18n]
+    [navigate, note.id]
   );
 
   const handleSpellCheckLanguageChange = useCallback(
