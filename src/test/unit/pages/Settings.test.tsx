@@ -253,8 +253,8 @@ describe("Settings page — container-aware layout", () => {
       "dictation",
       "export",
       "tutorial",
-      "advanced",
       "plugins",
+      "advanced",
       "about",
     ]);
     const cardClass = headings[0].closest("section")?.className;

@@ -146,8 +146,8 @@ describe("Settings outline", () => {
       "dictation.section.title",
       "settings.export",
       "tutorial.settings.title",
-      "settings.advanced",
       "settings.plugins",
+      "settings.advanced",
       "settings.about",
     ]);
   });
