@@ -83,7 +83,7 @@ test.describe("Settings Plugins empty state @wf:settings-plugins", () => {
     const pluginsEntry = page
       .getByRole("navigation", { name: "Secciones de configuración" })
       .getByRole("treegrid", { name: "Secciones de configuración" })
-      .getByRole("row", { name: /^Plugins(, current)?$/ });
+      .getByRole("row", { name: /^Plugins(, actual)?$/ });
     await expect(pluginsEntry).toBeVisible();
     await tabTo(page, pluginsEntry, { max: 10 });
     await page.keyboard.press("Enter");
