@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from "react";
+import { useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
@@ -9,7 +9,27 @@ import {
   getPluginSettingsRows,
   onSettingsRowsChange,
   rowOnPlatform,
+  type PluginSettingsOwner,
 } from "@/features/settings/rows";
+
+// The owners snapshot must be referentially stable between registry changes;
+// getPluginSettingsOwners builds a fresh sorted array on every call.
+let cachedOwners: PluginSettingsOwner[] | null = null;
+
+function subscribeOwners(notify: () => void): () => void {
+  // Registrations may predate the subscription (and a previous mount's cache
+  // may outlive its test), so re-read on subscribe, then hold it stable.
+  cachedOwners = null;
+  return onSettingsRowsChange(() => {
+    cachedOwners = null;
+    notify();
+  });
+}
+
+function getOwnersSnapshot(): PluginSettingsOwner[] {
+  if (cachedOwners === null) cachedOwners = getPluginSettingsOwners();
+  return cachedOwners;
+}
 
 /**
  * The Plugins Settings section: one accordion per Plugin that declares
@@ -20,13 +40,11 @@ import {
  */
 export function PluginsSection() {
   const { t } = useTranslation();
-  const [, force] = useReducer((count: number) => count + 1, 0);
-  useEffect(() => onSettingsRowsChange(force), []);
+  const owners = useSyncExternalStore(subscribeOwners, getOwnersSnapshot, getOwnersSnapshot);
   const pluginOpen = useSettingsRevealStore((state) => state.pluginOpen);
   const setPluginOpen = useSettingsRevealStore((state) => state.setPluginOpen);
 
   const platform = currentSettingsPlatform();
-  const owners = getPluginSettingsOwners();
 
   return (
     <SettingsSection

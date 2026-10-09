@@ -26,6 +26,16 @@ export type ToolbarGroupId =
   | "html-view"
   | "export";
 
+import {
+  LOCAL_ID_PATTERN,
+  PLUGIN_ID_PATTERN,
+  PLUGIN_PREFIX,
+  collapseContributionRenames,
+  isPluginContributionId,
+  localIdOfContribution,
+  pluginIdOfContribution,
+} from "@/features/plugins/ids";
+
 export type ToolbarSection = "start" | "end";
 
 /** A Plugin toolbar button id, derived by the host as `plugin.<pluginId>.<localId>`. */
@@ -33,27 +43,17 @@ export type PluginToolbarButtonId = `plugin.${string}.${string}`;
 /** Any toolbar button: a core group or a Plugin button. */
 export type ToolbarEntryId = ToolbarGroupId | PluginToolbarButtonId;
 
-export const PLUGIN_TOOLBAR_PREFIX = "plugin.";
-
-const PLUGIN_ID_SOURCE = "[a-z0-9-]{3,64}";
-const LOCAL_ID_SOURCE = "[a-z][a-zA-Z0-9]{0,47}";
-const PLUGIN_ID_PATTERN = new RegExp(`^${PLUGIN_ID_SOURCE}$`);
-const LOCAL_ID_PATTERN = new RegExp(`^${LOCAL_ID_SOURCE}$`);
-const PLUGIN_BUTTON_ID_PATTERN = new RegExp(
-  `^plugin\\.(${PLUGIN_ID_SOURCE})\\.(${LOCAL_ID_SOURCE})$`
-);
-
 /** The shape of a Plugin toolbar button id, whether or not its Plugin is registered. */
 export function isPluginToolbarButtonId(value: string): value is PluginToolbarButtonId {
-  return PLUGIN_BUTTON_ID_PATTERN.test(value);
+  return isPluginContributionId(value);
 }
 
 export function pluginIdOfToolbarButton(value: string): string | null {
-  return PLUGIN_BUTTON_ID_PATTERN.exec(value)?.[1] ?? null;
+  return pluginIdOfContribution(value);
 }
 
 export function localIdOfToolbarButton(value: string): string | null {
-  return PLUGIN_BUTTON_ID_PATTERN.exec(value)?.[2] ?? null;
+  return localIdOfContribution(value);
 }
 
 export interface ToolbarGroupPreference {
@@ -227,21 +227,26 @@ interface RegisteredToolbarPlugin {
   pluginId: string;
   order: number;
   renames: Readonly<Record<string, string>>;
-  buttonIds: readonly PluginToolbarButtonId[];
+  buttons: readonly PluginToolbarButtonDef[];
+}
+
+/** One live Plugin toolbar button: its derived id plus what its declaration carried. */
+export interface PluginToolbarButtonDef {
+  id: PluginToolbarButtonId;
+  pluginId: string;
+  localId: string;
+  /** The local Command id this button runs; labels resolve through the Command registry. */
+  command?: string;
+  /** A Lucide icon name or a relative `.svg` path; resolved by the wiring slice. */
+  icon?: string;
 }
 
 const toolbarPlugins = new Map<string, RegisteredToolbarPlugin>();
 let toolbarRegistrationOrder = 0;
-let toolbarRevision = 0;
 const toolbarListeners = new Set<() => void>();
 
 function notifyToolbarRegistryChange(): void {
-  toolbarRevision += 1;
   for (const listener of [...toolbarListeners]) listener();
-}
-
-export function toolbarRegistryRevision(): number {
-  return toolbarRevision;
 }
 
 /** Runs after every toolbar register and unregister. Returns unregister. */
@@ -250,35 +255,6 @@ export function onToolbarRegistryChange(listener: () => void): () => void {
   return () => {
     toolbarListeners.delete(listener);
   };
-}
-
-function collapseToolbarRenames(
-  renames: Readonly<Record<string, string>>,
-  declared: ReadonlySet<string>
-): Readonly<Record<string, string>> {
-  for (const [from, to] of Object.entries(renames)) {
-    if (!LOCAL_ID_PATTERN.test(from) || !LOCAL_ID_PATTERN.test(to)) {
-      throw new Error(`Plugin button rename "${from}" targets "${to}", which is not a Plugin-local id`);
-    }
-    if (declared.has(from)) {
-      throw new Error(`Plugin button rename source "${from}" is a declared button`);
-    }
-    if (!declared.has(to)) {
-      throw new Error(`Plugin button rename "${from}" targets "${to}", which is not a declared button`);
-    }
-  }
-  const collapsed: Record<string, string> = {};
-  for (const from of Object.keys(renames)) {
-    const seen = new Set<string>([from]);
-    let target = renames[from];
-    while (renames[target] !== undefined) {
-      if (seen.has(target)) throw new Error(`Plugin button rename for "${from}" cycles`);
-      seen.add(target);
-      target = renames[target];
-    }
-    collapsed[from] = target;
-  }
-  return collapsed;
 }
 
 /**
@@ -295,7 +271,7 @@ export function registerToolbarButtons(
     throw new Error(`Invalid Plugin id "${pluginId}"`);
   }
   const declared = new Set<string>();
-  const buttonIds: PluginToolbarButtonId[] = [];
+  const buttons: PluginToolbarButtonDef[] = [];
   for (const declaration of registration.buttons) {
     if (!LOCAL_ID_PATTERN.test(declaration.id)) {
       throw new Error(`Plugin button id "${declaration.id}" is outside this Plugin's namespace`);
@@ -304,9 +280,15 @@ export function registerToolbarButtons(
       throw new Error(`Duplicate Plugin button id "${declaration.id}"`);
     }
     declared.add(declaration.id);
-    buttonIds.push(`${PLUGIN_TOOLBAR_PREFIX}${pluginId}.${declaration.id}` as PluginToolbarButtonId);
+    buttons.push({
+      id: `${PLUGIN_PREFIX}${pluginId}.${declaration.id}` as PluginToolbarButtonId,
+      pluginId,
+      localId: declaration.id,
+      ...(declaration.command !== undefined ? { command: declaration.command } : {}),
+      ...(declaration.icon !== undefined ? { icon: declaration.icon } : {}),
+    });
   }
-  const renames = collapseToolbarRenames(registration.buttonRenames ?? {}, declared);
+  const renames = collapseContributionRenames(registration.buttonRenames ?? {}, declared, "button");
   const previous = toolbarPlugins.get(pluginId);
   const token = Symbol(pluginId);
   // Token guards a stale unregister after a re-register, like Commands.
@@ -314,7 +296,7 @@ export function registerToolbarButtons(
     pluginId,
     order: previous?.order ?? toolbarRegistrationOrder++,
     renames,
-    buttonIds,
+    buttons,
     token,
   };
   toolbarPlugins.set(pluginId, record);
@@ -331,9 +313,25 @@ function registeredToolbarPlugins(): RegisteredToolbarPlugin[] {
   return [...toolbarPlugins.values()].sort((a, b) => a.order - b.order);
 }
 
+/** Every live Plugin toolbar button, in registration then declaration order. */
+export function registeredToolbarButtons(): PluginToolbarButtonDef[] {
+  return registeredToolbarPlugins().flatMap((plugin) => [...plugin.buttons]);
+}
+
 /** Every live Plugin toolbar button id, in registration then declaration order. */
 export function registeredToolbarButtonIds(): PluginToolbarButtonId[] {
-  return registeredToolbarPlugins().flatMap((plugin) => [...plugin.buttonIds]);
+  return registeredToolbarButtons().map((button) => button.id);
+}
+
+/**
+ * Whether a toolbar entry renders: core groups always do; a `plugin.` button
+ * only while its Plugin is registered. Absent Plugin ids stay in the config
+ * as retained arrangement but render nothing until the Plugin returns.
+ */
+export function isLiveToolbarEntry(id: string): boolean {
+  if (GROUP_ID_SET.has(id)) return true;
+  if (!isPluginToolbarButtonId(id)) return false;
+  return registeredToolbarButtonIds().includes(id);
 }
 
 /** The rename maps of every registered Plugin, for settings migration. */
@@ -351,7 +349,7 @@ export function resolveToolbarButtonRename(value: string): string {
   if (pluginId === null) return value;
   const localId = localIdOfToolbarButton(value);
   const renamed = localId === null ? undefined : toolbarPlugins.get(pluginId)?.renames[localId];
-  return renamed === undefined ? value : `${PLUGIN_TOOLBAR_PREFIX}${pluginId}.${renamed}`;
+  return renamed === undefined ? value : `${PLUGIN_PREFIX}${pluginId}.${renamed}`;
 }
 
 /**
@@ -373,31 +371,46 @@ export function resolveStoredToolbarButtonId(rawId: string): ToolbarEntryId | nu
 export function applyToolbarButtonRenames(config: ToolbarConfig): ToolbarConfig {
   if (pluginToolbarButtonRenames().size === 0) return config;
   let changed = false;
-  const remap = (lane: ToolbarEntry[]): ToolbarEntry[] =>
+  interface MappedGroup {
+    entry: ToolbarEntry;
+    next: string;
+    owned: boolean;
+  }
+  const mapped: MappedGroup[][] = [config.start, config.end].map((lane) =>
     lane.map((entry) => {
-      if (entry.kind !== "group") return entry;
+      if (entry.kind !== "group") return { entry, next: "", owned: false };
       const next = resolveToolbarButtonRename(entry.id);
-      if (next === entry.id) return entry;
-      changed = true;
-      return { ...entry, id: next as ToolbarEntryId };
-    });
-  // The declared id's own entry wins over a migrated old one: drop duplicates
-  // keeping the first occurrence across both lanes.
-  const start = remap(config.start);
-  const end = remap(config.end);
+      if (next !== entry.id) changed = true;
+      return { entry, next, owned: next === entry.id };
+    })
+  );
+  // Ids with an entry of their own: a migrated old id pointing at one is
+  // dropped, so the declared entry's own flags win wherever it sits.
+  const ownedIds = new Set<string>();
+  for (const lane of mapped) {
+    for (const info of lane) {
+      if (info.entry.kind === "group" && info.owned) ownedIds.add(info.next);
+    }
+  }
   const seen = new Set<string>();
-  const dedupe = (lane: ToolbarEntry[]): ToolbarEntry[] =>
-    lane.filter((entry) => {
-      if (entry.kind !== "group") return true;
-      if (seen.has(entry.id)) {
-        changed = true;
-        return false;
+  const rebuild = (lane: MappedGroup[]): ToolbarEntry[] => {
+    const out: ToolbarEntry[] = [];
+    for (const info of lane) {
+      if (info.entry.kind !== "group") {
+        out.push(info.entry);
+        continue;
       }
-      seen.add(entry.id);
-      return true;
-    });
-  const nextStart = dedupe(start);
-  const nextEnd = dedupe(end);
+      if ((!info.owned && ownedIds.has(info.next)) || seen.has(info.next)) {
+        changed = true;
+        continue;
+      }
+      seen.add(info.next);
+      out.push(info.owned ? info.entry : { ...info.entry, id: info.next as ToolbarEntryId });
+    }
+    return out;
+  };
+  const nextStart = rebuild(mapped[0]);
+  const nextEnd = rebuild(mapped[1]);
   if (!changed) return config;
   return { start: nextStart, end: nextEnd };
 }
@@ -597,7 +610,10 @@ export function deriveFloatingGroupIds(config: ToolbarConfig): ToolbarEntryId[] 
   return [...config.start, ...config.end]
     .filter(
       (entry): entry is ToolbarGroupPreference =>
-        entry.kind === "group" && entry.floatingVisible && isFloatingEligible(entry.id)
+        entry.kind === "group" &&
+        entry.floatingVisible &&
+        isFloatingEligible(entry.id) &&
+        isLiveToolbarEntry(entry.id)
     )
     .map((entry) => entry.id);
 }

@@ -1,14 +1,15 @@
 import { describe, expect, it, afterEach } from "vitest";
 import {
   DEFAULT_TOOLBAR_CONFIG,
-  normalizeToolbarConfig,
+  applyToolbarButtonRenames,
   deriveFloatingGroupIds,
+  isLiveToolbarEntry,
+  isPluginToolbarButtonId,
+  normalizeToolbarConfig,
+  registerToolbarButtons,
   setGroupFloatingVisible,
   setGroupToolbarVisible,
-  registerToolbarButtons,
-  isPluginToolbarButtonId,
   withRegisteredToolbarButtons,
-  applyToolbarButtonRenames,
   type ToolbarConfig,
 } from "@/features/settings/toolbar-config";
 
@@ -98,9 +99,68 @@ describe("toolbar runtime buttons (issue #429)", () => {
     expect(migrated.start[0]).toMatchObject({ toolbarVisible: false, floatingVisible: true });
   });
 
+  it("keeps the declared entry when a renamed old id and the new id both exist", () => {
+    register("echoes", ["neu"], { old: "neu" });
+    const hidden = {
+      kind: "group",
+      id: "plugin.echoes.old",
+      toolbarVisible: false,
+      floatingVisible: false,
+    } as const;
+    const visible = {
+      kind: "group",
+      id: "plugin.echoes.neu",
+      toolbarVisible: true,
+      floatingVisible: true,
+    } as const;
+    for (const start of [
+      [hidden, visible],
+      [visible, hidden],
+    ] as const) {
+      const migrated = applyToolbarButtonRenames({ start: [...start], end: [] });
+      const groups = migrated.start.filter((e) => e.kind === "group");
+      expect(groups.map((e) => e.id)).toEqual(["plugin.echoes.neu"]);
+      expect(groups[0]).toMatchObject({ toolbarVisible: true, floatingVisible: true });
+    }
+    for (const config of [
+      { start: [{ ...hidden }], end: [{ ...visible }] },
+      { start: [{ ...visible }], end: [{ ...hidden }] },
+    ]) {
+      const migrated = applyToolbarButtonRenames(config as ToolbarConfig);
+      const groups = [...migrated.start, ...migrated.end].filter((e) => e.kind === "group");
+      expect(groups.map((e) => e.id)).toEqual(["plugin.echoes.neu"]);
+      expect(groups[0]).toMatchObject({ toolbarVisible: true, floatingVisible: true });
+    }
+  });
+
   it("recognizes plugin button id shape", () => {
     expect(isPluginToolbarButtonId("plugin.echoes.showReport")).toBe(true);
     expect(isPluginToolbarButtonId("history")).toBe(false);
     expect(isPluginToolbarButtonId("plugin.echoes.ShowReport")).toBe(false);
+  });
+
+  it("treats core ids as live, and plugin ids as live only while registered", () => {
+    expect(isLiveToolbarEntry("history")).toBe(true);
+    expect(isLiveToolbarEntry("not-a-real-group")).toBe(false);
+    expect(isLiveToolbarEntry("plugin.echoes.show")).toBe(false);
+    const unregister = registerToolbarButtons("echoes", { buttons: [{ id: "show" }] });
+    unregisters.push(unregister);
+    expect(isLiveToolbarEntry("plugin.echoes.show")).toBe(true);
+    expect(isLiveToolbarEntry("plugin.echoes.other")).toBe(false);
+  });
+
+  it("excludes a retained absent button from the selection toolbar", () => {
+    const config: ToolbarConfig = {
+      start: [
+        {
+          kind: "group",
+          id: "plugin.echoes.gone",
+          toolbarVisible: true,
+          floatingVisible: true,
+        },
+      ],
+      end: [],
+    };
+    expect(deriveFloatingGroupIds(config)).not.toContain("plugin.echoes.gone");
   });
 });

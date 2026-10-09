@@ -127,6 +127,34 @@ it("suppresses a leading divider at the Start lane boundary", () => {
   expect(startLane.querySelectorAll(".w-px.h-6.bg-border").length).toBe(0);
 });
 
+it("collapses dividers around a retained absent button to one, with no empty boundary", () => {
+  useSettingsStore.setState({
+    toolbarExpanded: true,
+    toolbarConfig: {
+      start: [
+        { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+        { kind: "divider", id: "d1" },
+        {
+          kind: "group",
+          id: "plugin.echoes.gone",
+          toolbarVisible: true,
+          floatingVisible: false,
+        },
+        { kind: "divider", id: "d2" },
+        { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
+      ],
+      end: [],
+    },
+  });
+  const { getByTestId } = renderToolbar();
+  const startLane = getByTestId("toolbar-start-lane");
+
+  expect(startLane.querySelector('[data-group-id="history"]')).toBeInTheDocument();
+  expect(startLane.querySelector('[data-group-id="font"]')).toBeInTheDocument();
+  expect(startLane.querySelector('[data-group-id="plugin.echoes.gone"]')).toBeNull();
+  expect(startLane.querySelectorAll(".w-px.h-6.bg-border").length).toBe(1);
+});
+
 it("does not end the Start lane on a divider when the cut falls after one", () => {
   mockVisibleCount = 2;
   useSettingsStore.setState({

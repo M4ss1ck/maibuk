@@ -10,7 +10,11 @@ import {
 } from "@/components/editor/toolbar/EditorToolbarGroups";
 import { useToolbarOverflow } from "@/components/editor/toolbar/useToolbarOverflow";
 import { useSettingsStore } from "@/features/settings/store";
-import { suppressOrphanDividers, type ToolbarEntry } from "@/features/settings/toolbar-config";
+import {
+  isLiveToolbarEntry,
+  suppressOrphanDividers,
+  type ToolbarEntry,
+} from "@/features/settings/toolbar-config";
 
 interface ResponsiveEditorToolbarProps {
   editor: Editor;
@@ -22,8 +26,13 @@ interface ResponsiveEditorToolbarProps {
 }
 
 function visibleEntries(entries: ToolbarEntry[]): ToolbarEntry[] {
+  // Retained buttons of absent Plugins stay in the config but render nothing:
+  // dropping them before orphan suppression leaves no empty boundary and no
+  // doubled dividers.
   return suppressOrphanDividers(
-    entries.filter((entry) => entry.kind !== "group" || entry.toolbarVisible)
+    entries.filter(
+      (entry) => entry.kind === "divider" || (entry.toolbarVisible && isLiveToolbarEntry(entry.id))
+    )
   );
 }
 

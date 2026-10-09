@@ -1,3 +1,4 @@
+import { PLUGINS_SECTION } from "@/components/settings/PluginsSection.rows";
 import {
   getAllPluginSettingsRows,
   rowOnPlatform,
@@ -47,7 +48,7 @@ export function buildOutline(
       // Runtime Plugin rows live in the Plugins section; their metadata needs
       // no Worker, so the outline and search see them like core rows.
       const runtimeRows =
-        section.id === "plugins"
+        section.id === PLUGINS_SECTION.id
           ? getAllPluginSettingsRows()
               .filter((row) => rowOnPlatform(row, options.platform))
               .map((row) => ({ id: row.id, label: row.label }))

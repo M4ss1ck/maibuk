@@ -217,20 +217,27 @@ describe("Plugins Settings section", () => {
 
     // Tab to the accordion trigger and open it with Enter alone.
     const trigger = screen.getByRole("button", { name: "Echoes" });
-    trigger.focus();
+    for (let i = 0; i < 200 && document.activeElement !== trigger; i++) {
+      await user.tab();
+    }
     expect(document.activeElement).toBe(trigger);
     await user.keyboard("{Enter}");
     const field = await screen.findByLabelText("Echo threshold");
     expect(field).toBeInTheDocument();
 
-    // Tab to the row's field with the keyboard alone.
-    trigger.focus();
+    // Tab moves into the opened accordion's field; Shift+Tab returns to the
+    // trigger, where Enter closes the accordion again.
+    for (let i = 0; i < 10 && document.activeElement !== field; i++) {
+      await user.tab();
+    }
+    expect(document.activeElement).toBe(field);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(trigger);
     await user.keyboard("{Enter}");
-    // Closed again.
     expect(screen.queryByLabelText("Echo threshold")).toBeNull();
 
     // Following a search result opens the accordion and focuses the row.
-    focusSettingsRow("plugin.echoes.threshold" as never);
+    focusSettingsRow("plugin.echoes.threshold");
     await waitFor(() => expect(screen.getByLabelText("Echo threshold")).toBeInTheDocument());
     await waitFor(() =>
       expect((screen.getByLabelText("Echo threshold") as HTMLElement) === document.activeElement).toBe(
@@ -238,6 +245,6 @@ describe("Plugins Settings section", () => {
       )
     );
     expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
-    expect(useSettingsRevealStore.getState().pluginOpen["echoes"]).toBe(true);
+    expect(useSettingsRevealStore.getState().pluginOpen.echoes).toBe(true);
   });
 });

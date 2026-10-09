@@ -1,4 +1,13 @@
 import { IS_ANDROID, IS_DESKTOP, IS_WEB } from "@/lib/platform";
+import {
+  LOCAL_ID_PATTERN,
+  PLUGIN_ID_PATTERN,
+  PLUGIN_PREFIX,
+  collapseContributionRenames,
+  isPluginContributionId,
+  localIdOfContribution,
+  pluginIdOfContribution,
+} from "@/features/plugins/ids";
 
 export type SettingsPlatform = "web" | "desktop" | "android";
 
@@ -48,27 +57,17 @@ export function rowOnPlatform(
 /** A Plugin Settings row id, derived by the host as `plugin.<pluginId>.<localId>`. */
 export type PluginSettingsRowId = `plugin.${string}.${string}`;
 
-export const PLUGIN_SETTINGS_PREFIX = "plugin.";
-
-const PLUGIN_ID_SOURCE = "[a-z0-9-]{3,64}";
-const LOCAL_ID_SOURCE = "[a-z][a-zA-Z0-9]{0,47}";
-const PLUGIN_ID_PATTERN = new RegExp(`^${PLUGIN_ID_SOURCE}$`);
-const LOCAL_ID_PATTERN = new RegExp(`^${LOCAL_ID_SOURCE}$`);
-const PLUGIN_ROW_ID_PATTERN = new RegExp(
-  `^plugin\\.(${PLUGIN_ID_SOURCE})\\.(${LOCAL_ID_SOURCE})$`
-);
-
 /** The shape of a Plugin Settings row id, whether or not its Plugin is registered. */
 export function isPluginSettingsRowId(value: string): value is PluginSettingsRowId {
-  return PLUGIN_ROW_ID_PATTERN.test(value);
+  return isPluginContributionId(value);
 }
 
 export function pluginIdOfSettingsRow(value: string): string | null {
-  return PLUGIN_ROW_ID_PATTERN.exec(value)?.[1] ?? null;
+  return pluginIdOfContribution(value);
 }
 
 export function localIdOfSettingsRow(value: string): string | null {
-  return PLUGIN_ROW_ID_PATTERN.exec(value)?.[2] ?? null;
+  return localIdOfContribution(value);
 }
 
 /** One Settings row a Plugin declares; metadata only, no Worker needed. */
@@ -118,16 +117,10 @@ interface RegisteredSettingsPlugin {
 
 const settingsPlugins = new Map<string, RegisteredSettingsPlugin>();
 let settingsRegistrationOrder = 0;
-let settingsRevision = 0;
 const settingsRowsListeners = new Set<() => void>();
 
 function notifySettingsRowsChange(): void {
-  settingsRevision += 1;
   for (const listener of [...settingsRowsListeners]) listener();
-}
-
-export function settingsRowsRevision(): number {
-  return settingsRevision;
 }
 
 /** Runs after every settings register and unregister. Returns unregister. */
@@ -136,35 +129,6 @@ export function onSettingsRowsChange(listener: () => void): () => void {
   return () => {
     settingsRowsListeners.delete(listener);
   };
-}
-
-function collapseSettingsRenames(
-  renames: Readonly<Record<string, string>>,
-  declared: ReadonlySet<string>
-): Readonly<Record<string, string>> {
-  for (const [from, to] of Object.entries(renames)) {
-    if (!LOCAL_ID_PATTERN.test(from) || !LOCAL_ID_PATTERN.test(to)) {
-      throw new Error(`Plugin row rename "${from}" targets "${to}", which is not a Plugin-local id`);
-    }
-    if (declared.has(from)) {
-      throw new Error(`Plugin row rename source "${from}" is a declared row`);
-    }
-    if (!declared.has(to)) {
-      throw new Error(`Plugin row rename "${from}" targets "${to}", which is not a declared row`);
-    }
-  }
-  const collapsed: Record<string, string> = {};
-  for (const from of Object.keys(renames)) {
-    const seen = new Set<string>([from]);
-    let target = renames[from];
-    while (renames[target] !== undefined) {
-      if (seen.has(target)) throw new Error(`Plugin row rename for "${from}" cycles`);
-      seen.add(target);
-      target = renames[target];
-    }
-    collapsed[from] = target;
-  }
-  return collapsed;
 }
 
 /**
@@ -198,7 +162,7 @@ export function registerPluginSettingsRows(
       throw new Error(`Plugin row "${declaration.id}" needs a label`);
     }
     rows.push({
-      id: `${PLUGIN_SETTINGS_PREFIX}${pluginId}.${declaration.id}` as PluginSettingsRowId,
+      id: `${PLUGIN_PREFIX}${pluginId}.${declaration.id}` as PluginSettingsRowId,
       pluginId,
       localId: declaration.id,
       label: declaration.label,
@@ -208,7 +172,7 @@ export function registerPluginSettingsRows(
       reveal: { kind: "plugin", pluginId },
     });
   }
-  const renames = collapseSettingsRenames(registration.rowRenames ?? {}, declared);
+  const renames = collapseContributionRenames(registration.rowRenames ?? {}, declared, "row");
   const previous = settingsPlugins.get(pluginId);
   const token = Symbol(pluginId);
   const record: RegisteredSettingsPlugin & { token: symbol } = {
@@ -281,11 +245,6 @@ export function findPluginSettingsRow(
   return { pluginId, displayName: plugin.displayName, row };
 }
 
-/** The rename maps of every registered Plugin, for stored-id migration. */
-export function pluginSettingsRowRenames(): ReadonlyMap<string, Readonly<Record<string, string>>> {
-  return new Map(registeredSettingsPlugins().map((plugin) => [plugin.pluginId, plugin.renames]));
-}
-
 /**
  * Applies a registered Plugin's rename map to a stored row id. A Plugin that
  * is absent keeps its stored ids as they are.
@@ -295,15 +254,5 @@ export function resolvePluginSettingsRowRename(value: string): string {
   if (pluginId === null) return value;
   const localId = localIdOfSettingsRow(value);
   const renamed = localId === null ? undefined : settingsPlugins.get(pluginId)?.renames[localId];
-  return renamed === undefined ? value : `${PLUGIN_SETTINGS_PREFIX}${pluginId}.${renamed}`;
-}
-
-/**
- * A stored id to the row it names today, or null when it names nothing.
- * Unknown ids under `plugin.` are kept as they are (retained for return);
- * everything else unknown is left to the core lookup.
- */
-export function resolveStoredSettingsRowId(rawId: string): string | null {
-  const renamed = resolvePluginSettingsRowRename(rawId);
-  return isPluginSettingsRowId(renamed) ? renamed : null;
+  return renamed === undefined ? value : `${PLUGIN_PREFIX}${pluginId}.${renamed}`;
 }

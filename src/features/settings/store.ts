@@ -397,7 +397,8 @@ export const useSettingsStore = create<SettingsStore>()(
         set((state) => ({
           toolbarConfig: removeDivider(state.toolbarConfig, section, dividerId),
         })),
-      resetToolbarConfig: () => set({ toolbarConfig: makeResetToolbarConfig() }),
+      resetToolbarConfig: () =>
+        set({ toolbarConfig: withRegisteredToolbarButtons(makeResetToolbarConfig()) }),
       setChapterListView: (chapterListView) => set({ chapterListView }),
       setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
       setNotesListView: (notesListView) => set({ notesListView }),
@@ -650,7 +651,9 @@ export const useSettingsStore = create<SettingsStore>()(
           pasteCleanup: normalizePasteCleanup(persisted.pasteCleanup),
           lastSceneBreak: normalizeSceneBreak(persisted.lastSceneBreak),
           metrics: normalizeMetrics(persisted.metrics),
-          toolbarConfig: normalizeToolbarConfig(persisted.toolbarConfig),
+          toolbarConfig: withRegisteredToolbarButtons(
+            applyToolbarButtonRenames(normalizeToolbarConfig(persisted.toolbarConfig))
+          ),
           notesFilters: normalizeNotesFilters(persisted.notesFilters),
         };
       },

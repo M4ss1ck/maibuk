@@ -137,7 +137,7 @@ export function Settings() {
     const section = SETTINGS_SECTIONS.find((s) => `#${s.id}` === location.hash);
     const first = section?.rows[0];
     if (section && first) {
-      focusSettingsRow(first.id as never, { align: "section" });
+      focusSettingsRow(first.id, { align: "section" });
     }
   }, [location.hash, location.key]);
 

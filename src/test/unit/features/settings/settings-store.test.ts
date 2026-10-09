@@ -4,6 +4,7 @@ import {
   ALL_GROUP_IDS,
   DEFAULT_TOOLBAR_CONFIG,
   FLOATING_ELIGIBLE_IDS,
+  registerToolbarButtons,
 } from "@/features/settings/toolbar-config";
 
 // Mock i18n before importing the store
@@ -815,8 +816,7 @@ describe("toolbarConfig actions", () => {
     expect(FLOATING_ELIGIBLE_IDS.has("history")).toBe(false);
   });
 
-  it("resetToolbarConfig restores semantic defaults with fresh divider ids without touching toolbarExpanded", () => {
-    useSettingsStore.setState({ toolbarExpanded: true });
+  it("resetToolbarConfig restores semantic defaults with fresh divider ids without touching toolbarExpanded", () => {    useSettingsStore.setState({ toolbarExpanded: true });
     useSettingsStore.getState().addToolbarDivider("end");
     useSettingsStore.getState().resetToolbarConfig();
     const config = useSettingsStore.getState().toolbarConfig;
@@ -835,6 +835,45 @@ describe("toolbarConfig actions", () => {
     expect(config.end).toEqual([]);
     expect(resetDividerIds).not.toEqual(defaultDividerIds);
     expect(useSettingsStore.getState().toolbarExpanded).toBe(true);
+  });
+
+  it("resetToolbarConfig keeps live Plugin buttons", () => {
+    const unregister = registerToolbarButtons("echoes", { buttons: [{ id: "show" }] });
+    try {
+      useSettingsStore.getState().resetToolbarConfig();
+      const ids = [
+        ...useSettingsStore.getState().toolbarConfig.start,
+        ...useSettingsStore.getState().toolbarConfig.end,
+      ]
+        .filter((entry) => entry.kind === "group")
+        .map((entry) => entry.id);
+      expect(ids).toContain("plugin.echoes.show");
+    } finally {
+      unregister();
+    }
+  });
+
+  it("rehydrate keeps live Plugin buttons missing from the stored config", async () => {
+    const unregister = registerToolbarButtons("echoes", { buttons: [{ id: "show" }] });
+    try {
+      localStorage.setItem(
+        "maibuk-settings",
+        JSON.stringify({
+          state: { toolbarConfig: JSON.parse(JSON.stringify(DEFAULT_TOOLBAR_CONFIG)) },
+          version: 0,
+        })
+      );
+      await useSettingsStore.persist.rehydrate();
+      const ids = [
+        ...useSettingsStore.getState().toolbarConfig.start,
+        ...useSettingsStore.getState().toolbarConfig.end,
+      ]
+        .filter((entry) => entry.kind === "group")
+        .map((entry) => entry.id);
+      expect(ids).toContain("plugin.echoes.show");
+    } finally {
+      unregister();
+    }
   });
 
   it("merge normalizes a malformed persisted toolbarConfig", async () => {

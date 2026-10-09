@@ -5,6 +5,7 @@ import {
   ChevronUp,
   GripVertical,
   Plus,
+  Puzzle,
   SeparatorHorizontal,
   Trash2,
 } from "lucide-react";
@@ -15,7 +16,14 @@ import { Button, Modal, Switch, Tooltip, TooltipGroup } from "@/components/ui";
 import { useSettingsStore } from "@/features/settings/store";
 import { useParkSelectionWhileDragging } from "@/hooks/useParkSelectionWhileDragging";
 import { TOOLBAR_GROUP_META } from "@/components/editor/toolbar/toolbar-groups";
-import type { ToolbarEntry, ToolbarSection } from "@/features/settings/toolbar-config";
+import {
+  isLiveToolbarEntry,
+  isPluginToolbarButtonId,
+  registeredToolbarButtons,
+  type ToolbarEntry,
+  type ToolbarSection,
+} from "@/features/settings/toolbar-config";
+import { commandLabel, isCommandId } from "@/lib/shortcut-registry";
 
 export const TOOLBAR_SETTINGS_ROW_GRID = "grid-cols-[minmax(0,1fr)_3rem_3rem_3rem_3rem]";
 export const TOOLBAR_SETTINGS_ROW_MIN_WIDTH = "min-w-[24rem]";
@@ -212,7 +220,12 @@ function ToolbarSectionGrid({ section, entries, announceMove }: ToolbarSectionGr
   return (
     <TooltipGroup>
       <GridList
-        items={entries}
+        // Retained buttons of absent Plugins stay in the config but are not
+        // listed: every reorder/drop path below resolves by id, so hiding them
+        // here moves nothing.
+        items={entries.filter(
+          (entry) => entry.kind !== "group" || isLiveToolbarEntry(entry.id)
+        )}
         aria-label={t(`toolbar.settings.${section}`)}
         className={`${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} min-h-8 max-h-[55vh] overflow-y-auto space-y-2 py-2`}
         dragAndDropHooks={dragAndDropHooks}
@@ -258,11 +271,26 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
     (state) => state.setToolbarGroupFloatingVisible
   );
   // Plugin buttons join the same ordering, visibility, and selection-toolbar
-  // membership as core groups. Their label and icon come from their Command in
-  // the wiring slice (#437); until then the stored id stands in.
-  const meta = (TOOLBAR_GROUP_META as Record<string, (typeof TOOLBAR_GROUP_META)[keyof typeof TOOLBAR_GROUP_META] | undefined>)[entry.id];
-  const Icon = meta?.Icon ?? GripVertical;
-  const label = meta ? t(meta.labelKey) : entry.id;
+  // membership as core groups. A live button is named by its Command's label
+  // (its local id until the wiring slice resolves more); a raw full id is
+  // never shown.
+  const meta = (
+    TOOLBAR_GROUP_META as Record<string, (typeof TOOLBAR_GROUP_META)[keyof typeof TOOLBAR_GROUP_META] | undefined>
+  )[entry.id];
+  const pluginButton = isPluginToolbarButtonId(entry.id)
+    ? registeredToolbarButtons().find((button) => button.id === entry.id)
+    : undefined;
+  const commandId =
+    pluginButton?.command !== undefined
+      ? (`plugin.${pluginButton.pluginId}.${pluginButton.command}` as const)
+      : null;
+  const label =
+    meta !== undefined
+      ? t(meta.labelKey)
+      : commandId !== null && isCommandId(commandId)
+        ? commandLabel(commandId, t)
+        : (pluginButton?.localId ?? entry.id);
+  const Icon = meta?.Icon ?? Puzzle;
   const floatingEligible = meta ? meta.floatingEligible : true;
 
   return (
