@@ -45,15 +45,16 @@ test.describe("Settings Plugins empty state @wf:settings-plugins", () => {
 
   test("shows the empty state in Spanish", async ({ page }) => {
     await openSettings(page);
-    const main = settingsMain(page);
     const general = page.locator('[data-tutorial~="settings.general"]');
     await chooseFromSelect(page, general.getByRole("button", { name: "Language" }), "Español");
 
     await expect(page.getByRole("heading", { name: "Configuración", level: 1 })).toBeVisible();
-    await expect(main.getByRole("heading", { name: "Plugins" })).toBeVisible();
-    await expect(main.getByText("Aún no hay Plugins")).toBeVisible();
+    // The main landmark label localizes too.
+    const mainEs = page.getByRole("main", { name: "Contenido principal" });
+    await expect(mainEs.getByRole("heading", { name: "Plugins" })).toBeVisible();
+    await expect(mainEs.getByText("Aún no hay Plugins")).toBeVisible();
     await expect(
-      main.getByText("Los Plugins que instales aparecen aquí, cada uno con sus ajustes.")
+      mainEs.getByText("Los Plugins que instales aparecen aquí, cada uno con sus ajustes.")
     ).toBeVisible();
     await capture(page, "settings-plugins-empty-es");
   });
