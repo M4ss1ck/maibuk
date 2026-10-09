@@ -1641,15 +1641,21 @@ export function resolveStoredCommandId(rawId: string): CommandId | null {
   return isPluginCommandId(renamed) ? renamed : null;
 }
 
-/** A Command's label: core Commands through i18n, Plugin Commands through their labels. */
+/**
+ * A Command's label: core Commands through i18n, Plugin Commands through their
+ * labels. `translate` is the caller's i18next `t`; its overloaded type sends
+ * TypeScript into TS2589 when it is checked against a plain signature, so it
+ * is taken as unknown and guarded here.
+ */
 export function commandLabel(
   id: CommandId,
-  t: (key: string) => unknown,
+  translate: unknown,
   language?: DictationLanguage
 ): string {
   const definition = getCommand(id);
   if (!isPluginCommandDef(definition)) {
-    const label = t(definition.labelKey);
+    const t = typeof translate === "function" ? (translate as (key: string) => unknown) : null;
+    const label = t?.(definition.labelKey);
     return typeof label === "string" ? label : definition.labelKey;
   }
   if (language !== undefined && definition.labels[language] !== undefined) {

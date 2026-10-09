@@ -71,7 +71,7 @@ describe("Plugin Command Voice Commands", () => {
 
     expect(defaultVoicePhrases(echoesId, "en")).toEqual(["Show report"]);
     expect(defaultVoicePhrases(echoesId, "es")).toEqual(["Mostrar informe"]);
-    expect(commandLabel(echoesId, (key) => key, "es")).toBe("Mostrar informe");
+    expect(commandLabel(echoesId, (key: string) => key, "es")).toBe("Mostrar informe");
   });
 
   it("keeps explicit phrases per language and the label-derived phrase elsewhere", () => {
