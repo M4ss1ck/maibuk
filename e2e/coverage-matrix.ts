@@ -21,8 +21,9 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "term",
-    items: ["Plugin", "Built-in Plugin", "Plugin Directory", "Plugin Permission"],
-    reason: "Decided, not built (ADR 0019, ADR 0020): no Plugin UI exists yet",
+    items: ["Built-in Plugin", "Plugin Directory", "Plugin Permission"],
+    reason:
+      "Decided, not built (ADR 0019, ADR 0020): the Plugins section exists but listing, directory choice, and permissions land in later slices",
     owner: "Plugin platform v1 implementation (#425) replaces this with rows",
   },
   {
@@ -2059,6 +2060,19 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "settings-plugins",
+    area: "settings",
+    workflow:
+      "Settings → Plugins with no Plugin known shows its empty state; asserts: Plugins heading and empty text visible; persists: no",
+    edges: [],
+    terms: ["Plugin"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "empty",
     tags: [],
     status: "accepted",
   },

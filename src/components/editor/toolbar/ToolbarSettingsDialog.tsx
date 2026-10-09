@@ -257,9 +257,13 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
   const setToolbarGroupFloatingVisible = useSettingsStore(
     (state) => state.setToolbarGroupFloatingVisible
   );
-  const meta = TOOLBAR_GROUP_META[entry.id];
-  const Icon = meta.Icon;
-  const label = t(meta.labelKey);
+  // Plugin buttons join the same ordering, visibility, and selection-toolbar
+  // membership as core groups. Their label and icon come from their Command in
+  // the wiring slice (#437); until then the stored id stands in.
+  const meta = (TOOLBAR_GROUP_META as Record<string, (typeof TOOLBAR_GROUP_META)[keyof typeof TOOLBAR_GROUP_META] | undefined>)[entry.id];
+  const Icon = meta?.Icon ?? GripVertical;
+  const label = meta ? t(meta.labelKey) : entry.id;
+  const floatingEligible = meta ? meta.floatingEligible : true;
 
   return (
     <GridListItem
@@ -288,7 +292,7 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
       <div className="flex justify-center">
         <Tooltip
           content={
-            meta.floatingEligible
+            floatingEligible
               ? t("toolbar.settings.floatingVisible")
               : t("toolbar.settings.floatingUnavailable")
           }
@@ -297,9 +301,9 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
             <Switch
               checked={entry.floatingVisible}
               onChange={(checked) => setToolbarGroupFloatingVisible(entry.id, checked)}
-              disabled={!meta.floatingEligible}
+              disabled={!floatingEligible}
               label={
-                meta.floatingEligible
+                floatingEligible
                   ? t("toolbar.settings.floatingVisible")
                   : t("toolbar.settings.floatingUnavailable")
               }

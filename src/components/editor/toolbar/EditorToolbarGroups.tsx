@@ -57,7 +57,8 @@ import { Tooltip } from "@/components/ui";
 import { getEditorToolbarState } from "@/components/editor/toolbar/editor-toolbar-state";
 import { useSettingsStore } from "@/features/settings/store";
 import { LANGUAGE_OPTIONS, type Language } from "@/features/settings/types";
-import type { ToolbarGroupId } from "@/features/settings/toolbar-config";
+import type { ToolbarEntryId } from "@/features/settings/toolbar-config";
+import { isPluginToolbarButtonId } from "@/features/settings/toolbar-config";
 
 const HEADING_SIZES: Record<1 | 2 | 3, string> = {
   1: "36",
@@ -107,7 +108,7 @@ export function ToolbarGroupBoundary({
 
 interface EditorToolbarGroupsProps {
   editor: Editor;
-  groupIds: ToolbarGroupId[];
+  groupIds: ToolbarEntryId[];
   callbacks: ToolbarGroupCallbacks;
   iconSize?: "sm" | "md";
   wrapItems?: boolean;
@@ -169,7 +170,10 @@ export function EditorToolbarGroups({
       .run();
   };
 
-  const renderGroup = (id: ToolbarGroupId): ReactNode => {
+  const renderGroup = (id: ToolbarEntryId): ReactNode => {
+    // Plugin buttons render nothing until the wiring slice (#437) binds them
+    // to their Commands; the config keeps their order meanwhile.
+    if (isPluginToolbarButtonId(id)) return null;
     switch (id) {
       case "history":
         return (

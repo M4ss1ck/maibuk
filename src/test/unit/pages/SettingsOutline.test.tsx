@@ -148,6 +148,7 @@ describe("Settings outline", () => {
       "tutorial.settings.title",
       "settings.advanced",
       "settings.about",
+      "settings.plugins",
     ]);
   });
 
@@ -221,7 +222,7 @@ describe("Settings outline", () => {
 
     await user.keyboard("{Escape}");
     expect(search).toHaveValue("");
-    expect(rowNames()).toHaveLength(12);
+    expect(rowNames()).toHaveLength(13);
   });
 
   it("follows the first section that starts in view as the page scrolls", async () => {

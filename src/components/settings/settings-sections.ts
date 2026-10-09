@@ -1,4 +1,10 @@
-import type { SettingsSectionDef } from "@/features/settings/rows";
+import type {
+  PluginSettingsRowDef,
+  PluginSettingsRowId,
+  SettingsRowDef,
+  SettingsSectionDef,
+} from "@/features/settings/rows";
+import { findPluginSettingsRow, resolvePluginSettingsRowRename } from "@/features/settings/rows";
 import { APPEARANCE_SECTION } from "@/components/settings/AppearanceSection.rows";
 import { WINDOW_SECTION } from "@/components/settings/WindowSection.rows";
 import { GENERAL_SECTION } from "@/components/settings/GeneralSection.rows";
@@ -12,6 +18,7 @@ import { EXPORT_SECTION } from "@/components/settings/ExportSection.rows";
 import { TUTORIAL_SECTION_DEF } from "@/components/settings/TutorialSection.rows";
 import { ADVANCED_SECTION } from "@/components/settings/AdvancedSection.rows";
 import { ABOUT_SECTION } from "@/components/settings/AboutSection.rows";
+import { PLUGINS_SECTION } from "@/components/settings/PluginsSection.rows";
 
 /** Every Settings section in screen order. The palette reads this too. */
 export const SETTINGS_SECTIONS = [
@@ -28,16 +35,29 @@ export const SETTINGS_SECTIONS = [
   TUTORIAL_SECTION_DEF,
   ADVANCED_SECTION,
   ABOUT_SECTION,
+  PLUGINS_SECTION,
 ] as const;
 
-export type SettingsRowId = (typeof SETTINGS_SECTIONS)[number]["rows"][number]["id"];
+type CoreSettingsRowId = (typeof SETTINGS_SECTIONS)[number]["rows"][number]["id"];
+/** Any Settings row: a core row or a runtime Plugin row. */
+export type SettingsRowId = CoreSettingsRowId | PluginSettingsRowId;
+
+export type AnySettingsRow = SettingsRowDef | PluginSettingsRowDef;
 
 export function findSettingsRow(
   id: string
-): { section: SettingsSectionDef; row: SettingsSectionDef["rows"][number] } | undefined {
+): { section: SettingsSectionDef; row: AnySettingsRow } | undefined {
+  const renamed = resolvePluginSettingsRowRename(id);
+  const lookupId = renamed !== id ? renamed : id;
   for (const section of SETTINGS_SECTIONS) {
-    const row = section.rows.find((candidate) => candidate.id === id);
+    const row = (section.rows as readonly SettingsRowDef[]).find(
+      (candidate) => candidate.id === lookupId
+    );
     if (row) return { section: section as SettingsSectionDef, row };
+  }
+  const runtime = findPluginSettingsRow(lookupId);
+  if (runtime) {
+    return { section: PLUGINS_SECTION as unknown as SettingsSectionDef, row: runtime.row };
   }
   return undefined;
 }
