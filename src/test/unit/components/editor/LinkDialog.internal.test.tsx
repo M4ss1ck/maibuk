@@ -7,6 +7,9 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 
+const { mockLoadLinkPreview } = vi.hoisted(() => ({ mockLoadLinkPreview: vi.fn() }));
+vi.mock("@/features/links/link-preview", () => ({ loadLinkPreview: mockLoadLinkPreview }));
+
 const setLink = vi.fn(() => ({ run: vi.fn() }));
 const insertContent = vi.fn(() => ({ run: vi.fn() }));
 const focus = vi.fn(() => ({ setLink, insertContent }));
@@ -22,7 +25,10 @@ const editor = {
 } as unknown as import("@tiptap/react").Editor;
 
 describe("LinkDialog internal target picker", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadLinkPreview.mockResolvedValue({ kind: "missing" });
+  });
 
   it("inserts a maibuk chapter link when a chapter is chosen", () => {
     render(
@@ -425,5 +431,54 @@ describe("LinkDialog internal target picker", () => {
     fireEvent.click(screen.getByText("common.insert"));
 
     expect(insertContent).toHaveBeenCalledWith('<a href="https://example.com">Custom Label</a>');
+  });
+
+  describe("the Link Preview of the Link being edited", () => {
+    it("shows where an internal Link goes", async () => {
+      mockLoadLinkPreview.mockResolvedValue({
+        kind: "chapter",
+        bookTitle: "The Long Road",
+        chapterTitle: "Departure",
+        snippet: { html: "<p>They left at dawn.</p>", truncated: false },
+      });
+      const internalLinkEditor = {
+        ...editor,
+        getAttributes: () => ({ href: "maibuk://chapter/c1" }),
+      } as unknown as import("@tiptap/react").Editor;
+
+      render(<LinkDialog editor={internalLinkEditor} isOpen onClose={() => {}} bookId="b1" />);
+
+      const current = await screen.findByRole("region", { name: "linkPreview.current" });
+      expect(current).toHaveTextContent("Departure");
+      expect(current).toHaveTextContent("They left at dawn.");
+      expect(mockLoadLinkPreview).toHaveBeenCalledWith("maibuk://chapter/c1");
+    });
+
+    it("shows a web address too", async () => {
+      mockLoadLinkPreview.mockResolvedValue({
+        kind: "web",
+        scheme: "web",
+        href: "https://example.com/guide",
+        host: "example.com",
+      });
+      const urlEditor = {
+        ...editor,
+        getAttributes: () => ({ href: "https://example.com/guide" }),
+      } as unknown as import("@tiptap/react").Editor;
+
+      render(<LinkDialog editor={urlEditor} isOpen onClose={() => {}} />);
+
+      expect(await screen.findByRole("region", { name: "linkPreview.current" })).toHaveTextContent(
+        "https://example.com/guide"
+      );
+    });
+
+    it("is not shown while inserting a new Link", async () => {
+      render(<LinkDialog editor={editor} isOpen onClose={() => {}} />);
+
+      await screen.findByRole("dialog");
+      expect(screen.queryByRole("region", { name: "linkPreview.current" })).not.toBeInTheDocument();
+      expect(mockLoadLinkPreview).not.toHaveBeenCalled();
+    });
   });
 });

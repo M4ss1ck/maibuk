@@ -140,6 +140,67 @@ test.describe("following a Link to a heading @wf:editor-follow-link @sc:editor.f
   });
 });
 
+test.describe("Link Preview @wf:editor-link-preview", () => {
+  const preview = (page: Page) => page.getByRole("tooltip", { name: "Link preview" });
+
+  /** Puts the caret inside the seeded Link to Keeper's Log. */
+  async function caretInSeededLink(page: Page) {
+    await openNote(page, SEED_NOTES.harborNotes);
+    await page.keyboard.press("ControlOrMeta+Home");
+    for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowRight");
+  }
+
+  test("resting the caret in a Link previews the Note it points to, and leaving hides it", async ({
+    page,
+  }) => {
+    await caretInSeededLink(page);
+
+    await expect(preview(page)).toBeVisible();
+    await expect(preview(page)).toContainText(SEED_NOTES.keeperLog);
+    await expect(preview(page)).toContainText("The lamp holds through the gale.");
+    await expect(noteText(page)).toBeFocused();
+    await capture(page, "link-preview-note");
+
+    await page.keyboard.press("End");
+    await expect(preview(page)).toBeHidden();
+  });
+
+  test("Escape hides it and leaves the caret where it was", async ({ page }) => {
+    await caretInSeededLink(page);
+    await expect(preview(page)).toBeVisible();
+
+    await page.keyboard.press("Escape");
+
+    await expect(preview(page)).toBeHidden();
+    await expect(noteText(page)).toBeFocused();
+    await page.keyboard.type("!");
+    await expect(noteText(page)).toContainText("Keep!er's Log");
+  });
+
+  test("a web address shows its domain", async ({ page }) => {
+    await openNote(page, SEED_NOTES.tideTables);
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.type(" Charts");
+    for (let i = 0; i < 6; i++) await page.keyboard.press("Shift+ArrowLeft");
+    await page.keyboard.press("ControlOrMeta+k");
+    const dialog = page.getByRole("dialog", { name: "Insert Link" });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.type("https://tides.example.com/charts");
+    await tabTo(page, dialog.getByRole("button", { name: "Insert", exact: true }));
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(noteText(page)).toBeFocused();
+    await page.keyboard.press("End");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+
+    await expect(preview(page)).toBeVisible();
+    await expect(preview(page)).toContainText("tides.example.com");
+    await expect(preview(page)).toContainText("https://tides.example.com/charts");
+    await capture(page, "link-preview-web");
+  });
+});
+
 test.describe("F6 pane cycle in the Note editor @wf:shell-cycle-panes @sc:global.cyclePanesForward @sc:global.cyclePanesBackward", () => {
   test("in the Note editor, F6 cycles the title bar, the notes list, and the note editor and wraps @palette-entry", async ({
     page,

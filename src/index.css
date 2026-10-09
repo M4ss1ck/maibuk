@@ -1150,6 +1150,38 @@ option {
   color: var(--color-primary-hover);
 }
 
+/* Link Preview: the target's opening text in the editor's typography, at
+   card size. Links inside it look like Links but cannot be followed, and a
+   cut-off text fades out at the bottom. */
+.link-preview-snippet {
+  font-size: 0.875rem;
+  --line-height: 1.5;
+  max-height: 9rem;
+  overflow: hidden;
+}
+
+.link-preview-snippet > :first-child {
+  margin-top: 0;
+}
+
+.link-preview-snippet > :last-child {
+  margin-bottom: 0;
+}
+
+.link-preview-snippet[data-truncated="true"] {
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+
+.link-preview-snippet .scene-break {
+  margin: 0.75em 0;
+}
+
+.link-preview-link {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .wikilink {
   color: var(--color-primary);
   text-decoration: none;

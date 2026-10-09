@@ -17,6 +17,7 @@ import {
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { SelectionToolbar } from "@/components/editor/SelectionToolbar";
 import { LinkClickHandler } from "@/components/editor/LinkClickHandler";
+import { LinkPreviewLayer } from "@/components/editor/LinkPreviewLayer";
 import { LinkDialog } from "@/components/editor/LinkDialog";
 import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
 import { FootnoteList } from "@/components/editor/FootnoteList";
@@ -595,6 +596,7 @@ export function Editor({
       </div>
 
       <LinkClickHandler editor={editor} />
+      <LinkPreviewLayer editor={editor} />
       <ImageContextMenu editor={editor} />
 
       {/* Floating selection toolbar — hidden when the context menu is open */}

@@ -28,6 +28,7 @@ const { registerPendingEditsFlush, PendingEditsFlushError } = await import(
 );
 const { runBetweenSyncRuns, resetSyncEngineForTests } = await import("@/features/sync/sync-engine");
 const { getBacklinksForNote } = await import("@/features/links/link-index");
+const { loadLinkPreview } = await import("@/features/links/link-preview");
 const librarySwitch = await import("@/features/tutorial/library-switch");
 const tutorial = await import("@/features/tutorial");
 const { useTutorialStore, EMPTY_TUTORIAL_PROGRESS } = tutorial;
@@ -174,6 +175,7 @@ describe("entering the Tutorial Library", () => {
       "notes",
       "canvases",
       "versions",
+      "linkPreviews",
     ]);
     expect(useBookStore.getState().books.map((book) => book.id)).toContain("tutorial-book-novel");
     expect(useBookStore.getState().books.some((book) => book.title === "My real book")).toBe(false);
@@ -183,6 +185,19 @@ describe("entering the Tutorial Library", () => {
     ]);
     expect(useChapterStore.getState().currentBookId).toBeNull();
     expect(useVersionStore.getState()).toMatchObject({ currentBookId: null, totalCount: 0 });
+  });
+
+  it("never previews a Link with a row from the Library it left", async () => {
+    await tutorial.startTutorial(START);
+    expect(await loadLinkPreview("maibuk://book/tutorial-book-novel")).toMatchObject({
+      kind: "book",
+    });
+
+    await tutorial.exitTutorial("closed");
+
+    expect(await loadLinkPreview("maibuk://book/tutorial-book-novel")).toEqual({
+      kind: "missing",
+    });
   });
 
   it("builds the sample content in Spanish when the app speaks Spanish", async () => {

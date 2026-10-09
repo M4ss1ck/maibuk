@@ -4,6 +4,7 @@ import { useStore } from "@xyflow/react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { FormattingButtons, LinkClickHandler, LinkDialog } from "@/components/editor";
+import { LinkPreviewLayer } from "@/components/editor/LinkPreviewLayer";
 import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
 import { useBookStore } from "@/features/books/store";
 import { getChapterForLinking, listChaptersForBookLinking } from "@/features/chapters/store";
@@ -153,6 +154,22 @@ export function NodeFormatBubble({
     };
   }, [editor]);
 
+  // A right click on a Link, or the long press a touch screen reports the same
+  // way, edits the whole Link, as it does in Chapters and Notes.
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const onContextMenu = (event: MouseEvent) => {
+      const link = (event.target as Element).closest("a.editor-link");
+      if (!link || event.defaultPrevented) return;
+      event.preventDefault();
+      event.stopPropagation();
+      editor.chain().setTextSelection(editor.view.posAtDOM(link, 0)).extendMarkRange("link").run();
+      setLinkDialogOpen(true);
+    };
+    dom.addEventListener("contextmenu", onContextMenu);
+    return () => dom.removeEventListener("contextmenu", onContextMenu);
+  }, [editor]);
+
   useEffect(() => {
     let animationFrame = 0;
     const onSelectionUpdate = () => {
@@ -197,6 +214,7 @@ export function NodeFormatBubble({
         loadInternalTargetChildren={loadInternalTargetChildren}
       />
       <LinkClickHandler editor={editor} />
+      <LinkPreviewLayer editor={editor} />
     </>
   );
 }

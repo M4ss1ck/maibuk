@@ -1516,6 +1516,14 @@
       "unknown": "Desconocido"
     }
   },
+  "linkPreview": {
+    "label": "Vista previa del enlace",
+    "announce": "{{type}}: {{target}}. {{text}}",
+    "byAuthor": "de {{author}}",
+    "empty": "Aún no hay texto",
+    "address": "Dirección",
+    "current": "Enlaza a"
+  },
   "deepLink": {
     "resourceGone": "El recurso enlazado ya no existe.",
     "headingGone": "El encabezado enlazado ya no existe.",
@@ -1695,7 +1703,7 @@
         },
         "content": {
           "title": "Listas de tareas y enlaces",
-          "body": "Las Notas usan el mismo editor que los capítulos: encabezados, listas de tareas y más. Un enlace apunta a un Libro, capítulo, Nota o encabezado y lo abre; escribe [[ para añadir uno."
+          "body": "Las Notas usan el mismo editor que los capítulos: encabezados, listas de tareas y más. Un enlace apunta a un Libro, capítulo, Nota o encabezado y lo abre; escribe [[ para añadir uno, y deja el puntero o el cursor sobre uno para ver adónde lleva."
         },
         "backlinks": {
           "title": "Enlazado desde",

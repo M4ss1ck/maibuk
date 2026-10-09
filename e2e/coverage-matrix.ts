@@ -1288,6 +1288,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "editor-link-preview",
+    area: "editor",
+    workflow:
+      "Caret rests in a Link: Link Preview shows the target's title and opening text; caret leaves, it hides; asserts: tooltip text, caret stays in the editor",
+    edges: ["Escape hides it", "web address shows its domain"],
+    terms: ["Link", "Link Preview", "Note"],
+    shortcuts: [],
+    routes: ["/notes/:noteId"],
+    fixture: "notesWithLinksAndTags",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "notes-links-backlinks",
     area: "notes",
     workflow: 'Link Note A -> Note B; open B, "Linked from" lists A; Enter opens A; persists: yes',

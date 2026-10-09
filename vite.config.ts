@@ -250,6 +250,7 @@ export default defineConfig(() => ({
         "src/features/links/navigate.ts",
         "src/features/deep-link/resolve.ts",
         "src/features/links/resolve-target.ts",
+        "src/features/links/link-preview.ts",
         "src/features/deep-link/bridge.ts",
         // Tutorial (issue #189)
         "src/features/tutorial/library-switch.ts",
