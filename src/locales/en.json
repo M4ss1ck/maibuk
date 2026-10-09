@@ -1264,7 +1264,8 @@
       "editor": "Editor",
       "ephemeral": "Ephemeral",
       "commandPalette": "Command palette",
-      "focus": "Focus"
+      "focus": "Focus",
+      "plugins": "Plugins"
     },
     "onThisScreen": "On this screen",
     "onOtherScreens": "On other screens",
@@ -1291,6 +1292,7 @@
     "intro": "Maibuk is keyboard-first. Give any command your own shortcut, add a second one, or remove it. Changes stay on this device.",
     "singleKey": "Single-key shortcuts",
     "singleKeyOff": "Off",
+    "inactive": "Inactive",
     "search": "Search commands and keys",
     "searchPlaceholder": "Bold, Ctrl+S, g p…",
     "listLabel": "Commands and their shortcuts",
@@ -1338,6 +1340,7 @@
       "removed": "{{keys}} removed from {{command}}.",
       "reset": "{{command}} reset to {{keys}}.",
       "resetNone": "{{command}} reset to no shortcut.",
+      "resetKept": "{{command}} reset, except {{keys}} kept by another command.",
       "resetAll": "All shortcuts reset.",
       "cancelled": "Recording cancelled."
     },
@@ -1400,7 +1403,8 @@
         "added": "{{phrase}} runs {{command}}.",
         "changed": "{{from}} changed to {{phrase}}.",
         "removed": "{{phrase}} removed from {{command}}.",
-        "reset": "{{command}} voice commands in {{language}} reset to the defaults."
+        "reset": "{{command}} voice commands in {{language}} reset to the defaults.",
+        "resetKept": "{{command}} voice commands in {{language}} reset, except {{phrases}} kept by another command."
       }
     }
   },

@@ -5,7 +5,7 @@
 import en from "@/locales/en.json";
 import es from "@/locales/es.json";
 import type { DictationLanguage } from "@/features/dictation/types";
-import { COMMANDS, type CommandId } from "@/lib/shortcut-registry";
+import { getCommand, isPluginCommandDef, type CommandId } from "@/lib/shortcut-registry";
 
 const LOCALES: Readonly<Record<DictationLanguage, unknown>> = { en, es };
 
@@ -19,13 +19,22 @@ function lookupKey(root: unknown, key: string): unknown {
 }
 
 /**
- * The Command's label in the Dictation Language's locale, or null when the
- * key is missing, the value is not a string, or it interpolates (a label
- * like `Look up "{{word}}"` is never a spoken phrase).
+ * The Command's label in the Dictation Language, or null when there is none.
+ * A Plugin Command answers only for the languages its declaration supplies: an
+ * English-only Plugin never acquires a Spanish phrase from a label fallback
+ * (ADR 0024). Core Commands read the label from the Dictation Language's
+ * locale; a key that is missing, not a string, or interpolates (a label like
+ * `Look up "{{word}}"`) is never a spoken phrase.
  */
 export function labelPhrase(id: CommandId, language: DictationLanguage): string | null {
-  const labelKey = COMMANDS[id].labelKey;
-  const value = lookupKey(LOCALES[language], labelKey);
+  const definition = getCommand(id);
+  if (isPluginCommandDef(definition)) {
+    const supplied =
+      definition.labels[language] ??
+      (definition.defaultLanguage === language ? definition.label : undefined);
+    return supplied ?? null;
+  }
+  const value = lookupKey(LOCALES[language], definition.labelKey);
   if (typeof value !== "string") return null;
   if (value.includes("{{")) return null;
   return value;

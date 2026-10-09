@@ -1264,7 +1264,8 @@
       "editor": "Editor",
       "ephemeral": "Efímero",
       "commandPalette": "Paleta de comandos",
-      "focus": "Foco"
+      "focus": "Foco",
+      "plugins": "Plugins"
     },
     "onThisScreen": "En esta pantalla",
     "onOtherScreens": "En otras pantallas",
@@ -1291,6 +1292,7 @@
     "intro": "Maibuk se usa con el teclado. Dale a cualquier comando tu propio atajo, agrega otro o quítalo. Los cambios se guardan solo en este dispositivo.",
     "singleKey": "Atajos de una tecla",
     "singleKeyOff": "Desactivado",
+    "inactive": "Inactivo",
     "search": "Buscar comandos y teclas",
     "searchPlaceholder": "Negrita, Ctrl+S, g p…",
     "listLabel": "Comandos y sus atajos",
@@ -1338,6 +1340,7 @@
       "removed": "{{keys}} se quitó de {{command}}.",
       "reset": "{{command}} se restableció a {{keys}}.",
       "resetNone": "{{command}} se restableció a sin atajo.",
+      "resetKept": "{{command}} restablecido, excepto {{keys}}, que se queda en otro comando.",
       "resetAll": "Se restablecieron todos los atajos.",
       "cancelled": "Grabación cancelada."
     },
@@ -1400,7 +1403,8 @@
         "added": "{{phrase}} ejecuta {{command}}.",
         "changed": "{{from}} cambió a {{phrase}}.",
         "removed": "{{phrase}} quitado de {{command}}.",
-        "reset": "Comandos de voz de {{command}} en {{language}} restablecidos."
+        "reset": "Comandos de voz de {{command}} en {{language}} restablecidos.",
+        "resetKept": "Comandos de voz de {{command}} en {{language}} restablecidos, excepto {{phrases}}, que se quedan en otro comando."
       }
     }
   },

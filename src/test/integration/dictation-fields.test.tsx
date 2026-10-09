@@ -17,7 +17,7 @@ import { createLineStats } from "@/features/dictation/stats";
 import type { DictationEvent, DictationLanguage, ModelSpec } from "@/features/dictation/types";
 import { defaultVoicePhrases } from "@/features/dictation/voice-commands";
 import type { CommandRunOutcome } from "@/lib/command-runner";
-import { getCommand, type CommandId } from "@/lib/shortcut-registry";
+import { isEditorKeymapCommand, type CommandId } from "@/lib/shortcut-registry";
 import { isOutsideLayer } from "@/lib/top-layer";
 import { useSettingsStore } from "@/features/settings/store";
 
@@ -98,7 +98,7 @@ function makeSession({
         ...(output.capsLock !== undefined ? { capsLock: output.capsLock } : {}),
       };
     }),
-    isEditorCommand: (id) => getCommand(id).source === "editor-keymap",
+    isEditorCommand: isEditorKeymapCommand,
     notify,
     copyText,
     stats: createLineStats(),

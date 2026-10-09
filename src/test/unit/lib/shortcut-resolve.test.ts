@@ -1,9 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("@/lib/shortcut-registry", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/shortcut-registry")>();
-  return { ...actual, COMMAND_RENAMES: { "global.oldGoto": "global.gotoProjects" } };
-});
+import { describe, expect, it } from "vitest";
+import { COMMAND_RENAMES } from "@/lib/shortcut-registry";
 
 import {
   DEFAULT_SHORTCUT_SETTINGS,
@@ -201,11 +197,18 @@ describe("normalizeShortcuts", () => {
   });
 
   it("carries a renamed Command id to its current id", () => {
-    const settings = normalizeShortcuts({
-      version: 1,
-      custom: { "global.oldGoto": [["Mod+Shift+y"]] },
-    });
-    expect(settings.custom["global.gotoProjects"]).toEqual([["Mod+Shift+y"]]);
+    // The rename table ships empty; a future entry is proven through it here.
+    const renames = COMMAND_RENAMES as Record<string, string>;
+    renames["global.oldGoto"] = "global.gotoProjects";
+    try {
+      const settings = normalizeShortcuts({
+        version: 1,
+        custom: { "global.oldGoto": [["Mod+Shift+y"]] },
+      });
+      expect(settings.custom["global.gotoProjects"]).toEqual([["Mod+Shift+y"]]);
+    } finally {
+      delete renames["global.oldGoto"];
+    }
   });
 });
 

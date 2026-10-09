@@ -10,10 +10,17 @@ import {
 } from "@/features/dictation/voice-commands";
 import { normalizePhrase } from "@/features/dictation/normalize";
 import { IS_WEB } from "@/lib/platform/target";
-import { COMMANDS, type CommandDef, type CommandId, type Shortcut } from "@/lib/shortcut-registry";
+import {
+  PLUGIN_COMMAND_PREFIX,
+  isSealedCommand,
+  onCommandRegistryChange,
+  type CommandId,
+  type Shortcut,
+} from "@/lib/shortcut-registry";
 import { normalizeShortcut, shortcutKey } from "@/lib/shortcut-keys";
 import {
   DEFAULT_SHORTCUT_SETTINGS,
+  applyPluginRenames,
   editableShortcuts,
   normalizeShortcuts,
   type CustomShortcuts,
@@ -36,6 +43,8 @@ interface ShortcutSettingsStore {
   resetCommandVoicePhrases: (id: CommandId, language: DictationLanguage) => void;
   /** Resets every Custom Shortcut and custom Voice Command. */
   resetAllShortcuts: () => void;
+  /** Erases one Plugin's retained Custom Shortcuts and custom Voice Commands. */
+  erasePluginPreferences: (pluginId: string) => void;
   /** Loading a Shortcut File replaces both kinds of binding. */
   replaceCustomShortcuts: (custom: CustomShortcuts, voice?: CustomVoiceCommands) => void;
   setSingleKeyShortcutsEnabled: (enabled: boolean) => void;
@@ -72,8 +81,7 @@ export const useShortcutSettingsStore = create<ShortcutSettingsStore>()(
       shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS),
       setCommandShortcuts: (id, shortcuts) =>
         set((state) => {
-          const command: CommandDef = COMMANDS[id];
-          if (command.sealed) return state;
+          if (isSealedCommand(id)) return state;
 
           const seen = new Set<string>();
           const next: Shortcut[] = [];
@@ -131,6 +139,27 @@ export const useShortcutSettingsStore = create<ShortcutSettingsStore>()(
         }),
       resetAllShortcuts: () =>
         set((state) => ({ shortcuts: { ...state.shortcuts, custom: {}, voice: {} } })),
+      erasePluginPreferences: (pluginId) =>
+        set((state) => {
+          const prefix = `${PLUGIN_COMMAND_PREFIX}${pluginId}.`;
+          const custom: CustomShortcuts = {};
+          for (const [id, list] of Object.entries(state.shortcuts.custom) as Array<
+            [string, readonly Shortcut[] | undefined]
+          >) {
+            if (!id.startsWith(prefix) && list !== undefined) {
+              custom[id as CommandId] = list;
+            }
+          }
+          const voice: CustomVoiceCommands = {};
+          for (const [id, languages] of Object.entries(state.shortcuts.voice) as Array<
+            [string, CustomVoiceCommands[CommandId] | undefined]
+          >) {
+            if (!id.startsWith(prefix) && languages !== undefined) {
+              voice[id as CommandId] = languages;
+            }
+          }
+          return { shortcuts: { ...state.shortcuts, custom, voice } };
+        }),
       replaceCustomShortcuts: (custom, voice = {}) =>
         set((state) => ({
           shortcuts: {
@@ -156,3 +185,11 @@ export const useShortcutSettingsStore = create<ShortcutSettingsStore>()(
     }
   )
 );
+
+// A Plugin that registers with renames moves its retained preferences to the
+// declared ids in the same turn (ADR 0024).
+onCommandRegistryChange(() => {
+  const state = useShortcutSettingsStore.getState();
+  const next = applyPluginRenames(state.shortcuts);
+  if (next !== state.shortcuts) useShortcutSettingsStore.setState({ shortcuts: next });
+});

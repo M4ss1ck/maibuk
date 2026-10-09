@@ -8,16 +8,22 @@ import { PhraseRecordingStatus, RecordPhraseButton } from "@/components/dictatio
 import { phraseConflictMessage } from "@/components/dictation/phrase-conflict-message";
 import { normalizePhrase } from "@/features/dictation/normalize";
 import { findPhraseConflict, type PhraseConflict } from "@/features/dictation/phrase-conflicts";
-import { useDictationStore } from "@/features/dictation/store";
+import { dictationLanguageFor, useDictationStore } from "@/features/dictation/store";
 import { usePhraseRecording } from "@/features/dictation/usePhraseRecording";
 import type { DictationLanguage } from "@/features/dictation/types";
 import {
   VOICE_LANGUAGES,
+  defaultVoicePhrases,
   voicePhrasePolarity,
   voicePhrases,
 } from "@/features/dictation/voice-commands";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
-import { COMMANDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
+import {
+  commandLabel,
+  isCommandId,
+  isPluginCommandId,
+  type CommandId,
+} from "@/lib/shortcut-registry";
 
 const ROW_CONTROL =
   "inline-flex items-center gap-1 rounded-md px-1.5 py-1 pointer-coarse:px-2.5 pointer-coarse:py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary";
@@ -35,7 +41,8 @@ interface VoiceCommandsDialogProps {
  * check. Opened from the Command's row in the Shortcut Editor.
  */
 export function VoiceCommandsDialog({ id, initialLanguage, onClose }: VoiceCommandsDialogProps) {
-  if (id === null) return null;
+  // A Plugin Command can vanish while its dialog is open: the Plugin stopped.
+  if (id === null || !isCommandId(id)) return null;
   return (
     <VoiceCommandsDialogContent
       key={id}
@@ -51,7 +58,7 @@ function VoiceCommandsDialogContent({
   initialLanguage,
   onClose,
 }: Omit<VoiceCommandsDialogProps, "id"> & { id: CommandId }) {
-  const { t: translate } = useTranslation();
+  const { t: translate, i18n } = useTranslation();
   // Command labels are registry data, so their keys are plain strings.
   const t = translate as unknown as (key: string, options?: Record<string, unknown>) => string;
   const voice = useShortcutSettingsStore((state) => state.shortcuts.voice);
@@ -63,6 +70,10 @@ function VoiceCommandsDialogContent({
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<{ conflict: PhraseConflict; phrase: string } | null>(null);
+  const [resetRefusal, setResetRefusal] = useState<Array<{
+    commandId: CommandId;
+    phrase: string;
+  }> | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const refusalId = useId();
@@ -74,10 +85,11 @@ function VoiceCommandsDialogContent({
     onHeard: (text) => {
       setDraft(text);
       setRefusal(null);
+      setResetRefusal(null);
     },
   });
 
-  const command = t((COMMANDS[id] as CommandDef).labelKey);
+  const command = commandLabel(id, t, dictationLanguageFor(null, i18n?.language));
   const languageName = t(`dictation.languageNames.${language}`);
   const phrases = voicePhrases(id, language, voice);
   const customized = voice[id]?.[language] !== undefined;
@@ -93,6 +105,7 @@ function VoiceCommandsDialogContent({
     setEditing(phrase);
     setDraft(phrase);
     setRefusal(null);
+    setResetRefusal(null);
     queueMicrotask(() => {
       inputRef.current?.focus();
       inputRef.current?.select();
@@ -103,6 +116,7 @@ function VoiceCommandsDialogContent({
     setEditing(null);
     setDraft("");
     setRefusal(null);
+    setResetRefusal(null);
     focusField();
   };
 
@@ -110,6 +124,7 @@ function VoiceCommandsDialogContent({
     event.preventDefault();
     const phrase = draft.trim();
     if (phrase === "") return;
+    setResetRefusal(null);
     const conflict = findPhraseConflict({
       language,
       phrase,
@@ -152,17 +167,72 @@ function VoiceCommandsDialogContent({
       setDraft("");
     }
     setRefusal(null);
+    setResetRefusal(null);
     announce(t("shortcutEditor.voice.announce.removed", { phrase, command }));
     // The focused button went with its row.
     focusField();
   };
 
   const reset = () => {
+    // A Default phrase the Reset would restore may be the newcomer next to an
+    // active Plugin phrase: prompt with the same Replace / Cancel (ADR 0024).
+    const conflicts = defaultVoicePhrases(id, language).flatMap((phrase) => {
+      const conflict = findPhraseConflict({
+        language,
+        phrase,
+        candidate: { kind: "voice", id },
+        voice,
+        spokenPunctuation: spokenPunctuation[language],
+      });
+      return conflict?.kind === "voiceCommand" && isPluginCommandId(conflict.commandId)
+        ? [{ commandId: conflict.commandId, phrase }]
+        : [];
+    });
+    if (conflicts.length > 0) {
+      setResetRefusal(conflicts);
+      setEditing(null);
+      setDraft("");
+      setRefusal(null);
+      return;
+    }
     resetVoicePhrases(id, language);
     setEditing(null);
     setDraft("");
     setRefusal(null);
     announce(t("shortcutEditor.voice.announce.reset", { command, language: languageName }));
+    focusField();
+  };
+
+  const replaceReset = () => {
+    if (!resetRefusal) return;
+    for (const conflict of resetRefusal) {
+      const current = useShortcutSettingsStore.getState().shortcuts.voice;
+      const remaining = voicePhrases(conflict.commandId, language, current).filter(
+        (phrase) => normalizePhrase(phrase) !== normalizePhrase(conflict.phrase)
+      );
+      setVoicePhrases(conflict.commandId, language, remaining);
+    }
+    resetVoicePhrases(id, language);
+    setResetRefusal(null);
+    announce(t("shortcutEditor.voice.announce.reset", { command, language: languageName }));
+    focusField();
+  };
+
+  const cancelReset = () => {
+    if (!resetRefusal) return;
+    const conflicting = new Set(resetRefusal.map((conflict) => normalizePhrase(conflict.phrase)));
+    const kept = defaultVoicePhrases(id, language).filter(
+      (phrase) => !conflicting.has(normalizePhrase(phrase))
+    );
+    setVoicePhrases(id, language, kept);
+    setResetRefusal(null);
+    announce(
+      t("shortcutEditor.voice.announce.resetKept", {
+        command,
+        language: languageName,
+        phrases: resetRefusal.map((conflict) => conflict.phrase).join(", "),
+      })
+    );
     focusField();
   };
 
@@ -208,6 +278,7 @@ function VoiceCommandsDialogContent({
             setEditing(null);
             setDraft("");
             setRefusal(null);
+            setResetRefusal(null);
           }}
           ariaLabel={t("dictation.language")}
         >
@@ -304,6 +375,33 @@ function VoiceCommandsDialogContent({
                   className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-foreground"
                 >
                   {phraseConflictMessage(translate, language, refusal.conflict, refusal.phrase, id)}
+                </div>
+              )}
+
+              {resetRefusal && (
+                <div
+                  role="alert"
+                  className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-foreground"
+                >
+                  <span>
+                    {phraseConflictMessage(
+                      translate,
+                      language,
+                      {
+                        kind: "voiceCommand",
+                        commandId: resetRefusal[0].commandId,
+                        phrase: resetRefusal[0].phrase,
+                      },
+                      resetRefusal[0].phrase,
+                      id
+                    )}
+                  </span>
+                  <AriaButton autoFocus className={ROW_CONTROL} onPress={replaceReset}>
+                    {t("shortcutEditor.conflict.replace")}
+                  </AriaButton>
+                  <AriaButton className={ROW_CONTROL} onPress={cancelReset}>
+                    {t("common.cancel")}
+                  </AriaButton>
                 </div>
               )}
             </>

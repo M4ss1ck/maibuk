@@ -16,5 +16,6 @@ Decided in [Commands, Shortcuts, and Voice Commands contributed by Plugins](http
 ## Consequences
 
 - The shortcut resolver represents a preference separately from whether it is active. Conflict checks run on enable, update, and settings changes, with the existing context-overlap and sequence-prefix rules.
+- A core Default counts as an existing binding, including one added by an app update: a Plugin binding it collides with stays inactive and shows in the Shortcut Editor for the author to resolve.
 - Renames for Plugin Commands migrate only within the same Plugin. A cross-owner rename cannot be expressed in a manifest.
 - Kept preferences are still device-local settings: not synced, not in Backups, carried by a Shortcut File like any other.

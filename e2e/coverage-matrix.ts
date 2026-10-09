@@ -258,6 +258,23 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-shortcut-editor",
+    area: "settings",
+    workflow:
+      "A registered Plugin's Commands appear in the Shortcut Editor under Plugins; a Default Shortcut or Voice phrase an existing active binding already owns shows the Inactive badge; the Commands disappear when the Plugin unregisters",
+    edges: [
+      "a conflicting Plugin Default Shortcut shows the Inactive badge",
+      "a conflicting Plugin Voice phrase shows the Inactive badge",
+    ],
+    terms: ["Plugin Command", "Inactive Binding", "Retained Plugin Preference"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "empty",
+    tags: [],
+    status: "not-accepted",
+    issue: "https://github.com/M4ss1ck/maibuk/issues/446",
+  },
+  {
     id: "shell-help-start-tutorial",
     area: "shell",
     workflow:

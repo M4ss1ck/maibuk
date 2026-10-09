@@ -28,7 +28,7 @@ import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import { isTutorialStatusActive, useTutorialStore } from "@/features/tutorial/store";
 import { createRecognizerHost, dictationPlatform, getModelFiles } from "@/lib/platform";
 import { clearChoices, hasChoices, pressByName, pressChoice } from "@/lib/click-by-name";
-import { getCommand } from "@/lib/shortcut-registry";
+import { isEditorKeymapCommand, isNavigatingCommand } from "@/lib/shortcut-registry";
 import { runCommand } from "@/lib/command-runner";
 import { createUnsupportedHost, unsupportedModelFiles } from "@/lib/platform/unsupported-dictation";
 
@@ -139,11 +139,10 @@ async function build(): Promise<DictationRuntime> {
     voiceCommandsAllowed: () => !isTutorialStatusActive(useTutorialStore.getState().status),
     // Commands outside the editor's keymap run through the Command Runner.
     runCommand: (id) => runCommand(id, { source: "voice" }),
-    isEditorCommand: (id) => getCommand(id).source === "editor-keymap",
+    isEditorCommand: isEditorKeymapCommand,
     // A Command whose dialog puts the caret in a text field opens the hand-off
     // window too, so lines spoken before the field takes focus land in it.
-    isNavigatingCommand: (id) =>
-      getCommand(id).navigates === true || getCommand(id).opensDialog === true,
+    isNavigatingCommand,
     notify: (notice) => {
       if (notice.kind === "stopped") interpreterState = INITIAL_INTERPRETER_STATE;
       notify(notice);

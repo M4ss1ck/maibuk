@@ -24,7 +24,7 @@ import {
   type VoiceCommandTable,
   type VoiceVerbClass,
 } from "@/features/dictation/voice-commands";
-import { COMMAND_IDS, COMMANDS, type CommandDef } from "@/lib/shortcut-registry";
+import { COMMAND_IDS, getCommand } from "@/lib/shortcut-registry";
 
 /** Every language the model catalog can dictate, so a new one cannot ship without a vocabulary. */
 const LANGUAGES = [
@@ -66,12 +66,10 @@ describe("Voice Command defaults", () => {
   });
 
   it("gives every verb Command targets in every language", () => {
-    const verbCommands = COMMAND_IDS.filter(
-      (id) => (COMMANDS[id] as CommandDef).voice?.verbs !== undefined
-    );
+    const verbCommands = COMMAND_IDS.filter((id) => getCommand(id).voice?.verbs !== undefined);
     expect(verbCommands.length).toBeGreaterThan(0);
     for (const id of verbCommands) {
-      const voice = (COMMANDS[id] as CommandDef).voice;
+      const voice = getCommand(id).voice;
       expect(voice, id).toBeDefined();
       for (const language of LANGUAGES) {
         const targets = voice?.targets?.[language] ?? [];
@@ -104,7 +102,7 @@ describe("Voice Command defaults", () => {
       const table = buildVoiceCommandTable(language);
       const vocabulary = VOICE_VOCABULARY[language];
       for (const id of voiceEligibleCommands()) {
-        const voice = (COMMANDS[id] as CommandDef).voice;
+        const voice = getCommand(id).voice;
         const verbs = voice?.verbs;
         if (!verbs) continue;
         for (const cls of verbs) {
@@ -140,7 +138,7 @@ describe("Voice Command defaults", () => {
 
   it("gives every verb Command an event-free runner", () => {
     for (const id of voiceEligibleCommands()) {
-      const voice = (COMMANDS[id] as CommandDef).voice;
+      const voice = getCommand(id).voice;
       if (!voice?.verbs) continue;
       const runners = VOICE_RUNNERS[id];
       const polarities = new Set(
@@ -425,7 +423,7 @@ describe("Voice Command heard forms", () => {
       const fillers = new Set(vocabulary.fillers.map(normalizePhrase));
       const targets = new Set(
         voiceEligibleCommands().flatMap((id) =>
-          ((COMMANDS[id] as CommandDef).voice?.targets?.[language] ?? []).map(normalizePhrase)
+          (getCommand(id).voice?.targets?.[language] ?? []).map(normalizePhrase)
         )
       );
       const punctuation = new Set(

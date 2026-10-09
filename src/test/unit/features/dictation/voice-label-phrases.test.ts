@@ -13,7 +13,7 @@ import {
   VOICE_VOCABULARY,
   defaultWholeLinePhrases,
 } from "@/features/dictation/voice-commands";
-import { COMMANDS, COMMAND_IDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
+import { COMMAND_IDS, getCommand, type CommandId } from "@/lib/shortcut-registry";
 
 interface WholeLineEntry {
   id: CommandId;
@@ -39,7 +39,7 @@ function findSharedWholeLinePhrases(entries: readonly WholeLineEntry[]): string[
 describe.each(VOICE_LANGUAGES)("voice label phrases (%s)", (language) => {
   it("derives a long enough label phrase for every Command without its own", () => {
     for (const id of COMMAND_IDS) {
-      const voice = (COMMANDS[id] as CommandDef).voice;
+      const voice = getCommand(id).voice;
       if (voice?.verbs !== undefined) continue;
       if (voice?.phrases?.[language] !== undefined) continue;
       if (VOICE_LABEL_EXCLUSIONS[id] !== undefined) continue;
@@ -75,7 +75,7 @@ describe("VOICE_LABEL_EXCLUSIONS", () => {
   it("lists only Commands with a reason that truly need it", () => {
     for (const [id, reason] of Object.entries(VOICE_LABEL_EXCLUSIONS) as [CommandId, string][]) {
       expect(reason.trim().length, `${id}: exclusion needs a reason`).toBeGreaterThan(0);
-      expect((COMMANDS[id] as CommandDef).voice, `${id}: exclusion is unneeded`).toBeUndefined();
+      expect(getCommand(id).voice, `${id}: exclusion is unneeded`).toBeUndefined();
     }
   });
 

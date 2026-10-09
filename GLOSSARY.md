@@ -550,6 +550,15 @@ _Avoid_: plugins folder, extensions folder
 One kind of access a Plugin declares, such as reading the Library or reaching a named web host, and that the author grants or revokes.
 _Avoid_: grant, scope, capability (Tauri's word in code)
 
+**Plugin Command**:
+A Command a Plugin declares, with the same identity, Shortcuts, Voice Commands, availability, and Command Palette behavior as a Maibuk Command. The host derives its id as `plugin.<pluginId>.<localId>`, so no Plugin can claim Maibuk's or another Plugin's ids. (ADR 0022)
+
+**Inactive Binding**:
+A Plugin's Custom Shortcut or custom Voice Command whose Plugin is absent, or whose keys or phrase an existing active binding already owns. It is kept and shown in the Shortcut Editor, does not reserve what it asks for, and never stops the Command's other ways of running. (ADR 0024)
+
+**Retained Plugin Preference**:
+A Custom Shortcut or custom Voice Command under `plugin.<pluginId>.` kept on this device while its Plugin is away, inactive until it returns. Removing a Plugin offers to erase it, Reset all always does, and a Shortcut File carries it like any other preference. (ADR 0024)
+
 ## Relationships
 
 - A **Library** holds many **Books**, **Notes**, and **Canvases**.

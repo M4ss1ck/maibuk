@@ -2,7 +2,7 @@ import type { TFunction } from "i18next";
 import type { PhraseConflict } from "@/features/dictation/phrase-conflicts";
 import { entriesFor } from "@/features/dictation/spoken-punctuation";
 import type { DictationLanguage } from "@/features/dictation/types";
-import { COMMANDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
+import { commandLabel, type CommandId } from "@/lib/shortcut-registry";
 
 /**
  * The message for a refused phrase, in the Shortcut Conflict style: what the
@@ -20,8 +20,7 @@ export function phraseConflictMessage(
   const entry = (entryId: string) =>
     entriesFor(language).find((candidate) => candidate.id === entryId)?.phrases[0] ?? entryId;
   // Command labels are registry data, so their keys are plain strings.
-  const command = (id: CommandId) =>
-    (t as unknown as (key: string) => string)((COMMANDS[id] as CommandDef).labelKey);
+  const command = (id: CommandId) => commandLabel(id, t);
   switch (conflict.kind) {
     case "empty":
       return t("dictation.spokenPunctuation.refused.empty");

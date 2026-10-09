@@ -21,18 +21,28 @@ import { VoicePhraseSummary } from "@/components/shortcuts/VoicePhraseSummary";
 import { VoiceCommandsDialog } from "@/components/shortcuts/VoiceCommandsDialog";
 import { MAX_SHORTCUTS_PER_COMMAND } from "@/constants";
 import { findPhraseConflict } from "@/features/dictation/phrase-conflicts";
+import { phraseWords } from "@/features/dictation/normalize";
 import { dictationLanguageFor, useDictationStore } from "@/features/dictation/store";
-import { isVoiceEligible, voicePhrases } from "@/features/dictation/voice-commands";
+import {
+  inactiveVoicePhrasesOf,
+  isVoiceEligible,
+  voicePhrases,
+} from "@/features/dictation/voice-commands";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { pickShortcutFileText, saveShortcutFile } from "@/features/settings/shortcut-file";
+import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 import { isMac } from "@/lib/platform/detect";
 import { IS_WEB } from "@/lib/platform/target";
 import {
-  COMMAND_IDS,
-  COMMANDS,
   SHORTCUT_SECTIONS,
+  commandIds,
+  commandLabel,
   commandSection,
-  type CommandDef,
+  fixedShortcuts,
+  getCommand,
+  isCommandId,
+  isPluginCommandDef,
+  isSealedCommand,
   type CommandId,
   type Shortcut,
 } from "@/lib/shortcut-registry";
@@ -40,6 +50,8 @@ import { formatShortcut, isSingleKey, isTypingSafe, shortcutKey } from "@/lib/sh
 import {
   editableShortcuts,
   findConflicts,
+  findResetConflicts,
+  isBindingActive,
   parseShortcutFile,
   type Conflict,
   type LoadResult,
@@ -56,6 +68,8 @@ interface Recording {
 interface PendingConflict extends Recording {
   shortcut: Shortcut;
   conflicts: Conflict[];
+  /** The pending action is a Reset to Defaults, not a recording. */
+  reset?: true;
 }
 
 /** Where focus goes once a recording, a removal, or a conflict ends. */
@@ -164,10 +178,17 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
   const searchRef = useRef<HTMLInputElement>(null);
 
   const clearFocusTarget = useCallback(() => setFocusTarget(null), []);
-  const label = (id: CommandId) => t((COMMANDS[id] as CommandDef).labelKey);
+  const label = (id: CommandId) => commandLabel(id, t, dictationLanguageFor(null, i18n?.language));
+  const fixedReason = (id: CommandId): string | null => {
+    const definition = getCommand(id);
+    return isPluginCommandDef(definition) ? null : (definition.fixedReasonKey ?? null);
+  };
 
   const customizedCount = new Set([...Object.keys(settings.custom), ...Object.keys(settings.voice)])
     .size;
+
+  // A Plugin that registers or unregisters while the editor is open updates it.
+  const revision = useCommandRegistryRevision();
 
   const sections = useMemo(() => {
     // A closed editor stays mounted to retain its query and filter, but must
@@ -176,11 +197,10 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
     const needle = query.trim().toLowerCase();
     return SHORTCUT_SECTIONS.map((section) => ({
       ...section,
-      ids: COMMAND_IDS.filter((id) => {
+      ids: commandIds().filter((id) => {
         if (commandSection(id) !== section.id) return false;
-        const definition: CommandDef = COMMANDS[id];
         const editable = editableShortcuts(id, settings.custom, IS_WEB);
-        const all = [...(definition.fixed ?? []), ...editable];
+        const all = [...fixedShortcuts(id), ...editable];
         if (
           filter === "customized" &&
           settings.custom[id] === undefined &&
@@ -191,19 +211,15 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
         if (filter === "none" && all.length > 0) return false;
         if (!needle) return true;
         const spoken = isVoiceEligible(id) ? voicePhrases(id, voiceLanguage, settings.voice) : [];
-        const haystack = [
-          t(definition.labelKey),
-          ...all.map(describeShortcut),
-          ...all.flat(),
-          ...spoken,
-        ]
+        const haystack = [label(id), ...all.map(describeShortcut), ...all.flat(), ...spoken]
           .join(" ")
           .toLowerCase();
         return haystack.includes(needle);
       }),
     })).filter((section) => section.ids.length > 0);
-    // `t` changes with the language; the list must follow it.
-  }, [isOpen, query, filter, settings.custom, settings.voice, voiceLanguage, t]);
+    // `t` changes with the language; the list must follow it. `revision`
+    // changes with a Plugin registering or unregistering.
+  }, [isOpen, query, filter, settings.custom, settings.voice, voiceLanguage, t, revision]);
 
   useEffect(() => {
     if (!focusTarget) return;
@@ -219,13 +235,18 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
   };
 
   const validate = (id: CommandId, index: number | null) => (shortcut: Shortcut) => {
-    const definition: CommandDef = COMMANDS[id];
-    if (definition.source === "editor-keymap" && !isTypingSafe(shortcut)) {
+    const definition = getCommand(id);
+    if (
+      !isPluginCommandDef(definition) &&
+      definition.source === "editor-keymap" &&
+      !isTypingSafe(shortcut)
+    ) {
       return t("shortcutEditor.errors.needsModifier", { keys: describeShortcut(shortcut) });
     }
-    const own = [...(definition.fixed ?? []), ...editableShortcuts(id, settings.custom, IS_WEB)];
+    const fixed = fixedShortcuts(id);
+    const own = [...fixed, ...editableShortcuts(id, settings.custom, IS_WEB)];
     const duplicate = own.findIndex((existing) => shortcutKey(existing) === shortcutKey(shortcut));
-    const editableIndex = duplicate - (definition.fixed?.length ?? 0);
+    const editableIndex = duplicate - fixed.length;
     if (duplicate !== -1 && editableIndex !== index) {
       return t("shortcutEditor.errors.duplicate", { keys: describeShortcut(shortcut) });
     }
@@ -277,6 +298,18 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
       );
       setCommandShortcuts(conflict.id, others);
     }
+    if (pending.reset) {
+      resetCommandShortcuts(pending.id);
+      const keys = editableShortcuts(pending.id, {}, IS_WEB).map(describeShortcut).join(", ");
+      announce(
+        keys
+          ? t("shortcutEditor.announce.reset", { command: label(pending.id), keys })
+          : t("shortcutEditor.announce.resetNone", { command: label(pending.id) })
+      );
+      setFocusTarget({ id: pending.id, control: "add" });
+      setPending(null);
+      return;
+    }
     apply(pending);
     announce(
       t("shortcutEditor.announce.moved", {
@@ -291,6 +324,22 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
 
   const cancelConflict = () => {
     if (!pending) return;
+    if (pending.reset) {
+      const conflicting = new Set(pending.conflicts.map((c) => shortcutKey(c.shortcut)));
+      const kept = editableShortcuts(pending.id, {}, IS_WEB).filter(
+        (shortcut) => !conflicting.has(shortcutKey(shortcut))
+      );
+      setCommandShortcuts(pending.id, kept);
+      setFocusTarget({ id: pending.id, control: "add" });
+      announce(
+        t("shortcutEditor.announce.resetKept", {
+          command: label(pending.id),
+          keys: pending.conflicts.map((c) => describeShortcut(c.shortcut)).join(", "),
+        })
+      );
+      setPending(null);
+      return;
+    }
     setFocusTarget(
       pending.index === null
         ? { id: pending.id, control: "add" }
@@ -311,6 +360,25 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
   };
 
   const reset = (id: CommandId) => {
+    // A Default the Reset would restore may be the newcomer next to an active
+    // Plugin binding: prompt with the same Replace / Cancel (ADR 0024).
+    const conflicts = findResetConflicts(id, settings.custom, IS_WEB);
+    if (conflicts.length > 0) {
+      setPending({
+        id,
+        index: null,
+        shortcut: conflicts[0].shortcut,
+        conflicts,
+        reset: true,
+      });
+      announce(
+        t("shortcutEditor.conflict.message", {
+          keys: describeShortcut(conflicts[0].shortcut),
+          command: label(conflicts[0].id),
+        })
+      );
+      return;
+    }
     resetCommandShortcuts(id);
     setFocusTarget({ id, control: "add" });
     const keys = editableShortcuts(id, {}, IS_WEB).map(describeShortcut).join(", ");
@@ -363,15 +431,19 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
   };
 
   const chips = (id: CommandId) => {
-    const definition: CommandDef = COMMANDS[id];
+    const fixed = fixedShortcuts(id);
     const editable = editableShortcuts(id, settings.custom, IS_WEB);
     const isRecordingHere = recording?.id === id;
     const off = (shortcut: Shortcut) => !settings.singleKeyEnabled && isSingleKey(shortcut);
     const commandLabel = label(id);
+    // A Plugin binding another active binding already owns stays visible here
+    // so the author can resolve it (ADR 0024).
+    const inactive = (shortcut: Shortcut) =>
+      !isBindingActive(id, shortcut, settings.custom, IS_WEB);
 
     return (
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        {(definition.fixed ?? []).map((shortcut) => (
+        {fixed.map((shortcut) => (
           <span
             key={`fixed-${shortcutKey(shortcut)}`}
             className="inline-flex items-center gap-1 rounded-md bg-muted/50 px-1.5 py-0.5"
@@ -401,6 +473,11 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
               className={`inline-flex items-center gap-0.5 rounded-md border border-border px-1 ${off(shortcut) ? "opacity-50" : ""}`}
             >
               <KeyboardShortcut shortcut={formatShortcut(shortcut, isMac())} alwaysVisible />
+              {inactive(shortcut) && (
+                <span className="px-1 text-[10px] text-destructive">
+                  {t("shortcutEditor.inactive")}
+                </span>
+              )}
               {off(shortcut) && (
                 <span className="px-1 text-[10px] text-muted-foreground">
                   {t("shortcutEditor.singleKeyOff")}
@@ -433,7 +510,7 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
             </span>
           )
         )}
-        {(definition.fixed?.length ?? 0) + editable.length === 0 && !isRecordingHere && (
+        {fixed.length + editable.length === 0 && !isRecordingHere && (
           <span className="text-xs text-muted-foreground">{t("shortcutEditor.noShortcut")}</span>
         )}
         {isRecordingHere && recording.index === null && (
@@ -472,12 +549,22 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
   const voiceSummary = (id: CommandId) => {
     if (!isVoiceEligible(id)) return null;
     const phrases = voicePhrases(id, voiceLanguage, settings.voice);
-    return <VoicePhraseSummary phrases={phrases} language={voiceLanguage} />;
+    const inactivePhrases = new Set(
+      inactiveVoicePhrasesOf(voiceLanguage, settings.voice)
+        .filter((binding) => binding.id === id)
+        .map((binding) => phraseWords(binding.phrase).join(" "))
+    );
+    return (
+      <VoicePhraseSummary
+        phrases={phrases}
+        language={voiceLanguage}
+        inactivePhrases={inactivePhrases}
+      />
+    );
   };
 
   const actions = (id: CommandId) => {
-    const definition: CommandDef = COMMANDS[id];
-    if (definition.sealed) {
+    if (isSealedCommand(id)) {
       return (
         <div className="flex shrink-0 items-center gap-1">
           <span className="text-xs text-muted-foreground">{t("shortcutEditor.sealed")}</span>
@@ -676,9 +763,9 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
                         <div className="flex flex-col gap-2 @2xl:grid @2xl:grid-cols-[minmax(10rem,14rem)_1fr_auto] @2xl:items-center">
                           <div className="min-w-0">
                             <p className="truncate text-sm text-foreground">{label(id)}</p>
-                            {(COMMANDS[id] as CommandDef).fixedReasonKey && (
+                            {fixedReason(id) && (
                               <p className="text-xs text-muted-foreground">
-                                {t((COMMANDS[id] as CommandDef).fixedReasonKey ?? "")}
+                                {t(fixedReason(id) ?? "")}
                               </p>
                             )}
                           </div>
@@ -767,9 +854,7 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
                           ? `shortcutEditor.file.droppedVoice.${item.reason}`
                           : `shortcutEditor.file.dropped.${item.reason}`,
                         {
-                          command: (COMMAND_IDS as string[]).includes(item.id)
-                            ? label(item.id as CommandId)
-                            : item.id,
+                          command: isCommandId(item.id) ? label(item.id) : item.id,
                           keys: item.shortcut ? item.shortcut.join(" ") : "",
                           phrase: item.phrase ?? "",
                           language: item.language
