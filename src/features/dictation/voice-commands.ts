@@ -13,11 +13,11 @@ import { labelPhrase, VOICE_LABEL_EXCLUSIONS } from "@/features/dictation/label-
 import { normalizeWord, phraseWords } from "@/features/dictation/normalize";
 import type { DictationLanguage } from "@/features/dictation/types";
 import {
-  COMMAND_IDS,
   COMMAND_RENAMES,
-  COMMANDS,
-  isCommandId,
-  type CommandDef,
+  commandIds,
+  getCommand,
+  onCommandRegistryChange,
+  resolveStoredCommandId,
   type CommandId,
 } from "@/lib/shortcut-registry";
 
@@ -287,7 +287,7 @@ export type VoiceOutcome = "ran" | "empty" | "ignored" | "refused" | "unavailabl
 
 /** Every Command takes Voice Commands (ADR 0016), in registry order. */
 export function voiceEligibleCommands(): CommandId[] {
-  return [...COMMAND_IDS];
+  return [...commandIds()];
 }
 
 export function isVoiceEligible(id: CommandId): boolean {
@@ -304,11 +304,15 @@ export function isVoiceEligible(id: CommandId): boolean {
  */
 const wholeLineCache = new Map<string, string[]>();
 
+// A Plugin Command's labels change with its registration; the cache must not
+// serve the previous declaration.
+onCommandRegistryChange(() => wholeLineCache.clear());
+
 export function defaultWholeLinePhrases(id: CommandId, language: DictationLanguage): string[] {
   const key = `${id}:${language}`;
   const cached = wholeLineCache.get(key);
   if (cached) return [...cached];
-  const voice = (COMMANDS[id] as CommandDef).voice;
+  const voice = getCommand(id).voice;
   const explicit = voice?.phrases?.[language];
   let phrases: string[];
   if (explicit !== undefined) {
@@ -318,6 +322,8 @@ export function defaultWholeLinePhrases(id: CommandId, language: DictationLangua
   } else if (VOICE_LABEL_EXCLUSIONS[id] !== undefined) {
     phrases = [];
   } else {
+    // A Plugin Command's label answers only for the languages its declaration
+    // supplies, so an English-only Command has no Spanish phrase (ADR 0024).
     const label = labelPhrase(id, language);
     phrases = label !== null && phraseWords(label).length >= MIN_VOICE_PHRASE_WORDS ? [label] : [];
   }
@@ -327,7 +333,7 @@ export function defaultWholeLinePhrases(id: CommandId, language: DictationLangua
 
 /** A mark Command: its registry voice verbs include "formatOn". */
 export function isMarkCommand(id: CommandId): boolean {
-  return (COMMANDS[id] as CommandDef).voice?.verbs?.includes("formatOn") ?? false;
+  return getCommand(id).voice?.verbs?.includes("formatOn") ?? false;
 }
 
 /**
@@ -340,7 +346,7 @@ function splitDefaultPhrase(
   language: DictationLanguage,
   words: readonly string[]
 ): { verb: string[]; target: string[]; cls: VoiceVerbClass } | null {
-  const voice = (COMMANDS[id] as CommandDef).voice;
+  const voice = getCommand(id).voice;
   const verbs = voice?.verbs;
   if (!verbs) return null;
   const vocabulary = VOICE_VOCABULARY[language];
@@ -373,7 +379,7 @@ export function voicePhrasePolarity(
   language: DictationLanguage,
   phrase: string
 ): VoicePolarity | null {
-  const voice = (COMMANDS[id] as CommandDef).voice;
+  const voice = getCommand(id).voice;
   const verbs = voice?.verbs;
   if (!verbs) return null;
   const vocabulary = VOICE_VOCABULARY[language];
@@ -438,8 +444,7 @@ export function normalizeVoicePhraseList(raw: readonly unknown[]): string[] {
 }
 
 function resolveCommandId(rawId: string): CommandId | null {
-  const renamed = COMMAND_RENAMES[rawId] ?? rawId;
-  return isCommandId(renamed) ? renamed : null;
+  return resolveStoredCommandId(rawId, COMMAND_RENAMES);
 }
 
 /**
@@ -490,8 +495,8 @@ export function buildVoiceCommandTable(
   const targets = new Map<VoiceVerbClass, VoiceTargetEntry[]>();
   const exact = new Map<string, VoiceCommandRun[]>();
   const pinned: VoicePinnedEntry[] = [];
-  for (const id of COMMAND_IDS) {
-    const voice = (COMMANDS[id] as CommandDef).voice;
+  for (const id of commandIds()) {
+    const voice = getCommand(id).voice;
     // The author's list replaces all of this language's defaults for the Command.
     const own = custom[id]?.[language];
     if (own !== undefined) {
@@ -662,8 +667,8 @@ export interface VoiceCommandPhrase {
 export function voiceCommandPhrases(language: DictationLanguage): VoiceCommandPhrase[] {
   const vocabulary = VOICE_VOCABULARY[language];
   const phrases: VoiceCommandPhrase[] = [];
-  for (const id of COMMAND_IDS) {
-    const voice = (COMMANDS[id] as CommandDef).voice;
+  for (const id of commandIds()) {
+    const voice = getCommand(id).voice;
     for (const cls of voice?.verbs ?? []) {
       for (const verb of vocabulary.verbs[cls].phrases) {
         for (const target of voice?.targets?.[language] ?? []) {
@@ -686,9 +691,9 @@ export function voiceCommandPhrases(language: DictationLanguage): VoiceCommandPh
 export function voiceThatPhrases(language: DictationLanguage): VoiceCommandPhrase[] {
   const vocabulary = VOICE_VOCABULARY[language];
   const phrases: VoiceCommandPhrase[] = [];
-  for (const id of COMMAND_IDS) {
+  for (const id of commandIds()) {
     if (!isMarkCommand(id)) continue;
-    const voice = (COMMANDS[id] as CommandDef).voice;
+    const voice = getCommand(id).voice;
     const verbs = voice?.verbs;
     if (!verbs) continue;
     for (const cls of verbs) {

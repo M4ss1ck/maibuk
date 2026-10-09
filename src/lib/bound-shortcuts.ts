@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { create } from "zustand";
-import { COMMAND_IDS, type CommandId } from "@/lib/shortcut-registry";
+import { useCommandRegistryRevision } from "@/hooks/useCommandRegistry";
+import { commandIds, type CommandId } from "@/lib/shortcut-registry";
 
 // A Bound Shortcut works on the screen the author is on right now. Whatever
 // handles a registry shortcut declares its id while it is mounted and enabled,
@@ -12,8 +13,6 @@ interface BoundShortcutState {
   /** Declares ids as bound; the returned function releases them once. */
   bind: (ids: readonly CommandId[]) => () => void;
 }
-
-const REGISTRY_ORDER = COMMAND_IDS;
 
 export const useBoundShortcutStore = create<BoundShortcutState>((set) => ({
   counts: {},
@@ -59,5 +58,6 @@ export function useBoundShortcutIds(ids: readonly CommandId[], enabled = true): 
 /** The shortcuts that work on this screen right now, in registry order. */
 export function useBoundShortcuts(): CommandId[] {
   const counts = useBoundShortcutStore((state) => state.counts);
-  return useMemo(() => REGISTRY_ORDER.filter((id) => (counts[id] ?? 0) > 0), [counts]);
+  const revision = useCommandRegistryRevision();
+  return useMemo(() => commandIds().filter((id) => (counts[id] ?? 0) > 0), [counts, revision]);
 }

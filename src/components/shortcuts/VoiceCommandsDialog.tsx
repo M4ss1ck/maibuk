@@ -8,7 +8,7 @@ import { PhraseRecordingStatus, RecordPhraseButton } from "@/components/dictatio
 import { phraseConflictMessage } from "@/components/dictation/phrase-conflict-message";
 import { normalizePhrase } from "@/features/dictation/normalize";
 import { findPhraseConflict, type PhraseConflict } from "@/features/dictation/phrase-conflicts";
-import { useDictationStore } from "@/features/dictation/store";
+import { dictationLanguageFor, useDictationStore } from "@/features/dictation/store";
 import { usePhraseRecording } from "@/features/dictation/usePhraseRecording";
 import type { DictationLanguage } from "@/features/dictation/types";
 import {
@@ -17,7 +17,7 @@ import {
   voicePhrases,
 } from "@/features/dictation/voice-commands";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
-import { COMMANDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
+import { commandLabel, isCommandId, type CommandId } from "@/lib/shortcut-registry";
 
 const ROW_CONTROL =
   "inline-flex items-center gap-1 rounded-md px-1.5 py-1 pointer-coarse:px-2.5 pointer-coarse:py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary";
@@ -35,7 +35,8 @@ interface VoiceCommandsDialogProps {
  * check. Opened from the Command's row in the Shortcut Editor.
  */
 export function VoiceCommandsDialog({ id, initialLanguage, onClose }: VoiceCommandsDialogProps) {
-  if (id === null) return null;
+  // A Plugin Command can vanish while its dialog is open: the Plugin stopped.
+  if (id === null || !isCommandId(id)) return null;
   return (
     <VoiceCommandsDialogContent
       key={id}
@@ -51,7 +52,7 @@ function VoiceCommandsDialogContent({
   initialLanguage,
   onClose,
 }: Omit<VoiceCommandsDialogProps, "id"> & { id: CommandId }) {
-  const { t: translate } = useTranslation();
+  const { t: translate, i18n } = useTranslation();
   // Command labels are registry data, so their keys are plain strings.
   const t = translate as unknown as (key: string, options?: Record<string, unknown>) => string;
   const voice = useShortcutSettingsStore((state) => state.shortcuts.voice);
@@ -77,7 +78,7 @@ function VoiceCommandsDialogContent({
     },
   });
 
-  const command = t((COMMANDS[id] as CommandDef).labelKey);
+  const command = commandLabel(id, t, dictationLanguageFor(null, i18n?.language));
   const languageName = t(`dictation.languageNames.${language}`);
   const phrases = voicePhrases(id, language, voice);
   const customized = voice[id]?.[language] !== undefined;

@@ -2,7 +2,15 @@
 // ships with. Bindings name a Command by id and never carry keys: the keys
 // that fire are these defaults merged with the author's Custom Shortcuts
 // (ADR 0012), resolved in `shortcut-resolve.ts`.
+//
+// Commands contributed by Plugins are registered at runtime through
+// `registerPluginCommands`: the host derives their ids as
+// `plugin.<pluginId>.<localId>`, so a Plugin can never claim Maibuk's or
+// another Plugin's Commands (ADR 0022). They are ordinary Commands everywhere
+// else in this module and in the resolver.
+import type { DictationLanguage } from "@/features/dictation/types";
 import type { VoiceCommandSpec } from "@/features/dictation/voice-commands";
+import { isRecordableStep, normalizeShortcut } from "@/lib/shortcut-keys";
 
 /**
  * One key combination: modifiers then a key, joined by "+". `Mod` is Cmd on
@@ -18,21 +26,37 @@ export type Shortcut = readonly Step[];
  * screen shows is declared per route in `ROUTE_CONTEXTS`; two Shortcuts can
  * conflict only when some route shows both of their Contexts.
  */
-export type ShortcutContext =
-  | "global"
-  | "bookList"
-  | "bookEditor"
-  | "coverDesigner"
-  | "notes"
-  | "canvas"
-  | "ephemeral"
-  | "editor"
-  | "noteItem"
-  | "chapterItem"
-  | "canvasNode"
-  | "image"
-  | "footnoteItem"
-  | "commandPalette";
+export const CORE_CONTEXTS = [
+  "global",
+  "bookList",
+  "bookEditor",
+  "coverDesigner",
+  "notes",
+  "canvas",
+  "ephemeral",
+  "editor",
+  "noteItem",
+  "chapterItem",
+  "canvasNode",
+  "image",
+  "footnoteItem",
+  "commandPalette",
+] as const;
+
+export type CoreShortcutContext = (typeof CORE_CONTEXTS)[number];
+
+/**
+ * `plugin` is reserved as a core Shortcut Context name forever: no Plugin page
+ * may take it, so the namespace stays unambiguous (ADR 0022).
+ */
+export const PLUGIN_CONTEXT_NAME = "plugin";
+
+export const PLUGIN_COMMAND_PREFIX = "plugin.";
+
+/** A Plugin page's own Context, derived by the host from its page id. */
+export type PluginContext = `${typeof PLUGIN_COMMAND_PREFIX}${string}`;
+
+export type ShortcutContext = CoreShortcutContext | PluginContext;
 
 /** Handled by the TipTap keymap inside the editor instead of a `useShortcuts` binding. */
 export type ShortcutSource = "editor-keymap";
@@ -60,6 +84,66 @@ export interface CommandDef {
   navigates?: true;
   /** The runner opens a dialog whose text field takes the caret: a Voice Command waits for that field like a navigating one (the Dictation hand-off window). */
   opensDialog?: true;
+}
+
+/**
+ * One Command contributed by a Plugin, after the host has derived its full id.
+ * It carries the ordinary `CommandDef` fields minus the core-only ones: a
+ * Plugin cannot declare Fixed or Sealed Commands, an i18n label key, or an
+ * editor-keymap source (ADR 0022).
+ */
+export interface PluginCommandDef {
+  /** The full id: `plugin.<pluginId>.<localId>`. */
+  id: PluginCommandId;
+  pluginId: string;
+  localId: string;
+  /** The label in the Plugin's default language. */
+  label: string;
+  /** Labels per Dictation Language the Plugin supplies; UI falls back to `label`. */
+  labels: Readonly<Partial<Record<DictationLanguage, string>>>;
+  defaultLanguage: DictationLanguage;
+  /** Extra search terms for the Command Palette, already in the default language. */
+  keywords?: readonly string[];
+  contexts: readonly ShortcutContext[];
+  defaults: readonly Shortcut[];
+  web?: readonly Shortcut[];
+  voice?: VoiceCommandSpec;
+  navigates?: true;
+  opensDialog?: true;
+}
+
+export type CommandDefinition = CommandDef | PluginCommandDef;
+
+export function isPluginCommandDef(definition: CommandDefinition): definition is PluginCommandDef {
+  return "pluginId" in definition;
+}
+
+/** A Command a Plugin declares; the host derives its full id from `pluginId`. */
+export interface PluginCommandDeclaration {
+  /** The Plugin-local id: `[a-z][a-zA-Z0-9]{0,47}`, unique in the Plugin. */
+  id: string;
+  /** The label in the Plugin's default language. */
+  label: string;
+  /** Labels per Dictation Language; only these languages get default Voice Command phrases. */
+  labels?: Readonly<Partial<Record<DictationLanguage, string>>>;
+  keywords?: readonly string[];
+  /** Core Context names plus this Plugin's own page ids. */
+  contexts: readonly string[];
+  defaults?: readonly Shortcut[];
+  web?: readonly Shortcut[];
+  voice?: VoiceCommandSpec;
+  navigates?: true;
+  opensDialog?: true;
+}
+
+export interface PluginRegistration {
+  commands: readonly PluginCommandDeclaration[];
+  /** The language of `label` and `keywords`; supplied locales override them. */
+  defaultLanguage: DictationLanguage;
+  /** The Plugin's page local ids; each becomes its own Shortcut Context. */
+  pages?: readonly string[];
+  /** Same-Plugin Command renames: old local id → new local id (ADR 0024). */
+  commandRenames?: Readonly<Record<string, string>>;
 }
 
 const FIXED_UNDO = "shortcuts.fixed.undo";
@@ -1220,16 +1304,321 @@ export const COMMANDS = {
   },
 } as const satisfies Record<string, CommandDef>;
 
-export type CommandId = keyof typeof COMMANDS;
+export type CoreCommandId = keyof typeof COMMANDS;
+/** A runtime Command id: `plugin.<pluginId>.<localId>`, derived by the host. */
+export type PluginCommandId = `plugin.${string}.${string}`;
+export type CommandId = CoreCommandId | PluginCommandId;
 
-export const COMMAND_IDS = Object.keys(COMMANDS) as CommandId[];
+export const COMMAND_IDS = Object.keys(COMMANDS) as CoreCommandId[];
 
-export function getCommand(id: CommandId): CommandDef {
+const PLUGIN_ID_PATTERN = /^[a-z0-9-]{3,64}$/;
+const LOCAL_ID_PATTERN = /^[a-z][a-zA-Z0-9]{0,47}$/;
+const PLUGIN_COMMAND_ID_PATTERN = /^plugin\.([a-z0-9-]{3,64})\.([a-z][a-zA-Z0-9]{0,47})$/;
+
+const CORE_CONTEXT_NAMES: ReadonlySet<string> = new Set(CORE_CONTEXTS);
+
+export function isCoreContextName(value: string): value is CoreShortcutContext {
+  return CORE_CONTEXT_NAMES.has(value);
+}
+
+/** A name no Plugin page may take: a core Context, or the reserved `plugin`. */
+export function isReservedContextName(value: string): boolean {
+  return CORE_CONTEXT_NAMES.has(value) || value === PLUGIN_CONTEXT_NAME;
+}
+
+export function isCoreCommandId(value: string): value is CoreCommandId {
+  return Object.getOwnPropertyDescriptor(COMMANDS, value) !== undefined;
+}
+
+/** The shape of a Plugin Command id, whether or not that Plugin is registered. */
+export function isPluginCommandId(value: string): value is PluginCommandId {
+  return PLUGIN_COMMAND_ID_PATTERN.test(value);
+}
+
+export function pluginIdOfCommand(value: string): string | null {
+  return PLUGIN_COMMAND_ID_PATTERN.exec(value)?.[1] ?? null;
+}
+
+export function localIdOfCommand(value: string): string | null {
+  return PLUGIN_COMMAND_ID_PATTERN.exec(value)?.[2] ?? null;
+}
+
+interface RegisteredPlugin {
+  pluginId: string;
+  /** The Plugin's place in the conflict order; earlier registrations win. */
+  order: number;
+  renames: Readonly<Record<string, string>>;
+  /** Declaration order, which is also the order within the Plugin. */
+  defs: readonly PluginCommandDef[];
+  byId: ReadonlyMap<PluginCommandId, PluginCommandDef>;
+  /** Distinguishes this registration from a later update of the same Plugin. */
+  token: symbol;
+}
+
+const plugins = new Map<string, RegisteredPlugin>();
+let registrationOrder = 0;
+let registryRevision = 0;
+const registryListeners = new Set<() => void>();
+
+function notifyRegistryChange(): void {
+  registryRevision += 1;
+  for (const listener of [...registryListeners]) listener();
+}
+
+/** Bumped on every register and unregister, so memoized readers can refresh. */
+export function commandRegistryRevision(): number {
+  return registryRevision;
+}
+
+/** Runs after every register and unregister. Returns unregister. */
+export function onCommandRegistryChange(listener: () => void): () => void {
+  registryListeners.add(listener);
+  return () => {
+    registryListeners.delete(listener);
+  };
+}
+
+function validateShortcuts(
+  localId: string,
+  shortcuts: readonly Shortcut[] | undefined
+): Shortcut[] {
+  return (shortcuts ?? []).map((shortcut) => {
+    const normalized =
+      Array.isArray(shortcut) && shortcut.length >= 1 && shortcut.length <= 2
+        ? normalizeShortcut(shortcut)
+        : null;
+    if (normalized === null || !normalized.every((step) => isRecordableStep(step))) {
+      throw new Error(`Plugin Command "${localId}" declares an invalid Shortcut`);
+    }
+    return normalized;
+  });
+}
+
+/**
+ * Collapses a Plugin's rename chains (a→b, b→c becomes a→c) and refuses what a
+ * manifest cannot express: a target outside the Plugin, a target that is not
+ * declared, a source that is, and cycles.
+ */
+function collapseRenames(
+  renames: Readonly<Record<string, string>>,
+  declared: ReadonlySet<string>
+): Readonly<Record<string, string>> {
+  for (const [from, to] of Object.entries(renames)) {
+    if (!LOCAL_ID_PATTERN.test(from) || !LOCAL_ID_PATTERN.test(to)) {
+      throw new Error(`Plugin rename "${from}" targets "${to}", which is not a Plugin-local id`);
+    }
+    if (declared.has(from)) {
+      throw new Error(`Plugin rename source "${from}" is a declared Command`);
+    }
+    if (!declared.has(to)) {
+      throw new Error(`Plugin rename "${from}" targets "${to}", which is not a declared Command`);
+    }
+  }
+  const collapsed: Record<string, string> = {};
+  for (const from of Object.keys(renames)) {
+    const seen = new Set<string>([from]);
+    let target = renames[from];
+    while (renames[target] !== undefined) {
+      if (seen.has(target)) throw new Error(`Plugin rename for "${from}" cycles`);
+      seen.add(target);
+      target = renames[target];
+    }
+    collapsed[from] = target;
+  }
+  return collapsed;
+}
+
+/**
+ * Admits a Plugin's Commands into the shared registry. `pluginId` names the
+ * owner; the host derives every full id as `plugin.<pluginId>.<localId>`, so a
+ * declaration can never name another owner's Command. Refuses what a Plugin
+ * Command may not be: Fixed, Sealed, a label key, or an editor-keymap source.
+ * Registering the same Plugin again updates it in place, keeping its place in
+ * the conflict order. Returns unregister.
+ */
+export function registerPluginCommands(
+  pluginId: string,
+  registration: PluginRegistration
+): () => void {
+  if (!PLUGIN_ID_PATTERN.test(pluginId)) {
+    throw new Error(`Invalid Plugin id "${pluginId}"`);
+  }
+
+  const pageSet = new Set<string>();
+  for (const page of registration.pages ?? []) {
+    if (!LOCAL_ID_PATTERN.test(page)) throw new Error(`Invalid Plugin page id "${page}"`);
+    if (isReservedContextName(page)) {
+      throw new Error(`Plugin page id "${page}" is a reserved Shortcut Context name`);
+    }
+    if (pageSet.has(page)) throw new Error(`Duplicate Plugin page id "${page}"`);
+    pageSet.add(page);
+  }
+
+  const declared = new Set<string>();
+  const defs: PluginCommandDef[] = [];
+  for (const declaration of registration.commands) {
+    const raw = declaration as unknown as Record<string, unknown>;
+    for (const refused of ["fixed", "sealed", "fixedReasonKey", "source"] as const) {
+      if (raw[refused] !== undefined) {
+        throw new Error(`Plugin Command "${declaration.id}" cannot declare ${refused}`);
+      }
+    }
+    if (!LOCAL_ID_PATTERN.test(declaration.id)) {
+      throw new Error(`Plugin Command id "${declaration.id}" is outside this Plugin's namespace`);
+    }
+    if (declared.has(declaration.id)) {
+      throw new Error(`Duplicate Plugin Command id "${declaration.id}"`);
+    }
+    declared.add(declaration.id);
+
+    const contexts = declaration.contexts.map((context): ShortcutContext => {
+      if (isCoreContextName(context)) return context;
+      if (pageSet.has(context)) {
+        return `${PLUGIN_COMMAND_PREFIX}${pluginId}.${context}` as PluginContext;
+      }
+      throw new Error(`Plugin Command "${declaration.id}" declares unknown Context "${context}"`);
+    });
+
+    defs.push({
+      id: `${PLUGIN_COMMAND_PREFIX}${pluginId}.${declaration.id}` as PluginCommandId,
+      pluginId,
+      localId: declaration.id,
+      label: declaration.label,
+      labels: declaration.labels ?? {},
+      defaultLanguage: registration.defaultLanguage,
+      contexts,
+      defaults: validateShortcuts(declaration.id, declaration.defaults),
+      ...(declaration.keywords !== undefined ? { keywords: declaration.keywords } : {}),
+      ...(declaration.web !== undefined
+        ? { web: validateShortcuts(declaration.id, declaration.web) }
+        : {}),
+      ...(declaration.voice !== undefined ? { voice: declaration.voice } : {}),
+      ...(declaration.navigates ? { navigates: declaration.navigates } : {}),
+      ...(declaration.opensDialog ? { opensDialog: declaration.opensDialog } : {}),
+    });
+  }
+
+  const token = Symbol(pluginId);
+  const byId = new Map(defs.map((definition) => [definition.id, definition]));
+  const previous = plugins.get(pluginId);
+  plugins.set(pluginId, {
+    pluginId,
+    order: previous?.order ?? registrationOrder++,
+    renames: collapseRenames(registration.commandRenames ?? {}, declared),
+    defs,
+    byId,
+    token,
+  });
+  notifyRegistryChange();
+
+  return () => {
+    const current = plugins.get(pluginId);
+    if (current?.token !== token) return;
+    plugins.delete(pluginId);
+    notifyRegistryChange();
+  };
+}
+
+function registeredPlugins(): RegisteredPlugin[] {
+  return [...plugins.values()].sort((a, b) => a.order - b.order);
+}
+
+/** Every live Command: the core registry in order, then each Plugin in turn. */
+export function commandIds(): CommandId[] {
+  const ids: CommandId[] = [...COMMAND_IDS];
+  for (const plugin of registeredPlugins()) {
+    for (const definition of plugin.defs) ids.push(definition.id);
+  }
+  return ids;
+}
+
+export function getCoreCommand(id: CoreCommandId): CommandDef {
   return COMMANDS[id];
 }
 
+export function getCommand(id: CommandId): CommandDefinition {
+  if (isCoreCommandId(id)) return COMMANDS[id];
+  const pluginId = pluginIdOfCommand(id);
+  const definition = pluginId === null ? undefined : plugins.get(pluginId)?.byId.get(id);
+  if (definition === undefined) throw new Error(`Unknown Command "${id}"`);
+  return definition;
+}
+
 export function isCommandId(value: string): value is CommandId {
-  return Object.getOwnPropertyDescriptor(COMMANDS, value) !== undefined;
+  if (isCoreCommandId(value)) return true;
+  const pluginId = pluginIdOfCommand(value);
+  return pluginId !== null && plugins.get(pluginId)?.byId.has(value as PluginCommandId) === true;
+}
+
+/**
+ * Applies a registered Plugin's rename map to a stored id. A Plugin that is
+ * absent keeps its stored ids as they are: the preference is retained for its
+ * return (ADR 0024).
+ */
+export function resolvePluginCommandRename(value: string): string {
+  const pluginId = pluginIdOfCommand(value);
+  if (pluginId === null) return value;
+  const localId = localIdOfCommand(value);
+  const renamed = localId === null ? undefined : plugins.get(pluginId)?.renames[localId];
+  return renamed === undefined ? value : `${PLUGIN_COMMAND_PREFIX}${pluginId}.${renamed}`;
+}
+
+/** The rename maps of every registered Plugin, for settings migration. */
+export function pluginCommandRenames(): ReadonlyMap<string, Readonly<Record<string, string>>> {
+  return new Map(registeredPlugins().map((plugin) => [plugin.pluginId, plugin.renames]));
+}
+
+/**
+ * A stored id to the Command it names today, or null when it names nothing.
+ * The core rename map is a parameter so a caller reads the one it imported;
+ * unknown ids under `plugin.` are kept as they are (ADR 0024), and everything
+ * else unknown is dropped (ADR 0012).
+ */
+export function resolveStoredCommandId(
+  rawId: string,
+  coreRenames: Readonly<Record<string, CommandId>> = COMMAND_RENAMES
+): CommandId | null {
+  const renamed = resolvePluginCommandRename(coreRenames[rawId] ?? rawId);
+  if (isCommandId(renamed)) return renamed;
+  return isPluginCommandId(renamed) ? renamed : null;
+}
+
+/** A Command's label: core Commands through i18n, Plugin Commands through their labels. */
+export function commandLabel(
+  id: CommandId,
+  t: (key: string) => unknown,
+  language?: DictationLanguage
+): string {
+  const definition = getCommand(id);
+  if (!isPluginCommandDef(definition)) {
+    const label = t(definition.labelKey);
+    return typeof label === "string" ? label : definition.labelKey;
+  }
+  if (language !== undefined && definition.labels[language] !== undefined) {
+    return definition.labels[language];
+  }
+  return definition.label;
+}
+
+/** A Command's Fixed Shortcuts; Plugin Commands never have any (ADR 0022). */
+export function fixedShortcuts(id: CommandId): readonly Shortcut[] {
+  const definition = getCommand(id);
+  return isPluginCommandDef(definition) ? [] : (definition.fixed ?? []);
+}
+
+export function isSealedCommand(id: CommandId): boolean {
+  const definition = getCommand(id);
+  return !isPluginCommandDef(definition) && definition.sealed === true;
+}
+
+export function isEditorKeymapCommand(id: CommandId): boolean {
+  const definition = getCommand(id);
+  return !isPluginCommandDef(definition) && definition.source === "editor-keymap";
+}
+
+export function isNavigatingCommand(id: CommandId): boolean {
+  const definition = getCommand(id);
+  return definition.navigates === true || definition.opensDialog === true;
 }
 
 /**
@@ -1287,6 +1676,7 @@ export const SHORTCUT_SECTIONS = [
     contexts: ["commandPalette"],
   },
   { id: "focus", labelKey: "shortcuts.sections.focus", contexts: [] },
+  { id: "plugins", labelKey: "shortcuts.sections.plugins", contexts: [] },
 ] as const satisfies readonly {
   id: string;
   labelKey: string;
@@ -1295,8 +1685,12 @@ export const SHORTCUT_SECTIONS = [
 
 export type ShortcutSectionId = (typeof SHORTCUT_SECTIONS)[number]["id"];
 
-/** A Shared Command lives in "common"; any other Command in its Context's section. */
+/**
+ * A Shared Command lives in "common", any other core Command in its Context's
+ * section, and every Plugin Command in "plugins".
+ */
 export function commandSection(id: CommandId): ShortcutSectionId {
+  if (isPluginCommandId(id)) return "plugins";
   if (id.startsWith("focus.")) return "focus";
   const contexts: readonly ShortcutContext[] = COMMANDS[id].contexts;
   if (contexts.length > 1) return "common";

@@ -1,8 +1,9 @@
-import { useId } from "react";
+import { useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { GraduationCap } from "lucide-react";
 import { Button, Modal, KeyboardShortcut } from "@/components/ui";
 import { VoicePhraseSummary } from "@/components/shortcuts/VoicePhraseSummary";
+import { useCommandRegistryRevision } from "@/hooks/useCommandRegistry";
 import { useBoundShortcuts } from "@/lib/bound-shortcuts";
 import { liveShortcuts, useCommandKeys } from "@/lib/command-keys";
 import { formatShortcut, shortcutKey } from "@/lib/shortcut-keys";
@@ -11,10 +12,10 @@ import { dictationLanguageFor, useDictationStore } from "@/features/dictation/st
 import { voicePhrases } from "@/features/dictation/voice-commands";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import {
-  COMMANDS,
-  COMMAND_IDS,
-  SHORTCUT_SECTIONS,
+  commandIds,
+  commandLabel,
   commandSection,
+  SHORTCUT_SECTIONS,
   type CommandId,
 } from "@/lib/shortcut-registry";
 
@@ -38,11 +39,12 @@ function ShortcutRow({ id }: { id: CommandId }) {
   const customVoice = useShortcutSettingsStore((state) => state.shortcuts.voice);
   const voiceLanguage = dictationLanguageFor(languageOverride, i18n?.language);
   const phrases = enabled ? voicePhrases(id, voiceLanguage, customVoice) : [];
+  const label = commandLabel(id, t, dictationLanguageFor(null, i18n?.language));
   if (shortcuts.length === 0) return null;
   if (!enabled || phrases.length === 0) {
     return (
       <li className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
-        <span className="text-sm text-foreground">{t(COMMANDS[id].labelKey)}</span>
+        <span className="text-sm text-foreground">{label}</span>
         <span className="inline-flex items-center gap-2">
           {shortcuts.map((shortcut) => (
             <KeyboardShortcut
@@ -58,7 +60,7 @@ function ShortcutRow({ id }: { id: CommandId }) {
   return (
     <li className="rounded-lg border border-border px-3 py-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-foreground">{t(COMMANDS[id].labelKey)}</span>
+        <span className="text-sm text-foreground">{label}</span>
         <span className="inline-flex items-center gap-2">
           {shortcuts.map((shortcut) => (
             <KeyboardShortcut
@@ -113,13 +115,16 @@ export function ShortcutsHelpDialog({
   const boundSet = new Set(bound);
   const settings = useShortcutSettingsStore((state) => state.shortcuts);
   const hasLive = (id: CommandId) => liveShortcuts(id, settings).length > 0;
+  // A Plugin that registers or unregisters while this dialog is open updates it.
+  const revision = useCommandRegistryRevision();
+  const ids = useMemo(() => commandIds(), [revision]);
 
-  const thisScreen = groupsFor(COMMAND_IDS.filter((id) => boundSet.has(id) && hasLive(id)));
+  const thisScreen = groupsFor(ids.filter((id) => boundSet.has(id) && hasLive(id)));
 
   // Global shortcuts are bound on every screen, so one missing here is not
   // available on this device at all and belongs in neither list.
   const otherScreens = groupsFor(
-    COMMAND_IDS.filter((id) => !boundSet.has(id) && commandSection(id) !== "global" && hasLive(id))
+    ids.filter((id) => !boundSet.has(id) && commandSection(id) !== "global" && hasLive(id))
   );
 
   return (

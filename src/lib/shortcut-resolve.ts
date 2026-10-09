@@ -13,12 +13,22 @@ import {
   shortcutKey,
 } from "@/lib/shortcut-keys";
 import {
-  COMMANDS,
   COMMAND_IDS,
   COMMAND_RENAMES,
   ROUTE_CONTEXTS,
+  commandIds,
+  commandRegistryRevision,
+  fixedShortcuts,
+  getCommand,
+  getCoreCommand,
   isCommandId,
-  type CommandDef,
+  isCoreCommandId,
+  isPluginCommandId,
+  isSealedCommand,
+  pluginCommandRenames,
+  resolvePluginCommandRename,
+  resolveStoredCommandId,
+  type CommandDefinition,
   type CommandId,
   type Shortcut,
   type ShortcutContext,
@@ -49,13 +59,18 @@ const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record<string
   1: (raw) => ({ ...raw, version: 2, voice: {} }),
 };
 
-function def(id: CommandId): CommandDef {
-  return COMMANDS[id];
+function def(id: CommandId): CommandDefinition {
+  return getCommand(id);
 }
 
+/**
+ * A stored id to the Command it names today, or null when it names nothing.
+ * Unknown ids under `plugin.` are kept as they are: the preference is retained
+ * for its Plugin's return (ADR 0024). Everything else unknown is dropped
+ * (ADR 0012).
+ */
 function resolveId(rawId: string): CommandId | null {
-  const renamed = COMMAND_RENAMES[rawId] ?? rawId;
-  return isCommandId(renamed) ? renamed : null;
+  return resolveStoredCommandId(rawId, COMMAND_RENAMES);
 }
 
 function freshDefaults(): ShortcutSettings {
@@ -72,10 +87,99 @@ export function editableShortcuts(
   custom: CustomShortcuts,
   web: boolean
 ): Shortcut[] {
-  if (def(id).sealed) return [];
+  if (isSealedCommand(id)) return [];
   const override = custom[id];
   if (override !== undefined) return [...override];
   return defaultShortcuts(id, web);
+}
+
+/** One preference a Plugin declared but that another active binding already owns. */
+export interface InactiveBinding {
+  id: CommandId;
+  shortcut: Shortcut;
+  kind: CollisionKind;
+  /** The active Command whose binding owns the keys. */
+  withId: CommandId;
+}
+
+interface Activity {
+  inactive: Map<CommandId, InactiveBinding[]>;
+}
+
+const activityCache = new WeakMap<
+  CustomShortcuts,
+  { web: boolean; revision: number; activity: Activity }
+>();
+
+/**
+ * Which Plugin bindings are inactive right now (ADR 0024). Core bindings are
+ * existing active bindings and always win; Plugins then follow registration
+ * order, and within a Plugin its declaration order. A binding whose keys are
+ * already owned by an active binding in an overlapping Context stays inactive
+ * and does not reserve its key.
+ */
+function activityFor(custom: CustomShortcuts, web: boolean): Activity {
+  const revision = commandRegistryRevision();
+  const cached = activityCache.get(custom);
+  if (cached && cached.web === web && cached.revision === revision) return cached.activity;
+
+  const inactive = new Map<CommandId, InactiveBinding[]>();
+  const accepted: Array<{
+    id: CommandId;
+    contexts: readonly ShortcutContext[];
+    shortcut: Shortcut;
+  }> = [];
+  for (const id of commandIds()) {
+    const command = def(id);
+    const editable = editableShortcuts(id, custom, web);
+    const candidates = isPluginCommandId(id) ? editable : [...fixedShortcuts(id), ...editable];
+    for (const shortcut of candidates) {
+      // A core binding is an existing active binding: it wins and never yields.
+      if (!isPluginCommandId(id)) {
+        accepted.push({ id, contexts: command.contexts, shortcut });
+        continue;
+      }
+      const owner = accepted.find(
+        (candidate) =>
+          contextsOverlap(command.contexts, candidate.contexts) &&
+          collision(candidate.shortcut, shortcut) !== null
+      );
+      if (owner === undefined) {
+        accepted.push({ id, contexts: command.contexts, shortcut });
+        continue;
+      }
+      const list = inactive.get(id) ?? [];
+      list.push({
+        id,
+        shortcut,
+        kind: collision(owner.shortcut, shortcut) as CollisionKind,
+        withId: owner.id,
+      });
+      inactive.set(id, list);
+    }
+  }
+
+  const activity: Activity = { inactive };
+  activityCache.set(custom, { web, revision, activity });
+  return activity;
+}
+
+/** Every inactive Plugin binding right now, in Command order. */
+export function inactiveBindings(custom: CustomShortcuts, web: boolean): InactiveBinding[] {
+  return [...activityFor(custom, web).inactive.values()].flat();
+}
+
+export function isBindingActive(
+  id: CommandId,
+  shortcut: Shortcut,
+  custom: CustomShortcuts,
+  web: boolean
+): boolean {
+  if (!isPluginCommandId(id)) return true;
+  const key = shortcutKey(shortcut);
+  return !(activityFor(custom, web).inactive.get(id) ?? []).some(
+    (binding) => shortcutKey(binding.shortcut) === key
+  );
 }
 
 export function effectiveShortcuts(
@@ -83,12 +187,14 @@ export function effectiveShortcuts(
   custom: CustomShortcuts,
   web: boolean
 ): Shortcut[] {
-  return [...(def(id).fixed ?? []), ...editableShortcuts(id, custom, web)];
+  const editable = editableShortcuts(id, custom, web);
+  if (!isPluginCommandId(id)) return [...fixedShortcuts(id), ...editable];
+  return editable.filter((shortcut) => isBindingActive(id, shortcut, custom, web));
 }
 
 export function isFixedShortcut(id: CommandId, shortcut: Shortcut): boolean {
   const key = shortcutKey(shortcut);
-  return (def(id).fixed ?? []).some((fixed) => shortcutKey(fixed) === key);
+  return fixedShortcuts(id).some((candidate) => shortcutKey(candidate) === key);
 }
 
 export function contextsOverlap(
@@ -96,6 +202,9 @@ export function contextsOverlap(
   b: readonly ShortcutContext[]
 ): boolean {
   if (a.includes("global") || b.includes("global")) return true;
+  // Two Commands in the same Context are live together, Plugin page Contexts
+  // included (they are not listed in `ROUTE_CONTEXTS`).
+  if (a.some((context) => b.includes(context))) return true;
   return Object.values(ROUTE_CONTEXTS).some(
     (contexts) =>
       a.some((context) => contexts.includes(context)) &&
@@ -127,7 +236,7 @@ export function findConflicts(
 ): Conflict[] {
   const contexts = def(id).contexts;
   const conflicts: Conflict[] = [];
-  for (const otherId of COMMAND_IDS) {
+  for (const otherId of commandIds()) {
     if (otherId === id) continue;
     const other = def(otherId);
     if (!contextsOverlap(contexts, other.contexts)) continue;
@@ -138,7 +247,7 @@ export function findConflicts(
         id: otherId,
         shortcut,
         kind,
-        locked: Boolean(other.sealed) || isFixedShortcut(otherId, shortcut),
+        locked: isSealedCommand(otherId) || isFixedShortcut(otherId, shortcut),
       });
     }
   }
@@ -152,6 +261,11 @@ export interface DefaultConflict {
   kind: CollisionKind;
 }
 
+/**
+ * The core registry's Default Shortcut gate: two core Commands may never ship
+ * the same keys. Plugin defaults are allowed to conflict; they stay inactive
+ * (ADR 0024), so they are not checked here.
+ */
 export function findDefaultConflicts(web: boolean): DefaultConflict[] {
   const conflicts: DefaultConflict[] = [];
   for (let i = 0; i < COMMAND_IDS.length; i += 1) {
@@ -197,8 +311,11 @@ export function normalizeShortcuts(raw: unknown): ShortcutSettings {
     for (const [rawId, value] of Object.entries(rawCustom as Record<string, unknown>)) {
       const id = resolveId(rawId);
       if (id === null) continue;
-      if (def(id).sealed) continue;
+      if (isCoreCommandId(id) && getCoreCommand(id).sealed) continue;
       if (!Array.isArray(value)) continue;
+      // The declared id's own preference wins over a renamed old entry, no
+      // matter which one storage lists first.
+      if (id !== rawId && custom[id] !== undefined) continue;
 
       const shortcuts: Shortcut[] = [];
       const seen = new Set<string>();
@@ -336,7 +453,9 @@ function parseVoiceSection(
           continue;
         }
         if (normalizeVoicePhraseList([...own, phrase]).length === own.length) continue;
-        if (conflicts?.({ id, language, phrase, accepted: voice })) {
+        // A retained preference for an absent Plugin has no live Command to
+        // conflict with; it stays inactive until that Plugin returns.
+        if (isCommandId(id) && conflicts?.({ id, language, phrase, accepted: voice })) {
           dropped.push({ id: rawId, language, phrase, reason: "conflict" });
           continue;
         }
@@ -385,7 +504,7 @@ export function parseShortcutFile(
         dropped.push({ id: rawId, reason: "unknown" });
         continue;
       }
-      if (def(id).sealed) {
+      if (isCoreCommandId(id) && getCoreCommand(id).sealed) {
         dropped.push({ id: rawId, reason: "sealed" });
         continue;
       }
@@ -414,7 +533,9 @@ export function parseShortcutFile(
         }
         const key = shortcutKey(normalized);
         if (seen.has(key)) continue;
-        if (findConflicts(id, normalized, custom, web).length > 0) {
+        // A retained preference for an absent Plugin has no live binding to
+        // conflict with; it stays inactive until that Plugin returns.
+        if (isCommandId(id) && findConflicts(id, normalized, custom, web).length > 0) {
           dropped.push({ id: rawId, shortcut: normalized, reason: "conflict" });
           continue;
         }
@@ -430,4 +551,34 @@ export function parseShortcutFile(
   // A version 1 file predates Voice Commands; it carries none.
   const voice = file.version === 1 ? {} : parseVoiceSection(file.voice, dropped, voiceConflicts);
   return { ok: true, custom, voice, dropped };
+}
+
+/**
+ * Moves retained preferences to a registered Plugin's renamed Command ids
+ * (ADR 0024). A Plugin that is absent has no rename map, so its ids stay as
+ * they are. Returns the same settings object when nothing changes.
+ */
+export function applyPluginRenames(settings: ShortcutSettings): ShortcutSettings {
+  if (pluginCommandRenames().size === 0) return settings;
+  let changed = false;
+
+  const custom: Record<string, readonly Shortcut[]> = {};
+  for (const [id, list] of Object.entries(settings.custom)) {
+    if (list === undefined) continue;
+    const next = resolvePluginCommandRename(id);
+    if (next !== id) changed = true;
+    // The declared id's own preference wins over a migrated old one.
+    if (next === id || custom[next] === undefined) custom[next] = list;
+  }
+
+  const voice: Record<string, Partial<Record<DictationLanguage, readonly string[]>>> = {};
+  for (const [id, languages] of Object.entries(settings.voice)) {
+    if (languages === undefined) continue;
+    const next = resolvePluginCommandRename(id);
+    if (next !== id) changed = true;
+    if (next === id || voice[next] === undefined) voice[next] = languages;
+  }
+
+  if (!changed) return settings;
+  return { ...settings, custom: custom as CustomShortcuts, voice: voice as CustomVoiceCommands };
 }

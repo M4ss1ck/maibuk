@@ -25,7 +25,7 @@ import {
   voicePhrases,
   type CustomVoiceCommands,
 } from "@/features/dictation/voice-commands";
-import { COMMANDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
+import { getCommand, type CommandId } from "@/lib/shortcut-registry";
 import { contextsOverlap } from "@/lib/shortcut-resolve";
 
 export type PhraseConflict =
@@ -59,7 +59,7 @@ export interface PhraseConflictOptions {
 }
 
 function contextsOf(id: CommandId) {
-  return (COMMANDS[id] as CommandDef).contexts;
+  return getCommand(id).contexts;
 }
 
 function isLiteralEntryId(language: DictationLanguage, entryId: string): boolean {

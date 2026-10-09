@@ -1264,7 +1264,8 @@
       "editor": "Editor",
       "ephemeral": "Ephemeral",
       "commandPalette": "Command palette",
-      "focus": "Focus"
+      "focus": "Focus",
+      "plugins": "Plugins"
     },
     "onThisScreen": "On this screen",
     "onOtherScreens": "On other screens",
@@ -1291,6 +1292,7 @@
     "intro": "Maibuk is keyboard-first. Give any command your own shortcut, add a second one, or remove it. Changes stay on this device.",
     "singleKey": "Single-key shortcuts",
     "singleKeyOff": "Off",
+    "inactive": "Inactive",
     "search": "Search commands and keys",
     "searchPlaceholder": "Bold, Ctrl+S, g p…",
     "listLabel": "Commands and their shortcuts",

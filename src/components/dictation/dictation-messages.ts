@@ -1,6 +1,8 @@
 import type { TFunction } from "i18next";
 import type { SessionNotice } from "@/features/dictation/session";
-import { COMMANDS } from "@/lib/shortcut-registry";
+import { commandLabel, type CommandId } from "@/lib/shortcut-registry";
+
+const commandName = (t: TFunction, id: CommandId): string => commandLabel(id, t);
 
 export interface NoticeMessage {
   toast?: { variant: "error" | "info"; text: string };
@@ -24,7 +26,7 @@ export function noticeMessage(notice: SessionNotice, t: TFunction): NoticeMessag
     case "scratch_empty":
       return { announce: t("dictation.scratchEmpty") };
     case "voice_command": {
-      const command = t(COMMANDS[notice.id].labelKey);
+      const command = commandName(t, notice.id);
       const key =
         notice.polarity === "on"
           ? "dictation.voiceCommandOn"
@@ -40,11 +42,11 @@ export function noticeMessage(notice: SessionNotice, t: TFunction): NoticeMessag
         ),
       };
     case "voice_command_unavailable": {
-      const command = t(COMMANDS[notice.id].labelKey);
+      const command = commandName(t, notice.id);
       return { announce: t("dictation.voiceCommandUnavailable", { command }) };
     }
     case "voice_command_refused": {
-      const command = t(COMMANDS[notice.id].labelKey);
+      const command = commandName(t, notice.id);
       const key =
         notice.reason === "dialog"
           ? "dictation.voiceCommandRefusedDialog"

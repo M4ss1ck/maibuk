@@ -1264,7 +1264,8 @@
       "editor": "Editor",
       "ephemeral": "Efímero",
       "commandPalette": "Paleta de comandos",
-      "focus": "Foco"
+      "focus": "Foco",
+      "plugins": "Plugins"
     },
     "onThisScreen": "En esta pantalla",
     "onOtherScreens": "En otras pantallas",
@@ -1291,6 +1292,7 @@
     "intro": "Maibuk se usa con el teclado. Dale a cualquier comando tu propio atajo, agrega otro o quítalo. Los cambios se guardan solo en este dispositivo.",
     "singleKey": "Atajos de una tecla",
     "singleKeyOff": "Desactivado",
+    "inactive": "Inactivo",
     "search": "Buscar comandos y teclas",
     "searchPlaceholder": "Negrita, Ctrl+S, g p…",
     "listLabel": "Comandos y sus atajos",

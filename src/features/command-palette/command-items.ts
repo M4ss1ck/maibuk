@@ -1,4 +1,10 @@
-import { COMMANDS, type CommandDef, type CommandId } from "@/lib/shortcut-registry";
+import {
+  commandLabel,
+  getCommand,
+  isPluginCommandDef,
+  isSealedCommand,
+  type CommandId,
+} from "@/lib/shortcut-registry";
 import { voicePhrases, type CustomVoiceCommands } from "@/features/dictation/voice-commands";
 import type { DictationLanguage } from "@/features/dictation/types";
 import type { PaletteItem, PaletteTranslate } from "@/features/command-palette/palette-index";
@@ -33,15 +39,17 @@ export function buildCommandItems({
   const items: PaletteItem[] = [];
   for (const [id, state] of snapshot) {
     if (id.startsWith("focus.")) continue;
-    const definition: CommandDef = COMMANDS[id];
-    if (definition.sealed) continue;
+    if (isSealedCommand(id)) continue;
+    const definition = getCommand(id);
     if (id === "global.openCommandPalette") continue;
     if (definition.contexts.includes("commandPalette")) continue;
     const terms: string[] = [...voicePhrases(id, language, customVoice)];
-    if (definition.keywordsKey) {
+    if (isPluginCommandDef(definition)) {
+      for (const term of definition.keywords ?? []) terms.push(term);
+    } else if (definition.keywordsKey) {
       for (const term of keywordsOf(t, definition.keywordsKey)) terms.push(term);
     }
-    const label = t(definition.labelKey);
+    const label = commandLabel(id, t, language);
     items.push({
       key: `command:${id}`,
       kind: "command",
