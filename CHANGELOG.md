@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-10-09
+
+### Added
+- Link Preview shows where a link goes without following it when hovering or resting the caret on a link for 500 ms
+- Link Preview includes note, chapter, heading, book, and web address targets with relevant details
+- Right-click or long press on a link in a text node opens Edit Link
+- Screen readers hear link targets through a polite live region
+
+### Changed
+- Link Preview loads snippets on demand and caches them until a change, library switch, or 30 seconds
+- Link Preview hides the type icon for notes, chapters, headings, and books
+- Edit Link shows the current target
+
+### Fixed
+- Typing [[ creates a standard link mark instead of an atom node, fixing text selection, right-click editing, and previews
+- Selecting a link suggestion consumes the auto-closed ]] and typing ] closes the suggestion list
+- Link suggestions read notes and books when opened, so items created after the editor opened appear
+- Closing a dialog restores focus without scrolling the editor away from the link
+- A click that ends a drag selection inside a link no longer follows it
+- Link Preview icons align with the first line
+- The link suggestion list scrolls to keep the active option visible
+
 ## [0.10.4] - 2026-10-08
 
 ### Added
