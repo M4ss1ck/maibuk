@@ -254,8 +254,8 @@ describe("Settings page — container-aware layout", () => {
       "export",
       "tutorial",
       "advanced",
-      "about",
       "plugins",
+      "about",
     ]);
     const cardClass = headings[0].closest("section")?.className;
     expect(cardClass).toContain("rounded-xl");

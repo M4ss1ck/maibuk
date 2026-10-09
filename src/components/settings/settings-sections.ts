@@ -34,8 +34,8 @@ export const SETTINGS_SECTIONS = [
   EXPORT_SECTION,
   TUTORIAL_SECTION_DEF,
   ADVANCED_SECTION,
-  ABOUT_SECTION,
   PLUGINS_SECTION,
+  ABOUT_SECTION,
 ] as const;
 
 type CoreSettingsRowId = (typeof SETTINGS_SECTIONS)[number]["rows"][number]["id"];

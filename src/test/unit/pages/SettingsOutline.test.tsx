@@ -147,8 +147,8 @@ describe("Settings outline", () => {
       "settings.export",
       "tutorial.settings.title",
       "settings.advanced",
-      "settings.about",
       "settings.plugins",
+      "settings.about",
     ]);
   });
 
