@@ -684,13 +684,13 @@ describe("Plugin Commands in the Shortcut Editor", () => {
     while (unregisters.length > 0) unregisters.pop()?.();
   });
 
-  function registerEchoes(defaults: string[][] = []) {
+  function registerEchoes(defaults: string[][] = [], label = "Show report") {
     const unregister = registerPluginCommands("echoes", {
       defaultLanguage: "en",
       commands: [
         {
           id: "showReport",
-          label: "Show report",
+          label,
           contexts: ["global"],
           defaults: defaults as [string][],
         },
@@ -719,5 +719,13 @@ describe("Plugin Commands in the Shortcut Editor", () => {
     await focusRow(user, "Show report");
 
     expect(screen.getByText("shortcutEditor.inactive")).toBeInTheDocument();
+  });
+
+  it("shows a conflicting Plugin Voice phrase as inactive", async () => {
+    registerEchoes([], "Dark theme");
+    const { user } = await openEditor();
+    await focusRow(user, "Dark theme");
+
+    expect(screen.getAllByText("shortcutEditor.inactive").length).toBeGreaterThan(0);
   });
 });

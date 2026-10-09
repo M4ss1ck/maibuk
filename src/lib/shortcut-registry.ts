@@ -10,7 +10,7 @@
 // else in this module and in the resolver.
 import type { DictationLanguage } from "@/features/dictation/types";
 import type { VoiceCommandSpec } from "@/features/dictation/voice-commands";
-import { isRecordableStep, normalizeShortcut } from "@/lib/shortcut-keys";
+import { isRecordableStep, normalizeShortcut, shortcutKey } from "@/lib/shortcut-keys";
 
 /**
  * One key combination: modifiers then a key, joined by "+". `Mod` is Cmd on
@@ -1311,9 +1311,13 @@ export type CommandId = CoreCommandId | PluginCommandId;
 
 export const COMMAND_IDS = Object.keys(COMMANDS) as CoreCommandId[];
 
-const PLUGIN_ID_PATTERN = /^[a-z0-9-]{3,64}$/;
-const LOCAL_ID_PATTERN = /^[a-z][a-zA-Z0-9]{0,47}$/;
-const PLUGIN_COMMAND_ID_PATTERN = /^plugin\.([a-z0-9-]{3,64})\.([a-z][a-zA-Z0-9]{0,47})$/;
+const PLUGIN_ID_SOURCE = "[a-z0-9-]{3,64}";
+const LOCAL_ID_SOURCE = "[a-z][a-zA-Z0-9]{0,47}";
+const PLUGIN_ID_PATTERN = new RegExp(`^${PLUGIN_ID_SOURCE}$`);
+const LOCAL_ID_PATTERN = new RegExp(`^${LOCAL_ID_SOURCE}$`);
+const PLUGIN_COMMAND_ID_PATTERN = new RegExp(
+  `^plugin\\.(${PLUGIN_ID_SOURCE})\\.(${LOCAL_ID_SOURCE})$`
+);
 
 const CORE_CONTEXT_NAMES: ReadonlySet<string> = new Set(CORE_CONTEXTS);
 
@@ -1345,18 +1349,18 @@ export function localIdOfCommand(value: string): string | null {
 
 interface RegisteredPlugin {
   pluginId: string;
-  /** The Plugin's place in the conflict order; earlier registrations win. */
   order: number;
   renames: Readonly<Record<string, string>>;
-  /** Declaration order, which is also the order within the Plugin. */
   defs: readonly PluginCommandDef[];
   byId: ReadonlyMap<PluginCommandId, PluginCommandDef>;
-  /** Distinguishes this registration from a later update of the same Plugin. */
+  commandRanks: ReadonlyMap<string, number>;
+  bindingRanks: ReadonlyMap<string, number>;
   token: symbol;
 }
 
 const plugins = new Map<string, RegisteredPlugin>();
 let registrationOrder = 0;
+let nextBindingRank = 0;
 let registryRevision = 0;
 const registryListeners = new Set<() => void>();
 
@@ -1365,7 +1369,6 @@ function notifyRegistryChange(): void {
   for (const listener of [...registryListeners]) listener();
 }
 
-/** Bumped on every register and unregister, so memoized readers can refresh. */
 export function commandRegistryRevision(): number {
   return registryRevision;
 }
@@ -1426,6 +1429,47 @@ function collapseRenames(
     collapsed[from] = target;
   }
   return collapsed;
+}
+
+/**
+ * The conflict ranks of a registration's Commands and declared bindings. A
+ * Command or binding that existed in the previous registration of the same
+ * Plugin keeps its rank (a rename keeps it too); anything new is ranked after
+ * every existing binding, so an update cannot take an active key (ADR 0024).
+ */
+function bindingRanksFor(
+  previous: RegisteredPlugin | undefined,
+  defs: readonly PluginCommandDef[],
+  renames: Readonly<Record<string, string>>
+): { commandRanks: Map<string, number>; bindingRanks: Map<string, number> } {
+  const renamedFrom = new Map<string, string[]>();
+  for (const [from, to] of Object.entries(renames)) {
+    renamedFrom.set(to, [...(renamedFrom.get(to) ?? []), from]);
+  }
+  const commandRanks = new Map<string, number>();
+  const bindingRanks = new Map<string, number>();
+  for (const definition of defs) {
+    const previousLocalIds = [definition.localId, ...(renamedFrom.get(definition.localId) ?? [])];
+    let base: number | undefined;
+    for (const localId of previousLocalIds) {
+      const rank = previous?.commandRanks.get(localId);
+      if (rank !== undefined && (base === undefined || rank < base)) base = rank;
+    }
+    commandRanks.set(definition.localId, base ?? nextBindingRank++);
+
+    const keys = new Set(
+      [...definition.defaults, ...(definition.web ?? [])].map((shortcut) => shortcutKey(shortcut))
+    );
+    for (const key of keys) {
+      let rank: number | undefined;
+      for (const localId of previousLocalIds) {
+        const kept = previous?.bindingRanks.get(`${localId}\u0000${key}`);
+        if (kept !== undefined && (rank === undefined || kept < rank)) rank = kept;
+      }
+      bindingRanks.set(`${definition.localId}\u0000${key}`, rank ?? nextBindingRank++);
+    }
+  }
+  return { commandRanks, bindingRanks };
 }
 
 /**
@@ -1501,12 +1545,16 @@ export function registerPluginCommands(
   const token = Symbol(pluginId);
   const byId = new Map(defs.map((definition) => [definition.id, definition]));
   const previous = plugins.get(pluginId);
+  const renames = collapseRenames(registration.commandRenames ?? {}, declared);
+  const { commandRanks, bindingRanks } = bindingRanksFor(previous, defs, renames);
   plugins.set(pluginId, {
     pluginId,
     order: previous?.order ?? registrationOrder++,
-    renames: collapseRenames(registration.commandRenames ?? {}, declared),
+    renames,
     defs,
     byId,
+    commandRanks,
+    bindingRanks,
     token,
   });
   notifyRegistryChange();
@@ -1569,16 +1617,26 @@ export function pluginCommandRenames(): ReadonlyMap<string, Readonly<Record<stri
 }
 
 /**
+ * The conflict rank of one Plugin binding; lower runs first. A key the
+ * registration does not declare keeps its Command's rank, which is the rank of
+ * the binding the Command already held.
+ */
+export function pluginBindingRank(id: PluginCommandId, shortcut: Shortcut): number {
+  const pluginId = pluginIdOfCommand(id);
+  const localId = localIdOfCommand(id);
+  const plugin = pluginId === null ? undefined : plugins.get(pluginId);
+  if (plugin === undefined || localId === null) return Number.MAX_SAFE_INTEGER;
+  const declared = plugin.bindingRanks.get(`${localId}\u0000${shortcutKey(shortcut)}`);
+  return declared ?? plugin.commandRanks.get(localId) ?? Number.MAX_SAFE_INTEGER;
+}
+
+/**
  * A stored id to the Command it names today, or null when it names nothing.
- * The core rename map is a parameter so a caller reads the one it imported;
- * unknown ids under `plugin.` are kept as they are (ADR 0024), and everything
+ * Unknown ids under `plugin.` are kept as they are (ADR 0024), and everything
  * else unknown is dropped (ADR 0012).
  */
-export function resolveStoredCommandId(
-  rawId: string,
-  coreRenames: Readonly<Record<string, CommandId>> = COMMAND_RENAMES
-): CommandId | null {
-  const renamed = resolvePluginCommandRename(coreRenames[rawId] ?? rawId);
+export function resolveStoredCommandId(rawId: string): CommandId | null {
+  const renamed = resolvePluginCommandRename(COMMAND_RENAMES[rawId] ?? rawId);
   if (isCommandId(renamed)) return renamed;
   return isPluginCommandId(renamed) ? renamed : null;
 }
@@ -1607,6 +1665,8 @@ export function fixedShortcuts(id: CommandId): readonly Shortcut[] {
 }
 
 export function isSealedCommand(id: CommandId): boolean {
+  // A retained preference for an absent Plugin names no live Command.
+  if (isPluginCommandId(id) && !isCommandId(id)) return false;
   const definition = getCommand(id);
   return !isPluginCommandDef(definition) && definition.sealed === true;
 }

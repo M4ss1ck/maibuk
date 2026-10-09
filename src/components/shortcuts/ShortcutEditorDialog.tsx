@@ -21,11 +21,16 @@ import { VoicePhraseSummary } from "@/components/shortcuts/VoicePhraseSummary";
 import { VoiceCommandsDialog } from "@/components/shortcuts/VoiceCommandsDialog";
 import { MAX_SHORTCUTS_PER_COMMAND } from "@/constants";
 import { findPhraseConflict } from "@/features/dictation/phrase-conflicts";
+import { phraseWords } from "@/features/dictation/normalize";
 import { dictationLanguageFor, useDictationStore } from "@/features/dictation/store";
-import { isVoiceEligible, voicePhrases } from "@/features/dictation/voice-commands";
+import {
+  inactiveVoicePhrasesOf,
+  isVoiceEligible,
+  voicePhrases,
+} from "@/features/dictation/voice-commands";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { pickShortcutFileText, saveShortcutFile } from "@/features/settings/shortcut-file";
-import { useCommandRegistryRevision } from "@/hooks/useCommandRegistry";
+import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 import { isMac } from "@/lib/platform/detect";
 import { IS_WEB } from "@/lib/platform/target";
 import {
@@ -45,7 +50,7 @@ import { formatShortcut, isSingleKey, isTypingSafe, shortcutKey } from "@/lib/sh
 import {
   editableShortcuts,
   findConflicts,
-  inactiveBindings,
+  isBindingActive,
   parseShortcutFile,
   type Conflict,
   type LoadResult,
@@ -383,11 +388,8 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
     const commandLabel = label(id);
     // A Plugin binding another active binding already owns stays visible here
     // so the author can resolve it (ADR 0024).
-    const inactiveKeys = new Set(
-      inactiveBindings(settings.custom, IS_WEB)
-        .filter((binding) => binding.id === id)
-        .map((binding) => shortcutKey(binding.shortcut))
-    );
+    const inactive = (shortcut: Shortcut) =>
+      !isBindingActive(id, shortcut, settings.custom, IS_WEB);
 
     return (
       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -421,7 +423,7 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
               className={`inline-flex items-center gap-0.5 rounded-md border border-border px-1 ${off(shortcut) ? "opacity-50" : ""}`}
             >
               <KeyboardShortcut shortcut={formatShortcut(shortcut, isMac())} alwaysVisible />
-              {inactiveKeys.has(shortcutKey(shortcut)) && (
+              {inactive(shortcut) && (
                 <span className="px-1 text-[10px] text-destructive">
                   {t("shortcutEditor.inactive")}
                 </span>
@@ -497,7 +499,18 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
   const voiceSummary = (id: CommandId) => {
     if (!isVoiceEligible(id)) return null;
     const phrases = voicePhrases(id, voiceLanguage, settings.voice);
-    return <VoicePhraseSummary phrases={phrases} language={voiceLanguage} />;
+    const inactivePhrases = new Set(
+      inactiveVoicePhrasesOf(voiceLanguage, settings.voice)
+        .filter((binding) => binding.id === id)
+        .map((binding) => phraseWords(binding.phrase).join(" "))
+    );
+    return (
+      <VoicePhraseSummary
+        phrases={phrases}
+        language={voiceLanguage}
+        inactivePhrases={inactivePhrases}
+      />
+    );
   };
 
   const actions = (id: CommandId) => {

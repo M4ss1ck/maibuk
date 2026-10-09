@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { create } from "zustand";
-import { useCommandRegistryRevision } from "@/hooks/useCommandRegistry";
+import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 import { commandIds, type CommandId } from "@/lib/shortcut-registry";
 
 // A Bound Shortcut works on the screen the author is on right now. Whatever

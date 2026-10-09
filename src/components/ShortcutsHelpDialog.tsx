@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { GraduationCap } from "lucide-react";
 import { Button, Modal, KeyboardShortcut } from "@/components/ui";
 import { VoicePhraseSummary } from "@/components/shortcuts/VoicePhraseSummary";
-import { useCommandRegistryRevision } from "@/hooks/useCommandRegistry";
+import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 import { useBoundShortcuts } from "@/lib/bound-shortcuts";
 import { liveShortcuts, useCommandKeys } from "@/lib/command-keys";
 import { formatShortcut, shortcutKey } from "@/lib/shortcut-keys";

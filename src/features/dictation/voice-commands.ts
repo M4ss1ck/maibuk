@@ -13,9 +13,10 @@ import { labelPhrase, VOICE_LABEL_EXCLUSIONS } from "@/features/dictation/label-
 import { normalizeWord, phraseWords } from "@/features/dictation/normalize";
 import type { DictationLanguage } from "@/features/dictation/types";
 import {
-  COMMAND_RENAMES,
   commandIds,
+  commandRegistryRevision,
   getCommand,
+  isPluginCommandId,
   onCommandRegistryChange,
   resolveStoredCommandId,
   type CommandId,
@@ -444,7 +445,7 @@ export function normalizeVoicePhraseList(raw: readonly unknown[]): string[] {
 }
 
 function resolveCommandId(rawId: string): CommandId | null {
-  return resolveStoredCommandId(rawId, COMMAND_RENAMES);
+  return resolveStoredCommandId(rawId);
 }
 
 /**
@@ -476,6 +477,193 @@ export function buildVoiceCommandTable(
   language: DictationLanguage,
   custom: CustomVoiceCommands = {}
 ): VoiceCommandTable {
+  const inactive = inactiveVoicePhrasesOf(language, custom);
+  if (inactive.length === 0) return buildTable(language, custom, null);
+  const suppression: VoicePhraseSuppression = { exact: new Map(), targets: new Map() };
+  for (const binding of inactive) {
+    const key = phraseWords(binding.phrase).join(" ");
+    for (const candidate of candidateVoicePhrases(binding.id, language, custom)) {
+      if (phraseWords(candidate.phrase).join(" ") === key) {
+        suppressPhrase(suppression, binding.id, candidate);
+      }
+    }
+  }
+  return buildTable(language, custom, suppression);
+}
+
+/** One line a Plugin Command answers to, before its activity is decided. */
+interface VoicePhraseCandidate {
+  phrase: string;
+  /** The verb class and target of a declared verb+target line; absent for a whole-line phrase. */
+  cls?: VoiceVerbClass;
+  target?: string;
+}
+
+/** Every line a Command answers to in one language, its defaults included. */
+function candidateVoicePhrases(
+  id: CommandId,
+  language: DictationLanguage,
+  custom: CustomVoiceCommands
+): VoicePhraseCandidate[] {
+  const own = custom[id]?.[language];
+  if (own !== undefined) return own.map((phrase) => ({ phrase }));
+  const voice = getCommand(id).voice;
+  const candidates: VoicePhraseCandidate[] = defaultWholeLinePhrases(id, language).map(
+    (phrase) => ({
+      phrase,
+    })
+  );
+  for (const cls of voice?.verbs ?? []) {
+    for (const target of voice?.targets?.[language] ?? []) {
+      const verb = VOICE_VOCABULARY[language].verbs[cls].phrases[0];
+      if (verb === undefined) continue;
+      candidates.push({ phrase: `${verb} ${target}`, cls, target });
+    }
+  }
+  return candidates;
+}
+
+interface VoicePhraseSuppression {
+  /** Whole-line phrases, per Command, by normalized words. */
+  exact: Map<CommandId, Set<string>>;
+  /** Verb+target lines, per Command: `${cls}:${normalized target}`. */
+  targets: Map<CommandId, Set<string>>;
+}
+
+function suppressionSet(map: Map<CommandId, Set<string>>, id: CommandId): Set<string> {
+  const existing = map.get(id);
+  if (existing !== undefined) return existing;
+  const created = new Set<string>();
+  map.set(id, created);
+  return created;
+}
+
+function suppressPhrase(
+  suppression: VoicePhraseSuppression,
+  id: CommandId,
+  candidate: VoicePhraseCandidate
+): void {
+  if (candidate.cls !== undefined && candidate.target !== undefined) {
+    suppressionSet(suppression.targets, id).add(
+      `${candidate.cls}:${phraseWords(candidate.target).join(" ")}`
+    );
+    return;
+  }
+  suppressionSet(suppression.exact, id).add(phraseWords(candidate.phrase).join(" "));
+}
+
+function unsuppressPhrase(
+  suppression: VoicePhraseSuppression,
+  id: CommandId,
+  candidate: VoicePhraseCandidate
+): void {
+  if (candidate.cls !== undefined && candidate.target !== undefined) {
+    suppression.targets
+      .get(id)
+      ?.delete(`${candidate.cls}:${phraseWords(candidate.target).join(" ")}`);
+    return;
+  }
+  suppression.exact.get(id)?.delete(phraseWords(candidate.phrase).join(" "));
+}
+
+/**
+ * A Plugin phrase another active phrase already owns (ADR 0024). It stays
+ * inactive, does not reserve the line, and is shown in the Shortcut Editor.
+ */
+export interface InactiveVoicePhrase {
+  kind: "phrase";
+  id: CommandId;
+  language: DictationLanguage;
+  phrase: string;
+  /** The active Command whose phrase owns the line. */
+  withId: CommandId;
+}
+
+const inactiveVoiceCache = new WeakMap<
+  CustomVoiceCommands,
+  { revision: number; byLanguage: Map<DictationLanguage, InactiveVoicePhrase[]> }
+>();
+
+function inactiveByLanguage(
+  custom: CustomVoiceCommands
+): Map<DictationLanguage, InactiveVoicePhrase[]> {
+  const revision = commandRegistryRevision();
+  const cached = inactiveVoiceCache.get(custom);
+  if (cached && cached.revision === revision) return cached.byLanguage;
+  const byLanguage = new Map<DictationLanguage, InactiveVoicePhrase[]>();
+  for (const language of VOICE_LANGUAGES) {
+    byLanguage.set(language, computeInactiveVoicePhrases(language, custom));
+  }
+  inactiveVoiceCache.set(custom, { revision, byLanguage });
+  return byLanguage;
+}
+
+/**
+ * Which Plugin phrases are inactive right now. Core phrases are existing
+ * active bindings and always win; Plugins follow registration order, and a
+ * phrase whose line an active phrase already matches stays inactive.
+ */
+function computeInactiveVoicePhrases(
+  language: DictationLanguage,
+  custom: CustomVoiceCommands
+): InactiveVoicePhrase[] {
+  const pluginIds = commandIds().filter((id) => isPluginCommandId(id));
+  if (pluginIds.length === 0) return [];
+  const suppression: VoicePhraseSuppression = { exact: new Map(), targets: new Map() };
+  for (const id of pluginIds) {
+    for (const candidate of candidateVoicePhrases(id, language, custom)) {
+      suppressPhrase(suppression, id, candidate);
+    }
+  }
+  const inactive: InactiveVoicePhrase[] = [];
+  let table = buildTable(language, custom, suppression);
+  for (const id of pluginIds) {
+    for (const candidate of candidateVoicePhrases(id, language, custom)) {
+      const words = phraseWords(candidate.phrase);
+      if (words.length < MIN_VOICE_PHRASE_WORDS) continue;
+      const run = matchVoiceCommand(table, words);
+      if (run !== null && run.id !== id) {
+        inactive.push({ kind: "phrase", id, language, phrase: candidate.phrase, withId: run.id });
+        continue;
+      }
+      unsuppressPhrase(suppression, id, candidate);
+      table = buildTable(language, custom, suppression);
+    }
+  }
+  return inactive;
+}
+
+/** A Plugin's inactive phrases in one Dictation Language. */
+export function inactiveVoicePhrasesOf(
+  language: DictationLanguage,
+  custom: CustomVoiceCommands
+): InactiveVoicePhrase[] {
+  return [...(inactiveByLanguage(custom).get(language) ?? [])];
+}
+
+/** Every inactive Plugin phrase, in Dictation Language order. */
+export function inactiveVoicePhrases(custom: CustomVoiceCommands): InactiveVoicePhrase[] {
+  return VOICE_LANGUAGES.flatMap((language) => inactiveByLanguage(custom).get(language) ?? []);
+}
+
+/** Whether one of a Command's phrases is active right now. */
+export function isVoicePhraseActive(
+  id: CommandId,
+  language: DictationLanguage,
+  phrase: string,
+  custom: CustomVoiceCommands
+): boolean {
+  const key = phraseWords(phrase).join(" ");
+  return !(inactiveByLanguage(custom).get(language) ?? []).some(
+    (binding) => binding.id === id && phraseWords(binding.phrase).join(" ") === key
+  );
+}
+
+function buildTable(
+  language: DictationLanguage,
+  custom: CustomVoiceCommands,
+  suppression: VoicePhraseSuppression | null
+): VoiceCommandTable {
   const vocabulary = VOICE_VOCABULARY[language];
   const verbsByPhrase = new Map<string, VoiceVerbClass[]>();
   for (const [cls, spec] of Object.entries(vocabulary.verbs) as [
@@ -503,6 +691,7 @@ export function buildVoiceCommandTable(
       for (const phrase of own) {
         const words = phraseWords(phrase);
         if (words.length < MIN_VOICE_PHRASE_WORDS) continue;
+        if (suppression?.exact.get(id)?.has(words.join(" "))) continue;
         const split = splitDefaultPhrase(id, language, words);
         if (split) {
           const polarity = vocabulary.verbs[split.cls].polarity;
@@ -520,6 +709,7 @@ export function buildVoiceCommandTable(
     for (const phrase of defaultWholeLinePhrases(id, language)) {
       const words = phraseWords(phrase);
       if (words.length < MIN_VOICE_PHRASE_WORDS) continue;
+      if (suppression?.exact.get(id)?.has(words.join(" "))) continue;
       const key = words.join(" ");
       const runs = exact.get(key) ?? [];
       runs.push({ id, polarity: null });
@@ -531,6 +721,7 @@ export function buildVoiceCommandTable(
       const words = phraseWords(phrase);
       if (words.length === 0) continue;
       for (const cls of verbs) {
+        if (suppression?.targets.get(id)?.has(`${cls}:${words.join(" ")}`)) continue;
         const entries = targets.get(cls) ?? [];
         entries.push({ words, id });
         targets.set(cls, entries);

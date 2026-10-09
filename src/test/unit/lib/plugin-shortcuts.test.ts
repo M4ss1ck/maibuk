@@ -138,7 +138,7 @@ describe("retained Plugin preferences", () => {
         custom: {
           "plugin.echoes.showReport": [["Mod+Alt+9"]],
           "plugin.other.cmd": [["Mod+Alt+8"]],
-          "common.save": [["Mod+k"]],
+          "common.save": [["Mod+Alt+k"]],
         },
         voice: {
           "plugin.echoes.showReport": { en: ["show report now"] },
@@ -152,7 +152,7 @@ describe("retained Plugin preferences", () => {
 
     expect(custom()).toEqual({
       "plugin.other.cmd": [["Mod+Alt+8"]],
-      "common.save": [["Mod+k"]],
+      "common.save": [["Mod+Alt+k"]],
     });
     expect(voice()).toEqual({ "plugin.other.cmd": { en: ["other command now"] } });
   });
@@ -211,14 +211,52 @@ describe("retained Plugin preferences", () => {
     });
   });
 
-  it("drops a Plugin binding that conflicts with a live Command while loading", () => {
+  it("keeps a Plugin binding that conflicts with a live Command, inactive, while loading", () => {
     register("echoes", echoesRegistration());
     const file = serializeShortcutFile({ "plugin.echoes.showReport": [["Mod+s"]] });
     const result = parseShortcutFile(file, false);
     expect(result).toMatchObject({
       ok: true,
-      custom: {},
-      dropped: [{ id: "plugin.echoes.showReport", shortcut: ["Mod+s"], reason: "conflict" }],
+      custom: { "plugin.echoes.showReport": [["Mod+s"]] },
+      dropped: [],
+    });
+    if (!result.ok) throw new Error("expected the file to load");
+    expect(effectiveShortcuts(echoesId, result.custom, false)).toEqual([]);
+    expect(inactiveBindings(result.custom, false)).toContainEqual({
+      kind: "shortcut",
+      id: echoesId,
+      shortcut: ["Mod+s"],
+      collision: "same",
+      withId: "common.save",
+    });
+  });
+
+  it("keeps a conflicting Plugin Voice phrase, inactive, while loading", () => {
+    register("echoes", echoesRegistration({ label: "Dark theme" }));
+    const file = serializeShortcutFile({}, { "plugin.echoes.showReport": { en: ["dark theme"] } });
+    const result = parseShortcutFile(
+      file,
+      false,
+      ({ id, language, phrase, accepted }) =>
+        findPhraseConflict({
+          language,
+          phrase,
+          candidate: { kind: "voice", id },
+          voice: accepted,
+        }) !== null
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      voice: { "plugin.echoes.showReport": { en: ["dark theme"] } },
+      dropped: [],
+    });
+    if (!result.ok) throw new Error("expected the file to load");
+    expect(inactiveBindings(result.custom, false, result.voice)).toContainEqual({
+      kind: "phrase",
+      id: echoesId,
+      language: "en",
+      phrase: "dark theme",
+      withId: "global.themeDark",
     });
   });
 
@@ -238,7 +276,13 @@ describe("Plugin Shortcut conflicts", () => {
 
     expect(effectiveShortcuts(echoesId, {}, false)).toEqual([]);
     expect(inactiveBindings({}, false)).toEqual([
-      { id: echoesId, shortcut: ["Mod+s"], kind: "same", withId: "common.save" },
+      {
+        kind: "shortcut",
+        id: echoesId,
+        shortcut: ["Mod+s"],
+        collision: "same",
+        withId: "common.save",
+      },
     ]);
   });
 
@@ -247,9 +291,10 @@ describe("Plugin Shortcut conflicts", () => {
 
     expect(effectiveShortcuts(echoesId, {}, false)).toEqual([]);
     expect(inactiveBindings({}, false)).toContainEqual({
+      kind: "shortcut",
       id: echoesId,
       shortcut: ["g"],
-      kind: "prefix",
+      collision: "prefix",
       withId: "global.gotoProjects",
     });
   });
@@ -283,9 +328,10 @@ describe("Plugin Shortcut conflicts", () => {
     expect(effectiveShortcuts(otherId, {}, false)).toEqual([["Mod+Alt+r"]]);
     expect(effectiveShortcuts(echoesId, {}, false)).toEqual([]);
     expect(inactiveBindings({}, false)).toContainEqual({
+      kind: "shortcut",
       id: echoesId,
       shortcut: ["Mod+Alt+r"],
-      kind: "same",
+      collision: "same",
       withId: otherId,
     });
   });
@@ -305,6 +351,31 @@ describe("Plugin Shortcut conflicts", () => {
 
     expect(effectiveShortcuts(echoesId, {}, false)).toEqual([["Mod+Alt+r"]]);
     expect(effectiveShortcuts(otherId, {}, false)).toEqual([]);
+  });
+
+  it("makes a binding new in an update lose to an already active binding", () => {
+    register("echoes", echoesRegistration());
+    register("other", {
+      defaultLanguage: "en",
+      commands: [
+        { id: "twin", label: "Other twin", contexts: ["global"], defaults: [["Mod+Alt+k"]] },
+      ],
+    });
+    const otherId = "plugin.other.twin" as const;
+    expect(effectiveShortcuts(otherId, {}, false)).toEqual([["Mod+Alt+k"]]);
+
+    // The update adds Ctrl+K: the key is new, so the held binding wins.
+    register("echoes", echoesRegistration({ defaults: [["Mod+Alt+r"], ["Mod+Alt+k"]] }));
+
+    expect(effectiveShortcuts(otherId, {}, false)).toEqual([["Mod+Alt+k"]]);
+    expect(effectiveShortcuts(echoesId, {}, false)).toEqual([["Mod+Alt+r"]]);
+    expect(inactiveBindings({}, false)).toContainEqual({
+      kind: "shortcut",
+      id: echoesId,
+      shortcut: ["Mod+Alt+k"],
+      collision: "same",
+      withId: otherId,
+    });
   });
 
   it("re-checks conflicts when the settings change", () => {
@@ -340,9 +411,10 @@ describe("Plugin Shortcut conflicts", () => {
     // loses to the one active binding too, not to echoes' inactive one.
     expect(effectiveShortcuts(thirdId, {}, false)).toEqual([]);
     expect(inactiveBindings({}, false)).toContainEqual({
+      kind: "shortcut",
       id: thirdId,
       shortcut: ["Mod+Alt+r"],
-      kind: "same",
+      collision: "same",
       withId: otherId,
     });
     expect(effectiveShortcuts(echoesId, {}, false)).toEqual([]);
