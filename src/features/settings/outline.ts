@@ -1,4 +1,6 @@
+import { PLUGINS_SECTION } from "@/components/settings/PluginsSection.rows";
 import {
+  getAllPluginSettingsRows,
   rowOnPlatform,
   type SettingsPlatform,
   type SettingsSectionDef,
@@ -40,9 +42,18 @@ export function buildOutline(
     .filter((section) => options.present.includes(section.id))
     .flatMap((section) => {
       const label = options.translate(section.labelKey);
-      const rows = section.rows
+      const coreRows = section.rows
         .filter((row) => rowOnPlatform(row, options.platform))
         .map((row) => ({ id: row.id, label: options.translate(row.labelKey) }));
+      // Runtime Plugin rows live in the Plugins section; their metadata needs
+      // no Worker, so the outline and search see them like core rows.
+      const runtimeRows =
+        section.id === PLUGINS_SECTION.id
+          ? getAllPluginSettingsRows()
+              .filter((row) => rowOnPlatform(row, options.platform))
+              .map((row) => ({ id: row.id, label: row.label }))
+          : [];
+      const rows = [...coreRows, ...runtimeRows];
       if (!query)
         return [{ id: section.id, label, rows, open: section.id === options.openSection }];
       if (normalize(label).includes(query)) return [{ id: section.id, label, rows, open: true }];

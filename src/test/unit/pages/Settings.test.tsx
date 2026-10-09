@@ -253,6 +253,7 @@ describe("Settings page — container-aware layout", () => {
       "dictation",
       "export",
       "tutorial",
+      "plugins",
       "advanced",
       "about",
     ]);

@@ -17,6 +17,7 @@ import { ExportSection } from "@/components/settings/ExportSection";
 import { TutorialSection } from "@/components/settings/TutorialSection";
 import { AdvancedSection } from "@/components/settings/AdvancedSection";
 import { AboutSection } from "@/components/settings/AboutSection";
+import { PluginsSection } from "@/components/settings/PluginsSection";
 import { SETTINGS_SECTIONS, findSettingsRow } from "@/components/settings/settings-sections";
 import { focusSettingsRow } from "@/features/settings/focus-row";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
@@ -35,6 +36,7 @@ const SECTION_COMPONENTS = {
   tutorial: TutorialSection,
   advanced: AdvancedSection,
   about: AboutSection,
+  plugins: PluginsSection,
 } satisfies Record<(typeof SETTINGS_SECTIONS)[number]["id"], ComponentType>;
 
 const FOCUSABLE_IN_ROW =
@@ -56,6 +58,8 @@ function usePendingSettingsRow() {
       useSettingsRevealStore.getState().setAdvancedOpen(true);
     } else if (row.reveal?.kind === "pasteCleanupAdvanced") {
       useSettingsRevealStore.getState().setPasteCleanupAdvancedOpen(true);
+    } else if (row.reveal?.kind === "plugin") {
+      useSettingsRevealStore.getState().setPluginOpen(row.reveal.pluginId, true);
     }
     // A dictationLanguage reveal needs nothing: the rows live in the tabs'
     // selected panel, which is already mounted.
@@ -131,7 +135,10 @@ export function Settings() {
   // second navigation to the same hash.
   useEffect(() => {
     const section = SETTINGS_SECTIONS.find((s) => `#${s.id}` === location.hash);
-    if (section) focusSettingsRow(section.rows[0].id, { align: "section" });
+    const first = section?.rows[0];
+    if (section && first) {
+      focusSettingsRow(first.id, { align: "section" });
+    }
   }, [location.hash, location.key]);
 
   return (

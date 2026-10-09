@@ -146,6 +146,7 @@ describe("Settings outline", () => {
       "dictation.section.title",
       "settings.export",
       "tutorial.settings.title",
+      "settings.plugins",
       "settings.advanced",
       "settings.about",
     ]);
@@ -221,7 +222,7 @@ describe("Settings outline", () => {
 
     await user.keyboard("{Escape}");
     expect(search).toHaveValue("");
-    expect(rowNames()).toHaveLength(12);
+    expect(rowNames()).toHaveLength(13);
   });
 
   it("follows the first section that starts in view as the page scrolls", async () => {

@@ -8,7 +8,12 @@ import {
 } from "@/components/editor/toolbar/ToolbarSettingsDialog";
 import { useSettingsStore } from "@/features/settings/store";
 import { createDataTransfer, dispatchDragEvent, mockRect } from "@/test/support/drag-events";
-import { ALL_GROUP_IDS, type ToolbarConfig } from "@/features/settings/toolbar-config";
+import {
+  ALL_GROUP_IDS,
+  registerToolbarButtons,
+  type ToolbarConfig,
+} from "@/features/settings/toolbar-config";
+import { registerPluginCommands } from "@/lib/shortcut-registry";
 
 const { i18nTestState } = vi.hoisted(() => ({
   i18nTestState: { localizeGroupLabels: false },
@@ -902,5 +907,99 @@ describe("nested row controls by keyboard", () => {
     expect(start).toHaveLength(2);
     expect(start.every((e) => e.kind !== "divider")).toBe(true);
     expect(start.map((e) => e.id)).toEqual(["history", "basic-marks"]);
+  });
+});
+
+describe("runtime Plugin buttons", () => {
+  const unregisters: Array<() => void> = [];
+  afterEach(() => {
+    while (unregisters.length > 0) unregisters.pop()?.();
+  });
+
+  function setConfigWithAbsentButton() {
+    unregisters.push(registerToolbarButtons("echoes", { buttons: [{ id: "gone" }] }));
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: [
+          { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+          {
+            kind: "group",
+            id: "plugin.echoes.gone",
+            toolbarVisible: false,
+            floatingVisible: true,
+          },
+        ],
+        end: [],
+      },
+    });
+    // The Plugin leaves; its ids stay in the config as retained arrangement.
+    unregisters.pop()?.();
+  }
+
+  it("does not list a retained absent button, and the stored arrangement survives", () => {
+    setConfigWithAbsentButton();
+    renderDialog();
+    expect(screen.queryByText(/plugin\.echoes\./)).toBeNull();
+    expect(within(findStartGrid()).getAllByRole("row")).toHaveLength(1);
+    const stored = [...useSettingsStore.getState().toolbarConfig.start].filter(
+      (entry) => entry.kind === "group"
+    );
+    expect(stored.map((entry) => entry.id)).toContain("plugin.echoes.gone");
+  });
+
+  it("labels a live button with its Command's label, never the raw id", () => {
+    unregisters.push(
+      registerPluginCommands("echoes", {
+        defaultLanguage: "en",
+        commands: [{ id: "show", label: "Show report", contexts: ["global"] }],
+      })
+    );
+    unregisters.push(
+      registerToolbarButtons("echoes", { buttons: [{ id: "show", command: "show" }] })
+    );
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: [
+          { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+          {
+            kind: "group",
+            id: "plugin.echoes.show",
+            toolbarVisible: true,
+            floatingVisible: false,
+          },
+        ],
+        end: [],
+      },
+    });
+    renderDialog();
+    expect(findRowByName(/Show report/)).toBeInTheDocument();
+    expect(screen.queryByText(/plugin\.echoes\./)).toBeNull();
+  });
+
+  it("shows a retained row when its Plugin registers and hides it on unregister", () => {
+    setConfigWithAbsentButton();
+    renderDialog();
+    expect(screen.queryByText(/plugin\.echoes\./)).toBeNull();
+
+    let unregister!: () => void;
+    act(() => {
+      unregister = registerToolbarButtons("echoes", { buttons: [{ id: "gone" }] });
+    });
+    try {
+      // The row appears with its retained arrangement intact, named by its
+      // local id until the wiring slice resolves more.
+      const row = findRowByName("gone");
+      expect(
+        within(row).getByRole("switch", { name: "toolbar.settings.toolbarVisible" })
+      ).toHaveAttribute("aria-checked", "false");
+      expect(screen.queryByText(/plugin\.echoes\./)).toBeNull();
+
+      act(() => {
+        unregister();
+      });
+      expect(screen.queryByText("gone")).toBeNull();
+    } finally {
+      unregisters.push(unregister);
+    }
   });
 });

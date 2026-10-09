@@ -4,13 +4,18 @@ import { Toolbar } from "react-aria-components/Toolbar";
 import { useTranslation } from "react-i18next";
 import { TooltipGroup } from "@/components/ui";
 import { Divider } from "@/components/editor/ToolbarButton";
+import { useToolbarRegistryRevision } from "@/hooks/useToolbarRegistryRevision";
 import {
   EditorToolbarGroups,
   type ToolbarGroupCallbacks,
 } from "@/components/editor/toolbar/EditorToolbarGroups";
 import { useToolbarOverflow } from "@/components/editor/toolbar/useToolbarOverflow";
 import { useSettingsStore } from "@/features/settings/store";
-import { suppressOrphanDividers, type ToolbarEntry } from "@/features/settings/toolbar-config";
+import {
+  isLiveToolbarEntry,
+  suppressOrphanDividers,
+  type ToolbarEntry,
+} from "@/features/settings/toolbar-config";
 
 interface ResponsiveEditorToolbarProps {
   editor: Editor;
@@ -22,8 +27,13 @@ interface ResponsiveEditorToolbarProps {
 }
 
 function visibleEntries(entries: ToolbarEntry[]): ToolbarEntry[] {
+  // Retained buttons of absent Plugins stay in the config but render nothing:
+  // dropping them before orphan suppression leaves no empty boundary and no
+  // doubled dividers.
   return suppressOrphanDividers(
-    entries.filter((entry) => entry.kind !== "group" || entry.toolbarVisible)
+    entries.filter(
+      (entry) => entry.kind === "divider" || (entry.toolbarVisible && isLiveToolbarEntry(entry.id))
+    )
   );
 }
 
@@ -59,6 +69,8 @@ export function ResponsiveEditorToolbar({
   onExitToolbar,
 }: ResponsiveEditorToolbarProps) {
   const { t } = useTranslation();
+  // Recompute entry liveness when Plugins register or unregister their buttons.
+  useToolbarRegistryRevision();
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   const toolbarExpanded = useSettingsStore((state) => state.toolbarExpanded);
 

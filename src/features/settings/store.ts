@@ -57,16 +57,19 @@ import { isTutorialRunInProgress } from "@/features/tutorial/library-switch";
 import {
   DEFAULT_TOOLBAR_CONFIG,
   addDivider,
+  applyToolbarButtonRenames,
   cloneToolbarConfig,
   moveEntry,
   moveEntryTo,
   normalizeToolbarConfig,
+  onToolbarRegistryChange,
   removeDivider,
   resetToolbarConfig as makeResetToolbarConfig,
   setGroupFloatingVisible,
   setGroupToolbarVisible,
   transferEntry,
-  type ToolbarGroupId,
+  withRegisteredToolbarButtons,
+  type ToolbarEntryId,
   type ToolbarSection,
 } from "@/features/settings/toolbar-config";
 
@@ -112,8 +115,8 @@ interface SettingsStore extends Settings {
     toIndex: number
   ) => void;
   transferToolbarEntry: (from: ToolbarSection, index: number) => void;
-  setToolbarGroupVisible: (id: ToolbarGroupId, visible: boolean) => void;
-  setToolbarGroupFloatingVisible: (id: ToolbarGroupId, visible: boolean) => void;
+  setToolbarGroupVisible: (id: ToolbarEntryId, visible: boolean) => void;
+  setToolbarGroupFloatingVisible: (id: ToolbarEntryId, visible: boolean) => void;
   addToolbarDivider: (section: ToolbarSection, index?: number) => void;
   removeToolbarDivider: (section: ToolbarSection, dividerId: string) => void;
   resetToolbarConfig: () => void;
@@ -394,7 +397,8 @@ export const useSettingsStore = create<SettingsStore>()(
         set((state) => ({
           toolbarConfig: removeDivider(state.toolbarConfig, section, dividerId),
         })),
-      resetToolbarConfig: () => set({ toolbarConfig: makeResetToolbarConfig() }),
+      resetToolbarConfig: () =>
+        set({ toolbarConfig: withRegisteredToolbarButtons(makeResetToolbarConfig()) }),
       setChapterListView: (chapterListView) => set({ chapterListView }),
       setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
       setNotesListView: (notesListView) => set({ notesListView }),
@@ -647,7 +651,9 @@ export const useSettingsStore = create<SettingsStore>()(
           pasteCleanup: normalizePasteCleanup(persisted.pasteCleanup),
           lastSceneBreak: normalizeSceneBreak(persisted.lastSceneBreak),
           metrics: normalizeMetrics(persisted.metrics),
-          toolbarConfig: normalizeToolbarConfig(persisted.toolbarConfig),
+          toolbarConfig: withRegisteredToolbarButtons(
+            applyToolbarButtonRenames(normalizeToolbarConfig(persisted.toolbarConfig))
+          ),
           notesFilters: normalizeNotesFilters(persisted.notesFilters),
         };
       },
@@ -676,3 +682,15 @@ export const useSettingsStore = create<SettingsStore>()(
 export function useSettings() {
   return useSettingsStore();
 }
+
+// A Plugin that registers toolbar buttons appends the new ones to the
+// author's order, and renames move retained preferences to the declared ids
+// in the same turn. An absent Plugin's ids stay in the config untouched.
+onToolbarRegistryChange(() => {
+  const config = useSettingsStore.getState().toolbarConfig;
+  const renamed = applyToolbarButtonRenames(config);
+  const next = withRegisteredToolbarButtons(renamed);
+  if (next !== renamed || renamed !== config) {
+    useSettingsStore.setState({ toolbarConfig: next });
+  }
+});

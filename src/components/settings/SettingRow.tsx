@@ -60,20 +60,34 @@ export function SettingRow({
 }: SettingRowProps) {
   const { t } = useTranslation();
   // Row declarations carry plain-string keys; resolve them like the Tutorial
-  // section does for its composed keys.
+  // section does for its composed keys. Runtime Plugin rows carry literals.
   const translate = t as unknown as (key: string) => string;
   const found = findSettingsRow(id);
   const row = found?.row;
+  const label = row
+    ? "labelKey" in row && row.labelKey
+      ? translate(row.labelKey)
+      : "label" in row && typeof row.label === "string"
+        ? row.label
+        : id
+    : id;
+  const descriptionKey = row && "descriptionKey" in row ? row.descriptionKey : undefined;
+  const descriptionLiteral =
+    row && "description" in row && typeof row.description === "string"
+      ? row.description
+      : undefined;
   if (labelHidden) {
     // No label wrapper: the sr-only label is absolutely positioned (out of
     // flow), so the description and the controls keep the exact flex layout
     // the row had before the migration.
     return (
       <div data-settings-row={id} className={className} onBlur={onBlur}>
-        <p className="sr-only">{row ? translate(row.labelKey) : id}</p>
+        <p className="sr-only">{label}</p>
         {descriptionOverride ??
-          (row?.descriptionKey ? (
-            <p className="text-sm text-muted-foreground">{translate(row.descriptionKey)}</p>
+          (descriptionKey ? (
+            <p className="text-sm text-muted-foreground">{translate(descriptionKey)}</p>
+          ) : descriptionLiteral ? (
+            <p className="text-sm text-muted-foreground">{descriptionLiteral}</p>
           ) : null)}
         {labelExtra}
         {children}
@@ -85,14 +99,14 @@ export function SettingRow({
   return (
     <div data-settings-row={id} className={className} onBlur={onBlur}>
       <div className={labelWrapperClassName}>
-        <p className={hidden ?? labelClassName ?? "font-medium"}>
-          {row ? translate(row.labelKey) : id}
-        </p>
+        <p className={hidden ?? labelClassName ?? "font-medium"}>{label}</p>
         {descriptionOverride ??
-          (row?.descriptionKey ? (
+          (descriptionKey ? (
             <p className={hidden ?? "text-sm text-muted-foreground"}>
-              {translate(row.descriptionKey)}
+              {translate(descriptionKey)}
             </p>
+          ) : descriptionLiteral ? (
+            <p className={hidden ?? "text-sm text-muted-foreground"}>{descriptionLiteral}</p>
           ) : null)}
         {labelExtra}
       </div>
