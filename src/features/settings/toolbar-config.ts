@@ -1,3 +1,13 @@
+import {
+  LOCAL_ID_PATTERN,
+  PLUGIN_ID_PATTERN,
+  PLUGIN_PREFIX,
+  collapseContributionRenames,
+  isPluginContributionId,
+  localIdOfContribution,
+  pluginIdOfContribution,
+} from "@/features/plugins/ids";
+
 export type ToolbarGroupId =
   | "history"
   | "font"
@@ -25,16 +35,6 @@ export type ToolbarGroupId =
   | "symbols"
   | "html-view"
   | "export";
-
-import {
-  LOCAL_ID_PATTERN,
-  PLUGIN_ID_PATTERN,
-  PLUGIN_PREFIX,
-  collapseContributionRenames,
-  isPluginContributionId,
-  localIdOfContribution,
-  pluginIdOfContribution,
-} from "@/features/plugins/ids";
 
 export type ToolbarSection = "start" | "end";
 
@@ -243,10 +243,16 @@ export interface PluginToolbarButtonDef {
 
 const toolbarPlugins = new Map<string, RegisteredToolbarPlugin>();
 let toolbarRegistrationOrder = 0;
+let toolbarRevision = 0;
 const toolbarListeners = new Set<() => void>();
 
 function notifyToolbarRegistryChange(): void {
+  toolbarRevision += 1;
   for (const listener of [...toolbarListeners]) listener();
+}
+
+export function toolbarRegistryRevision(): number {
+  return toolbarRevision;
 }
 
 /** Runs after every toolbar register and unregister. Returns unregister. */
@@ -302,7 +308,9 @@ export function registerToolbarButtons(
   toolbarPlugins.set(pluginId, record);
   notifyToolbarRegistryChange();
   return () => {
-    const current = toolbarPlugins.get(pluginId) as (RegisteredToolbarPlugin & { token?: symbol }) | undefined;
+    const current = toolbarPlugins.get(pluginId) as
+      | (RegisteredToolbarPlugin & { token?: symbol })
+      | undefined;
     if (current?.token !== token) return;
     toolbarPlugins.delete(pluginId);
     notifyToolbarRegistryChange();
@@ -335,7 +343,10 @@ export function isLiveToolbarEntry(id: string): boolean {
 }
 
 /** The rename maps of every registered Plugin, for settings migration. */
-export function pluginToolbarButtonRenames(): ReadonlyMap<string, Readonly<Record<string, string>>> {
+export function pluginToolbarButtonRenames(): ReadonlyMap<
+  string,
+  Readonly<Record<string, string>>
+> {
   return new Map(registeredToolbarPlugins().map((plugin) => [plugin.pluginId, plugin.renames]));
 }
 

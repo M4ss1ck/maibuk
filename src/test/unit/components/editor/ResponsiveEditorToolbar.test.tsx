@@ -1,10 +1,11 @@
 import { createPortal } from "react-dom";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ResponsiveEditorToolbar } from "@/components/editor/toolbar/ResponsiveEditorToolbar";
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
 import { useSettingsStore } from "@/features/settings/store";
+import { registerToolbarButtons } from "@/features/settings/toolbar-config";
 import type { ToolbarConfig } from "@/features/settings/toolbar-config";
 import { makeToolbarEditor } from "@/test/support/toolbar-editor";
 
@@ -153,6 +154,42 @@ it("collapses dividers around a retained absent button to one, with no empty bou
   expect(startLane.querySelector('[data-group-id="font"]')).toBeInTheDocument();
   expect(startLane.querySelector('[data-group-id="plugin.echoes.gone"]')).toBeNull();
   expect(startLane.querySelectorAll(".w-px.h-6.bg-border").length).toBe(1);
+});
+
+it("shows and hides a retained button's boundary as its Plugin registers and unregisters", () => {
+  useSettingsStore.setState({
+    toolbarExpanded: true,
+    toolbarConfig: {
+      start: [
+        { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+        {
+          kind: "group",
+          id: "plugin.echoes.gone",
+          toolbarVisible: true,
+          floatingVisible: false,
+        },
+      ],
+      end: [],
+    },
+  });
+  const { getByTestId } = renderToolbar();
+  const lane = getByTestId("toolbar-start-lane");
+  expect(lane.querySelector('[data-group-id="plugin.echoes.gone"]')).toBeNull();
+
+  let unregister!: () => void;
+  act(() => {
+    unregister = registerToolbarButtons("echoes", { buttons: [{ id: "gone" }] });
+  });
+  try {
+    expect(lane.querySelector('[data-group-id="plugin.echoes.gone"]')).toBeInTheDocument();
+
+    act(() => {
+      unregister();
+    });
+    expect(lane.querySelector('[data-group-id="plugin.echoes.gone"]')).toBeNull();
+  } finally {
+    unregister();
+  }
 });
 
 it("does not end the Start lane on a divider when the cut falls after one", () => {

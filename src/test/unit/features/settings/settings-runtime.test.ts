@@ -1,7 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import {
-  buildOutline,
-} from "@/features/settings/outline";
+import { buildOutline } from "@/features/settings/outline";
 import { SETTINGS_SECTIONS } from "@/components/settings/settings-sections";
 import {
   registerPluginSettingsRows,
@@ -90,5 +88,18 @@ describe("settings runtime rows (issue #429)", () => {
     });
     const plugins = outline.find((section) => section.id === "plugins");
     expect(plugins?.rows.map((row) => row.id)).toContain("plugin.echoes.threshold");
+  });
+
+  it("returns a stable owners snapshot that refreshes on registry change", () => {
+    expect(getPluginSettingsOwners()).toEqual([]);
+    const first = getPluginSettingsOwners();
+    expect(getPluginSettingsOwners()).toBe(first);
+    const unregister = registerPluginSettingsRows("echoes", {
+      displayName: "Echoes",
+      rows: [{ id: "threshold", label: "Echo threshold" }],
+    });
+    unregisters.push(unregister);
+    expect(getPluginSettingsOwners()).not.toBe(first);
+    expect(getPluginSettingsOwners().map((owner) => owner.pluginId)).toEqual(["echoes"]);
   });
 });

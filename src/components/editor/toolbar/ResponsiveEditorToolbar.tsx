@@ -4,6 +4,7 @@ import { Toolbar } from "react-aria-components/Toolbar";
 import { useTranslation } from "react-i18next";
 import { TooltipGroup } from "@/components/ui";
 import { Divider } from "@/components/editor/ToolbarButton";
+import { useToolbarRegistryRevision } from "@/hooks/useToolbarRegistryRevision";
 import {
   EditorToolbarGroups,
   type ToolbarGroupCallbacks,
@@ -68,6 +69,8 @@ export function ResponsiveEditorToolbar({
   onExitToolbar,
 }: ResponsiveEditorToolbarProps) {
   const { t } = useTranslation();
+  // Recompute entry liveness when Plugins register or unregister their buttons.
+  useToolbarRegistryRevision();
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   const toolbarExpanded = useSettingsStore((state) => state.toolbarExpanded);
 

@@ -887,7 +887,8 @@ describe("column headers and tooltips", () => {
   });
 });
 
-describe("nested row controls by keyboard", () => {  // These GridList rows carry no row-level onAction: the assertion is that the
+describe("nested row controls by keyboard", () => {
+  // These GridList rows carry no row-level onAction: the assertion is that the
   // nested control's own action runs exactly once and the lane holds no other
   // change (no reorder, no selection side effect).
   it.each([
@@ -953,7 +954,9 @@ describe("runtime Plugin buttons", () => {
         commands: [{ id: "show", label: "Show report", contexts: ["global"] }],
       })
     );
-    unregisters.push(registerToolbarButtons("echoes", { buttons: [{ id: "show", command: "show" }] }));
+    unregisters.push(
+      registerToolbarButtons("echoes", { buttons: [{ id: "show", command: "show" }] })
+    );
     useSettingsStore.setState({
       toolbarConfig: {
         start: [
@@ -971,5 +974,32 @@ describe("runtime Plugin buttons", () => {
     renderDialog();
     expect(findRowByName(/Show report/)).toBeInTheDocument();
     expect(screen.queryByText(/plugin\.echoes\./)).toBeNull();
+  });
+
+  it("shows a retained row when its Plugin registers and hides it on unregister", () => {
+    setConfigWithAbsentButton();
+    renderDialog();
+    expect(screen.queryByText(/plugin\.echoes\./)).toBeNull();
+
+    let unregister!: () => void;
+    act(() => {
+      unregister = registerToolbarButtons("echoes", { buttons: [{ id: "gone" }] });
+    });
+    try {
+      // The row appears with its retained arrangement intact, named by its
+      // local id until the wiring slice resolves more.
+      const row = findRowByName("gone");
+      expect(
+        within(row).getByRole("switch", { name: "toolbar.settings.toolbarVisible" })
+      ).toHaveAttribute("aria-checked", "false");
+      expect(screen.queryByText(/plugin\.echoes\./)).toBeNull();
+
+      act(() => {
+        unregister();
+      });
+      expect(screen.queryByText("gone")).toBeNull();
+    } finally {
+      unregisters.push(unregister);
+    }
   });
 });

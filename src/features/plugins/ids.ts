@@ -46,13 +46,17 @@ export function collapseContributionRenames(
 ): Readonly<Record<string, string>> {
   for (const [from, to] of Object.entries(renames)) {
     if (!LOCAL_ID_PATTERN.test(from) || !LOCAL_ID_PATTERN.test(to)) {
-      throw new Error(`Plugin ${kind} rename "${from}" targets "${to}", which is not a Plugin-local id`);
+      throw new Error(
+        `Plugin ${kind} rename "${from}" targets "${to}", which is not a Plugin-local id`
+      );
     }
     if (declared.has(from)) {
       throw new Error(`Plugin ${kind} rename source "${from}" is a declared ${kind}`);
     }
     if (!declared.has(to)) {
-      throw new Error(`Plugin ${kind} rename "${from}" targets "${to}", which is not a declared ${kind}`);
+      throw new Error(
+        `Plugin ${kind} rename "${from}" targets "${to}", which is not a declared ${kind}`
+      );
     }
   }
   const collapsed: Record<string, string> = {};

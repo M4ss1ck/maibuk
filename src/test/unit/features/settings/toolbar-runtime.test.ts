@@ -28,9 +28,7 @@ function register(pluginId: string, buttons: string[], renames?: Record<string, 
 }
 
 function ids(config: ToolbarConfig): string[] {
-  return [...config.start, ...config.end]
-    .filter((e) => e.kind === "group")
-    .map((e) => e.id);
+  return [...config.start, ...config.end].filter((e) => e.kind === "group").map((e) => e.id);
 }
 
 describe("toolbar runtime buttons (issue #429)", () => {
@@ -38,7 +36,12 @@ describe("toolbar runtime buttons (issue #429)", () => {
     const result = normalizeToolbarConfig({
       start: [
         { kind: "group", id: "basic-marks", toolbarVisible: true, floatingVisible: true },
-        { kind: "group", id: "plugin.echoes.showReport", toolbarVisible: false, floatingVisible: true },
+        {
+          kind: "group",
+          id: "plugin.echoes.showReport",
+          toolbarVisible: false,
+          floatingVisible: true,
+        },
         { kind: "group", id: "not-a-real-group", toolbarVisible: true, floatingVisible: true },
         { kind: "group", id: "plugin.bad id!", toolbarVisible: true, floatingVisible: true },
       ],
@@ -64,7 +67,9 @@ describe("toolbar runtime buttons (issue #429)", () => {
     register("echoes", ["showReport"]);
     let config = withRegisteredToolbarButtons(DEFAULT_TOOLBAR_CONFIG);
     // Author moves it to End and puts it in the selection toolbar.
-    const idx = config.start.findIndex((e) => e.kind === "group" && e.id === "plugin.echoes.showReport");
+    const idx = config.start.findIndex(
+      (e) => e.kind === "group" && e.id === "plugin.echoes.showReport"
+    );
     expect(idx).toBeGreaterThanOrEqual(0);
     const moved = config.start[idx];
     config = {
@@ -90,7 +95,12 @@ describe("toolbar runtime buttons (issue #429)", () => {
     register("echoes", ["showReport"], { oldReport: "showReport" });
     const config: ToolbarConfig = {
       start: [
-        { kind: "group", id: "plugin.echoes.oldReport" as never, toolbarVisible: false, floatingVisible: true },
+        {
+          kind: "group",
+          id: "plugin.echoes.oldReport" as never,
+          toolbarVisible: false,
+          floatingVisible: true,
+        },
       ],
       end: [],
     };

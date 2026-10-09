@@ -816,7 +816,8 @@ describe("toolbarConfig actions", () => {
     expect(FLOATING_ELIGIBLE_IDS.has("history")).toBe(false);
   });
 
-  it("resetToolbarConfig restores semantic defaults with fresh divider ids without touching toolbarExpanded", () => {    useSettingsStore.setState({ toolbarExpanded: true });
+  it("resetToolbarConfig restores semantic defaults with fresh divider ids without touching toolbarExpanded", () => {
+    useSettingsStore.setState({ toolbarExpanded: true });
     useSettingsStore.getState().addToolbarDivider("end");
     useSettingsStore.getState().resetToolbarConfig();
     const config = useSettingsStore.getState().toolbarConfig;

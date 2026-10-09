@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectionToolbar } from "@/components/editor/SelectionToolbar";
 import {
   DEFAULT_TOOLBAR_CONFIG,
+  registerToolbarButtons,
   setGroupFloatingVisible,
+  type ToolbarEntry,
 } from "@/features/settings/toolbar-config";
 import { useSettingsStore } from "@/features/settings/store";
 import { useModalStore } from "@/components/ui/modal-store";
@@ -89,6 +91,42 @@ describe("SelectionToolbar", () => {
     );
     act(() => listeners.get("selectionUpdate")?.());
     expect(container.querySelector(".selection-toolbar-enter")).toBeNull();
+  });
+
+  it("mounts and unmounts the bubble as a floating Plugin button registers and unregisters", () => {
+    let config = DEFAULT_TOOLBAR_CONFIG;
+    for (const id of ["basic-marks", "headings", "highlight", "link-code"] as const) {
+      config = setGroupFloatingVisible(config, id, false);
+    }
+    const retained: ToolbarEntry = {
+      kind: "group",
+      id: "plugin.echoes.float",
+      toolbarVisible: true,
+      floatingVisible: true,
+    };
+    useSettingsStore.setState({ toolbarConfig: { start: [...config.start, retained], end: [] } });
+    const { editor, listeners } = makeEditor();
+    const { container } = render(
+      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />
+    );
+    act(() => listeners.get("selectionUpdate")?.());
+    expect(container.querySelector(".selection-toolbar-enter")).toBeNull();
+
+    let unregister!: () => void;
+    act(() => {
+      unregister = registerToolbarButtons("echoes", { buttons: [{ id: "float" }] });
+    });
+    try {
+      act(() => listeners.get("selectionUpdate")?.());
+      expect(container.querySelector(".selection-toolbar-enter")).not.toBeNull();
+
+      act(() => {
+        unregister();
+      });
+      expect(container.querySelector(".selection-toolbar-enter")).toBeNull();
+    } finally {
+      unregister();
+    }
   });
 });
 

@@ -240,9 +240,9 @@ describe("Plugins Settings section", () => {
     focusSettingsRow("plugin.echoes.threshold");
     await waitFor(() => expect(screen.getByLabelText("Echo threshold")).toBeInTheDocument());
     await waitFor(() =>
-      expect((screen.getByLabelText("Echo threshold") as HTMLElement) === document.activeElement).toBe(
-        true
-      )
+      expect(
+        (screen.getByLabelText("Echo threshold") as HTMLElement) === document.activeElement
+      ).toBe(true)
     );
     expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
     expect(useSettingsRevealStore.getState().pluginOpen.echoes).toBe(true);

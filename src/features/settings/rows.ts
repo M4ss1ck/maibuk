@@ -118,8 +118,12 @@ interface RegisteredSettingsPlugin {
 const settingsPlugins = new Map<string, RegisteredSettingsPlugin>();
 let settingsRegistrationOrder = 0;
 const settingsRowsListeners = new Set<() => void>();
+// The owners snapshot for useSyncExternalStore: referentially stable between
+// registry changes, recomputed on demand after one.
+let cachedOwners: PluginSettingsOwner[] | null = null;
 
 function notifySettingsRowsChange(): void {
+  cachedOwners = null;
   for (const listener of [...settingsRowsListeners]) listener();
 }
 
@@ -206,13 +210,16 @@ function isMaibukOwner(pluginId: string): boolean {
 /**
  * Every known Plugin Settings owner, ordered Maibuk first, then owner display
  * name, owner id for ties. Declared order within an owner is kept in its rows.
+ * The result is cached for useSyncExternalStore and refreshed on every
+ * registry change; do not mutate it.
  */
 export function getPluginSettingsOwners(): PluginSettingsOwner[] {
+  if (cachedOwners !== null) return cachedOwners;
   const owners = registeredSettingsPlugins().map((plugin) => ({
     pluginId: plugin.pluginId,
     displayName: plugin.displayName,
   }));
-  return owners.sort((a, b) => {
+  owners.sort((a, b) => {
     const aMaibuk = isMaibukOwner(a.pluginId) ? 0 : 1;
     const bMaibuk = isMaibukOwner(b.pluginId) ? 0 : 1;
     if (aMaibuk !== bMaibuk) return aMaibuk - bMaibuk;
@@ -220,6 +227,8 @@ export function getPluginSettingsOwners(): PluginSettingsOwner[] {
     if (byName !== 0) return byName;
     return a.pluginId.localeCompare(b.pluginId);
   });
+  cachedOwners = owners;
+  return owners;
 }
 
 /** A Plugin's declared rows, in declared order, or [] when unknown. */
