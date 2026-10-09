@@ -1340,6 +1340,7 @@
       "removed": "{{keys}} removed from {{command}}.",
       "reset": "{{command}} reset to {{keys}}.",
       "resetNone": "{{command}} reset to no shortcut.",
+      "resetKept": "{{command}} reset, except {{keys}} kept by another command.",
       "resetAll": "All shortcuts reset.",
       "cancelled": "Recording cancelled."
     },
@@ -1402,7 +1403,8 @@
         "added": "{{phrase}} runs {{command}}.",
         "changed": "{{from}} changed to {{phrase}}.",
         "removed": "{{phrase}} removed from {{command}}.",
-        "reset": "{{command}} voice commands in {{language}} reset to the defaults."
+        "reset": "{{command}} voice commands in {{language}} reset to the defaults.",
+        "resetKept": "{{command}} voice commands in {{language}} reset, except {{phrases}} kept by another command."
       }
     }
   },

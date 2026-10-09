@@ -1340,6 +1340,7 @@
       "removed": "{{keys}} se quitó de {{command}}.",
       "reset": "{{command}} se restableció a {{keys}}.",
       "resetNone": "{{command}} se restableció a sin atajo.",
+      "resetKept": "{{command}} restablecido, excepto {{keys}}, que se queda en otro comando.",
       "resetAll": "Se restablecieron todos los atajos.",
       "cancelled": "Grabación cancelada."
     },
@@ -1402,7 +1403,8 @@
         "added": "{{phrase}} ejecuta {{command}}.",
         "changed": "{{from}} cambió a {{phrase}}.",
         "removed": "{{phrase}} quitado de {{command}}.",
-        "reset": "Comandos de voz de {{command}} en {{language}} restablecidos."
+        "reset": "Comandos de voz de {{command}} en {{language}} restablecidos.",
+        "resetKept": "Comandos de voz de {{command}} en {{language}} restablecidos, excepto {{phrases}}, que se quedan en otro comando."
       }
     }
   },

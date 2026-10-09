@@ -1,17 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
+import { useShortcutSettingsStore, SHORTCUT_STORAGE_KEY } from "@/features/settings/shortcut-store";
 import { findPhraseConflict } from "@/features/dictation/phrase-conflicts";
 import { normalizeCustomVoiceCommands } from "@/features/dictation/voice-commands";
 import {
   DEFAULT_SHORTCUT_SETTINGS,
   effectiveShortcuts,
+  findConflicts,
+  findResetConflicts,
   inactiveBindings,
   normalizeShortcuts,
   parseShortcutFile,
   serializeShortcutFile,
   type CustomShortcuts,
 } from "@/lib/shortcut-resolve";
-import { registerPluginCommands, type PluginRegistration } from "@/lib/shortcut-registry";
+import {
+  COMMANDS,
+  registerPluginCommands,
+  type PluginRegistration,
+  type Shortcut,
+} from "@/lib/shortcut-registry";
 
 const unregisters: Array<() => void> = [];
 afterEach(() => {
@@ -418,5 +425,109 @@ describe("Plugin Shortcut conflicts", () => {
       withId: otherId,
     });
     expect(effectiveShortcuts(echoesId, {}, false)).toEqual([]);
+  });
+});
+
+describe("a core Default shipped by an app update", () => {
+  /** Temporarily swaps a core Command's Defaults; the registry is static. */
+  async function withCoreDefaults<T>(
+    id: keyof typeof COMMANDS,
+    defaults: Shortcut[],
+    run: () => T | Promise<T>
+  ): Promise<T> {
+    const definition = COMMANDS[id] as unknown as { defaults: readonly Shortcut[] };
+    const original = definition.defaults;
+    definition.defaults = defaults;
+    try {
+      return await run();
+    } finally {
+      definition.defaults = original;
+    }
+  }
+
+  it("strips the new core Default and leaves the Plugin binding active", async () => {
+    register("echoes", echoesRegistration({ defaults: [["Mod+Alt+k"]] }));
+
+    await withCoreDefaults("global.toggleTheme", [["Mod+Alt+q"], ["Mod+Alt+k"]], () => {
+      const settings = normalizeShortcuts({
+        version: 2,
+        custom: {},
+        singleKeyEnabled: true,
+      });
+      expect(settings.custom["global.toggleTheme"]).toEqual([["Mod+Alt+q"]]);
+      expect(effectiveShortcuts(echoesId, settings.custom, false)).toEqual([["Mod+Alt+k"]]);
+    });
+  });
+
+  it("strips the new core Default at store hydration too", async () => {
+    register("echoes", echoesRegistration({ defaults: [["Mod+Alt+k"]] }));
+    localStorage.setItem(
+      SHORTCUT_STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          shortcuts: { version: 2, custom: {}, voice: {}, singleKeyEnabled: true },
+        },
+        version: 0,
+      })
+    );
+
+    await withCoreDefaults("global.toggleTheme", [["Mod+Alt+k"]], async () => {
+      await useShortcutSettingsStore.persist.rehydrate();
+      const { custom } = useShortcutSettingsStore.getState().shortcuts;
+      expect(custom["global.toggleTheme"]).toEqual([]);
+      expect(effectiveShortcuts(echoesId, custom, false)).toEqual([["Mod+Alt+k"]]);
+    });
+  });
+});
+
+describe("no write path lets a core binding take an active Plugin key", () => {
+  it("Change and Add report the active Plugin binding through findConflicts", () => {
+    register("echoes", echoesRegistration({ defaults: [["Mod+Alt+k"]] }));
+
+    expect(findConflicts("common.save", ["Mod+Alt+k"], {}, false)).toContainEqual({
+      id: echoesId,
+      shortcut: ["Mod+Alt+k"],
+      kind: "same",
+      locked: false,
+    });
+  });
+
+  it("Reset reports the active Plugin binding its Defaults would take", () => {
+    register("echoes", echoesRegistration({ defaults: [["Mod+s"]] }));
+    const custom: CustomShortcuts = { "common.save": [["Mod+Alt+s"]] };
+
+    expect(findResetConflicts("common.save", custom, false)).toContainEqual({
+      id: echoesId,
+      shortcut: ["Mod+s"],
+      kind: "same",
+      locked: false,
+    });
+  });
+
+  it("Shortcut File load drops a core key an active Plugin holds", () => {
+    register("echoes", echoesRegistration({ defaults: [["Mod+Alt+k"]] }));
+    const file = serializeShortcutFile({ "common.save": [["Mod+Alt+k"]] });
+
+    expect(parseShortcutFile(file, false)).toMatchObject({
+      ok: true,
+      custom: {},
+      dropped: [{ id: "common.save", shortcut: ["Mod+Alt+k"], reason: "conflict" }],
+    });
+  });
+
+  it("the update-time Default check strips the core Default, not the Plugin key", () => {
+    register("echoes", echoesRegistration({ defaults: [["Mod+Alt+k"]] }));
+    const definition = COMMANDS["global.toggleTheme"] as unknown as {
+      defaults: readonly Shortcut[];
+    };
+    const original = definition.defaults;
+    definition.defaults = [["Mod+Alt+k"]];
+    try {
+      const settings = normalizeShortcuts({ version: 2, custom: {}, singleKeyEnabled: true });
+      expect(settings.custom["global.toggleTheme"]).toEqual([]);
+      expect(effectiveShortcuts(echoesId, settings.custom, false)).toEqual([["Mod+Alt+k"]]);
+    } finally {
+      definition.defaults = original;
+    }
   });
 });

@@ -5,7 +5,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
-import { DEFAULT_SHORTCUT_SETTINGS, serializeShortcutFile } from "@/lib/shortcut-resolve";
+import {
+  DEFAULT_SHORTCUT_SETTINGS,
+  effectiveShortcuts,
+  serializeShortcutFile,
+} from "@/lib/shortcut-resolve";
 import { registerPluginCommands } from "@/lib/shortcut-registry";
 
 const translate = vi.hoisted(() =>
@@ -714,6 +718,11 @@ describe("Plugin Commands in the Shortcut Editor", () => {
   });
 
   it("shows a conflicting Plugin Default Shortcut as inactive", async () => {
+    // The core binding is a Custom Shortcut: an existing binding, so the
+    // Plugin's Default stays inactive (a core Default would be the newcomer).
+    useShortcutSettingsStore
+      .getState()
+      .setCommandShortcuts("common.save", [["Mod+s"], ["Mod+Alt+s"]]);
     registerEchoes([["Mod+s"]]);
     const { user } = await openEditor();
     await focusRow(user, "Show report");
@@ -727,5 +736,81 @@ describe("Plugin Commands in the Shortcut Editor", () => {
     await focusRow(user, "Dark theme");
 
     expect(screen.getAllByText("shortcutEditor.inactive").length).toBeGreaterThan(0);
+  });
+
+  /** Moves through a row's controls with ArrowRight until Reset has focus. */
+  async function focusReset(user: ReturnType<typeof userEvent.setup>) {
+    for (let press = 0; press < 8; press += 1) {
+      if (
+        /^shortcutEditor\.reset /.test(document.activeElement?.getAttribute("aria-label") ?? "")
+      ) {
+        return;
+      }
+      await user.keyboard("{ArrowRight}");
+    }
+    expectFocusName(/^shortcutEditor\.reset /);
+  }
+
+  it("prompts before a Reset takes a key from an active Plugin binding", async () => {
+    registerEchoes([["Mod+s"]]);
+    useShortcutSettingsStore.getState().setCommandShortcuts("common.save", [["Mod+Alt+s"]]);
+    const pluginId = "plugin.echoes.showReport" as const;
+    // Save no longer uses Mod+S, so the Plugin's binding is active.
+    expect(effectiveShortcuts(pluginId, custom(), false)).toEqual([["Mod+s"]]);
+
+    const { user } = await openEditor();
+    await focusRow(user, "shortcuts.save");
+    await focusReset(user);
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByRole("alert")).toHaveTextContent("shortcutEditor.conflict.message");
+    // Nothing changes until Replace.
+    expect(custom()["common.save"]).toEqual([["Mod+Alt+s"]]);
+    expect(effectiveShortcuts(pluginId, custom(), false)).toEqual([["Mod+s"]]);
+
+    // Replace is focused first: Enter takes the key for Save.
+    await user.keyboard("{Enter}");
+    expect(custom()["common.save"]).toBeUndefined();
+    expect(custom()[pluginId]).toEqual([]);
+    expect(effectiveShortcuts(pluginId, custom(), false)).toEqual([]);
+  });
+
+  it("Cancel keeps the Plugin binding and restores the other Defaults", async () => {
+    registerEchoes([["F11"]]);
+    useShortcutSettingsStore
+      .getState()
+      .setCommandShortcuts("bookEditor.focusMode", [["Mod+Alt+f"]]);
+    const pluginId = "plugin.echoes.showReport" as const;
+
+    const { user } = await openEditor();
+    await focusRow(user, "shortcuts.toggleFocusMode");
+    await focusReset(user);
+    await user.keyboard("{Enter}");
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("shortcutEditor.conflict.message");
+
+    // Cancel is the second button in the notice.
+    const cancel = within(alert).getByRole("button", { name: "common.cancel" });
+    // The row's arrow navigation reaches the notice's second button.
+    await user.keyboard("{ArrowRight}");
+    expect(cancel).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(custom()["bookEditor.focusMode"]).toEqual([["Mod+Shift+f"]]);
+    expect(effectiveShortcuts(pluginId, custom(), false)).toEqual([["F11"]]);
+    expect(screen.getByRole("status")).toHaveTextContent("shortcutEditor.announce.resetKept");
+  });
+
+  it("Reset with no Plugin conflict resets immediately", async () => {
+    registerEchoes([["Mod+Alt+k"]]);
+    useShortcutSettingsStore.getState().setCommandShortcuts("common.save", [["Mod+Alt+s"]]);
+
+    const { user } = await openEditor();
+    await focusRow(user, "shortcuts.save");
+    await focusReset(user);
+    await user.keyboard("{Enter}");
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(custom()["common.save"]).toBeUndefined();
   });
 });

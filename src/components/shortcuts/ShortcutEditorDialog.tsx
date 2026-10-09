@@ -50,6 +50,7 @@ import { formatShortcut, isSingleKey, isTypingSafe, shortcutKey } from "@/lib/sh
 import {
   editableShortcuts,
   findConflicts,
+  findResetConflicts,
   isBindingActive,
   parseShortcutFile,
   type Conflict,
@@ -67,6 +68,8 @@ interface Recording {
 interface PendingConflict extends Recording {
   shortcut: Shortcut;
   conflicts: Conflict[];
+  /** The pending action is a Reset to Defaults, not a recording. */
+  reset?: true;
 }
 
 /** Where focus goes once a recording, a removal, or a conflict ends. */
@@ -295,6 +298,18 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
       );
       setCommandShortcuts(conflict.id, others);
     }
+    if (pending.reset) {
+      resetCommandShortcuts(pending.id);
+      const keys = editableShortcuts(pending.id, {}, IS_WEB).map(describeShortcut).join(", ");
+      announce(
+        keys
+          ? t("shortcutEditor.announce.reset", { command: label(pending.id), keys })
+          : t("shortcutEditor.announce.resetNone", { command: label(pending.id) })
+      );
+      setFocusTarget({ id: pending.id, control: "add" });
+      setPending(null);
+      return;
+    }
     apply(pending);
     announce(
       t("shortcutEditor.announce.moved", {
@@ -309,6 +324,22 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
 
   const cancelConflict = () => {
     if (!pending) return;
+    if (pending.reset) {
+      const conflicting = new Set(pending.conflicts.map((c) => shortcutKey(c.shortcut)));
+      const kept = editableShortcuts(pending.id, {}, IS_WEB).filter(
+        (shortcut) => !conflicting.has(shortcutKey(shortcut))
+      );
+      setCommandShortcuts(pending.id, kept);
+      setFocusTarget({ id: pending.id, control: "add" });
+      announce(
+        t("shortcutEditor.announce.resetKept", {
+          command: label(pending.id),
+          keys: pending.conflicts.map((c) => describeShortcut(c.shortcut)).join(", "),
+        })
+      );
+      setPending(null);
+      return;
+    }
     setFocusTarget(
       pending.index === null
         ? { id: pending.id, control: "add" }
@@ -329,6 +360,25 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
   };
 
   const reset = (id: CommandId) => {
+    // A Default the Reset would restore may be the newcomer next to an active
+    // Plugin binding: prompt with the same Replace / Cancel (ADR 0024).
+    const conflicts = findResetConflicts(id, settings.custom, IS_WEB);
+    if (conflicts.length > 0) {
+      setPending({
+        id,
+        index: null,
+        shortcut: conflicts[0].shortcut,
+        conflicts,
+        reset: true,
+      });
+      announce(
+        t("shortcutEditor.conflict.message", {
+          keys: describeShortcut(conflicts[0].shortcut),
+          command: label(conflicts[0].id),
+        })
+      );
+      return;
+    }
     resetCommandShortcuts(id);
     setFocusTarget({ id, control: "add" });
     const keys = editableShortcuts(id, {}, IS_WEB).map(describeShortcut).join(", ");

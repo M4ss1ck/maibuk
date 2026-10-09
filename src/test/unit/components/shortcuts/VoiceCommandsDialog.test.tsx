@@ -18,7 +18,9 @@ vi.mock("@/features/dictation/runtime", () => ({
 const { VoiceCommandsDialog } = await import("@/components/shortcuts/VoiceCommandsDialog");
 const { useDictationStore } = await import("@/features/dictation/store");
 const { useShortcutSettingsStore } = await import("@/features/settings/shortcut-store");
-const { DEFAULT_SHORTCUT_SETTINGS } = await import("@/lib/shortcut-resolve");
+const { defaultVoicePhrases } = await import("@/features/dictation/voice-commands");
+const { DEFAULT_SHORTCUT_SETTINGS, inactiveBindings } = await import("@/lib/shortcut-resolve");
+const { registerPluginCommands } = await import("@/lib/shortcut-registry");
 const { runCommand } = await import("@/lib/command-runner");
 
 /** Undo is a whole-line Voice Command, so the dialog has phrases to list. */
@@ -212,31 +214,124 @@ describe("VoiceCommandsDialog Phrase Recording (#270)", () => {
 });
 
 describe("nested row controls by keyboard", () => {
-  it.each(["{Enter}", " "])(
-    "%s on a phrase row's Remove button removes, never edits the phrase",
-    async (key) => {
-      const user = userEvent.setup();
-      renderDialog();
-      const rowEl = screen.getAllByRole("row")[0];
-      const remove = within(rowEl).getByRole("button", { name: /^Remove / });
-      const phrase = (remove.getAttribute("aria-label") ?? "")
-        .replace(/^Remove /, "")
-        .replace(/ from .*$/, "");
-      expect(phrase.length).toBeGreaterThan(0);
+  it.each([
+    "{Enter}",
+    " ",
+  ])("%s on a phrase row's Remove button removes, never edits the phrase", async (key) => {
+    const user = userEvent.setup();
+    renderDialog();
+    const rowEl = screen.getAllByRole("row")[0];
+    const remove = within(rowEl).getByRole("button", { name: /^Remove / });
+    const phrase = (remove.getAttribute("aria-label") ?? "")
+      .replace(/^Remove /, "")
+      .replace(/ from .*$/, "");
+    expect(phrase.length).toBeGreaterThan(0);
 
-      rowEl.focus();
-      for (let i = 0; i < 6 && document.activeElement !== remove; i++) {
-        await user.keyboard("{ArrowRight}");
-      }
-      expect(remove).toHaveFocus();
-      await user.keyboard(key);
-
-      // The button's own action ran: the phrase is gone from the list.
-      expect(screen.queryByText(phrase)).toBeNull();
-      // The row's action (startEdit) did not run: the field still adds,
-      // it does not hold the removed phrase for editing.
-      expect(phraseField()).toHaveValue("");
-      expect(phraseField()).toHaveAccessibleName(/New voice command/);
+    rowEl.focus();
+    for (let i = 0; i < 6 && document.activeElement !== remove; i++) {
+      await user.keyboard("{ArrowRight}");
     }
-  );
+    expect(remove).toHaveFocus();
+    await user.keyboard(key);
+
+    // The button's own action ran: the phrase is gone from the list.
+    expect(screen.queryByText(phrase)).toBeNull();
+    // The row's action (startEdit) did not run: the field still adds,
+    // it does not hold the removed phrase for editing.
+    expect(phraseField()).toHaveValue("");
+    expect(phraseField()).toHaveAccessibleName(/New voice command/);
+  });
+});
+
+describe("Plugin binding conflicts on Voice reset", () => {
+  const unregisters: Array<() => void> = [];
+  afterEach(() => {
+    while (unregisters.length > 0) unregisters.pop()?.();
+  });
+
+  function registerEchoes(label: string) {
+    const unregister = registerPluginCommands("echoes", {
+      defaultLanguage: "en",
+      commands: [{ id: "showReport", label, contexts: ["global"], defaults: [] }],
+    });
+    unregisters.push(unregister);
+  }
+
+  const voice = () => useShortcutSettingsStore.getState().shortcuts.voice;
+  const pluginId = "plugin.echoes.showReport" as const;
+
+  function renderCommand(id: Parameters<typeof VoiceCommandsDialog>[0]["id"]) {
+    return render(<VoiceCommandsDialog id={id} initialLanguage="en" onClose={vi.fn()} />);
+  }
+
+  async function pressReset(user: User) {
+    const reset = screen.getByRole("button", { name: "Reset English to defaults" });
+    await tabUntil(user, () => document.activeElement === reset);
+    await user.keyboard("{Enter}");
+  }
+
+  it("prompts before a Reset takes a phrase from an active Plugin binding", async () => {
+    registerEchoes("Dark theme");
+    useShortcutSettingsStore
+      .getState()
+      .setCommandVoicePhrases("global.themeDark", "en", ["gloomy mode on"]);
+    expect(inactiveBindings({}, false, voice())).toEqual([]);
+
+    const user = userEvent.setup();
+    renderCommand("global.themeDark");
+    await pressReset(user);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/dark theme/i);
+    // Nothing changes until Replace.
+    expect(voice()["global.themeDark"]).toEqual({ en: ["gloomy mode on"] });
+
+    // Replace is focused first: Enter takes the phrase for the core Command.
+    await user.keyboard("{Enter}");
+    expect(voice()["global.themeDark"]).toBeUndefined();
+    expect(voice()[pluginId]).toEqual({ en: [] });
+    expect(inactiveBindings({}, false, voice())).toEqual([]);
+  });
+
+  it("Cancel keeps the Plugin phrase and restores the other Defaults", async () => {
+    registerEchoes("Make bold");
+    useShortcutSettingsStore
+      .getState()
+      .setCommandVoicePhrases("editor.bold", "en", ["heavy words"]);
+    const defaults = defaultVoicePhrases("editor.bold", "en");
+    expect(defaults.length).toBeGreaterThan(1);
+
+    const user = userEvent.setup();
+    renderCommand("editor.bold");
+    await pressReset(user);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/make bold/i);
+
+    // Cancel is the second button in the notice.
+    const cancel = within(alert).getByRole("button", { name: "Cancel" });
+    for (let press = 0; press < 6 && document.activeElement !== cancel; press += 1) {
+      await user.tab();
+    }
+    expect(cancel).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    const kept = voice()["editor.bold"]?.en ?? [];
+    expect(kept).not.toContain("make bold");
+    expect(kept.length).toBe(defaults.length - 1);
+    expect(voice()[pluginId]).toBeUndefined();
+    expect(inactiveBindings({}, false, voice())).toEqual([]);
+  });
+
+  it("Reset with no Plugin conflict resets immediately", async () => {
+    registerEchoes("Show report");
+    useShortcutSettingsStore
+      .getState()
+      .setCommandVoicePhrases("global.themeDark", "en", ["gloomy mode on"]);
+
+    const user = userEvent.setup();
+    renderCommand("global.themeDark");
+    await pressReset(user);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(voice()["global.themeDark"]).toBeUndefined();
+  });
 });
