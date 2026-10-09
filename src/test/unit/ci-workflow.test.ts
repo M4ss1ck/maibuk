@@ -27,6 +27,13 @@ describe("CI workflow", () => {
     expect(checks).not.toMatch(/needs:/);
   });
 
+  // The e2e project has its own tsconfig, outside the root one: without this
+  // step a broken e2e config or spec type only fails a local run, because
+  // Playwright never runs in CI (issue #472).
+  it("typechecks the e2e project in the fast job", () => {
+    expect(job("checks")).toContain("run: pnpm exec tsc --noEmit -p e2e");
+  });
+
   it("shards the suite and enforces the coverage thresholds only on the merged report", () => {
     const tests = job("tests");
     expect(tests).toContain("--shard=${{ matrix.shard }}/");

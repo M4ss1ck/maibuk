@@ -44,6 +44,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Playwright never runs in CI, but a broken e2e config or spec should
+      # fail here, not in a local run (issue #472).
+      - name: Typecheck e2e suite
+        run: pnpm exec tsc --noEmit -p e2e
+
       - name: Test the release changelog generator
         run: pnpm test:release
 
