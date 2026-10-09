@@ -337,11 +337,13 @@ has a row in `e2e/coverage-matrix.ts`, and a spec tagged `@wf:<row-id>` (and
 `@sc:<id>` for each new shortcut) that passes locally with `pnpm test:e2e`; a
 single file is fine while iterating (`pnpm test:e2e specs/<file>`). A gap whose
 right interaction is undecided may stay `not-accepted` with a real GitHub issue
-and `test.fail` citing it. Playwright never runs in CI (timing). CI runs only the
+and `test.fail` citing it. Playwright never runs in CI (timing). CI runs the
 coverage guard through Vitest (`src/test/unit/e2e-coverage-guard.test.ts`),
 which fails when a route, registry shortcut, or GLOSSARY.md term has no row, or a
-row has no tagged spec. Running the specs is the author's local pre-PR check and
-the first diagnosis tool when behavior breaks.
+row has no tagged spec, and it typechecks the e2e project
+(`tsc --noEmit -p e2e`), so a broken e2e config or spec type fails the PR.
+Running the specs is the author's local pre-PR check and the first diagnosis
+tool when behavior breaks.
 
 **Keyboard contract (every spec).** Enter each workflow through keyboard-reachable
 UI and drive it with Tab, Shift+Tab, arrows, Enter, Space, Escape, and registered

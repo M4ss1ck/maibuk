@@ -9,8 +9,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "baseUrl": "..",
-    "paths": { "@/*": ["src/*"] }
+    "paths": { "@/*": ["../src/*"] }
   },
   "include": ["**/*.ts"],
   "exclude": [".output"]

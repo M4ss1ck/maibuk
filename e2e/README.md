@@ -8,7 +8,9 @@ git hooks runs it.
 The coverage guard is browser-free, so it also runs inside Vitest, which CI
 already runs (`src/test/unit/e2e-coverage-guard.test.ts`): CI fails when a
 route, shortcut, or GLOSSARY.md term has no matrix row, or a row has no tagged
-spec. Playwright itself stays a local command and never runs in CI.
+spec. CI also typechecks the e2e project (`tsc --noEmit -p e2e`), the same
+command step 3 below runs, so a broken e2e config or spec type fails there.
+Playwright itself stays a local command and never runs in CI.
 
 ## Install
 
