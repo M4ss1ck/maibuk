@@ -821,6 +821,27 @@ describe("validateManifestValue: icons", () => {
       );
     }
   });
+
+  it("refuses a .svg icon without a file name or with an empty path segment", () => {
+    for (const icon of [".svg", "icons//a.svg", "icons/.svg"]) {
+      expectProblem(
+        problemsFor((m) => (m.contributes.toolbarButtons[0].icon = icon)),
+        "contributes.toolbarButtons[0].icon",
+        /svg/i
+      );
+    }
+  });
+
+  it("accepts a .svg icon that names a file, ./ included", () => {
+    for (const icon of ["icons/a.svg", "./a.svg"]) {
+      expect(
+        validateManifestValue(
+          baseManifestWith((m) => (m.contributes.toolbarButtons[0].icon = icon))
+        ).ok,
+        icon
+      ).toBe(true);
+    }
+  });
 });
 
 describe("parsePluginManifest", () => {

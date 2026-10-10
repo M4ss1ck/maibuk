@@ -147,22 +147,37 @@ function relativePathProblem(value: string, subject: string): string | null {
   return null;
 }
 
+/** An empty path segment anywhere after the first (`dist//index.js`). */
+function emptySegmentProblem(value: string, subject: string): string | null {
+  if (value.split("/").some((segment, index) => segment === "" && index > 0)) {
+    return `${subject} must not have empty path segments`;
+  }
+  return null;
+}
+
 function entryProblem(entry: string): string | null {
   const pathProblem = relativePathProblem(entry, "entry");
   if (pathProblem !== null) return pathProblem;
   if (entry.includes("?") || entry.includes("#")) {
     return "entry must not carry a query or fragment";
   }
-  if (entry.split("/").some((segment, index) => segment === "" && index > 0)) {
-    return "entry must not have empty path segments";
-  }
+  const segmentProblem = emptySegmentProblem(entry, "entry");
+  if (segmentProblem !== null) return segmentProblem;
   if (!/\.(js|mjs)$/u.test(entry)) return "entry must point to a .js or .mjs ES module";
   return null;
 }
 
 function iconProblem(icon: string): string | null {
   if (icon.endsWith(".svg")) {
-    return relativePathProblem(icon, `the .svg icon "${icon}"`);
+    const subject = `the .svg icon "${icon}"`;
+    const pathProblem = relativePathProblem(icon, subject);
+    if (pathProblem !== null) return pathProblem;
+    const segmentProblem = emptySegmentProblem(icon, subject);
+    if (segmentProblem !== null) return segmentProblem;
+    if (icon.slice(icon.lastIndexOf("/") + 1) === ".svg") {
+      return `${subject} must have a file name, like "icons/echo.svg"`;
+    }
+    return null;
   }
   if (!LUCIDE_ICON_NAMES_SET.has(icon)) {
     return `"${icon}" is not a Lucide icon name or a relative .svg path`;
