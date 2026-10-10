@@ -87,8 +87,8 @@ export interface PluginPermissionDiff {
 }
 
 /**
- * The review diff between two manifests' grants. A fresh install passes
- * `previous: null`, which lists every permission as added.
+ * The review diff between two manifests' Plugin Permissions. A fresh install
+ * passes `previous: null`, which lists every permission as added.
  */
 export function diffPluginPermissions(
   previous: PluginPermissions | null,

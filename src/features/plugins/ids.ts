@@ -33,6 +33,28 @@ export function localIdOfContribution(value: string): string | null {
   return FULL_ID_PATTERN.exec(value)?.[2] ?? null;
 }
 
+/** Why a Plugin rename map was refused; the caller maps it to a field path. */
+export type PluginRenameProblem =
+  | "not-local-id"
+  | "source-declared"
+  | "target-undeclared"
+  | "cycle";
+
+/** A refused rename map, carrying the offending ids for callers to locate. */
+export class PluginRenameError extends Error {
+  readonly problem: PluginRenameProblem;
+  readonly from: string;
+  readonly to: string | null;
+
+  constructor(problem: PluginRenameProblem, message: string, from: string, to: string | null) {
+    super(message);
+    this.name = "PluginRenameError";
+    this.problem = problem;
+    this.from = from;
+    this.to = to;
+  }
+}
+
 /**
  * Collapses a Plugin's rename chains (a→b, b→c becomes a→c) and refuses what a
  * manifest cannot express: a target outside the Plugin, a source that is still
@@ -48,12 +70,20 @@ export function collapseContributionRenames(
 ): Readonly<Record<string, string>> {
   for (const [from, to] of Object.entries(renames)) {
     if (!LOCAL_ID_PATTERN.test(from) || !LOCAL_ID_PATTERN.test(to)) {
-      throw new Error(
-        `Plugin ${kind} rename "${from}" targets "${to}", which is not a Plugin-local id`
+      throw new PluginRenameError(
+        "not-local-id",
+        `Plugin ${kind} rename "${from}" targets "${to}", which is not a Plugin-local id`,
+        from,
+        to
       );
     }
     if (declared.has(from)) {
-      throw new Error(`Plugin ${kind} rename source "${from}" is a declared ${kind}`);
+      throw new PluginRenameError(
+        "source-declared",
+        `Plugin ${kind} rename source "${from}" is a declared ${kind}`,
+        from,
+        null
+      );
     }
   }
   const collapsed: Record<string, string> = {};
@@ -61,13 +91,23 @@ export function collapseContributionRenames(
     const seen = new Set<string>([from]);
     let target = renames[from];
     while (renames[target] !== undefined) {
-      if (seen.has(target)) throw new Error(`Plugin ${kind} rename for "${from}" cycles`);
+      if (seen.has(target)) {
+        throw new PluginRenameError(
+          "cycle",
+          `Plugin ${kind} rename for "${from}" cycles`,
+          from,
+          target
+        );
+      }
       seen.add(target);
       target = renames[target];
     }
     if (!declared.has(target)) {
-      throw new Error(
-        `Plugin ${kind} rename "${from}" targets "${target}", which is not a declared ${kind}`
+      throw new PluginRenameError(
+        "target-undeclared",
+        `Plugin ${kind} rename "${from}" targets "${target}", which is not a declared ${kind}`,
+        from,
+        target
       );
     }
     collapsed[from] = target;

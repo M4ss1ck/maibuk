@@ -11,7 +11,11 @@
  */
 import { z } from "zod";
 import { normalizeVoicePhraseList } from "@/features/dictation/voice-commands";
-import { LOCAL_ID_PATTERN, collapseContributionRenames } from "@/features/plugins/ids";
+import {
+  LOCAL_ID_PATTERN,
+  PluginRenameError,
+  collapseContributionRenames,
+} from "@/features/plugins/ids";
 import LUCIDE_ICON_NAMES from "@/features/plugins/lucide-icon-names.json";
 import {
   MANIFEST_LANGUAGES,
@@ -28,7 +32,9 @@ import {
   normalizeStep,
 } from "@/lib/shortcut-keys";
 
-/** Caps that protect the host from a hostile or runaway manifest (decision #401). */
+/** Caps that protect the host from a hostile or runaway manifest. The budget
+ * decision (#401) froze runtime limits but no manifest numbers; these are this
+ * slice's proposal, kept in one place so they are easy to tune. */
 export const MAX_MANIFEST_BYTES = 64 * 1024;
 export const MAX_LOCALE_BYTES = 64 * 1024;
 export const CONTRIBUTION_LIMITS = {
@@ -123,31 +129,33 @@ function permissionProblem(permission: string): string | null {
   return `"${permission}" is not a known Plugin Permission`;
 }
 
+/** The rules a Plugin-folder-relative path must follow; `subject` names it. */
+function relativePathProblem(value: string, subject: string): string | null {
+  if (value.includes("\\")) return `${subject} must use forward slashes`;
+  if (value.includes("://")) return `${subject} must be a relative path, not a URL`;
+  if (value.startsWith("/")) return `${subject} must be relative to the Plugin folder`;
+  if (value.split("/").some((segment) => segment === "..")) {
+    return `${subject} must not leave the Plugin folder`;
+  }
+  return null;
+}
+
 function entryProblem(entry: string): string | null {
-  if (entry.includes("\\")) return "must use forward slashes";
-  if (entry.includes("://")) return "must be a relative path, not a URL";
-  if (entry.startsWith("/")) return "must be relative to the Plugin folder";
-  if (entry.includes("?") || entry.includes("#")) return "must not carry a query or fragment";
-  const segments = entry.split("/");
-  if (segments.some((segment) => segment === "..")) {
-    return "must not leave the Plugin folder";
+  const pathProblem = relativePathProblem(entry, "entry");
+  if (pathProblem !== null) return pathProblem;
+  if (entry.includes("?") || entry.includes("#")) {
+    return "entry must not carry a query or fragment";
   }
-  if (segments.some((segment, index) => segment === "" && index > 0)) {
-    return "must not have empty path segments";
+  if (entry.split("/").some((segment, index) => segment === "" && index > 0)) {
+    return "entry must not have empty path segments";
   }
-  if (!/\.(js|mjs)$/u.test(entry)) return "must point to a .js or .mjs ES module";
+  if (!/\.(js|mjs)$/u.test(entry)) return "entry must point to a .js or .mjs ES module";
   return null;
 }
 
 function iconProblem(icon: string): string | null {
   if (icon.endsWith(".svg")) {
-    if (icon.includes("\\") || icon.includes("://") || icon.startsWith("/")) {
-      return `"${icon}" must be a relative .svg path inside the Plugin folder`;
-    }
-    if (icon.split("/").some((segment) => segment === "..")) {
-      return `"${icon}" must stay inside the Plugin folder`;
-    }
-    return null;
+    return relativePathProblem(icon, `the .svg icon "${icon}"`);
   }
   if (!LUCIDE_ICON_NAMES_SET.has(icon)) {
     return `"${icon}" is not a Lucide icon name or a relative .svg path`;
@@ -232,19 +240,6 @@ function checkContributionPlatforms(
   if (new Set(platforms).size !== platforms.length) add(path, "must not list a platform twice");
 }
 
-function findRenameCycle(renames: Readonly<Record<string, string>>): string | null {
-  for (const start of Object.keys(renames)) {
-    const seen = new Set<string>([start]);
-    let current = renames[start];
-    while (renames[current] !== undefined) {
-      if (seen.has(current)) return start;
-      seen.add(current);
-      current = renames[current];
-    }
-  }
-  return null;
-}
-
 function collapseRenames(
   mapName: "commandRenames" | "rowRenames" | "buttonRenames",
   renames: Readonly<Record<string, string>> | undefined,
@@ -254,18 +249,16 @@ function collapseRenames(
   add: AddProblem
 ): void {
   if (renames === undefined) return;
-  const cycle = findRenameCycle(renames);
-  if (cycle !== null) {
-    add(mapName, `Plugin ${kind} rename for "${cycle}" cycles`);
-    return;
-  }
   try {
     const collapsed = collapseContributionRenames(renames, declared, kind);
     manifest[mapName] = { ...collapsed };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const from = /"([^"]+)"/u.exec(message)?.[1];
-    add(from === undefined ? mapName : `${mapName}.${from}`, message);
+    if (error instanceof PluginRenameError) {
+      // A cycle spans several ids, so it belongs to the map, not one entry.
+      add(error.problem === "cycle" ? mapName : `${mapName}.${error.from}`, error.message);
+      return;
+    }
+    add(mapName, error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -338,36 +331,21 @@ function collectProblems(manifest: PluginManifest): ManifestProblem[] {
   const commandById = new Map(commands.map((command) => [command.id, command]));
   const pageIds = new Set(pages.map((page) => page.id));
 
-  if (commands.length > CONTRIBUTION_LIMITS.commands) {
-    add("contributes.commands", `at most ${CONTRIBUTION_LIMITS.commands} commands are allowed`);
-  }
-  if (pages.length > CONTRIBUTION_LIMITS.pages) {
-    add("contributes.pages", `at most ${CONTRIBUTION_LIMITS.pages} pages are allowed`);
-  }
-  if (sidebarEntries.length > CONTRIBUTION_LIMITS.sidebarEntries) {
-    add(
-      "contributes.sidebarEntries",
-      `at most ${CONTRIBUTION_LIMITS.sidebarEntries} sidebarEntries are allowed`
-    );
-  }
-  if (settingsRows.length > CONTRIBUTION_LIMITS.settingsRows) {
-    add(
-      "contributes.settingsRows",
-      `at most ${CONTRIBUTION_LIMITS.settingsRows} settingsRows are allowed`
-    );
-  }
-  if (toolbarButtons.length > CONTRIBUTION_LIMITS.toolbarButtons) {
-    add(
-      "contributes.toolbarButtons",
-      `at most ${CONTRIBUTION_LIMITS.toolbarButtons} toolbarButtons are allowed`
-    );
-  }
-  if (itemMenuEntries.length > CONTRIBUTION_LIMITS.itemMenuEntries) {
-    add(
-      "contributes.itemMenuEntries",
-      `at most ${CONTRIBUTION_LIMITS.itemMenuEntries} itemMenuEntries are allowed`
-    );
-  }
+  const checkCount = <K extends keyof typeof CONTRIBUTION_LIMITS>(
+    kind: K,
+    list: readonly unknown[]
+  ): void => {
+    const limit = CONTRIBUTION_LIMITS[kind];
+    if (list.length > limit) {
+      add(`contributes.${kind}`, `at most ${limit} ${kind} are allowed`);
+    }
+  };
+  checkCount("commands", commands);
+  checkCount("pages", pages);
+  checkCount("sidebarEntries", sidebarEntries);
+  checkCount("settingsRows", settingsRows);
+  checkCount("toolbarButtons", toolbarButtons);
+  checkCount("itemMenuEntries", itemMenuEntries);
 
   checkDuplicateIds(commands, "contributes.commands", "Command", add);
   commands.forEach((command, commandIndex) => {
@@ -500,6 +478,10 @@ function collectProblems(manifest: PluginManifest): ManifestProblem[] {
     manifest,
     add
   );
+
+  // The decision's "default 1": consumers read the validated manifest, not the
+  // authored file, so the absent field becomes explicit here.
+  if (manifest.dataVersion === undefined) manifest.dataVersion = 1;
 
   return problems;
 }

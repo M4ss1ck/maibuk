@@ -30,7 +30,7 @@
     },
     "version": {
       "type": "string",
-      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$",
+      "pattern": "^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$",
       "description": "The Plugin's own version; it may go down on an update."
     },
     "apiVersion": {
@@ -41,7 +41,7 @@
     "minAppVersion": {
       "description": "The earliest Maibuk Release this Plugin tolerates.",
       "type": "string",
-      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+      "pattern": "^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
     },
     "homepage": {
       "type": "string"
@@ -86,14 +86,14 @@
           "items": {
             "type": "string"
           },
-          "description": "Grants the author must approve to enable the Plugin."
+          "description": "Plugin Permissions the author must approve to enable the Plugin."
         },
         "optional": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Grants the author may deny one by one."
+          "description": "Plugin Permissions the author may deny one by one."
         }
       },
       "required": [

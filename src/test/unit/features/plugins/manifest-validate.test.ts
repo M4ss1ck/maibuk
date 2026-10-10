@@ -262,6 +262,14 @@ describe("validateManifestValue: version fields", () => {
       problemsFor((m) => (m.version = "v1.0.0")),
       "version"
     );
+    expectProblem(
+      problemsFor((m) => (m.version = "01.2.3")),
+      "version"
+    );
+    expectProblem(
+      problemsFor((m) => (m.minAppVersion = "01.2.3")),
+      "minAppVersion"
+    );
   });
 
   it("accepts a prerelease Plugin version", () => {
@@ -379,6 +387,16 @@ describe("validateManifestValue: platforms, lifecycle, language, dataVersion, cu
       problemsFor((m) => (m.dataVersion = 1.5)),
       "dataVersion"
     );
+  });
+
+  it("defaults dataVersion to 1 and keeps an explicit one", () => {
+    const withoutDataVersion = validateManifestValue(baseManifestWith((m) => delete m.dataVersion));
+    if (!withoutDataVersion.ok) throw new Error(JSON.stringify(withoutDataVersion.problems));
+    expect(withoutDataVersion.manifest.dataVersion).toBe(1);
+
+    const explicit = validateManifestValue(baseManifestWith((m) => (m.dataVersion = 4)));
+    if (!explicit.ok) throw new Error(JSON.stringify(explicit.problems));
+    expect(explicit.manifest.dataVersion).toBe(4);
   });
 
   it("refuses a non-boolean customUi", () => {

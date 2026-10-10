@@ -28,8 +28,20 @@ interface Bounds {
   readonly upperInclusive: boolean;
 }
 
-const VERSION_PATTERN =
-  /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const NUMERIC_SOURCE = "(?:0|[1-9]\\d*)";
+const PRERELEASE_IDENTIFIER_SOURCE = "(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)";
+const BUILD_SOURCE = "[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*";
+
+/**
+ * The concrete-version grammar (no anchors, no leading `v`), shared with the
+ * manifest schema so the JSON Schema and this parser cannot disagree on what a
+ * version is. Numeric identifiers carry no leading zeros.
+ */
+export const SEMVER_SOURCE = `${NUMERIC_SOURCE}\\.${NUMERIC_SOURCE}\\.${NUMERIC_SOURCE}(?:-${PRERELEASE_IDENTIFIER_SOURCE}(?:\\.${PRERELEASE_IDENTIFIER_SOURCE})*)?(?:\\+${BUILD_SOURCE})?`;
+
+const VERSION_PATTERN = new RegExp(
+  `^v?(${NUMERIC_SOURCE})\\.(${NUMERIC_SOURCE})\\.(${NUMERIC_SOURCE})(?:-(${PRERELEASE_IDENTIFIER_SOURCE}(?:\\.${PRERELEASE_IDENTIFIER_SOURCE})*))?(?:\\+${BUILD_SOURCE})?$`
+);
 
 const PARTIAL_PATTERN =
   /^(?:(x|X|\*)|(0|[1-9]\d*))(?:\.(?:(x|X|\*)|(0|[1-9]\d*)))?(?:\.(?:(x|X|\*)|(0|[1-9]\d*)))?$/;
@@ -41,16 +53,11 @@ function version(major: number, minor: number, patch: number): Semver {
 export function parseSemver(value: string): Semver | null {
   const match = VERSION_PATTERN.exec(value);
   if (match === null) return null;
-  const prerelease = match[4] === undefined ? [] : match[4].split(".");
-  for (const identifier of prerelease) {
-    if (/^\d+$/.test(identifier) && identifier.length > 1 && identifier.startsWith("0"))
-      return null;
-  }
   return {
     major: Number(match[1]),
     minor: Number(match[2]),
     patch: Number(match[3]),
-    prerelease,
+    prerelease: match[4] === undefined ? [] : match[4].split("."),
   };
 }
 

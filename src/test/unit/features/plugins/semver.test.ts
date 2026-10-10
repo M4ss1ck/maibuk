@@ -20,7 +20,22 @@ describe("parseSemver", () => {
   });
 
   it("refuses what is not a semver version", () => {
-    for (const value of ["", "1", "1.2", "1.2.3.4", "a.b.c", "1.2.x", "^1.2.3", " 1.2.3"]) {
+    for (const value of [
+      "",
+      "1",
+      "1.2",
+      "1.2.3.4",
+      "a.b.c",
+      "1.2.x",
+      "^1.2.3",
+      " 1.2.3",
+      "01.2.3",
+      "1.02.3",
+      "1.2.03",
+      "1.2.3-01",
+      "1.2.3-",
+      "1.2.3+",
+    ]) {
       expect(parseSemver(value), value).toBeNull();
     }
   });

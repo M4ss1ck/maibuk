@@ -7,11 +7,12 @@
  * permission hosts, icon names, counts) run in `manifest-validate.ts`.
  *
  * Unknown fields are refused everywhere (a misspelled `permisions` must not
- * silently ship a Plugin with no grants), except `x-*` keys the author's own
- * tooling may use.
+ * silently ship a Plugin with no Plugin Permissions), except `x-*` keys the
+ * author's own tooling may use.
  */
 import { z } from "zod";
 import { LOCAL_ID_SOURCE, PLUGIN_ID_SOURCE } from "@/features/plugins/ids";
+import { SEMVER_SOURCE } from "@/features/plugins/semver";
 import type { SettingsPlatform } from "@/features/settings/rows";
 import type { Language } from "@/features/settings/types";
 import { VOICE_VOCABULARY, type VoiceVerbClass } from "@/features/dictation/voice-commands";
@@ -31,8 +32,7 @@ export const PLUGIN_TARGETS = ["book", "chapter", "note", "canvas", "canvasNode"
 
 const VOICE_VERB_CLASSES = Object.keys(VOICE_VOCABULARY.en.verbs) as readonly VoiceVerbClass[];
 
-const SEMVER_PATTERN =
-  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const SEMVER_PATTERN = new RegExp(`^${SEMVER_SOURCE}$`);
 
 /**
  * An object that refuses unknown fields except `x-*`, with one message per
@@ -63,20 +63,16 @@ const shortcuts = z.array(shortcut);
 
 const shortcutList = (description: string) => shortcuts.describe(description).optional();
 
-const voicePhrases = strictObject({
-  en: z.array(z.string().min(1)).min(1).optional(),
-  es: z.array(z.string().min(1)).min(1).optional(),
-});
-
-const voiceTargets = strictObject({
+/** Non-empty phrase or target lists per Dictation Language. */
+const languageListMap = strictObject({
   en: z.array(z.string().min(1)).min(1).optional(),
   es: z.array(z.string().min(1)).min(1).optional(),
 });
 
 const voiceSpec = strictObject({
   verbs: z.array(z.enum(VOICE_VERB_CLASSES)).min(1).optional(),
-  targets: voiceTargets.optional(),
-  phrases: voicePhrases.optional(),
+  targets: languageListMap.optional(),
+  phrases: languageListMap.optional(),
 }).refine(
   (voice) =>
     voice.verbs !== undefined || voice.targets !== undefined || voice.phrases !== undefined,
@@ -197,8 +193,8 @@ export function buildPluginManifestSchema(options: { builtIn: boolean }) {
     permissions: strictObject({
       required: z
         .array(z.string())
-        .describe("Grants the author must approve to enable the Plugin."),
-      optional: z.array(z.string()).describe("Grants the author may deny one by one."),
+        .describe("Plugin Permissions the author must approve to enable the Plugin."),
+      optional: z.array(z.string()).describe("Plugin Permissions the author may deny one by one."),
     }),
     dataVersion: z
       .number()
