@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
-import { onChange, resetChangeFeedForTests, type Change } from "@/features/sync/change-feed";
+import {
+  isEntityChange,
+  onChange,
+  resetChangeFeedForTests,
+  type Change,
+} from "@/features/sync/change-feed";
 
 let testDb: DatabaseAdapter;
 
@@ -25,8 +30,8 @@ describe("note write path", () => {
     mockGetDatabase.mockResolvedValue(testDb);
     resetChangeFeedForTests();
     changes = [];
-    onChange((change) => {
-      changes.push(change);
+    onChange((signal) => {
+      if (isEntityChange(signal)) changes.push(signal);
     });
     useNoteStore.setState({ notes: [], currentNote: null, isLoading: false, error: null });
   });

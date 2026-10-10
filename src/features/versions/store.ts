@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { getDatabase } from "@/lib/db";
 import { serializeBook, applyBookSnapshot } from "@/features/sync/serializer";
-import { refreshViewsForLocalRestore } from "@/features/sync/view-refresh";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { computeChecksum } from "@/lib/checksum";
 import { VERSION_AUTO_PRUNE_KEEP } from "@/constants";
@@ -355,10 +354,9 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
 
     // A local apply reads as a fresh local edit (timestamps move to now),
     // persists through the book write path, and emits the local Change so
-    // Auto Sync picks the restored book up. Resolves with the rows as stored.
+    // Auto Sync picks the restored book up and open views refresh through the
+    // Change Feed. Resolves with the rows as stored.
     const applied = await applyBookSnapshot(snapshot, "local");
-    // The writing store was bypassed, so refresh the views explicitly.
-    await refreshViewsForLocalRestore(applied.book.id);
     // Re-fetch page 1 so the new pre-restore version is visible on top.
     await useVersionStore.getState().loadVersions(bookId, 1);
     return applied;

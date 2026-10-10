@@ -94,7 +94,7 @@ describe("NoteEditor after a sync pull replaces the document", () => {
     editorProps.current = null;
   });
 
-  it("drops a save queued for the old text and shows the pulled text", async () => {
+  it("keeps a save queued for the typing and writes it over the pulled text", async () => {
     vi.useFakeTimers();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
     const { rerender } = render(<NoteEditor note={buildNote()} onSave={onSave} />);
@@ -103,12 +103,16 @@ describe("NoteEditor after a sync pull replaces the document", () => {
       editorProps.current?.onUpdate("<p>Typed before the pull</p>");
     });
     rerender(<NoteEditor note={buildNote({ content: "<p>Remote</p>" })} onSave={onSave} />);
+    // The pull is the store's newer row, but the author's unsaved text is
+    // newer still: it stays on screen and the pending save writes it over.
+    expect(editorProps.current?.content).not.toBe("<p>Remote</p>");
     await act(async () => {
       vi.advanceTimersByTime(1500);
     });
 
-    expect(onSave).not.toHaveBeenCalled();
-    expect(editorProps.current?.content).toBe("<p>Remote</p>");
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ content: "<p>Typed before the pull</p>" })
+    );
   });
 
   it("lets an automatic sync land the pending save before it reads the database", async () => {

@@ -6,6 +6,7 @@ import { compactLibrary } from "@/lib/db/compact";
 import { isTransactionControl } from "@/lib/db/atomic";
 import { parseSqlStatements } from "@/lib/db/sql-parser";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
+import { emitChange } from "@/features/sync/change-feed";
 
 let db: DatabaseAdapter | null = null;
 let dbPromise: Promise<DatabaseAdapter> | null = null;
@@ -409,25 +410,32 @@ export async function exportDatabase(): Promise<Uint8Array> {
 export async function resetDatabase(): Promise<void> {
   const database = await getDatabase();
 
-  // Delete all data from tables (order matters due to foreign keys)
-  await database.execute("DELETE FROM chapter_epub_meta").catch(() => {});
-  await database.execute("DELETE FROM epub_structures").catch(() => {});
-  await database.execute("DELETE FROM book_styles").catch(() => {});
-  await database.execute("DELETE FROM book_metadata").catch(() => {});
-  await database.execute("DELETE FROM project_assets").catch(() => {});
-  await database.execute("DELETE FROM chapters");
-  await database.execute("DELETE FROM book_versions");
-  await database.execute("DELETE FROM books");
-  await database.execute("DELETE FROM cover_templates");
-  await database.execute("DELETE FROM notes").catch(() => {});
-  await database.execute("DELETE FROM canvases").catch(() => {});
-  await database.execute("DELETE FROM links").catch(() => {});
-  await database.execute("DELETE FROM sync_tombstones").catch(() => {});
-  await database.execute("DELETE FROM sync_state").catch(() => {});
-  await database.execute("DELETE FROM settings");
-  await database.execute("DELETE FROM metrics_cache").catch(() => {});
-  await database.execute("DELETE FROM metrics_event_tombstones").catch(() => {});
-  await database.execute("DELETE FROM metrics_events").catch(() => {});
+  // One transaction: a failure clears nothing. Every table is created by
+  // initializeSchema (the metrics tables by ensureMetricsSchema), so none can
+  // be missing. Order matters for foreign keys.
+  await database.executeAtomic([
+    "DELETE FROM chapter_epub_meta",
+    "DELETE FROM epub_structures",
+    "DELETE FROM book_styles",
+    "DELETE FROM book_metadata",
+    "DELETE FROM project_assets",
+    "DELETE FROM chapters",
+    "DELETE FROM book_versions",
+    "DELETE FROM books",
+    "DELETE FROM cover_templates",
+    "DELETE FROM notes",
+    "DELETE FROM canvases",
+    "DELETE FROM links",
+    "DELETE FROM sync_tombstones",
+    "DELETE FROM sync_state",
+    "DELETE FROM settings",
+    "DELETE FROM metrics_cache",
+    "DELETE FROM metrics_event_tombstones",
+    "DELETE FROM metrics_events",
+  ]);
+
+  // The Library is empty and available; only a completed Reset announces it.
+  await emitChange({ scope: "all", reason: "resetLibrary" });
 }
 
 /**
@@ -467,4 +475,7 @@ export async function importDatabase(sqlContent: string): Promise<void> {
     .filter((s) => !isTransactionControl(s))
     .map((s) => normaliseToUpsert(s));
   await database.executeAtomic(statements);
+
+  // The merged rows persisted; only a completed load announces it.
+  await emitChange({ scope: "all", reason: "databaseLoad" });
 }

@@ -8,6 +8,7 @@ import {
   toNote,
   updateNoteRow,
 } from "@/features/notes/write";
+import { STORE_VIEW } from "@/features/sync/change-feed";
 import type {
   CreateNoteInput,
   Note,
@@ -93,7 +94,8 @@ export const useNoteStore = create<NoteStore>((set) => ({
 
   createNote: async (input: CreateNoteInput) => {
     // The write path persists, returns the stored note, and emits the Change.
-    const note = await createNoteRow(input, "local");
+    // The store updates its own view below, so the Change needs no refresh.
+    const note = await createNoteRow(input, "local", STORE_VIEW);
 
     set((state) => ({ notes: sortNotes([...state.notes, note]) }));
     return note;
@@ -101,7 +103,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
 
   updateNote: async (input: UpdateNoteInput) => {
     // The write path persists, returns the stored note, and emits the Change.
-    const updated = await updateNoteRow(input, "local");
+    const updated = await updateNoteRow(input, "local", STORE_VIEW);
     if (!updated) return null;
 
     set((state) => ({
@@ -114,7 +116,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
 
   deleteNote: async (id: string) => {
     // The write path records the tombstone, deletes, and emits the Change.
-    await deleteNoteRow(id, "local");
+    await deleteNoteRow(id, "local", STORE_VIEW);
 
     set((state) => ({
       notes: state.notes.filter((n) => n.id !== id),
@@ -124,7 +126,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
 
   reorderNotes: async (orderedItems: string[] | ReorderNoteItem[]) => {
     // The write path persists the order and emits the Change.
-    await reorderNoteRows(orderedItems, "local");
+    await reorderNoteRows(orderedItems, "local", STORE_VIEW);
     const db = await getDatabase();
     const rows = await db.select<Record<string, unknown>[]>(
       'SELECT * FROM notes ORDER BY pinned DESC, "order" ASC'

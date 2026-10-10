@@ -6,7 +6,12 @@ import type { Note } from "@/features/notes/types";
 import type { AppliedBook } from "@/features/books/write";
 import { useChapterStore } from "@/features/chapters/store";
 import { installViewRefresh, resetViewRefreshForTests } from "@/features/sync/view-refresh";
-import { onChange, resetChangeFeedForTests, type Change } from "@/features/sync/change-feed";
+import {
+  isEntityChange,
+  onChange,
+  resetChangeFeedForTests,
+  type Change,
+} from "@/features/sync/change-feed";
 
 let testDb: DatabaseAdapter;
 
@@ -235,8 +240,8 @@ describe("note snapshot serializer", () => {
     // newer sync clock.
     const { contentUpdatedAt: _dropped, ...legacyFields } = snapshot.note;
     const seen: Change[] = [];
-    const off = onChange((change) => {
-      seen.push(change);
+    const off = onChange((signal) => {
+      if (isEntityChange(signal)) seen.push(signal);
     });
     try {
       await applyNoteSnapshot({
@@ -271,8 +276,8 @@ describe("note snapshot serializer", () => {
     } as DatabaseAdapter);
 
     const seen: Change[] = [];
-    const off = onChange((change) => {
-      seen.push(change);
+    const off = onChange((signal) => {
+      if (isEntityChange(signal)) seen.push(signal);
     });
     let applied: Note | undefined;
     try {
@@ -876,8 +881,8 @@ describe("book snapshot serializer", () => {
     } as DatabaseAdapter);
 
     const seen: Change[] = [];
-    const off = onChange((change) => {
-      seen.push(change);
+    const off = onChange((signal) => {
+      if (isEntityChange(signal)) seen.push(signal);
     });
     let applied: AppliedBook | undefined;
     try {
@@ -939,8 +944,8 @@ describe("book snapshot serializer", () => {
     snapshot.book.contentUpdatedAt = 40;
 
     const seen: Change[] = [];
-    const off = onChange((change) => {
-      seen.push(change);
+    const off = onChange((signal) => {
+      if (isEntityChange(signal)) seen.push(signal);
     });
     try {
       await applyBookSnapshot(snapshot);

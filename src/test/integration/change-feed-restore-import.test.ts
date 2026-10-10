@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
-import { onChange, resetChangeFeedForTests, type Change } from "@/features/sync/change-feed";
+import { isEntityChange, onChange, resetChangeFeedForTests, type Change } from "@/features/sync/change-feed";
 import { installViewRefresh, resetViewRefreshForTests } from "@/features/sync/view-refresh";
 import type { BookSnapshot } from "@/features/sync/types";
 
@@ -89,8 +89,8 @@ describe("write path integration", () => {
     resetViewRefreshForTests();
     installViewRefresh();
     changes = [];
-    onChange((change) => {
-      changes.push(change);
+    onChange((signal) => {
+      if (isEntityChange(signal)) changes.push(signal);
     });
     useBookStore.setState({ books: [], currentBook: null, isLoading: false, error: null });
     useChapterStore.setState({

@@ -18,6 +18,7 @@ import { dumpHasDataAsync } from "@/features/sync/sync-codec";
 import { createAsyncQueue } from "@/lib/async-queue";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
+import { emitChange } from "@/features/sync/change-feed";
 import { AtomicStatementError } from "@/lib/db/atomic";
 
 // Serializes expensive backup work (create/restore) and concurrent
@@ -296,27 +297,36 @@ export class BackupService {
       throw new Error(`RESTORE_FAILED: ${detail}`);
     }
 
-    await useBookStore.getState().loadBooks();
-    await useNoteStore.getState().loadNotes();
-    await useCanvasStore.getState().loadCanvases();
-    const previousBookId = useChapterStore.getState().currentBookId;
-    const restoredBooks = useBookStore.getState().books;
-    const currentBookStillExists = previousBookId
-      ? restoredBooks.some((book) => book.id === previousBookId)
-      : false;
+    // Once replaceRestoreData resolved, the replacement committed and the
+    // Restore is complete. The signal follows the view re-reads on success, so
+    // a listener reading the stores on the signal sees the restored rows, but
+    // it still fires in the finally when a re-read throws: the commit is the
+    // completion (#430), and a view reload failure must not suppress it. The
+    // reload error keeps propagating to the caller.
+    try {
+      await useBookStore.getState().loadBooks();
+      await useNoteStore.getState().loadNotes();
+      await useCanvasStore.getState().loadCanvases();
+      const previousBookId = useChapterStore.getState().currentBookId;
+      const restoredBooks = useBookStore.getState().books;
+      const currentBookStillExists = previousBookId
+        ? restoredBooks.some((book) => book.id === previousBookId)
+        : false;
 
-    if (currentBookStillExists && previousBookId) {
-      await useChapterStore.getState().loadChapters(previousBookId);
-      return;
+      if (currentBookStillExists && previousBookId) {
+        await useChapterStore.getState().loadChapters(previousBookId);
+      } else {
+        useChapterStore.setState({
+          chapters: [],
+          currentChapter: null,
+          currentBookId: null,
+          isLoading: false,
+          error: null,
+        });
+      }
+    } finally {
+      await emitChange({ scope: "all", reason: "restore" });
     }
-
-    useChapterStore.setState({
-      chapters: [],
-      currentChapter: null,
-      currentBookId: null,
-      isLoading: false,
-      error: null,
-    });
   }
 
   async deleteByTrigger(trigger: BackupEntry["trigger"]): Promise<void> {

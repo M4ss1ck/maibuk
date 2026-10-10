@@ -20,18 +20,26 @@ export {
 } from "@/features/sync/serializer";
 export {
   emitChange,
+  isBulkSignal,
+  isEntityChange,
+  isLibraryAvailability,
   onChange,
   resetChangeFeedForTests,
+  STORE_VIEW,
 } from "@/features/sync/change-feed";
 export type {
+  BulkSignal,
+  BulkReason,
   Change,
   ChangeEntity,
+  ChangeFeedMeta,
+  ChangeFeedSignal,
   ChangeKind,
   ChangeOrigin,
+  LibraryAvailability,
 } from "@/features/sync/change-feed";
 export {
   installViewRefresh,
-  refreshViewsForLocalRestore,
   resetViewRefreshForTests,
 } from "@/features/sync/view-refresh";
 export {

@@ -9,6 +9,7 @@ import {
   updateCanvasDocRow,
   updateCanvasRow,
 } from "@/features/canvas/write";
+import { STORE_VIEW } from "@/features/sync/change-feed";
 import { connectionBetween, fromConnection } from "@/features/canvas/reactFlowAdapter";
 import {
   isFinitePosition,
@@ -314,14 +315,14 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
 
   createCanvas: async (input = {}) => {
     // The write path persists, returns the stored canvas, and emits the Change.
-    const canvas = await createCanvasRow(input, "local");
+    const canvas = await createCanvasRow(input, "local", STORE_VIEW);
     set((state) => ({ canvases: sortCanvases([...state.canvases, canvas]) }));
     return canvas;
   },
 
   deleteCanvas: async (id) => {
     // The write path records the tombstone, deletes, and emits the Change.
-    await deleteCanvasRow(id, "local");
+    await deleteCanvasRow(id, "local", STORE_VIEW);
     set((state) => ({
       canvases: state.canvases.filter((canvas) => canvas.id !== id),
       ...(state.current?.id === id ? editorResetState() : {}),
@@ -333,7 +334,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   updateCanvas: async (id, input) => {
     // The write path persists, returns the stored canvas, and emits the
     // Change (content for a title change, metadata for pin/order).
-    const stored = await canvasWriteQueue.enqueue(() => updateCanvasRow(id, input, "local"));
+    const stored = await canvasWriteQueue.enqueue(() => updateCanvasRow(id, input, "local", STORE_VIEW));
     if (!stored) return;
     set((state) => ({
       canvases: sortCanvases(
@@ -367,7 +368,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
 
   reorderCanvases: async (items) => {
     // The write path persists the order and emits one metadata Change per row.
-    await canvasWriteQueue.enqueue(() => reorderCanvasRows(items, "local"));
+    await canvasWriteQueue.enqueue(() => reorderCanvasRows(items, "local", STORE_VIEW));
     const now = nowSeconds();
     const orderById = new Map(items.map((item) => [item.id, item.order]));
     set((state) => ({
@@ -853,7 +854,9 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     }
     // Recovery is a content edit like any other: it goes through the write
     // path so it emits a Change and syncs.
-    const stored = await canvasWriteQueue.enqueue(() => updateCanvasDocRow(canvasId, doc, "local"));
+    const stored = await canvasWriteQueue.enqueue(() =>
+      updateCanvasDocRow(canvasId, doc, "local", STORE_VIEW)
+    );
     if (!stored) {
       throw new Error("Canvas document replacement is not allowed");
     }
@@ -898,7 +901,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       // move. This runs inside the Edit Session's own queue, so it must not
       // re-enter the shared write queue (that self-deadlocks); metadata saves
       // below stay on the shared queue, where the session save never runs.
-      const stored = await updateCanvasDocRow(canvasId, doc, "local");
+      const stored = await updateCanvasDocRow(canvasId, doc, "local", STORE_VIEW);
       if (!stored) return null;
       if (get().current?.id !== canvasId) return stored;
       set((currentState) => ({
@@ -946,7 +949,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       // The write path persists, returns the stored canvas, and emits the
       // Change. A delayed snapshot for another canvas is dropped on arrival.
       const stored = await canvasWriteQueue.enqueue(() =>
-        updateCanvasDocRow(canvasId, doc, "local")
+        updateCanvasDocRow(canvasId, doc, "local", STORE_VIEW)
       );
       if (!stored || get().current?.id !== canvasId) return;
       set((currentState) => ({

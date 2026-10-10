@@ -31,9 +31,16 @@ vi.mock("@/features/sync/pending-edits", () => ({
   flushPendingEdits: mockFlushPendingEdits,
 }));
 
+/** The DELETE statements a mocked execute call received. */
+function deletesFrom(execute: ReturnType<typeof vi.fn>): string[] {
+  return execute.mock.calls
+    .map(([sql]) => String(sql))
+    .filter((sql) => sql.trimStart().startsWith("DELETE"));
+}
+
 describe("src/lib/db/index.ts", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.resetModules();
     mockCreateDatabase.mockResolvedValue(mockDb);
     mockDb.execute.mockResolvedValue({ rowsAffected: 0 });
@@ -201,57 +208,96 @@ describe("src/lib/db/index.ts", () => {
   });
 
   describe("resetDatabase()", () => {
-    it("deletes all data from tables in the correct order", async () => {
+    it("clears every table in one transaction, in foreign-key order", async () => {
       const { resetDatabase } = await import("@/lib/db");
 
       await resetDatabase();
 
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM chapters");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM book_versions");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM books");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM cover_templates");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM settings");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM metrics_cache");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM metrics_event_tombstones");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM metrics_events");
+      expect(mockDb.executeAtomic).toHaveBeenCalledTimes(1);
+      expect(mockDb.executeAtomic).toHaveBeenCalledWith([
+        "DELETE FROM chapter_epub_meta",
+        "DELETE FROM epub_structures",
+        "DELETE FROM book_styles",
+        "DELETE FROM book_metadata",
+        "DELETE FROM project_assets",
+        "DELETE FROM chapters",
+        "DELETE FROM book_versions",
+        "DELETE FROM books",
+        "DELETE FROM cover_templates",
+        "DELETE FROM notes",
+        "DELETE FROM canvases",
+        "DELETE FROM links",
+        "DELETE FROM sync_tombstones",
+        "DELETE FROM sync_state",
+        "DELETE FROM settings",
+        "DELETE FROM metrics_cache",
+        "DELETE FROM metrics_event_tombstones",
+        "DELETE FROM metrics_events",
+      ]);
+      // The per-statement path is gone: a failure must clear nothing.
+      expect(deletesFrom(mockDb.execute)).toEqual([]);
     });
 
-    it("does not throw when metrics tables do not exist", async () => {
+    it("announces the completed Reset once on the Change Feed", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
       const { resetDatabase } = await import("@/lib/db");
-      mockDb.execute.mockImplementation((sql: string) => {
-        if (sql.includes("metrics_")) {
-          return Promise.reject(new Error("no such table"));
-        }
-        return Promise.resolve({ rowsAffected: 0 });
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
       });
 
-      await expect(resetDatabase()).resolves.toBeUndefined();
+      try {
+        await resetDatabase();
+      } finally {
+        off();
+      }
+
+      expect(signals).toEqual([{ scope: "all", reason: "resetLibrary" }]);
     });
 
-    it("does not throw when optional tables are missing", async () => {
+    it("announces the completed Reset only after the transaction committed", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
       const { resetDatabase } = await import("@/lib/db");
-      // Every DELETE guarded by .catch() is for a table that may not exist yet.
-      const optional = [
-        "chapter_epub_meta",
-        "epub_structures",
-        "book_styles",
-        "book_metadata",
-        "project_assets",
-        "notes",
-        "links",
-        "sync_tombstones",
-        "metrics_cache",
-        "metrics_event_tombstones",
-        "metrics_events",
-      ];
-      mockDb.execute.mockImplementation((sql: string) => {
-        if (optional.some((table) => sql === `DELETE FROM ${table}`)) {
-          return Promise.reject(new Error("no such table"));
-        }
-        return Promise.resolve({ rowsAffected: 0 });
+      resetChangeFeedForTests();
+      const order: string[] = [];
+      mockDb.executeAtomic.mockImplementation(async () => {
+        order.push("clear");
+      });
+      const off = onChange(() => {
+        order.push("signal");
       });
 
-      await expect(resetDatabase()).resolves.toBeUndefined();
+      try {
+        await resetDatabase();
+      } finally {
+        off();
+      }
+
+      // A listener reading the Library on the signal sees it already empty;
+      // the page reload that resets the views follows the signal (ADR 0026).
+      expect(order).toEqual(["clear", "signal"]);
+    });
+
+    it("clears nothing and announces nothing when a Reset fails partway", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { resetDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+      mockDb.executeAtomic.mockRejectedValueOnce(new Error("disk full"));
+
+      try {
+        await expect(resetDatabase()).rejects.toThrow("disk full");
+      } finally {
+        off();
+      }
+
+      // The failed transaction rolled back: no table was cleared.
+      expect(deletesFrom(mockDb.execute)).toEqual([]);
+      expect(signals).toEqual([]);
     });
   });
 
@@ -291,6 +337,68 @@ describe("src/lib/db/index.ts", () => {
         "disk full"
       );
       expect(mockDb.executeAtomic).not.toHaveBeenCalled();
+    });
+
+    it("announces the completed Database File load once on the Change Feed", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { importDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+
+      try {
+        await importDatabase(`INSERT INTO books (id) VALUES ('1');`);
+      } finally {
+        off();
+      }
+
+      expect(signals).toEqual([{ scope: "all", reason: "databaseLoad" }]);
+    });
+
+    it("announces the completed Database File load only after the rows persisted", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { importDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const order: string[] = [];
+      mockDb.executeAtomic.mockImplementation(async () => {
+        order.push("load");
+      });
+      const off = onChange(() => {
+        order.push("signal");
+      });
+
+      try {
+        await importDatabase(`INSERT INTO books (id) VALUES ('1');`);
+      } finally {
+        off();
+      }
+
+      // A listener reading the Library on the signal sees the loaded rows;
+      // the page reload that resets the views follows the signal (ADR 0026).
+      expect(order).toEqual(["load", "signal"]);
+    });
+
+    it("announces no completion when the load fails", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { importDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+      mockDb.executeAtomic.mockRejectedValueOnce(new Error("disk full"));
+
+      try {
+        await expect(importDatabase(`INSERT INTO books (id) VALUES ('1');`)).rejects.toThrow(
+          "disk full"
+        );
+      } finally {
+        off();
+      }
+
+      expect(signals).toEqual([]);
     });
   });
 });

@@ -2,7 +2,6 @@ import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
 import { fetchStoredBook, removeBookRow } from "@/features/books/write";
 import { fetchStoredChapters } from "@/features/chapters/write";
-import { refreshViewsForLocalRestore } from "@/features/sync/view-refresh";
 import {
   insertBookMetadata,
   insertBookStyles,
@@ -114,20 +113,17 @@ export async function importEpubProject(input: {
 }
 
 /**
- * Remove a half-imported book through the shared book removal path (no
- * tombstone: a failed import was never synced) and refresh the views so no
- * phantom book lingers. Best-effort: the original import error takes
- * precedence.
+ * Remove a half-imported book through the shared book removal path. Records
+ * no tombstone: a failed import was never synced, so there is nothing to push
+ * and nothing for Auto Sync's scheduled run to delete remotely. The Change is
+ * a local write (ADR 0026 rejects mislabelling local writes as remote), so it
+ * refreshes the views and no phantom book lingers. Best-effort: the original
+ * import error takes precedence.
  */
 async function cleanupPartialImport(bookId: string): Promise<void> {
   try {
-    await removeBookRow(bookId, "remote");
+    await removeBookRow(bookId, "local");
   } catch {
     // The import already failed; a cleanup failure must not mask it.
-  }
-  try {
-    await refreshViewsForLocalRestore(bookId);
-  } catch {
-    // View refresh is best-effort during cleanup.
   }
 }

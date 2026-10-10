@@ -2,7 +2,9 @@
 // table goes through here — normalize, persist, return the stored Chapter,
 // emit the Change. Chapter edits belong to their containing Book, so Changes
 // use entity "book" with the containing book's id. Stores and the sync
-// serializer all call these; nobody hand-signals.
+// serializer all call these; nobody hand-signals. The optional `viewMeta`
+// marks a store's own write (STORE_VIEW): view refresh skips it because that
+// store re-reads its view itself.
 //
 // A chapter content change (title, body, synopsis) advances the containing
 // Book's Last Edited; metadata changes (type, status, inclusion, order) do
@@ -10,7 +12,13 @@
 
 import { getDatabase } from "@/lib/db";
 import { assertWritableId } from "@/features/tutorial/library-switch";
-import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/change-feed";
+import { flushForOutsideWrite } from "@/features/sync/pending-edits";
+import {
+  emitChange,
+  type ChangeFeedMeta,
+  type ChangeKind,
+  type ChangeOrigin,
+} from "@/features/sync/change-feed";
 import { assignHeadingIds } from "@/features/links/heading-ids";
 import { reindexSource } from "@/features/links/link-index";
 import type {
@@ -99,10 +107,12 @@ export async function fetchStoredChapters(bookId: string): Promise<Chapter[]> {
 
 export async function createChapterRow(
   input: CreateChapterInput,
-  origin: ChangeOrigin
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
 ): Promise<Chapter> {
   assertWritableId(input.bookId);
   assertWritableId(input.parentId);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const id = generateId();
   const now = nowSeconds();
@@ -161,7 +171,10 @@ export async function createChapterRow(
     createdAt: new Date(now * 1000),
     updatedAt: new Date(now * 1000),
   };
-  await emitChange({ entity: "book", id: input.bookId, origin, kind: "content" });
+  await emitChange(
+    { entity: "book", id: input.bookId, origin, kind: "content" },
+    viewMeta
+  );
   if (parentError) throw parentError;
   return own;
 }
@@ -174,9 +187,11 @@ export async function createChapterRow(
 export async function updateChapterRow(
   id: string,
   input: UpdateChapterInput,
-  origin: ChangeOrigin
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
 ): Promise<Chapter | null> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const now = nowSeconds();
   const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM chapters WHERE id = ?", [
@@ -295,13 +310,21 @@ export async function updateChapterRow(
       contentHtml: normalizedContent,
     }).catch(() => {});
   }
-  await emitChange({ entity: "book", id: existing.bookId, origin, kind });
+  await emitChange(
+    { entity: "book", id: existing.bookId, origin, kind },
+    viewMeta
+  );
   if (parentError) throw parentError;
   return own;
 }
 
-export async function deleteChapterRow(id: string, origin: ChangeOrigin): Promise<void> {
+export async function deleteChapterRow(
+  id: string,
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
+): Promise<void> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const rows = await db.select<{ book_id: string }[]>("SELECT book_id FROM chapters WHERE id = ?", [
     id,
@@ -322,7 +345,10 @@ export async function deleteChapterRow(id: string, origin: ChangeOrigin): Promis
     } catch (error) {
       parentError = error;
     }
-    await emitChange({ entity: "book", id: rows[0].book_id, origin, kind: "content" });
+    await emitChange(
+      { entity: "book", id: rows[0].book_id, origin, kind: "content" },
+      viewMeta
+    );
     if (parentError) throw parentError;
   }
 }
@@ -330,10 +356,12 @@ export async function deleteChapterRow(id: string, origin: ChangeOrigin): Promis
 export async function reorderChapterRows(
   bookId: string,
   chapterIds: string[],
-  origin: ChangeOrigin
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
 ): Promise<void> {
   assertWritableId(bookId);
   for (const chapterId of chapterIds) assertWritableId(chapterId);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const now = nowSeconds();
 
@@ -353,7 +381,10 @@ export async function reorderChapterRows(
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       if (persisted > 0) {
-        await emitChange({ entity: "book", id: bookId, origin, kind: "metadata" });
+        await emitChange(
+          { entity: "book", id: bookId, origin, kind: "metadata" },
+          viewMeta
+        );
       }
       throw new Error(`Failed to reorder chapter ${i + 1}/${chapterIds.length}: ${detail}`);
     }
@@ -361,6 +392,9 @@ export async function reorderChapterRows(
   }
 
   if (persisted > 0) {
-    await emitChange({ entity: "book", id: bookId, origin, kind: "metadata" });
+    await emitChange(
+      { entity: "book", id: bookId, origin, kind: "metadata" },
+      viewMeta
+    );
   }
 }

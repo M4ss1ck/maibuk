@@ -1,7 +1,10 @@
 // Editors hold keystrokes in a debounced save for about a second. Before a sync
-// reads the database, and again right before it applies a pulled change, those
-// pending saves must land; otherwise the pull would replace text that never
-// reached the database. Editors register a flush while mounted.
+// reads the database, before it applies a pulled change, and before a local
+// write from outside a store, those pending saves must land; otherwise the
+// write would replace text that never reached the database. Editors register a
+// flush while mounted.
+
+import type { ChangeFeedMeta, ChangeOrigin } from "@/features/sync/change-feed";
 
 type Flush = () => unknown;
 
@@ -34,4 +37,24 @@ export async function flushPendingEdits(): Promise<void> {
   const results = await Promise.allSettled([...flushes].map(async (flush) => flush()));
   const causes = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
   if (causes.length > 0) throw new PendingEditsFlushError(causes);
+}
+
+/**
+ * A local write from outside a store flushes open editors before it touches
+ * the database: outside content would otherwise replace keystrokes the editor
+ * still holds (ADR 0002). A store's own write runs inside that flush itself
+ * (STORE_VIEW), and a remote write was preceded by one, so neither flushes
+ * here. Rejects with PendingEditsFlushError before anything is written when an
+ * open editor cannot save what it holds.
+ */
+export async function flushForOutsideWrite(
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
+): Promise<void> {
+  if (origin !== "local" || viewMeta?.viewUpdated) return;
+  await flushPendingEdits();
+}
+
+export function resetPendingEditsForTests(): void {
+  flushes.clear();
 }

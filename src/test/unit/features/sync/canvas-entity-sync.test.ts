@@ -27,7 +27,9 @@ const {
 } = await import("@/features/sync/sync-codec");
 const { getSyncBase } = await import("@/features/sync/sync-state");
 const { listPendingTombstones } = await import("@/features/sync/tombstones");
-const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+const { isEntityChange, onChange, resetChangeFeedForTests } = await import(
+  "@/features/sync/change-feed"
+);
 const { useReadingPositionStore } = await import("@/features/reading-position/store");
 
 const PASS = "test-passphrase";
@@ -191,8 +193,10 @@ describe("entity sync — canvas adapter", () => {
     const remote = new InMemoryRemote();
     const { ctx } = makeCtx(remote);
     const seen: { entity: string; origin: string; id: string }[] = [];
-    const stop = onChange((change) => {
-      seen.push({ entity: change.entity, origin: change.origin, id: change.id });
+    const stop = onChange((signal) => {
+      if (isEntityChange(signal)) {
+        seen.push({ entity: signal.entity, origin: signal.origin, id: signal.id });
+      }
     });
     const id = await seedRemoteOnly(remote, "Pulled Map");
 

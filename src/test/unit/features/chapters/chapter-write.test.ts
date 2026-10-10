@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
-import { onChange, resetChangeFeedForTests, type Change } from "@/features/sync/change-feed";
+import {
+  isEntityChange,
+  onChange,
+  resetChangeFeedForTests,
+  type Change,
+  type ChangeFeedSignal,
+} from "@/features/sync/change-feed";
 
 let testDb: DatabaseAdapter;
 
@@ -57,8 +63,8 @@ describe("chapter write path", () => {
     mockReindex.mockReset().mockResolvedValue(undefined);
     resetChangeFeedForTests();
     changes = [];
-    onChange((change) => {
-      changes.push(change);
+    onChange((signal) => {
+      if (isEntityChange(signal)) changes.push(signal);
     });
     await seedBook("book-1");
     useChapterStore.setState({
@@ -148,10 +154,23 @@ describe("chapter write path", () => {
       },
       select: realDb.select.bind(realDb),
     } as DatabaseAdapter);
+    const signals: ChangeFeedSignal[] = [];
+    const offSignals = onChange((signal) => {
+      signals.push(signal);
+    });
 
-    await expect(
-      useChapterStore.getState().reorderChapters("book-1", ["ch-1", "ch-2"])
-    ).rejects.toThrow("Failed to reorder chapter 2/2");
+    try {
+      await expect(
+        useChapterStore.getState().reorderChapters("book-1", ["ch-1", "ch-2"])
+      ).rejects.toThrow("Failed to reorder chapter 2/2");
+    } finally {
+      offSignals();
+    }
+
+    // Only the persisted write is described; no bulk completion is announced.
+    expect(signals).toEqual([
+      { entity: "book", id: "book-1", origin: "local", kind: "metadata" },
+    ]);
     expect(changes).toEqual([{ entity: "book", id: "book-1", origin: "local", kind: "metadata" }]);
   });
 

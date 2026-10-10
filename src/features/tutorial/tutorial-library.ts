@@ -9,6 +9,7 @@ import { createMemoryDatabase } from "@/lib/db/memory-database";
 import { metricsService } from "@/lib/metrics/MetricsService";
 import { countWords } from "@/features/metrics/word-count";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
+import { emitChange } from "@/features/sync/change-feed";
 import { runBetweenSyncRuns } from "@/features/sync/sync-engine";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
@@ -123,10 +124,14 @@ export async function enterTutorialLibrary(options: EnterTutorialLibraryOptions)
     const database = await createMemoryDatabase();
     await initializeSchema(database);
     activateTutorialDatabase(database);
+    // The author's Library is unavailable for as long as the Tutorial Library
+    // is active; consumers suspend Library work on this signal.
+    await emitChange({ available: false, reason: "tutorial" });
     try {
       await buildTutorialLibrary(options.text, options.language);
     } catch (error) {
       deactivateTutorialDatabase();
+      await emitChange({ available: true, reason: "tutorial" });
       await database.close().catch(() => {});
       throw error;
     }
@@ -155,14 +160,23 @@ export async function enterTutorialLibrary(options: EnterTutorialLibraryOptions)
 export async function exitTutorialLibrary(): Promise<void> {
   if (!isTutorialLibraryActive()) return;
 
-  await runBetweenSyncRuns(async () => {
-    // Sample editors hold nothing the author wrote; a failed save here only
-    // concerns content that is about to be dropped.
-    await flushPendingEdits().catch(() => {});
-    metricsService.discardSession();
-    const database = deactivateTutorialDatabase();
-    await database?.close().catch(() => {});
-  });
+  // Availability is tied to the switch itself: announce it whenever the
+  // Tutorial database was actually deactivated, even if the task throws after
+  // that, and never when the author's Library never came back.
+  let deactivated = false;
+  try {
+    await runBetweenSyncRuns(async () => {
+      // Sample editors hold nothing the author wrote; a failed save here only
+      // concerns content that is about to be dropped.
+      await flushPendingEdits().catch(() => {});
+      metricsService.discardSession();
+      const database = deactivateTutorialDatabase();
+      deactivated = true;
+      await database?.close().catch(() => {});
+    });
+  } finally {
+    if (deactivated) await emitChange({ available: true, reason: "tutorial" });
+  }
 
   restoreEphemeral();
   await reloadLibraryViews();
