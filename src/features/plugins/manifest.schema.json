@@ -1,0 +1,562 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifestVersion": {
+      "type": "number",
+      "const": 1,
+      "description": "The manifest file format version; always 1."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^(?!maibuk-|tutorial-)[a-z0-9-]{3,64}$",
+      "description": "The Plugin id: lowercase slug, stable across releases, never reused."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$",
+      "description": "The Plugin's own version; it may go down on an update."
+    },
+    "apiVersion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A semver range against the Plugin API, for example ^0.3 (which pins 0.3.x before API 1.0)."
+    },
+    "minAppVersion": {
+      "description": "The earliest Maibuk Release this Plugin tolerates.",
+      "type": "string",
+      "pattern": "^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "homepage": {
+      "type": "string"
+    },
+    "entry": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A relative path to the Plugin's ES module entry file."
+    },
+    "platforms": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "desktop",
+          "web",
+          "android"
+        ]
+      }
+    },
+    "lifecycle": {
+      "type": "string",
+      "enum": [
+        "persistent",
+        "on-demand"
+      ],
+      "description": "persistent starts with the app; on-demand starts when a surface becomes reachable."
+    },
+    "defaultLanguage": {
+      "type": "string",
+      "enum": [
+        "en",
+        "es"
+      ]
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Plugin Permissions the author must approve to enable the Plugin."
+        },
+        "optional": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Plugin Permissions the author may deny one by one."
+        }
+      },
+      "required": [
+        "required",
+        "optional"
+      ],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {}
+      }
+    },
+    "dataVersion": {
+      "description": "The Plugin data format version; defaults to 1.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "customUi": {
+      "description": "Required when the Plugin draws its own UI with Frame.",
+      "type": "boolean"
+    },
+    "contributes": {
+      "type": "object",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,47}$",
+                "description": "A camelCase id, unique within its contribution kind for this Plugin."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The Command's label in the Plugin's default language."
+              },
+              "keywords": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "contexts": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "Core Shortcut Context names plus this Plugin's own page ids."
+              },
+              "defaults": {
+                "type": "array",
+                "items": {
+                  "minItems": 1,
+                  "maxItems": 2,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "description": "Default Shortcuts, empty when the Command has none."
+              },
+              "web": {
+                "type": "array",
+                "items": {
+                  "minItems": 1,
+                  "maxItems": 2,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "description": "Shortcuts that replace the defaults on the web build."
+              },
+              "voice": {
+                "type": "object",
+                "properties": {
+                  "verbs": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "formatOn",
+                        "formatOff",
+                        "block",
+                        "listOn",
+                        "listOff",
+                        "align",
+                        "undo",
+                        "redo",
+                        "dictation"
+                      ]
+                    }
+                  },
+                  "targets": {
+                    "type": "object",
+                    "properties": {
+                      "en": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "es": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    "additionalProperties": false,
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  },
+                  "phrases": {
+                    "type": "object",
+                    "properties": {
+                      "en": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "es": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    "additionalProperties": false,
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  }
+                },
+                "additionalProperties": false,
+                "patternProperties": {
+                  "^x-": {}
+                }
+              },
+              "targets": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "book",
+                    "chapter",
+                    "note",
+                    "canvas",
+                    "canvasNode"
+                  ]
+                }
+              },
+              "navigates": {
+                "type": "boolean",
+                "const": true
+              },
+              "opensDialog": {
+                "type": "boolean",
+                "const": true
+              },
+              "platforms": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "desktop",
+                    "web",
+                    "android"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "contexts"
+            ],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          }
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,47}$",
+                "description": "A camelCase id, unique within its contribution kind for this Plugin."
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "command": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,47}$",
+                "description": "A Command that declares navigates: true."
+              },
+              "platforms": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "desktop",
+                    "web",
+                    "android"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "command"
+            ],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          }
+        },
+        "sidebarEntries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,47}$",
+                "description": "A declared page id; its title is the entry's label."
+              },
+              "icon": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A Lucide icon name (kebab-case) or a relative .svg path inside the Plugin folder."
+              },
+              "platforms": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "desktop",
+                    "web",
+                    "android"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "page",
+              "icon"
+            ],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          }
+        },
+        "settingsRows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,47}$",
+                "description": "A camelCase id, unique within its contribution kind for this Plugin."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              },
+              "keywords": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "platforms": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "desktop",
+                    "web",
+                    "android"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          }
+        },
+        "toolbarButtons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,47}$",
+                "description": "A camelCase id, unique within its contribution kind for this Plugin."
+              },
+              "command": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,47}$",
+                "description": "A camelCase id, unique within its contribution kind for this Plugin."
+              },
+              "icon": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A Lucide icon name (kebab-case) or a relative .svg path inside the Plugin folder."
+              },
+              "platforms": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "desktop",
+                    "web",
+                    "android"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "command",
+              "icon"
+            ],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          }
+        },
+        "itemMenuEntries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,47}$",
+                "description": "A declared Command with targets; its targets pick the menus."
+              },
+              "platforms": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "desktop",
+                    "web",
+                    "android"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {}
+      }
+    },
+    "commandRenames": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Old local id to new local id, within this Plugin only."
+    },
+    "rowRenames": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Old local id to new local id, within this Plugin only."
+    },
+    "buttonRenames": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Old local id to new local id, within this Plugin only."
+    }
+  },
+  "required": [
+    "manifestVersion",
+    "id",
+    "name",
+    "description",
+    "author",
+    "version",
+    "apiVersion",
+    "entry",
+    "platforms",
+    "lifecycle",
+    "defaultLanguage",
+    "permissions"
+  ],
+  "additionalProperties": false,
+  "description": "A Maibuk Plugin manifest (manifestVersion 1).",
+  "patternProperties": {
+    "^x-": {}
+  }
+}

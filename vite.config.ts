@@ -149,6 +149,11 @@ export default defineConfig(() => ({
         // Plugin storage (ADR 0023)
         "src/features/plugins/tables.ts",
         "src/features/plugins/storage.ts",
+        // Plugin manifest (ADR 0022)
+        "src/features/plugins/semver.ts",
+        "src/features/plugins/manifest-schema.ts",
+        "src/features/plugins/manifest-validate.ts",
+        "src/features/plugins/manifest-compat.ts",
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
         "src/components/editor/paste-cleanup.ts",
