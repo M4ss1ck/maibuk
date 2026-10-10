@@ -3,9 +3,10 @@
  * `version`, `minAppVersion`, the host's API version) and the range syntaxes an
  * author writes for `apiVersion` — `*`, exact, partial (`1.2`, `1.x`), caret,
  * tilde, comparator sets, and `||` unions. Hyphen ranges are not supported; a
- * manifest that uses one fails validation with a clear message. Prerelease
- * versions order by the semver rules; a prerelease never satisfies a range
- * written without one, so a Plugin cannot ride a prerelease API by accident.
+ * manifest that uses one fails validation with a clear message. A comparator
+ * may carry a prerelease (`>=0.4.0-beta.1`, `^0.4.0-rc.1`); a prerelease
+ * candidate satisfies a range only when a comparator names a prerelease at its
+ * own x.y.z, so a Plugin cannot ride a prerelease API by accident.
  */
 
 export interface Semver {
@@ -19,6 +20,7 @@ interface PartialVersion {
   readonly major: number | null;
   readonly minor: number | null;
   readonly patch: number | null;
+  readonly prerelease: readonly string[];
 }
 
 interface Bounds {
@@ -43,8 +45,9 @@ const VERSION_PATTERN = new RegExp(
   `^v?(${NUMERIC_SOURCE})\\.(${NUMERIC_SOURCE})\\.(${NUMERIC_SOURCE})(?:-(${PRERELEASE_IDENTIFIER_SOURCE}(?:\\.${PRERELEASE_IDENTIFIER_SOURCE})*))?(?:\\+${BUILD_SOURCE})?$`
 );
 
-const PARTIAL_PATTERN =
-  /^(?:(x|X|\*)|(0|[1-9]\d*))(?:\.(?:(x|X|\*)|(0|[1-9]\d*)))?(?:\.(?:(x|X|\*)|(0|[1-9]\d*)))?$/;
+const PARTIAL_PATTERN = new RegExp(
+  `^(?:(x|X|\\*)|(${NUMERIC_SOURCE}))(?:\\.(?:(x|X|\\*)|(${NUMERIC_SOURCE})))?(?:\\.(?:(x|X|\\*)|(${NUMERIC_SOURCE})))?(?:-(${PRERELEASE_IDENTIFIER_SOURCE}(?:\\.${PRERELEASE_IDENTIFIER_SOURCE})*))?$`
+);
 
 function version(major: number, minor: number, patch: number): Semver {
   return { major, minor, patch, prerelease: [] };
@@ -102,11 +105,19 @@ function parsePartial(text: string): PartialVersion | null {
   const major = read(match[1], match[2]);
   const minor = major === null ? null : read(match[3], match[4]);
   const patch = minor === null ? null : read(match[5], match[6]);
-  return { major, minor, patch };
+  const prerelease = match[7] === undefined ? [] : match[7].split(".");
+  // A prerelease belongs to a full x.y.z; `1.2-beta` is a typo, not a range.
+  if (prerelease.length > 0 && patch === null) return null;
+  return { major, minor, patch, prerelease };
 }
 
 function filled(partial: PartialVersion): Semver {
-  return version(partial.major ?? 0, partial.minor ?? 0, partial.patch ?? 0);
+  return {
+    major: partial.major ?? 0,
+    minor: partial.minor ?? 0,
+    patch: partial.patch ?? 0,
+    prerelease: partial.prerelease,
+  };
 }
 
 function boundsFor(op: string, partial: PartialVersion): Bounds {
@@ -228,22 +239,38 @@ function boundsSatisfied(bounds: Bounds, candidate: Semver): boolean {
     const difference = compareSemver(candidate, bounds.upper);
     if (difference > 0 || (difference === 0 && !bounds.upperInclusive)) return false;
   }
-  if (candidate.prerelease.length > 0) {
-    const tuple = `${candidate.major}.${candidate.minor}.${candidate.patch}`;
-    const boundsAllow = [bounds.lower, bounds.upper].some(
-      (bound) =>
-        bound !== null &&
-        bound.prerelease.length > 0 &&
-        `${bound.major}.${bound.minor}.${bound.patch}` === tuple
-    );
-    if (!boundsAllow) return false;
-  }
   return true;
 }
 
 /** One `||` alternative: the comparators a version must all satisfy. */
 interface RangeMember {
   readonly bounds: readonly Bounds[];
+}
+
+/**
+ * A prerelease candidate needs a comparator in the same member that names a
+ * prerelease at its own x.y.z; a release candidate always passes. The check
+ * spans the member, not one comparator, so `>=0.4.0-beta.1 <0.5.0` admits
+ * 0.4.0-beta.2.
+ */
+function memberAllowsPrerelease(bounds: readonly Bounds[], candidate: Semver): boolean {
+  if (candidate.prerelease.length === 0) return true;
+  const tuple = `${candidate.major}.${candidate.minor}.${candidate.patch}`;
+  return bounds.some((bound) =>
+    [bound.lower, bound.upper].some(
+      (edge) =>
+        edge !== null &&
+        edge.prerelease.length > 0 &&
+        `${edge.major}.${edge.minor}.${edge.patch}` === tuple
+    )
+  );
+}
+
+function memberSatisfied(member: RangeMember, candidate: Semver): boolean {
+  return (
+    member.bounds.every((bounds) => boundsSatisfied(bounds, candidate)) &&
+    memberAllowsPrerelease(member.bounds, candidate)
+  );
 }
 
 function parseRange(range: string): RangeMember[] | null {
@@ -254,7 +281,9 @@ function parseRange(range: string): RangeMember[] | null {
     const member = rawMember.trim();
     if (member === "") return null;
     if (member === "*" || member === "x" || member === "X") {
-      members.push({ bounds: [boundsFor("", { major: null, minor: null, patch: null })] });
+      members.push({
+        bounds: [boundsFor("", { major: null, minor: null, patch: null, prerelease: [] })],
+      });
       continue;
     }
     const bounds = parseMemberBounds(member);
@@ -271,9 +300,7 @@ export function isValidRange(range: string): boolean {
 export function satisfiesRange(range: string, candidate: Semver): boolean {
   const members = parseRange(range);
   if (members === null) return false;
-  return members.some((member) =>
-    member.bounds.every((bounds) => boundsSatisfied(bounds, candidate))
-  );
+  return members.some((member) => memberSatisfied(member, candidate));
 }
 
 function memberBounds(member: RangeMember): Bounds {
@@ -301,7 +328,7 @@ export function rangeRelation(range: string, candidate: Semver): RangeRelation {
   let allBelow = true;
   for (const member of members) {
     const bounds = memberBounds(member);
-    if (member.bounds.every((comparator) => boundsSatisfied(comparator, candidate))) {
+    if (memberSatisfied(member, candidate)) {
       return "in-range";
     }
     const below =

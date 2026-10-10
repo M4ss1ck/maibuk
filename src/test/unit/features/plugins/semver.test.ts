@@ -96,6 +96,26 @@ describe("isValidRange / satisfiesRange", () => {
     { range: "1.2", match: ["1.2.0", "1.2.9"], miss: ["1.3.0", "1.1.9"] },
     { range: "1.x", match: ["1.0.0", "1.9.9"], miss: ["2.0.0"] },
     { range: "1.2.x", match: ["1.2.5"], miss: ["1.3.0"] },
+    {
+      range: ">=0.4.0-beta.1",
+      match: ["0.4.0-beta.2", "0.4.0", "0.5.0"],
+      miss: ["0.4.0-alpha", "0.3.9"],
+    },
+    {
+      range: "^0.4.0-rc.1",
+      match: ["0.4.0-rc.2", "0.4.0", "0.4.9"],
+      miss: ["0.4.0-beta.9", "0.5.0"],
+    },
+    {
+      range: ">=0.4.0-beta.1 <0.5.0",
+      match: ["0.4.0-beta.2"],
+      miss: ["0.5.0-beta.1", "0.4.0-alpha"],
+    },
+    {
+      range: "0.4.0-beta.1",
+      match: ["0.4.0-beta.1"],
+      miss: ["0.4.0-beta.2", "0.4.0"],
+    },
   ];
 
   for (const { range, match, miss } of rangeCases) {
@@ -128,9 +148,17 @@ describe("isValidRange / satisfiesRange", () => {
       "1.2.3.4",
       "||",
       "^1.2 ||",
+      "1.2-beta",
+      ">=0.4-beta",
+      "0.4.0-beta.01",
     ]) {
       expect(isValidRange(range), range).toBe(false);
     }
+  });
+
+  it("accepts a comparator that carries a prerelease", () => {
+    expect(isValidRange(">=0.4.0-beta.1")).toBe(true);
+    expect(isValidRange("^0.4.0-rc.1")).toBe(true);
   });
 
   it("never lets a prerelease version satisfy a plain range", () => {
@@ -138,6 +166,14 @@ describe("isValidRange / satisfiesRange", () => {
     if (beta === null) throw new Error("bad test version");
     expect(satisfiesRange("^0.3", beta)).toBe(false);
     expect(satisfiesRange("*", beta)).toBe(false);
+  });
+
+  it("lets a prerelease satisfy a range only for its own x.y.z", () => {
+    const tupleMatch = parseSemver("0.4.0-beta.2");
+    const otherTuple = parseSemver("0.5.0-beta.1");
+    if (tupleMatch === null || otherTuple === null) throw new Error("bad test version");
+    expect(satisfiesRange(">=0.4.0-beta.1 <0.5.0", tupleMatch)).toBe(true);
+    expect(satisfiesRange(">=0.4.0-beta.1 <0.6.0", otherTuple)).toBe(false);
   });
 });
 
