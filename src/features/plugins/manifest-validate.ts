@@ -85,7 +85,11 @@ export const PLUGIN_PERMISSION_NAMES = [
 
 const PERMISSION_NAMES: ReadonlySet<string> = new Set(PLUGIN_PERMISSION_NAMES);
 const HOST_LABEL = "[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
-const NETWORK_HOST_PATTERN = new RegExp(`^(?:\\*\\.)?${HOST_LABEL}(?:\\.${HOST_LABEL})*$`);
+// A leading `*.` must cover at least two labels: `*.example.com` is a host,
+// `*.com` is a whole top-level domain.
+const NETWORK_HOST_PATTERN = new RegExp(
+  `^(?:\\*\\.${HOST_LABEL}\\.${HOST_LABEL}(?:\\.${HOST_LABEL})*|${HOST_LABEL}(?:\\.${HOST_LABEL})*)$`
+);
 const NETWORK_PERMISSION_PREFIX = "network:";
 
 function utf8Bytes(text: string): number {
@@ -124,7 +128,10 @@ function permissionProblem(permission: string): string | null {
   if (permission.startsWith(NETWORK_PERMISSION_PREFIX)) {
     const host = permission.slice(NETWORK_PERMISSION_PREFIX.length);
     if (host !== "" && NETWORK_HOST_PATTERN.test(host)) return null;
-    return `"${permission}" must name a network host, like "network:api.example.com" ("network:*" is not allowed)`;
+    if (host.includes(":")) {
+      return `"${permission}" must name a network host without a port, like "network:localhost"`;
+    }
+    return `"${permission}" must name a network host, like "network:api.example.com" (a wildcard covers at least two labels, like "network:*.example.com")`;
   }
   return `"${permission}" is not a known Plugin Permission`;
 }

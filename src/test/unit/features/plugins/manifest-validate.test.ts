@@ -442,6 +442,7 @@ describe("validateManifestValue: permissions", () => {
       "example.com",
       "api.example.com",
       "*.example.com",
+      "*.co.uk",
       "localhost",
       "192.168.1.1",
     ]) {
@@ -452,11 +453,12 @@ describe("validateManifestValue: permissions", () => {
     }
   });
 
-  it("refuses a bare wildcard host, an empty host, and malformed hosts", () => {
+  it("refuses a bare wildcard host, an empty host, a single-label wildcard, and malformed hosts", () => {
     for (const host of [
       "*",
       "",
       "*.",
+      "*.com",
       "EXample.com",
       "exa mple.com",
       "-example.com",
@@ -467,6 +469,16 @@ describe("validateManifestValue: permissions", () => {
         problemsFor((m) => (m.permissions.required = [`network:${host}`])),
         "permissions.required[0]",
         /host/
+      );
+    }
+  });
+
+  it("refuses a host with a port, saying a network permission names a host without one", () => {
+    for (const permission of ["network:localhost:11434", "network:example.com:8080"]) {
+      expectProblem(
+        problemsFor((m) => (m.permissions.required = [permission])),
+        "permissions.required[0]",
+        /without a port/
       );
     }
   });
