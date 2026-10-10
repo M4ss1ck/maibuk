@@ -154,6 +154,11 @@ export default defineConfig(() => ({
         "src/features/plugins/manifest-schema.ts",
         "src/features/plugins/manifest-validate.ts",
         "src/features/plugins/manifest-compat.ts",
+        "src/features/plugins/api-table.ts",
+        "src/features/plugins/api-codegen.ts",
+        "src/features/plugins/broker.ts",
+        "src/plugin-sdk/index.ts",
+        "src/plugin-sdk/protocol.ts",
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
         "src/components/editor/paste-cleanup.ts",
