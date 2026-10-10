@@ -219,27 +219,6 @@ export const pluginManifestSchema = buildPluginManifestSchema({ builtIn: false }
 /** The manifest schema for Built-in Plugins; only `tutorial-` stays reserved. */
 export const builtInPluginManifestSchema = buildPluginManifestSchema({ builtIn: true });
 
-export type PluginManifest = z.infer<typeof pluginManifestSchema>;
-export type PluginPermissions = PluginManifest["permissions"];
-export type PluginCommandContribution = NonNullable<
-  NonNullable<PluginManifest["contributes"]>["commands"]
->[number];
-export type PluginPageContribution = NonNullable<
-  NonNullable<PluginManifest["contributes"]>["pages"]
->[number];
-export type PluginSidebarEntryContribution = NonNullable<
-  NonNullable<PluginManifest["contributes"]>["sidebarEntries"]
->[number];
-export type PluginSettingsRowContribution = NonNullable<
-  NonNullable<PluginManifest["contributes"]>["settingsRows"]
->[number];
-export type PluginToolbarButtonContribution = NonNullable<
-  NonNullable<PluginManifest["contributes"]>["toolbarButtons"]
->[number];
-export type PluginItemMenuEntryContribution = NonNullable<
-  NonNullable<PluginManifest["contributes"]>["itemMenuEntries"]
->[number];
-export type PluginLifecycle = PluginManifest["lifecycle"];
 
 /**
  * The JSON Schema an author's editor reads through `$schema`. It is generated

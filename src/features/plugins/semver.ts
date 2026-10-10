@@ -9,12 +9,7 @@
  * own x.y.z, so a Plugin cannot ride a prerelease API by accident.
  */
 
-export interface Semver {
-  readonly major: number;
-  readonly minor: number;
-  readonly patch: number;
-  readonly prerelease: readonly string[];
-}
+import type { RangeRelation, Semver } from "@/features/plugins/types";
 
 interface PartialVersion {
   readonly major: number | null;
@@ -313,8 +308,6 @@ function memberBounds(member: RangeMember): Bounds {
   for (const comparator of member.bounds) bounds = intersectBounds(bounds, comparator);
   return bounds;
 }
-
-export type RangeRelation = "in-range" | "wants-newer" | "wants-older";
 
 /**
  * How one host version stands against a range. `wants-newer` means every

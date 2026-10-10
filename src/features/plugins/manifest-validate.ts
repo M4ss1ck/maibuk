@@ -21,9 +21,16 @@ import {
   MANIFEST_LANGUAGES,
   builtInPluginManifestSchema,
   pluginManifestSchema,
-  type PluginManifest,
 } from "@/features/plugins/manifest-schema";
 import { isValidRange, parseSemver } from "@/features/plugins/semver";
+import type {
+  LocaleValidation,
+  ManifestProblem,
+  ManifestValidation,
+  ManifestValidationOptions,
+  PluginLocale,
+  PluginManifest,
+} from "@/features/plugins/types";
 import { isCoreContextName, isReservedContextName } from "@/lib/shortcut-registry";
 import {
   isRecordableStep,
@@ -45,29 +52,6 @@ export const CONTRIBUTION_LIMITS = {
   toolbarButtons: 20,
   itemMenuEntries: 50,
 } as const;
-
-/** One refused field: where it is, and why in plain language. */
-export interface ManifestProblem {
-  /** A dot/bracket path such as `contributes.commands[0].label`, or "" for the file. */
-  path: string;
-  message: string;
-}
-
-export type ManifestValidation =
-  | { ok: true; manifest: PluginManifest }
-  | { ok: false; problems: ManifestProblem[] };
-
-export interface ManifestValidationOptions {
-  /** A Built-in Plugin may use the reserved `maibuk-` prefix; `tutorial-` stays refused. */
-  builtIn?: boolean;
-}
-
-/** A Plugin's UI-string overrides for one language, by field path. */
-export type PluginLocale = Readonly<Record<string, string | readonly string[]>>;
-
-export type LocaleValidation =
-  | { ok: true; locale: PluginLocale }
-  | { ok: false; problems: ManifestProblem[] };
 
 const LUCIDE_ICON_NAMES_SET: ReadonlySet<string> = new Set(LUCIDE_ICON_NAMES);
 

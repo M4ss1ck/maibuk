@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  checkPluginCompatibility,
-  diffPluginPermissions,
-  type PluginHostVersions,
-} from "@/features/plugins/manifest-compat";
+import { checkPluginCompatibility, diffPluginPermissions } from "@/features/plugins/manifest-compat";
 import { validateManifestValue } from "@/features/plugins/manifest-validate";
-import type { PluginManifest } from "@/features/plugins/manifest-schema";
+import type { PluginHostVersions, PluginManifest } from "@/features/plugins/types";
 
 type Mutable = Record<string, any>;
 

@@ -8,29 +8,15 @@
  * string, so a permission moving optional → required is flagged even though
  * its name is unchanged.
  */
-import type { PluginManifest, PluginPermissions } from "@/features/plugins/manifest-schema";
-import { compareSemver, parseSemver, rangeRelation, type Semver } from "@/features/plugins/semver";
-
-/** What the host provides: its Plugin API version and its Release number. */
-export interface PluginHostVersions {
-  /** The Plugin API version this app implements, e.g. `0.3.0`. */
-  apiVersion: string;
-  /** The app's Release, e.g. `0.11.0`. */
-  appVersion: string;
-}
-
-export type PluginCompatibilityReason = "api-version" | "min-app-version";
-
-/**
- * `ok`: the Plugin can run. `needs-newer-app`: the Plugin wants a newer API or
- * app than this one. `older-api`: the app has moved past the API the Plugin
- * was built for. `message` is plain-language diagnostic text for tooling
- * (`plugin:check`, logs); in-app copy is localized from the verdict and reason.
- */
-export type PluginCompatibility =
-  | { verdict: "ok" }
-  | { verdict: "needs-newer-app"; reason: PluginCompatibilityReason; message: string }
-  | { verdict: "older-api"; reason: "api-version"; message: string };
+import { compareSemver, parseSemver, rangeRelation } from "@/features/plugins/semver";
+import type {
+  PluginCompatibility,
+  PluginHostVersions,
+  PluginManifest,
+  PluginPermissionDiff,
+  PluginPermissions,
+  Semver,
+} from "@/features/plugins/types";
 
 function hostVersion(value: string, label: string): Semver {
   const parsed = parseSemver(value);
@@ -70,20 +56,6 @@ export function checkPluginCompatibility(
     }
   }
   return { verdict: "ok" };
-}
-
-/** One permission in a diff, with the requirement it holds in its own version. */
-export interface PluginPermissionChange {
-  permission: string;
-  /** Required in the manifest the entry describes (new for added, old for removed). */
-  required: boolean;
-}
-
-export interface PluginPermissionDiff {
-  added: PluginPermissionChange[];
-  removed: PluginPermissionChange[];
-  nowRequired: PluginPermissionChange[];
-  nowOptional: PluginPermissionChange[];
 }
 
 /**
