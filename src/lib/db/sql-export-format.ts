@@ -1,6 +1,9 @@
 // Pure SQL dump formatting shared by the export worker and the fallback
-// path, so both emit identical output for the same rows. Dependency-free:
-// the worker bundle imports this module without pulling in client code.
+// path, so both emit identical output for the same rows. It imports only
+// the Plugin table-name constants, so the worker bundle stays free of
+// client code.
+import { PLUGIN_DATA_VERSIONS_TABLE, PLUGIN_STORAGE_TABLE } from "@/features/plugins/tables";
+
 export interface SqlExportTable {
   name: string;
   comment: string;
@@ -10,8 +13,18 @@ export interface SqlExportTable {
 // section with this title; restore uses that to keep the device's Canvases.
 export const CANVASES_SECTION_TITLE = "Canvases";
 
+// Dumps made before Plugin storage joined the export have no section with one
+// of these titles; restore uses that to keep the device's Plugin data.
+export const PLUGIN_STORAGE_SECTION_TITLE = "Plugin Storage";
+export const PLUGIN_DATA_VERSIONS_SECTION_TITLE = "Plugin Data Versions";
+export const PLUGIN_SECTION_TITLES: readonly string[] = [
+  PLUGIN_STORAGE_SECTION_TITLE,
+  PLUGIN_DATA_VERSIONS_SECTION_TITLE,
+];
+
 // Fixed table set and order: the dump format must stay stable so backups
-// restore across versions.
+// restore across versions. Plugin tables are appended last so the sections an
+// older app wrote keep their exact layout.
 export const SQL_EXPORT_TABLES: SqlExportTable[] = [
   { name: "books", comment: "-- Books" },
   { name: "chapters", comment: "-- Chapters" },
@@ -21,6 +34,11 @@ export const SQL_EXPORT_TABLES: SqlExportTable[] = [
   { name: "sync_tombstones", comment: "-- Sync Tombstones" },
   { name: "cover_templates", comment: "-- Cover Templates" },
   { name: "settings", comment: "-- Settings" },
+  { name: PLUGIN_STORAGE_TABLE, comment: `-- ${PLUGIN_STORAGE_SECTION_TITLE}` },
+  {
+    name: PLUGIN_DATA_VERSIONS_TABLE,
+    comment: `-- ${PLUGIN_DATA_VERSIONS_SECTION_TITLE}`,
+  },
 ];
 
 export function escapeSqlExportValue(value: unknown): string {

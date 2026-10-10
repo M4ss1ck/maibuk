@@ -7,7 +7,11 @@ import type {
 } from "@/lib/platform/types";
 import { getDatabase } from "@/lib/db";
 import { parseSqlLineComments, parseSqlStatements } from "@/lib/db/sql-parser";
-import { CANVASES_SECTION_TITLE } from "@/lib/db/sql-export-format";
+import {
+  CANVASES_SECTION_TITLE,
+  PLUGIN_SECTION_TITLES,
+} from "@/lib/db/sql-export-format";
+import { PLUGIN_TABLES } from "@/features/plugins/tables";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
 import { useNoteStore } from "@/features/notes/store";
@@ -46,14 +50,28 @@ function buildFilename(trigger: BackupEntry["trigger"]): string {
 
 const PROTECTED_TRIGGERS = new Set<BackupEntry["trigger"]>(["pre-sync", "pre-restore"]);
 const MIN_PROTECTED = 2;
+
+/** Tables a Backup restores into. Plugin tables are Library data (ADR 0023). */
+const RESTORE_TABLES = [
+  "books",
+  "chapters",
+  "book_versions",
+  "notes",
+  "canvases",
+  "sync_tombstones",
+  ...PLUGIN_TABLES,
+];
+
 /**
- * Filter to only allow restore INSERT statements targeting books, chapters,
- * book versions, notes and canvases.
+ * Filter to only allow restore INSERT statements targeting the restorable
+ * tables.
  * Multi-statement injection is blocked by `parseSqlStatements()` splitting on
  * unquoted semicolons, and this regex requires a concrete VALUES clause.
  */
-const RESTORE_TABLE_PATTERN =
-  /^INSERT\s+(OR\s+REPLACE\s+)?INTO\s+"?(books|chapters|book_versions|notes|canvases|sync_tombstones)"?\s*(\([^)]*\)\s*)?VALUES\s*\(/i;
+const RESTORE_TABLE_PATTERN = new RegExp(
+  `^INSERT\\s+(OR\\s+REPLACE\\s+)?INTO\\s+"?(${RESTORE_TABLES.join("|")})"?\\s*(\\([^)]*\\)\\s*)?VALUES\\s*\\(`,
+  "i"
+);
 
 function isRestoreStatement(statement: string): boolean {
   return RESTORE_TABLE_PATTERN.test(statement.trim());
@@ -148,23 +166,56 @@ function backupCoversCanvases(sql: string, statements: string[]): boolean {
   );
 }
 
+const PLUGIN_INSERT_PATTERN = new RegExp(
+  `^INSERT\\s+(OR\\s+REPLACE\\s+)?INTO\\s+"?(${PLUGIN_TABLES.join("|")})"?\\s`,
+  "i"
+);
+
+// Every Backup taken before Plugin storage joined the export has no Plugin
+// section. Restoring one must keep this device's Plugin data instead of
+// replacing it with nothing.
+function backupCoversPluginData(sql: string, statements: string[]): boolean {
+  return (
+    parseSqlLineComments(sql).some((comment) => PLUGIN_SECTION_TITLES.includes(comment)) ||
+    statements.some((statement) => PLUGIN_INSERT_PATTERN.test(statement.trim()))
+  );
+}
+
+/**
+ * Every table a Restore clears before the Backup's rows land. Canvases and
+ * Plugin data are conditional: a Backup made before they joined the dump
+ * keeps the device's rows instead of wiping them.
+ */
+export const RESTORE_DELETE_TABLES: readonly string[] = [
+  "chapters",
+  "book_versions",
+  "books",
+  "notes",
+  "canvases",
+  ...PLUGIN_TABLES,
+  "sync_tombstones",
+  // Bases describe the replaced data; the restored library is compared afresh.
+  "sync_state",
+];
+
+function restoreDeletes(replaceCanvases: boolean, replacePluginData: boolean): string[] {
+  const skipped = new Set<string>();
+  if (!replaceCanvases) skipped.add("canvases");
+  if (!replacePluginData) for (const table of PLUGIN_TABLES) skipped.add(table);
+  return RESTORE_DELETE_TABLES.filter((table) => !skipped.has(table)).map(
+    (table) => `DELETE FROM ${table}`
+  );
+}
+
 async function replaceRestoreData(
   db: DatabaseAdapter,
   statements: string[],
-  replaceCanvases: boolean
+  replaceCanvases: boolean,
+  replacePluginData: boolean
 ): Promise<void> {
   // The deletes and inserts are one transaction, so a failed insert leaves
   // the Library as it was (#344).
-  const deletes = [
-    "DELETE FROM chapters",
-    "DELETE FROM book_versions",
-    "DELETE FROM books",
-    "DELETE FROM notes",
-    ...(replaceCanvases ? ["DELETE FROM canvases"] : []),
-    "DELETE FROM sync_tombstones",
-    // Bases describe the replaced data; the restored library is compared afresh.
-    "DELETE FROM sync_state",
-  ];
+  const deletes = restoreDeletes(replaceCanvases, replacePluginData);
   try {
     await db.executeAtomic([...deletes, ...statements]);
   } catch (error) {
@@ -287,10 +338,11 @@ export class BackupService {
     }
 
     const replaceCanvases = backupCoversCanvases(sql, statements);
+    const replacePluginData = backupCoversPluginData(sql, statements);
     const db = await getDatabase();
 
     try {
-      await replaceRestoreData(db, statements, replaceCanvases);
+      await replaceRestoreData(db, statements, replaceCanvases, replacePluginData);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error("Restore data replacement failed:", detail);

@@ -766,6 +766,35 @@ describe("useVersionStore", () => {
       // Should have the original + pre-restore versions in state
       expect(useVersionStore.getState().versions.length).toBeGreaterThanOrEqual(2);
     });
+
+    it("leaves Plugin storage untouched", async () => {
+      mockSerializeBook.mockResolvedValue(makeSnapshot(1000, 1000));
+      const target = await useVersionStore.getState().createVersion({
+        bookId: "book-1",
+        triggerType: "manual",
+      });
+      await testDb.execute(
+        `INSERT INTO plugin_storage (plugin_id, "key", "value", updated_at)
+         VALUES ('echoes', 'ignored', '["chapter-1"]', 1)`
+      );
+      await testDb.execute(
+        `INSERT INTO plugin_data_versions (plugin_id, data_version, updated_at)
+         VALUES ('echoes', 2, 1)`
+      );
+
+      await useVersionStore.getState().restoreVersion(target!.id);
+
+      const values = await testDb.select<Record<string, unknown>[]>(
+        `SELECT plugin_id, "key", "value" FROM plugin_storage`
+      );
+      expect(values).toEqual([
+        { plugin_id: "echoes", key: "ignored", value: '["chapter-1"]' },
+      ]);
+      const versions = await testDb.select<Record<string, unknown>[]>(
+        "SELECT plugin_id, data_version FROM plugin_data_versions"
+      );
+      expect(versions).toEqual([{ plugin_id: "echoes", data_version: 2 }]);
+    });
   });
 
   describe("renameVersion", () => {

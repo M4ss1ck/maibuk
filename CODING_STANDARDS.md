@@ -273,11 +273,11 @@ Every test and hook runs on one timeout, `TEST_TIMEOUT_MS` (60 s), and every `wa
 2. Implement the minimum code to pass
 3. Refactor safely with tests green
 
-### Feature-critical test gate (current scope: sync safety + backups)
+### Feature-critical test gate (current scope: sync safety, backups + Plugin storage)
 
-For changes in `src/features/backup/`, `src/features/sync/`, `src/features/versions/`, `src/lib/platform/*/backup.ts`, `src/lib/db/sql-parser.ts`, or the backup/sync/version UI that triggers destructive behavior, the feature is **not done** until tests cover the spec-critical paths.
+For changes in `src/features/backup/`, `src/features/sync/`, `src/features/versions/`, `src/features/plugins/storage.ts`, the Plugin write paths (Plugin storage and entity writes a Plugin makes), `src/lib/platform/*/backup.ts`, `src/lib/db/sql-parser.ts`, or the backup/sync/version UI that triggers destructive behavior, the feature is **not done** until tests cover the spec-critical paths.
 
-Required coverage for the current sync-safety / backup / version-control feature:
+Required coverage for the current sync-safety / backup / version-control / Plugin-storage feature:
 
 1. **Pre-sync backup aborts sync** with the exact user-facing error required by the spec.
 2. **Restore order is correct**: create `pre-restore` backup before verifying or mutating data.
@@ -289,6 +289,7 @@ Required coverage for the current sync-safety / backup / version-control feature
 8. **Shared destructive helpers are tested directly**: if a helper is extracted and used by restore/import/sync, it needs its own unit tests and must be added to `coverage.include`.
 9. **Version restore and version sync are safe**: `restoreVersion` lands pending editor saves first (a failed save rejects before anything changes), creates a `pre-restore` version before applying the snapshot, bumps `updated_at` to now, and emits a local content Change through the shared Book write path; `syncVersions` verifies checksums before inserting pulled blobs; pure-union sync with no duplicates.
 10. **Unsaved editor text is never dropped silently**: every sync run flushes open editors before its pre-sync backup or first read, and a failed save stops the run with a Sync Log error; a failed editor save shows Save Status "Not saved" and is retried on the next edit, Flush, or unmount. Test through `NoteEditor.dataSafety.test.tsx` and `BookEditor.dataSafety.test.tsx`.
+11. **Plugin storage is Library data, never a Synced Item** (ADR 0023): a Backup/Restore round trip carries every Plugin namespace, including one whose Plugin is absent; a Backup made before Plugin storage joined the dump leaves the device's Plugin data while a current Backup (even with no rows) replaces it; Reset Library clears it while Reset settings leaves it alone; loading a Database File merges by Plugin id and storage key (incoming values replace matching keys, the rest stay); a Plugin-private write emits no Change and schedules no Sync. The table-coverage agreement test fails when a Plugin table is missing from `SQL_EXPORT_TABLES` or a Restore or Reset delete list, so no Plugin table can join one path and be missed by another.
 
 Rules for this feature:
 

@@ -7,6 +7,7 @@ import { isTransactionControl } from "@/lib/db/atomic";
 import { parseSqlStatements } from "@/lib/db/sql-parser";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { emitChange } from "@/features/sync/change-feed";
+import { PLUGIN_DATA_VERSIONS_TABLE, PLUGIN_STORAGE_TABLE } from "@/features/plugins/tables";
 
 let db: DatabaseAdapter | null = null;
 let dbPromise: Promise<DatabaseAdapter> | null = null;
@@ -325,6 +326,27 @@ export async function initializeSchema(db: DatabaseAdapter): Promise<void> {
     )
   `);
 
+  // Plugin storage: each Plugin's namespace in the Library (ADR 0023). It is
+  // Library data for Backups, Restore, Reset Library, and Database Files; it
+  // is never a Synced Item.
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS plugin_storage (
+      plugin_id TEXT NOT NULL,
+      "key" TEXT NOT NULL,
+      "value" TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (plugin_id, "key")
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS plugin_data_versions (
+      plugin_id TEXT PRIMARY KEY,
+      data_version INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
   // Create indexes for better performance
   await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_chapters_book_id ON chapters(book_id)
@@ -407,32 +429,40 @@ export async function exportDatabase(): Promise<Uint8Array> {
   return database.exportData();
 }
 
+/**
+ * Every table a Reset Library clears, in foreign-key order. Every table is
+ * created by initializeSchema (the metrics tables by ensureMetricsSchema), so
+ * none can be missing. Plugin tables are Library data (ADR 0023): a Reset
+ * clears them with everything else.
+ */
+export const RESET_LIBRARY_TABLES = [
+  "chapter_epub_meta",
+  "epub_structures",
+  "book_styles",
+  "book_metadata",
+  "project_assets",
+  "chapters",
+  "book_versions",
+  "books",
+  "cover_templates",
+  "notes",
+  "canvases",
+  "links",
+  "sync_tombstones",
+  "sync_state",
+  PLUGIN_STORAGE_TABLE,
+  PLUGIN_DATA_VERSIONS_TABLE,
+  "settings",
+  "metrics_cache",
+  "metrics_event_tombstones",
+  "metrics_events",
+] as const;
+
 export async function resetDatabase(): Promise<void> {
   const database = await getDatabase();
 
-  // One transaction: a failure clears nothing. Every table is created by
-  // initializeSchema (the metrics tables by ensureMetricsSchema), so none can
-  // be missing. Order matters for foreign keys.
-  await database.executeAtomic([
-    "DELETE FROM chapter_epub_meta",
-    "DELETE FROM epub_structures",
-    "DELETE FROM book_styles",
-    "DELETE FROM book_metadata",
-    "DELETE FROM project_assets",
-    "DELETE FROM chapters",
-    "DELETE FROM book_versions",
-    "DELETE FROM books",
-    "DELETE FROM cover_templates",
-    "DELETE FROM notes",
-    "DELETE FROM canvases",
-    "DELETE FROM links",
-    "DELETE FROM sync_tombstones",
-    "DELETE FROM sync_state",
-    "DELETE FROM settings",
-    "DELETE FROM metrics_cache",
-    "DELETE FROM metrics_event_tombstones",
-    "DELETE FROM metrics_events",
-  ]);
+  // One transaction: a failure clears nothing.
+  await database.executeAtomic(RESET_LIBRARY_TABLES.map((table) => `DELETE FROM ${table}`));
 
   // The Library is empty and available; only a completed Reset announces it.
   await emitChange({ scope: "all", reason: "resetLibrary" });
