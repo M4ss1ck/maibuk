@@ -1,5 +1,7 @@
 // Platform adapter interfaces for cross-platform compatibility
 
+import type { PluginFolder } from "@/features/plugins/types";
+
 export interface DatabaseAdapter {
   execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }>;
   select<T = unknown[]>(sql: string, params?: unknown[]): Promise<T>;
@@ -80,4 +82,12 @@ export interface BackupAdapter {
   deleteBackup(filename: string): Promise<void>;
 }
 
+export interface PluginDirectoryAdapter {
+  /** Folder names in the Plugin Directory; [] when there is none. */
+  listFolders(): Promise<string[]>;
+  /** A folder's files with the bytes they were hashed from; null when the folder is gone. */
+  readFolder(name: string): Promise<PluginFolder | null>;
+}
+
 export type { ModelFiles, RecognizerHost } from "@/features/dictation/types";
+export type { PluginFolder, PluginFolderFile } from "@/features/plugins/types";

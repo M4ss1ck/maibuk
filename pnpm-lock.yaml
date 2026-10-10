@@ -185,6 +185,9 @@ importers:
       epub-gen-memory:
         specifier: ^1.1.2
         version: 1.1.2
+      es-module-lexer:
+        specifier: 1.7.0
+        version: 1.7.0
       fabric:
         specifier: ^7.1.0
         version: 7.1.0

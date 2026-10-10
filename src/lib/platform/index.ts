@@ -6,6 +6,7 @@ import type {
   OSAdapter,
   WebDialogAdapter,
   BackupAdapter,
+  PluginDirectoryAdapter,
 } from "@/lib/platform/types";
 
 import type { DictationPlatform, ModelFiles, RecognizerHost } from "@/features/dictation/types";
@@ -37,6 +38,7 @@ export type {
   FileWithData,
   BackupAdapter,
   BackupEntry,
+  PluginDirectoryAdapter,
 } from "@/lib/platform/types";
 
 // Database factory
@@ -151,6 +153,17 @@ export async function createBackup(customDir?: string | null): Promise<BackupAda
   if (customDir) await restoreBackupDirectory(customDir);
   const { createTauriBackup } = await import("@/lib/platform/tauri/backup");
   return createTauriBackup(customDir ?? undefined);
+}
+
+// Plugin Directory factory. The web keeps Plugins in OPFS (ADR 0020); on
+// desktop and Android only Rust reads the folder (#435).
+export async function getPluginDirectory(): Promise<PluginDirectoryAdapter> {
+  if (IS_WEB) {
+    const { createWebPluginDirectory } = await import("@/lib/platform/web/plugins");
+    return createWebPluginDirectory();
+  }
+  const { createTauriPluginDirectory } = await import("@/lib/platform/tauri/plugins");
+  return createTauriPluginDirectory();
 }
 
 // The directory Backups live in when the author has not chosen one. Null on

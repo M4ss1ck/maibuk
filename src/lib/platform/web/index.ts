@@ -4,3 +4,4 @@ export { webFileSystem } from "@/lib/platform/web/filesystem";
 export { webDialog } from "@/lib/platform/web/dialog";
 export { webOS } from "@/lib/platform/web/os";
 export { createWebBackup } from "@/lib/platform/web/backup";
+export { createWebPluginDirectory } from "@/lib/platform/web/plugins";
