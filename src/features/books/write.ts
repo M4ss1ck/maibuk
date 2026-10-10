@@ -1,7 +1,9 @@
 // Narrow write path for Books and their Chapters (ADR 0005): every mutation
 // of the books/chapters tables goes through here — normalize, persist, return
 // the stored model, emit the Change. Stores, Version Restore, Import, and the
-// sync serializer all call these; nobody hand-signals.
+// sync serializer all call these; nobody hand-signals. The optional `viewMeta`
+// marks a store's own write (STORE_VIEW): view refresh skips it because that
+// store re-reads its view itself.
 //
 // Last Edited for a Book lives in content_updated_at (the Note pattern):
 // title, subtitle, description, and cover changes move it, as do chapter
@@ -11,7 +13,12 @@
 import { getDatabase } from "@/lib/db";
 import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
-import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/change-feed";
+import {
+  emitChange,
+  type ChangeFeedMeta,
+  type ChangeKind,
+  type ChangeOrigin,
+} from "@/features/sync/change-feed";
 import { normalizeChapterContent, toChapter } from "@/features/chapters/write";
 import { reindexSource } from "@/features/links/link-index";
 import { appLanguage } from "@/features/settings/app-language";
@@ -83,7 +90,11 @@ function bookContentChanged(
   );
 }
 
-export async function createBookRow(input: CreateBookInput, origin: ChangeOrigin): Promise<Book> {
+export async function createBookRow(
+  input: CreateBookInput,
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
+): Promise<Book> {
   const db = await getDatabase();
   const id = generateId();
   const now = nowSeconds();
@@ -132,7 +143,10 @@ export async function createBookRow(input: CreateBookInput, origin: ChangeOrigin
     lastOpenedAt: undefined,
     lastChapterId: undefined,
   };
-  await emitChange({ entity: "book", id, origin, kind: "content" });
+  await emitChange(
+    { entity: "book", id, origin, kind: "content" },
+    viewMeta
+  );
   return own;
 }
 
@@ -140,7 +154,8 @@ export async function createBookRow(input: CreateBookInput, origin: ChangeOrigin
 export async function updateBookRow(
   id: string,
   input: UpdateBookInput,
-  origin: ChangeOrigin
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
 ): Promise<Book | null> {
   assertWritableId(id);
   const db = await getDatabase();
@@ -231,7 +246,7 @@ export async function updateBookRow(
     updatedAt: new Date(now * 1000),
     contentUpdatedAt: contentChanged ? new Date(now * 1000) : existing.contentUpdatedAt,
   };
-  await emitChange({ entity: "book", id, origin, kind });
+  await emitChange({ entity: "book", id, origin, kind }, viewMeta);
   return own;
 }
 
@@ -254,7 +269,11 @@ export async function updateBookWordCountRow(id: string, wordCount: number): Pro
 }
 
 /** Local delete: records a tombstone so sync carries the deletion. */
-export async function deleteBookRow(id: string, origin: ChangeOrigin): Promise<void> {
+export async function deleteBookRow(
+  id: string,
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
+): Promise<void> {
   assertWritableId(id);
   const db = await getDatabase();
   const rows = await db.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [id]);
@@ -266,7 +285,10 @@ export async function deleteBookRow(id: string, origin: ChangeOrigin): Promise<v
     });
   }
   await db.execute("DELETE FROM books WHERE id = ?", [id]);
-  await emitChange({ entity: "book", id, origin, kind: "content" });
+  await emitChange(
+    { entity: "book", id, origin, kind: "content" },
+    viewMeta
+  );
 }
 
 /**

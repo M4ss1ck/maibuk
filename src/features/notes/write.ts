@@ -1,7 +1,9 @@
 // Narrow write path for Notes (ADR 0005): every mutation of the notes table
 // goes through here — normalize, persist, return the stored Note, emit the
 // Change. Stores, Version Restore, Import, and the sync serializer all call
-// these; nobody hand-signals. View updates stay in the Zustand store.
+// these; nobody hand-signals. View updates stay in the Zustand store. The
+// optional `viewMeta` marks a store's own write (STORE_VIEW): view refresh
+// skips it because that store re-reads its view itself.
 //
 // Each statement auto-commits on its own (the Tauri pool cannot hold
 // BEGIN/COMMIT across calls), so multi-write paths emit for data already
@@ -10,7 +12,12 @@
 import { getDatabase } from "@/lib/db";
 import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
-import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/change-feed";
+import {
+  emitChange,
+  type ChangeFeedMeta,
+  type ChangeKind,
+  type ChangeOrigin,
+} from "@/features/sync/change-feed";
 import { reindexSource } from "@/features/links/link-index";
 import { appLanguage } from "@/features/settings/app-language";
 import type { DatabaseAdapter } from "@/lib/platform/types";
@@ -85,7 +92,11 @@ async function readNote(id: string): Promise<Note | null> {
   return rows.length > 0 ? toNote(rows[0]) : null;
 }
 
-export async function createNoteRow(input: CreateNoteInput, origin: ChangeOrigin): Promise<Note> {
+export async function createNoteRow(
+  input: CreateNoteInput,
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
+): Promise<Note> {
   assertWritableId(input.bookId);
   const db = await getDatabase();
   const id = generateId();
@@ -140,7 +151,10 @@ export async function createNoteRow(input: CreateNoteInput, origin: ChangeOrigin
     stored = null;
   }
   // A read-back failure after the durable write still emits below.
-  await emitChange({ entity: "note", id, origin, kind: "content" });
+  await emitChange(
+    { entity: "note", id, origin, kind: "content" },
+    viewMeta
+  );
   return stored ?? note;
 }
 
@@ -152,7 +166,8 @@ export async function createNoteRow(input: CreateNoteInput, origin: ChangeOrigin
  */
 export async function updateNoteRow(
   input: UpdateNoteInput,
-  origin: ChangeOrigin
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
 ): Promise<Note | null> {
   assertWritableId(input.id);
   assertWritableId(input.bookId);
@@ -212,12 +227,16 @@ export async function updateNoteRow(
       contentHtml: updated.content,
     }).catch((error) => console.warn("[notes] link reindex failed:", error));
   }
-  await emitChange({ entity: "note", id: updated.id, origin, kind });
+  await emitChange({ entity: "note", id: updated.id, origin, kind }, viewMeta);
   return own;
 }
 
 /** Local delete: records a tombstone so sync carries the deletion. */
-export async function deleteNoteRow(id: string, origin: ChangeOrigin): Promise<void> {
+export async function deleteNoteRow(
+  id: string,
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
+): Promise<void> {
   assertWritableId(id);
   const db = await getDatabase();
   const rows = await db.select<{ title: string }[]>("SELECT title FROM notes WHERE id = ?", [id]);
@@ -230,7 +249,10 @@ export async function deleteNoteRow(id: string, origin: ChangeOrigin): Promise<v
   }
   await db.execute("DELETE FROM notes WHERE id = ?", [id]);
   await db.execute("DELETE FROM links WHERE source_id = ?", [id]).catch(() => {});
-  await emitChange({ entity: "note", id, origin, kind: "content" });
+  await emitChange(
+    { entity: "note", id, origin, kind: "content" },
+    viewMeta
+  );
 }
 
 /**
@@ -248,7 +270,8 @@ export async function removeNoteRow(id: string, origin: ChangeOrigin): Promise<v
 
 export async function reorderNoteRows(
   orderedItems: string[] | ReorderNoteItem[],
-  origin: ChangeOrigin
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
 ): Promise<void> {
   for (const item of orderedItems) assertWritableId(typeof item === "string" ? item : item.id);
   const db = await getDatabase();
@@ -278,7 +301,10 @@ export async function reorderNoteRows(
       affected = result.rowsAffected ?? 0;
     } catch (error) {
       for (const id of persistedIds) {
-        await emitChange({ entity: "note", id, origin, kind: "metadata" });
+        await emitChange(
+          { entity: "note", id, origin, kind: "metadata" },
+          viewMeta
+        );
       }
       throw error;
     }
@@ -286,7 +312,10 @@ export async function reorderNoteRows(
   }
 
   for (const id of persistedIds) {
-    await emitChange({ entity: "note", id, origin, kind: "metadata" });
+    await emitChange(
+      { entity: "note", id, origin, kind: "metadata" },
+      viewMeta
+    );
   }
 }
 

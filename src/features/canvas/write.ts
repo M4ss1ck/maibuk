@@ -1,7 +1,9 @@
 // Narrow write path for Canvases (ADR 0005): every mutation of the
 // canvases table goes through here — normalize, persist, return the stored
 // Canvas, emit the Change. The Zustand store, the sync serializer, and the
-// Canvas page's Edit Session all call these; nobody hand-signals.
+// Canvas page's Edit Session all call these; nobody hand-signals. The
+// optional `viewMeta` marks a store's own write (STORE_VIEW): view refresh
+// skips it because that store re-reads its view itself.
 //
 // Each statement auto-commits on its own (the Tauri pool cannot hold
 // BEGIN/COMMIT across calls).
@@ -14,7 +16,12 @@
 import { getDatabase } from "@/lib/db";
 import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
-import { emitChange, type ChangeKind, type ChangeOrigin } from "@/features/sync/change-feed";
+import {
+  emitChange,
+  type ChangeFeedMeta,
+  type ChangeKind,
+  type ChangeOrigin,
+} from "@/features/sync/change-feed";
 import { CURRENT_CANVAS_SCHEMA_VERSION } from "@/lib/canvas/defaultDoc";
 import {
   createDefaultCanvasDoc,
@@ -105,7 +112,8 @@ function parseStoredDoc(raw: unknown): CanvasDoc {
 
 export async function createCanvasRow(
   input: CreateCanvasInput,
-  origin: ChangeOrigin
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
 ): Promise<Canvas> {
   const db = await getDatabase();
   const id = generateId();
@@ -124,7 +132,10 @@ export async function createCanvasRow(
 
   const stored = await fetchStoredCanvas(id);
   // A read-back failure after the durable write still emits below.
-  await emitChange({ entity: "canvas", id, origin, kind: "content" });
+  await emitChange(
+    { entity: "canvas", id, origin, kind: "content" },
+    viewMeta
+  );
   return (
     stored ?? {
       id,
@@ -147,7 +158,8 @@ export async function createCanvasRow(
 export async function updateCanvasDocRow(
   id: string,
   doc: CanvasDoc,
-  origin: ChangeOrigin
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
 ): Promise<Canvas | null> {
   assertWritableId(id);
   const db = await getDatabase();
@@ -162,7 +174,10 @@ export async function updateCanvasDocRow(
 
   const stored = await fetchStoredCanvas(id);
   // A read-back failure after the durable write still emits below.
-  await emitChange({ entity: "canvas", id, origin, kind: "content" });
+  await emitChange(
+    { entity: "canvas", id, origin, kind: "content" },
+    viewMeta
+  );
   return stored;
 }
 
@@ -175,7 +190,8 @@ export async function updateCanvasDocRow(
 export async function updateCanvasRow(
   id: string,
   input: UpdateCanvasInput,
-  origin: ChangeOrigin
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
 ): Promise<Canvas | null> {
   assertWritableId(id);
   const db = await getDatabase();
@@ -202,13 +218,14 @@ export async function updateCanvasRow(
 
   const stored = await fetchStoredCanvas(id);
   // A read-back failure after the durable write still emits below.
-  await emitChange({ entity: "canvas", id, origin, kind });
+  await emitChange({ entity: "canvas", id, origin, kind }, viewMeta);
   return stored;
 }
 
 export async function reorderCanvasRows(
   items: ReorderCanvasItem[],
-  origin: ChangeOrigin
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
 ): Promise<void> {
   for (const item of items) assertWritableId(item.id);
   const db = await getDatabase();
@@ -227,7 +244,10 @@ export async function reorderCanvasRows(
       affected = result.rowsAffected ?? 0;
     } catch (error) {
       for (const id of persistedIds) {
-        await emitChange({ entity: "canvas", id, origin, kind: "metadata" });
+        await emitChange(
+          { entity: "canvas", id, origin, kind: "metadata" },
+          viewMeta
+        );
       }
       throw error;
     }
@@ -235,12 +255,19 @@ export async function reorderCanvasRows(
   }
 
   for (const id of persistedIds) {
-    await emitChange({ entity: "canvas", id, origin, kind: "metadata" });
+    await emitChange(
+      { entity: "canvas", id, origin, kind: "metadata" },
+      viewMeta
+    );
   }
 }
 
 /** Local delete: records a tombstone so sync carries the deletion. */
-export async function deleteCanvasRow(id: string, origin: ChangeOrigin): Promise<void> {
+export async function deleteCanvasRow(
+  id: string,
+  origin: ChangeOrigin,
+  viewMeta?: ChangeFeedMeta
+): Promise<void> {
   assertWritableId(id);
   const db = await getDatabase();
   const rows = await db.select<{ title: string }[]>("SELECT title FROM canvases WHERE id = ?", [
@@ -254,7 +281,10 @@ export async function deleteCanvasRow(id: string, origin: ChangeOrigin): Promise
     });
   }
   await db.execute("DELETE FROM canvases WHERE id = ?", [id]);
-  await emitChange({ entity: "canvas", id, origin, kind: "content" });
+  await emitChange(
+    { entity: "canvas", id, origin, kind: "content" },
+    viewMeta
+  );
 }
 
 /**

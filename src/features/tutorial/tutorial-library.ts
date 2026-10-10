@@ -9,6 +9,7 @@ import { createMemoryDatabase } from "@/lib/db/memory-database";
 import { metricsService } from "@/lib/metrics/MetricsService";
 import { countWords } from "@/features/metrics/word-count";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
+import { emitChange } from "@/features/sync/change-feed";
 import { runBetweenSyncRuns } from "@/features/sync/sync-engine";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
@@ -123,10 +124,14 @@ export async function enterTutorialLibrary(options: EnterTutorialLibraryOptions)
     const database = await createMemoryDatabase();
     await initializeSchema(database);
     activateTutorialDatabase(database);
+    // The author's Library is unavailable for as long as the Tutorial Library
+    // is active; consumers suspend Library work on this signal.
+    await emitChange({ available: false, reason: "tutorial" });
     try {
       await buildTutorialLibrary(options.text, options.language);
     } catch (error) {
       deactivateTutorialDatabase();
+      await emitChange({ available: true, reason: "tutorial" });
       await database.close().catch(() => {});
       throw error;
     }
@@ -165,7 +170,14 @@ export async function exitTutorialLibrary(): Promise<void> {
   });
 
   restoreEphemeral();
-  await reloadLibraryViews();
+  try {
+    await reloadLibraryViews();
+  } finally {
+    // The author's Library is back and its views were reloaded; consumers
+    // refresh on this signal. It fires even if a view reload failed: the
+    // Library itself is available.
+    await emitChange({ available: true, reason: "tutorial" });
+  }
 }
 
 function restoreEphemeral(): void {

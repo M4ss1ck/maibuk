@@ -298,12 +298,9 @@ describe("EPUB import service", () => {
       "book-1",
     ]);
     expect(mockDeleteExecute).toHaveBeenCalledWith("DELETE FROM books WHERE id = ?", ["book-1"]);
-    // Shared removal path: no tombstone for a book that was never synced...
+    // Shared removal path: no tombstone for a book that was never synced.
     for (const [sql] of mockDeleteExecute.mock.calls) {
       expect(String(sql)).not.toContain("sync_tombstones");
     }
-    // ...and the views are refreshed so no phantom book lingers.
-    expect(mockRefreshBooks).toHaveBeenCalled();
-    expect(mockRefreshChapters).toHaveBeenCalledWith("book-1");
   });
 });

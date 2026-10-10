@@ -626,6 +626,59 @@ describe("BackupService", () => {
       expect(mockLoadBooks).not.toHaveBeenCalled();
     });
 
+    it("announces the completed Restore once on the Change Feed", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
+
+      try {
+        await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
+      } finally {
+        off();
+      }
+
+      expect(signals).toEqual([{ scope: "all", reason: "restore" }]);
+    });
+
+    it("announces no completion when the Restore fails", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
+      mockDb.executeAtomic.mockRejectedValueOnce(
+        new AtomicStatementError(7, "UNIQUE constraint failed", 8)
+      );
+
+      try {
+        await expect(
+          service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")
+        ).rejects.toThrow("RESTORE_FAILED");
+      } finally {
+        off();
+      }
+
+      expect(signals).toEqual([]);
+    });
+
     it("normalizes and restores valid canvas documents", async () => {
       const doc = JSON.stringify({
         schemaVersion: 1,

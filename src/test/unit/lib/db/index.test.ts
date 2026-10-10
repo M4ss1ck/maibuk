@@ -253,6 +253,68 @@ describe("src/lib/db/index.ts", () => {
 
       await expect(resetDatabase()).resolves.toBeUndefined();
     });
+
+    it("announces the completed Reset once on the Change Feed", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { resetDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+
+      try {
+        await resetDatabase();
+      } finally {
+        off();
+      }
+
+      expect(signals).toEqual([{ scope: "all", reason: "resetLibrary" }]);
+    });
+
+    it("announces no completion when a Reset fails partway", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { resetDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+      mockDb.execute.mockImplementation((sql: string) => {
+        if (sql === "DELETE FROM chapters") return Promise.reject(new Error("disk full"));
+        return Promise.resolve({ rowsAffected: 0 });
+      });
+
+      try {
+        await expect(resetDatabase()).rejects.toThrow("disk full");
+      } finally {
+        off();
+      }
+
+      expect(signals).toEqual([]);
+    });
+
+    it("announces no completion when a best-effort table could not be cleared", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { resetDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+      mockDb.execute.mockImplementation((sql: string) => {
+        if (sql === "DELETE FROM notes") return Promise.reject(new Error("disk full"));
+        return Promise.resolve({ rowsAffected: 0 });
+      });
+
+      try {
+        await expect(resetDatabase()).resolves.toBeUndefined();
+      } finally {
+        off();
+      }
+
+      expect(signals).toEqual([]);
+    });
   });
 
   describe("importDatabase()", () => {
@@ -291,6 +353,45 @@ describe("src/lib/db/index.ts", () => {
         "disk full"
       );
       expect(mockDb.executeAtomic).not.toHaveBeenCalled();
+    });
+
+    it("announces the completed Database File load once on the Change Feed", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { importDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+
+      try {
+        await importDatabase(`INSERT INTO books (id) VALUES ('1');`);
+      } finally {
+        off();
+      }
+
+      expect(signals).toEqual([{ scope: "all", reason: "databaseLoad" }]);
+    });
+
+    it("announces no completion when the load fails", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { importDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+      mockDb.executeAtomic.mockRejectedValueOnce(new Error("disk full"));
+
+      try {
+        await expect(importDatabase(`INSERT INTO books (id) VALUES ('1');`)).rejects.toThrow(
+          "disk full"
+        );
+      } finally {
+        off();
+      }
+
+      expect(signals).toEqual([]);
     });
   });
 });

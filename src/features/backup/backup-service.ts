@@ -18,6 +18,7 @@ import { dumpHasDataAsync } from "@/features/sync/sync-codec";
 import { createAsyncQueue } from "@/lib/async-queue";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
+import { emitChange } from "@/features/sync/change-feed";
 import { AtomicStatementError } from "@/lib/db/atomic";
 
 // Serializes expensive backup work (create/restore) and concurrent
@@ -295,6 +296,9 @@ export class BackupService {
       console.error("Restore data replacement failed:", detail);
       throw new Error(`RESTORE_FAILED: ${detail}`);
     }
+
+    // The replacement committed as one transaction; announce it once.
+    await emitChange({ scope: "all", reason: "restore" });
 
     await useBookStore.getState().loadBooks();
     await useNoteStore.getState().loadNotes();

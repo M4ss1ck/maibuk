@@ -359,6 +359,64 @@ describe("leaving the Tutorial Library", () => {
   });
 });
 
+describe("Library availability signals", () => {
+  async function collectAvailability<T>(run: () => Promise<T>): Promise<unknown[]> {
+    const { isLibraryAvailability, onChange, resetChangeFeedForTests } = await import(
+      "@/features/sync/change-feed"
+    );
+    resetChangeFeedForTests();
+    const signals: unknown[] = [];
+    const off = onChange((signal) => {
+      if (isLibraryAvailability(signal)) signals.push(signal);
+    });
+    try {
+      await run();
+    } finally {
+      off();
+    }
+    return signals;
+  }
+
+  it("brackets Tutorial entry and exit", async () => {
+    const signals = await collectAvailability(async () => {
+      await tutorial.startTutorial(START);
+      await tutorial.exitTutorial("finished");
+    });
+
+    expect(signals).toEqual([
+      { available: false, reason: "tutorial" },
+      { available: true, reason: "tutorial" },
+    ]);
+  });
+
+  it("returns availability when a view fails to reload after the switch", async () => {
+    const refreshNotes = vi
+      .spyOn(useNoteStore.getState(), "refreshNotes")
+      .mockRejectedValueOnce(new Error("read failed"));
+    const signals = await collectAvailability(async () => {
+      await expect(tutorial.startTutorial(START)).rejects.toThrow("read failed");
+    });
+    refreshNotes.mockRestore();
+
+    expect(signals).toEqual([
+      { available: false, reason: "tutorial" },
+      { available: true, reason: "tutorial" },
+    ]);
+  });
+
+  it("emits nothing when the entry stops before switching Libraries", async () => {
+    const unregister = registerPendingEditsFlush(async () => {
+      throw new Error("disk full");
+    });
+    const signals = await collectAvailability(async () => {
+      await expect(tutorial.startTutorial(START)).rejects.toBeInstanceOf(PendingEditsFlushError);
+    });
+    unregister();
+
+    expect(signals).toEqual([]);
+  });
+});
+
 describe("Tutorial state on this device", () => {
   it("records per-section completion and a finished full run", async () => {
     await tutorial.startTutorial(START);

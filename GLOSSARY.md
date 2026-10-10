@@ -320,7 +320,7 @@ Where a Change came from: this device, or another device through a Pull. (ADR 00
 Whether a Change touched what an item says (content, including its title) or only how it is organized (metadata such as pin, order, and status). Every Change schedules Auto Sync regardless of kind; the kind only decides whether Last Edited moves. (ADR 0003)
 
 **Change Feed**:
-The single stream of Changes that Auto Sync, Galleries, and open editors listen to. (ADR 0003)
+The single stream of Changes and Library signals that Auto Sync, Galleries, and open editors listen to: besides a Change, it carries a completed bulk operation and Library availability. (ADR 0003, 0026)
 _Avoid_: event bus, notifications
 
 **Entity Sync**:

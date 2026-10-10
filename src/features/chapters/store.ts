@@ -7,6 +7,7 @@ import {
   toChapter,
   updateChapterRow,
 } from "@/features/chapters/write";
+import { STORE_VIEW } from "@/features/sync/change-feed";
 import type { Chapter, CreateChapterInput, UpdateChapterInput } from "@/features/chapters/types";
 
 interface ChapterStore {
@@ -108,8 +109,9 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   },
 
   createChapter: async (input: CreateChapterInput) => {
-    // The write path persists, returns the stored chapter, and emits the Change.
-    const newChapter = await createChapterRow(input, "local");
+    // The write path persists, returns the stored chapter, and emits the
+    // Change. The store updates its own view below, so no refresh is needed.
+    const newChapter = await createChapterRow(input, "local", STORE_VIEW);
 
     set((state) =>
       state.currentBookId === null || state.currentBookId === input.bookId
@@ -122,7 +124,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
   updateChapter: async (id: string, input: UpdateChapterInput) => {
     // The write path normalizes, persists, returns the stored chapter (even
     // when it is not loaded), and emits the Change.
-    const stored = await updateChapterRow(id, input, "local");
+    const stored = await updateChapterRow(id, input, "local", STORE_VIEW);
     if (!stored) return null;
 
     set((state) => ({
@@ -135,7 +137,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
 
   deleteChapter: async (id: string) => {
     // The write path deletes, touches the parent Book, and emits the Change.
-    await deleteChapterRow(id, "local");
+    await deleteChapterRow(id, "local", STORE_VIEW);
 
     set((state) => ({
       chapters: state.chapters.filter((chapter) => chapter.id !== id),
@@ -145,7 +147,7 @@ export const useChapterStore = create<ChapterStore>((set, get) => ({
 
   reorderChapters: async (bookId: string, chapterIds: string[]) => {
     // The write path persists the order and emits the Change.
-    await reorderChapterRows(bookId, chapterIds, "local");
+    await reorderChapterRows(bookId, chapterIds, "local", STORE_VIEW);
 
     // Update local state
     set((state) => ({

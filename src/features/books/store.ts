@@ -7,6 +7,7 @@ import {
   updateBookRow,
   updateBookWordCountRow,
 } from "@/features/books/write";
+import { STORE_VIEW } from "@/features/sync/change-feed";
 import type { Book, CreateBookInput, UpdateBookInput } from "@/features/books/types";
 
 interface BookStore {
@@ -93,7 +94,8 @@ export const useBookStore = create<BookStore>((set) => ({
 
   createBook: async (input: CreateBookInput) => {
     // The write path persists, returns the stored book, and emits the Change.
-    const newBook = await createBookRow(input, "local");
+    // The store updates its own view below, so the Change needs no refresh.
+    const newBook = await createBookRow(input, "local", STORE_VIEW);
 
     set((state) => ({ books: [newBook, ...state.books] }));
     return newBook;
@@ -101,7 +103,7 @@ export const useBookStore = create<BookStore>((set) => ({
 
   updateBook: async (id: string, input: UpdateBookInput) => {
     // The write path persists, returns the stored book, and emits the Change.
-    const updated = await updateBookRow(id, input, "local");
+    const updated = await updateBookRow(id, input, "local", STORE_VIEW);
     if (!updated) return;
 
     set((state) => ({
@@ -112,7 +114,7 @@ export const useBookStore = create<BookStore>((set) => ({
 
   deleteBook: async (id: string) => {
     // The write path records the tombstone, deletes, and emits the Change.
-    await deleteBookRow(id, "local");
+    await deleteBookRow(id, "local", STORE_VIEW);
 
     set((state) => ({
       books: state.books.filter((book) => book.id !== id),

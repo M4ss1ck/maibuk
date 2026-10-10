@@ -1,7 +1,7 @@
 import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
 import { getPassphrase } from "@/features/sync/crypto";
-import { onChange } from "@/features/sync/change-feed";
+import { isEntityChange, onChange } from "@/features/sync/change-feed";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import type { ConflictResolver } from "@/features/sync/types";
 
@@ -101,9 +101,11 @@ export function installAutoSync(): () => void {
   if (uninstall) return uninstall;
 
   // Every local Change — content or metadata — schedules a sync; the kind
-  // only decides whether Last Edited moves.
-  const stopChanges = onChange((change) => {
-    if (change.origin !== "local" || isTutorialLibraryActive()) return;
+  // only decides whether Last Edited moves. Bulk and availability signals
+  // are not edits and schedule nothing.
+  const stopChanges = onChange((signal) => {
+    if (!isEntityChange(signal)) return;
+    if (signal.origin !== "local" || isTutorialLibraryActive()) return;
     scheduleAutoSync();
   });
   const stopAuth = useSyncStore.subscribe((state, previous) => {
