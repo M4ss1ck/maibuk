@@ -678,6 +678,15 @@ Output:
 }
 ```
 
+Then the body, as chunks passed to `listener.onChunk` until `listener.onEnd`:
+
+```ts
+{
+  /** The next piece of the response body, decoded as UTF-8. A chunk is at most 64 KB. */
+  text: string;
+}
+```
+
 ## clipboard
 
 ### `clipboard.readText`
@@ -832,6 +841,78 @@ Output:
 
 ```ts
 string[]
+```
+
+## Events
+
+Subscribe with `maibuk.on(event, listener)`; it resolves with the function that unsubscribes. An event reaches the Plugin only while it holds the event's Plugin Permission, and never while it is stopped. Events only invalidate: they carry ids, never content.
+
+### `library.changed`
+
+A Book, Note, or Canvas was saved (Chapter edits arrive as their Book), or a bulk operation replaced the Library.
+
+- Plugin Permission: `library:read`
+
+Payload:
+
+```ts
+{
+  entity: "book" | "note" | "canvas";
+  id: string;
+  origin: "local" | "remote";
+  kind: "content" | "metadata";
+} | {
+  scope: "all";
+  reason: "restore" | "resetLibrary" | "databaseLoad";
+}
+```
+
+### `library.availabilityChanged`
+
+The Library became available or unavailable (the Tutorial makes it unavailable).
+
+- Plugin Permission: none
+
+Payload:
+
+```ts
+{
+  available: boolean;
+}
+```
+
+### `editor.contentChanged`
+
+The focused editor's content changed; sent once per typing burst.
+
+- Plugin Permission: `editor:read`
+
+Payload:
+
+```ts
+{
+  entity: {
+    kind: "book" | "chapter" | "note" | "canvas";
+    id: string;
+  };
+}
+```
+
+### `editor.focusChanged`
+
+A different editor took focus, or none did (entity is null).
+
+- Plugin Permission: `editor:read`
+
+Payload:
+
+```ts
+{
+  entity: {
+    kind: "book" | "chapter" | "note" | "canvas";
+    id: string;
+  } | null;
+}
 ```
 
 ## Reserved namespaces

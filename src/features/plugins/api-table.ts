@@ -4,13 +4,18 @@
  * needs, and whether it reads or writes. The SDK types, the API reference,
  * the MCP tool projection, and the broker's checks all come from these rows,
  * so adding a method is adding a row and running `pnpm generate:plugin-api`.
+ * Events the host sends to subscribed Plugins are rows of a second table.
  *
  * Schemas are Zod so the broker validates input with the same definition the
  * JSON Schema is emitted from; nothing can drift between them.
  */
 
 import { z } from "zod";
-import type { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-validate";
+import type {
+  McpToolProjection,
+  PluginApiEventRow,
+  PluginApiRow,
+} from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
 export const PLUGIN_API_VERSION = "0.1.0";
@@ -29,36 +34,18 @@ export const PLUGIN_API_NAMESPACES = [
 /** Names held for a later effort; every call into one refuses with `not-implemented`. */
 export const PLUGIN_API_RESERVED_NAMESPACES = ["process"] as const;
 
-/**
- * `network` means "a granted `network:<host>` matching the request URL";
- * `null` means ungated (rate-limited instead).
- */
-export type PluginApiPermission = (typeof PLUGIN_PERMISSION_NAMES)[number] | "network" | null;
-
-export type PluginApiEffect = "read" | "write";
-
-export interface PluginApiRow<
-  Id extends string = string,
-  Input extends z.ZodType = z.ZodType,
-  Output extends z.ZodType = z.ZodType,
-> {
-  id: Id;
-  description: string;
-  input: Input;
-  output: Output;
-  permission: PluginApiPermission;
-  effect: PluginApiEffect;
-  /** Refused with `library-unavailable` while the Library cannot be read or written. */
-  requiresLibrary?: boolean;
-  /** At most one accepted call per this many milliseconds, per Plugin. */
-  minIntervalMs?: number;
-}
-
 export function defineApiRow<
   const Id extends string,
   Input extends z.ZodType,
   Output extends z.ZodType,
->(row: PluginApiRow<Id, Input, Output>): PluginApiRow<Id, Input, Output> {
+  Chunk extends z.ZodType | undefined = undefined,
+>(row: PluginApiRow<Id, Input, Output, Chunk>): PluginApiRow<Id, Input, Output, Chunk> {
+  return row;
+}
+
+export function defineApiEvent<const Id extends string, Payload extends z.ZodType>(
+  row: PluginApiEventRow<Id, Payload>
+): PluginApiEventRow<Id, Payload> {
   return row;
 }
 
@@ -326,10 +313,17 @@ export const PLUGIN_API_TABLE = [
         .describe("Header name to secret name; the host fills in the value."),
       body: z.string().optional(),
     }),
-    output: z.strictObject({
-      status: z.int(),
-      statusText: z.string(),
-      headers: z.record(z.string(), z.string()),
+    output: z
+      .strictObject({
+        status: z.int(),
+        statusText: z.string(),
+        headers: z.record(z.string(), z.string()),
+      })
+      .describe("The response head; the body follows as streamed chunks."),
+    chunk: z.strictObject({
+      text: z
+        .string()
+        .describe("The next piece of the response body, decoded as UTF-8. A chunk is at most 64 KB."),
     }),
     permission: "network",
     effect: "write",
@@ -400,11 +394,44 @@ export const PLUGIN_API_TABLE = [
   }),
 ] as const;
 
-export type PluginApiTable = typeof PLUGIN_API_TABLE;
-export type PluginApiMethodId = PluginApiTable[number]["id"];
-type RowOf<M extends PluginApiMethodId> = Extract<PluginApiTable[number], { id: M }>;
-export type PluginApiInput<M extends PluginApiMethodId> = z.output<RowOf<M>["input"]>;
-export type PluginApiOutput<M extends PluginApiMethodId> = z.input<RowOf<M>["output"]>;
+export const PLUGIN_API_EVENTS = [
+  defineApiEvent({
+    id: "library.changed",
+    description:
+      "A Book, Note, or Canvas was saved (Chapter edits arrive as their Book), or a bulk operation replaced the Library.",
+    payload: z.union([
+      z.strictObject({
+        entity: z.enum(["book", "note", "canvas"]),
+        id,
+        origin: z.enum(["local", "remote"]),
+        kind: z.enum(["content", "metadata"]),
+      }),
+      z.strictObject({
+        scope: z.literal("all"),
+        reason: z.enum(["restore", "resetLibrary", "databaseLoad"]),
+      }),
+    ]),
+    permission: "library:read",
+  }),
+  defineApiEvent({
+    id: "library.availabilityChanged",
+    description: "The Library became available or unavailable (the Tutorial makes it unavailable).",
+    payload: z.strictObject({ available: z.boolean() }),
+    permission: null,
+  }),
+  defineApiEvent({
+    id: "editor.contentChanged",
+    description: "The focused editor's content changed; sent once per typing burst.",
+    payload: z.strictObject({ entity: entityRef }),
+    permission: "editor:read",
+  }),
+  defineApiEvent({
+    id: "editor.focusChanged",
+    description: "A different editor took focus, or none did (entity is null).",
+    payload: z.strictObject({ entity: entityRef.nullable() }),
+    permission: "editor:read",
+  }),
+] as const;
 
 type JsonSchema = Record<string, unknown>;
 
@@ -421,12 +448,12 @@ export function outputJsonSchema(row: PluginApiRow): JsonSchema {
   return toJsonSchema(row.output, "output");
 }
 
-export interface McpToolProjection {
-  name: string;
-  description: string;
-  inputSchema: JsonSchema;
-  outputSchema: JsonSchema;
-  annotations: { readOnlyHint: boolean };
+export function chunkJsonSchema(row: PluginApiRow): JsonSchema | null {
+  return row.chunk ? toJsonSchema(row.chunk, "output") : null;
+}
+
+export function payloadJsonSchema(event: PluginApiEventRow): JsonSchema {
+  return toJsonSchema(event.payload, "output");
 }
 
 // MCP carries structured results as an object, so anything else becomes { result }.

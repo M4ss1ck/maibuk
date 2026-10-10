@@ -2,15 +2,15 @@ import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 import {
+  PLUGIN_API_EVENTS,
   PLUGIN_API_NAMESPACES,
   PLUGIN_API_RESERVED_NAMESPACES,
   PLUGIN_API_TABLE,
-  type PluginApiMethodId,
-  type PluginApiRow,
-  type PluginApiTable,
+  defineApiEvent,
   defineApiRow,
   inputJsonSchema,
   outputJsonSchema,
+  payloadJsonSchema,
   projectMcpTools,
 } from "@/features/plugins/api-table";
 import {
@@ -18,9 +18,27 @@ import {
   renderPluginApiDocs,
   renderPluginApiTypes,
 } from "@/features/plugins/api-codegen";
-import { type PluginApiHandlers, createPluginBroker } from "@/features/plugins/broker";
+import { createPluginBroker } from "@/features/plugins/broker";
 import { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-validate";
-import { PLUGIN_API_METHODS, type PluginApiMethods } from "@/plugin-sdk/api.generated";
+import type { BulkSignal, Change } from "@/features/sync/change-feed";
+import type {
+  PluginApiEventId,
+  PluginApiEventRow,
+  PluginApiEvents,
+  PluginApiHandlers,
+  PluginApiMethodId,
+  PluginApiRow,
+  PluginApiStreamingMethodId,
+  PluginApiTable,
+  PluginPermissionId,
+} from "@/features/plugins/types";
+import {
+  PLUGIN_API_EVENT_IDS,
+  PLUGIN_API_METHODS,
+  PLUGIN_API_STREAMING_METHODS,
+  type PluginApiEvents as GeneratedEvents,
+  type PluginApiMethods,
+} from "@/plugin-sdk/api.generated";
 
 const UNGATED = new Set(["storage", "notifications", "navigation"]);
 
@@ -84,6 +102,47 @@ describe("PLUGIN_API_TABLE", () => {
       expect(() => outputJsonSchema(row)).not.toThrow();
     }
   });
+
+  it("streams the network.fetch response body in chunks", () => {
+    const streaming = PLUGIN_API_TABLE.filter((row) => "chunk" in row && row.chunk);
+    expect(streaming.map((row) => row.id)).toEqual(["network.fetch"]);
+  });
+});
+
+/** Every property name anywhere in a JSON Schema. */
+function propertyNames(schema: unknown): string[] {
+  if (typeof schema !== "object" || schema === null) return [];
+  const own = Object.keys((schema as { properties?: object }).properties ?? {});
+  return [...own, ...Object.values(schema).flatMap(propertyNames)];
+}
+
+describe("PLUGIN_API_EVENTS", () => {
+  it("lists the v1 events: library.changed, availability, and the two editor events", () => {
+    expect(PLUGIN_API_EVENTS.map((event) => event.id)).toEqual([
+      "library.changed",
+      "library.availabilityChanged",
+      "editor.contentChanged",
+      "editor.focusChanged",
+    ]);
+  });
+
+  it("gates each event by its namespace's read permission, availability by none", () => {
+    for (const event of PLUGIN_API_EVENTS) {
+      const namespace = event.id.split(".")[0];
+      expect(PLUGIN_API_NAMESPACES).toContain(namespace);
+      const expected = event.id === "library.availabilityChanged" ? null : `${namespace}:read`;
+      expect(event.permission, event.id).toBe(expected);
+    }
+  });
+
+  it("carries ids only, never content", () => {
+    for (const event of PLUGIN_API_EVENTS) {
+      const names = propertyNames(payloadJsonSchema(event));
+      for (const forbidden of ["content", "text", "html", "title"]) {
+        expect(names, event.id).not.toContain(forbidden);
+      }
+    }
+  });
 });
 
 describe("projectMcpTools()", () => {
@@ -132,8 +191,10 @@ describe("generated SDK files", () => {
     expect(committed).toBe(renderPluginApiDocs(PLUGIN_API_TABLE));
   });
 
-  it("lists every table method at runtime for the SDK client", () => {
+  it("lists every table method, streaming method, and event at runtime for the SDK client", () => {
     expect([...PLUGIN_API_METHODS]).toEqual(PLUGIN_API_TABLE.map((r) => r.id));
+    expect([...PLUGIN_API_STREAMING_METHODS]).toEqual(["network.fetch"]);
+    expect([...PLUGIN_API_EVENT_IDS]).toEqual(PLUGIN_API_EVENTS.map((e) => e.id));
   });
 });
 
@@ -171,12 +232,12 @@ describe("adding a row", () => {
 
   it("reaches the broker's Plugin Permission and schema checks with no other change", async () => {
     const channel = new MessageChannel();
-    const grants = new Set(["library:read"]);
+    const granted = new Set<PluginPermissionId>(["library:read"]);
     createPluginBroker({
       pluginId: "fixture",
       port: channel.port1,
       declared: ["library:read"],
-      granted: () => grants,
+      granted: () => granted,
       table,
       handlers: { "library.books.countWords": async () => ({ words: 3 }) } as PluginApiHandlers,
     });
@@ -195,8 +256,65 @@ describe("adding a row", () => {
         result: { words: 3 },
       });
       expect(await send(2, {})).toMatchObject({ ok: false, error: { code: "invalid-params" } });
-      grants.clear();
+      granted.clear();
       expect(await send(3, { bookId: "b1" })).toMatchObject({
+        ok: false,
+        error: { code: "permission-denied", permission: "library:read" },
+      });
+    } finally {
+      channel.port1.close();
+      channel.port2.close();
+    }
+  });
+});
+
+describe("adding an event", () => {
+  const extra: PluginApiEventRow = defineApiEvent({
+    id: "library.bookOpened",
+    description: "A Book was opened in the editor.",
+    payload: z.strictObject({ bookId: z.string() }),
+    permission: "library:read",
+  });
+  const events = [...PLUGIN_API_EVENTS, extra];
+
+  it("reaches the SDK types and the docs stub with no other change", () => {
+    const types = renderPluginApiTypes(PLUGIN_API_TABLE, events);
+    expect(types).toContain('"library.bookOpened": {\n    bookId: string;\n  };');
+    expect(renderPluginApiDocs(PLUGIN_API_TABLE, events)).toContain("### `library.bookOpened`");
+  });
+
+  it("reaches the broker's subscription and Plugin Permission checks with no other change", async () => {
+    const channel = new MessageChannel();
+    const granted = new Set<PluginPermissionId>(["library:read"]);
+    const broker = createPluginBroker({
+      pluginId: "fixture",
+      port: channel.port1,
+      declared: ["library:read"],
+      granted: () => granted,
+      events,
+    });
+    const next = () =>
+      new Promise<unknown>((resolve) => {
+        channel.port2.onmessage = (message) => resolve(message.data);
+      });
+    const send = (id: number, event: string) => {
+      const reply = next();
+      channel.port2.postMessage(JSON.stringify({ kind: "subscribe", id, event }));
+      return reply;
+    };
+    const emit = broker.emit as (event: string, payload: unknown) => boolean;
+    try {
+      expect(await send(1, "library.bookOpened")).toMatchObject({ id: 1, ok: true });
+      const delivered = next();
+      expect(emit("library.bookOpened", { bookId: "b1" })).toBe(true);
+      expect(await delivered).toEqual({
+        kind: "event",
+        event: "library.bookOpened",
+        payload: { bookId: "b1" },
+      });
+      granted.clear();
+      expect(emit("library.bookOpened", { bookId: "b1" })).toBe(false);
+      expect(await send(2, "library.bookOpened")).toMatchObject({
         ok: false,
         error: { code: "permission-denied", permission: "library:read" },
       });
@@ -263,9 +381,35 @@ type OutputMismatch = {
     : M;
 }[PluginApiMethodId];
 
+type ChunkMismatch = {
+  [M in PluginApiStreamingMethodId]: Same<
+    PluginApiMethods[M] extends { chunk: infer C } ? C : never,
+    z.output<NonNullable<RowOf<M>["chunk"]>>
+  > extends true
+    ? never
+    : M;
+}[PluginApiStreamingMethodId];
+type EventMismatch = {
+  [E in PluginApiEventId]: Same<GeneratedEvents[E], PluginApiEventPayloadOf<E>> extends true
+    ? never
+    : E;
+}[PluginApiEventId];
+type PluginApiEventPayloadOf<E extends PluginApiEventId> = z.output<
+  Extract<PluginApiEvents[number], { id: E }>["payload"]
+>;
+
 describe("generated types", () => {
-  it("match the Zod rows for every method's input and output", () => {
+  it("match the Zod rows for every method's input, output, and chunk, and every event", () => {
     expectTypeOf<InputMismatch>().toEqualTypeOf<never>();
     expectTypeOf<OutputMismatch>().toEqualTypeOf<never>();
+    expectTypeOf<ChunkMismatch>().toEqualTypeOf<never>();
+    expectTypeOf<EventMismatch>().toEqualTypeOf<never>();
+    expectTypeOf<PluginApiStreamingMethodId>().toEqualTypeOf<"network.fetch">();
+  });
+
+  it("pass the Change Feed's own shapes through library.changed, so they cannot drift", () => {
+    expectTypeOf<PluginApiEventPayloadOf<"library.changed">>().toEqualTypeOf<
+      Change | BulkSignal
+    >();
   });
 });

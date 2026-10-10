@@ -7,6 +7,8 @@
  * everywhere.
  */
 
+import type { PluginContributionId, PluginRenameProblem } from "@/features/plugins/types";
+
 export const PLUGIN_PREFIX = "plugin.";
 
 export const PLUGIN_ID_SOURCE = "[a-z0-9-]{3,64}";
@@ -17,8 +19,6 @@ export const LOCAL_ID_PATTERN = new RegExp(`^${LOCAL_ID_SOURCE}$`);
 
 const FULL_ID_PATTERN = new RegExp(`^plugin\\.(${PLUGIN_ID_SOURCE})\\.(${LOCAL_ID_SOURCE})$`);
 
-/** A derived Plugin contribution id: `plugin.<pluginId>.<localId>`. */
-export type PluginContributionId = `plugin.${string}.${string}`;
 
 /** The shape of a derived Plugin contribution id, registered or not. */
 export function isPluginContributionId(value: string): value is PluginContributionId {
@@ -32,13 +32,6 @@ export function pluginIdOfContribution(value: string): string | null {
 export function localIdOfContribution(value: string): string | null {
   return FULL_ID_PATTERN.exec(value)?.[2] ?? null;
 }
-
-/** Why a Plugin rename map was refused; the caller maps it to a field path. */
-export type PluginRenameProblem =
-  | "not-local-id"
-  | "source-declared"
-  | "target-undeclared"
-  | "cycle";
 
 /** A refused rename map, carrying the offending ids for callers to locate. */
 export class PluginRenameError extends Error {

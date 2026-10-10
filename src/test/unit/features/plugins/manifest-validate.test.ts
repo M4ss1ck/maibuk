@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ManifestProblem } from "@/features/plugins/manifest-validate";
+import type { ManifestProblem } from "@/features/plugins/types";
 import {
   CONTRIBUTION_LIMITS,
   MAX_LOCALE_BYTES,
