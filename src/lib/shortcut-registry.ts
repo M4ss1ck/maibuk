@@ -10,6 +10,7 @@
 // else in this module and in the resolver.
 import type { DictationLanguage } from "@/features/dictation/types";
 import type { VoiceCommandSpec } from "@/features/dictation/voice-commands";
+import { collapseContributionRenames } from "@/features/plugins/ids";
 import { isRecordableStep, normalizeShortcut, shortcutKey } from "@/lib/shortcut-keys";
 
 /**
@@ -1398,40 +1399,6 @@ function validateShortcuts(
 }
 
 /**
- * Collapses a Plugin's rename chains (a→b, b→c becomes a→c) and refuses what a
- * manifest cannot express: a target outside the Plugin, a target that is not
- * declared, a source that is, and cycles.
- */
-function collapseRenames(
-  renames: Readonly<Record<string, string>>,
-  declared: ReadonlySet<string>
-): Readonly<Record<string, string>> {
-  for (const [from, to] of Object.entries(renames)) {
-    if (!LOCAL_ID_PATTERN.test(from) || !LOCAL_ID_PATTERN.test(to)) {
-      throw new Error(`Plugin rename "${from}" targets "${to}", which is not a Plugin-local id`);
-    }
-    if (declared.has(from)) {
-      throw new Error(`Plugin rename source "${from}" is a declared Command`);
-    }
-    if (!declared.has(to)) {
-      throw new Error(`Plugin rename "${from}" targets "${to}", which is not a declared Command`);
-    }
-  }
-  const collapsed: Record<string, string> = {};
-  for (const from of Object.keys(renames)) {
-    const seen = new Set<string>([from]);
-    let target = renames[from];
-    while (renames[target] !== undefined) {
-      if (seen.has(target)) throw new Error(`Plugin rename for "${from}" cycles`);
-      seen.add(target);
-      target = renames[target];
-    }
-    collapsed[from] = target;
-  }
-  return collapsed;
-}
-
-/**
  * The conflict ranks of a registration's Commands and declared bindings. A
  * Command or binding that existed in the previous registration of the same
  * Plugin keeps its rank (a rename keeps it too); anything new is ranked after
@@ -1545,7 +1512,11 @@ export function registerPluginCommands(
   const token = Symbol(pluginId);
   const byId = new Map(defs.map((definition) => [definition.id, definition]));
   const previous = plugins.get(pluginId);
-  const renames = collapseRenames(registration.commandRenames ?? {}, declared);
+  const renames = collapseContributionRenames(
+    registration.commandRenames ?? {},
+    declared,
+    "Command"
+  );
   const { commandRanks, bindingRanks } = bindingRanksFor(previous, defs, renames);
   plugins.set(pluginId, {
     pluginId,

@@ -34,6 +34,7 @@
     "android:dev": "tauri android dev",
     "version:bump": "./scripts/bump-version.sh",
     "generate:symbols": "tsx scripts/generate-symbols-data.ts",
+    "generate:plugin-manifest": "node scripts/generate-lucide-icon-names.mjs && tsx scripts/generate-manifest-schema.ts",
     "fetch:dictation": "node scripts/fetch-dictation-runtime.mjs",
     "fetch:sync-server": "node scripts/fetch-sync-server.mjs",
     "conformance:dictation": "node scripts/dictation-conformance/web.mjs && cd src-tauri && cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture && python3 ../scripts/dictation-conformance/report.py",
@@ -128,6 +129,7 @@
     "sql.js": "^1.13.0",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
+    "zod": "^4.6.5",
     "zustand": "^5.0.3"
   },
   "devDependencies": {

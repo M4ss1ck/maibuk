@@ -35,8 +35,10 @@ export function localIdOfContribution(value: string): string | null {
 
 /**
  * Collapses a Plugin's rename chains (a→b, b→c becomes a→c) and refuses what a
- * manifest cannot express: a target outside the Plugin, a target that is not
- * declared, a source that is, and cycles. `kind` names the contribution in
+ * manifest cannot express: a target outside the Plugin, a source that is still
+ * declared, a chain that does not end at a declared contribution, and cycles.
+ * An intermediate id needs no declaration of its own: it is an old name that
+ * was renamed again in a later release. `kind` names the contribution in
  * errors ("button", "row").
  */
 export function collapseContributionRenames(
@@ -53,11 +55,6 @@ export function collapseContributionRenames(
     if (declared.has(from)) {
       throw new Error(`Plugin ${kind} rename source "${from}" is a declared ${kind}`);
     }
-    if (!declared.has(to)) {
-      throw new Error(
-        `Plugin ${kind} rename "${from}" targets "${to}", which is not a declared ${kind}`
-      );
-    }
   }
   const collapsed: Record<string, string> = {};
   for (const from of Object.keys(renames)) {
@@ -67,6 +64,11 @@ export function collapseContributionRenames(
       if (seen.has(target)) throw new Error(`Plugin ${kind} rename for "${from}" cycles`);
       seen.add(target);
       target = renames[target];
+    }
+    if (!declared.has(target)) {
+      throw new Error(
+        `Plugin ${kind} rename "${from}" targets "${target}", which is not a declared ${kind}`
+      );
     }
     collapsed[from] = target;
   }

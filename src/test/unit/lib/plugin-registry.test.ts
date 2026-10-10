@@ -7,8 +7,10 @@ import {
   isCommandId,
   isPluginCommandDef,
   isPluginCommandId,
+  pluginCommandRenames,
   pluginIdOfCommand,
   registerPluginCommands,
+  resolvePluginCommandRename,
   type PluginCommandDeclaration,
   type PluginRegistration,
 } from "@/lib/shortcut-registry";
@@ -151,6 +153,17 @@ describe("registerPluginCommands", () => {
         commandRenames: { oldReport: "plugin.other.showReport" },
       })
     ).toThrow(/rename/);
+  });
+
+  it("collapses a rename chain to the Command it ends at", () => {
+    register("echoes", {
+      defaultLanguage: "en",
+      commands: [{ ...base, id: "third" }],
+      commandRenames: { first: "second", second: "third" },
+    });
+    expect(resolvePluginCommandRename("plugin.echoes.first")).toBe("plugin.echoes.third");
+    expect(resolvePluginCommandRename("plugin.echoes.second")).toBe("plugin.echoes.third");
+    expect(pluginCommandRenames().get("echoes")).toEqual({ first: "third", second: "third" });
   });
 
   it("files a Plugin Command under the Plugins section", () => {
