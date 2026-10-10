@@ -716,6 +716,36 @@ describe("BackupService", () => {
       expect(signals).toEqual([]);
     });
 
+    it("still announces the completed Restore once when a view reload fails", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      resetChangeFeedForTests();
+      const signals: unknown[] = [];
+      const off = onChange((signal) => {
+        signals.push(signal);
+      });
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
+      mockLoadNotes.mockRejectedValueOnce(new Error("reload failed"));
+
+      try {
+        await expect(
+          service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")
+        ).rejects.toThrow("reload failed");
+      } finally {
+        off();
+      }
+
+      // The transaction committed, so the Restore is complete and announces
+      // itself even though a subsequent view re-read failed.
+      expect(mockDb.executeAtomic).toHaveBeenCalledTimes(1);
+      expect(signals).toEqual([{ scope: "all", reason: "restore" }]);
+    });
+
     it("normalizes and restores valid canvas documents", async () => {
       const doc = JSON.stringify({
         schemaVersion: 1,
