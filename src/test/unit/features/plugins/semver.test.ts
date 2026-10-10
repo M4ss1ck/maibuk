@@ -76,11 +76,22 @@ describe("isValidRange / satisfiesRange", () => {
     { range: "~0.3.1", match: ["0.3.1", "0.3.9"], miss: ["0.4.0"] },
     { range: "~0.3", match: ["0.3.0", "0.3.9"], miss: ["0.4.0"] },
     { range: "~1", match: ["1.0.0", "1.9.9"], miss: ["2.0.0"] },
+    { range: ">=0.3", match: ["0.3.0", "0.3.9"], miss: ["0.2.9"] },
     { range: ">=0.3.0", match: ["0.3.0", "1.0.0"], miss: ["0.2.9"] },
+    { range: ">=0.3.4", match: ["0.3.4", "0.3.5"], miss: ["0.3.3"] },
+    { range: ">0.3", match: ["0.4.0"], miss: ["0.3.9", "0.3.0"] },
     { range: ">0.3.0", match: ["0.3.1"], miss: ["0.3.0"] },
+    { range: ">0.3.4", match: ["0.3.5"], miss: ["0.3.4", "0.3.0"] },
+    { range: "<=0.3", match: ["0.3.0", "0.3.9"], miss: ["0.4.0"] },
     { range: "<=0.3.0", match: ["0.3.0", "0.2.0"], miss: ["0.3.1"] },
+    { range: "<=0.3.4", match: ["0.3.4", "0.3.0"], miss: ["0.3.5"] },
+    { range: "<0.3", match: ["0.2.9"], miss: ["0.3.0"] },
     { range: "<0.3.0", match: ["0.2.9"], miss: ["0.3.0"] },
+    { range: "<0.3.5", match: ["0.3.2", "0.3.4"], miss: ["0.3.5", "0.4.0"] },
+    { range: "0.3", match: ["0.3.0", "0.3.9"], miss: ["0.4.0", "0.2.9"] },
+    { range: "0.3.4", match: ["0.3.4"], miss: ["0.3.3", "0.3.5"] },
     { range: ">=0.3.0 <0.5.0", match: ["0.3.0", "0.4.9"], miss: ["0.5.0"] },
+    { range: ">=0.3.0 <0.3.5", match: ["0.3.4"], miss: ["0.3.5", "0.2.9"] },
     { range: "^0.1 || ^0.3", match: ["0.1.5", "0.3.0"], miss: ["0.2.0"] },
     { range: "1.2", match: ["1.2.0", "1.2.9"], miss: ["1.3.0", "1.1.9"] },
     { range: "1.x", match: ["1.0.0", "1.9.9"], miss: ["2.0.0"] },
@@ -140,6 +151,7 @@ describe("rangeRelation", () => {
   it("reports in-range", () => {
     expect(rangeRelation("^0.3", at("0.3.2"))).toBe("in-range");
     expect(rangeRelation("*", at("9.9.9"))).toBe("in-range");
+    expect(rangeRelation("<0.3.5", at("0.3.2"))).toBe("in-range");
   });
 
   it("reports wants-newer when every supported version is above the host", () => {

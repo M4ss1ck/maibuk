@@ -94,8 +94,11 @@ export function compareSemver(a: Semver, b: Semver): number {
 function parsePartial(text: string): PartialVersion | null {
   const match = PARTIAL_PATTERN.exec(text);
   if (match === null) return null;
-  const read = (wildcard: string | undefined, number: string | undefined): number | null =>
-    wildcard !== undefined ? null : Number(number);
+  // An absent component is null, exactly like a wildcard: `1.2` has no patch.
+  const read = (wildcard: string | undefined, number: string | undefined): number | null => {
+    if (wildcard !== undefined) return null;
+    return number === undefined ? null : Number(number);
+  };
   const major = read(match[1], match[2]);
   const minor = major === null ? null : read(match[3], match[4]);
   const patch = minor === null ? null : read(match[5], match[6]);
@@ -135,7 +138,13 @@ function boundsFor(op: string, partial: PartialVersion): Bounds {
     return { lower: filled(partial), lowerInclusive: true, upper: null, upperInclusive: true };
   }
   if (op === "<") {
-    const upper = minor === null ? version(major, 0, 0) : version(major, minor, 0);
+    // A patch pins the bound exactly: `<0.3.5` is below 0.3.5, not below 0.3.0.
+    const upper =
+      patch !== null
+        ? filled(partial)
+        : minor === null
+          ? version(major, 0, 0)
+          : version(major, minor, 0);
     return { lower: null, lowerInclusive: true, upper, upperInclusive: false };
   }
   if (op === "<=") {
