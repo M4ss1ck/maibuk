@@ -85,8 +85,18 @@ export default defineConfig<{ macPlatform: boolean }>({
     {
       name: "webkit",
       // WebKit cannot grant clipboard permissions; clipboard rows are chromium-only.
-      grepInvert: /@chromium-only|@touch/,
+      // @no-webkit rows need an API the pinned Playwright WebKit build lacks
+      // (today: OPFS, microsoft/playwright#18235).
+      grepInvert: /@chromium-only|@touch|@no-webkit/,
       use: { ...devices["Desktop Safari"], ...shared },
+    },
+    {
+      // Firefox runs only the @sandbox group: the Plugin sandbox's engine
+      // coverage (issue #434's tracer; the hostile fixture group extends it).
+      name: "firefox",
+      grep: /@sandbox/,
+      testIgnore: ["sync/**", AUDIO_SPECS],
+      use: { ...devices["Desktop Firefox"], ...shared },
     },
     {
       // Chromium reporting a Mac navigator.platform, so isMac() and TipTap's

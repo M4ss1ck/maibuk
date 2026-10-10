@@ -16,7 +16,7 @@ Playwright itself stays a local command and never runs in CI.
 
 ```bash
 pnpm install
-pnpm exec playwright install chromium webkit
+pnpm exec playwright install chromium webkit firefox
 pnpm fetch:dictation --test-assets   # the Dictation specs' models and test audio
 pnpm e2e:voice-audio                 # Piper TTS audio for the Voice Command spec
 ```
@@ -47,6 +47,7 @@ terminal you control. A slim container often also needs `libnss3`, `libnspr4`,
 ```bash
 pnpm test:e2e                                     # everything: guard, typecheck, build, all projects
 pnpm test:e2e --project=chromium                  # one browser (chromium or webkit)
+pnpm test:e2e --project=firefox                   # the @sandbox group in Firefox
 pnpm test:e2e --project=voice                     # the audio specs, one at a time
 pnpm test:e2e --project=phone                     # the touch specs on a phone
 pnpm test:e2e specs/books-create.spec.ts          # one file
@@ -104,7 +105,8 @@ run at once and a leftover never blocks a run. Running
 | --- | --- | --- |
 | `chromium` | Chromium | every spec except the audio specs |
 | `voice` | Chromium with the fake microphone, one worker | the audio specs: `voice-*.spec.ts` and `dictation*.spec.ts` |
-| `webkit` | WebKit (the engine of the Linux and macOS desktop shells) | every spec except `@chromium-only` |
+| `webkit` | WebKit (the engine of the Linux and macOS desktop shells) | every spec except `@chromium-only` and `@no-webkit` |
+| `firefox` | Firefox | only tests tagged `@sandbox` (the Plugin sandbox's engine coverage) |
 | `mac-platform` | Chromium reporting a Mac `navigator.platform` | only tests tagged `@mac-platform` |
 | `phone` | Chromium as a Pixel 7: 412x839 viewport, touch, `isMobile` | only tests tagged `@touch` |
 
@@ -173,6 +175,9 @@ else (a comment, a variable, an annotation) covers nothing:
   lists must be tagged in a spec file that carries that row.
 - `@mac-platform` also runs the test in the `mac-platform` project, and
   `@chromium-only` keeps it out of WebKit (clipboard rows only).
+- `@no-webkit` keeps a test out of WebKit when the pinned Playwright WebKit
+  build lacks an API the row needs (today: OPFS, microsoft/playwright#18235);
+  the matrix records the gap as an exclusion.
 - `@touch` runs the test only in the `phone` project, and lets it use touch
   input (see "Driving the app by touch").
 
@@ -545,3 +550,10 @@ presses can pass in Chromium and fail in WebKit. Prefer `tabTo(page, target)`
 (which presses Tab until the target has focus and reports everything it visited
 when it never does) over a fixed number of `Tab` presses, and assert the
 focused element rather than a step count.
+
+**WebKit has no OPFS on the pinned Playwright.** `navigator.storage` is
+undefined in the WebKit build that ships with Playwright 1.62.1
+(microsoft/playwright#18235, fixed by the WebKit r2339 roll in a later
+Playwright), so specs that seed the web Plugin Directory cannot run there.
+They carry `@no-webkit` and the matrix records the exclusion; the row returns
+to WebKit with the Playwright bump.

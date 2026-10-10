@@ -3,12 +3,19 @@
 // They prepare the device before the app boots; they never stand in for the
 // behavior a spec is testing.
 
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
+import { WEB_PLUGIN_DIRECTORY_NAME } from "@/lib/platform/web/plugins";
+import {
+  PLUGIN_APPROVALS_STORAGE_KEY,
+  serializePluginApprovals,
+} from "@/features/plugins/approvals";
 import { PASTE_CLEANUP_PRESETS, type PasteCleanupPreset } from "@/features/settings/types";
+import { readFolderFiles } from "@/test/support/plugin-fixtures";
 import type { SeedName } from "./seed/libraries";
-import { SEED_DIR } from "./seed/seeds";
+import { REPO_ROOT, SEED_DIR } from "./seed/seeds";
 
 /** `empty` is a fresh device: no Library in IndexedDB at all. */
 export type LibrarySeed = SeedName | "empty";
@@ -16,28 +23,62 @@ export type LibrarySeed = SeedName | "empty";
 /** `dismissed`: the first-launch Tutorial offer was already answered "Not now". */
 export type TutorialProgressSeed = "dismissed" | "clean";
 
+/** A fixture Plugin the seed writes into the web Plugin Directory (OPFS). */
+export type PluginSeed = "tracer";
+
+const PLUGIN_FIXTURES_DIR = resolve(REPO_ROOT, "e2e/fixtures/plugins");
+
 const BLANK_PATH = "/__e2e__/blank";
 
+interface PluginSeedData {
+  name: PluginSeed;
+  files: { path: string; base64: string }[];
+  /** The fixture's committed pin; the app must compute the same h1: from OPFS. */
+  pinnedHash: string;
+}
+
+function readPluginSeed(name: PluginSeed): PluginSeedData {
+  const dir = resolve(PLUGIN_FIXTURES_DIR, name);
+  const expected = JSON.parse(
+    readFileSync(resolve(PLUGIN_FIXTURES_DIR, `${name}.expected.json`), "utf8")
+  ) as { hash: string };
+  const files = readFolderFiles(dir).map((file) => ({
+    path: file.path,
+    base64: Buffer.from(file.bytes).toString("base64"),
+  }));
+  return { name, files, pinnedHash: expected.hash };
+}
+
 /**
- * Writes the seed into the web adapter's IndexedDB store and the Tutorial
- * progress into localStorage from a blank same-origin page, before any app
- * code runs. The page is left on the blank page; the spec navigates.
+ * Writes the seed into the web adapter's IndexedDB store, the Tutorial
+ * progress into localStorage, and any fixture Plugins into the web Plugin
+ * Directory (OPFS) with the approval record the runtime reads, from a blank
+ * same-origin page, before any app code runs. The page is left on the blank
+ * page; the spec navigates.
  */
 export async function prepareDevice(
   page: Page,
-  { library, tutorial }: { library: LibrarySeed; tutorial: TutorialProgressSeed }
+  {
+    library,
+    tutorial,
+    plugins = [],
+  }: { library: LibrarySeed; tutorial: TutorialProgressSeed; plugins?: PluginSeed[] }
 ): Promise<void> {
   const bytes =
     library === "empty"
       ? null
       : (await readFile(resolve(SEED_DIR, `${library}.sqlite`))).toString("base64");
+  const seeds = plugins.map(readPluginSeed);
+  const approvals = serializePluginApprovals(
+    seeds.map((seed) => ({ pluginId: seed.name, pinnedHash: seed.pinnedHash, granted: [] }))
+  );
 
   await page.route(`**${BLANK_PATH}`, (route) =>
     route.fulfill({ contentType: "text/html", body: "<!doctype html><title>e2e</title>" })
   );
   await page.goto(BLANK_PATH);
   await page.evaluate(
-    async ({ bytes, dismissed }) => {
+    async ({ bytes, dismissed, seeds, approvals, approvalsKey, directoryName }) => {
       if (dismissed) {
         const progress = {
           dismissedAt: 1,
@@ -51,6 +92,25 @@ export async function prepareDevice(
           "maibuk-tutorial",
           JSON.stringify({ state: { progress }, version: 1 })
         );
+      }
+      if (seeds.length > 0) {
+        const root = await navigator.storage.getDirectory();
+        const directory = await root.getDirectoryHandle(directoryName, { create: true });
+        for (const seed of seeds) {
+          const folder = await directory.getDirectoryHandle(seed.name, { create: true });
+          for (const file of seed.files) {
+            const parts = file.path.split("/");
+            let current = folder;
+            for (const part of parts.slice(0, -1)) {
+              current = await current.getDirectoryHandle(part, { create: true });
+            }
+            const handle = await current.getFileHandle(parts[parts.length - 1], { create: true });
+            const writable = await handle.createWritable();
+            await writable.write(Uint8Array.from(atob(file.base64), (c) => c.charCodeAt(0)));
+            await writable.close();
+          }
+        }
+        localStorage.setItem(approvalsKey, approvals);
       }
       if (bytes === null) return;
       const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
@@ -69,7 +129,14 @@ export async function prepareDevice(
         };
       });
     },
-    { bytes, dismissed: tutorial === "dismissed" }
+    {
+      bytes,
+      dismissed: tutorial === "dismissed",
+      seeds,
+      approvals,
+      approvalsKey: PLUGIN_APPROVALS_STORAGE_KEY,
+      directoryName: WEB_PLUGIN_DIRECTORY_NAME,
+    }
   );
   await page.unroute(`**${BLANK_PATH}`);
 }

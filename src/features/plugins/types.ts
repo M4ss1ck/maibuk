@@ -7,12 +7,204 @@ import type { z } from "zod";
 import type { PLUGIN_API_EVENTS, PLUGIN_API_TABLE } from "@/features/plugins/api-table";
 import type { pluginManifestSchema } from "@/features/plugins/manifest-schema";
 import type { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-validate";
+import type { PluginDirectoryAdapter } from "@/lib/platform/types";
 import type { PluginMessagePort } from "@/plugin-sdk/protocol";
 
 // Identity (ids.ts)
 
 /** A derived Plugin contribution id: `plugin.<pluginId>.<localId>`. */
 export type PluginContributionId = `plugin.${string}.${string}`;
+
+// Plugin Directory (directory-hash.ts, the platform adapters)
+
+/** One file in a Plugin folder, keyed by its POSIX-relative path. */
+export interface PluginFolderFile {
+  path: string;
+  bytes: Uint8Array;
+}
+
+/** A Plugin folder as the Plugin Directory listed it. */
+export interface PluginFolder {
+  /** The folder's name in the Plugin Directory. */
+  name: string;
+  files: PluginFolderFile[];
+}
+
+// Entry loading (modules.ts)
+
+/** One import site in a module's source, resolved to a target module path. */
+export interface PluginImportSite {
+  /** Start of the replaceable range in the module source. */
+  start: number;
+  /** End of the replaceable range: a static specifier excludes its quotes, a dynamic literal includes them. */
+  end: number;
+  /** `static` replaces with a bare URL, `dynamic` with a quoted one. */
+  kind: "static" | "dynamic";
+  /** The target module's POSIX-relative path within the Plugin folder. */
+  target: string;
+}
+
+export interface PluginModulePlanEntry {
+  path: string;
+  source: string;
+  imports: PluginImportSite[];
+}
+
+export type PluginModuleProblemCode =
+  | "entry-missing"
+  | "entry-not-module"
+  | "not-a-module"
+  | "missing-import"
+  | "bare-import"
+  | "url-import"
+  | "dynamic-import"
+  | "cyclic-import"
+  | "invalid-source";
+
+export interface PluginModuleProblem {
+  code: PluginModuleProblemCode;
+  /** The module the problem was found in. */
+  path: string;
+  /** The specifier as written, when the problem is about one. */
+  specifier?: string;
+  message: string;
+}
+
+/**
+ * `modules` is in dependency order: every module appears before its importers,
+ * and the entry is last.
+ */
+export type PluginModulePlan =
+  | { ok: true; modules: PluginModulePlanEntry[] }
+  | { ok: false; problems: PluginModuleProblem[] };
+
+// Sandbox (sandbox.ts)
+
+export interface PluginSandboxFrame {
+  /** The hidden iframe, appended to the host document. */
+  readonly element: HTMLIFrameElement;
+  /** Resolves once the bootstrap is listening. */
+  readonly ready: Promise<void>;
+  /** Creates a `blob:` URL inside the frame for one module source. */
+  createModule(source: string): Promise<string>;
+  /** Starts the Worker from a frame-created URL and hands it the port. */
+  startWorker(entryUrl: string, port: MessagePort): Promise<void>;
+  /** Worker messages posted to the frame (readiness and heartbeats). */
+  onWorkerMessage(handler: (data: unknown) => void): void;
+  /** A Worker `error` event: the Plugin crashed or was killed. */
+  onWorkerError(handler: (message: string) => void): void;
+  /** Terminates the Worker and removes the frame. */
+  stop(): void;
+}
+
+// Runtime (runtime.ts)
+
+export type PluginStartRefusal =
+  | { code: "hash-mismatch"; expected: string; actual: string }
+  | { code: "manifest-invalid"; problems: ManifestProblem[] }
+  | { code: "module-refused"; problems: PluginModuleProblem[] }
+  | { code: "startup-timeout" }
+  | { code: "worker-error"; message: string }
+  | { code: "health-check-failed"; message: string };
+
+export interface PluginRuntime {
+  manifest: PluginManifest;
+  /** The host end of the Plugin's port: requests, events, and stop. */
+  broker: PluginBroker;
+  /** Stops the broker and removes the sandbox frame (terminating its Worker). */
+  stop(): void;
+}
+
+export interface PluginStartOptions {
+  folder: PluginFolder;
+  /** The `h1:` value the author pinned when approving the Plugin. */
+  pinnedHash: string;
+  /** The Plugin Permissions granted right now; none by default. */
+  granted?: readonly PluginPermissionId[];
+  /** Builds the method handlers for this Plugin; a row without one refuses `not-implemented`. */
+  handlers?: (manifest: PluginManifest) => PluginApiHandlers;
+  /** False while the Library cannot be read or written (the Tutorial Library). */
+  isLibraryAvailable?: () => boolean;
+  /** Injected by tests: jsdom has no Worker, and a fake frame proves the refusal order. */
+  createFrame?: (document: Document) => PluginSandboxFrame;
+  /** The startup limit; tests pass a small one. */
+  timeoutMs?: number;
+}
+
+export type PluginStartResult =
+  | { ok: true; plugin: PluginRuntime }
+  | { ok: false; refusal: PluginStartRefusal };
+
+// Approvals (approvals.ts)
+
+export interface PluginApproval {
+  /** The Plugin's folder name in the Plugin Directory. */
+  pluginId: string;
+  /** The `h1:` hash pinned at approval; a folder that changed stays off. */
+  pinnedHash: string;
+  /** The Plugin Permissions granted right now. */
+  granted: PluginPermissionId[];
+}
+
+// Launch (launch.ts)
+
+export interface PluginLaunchRefusal {
+  pluginId: string;
+  refusal: PluginStartRefusal;
+}
+
+export interface PluginLaunchResult {
+  launched: PluginRuntime[];
+  refusals: PluginLaunchRefusal[];
+}
+
+export interface LaunchPluginsOptions {
+  /** Injected by tests; defaults to the platform's Plugin Directory. */
+  directory?: PluginDirectoryAdapter;
+  /** Builds the method handlers for a Plugin; defaults to the wired API subset. */
+  handlers?: (manifest: PluginManifest) => PluginApiHandlers;
+  /** Injected by tests: jsdom has no Worker. */
+  createFrame?: (document: Document) => PluginSandboxFrame;
+  /** False while the Library cannot be read or written (the Tutorial Library). */
+  isLibraryAvailable?: () => boolean;
+  timeoutMs?: number;
+}
+
+// Test kit (test-kit.ts)
+
+/** The in-memory Library the read handlers serve. */
+export interface TestLibrary {
+  books?: ReadonlyArray<PluginApiOutput<"library.books.list">[number]>;
+}
+
+export interface TestNotification {
+  variant: string;
+  message: string;
+}
+
+export interface TestHostOptions {
+  manifest: PluginManifest;
+  /** Granted Plugin Permissions; defaults to every declared one. */
+  permissions?: readonly PluginPermissionId[];
+  /** In-memory Library the read handlers serve. */
+  library?: TestLibrary;
+  /** UI-string overrides the host renderer applies once it exists (#438). */
+  locale?: PluginLocale;
+}
+
+export interface TestHost {
+  /** The Plugin-side port: hand it to the Plugin's setup. */
+  port: MessagePort;
+  /** The real broker over the in-process channel. */
+  broker: PluginBroker;
+  /** Every `notifications.show` the Plugin asked for, in order. */
+  notifications: TestNotification[];
+  /** The UI-string overrides this host carries. */
+  locale: PluginLocale | null;
+  /** Changes the granted Plugin Permissions; the next call reads them again. */
+  setGranted(permissions: readonly PluginPermissionId[]): void;
+  stop(): void;
+}
 
 /** Why a Plugin rename map was refused; the caller maps it to a field path. */
 export type PluginRenameProblem =

@@ -4,3 +4,4 @@ export { tauriFileSystem } from "@/lib/platform/tauri/filesystem";
 export { tauriDialog } from "@/lib/platform/tauri/dialog";
 export { tauriOS } from "@/lib/platform/tauri/os";
 export { createTauriBackup } from "@/lib/platform/tauri/backup";
+export { createTauriPluginDirectory } from "@/lib/platform/tauri/plugins";

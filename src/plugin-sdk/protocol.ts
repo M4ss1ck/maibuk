@@ -75,6 +75,21 @@ export interface PluginMessagePort {
   onmessage: ((event: MessageEvent) => void) | null;
 }
 
+/**
+ * The sandbox's boot handshake with the Plugin's Worker. `PLUGIN_BOOT_MESSAGE`
+ * carries the entry module's `blob:` URL; `PLUGIN_INIT_MESSAGE` carries the
+ * Plugin's one MessagePort (`event.ports[0]`). The Worker's fixed prelude
+ * consumes both, imports the entry, then replays the init message to the
+ * Plugin's handler. The Worker posts `PLUGIN_READY_MESSAGE` back to its frame
+ * once setup finished, and the frame forwards it to the host, which then sends
+ * the first health check.
+ */
+export const PLUGIN_BOOT_MESSAGE = { kind: "maibuk:plugin-boot" } as const;
+export const PLUGIN_INIT_MESSAGE = { kind: "maibuk:plugin-init" } as const;
+export const PLUGIN_READY_MESSAGE = { kind: "maibuk:plugin-ready" } as const;
+/** The prelude's report when importing the entry module failed. */
+export const PLUGIN_ERROR_MESSAGE = { kind: "maibuk:plugin-error" } as const;
+
 /** Requests sent and not yet answered, by id. */
 export type PendingReplies = Map<
   number,

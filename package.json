@@ -107,6 +107,7 @@
     "dompurify": "^3.4.3",
     "drizzle-orm": "^0.45.1",
     "epub-gen-memory": "^1.1.2",
+    "es-module-lexer": "1.7.0",
     "fabric": "^7.1.0",
     "fflate": "^0.8.3",
     "fuzzysort": "^4.0.2",

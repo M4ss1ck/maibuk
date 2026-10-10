@@ -21,10 +21,17 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "term",
-    items: ["Built-in Plugin", "Plugin Directory", "Plugin Permission"],
+    items: ["Built-in Plugin", "Plugin Permission"],
     reason:
-      "Decided, not built (ADR 0019, ADR 0020): the Plugins section exists but listing, directory choice, and permissions land in later slices",
+      "Decided, not built (ADR 0019, ADR 0020): the Plugins section exists but the Built-in list is empty and permissions land with the install flow (#442)",
     owner: "Plugin platform v1 implementation (#425) replaces this with rows",
+  },
+  {
+    kind: "behavior",
+    items: ["Plugin tracer on Playwright WebKit"],
+    reason:
+      "The pinned Playwright 1.62.1 WebKit build has no OPFS (navigator.storage is undefined; microsoft/playwright#18235, fixed by the WebKit r2339 roll in a later Playwright), so the web Plugin Directory cannot be seeded there. The row is tagged @no-webkit and runs on chromium and firefox; the sandbox itself is engine-verified on WebKit by the T1 probe (docs/research/plugins-engine-verification.md)",
+    owner: "Playwright version bump; the row returns to WebKit with it",
   },
   {
     kind: "shortcut",
@@ -2074,6 +2081,19 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "empty",
     tags: [],
+    status: "accepted",
+  },
+  {
+    id: "plugins-sandbox-tracer",
+    area: "plugins",
+    workflow:
+      "A tracer Plugin seeded into the Plugin Directory with a pinned-hash approval loads at launch in the sandbox frame, answers the host's health check, makes one broker call (shown as a toast), and a direct fetch from its Worker is refused before any request leaves; asserts: the toast text, the request log stays empty",
+    edges: ["With no Plugins seeded, launch creates no sandbox frame"],
+    terms: ["Plugin", "Plugin Directory"],
+    shortcuts: [],
+    routes: ["/"],
+    fixture: "empty",
+    tags: ["no-webkit"],
     status: "accepted",
   },
   {
