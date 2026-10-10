@@ -410,39 +410,32 @@ export async function exportDatabase(): Promise<Uint8Array> {
 export async function resetDatabase(): Promise<void> {
   const database = await getDatabase();
 
-  // Delete all data from tables (order matters due to foreign keys). A table
-  // that may not exist yet is cleared best-effort; any failure means the
-  // Library was not fully cleared, so completion stays unannounced.
-  let cleared = true;
-  const clear = async (sql: string): Promise<void> => {
-    try {
-      await database.execute(sql);
-    } catch {
-      cleared = false;
-    }
-  };
+  // One transaction: a failure clears nothing. Every table is created by
+  // initializeSchema (the metrics tables by ensureMetricsSchema), so none can
+  // be missing. Order matters for foreign keys.
+  await database.executeAtomic([
+    "DELETE FROM chapter_epub_meta",
+    "DELETE FROM epub_structures",
+    "DELETE FROM book_styles",
+    "DELETE FROM book_metadata",
+    "DELETE FROM project_assets",
+    "DELETE FROM chapters",
+    "DELETE FROM book_versions",
+    "DELETE FROM books",
+    "DELETE FROM cover_templates",
+    "DELETE FROM notes",
+    "DELETE FROM canvases",
+    "DELETE FROM links",
+    "DELETE FROM sync_tombstones",
+    "DELETE FROM sync_state",
+    "DELETE FROM settings",
+    "DELETE FROM metrics_cache",
+    "DELETE FROM metrics_event_tombstones",
+    "DELETE FROM metrics_events",
+  ]);
 
-  await clear("DELETE FROM chapter_epub_meta");
-  await clear("DELETE FROM epub_structures");
-  await clear("DELETE FROM book_styles");
-  await clear("DELETE FROM book_metadata");
-  await clear("DELETE FROM project_assets");
-  await database.execute("DELETE FROM chapters");
-  await database.execute("DELETE FROM book_versions");
-  await database.execute("DELETE FROM books");
-  await database.execute("DELETE FROM cover_templates");
-  await clear("DELETE FROM notes");
-  await clear("DELETE FROM canvases");
-  await clear("DELETE FROM links");
-  await clear("DELETE FROM sync_tombstones");
-  await clear("DELETE FROM sync_state");
-  await database.execute("DELETE FROM settings");
-  await clear("DELETE FROM metrics_cache");
-  await clear("DELETE FROM metrics_event_tombstones");
-  await clear("DELETE FROM metrics_events");
-
-  // Only a fully cleared Library announces the completed Reset.
-  if (cleared) await emitChange({ scope: "all", reason: "resetLibrary" });
+  // The Library is empty and available; only a completed Reset announces it.
+  await emitChange({ scope: "all", reason: "resetLibrary" });
 }
 
 /**

@@ -19,6 +19,6 @@ Decided in [Plugins vs. the Tutorial Library, Backups, Restore, and Sync](https:
 
 - `emitChange()` takes an optional meta; listeners that ignore it keep working. `STORE_VIEW` is the shared meta for store-originated writes.
 - Every store-facing write path takes an optional trailing `ChangeFeedMeta`, and the stores pass `STORE_VIEW`; a direct write-path caller — Import, Restore, a Plugin — needs no change to reach open views.
-- View refresh reacts to remote Changes as before and to local Changes without the marker; the Edit Session drops its own save's echo, so a refresh never replaces what the store just wrote.
+- View refresh reacts to remote Changes as before and to local Changes without the marker. A local write without the marker flushes open editors before it persists (rejecting, with nothing written, when a save fails), so a refresh never replaces text that never reached the database; a store's own write carries the marker and is skipped, and the Edit Session drops its own save's echo.
 - Bulk signals are not entity Changes: Auto Sync ignores them, and a Restore that fails leaves no completion signal.
 - The Tutorial brackets entry and exit with availability; a failed entry that activated the Library returns availability on rollback, and an entry stopped before switching emits nothing.

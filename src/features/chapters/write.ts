@@ -12,6 +12,7 @@
 
 import { getDatabase } from "@/lib/db";
 import { assertWritableId } from "@/features/tutorial/library-switch";
+import { flushForOutsideWrite } from "@/features/sync/pending-edits";
 import {
   emitChange,
   type ChangeFeedMeta,
@@ -111,6 +112,7 @@ export async function createChapterRow(
 ): Promise<Chapter> {
   assertWritableId(input.bookId);
   assertWritableId(input.parentId);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const id = generateId();
   const now = nowSeconds();
@@ -189,6 +191,7 @@ export async function updateChapterRow(
   viewMeta?: ChangeFeedMeta
 ): Promise<Chapter | null> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const now = nowSeconds();
   const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM chapters WHERE id = ?", [
@@ -321,6 +324,7 @@ export async function deleteChapterRow(
   viewMeta?: ChangeFeedMeta
 ): Promise<void> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const rows = await db.select<{ book_id: string }[]>("SELECT book_id FROM chapters WHERE id = ?", [
     id,
@@ -357,6 +361,7 @@ export async function reorderChapterRows(
 ): Promise<void> {
   assertWritableId(bookId);
   for (const chapterId of chapterIds) assertWritableId(chapterId);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const now = nowSeconds();
 

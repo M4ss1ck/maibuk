@@ -12,6 +12,7 @@
 import { getDatabase } from "@/lib/db";
 import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
+import { flushForOutsideWrite } from "@/features/sync/pending-edits";
 import {
   emitChange,
   type ChangeFeedMeta,
@@ -98,6 +99,7 @@ export async function createNoteRow(
   viewMeta?: ChangeFeedMeta
 ): Promise<Note> {
   assertWritableId(input.bookId);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const id = generateId();
   const now = nowSeconds();
@@ -171,6 +173,7 @@ export async function updateNoteRow(
 ): Promise<Note | null> {
   assertWritableId(input.id);
   assertWritableId(input.bookId);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const rows = await db.select<Record<string, unknown>[]>("SELECT * FROM notes WHERE id = ?", [
     input.id,
@@ -238,6 +241,7 @@ export async function deleteNoteRow(
   viewMeta?: ChangeFeedMeta
 ): Promise<void> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const rows = await db.select<{ title: string }[]>("SELECT title FROM notes WHERE id = ?", [id]);
   if (rows.length > 0) {
@@ -262,6 +266,7 @@ export async function deleteNoteRow(
  */
 export async function removeNoteRow(id: string, origin: ChangeOrigin): Promise<void> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin);
   const db = await getDatabase();
   await db.execute("DELETE FROM notes WHERE id = ?", [id]);
   await db.execute("DELETE FROM links WHERE source_id = ?", [id]).catch(() => {});
@@ -274,6 +279,7 @@ export async function reorderNoteRows(
   viewMeta?: ChangeFeedMeta
 ): Promise<void> {
   for (const item of orderedItems) assertWritableId(typeof item === "string" ? item : item.id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const now = nowSeconds();
   const ordered = orderedItems.map((item) =>
@@ -349,6 +355,7 @@ export async function applyNoteSnapshotData(
 ): Promise<Note> {
   assertWritableId(snapshot.note.id);
   assertWritableId(snapshot.note.bookId);
+  await flushForOutsideWrite(origin);
   const db = await getDatabase();
   const { note } = snapshot;
   const existingRows = await db.select<Record<string, unknown>[]>(

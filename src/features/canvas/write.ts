@@ -16,6 +16,7 @@
 import { getDatabase } from "@/lib/db";
 import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
+import { flushForOutsideWrite } from "@/features/sync/pending-edits";
 import {
   emitChange,
   type ChangeFeedMeta,
@@ -115,6 +116,7 @@ export async function createCanvasRow(
   origin: ChangeOrigin,
   viewMeta?: ChangeFeedMeta
 ): Promise<Canvas> {
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const id = generateId();
   const now = nowSeconds();
@@ -162,6 +164,7 @@ export async function updateCanvasDocRow(
   viewMeta?: ChangeFeedMeta
 ): Promise<Canvas | null> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const existing = await readCanvasRow(id);
   if (!existing) return null;
@@ -194,6 +197,7 @@ export async function updateCanvasRow(
   viewMeta?: ChangeFeedMeta
 ): Promise<Canvas | null> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const existing = await readCanvasRow(id);
   if (!existing) return null;
@@ -228,6 +232,7 @@ export async function reorderCanvasRows(
   viewMeta?: ChangeFeedMeta
 ): Promise<void> {
   for (const item of items) assertWritableId(item.id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const now = nowSeconds();
 
@@ -269,6 +274,7 @@ export async function deleteCanvasRow(
   viewMeta?: ChangeFeedMeta
 ): Promise<void> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const rows = await db.select<{ title: string }[]>("SELECT title FROM canvases WHERE id = ?", [
     id,
@@ -294,6 +300,7 @@ export async function deleteCanvasRow(
  */
 export async function removeCanvasRow(id: string, origin: ChangeOrigin): Promise<void> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin);
   const db = await getDatabase();
   await db.execute("DELETE FROM canvases WHERE id = ?", [id]);
   await emitChange({ entity: "canvas", id, origin, kind: "content" });
@@ -314,6 +321,7 @@ export async function applyCanvasSnapshotData(
   origin: ChangeOrigin
 ): Promise<Canvas> {
   assertWritableId(snapshot.canvas.id);
+  await flushForOutsideWrite(origin);
   const db = await getDatabase();
   const { canvas } = snapshot;
   const existing = await readCanvasRow(canvas.id);

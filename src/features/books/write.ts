@@ -13,6 +13,7 @@
 import { getDatabase } from "@/lib/db";
 import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
+import { flushForOutsideWrite } from "@/features/sync/pending-edits";
 import {
   emitChange,
   type ChangeFeedMeta,
@@ -95,6 +96,7 @@ export async function createBookRow(
   origin: ChangeOrigin,
   viewMeta?: ChangeFeedMeta
 ): Promise<Book> {
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const id = generateId();
   const now = nowSeconds();
@@ -158,6 +160,7 @@ export async function updateBookRow(
   viewMeta?: ChangeFeedMeta
 ): Promise<Book | null> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const existing = await readBook(id);
   if (!existing) return null;
@@ -275,6 +278,7 @@ export async function deleteBookRow(
   viewMeta?: ChangeFeedMeta
 ): Promise<void> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin, viewMeta);
   const db = await getDatabase();
   const rows = await db.select<{ title: string }[]>("SELECT title FROM books WHERE id = ?", [id]);
   if (rows.length > 0) {
@@ -298,6 +302,7 @@ export async function deleteBookRow(
  */
 export async function removeBookRow(id: string, origin: ChangeOrigin): Promise<void> {
   assertWritableId(id);
+  await flushForOutsideWrite(origin);
   const db = await getDatabase();
   const chapters = await db.select<{ id: string }[]>("SELECT id FROM chapters WHERE book_id = ?", [
     id,
@@ -346,6 +351,7 @@ export async function applyBookSnapshotData(
 ): Promise<AppliedBook> {
   assertWritableId(snapshot.book.id);
   for (const chapter of snapshot.chapters) assertWritableId(chapter.id);
+  await flushForOutsideWrite(origin);
   const db = await getDatabase();
   const { book, chapters } = snapshot;
 

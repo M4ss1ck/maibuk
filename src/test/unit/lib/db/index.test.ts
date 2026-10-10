@@ -31,9 +31,16 @@ vi.mock("@/features/sync/pending-edits", () => ({
   flushPendingEdits: mockFlushPendingEdits,
 }));
 
+/** The DELETE statements a mocked execute call received. */
+function deletesFrom(execute: ReturnType<typeof vi.fn>): string[] {
+  return execute.mock.calls
+    .map(([sql]) => String(sql))
+    .filter((sql) => sql.trimStart().startsWith("DELETE"));
+}
+
 describe("src/lib/db/index.ts", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.resetModules();
     mockCreateDatabase.mockResolvedValue(mockDb);
     mockDb.execute.mockResolvedValue({ rowsAffected: 0 });
@@ -201,57 +208,34 @@ describe("src/lib/db/index.ts", () => {
   });
 
   describe("resetDatabase()", () => {
-    it("deletes all data from tables in the correct order", async () => {
+    it("clears every table in one transaction, in foreign-key order", async () => {
       const { resetDatabase } = await import("@/lib/db");
 
       await resetDatabase();
 
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM chapters");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM book_versions");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM books");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM cover_templates");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM settings");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM metrics_cache");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM metrics_event_tombstones");
-      expect(mockDb.execute).toHaveBeenCalledWith("DELETE FROM metrics_events");
-    });
-
-    it("does not throw when metrics tables do not exist", async () => {
-      const { resetDatabase } = await import("@/lib/db");
-      mockDb.execute.mockImplementation((sql: string) => {
-        if (sql.includes("metrics_")) {
-          return Promise.reject(new Error("no such table"));
-        }
-        return Promise.resolve({ rowsAffected: 0 });
-      });
-
-      await expect(resetDatabase()).resolves.toBeUndefined();
-    });
-
-    it("does not throw when optional tables are missing", async () => {
-      const { resetDatabase } = await import("@/lib/db");
-      // Every DELETE guarded by .catch() is for a table that may not exist yet.
-      const optional = [
-        "chapter_epub_meta",
-        "epub_structures",
-        "book_styles",
-        "book_metadata",
-        "project_assets",
-        "notes",
-        "links",
-        "sync_tombstones",
-        "metrics_cache",
-        "metrics_event_tombstones",
-        "metrics_events",
-      ];
-      mockDb.execute.mockImplementation((sql: string) => {
-        if (optional.some((table) => sql === `DELETE FROM ${table}`)) {
-          return Promise.reject(new Error("no such table"));
-        }
-        return Promise.resolve({ rowsAffected: 0 });
-      });
-
-      await expect(resetDatabase()).resolves.toBeUndefined();
+      expect(mockDb.executeAtomic).toHaveBeenCalledTimes(1);
+      expect(mockDb.executeAtomic).toHaveBeenCalledWith([
+        "DELETE FROM chapter_epub_meta",
+        "DELETE FROM epub_structures",
+        "DELETE FROM book_styles",
+        "DELETE FROM book_metadata",
+        "DELETE FROM project_assets",
+        "DELETE FROM chapters",
+        "DELETE FROM book_versions",
+        "DELETE FROM books",
+        "DELETE FROM cover_templates",
+        "DELETE FROM notes",
+        "DELETE FROM canvases",
+        "DELETE FROM links",
+        "DELETE FROM sync_tombstones",
+        "DELETE FROM sync_state",
+        "DELETE FROM settings",
+        "DELETE FROM metrics_cache",
+        "DELETE FROM metrics_event_tombstones",
+        "DELETE FROM metrics_events",
+      ]);
+      // The per-statement path is gone: a failure must clear nothing.
+      expect(deletesFrom(mockDb.execute)).toEqual([]);
     });
 
     it("announces the completed Reset once on the Change Feed", async () => {
@@ -272,7 +256,7 @@ describe("src/lib/db/index.ts", () => {
       expect(signals).toEqual([{ scope: "all", reason: "resetLibrary" }]);
     });
 
-    it("announces no completion when a Reset fails partway", async () => {
+    it("clears nothing and announces nothing when a Reset fails partway", async () => {
       const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
       const { resetDatabase } = await import("@/lib/db");
       resetChangeFeedForTests();
@@ -280,10 +264,7 @@ describe("src/lib/db/index.ts", () => {
       const off = onChange((signal) => {
         signals.push(signal);
       });
-      mockDb.execute.mockImplementation((sql: string) => {
-        if (sql === "DELETE FROM chapters") return Promise.reject(new Error("disk full"));
-        return Promise.resolve({ rowsAffected: 0 });
-      });
+      mockDb.executeAtomic.mockRejectedValueOnce(new Error("disk full"));
 
       try {
         await expect(resetDatabase()).rejects.toThrow("disk full");
@@ -291,28 +272,8 @@ describe("src/lib/db/index.ts", () => {
         off();
       }
 
-      expect(signals).toEqual([]);
-    });
-
-    it("announces no completion when a best-effort table could not be cleared", async () => {
-      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
-      const { resetDatabase } = await import("@/lib/db");
-      resetChangeFeedForTests();
-      const signals: unknown[] = [];
-      const off = onChange((signal) => {
-        signals.push(signal);
-      });
-      mockDb.execute.mockImplementation((sql: string) => {
-        if (sql === "DELETE FROM notes") return Promise.reject(new Error("disk full"));
-        return Promise.resolve({ rowsAffected: 0 });
-      });
-
-      try {
-        await expect(resetDatabase()).resolves.toBeUndefined();
-      } finally {
-        off();
-      }
-
+      // The failed transaction rolled back: no table was cleared.
+      expect(deletesFrom(mockDb.execute)).toEqual([]);
       expect(signals).toEqual([]);
     });
   });

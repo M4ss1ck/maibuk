@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { emitChange, onChange, resetChangeFeedForTests } from "@/features/sync/change-feed";
 import {
+  emitChange,
+  onChange,
+  resetChangeFeedForTests,
+  STORE_VIEW,
+} from "@/features/sync/change-feed";
+import {
+  flushForOutsideWrite,
   flushPendingEdits,
   PendingEditsFlushError,
   registerPendingEditsFlush,
@@ -83,5 +89,44 @@ describe("pending edits flush", () => {
     await flushPendingEdits();
 
     expect(flush).not.toHaveBeenCalled();
+  });
+});
+
+describe("flush before an outside write", () => {
+  it("flushes open editors for a local write from outside a store", async () => {
+    const flush = vi.fn();
+    const off = registerPendingEditsFlush(flush);
+
+    try {
+      await flushForOutsideWrite("local");
+    } finally {
+      off();
+    }
+
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not flush for a store's own write or a remote write", async () => {
+    const flush = vi.fn();
+    const off = registerPendingEditsFlush(flush);
+
+    try {
+      await flushForOutsideWrite("local", STORE_VIEW);
+      await flushForOutsideWrite("remote");
+    } finally {
+      off();
+    }
+
+    expect(flush).not.toHaveBeenCalled();
+  });
+
+  it("rejects before anything is written when a flush fails", async () => {
+    const off = registerPendingEditsFlush(() => Promise.reject(new Error("disk full")));
+
+    try {
+      await expect(flushForOutsideWrite("local")).rejects.toBeInstanceOf(PendingEditsFlushError);
+    } finally {
+      off();
+    }
   });
 });

@@ -3,9 +3,10 @@
 // affected views in place so open editors keep their mounts and selection.
 // Local Changes written outside the open view's store (a Plugin write, an
 // import, a Version restore) refresh the same views; a store's own save is
-// emitted with the store-view meta, so it is skipped. The Edit Session drops
-// its own save's echo, so intervening typing is never replaced by a refresh
-// of what it just wrote. Installed once at startup; idempotent.
+// emitted with the store-view meta, so it is skipped. A local write without
+// the meta flushes open editors before it persists, so a refresh never
+// replaces typing that never reached the database, and the Edit Session drops
+// its own save's echo. Installed once at startup; idempotent.
 
 import { isEntityChange, onChange, type Change } from "@/features/sync/change-feed";
 import { useBookStore } from "@/features/books/store";

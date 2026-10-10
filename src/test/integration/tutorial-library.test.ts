@@ -262,8 +262,11 @@ describe("entering the Tutorial Library", () => {
   it("lands pending edits in the author's Library before switching", async () => {
     const note = await createNoteRow({ title: "Draft" }, "local");
     const unregister = registerPendingEditsFlush(async () => {
-      const { updateNoteRow } = await import("@/features/notes/write");
-      await updateNoteRow({ id: note.id, content: "<p>typed just now</p>" }, "local");
+      // An open editor's save goes through its store, which marks the write
+      // (STORE_VIEW); a flush that wrote through the raw path would re-enter.
+      await useNoteStore
+        .getState()
+        .updateNote({ id: note.id, content: "<p>typed just now</p>" });
     });
 
     await tutorial.startTutorial(START);
@@ -402,6 +405,24 @@ describe("Library availability signals", () => {
       { available: false, reason: "tutorial" },
       { available: true, reason: "tutorial" },
     ]);
+  });
+
+  it("announces availability when exit fails after the Tutorial database was deactivated", async () => {
+    const signals = await collectAvailability(async () => {
+      await tutorial.startTutorial(START);
+      const database = librarySwitch.getTutorialDatabase();
+      vi.spyOn(database!, "close").mockImplementation(() => {
+        throw new Error("close failed");
+      });
+
+      await expect(tutorial.exitTutorial("closed")).rejects.toThrow("close failed");
+    });
+
+    expect(signals).toEqual([
+      { available: false, reason: "tutorial" },
+      { available: true, reason: "tutorial" },
+    ]);
+    expect(tutorial.isTutorialLibraryActive()).toBe(false);
   });
 
   it("emits nothing when the entry stops before switching Libraries", async () => {

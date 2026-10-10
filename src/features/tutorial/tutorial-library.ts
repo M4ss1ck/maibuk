@@ -160,24 +160,26 @@ export async function enterTutorialLibrary(options: EnterTutorialLibraryOptions)
 export async function exitTutorialLibrary(): Promise<void> {
   if (!isTutorialLibraryActive()) return;
 
-  await runBetweenSyncRuns(async () => {
-    // Sample editors hold nothing the author wrote; a failed save here only
-    // concerns content that is about to be dropped.
-    await flushPendingEdits().catch(() => {});
-    metricsService.discardSession();
-    const database = deactivateTutorialDatabase();
-    await database?.close().catch(() => {});
-  });
+  // Availability is tied to the switch itself: announce it whenever the
+  // Tutorial database was actually deactivated, even if the task throws after
+  // that, and never when the author's Library never came back.
+  let deactivated = false;
+  try {
+    await runBetweenSyncRuns(async () => {
+      // Sample editors hold nothing the author wrote; a failed save here only
+      // concerns content that is about to be dropped.
+      await flushPendingEdits().catch(() => {});
+      metricsService.discardSession();
+      const database = deactivateTutorialDatabase();
+      deactivated = true;
+      await database?.close().catch(() => {});
+    });
+  } finally {
+    if (deactivated) await emitChange({ available: true, reason: "tutorial" });
+  }
 
   restoreEphemeral();
-  try {
-    await reloadLibraryViews();
-  } finally {
-    // The author's Library is back and its views were reloaded; consumers
-    // refresh on this signal. It fires even if a view reload failed: the
-    // Library itself is available.
-    await emitChange({ available: true, reason: "tutorial" });
-  }
+  await reloadLibraryViews();
 }
 
 function restoreEphemeral(): void {

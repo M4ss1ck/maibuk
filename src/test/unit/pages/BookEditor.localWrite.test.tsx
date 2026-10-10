@@ -139,10 +139,20 @@ import { BookEditor } from "@/pages/BookEditor";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
 import { useNoteStore } from "@/features/notes/store";
+import type { Chapter, UpdateChapterInput } from "@/features/chapters/types";
 import { updateChapterRow } from "@/features/chapters/write";
-import { flushPendingEdits } from "@/features/sync/pending-edits";
+import {
+  flushPendingEdits,
+  PendingEditsFlushError,
+  resetPendingEditsForTests,
+} from "@/features/sync/pending-edits";
 import { installViewRefresh, resetViewRefreshForTests } from "@/features/sync/view-refresh";
-import { resetChangeFeedForTests } from "@/features/sync/change-feed";
+import {
+  isEntityChange,
+  onChange,
+  resetChangeFeedForTests,
+  type ChangeFeedSignal,
+} from "@/features/sync/change-feed";
 
 async function settle() {
   await act(async () => {});
@@ -155,13 +165,41 @@ async function storedContent(): Promise<string | null> {
   return rows[0]?.content ?? null;
 }
 
+type SaveChapter = (id: string, input: UpdateChapterInput) => Promise<Chapter | null>;
+let realSaveChapter: SaveChapter | null = null;
+
+/** Records the content of every save the editor's store performs. */
+function trackChapterSaves(): string[] {
+  const saved: string[] = [];
+  realSaveChapter = useChapterStore.getState().updateChapter;
+  useChapterStore.setState({
+    updateChapter: async (id, input) => {
+      if (input.content !== undefined) saved.push(input.content);
+      return realSaveChapter!(id, input);
+    },
+  });
+  return saved;
+}
+
+/** Makes the editor's next store save fail, the way a full disk would. */
+function failChapterSaves(): void {
+  realSaveChapter = useChapterStore.getState().updateChapter;
+  useChapterStore.setState({
+    updateChapter: async () => {
+      throw new Error("disk full");
+    },
+  });
+}
+
 describe("BookEditor after a local write from outside its store", () => {
   beforeEach(async () => {
     testDb = await createTestDatabase();
+    vi.spyOn(console, "error").mockImplementation(() => {});
     mockGetDatabase.mockReset().mockResolvedValue(testDb);
     mockReindex.mockReset().mockResolvedValue(undefined);
     resetChangeFeedForTests();
     resetViewRefreshForTests();
+    resetPendingEditsForTests();
     installViewRefresh();
     editorProps.current = null;
     burst.current = null;
@@ -185,6 +223,10 @@ describe("BookEditor after a local write from outside its store", () => {
   });
 
   afterEach(() => {
+    if (realSaveChapter) {
+      useChapterStore.setState({ updateChapter: realSaveChapter });
+      realSaveChapter = null;
+    }
     resetViewRefreshForTests();
     resetChangeFeedForTests();
     vi.restoreAllMocks();
@@ -202,25 +244,65 @@ describe("BookEditor after a local write from outside its store", () => {
     expect(editorProps.current?.content).toBe("<p>Written outside</p>");
   });
 
-  it("lands the author's typing before an outside write replaces the editor", async () => {
+  it("flushes debounced typing before an outside write replaces the editor", async () => {
+    const saved = trackChapterSaves();
     render(<BookEditor />);
     await settle();
 
-    // The Editor is still coalescing keystrokes. The writer flushes the target
-    // editor first and refuses to write if that save fails; the flush drains
-    // the burst, so nothing typed is lost.
-    burst.current = "<p>Typing in between</p>";
-    await act(async () => {
-      await flushPendingEdits();
+    act(() => {
+      editorProps.current?.onUpdate("<p>Unsaved mine</p>");
     });
-    expect(await storedContent()).toBe("<p>Typing in between</p>");
-
+    // No manual flush: the outside write itself must land the pending typing
+    // before it persists, so nothing typed is lost silently.
     await act(async () => {
       await updateChapterRow("chapter-1", { content: "<p>Written outside</p>" }, "local");
     });
 
+    expect(saved).toEqual(["<p>Unsaved mine</p>"]);
     expect(editorProps.current?.content).toBe("<p>Written outside</p>");
     expect(await storedContent()).toBe("<p>Written outside</p>");
+  });
+
+  it("flushes a coalescing burst before an outside write replaces the editor", async () => {
+    const saved = trackChapterSaves();
+    render(<BookEditor />);
+    await settle();
+
+    // The Editor still holds these keystrokes; the outside write's flush must
+    // drain them through the flush handle before persisting.
+    burst.current = "<p>Still coalescing</p>";
+    await act(async () => {
+      await updateChapterRow("chapter-1", { content: "<p>Written outside</p>" }, "local");
+    });
+
+    expect(saved).toEqual(["<p>Still coalescing</p>"]);
+    expect(editorProps.current?.content).toBe("<p>Written outside</p>");
+    expect(await storedContent()).toBe("<p>Written outside</p>");
+  });
+
+  it("refuses an outside write when the pending save fails", async () => {
+    const signals: ChangeFeedSignal[] = [];
+    const off = onChange((signal) => {
+      signals.push(signal);
+    });
+    failChapterSaves();
+    render(<BookEditor />);
+    await settle();
+
+    act(() => {
+      editorProps.current?.onUpdate("<p>Precious</p>");
+    });
+    await act(async () => {
+      await expect(
+        updateChapterRow("chapter-1", { content: "<p>Written outside</p>" }, "local")
+      ).rejects.toBeInstanceOf(PendingEditsFlushError);
+    });
+    off();
+
+    // Nothing persisted, nothing emitted, and the editor still holds the text.
+    expect(await storedContent()).toBe("<p>Original</p>");
+    expect(editorProps.current?.content).toBe("<p>Original</p>");
+    expect(signals.filter(isEntityChange)).toEqual([]);
   });
 
   it("keeps typing typed after the outside write when the store saves it", async () => {
