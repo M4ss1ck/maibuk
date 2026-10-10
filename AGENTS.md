@@ -30,7 +30,7 @@ This file holds only what every task needs. The rest sits behind these pointers;
 Each line is a completion requirement. The rule in full is in `CODING_STANDARDS.md` under the name in brackets.
 
 - **TDD loop**: write a failing test, make it pass with the least code, refactor while green. Every behavior change ships its test in the same change. [TDD workflow]
-- **Feature-critical gate**: a change to `src/features/backup/`, `sync/`, or `versions/`, a platform `backup.ts`, `src/lib/db/sql-parser.ts`, or the UI that triggers their destructive paths is not done until its spec-critical paths are tested. [Feature-critical test gate]
+- **Feature-critical gate**: a change to `src/features/backup/`, `sync/`, `versions/`, or Plugin storage, a platform `backup.ts`, `src/lib/db/sql-parser.ts`, or the UI that triggers their destructive paths is not done until its spec-critical paths are tested. [Feature-critical test gate]
 - **Keyboard and accessibility**: interactive UI is operable by keyboard alone, manages focus through React Aria, has localized labels, registers its actions as Commands, is reachable by touch, and ships before and after screenshots, light and dark, in the PR. [Keyboard and accessibility]
 - **Keyboard test gate**: those paths are proven by `user-event` key presses that assert behavior, never by checking attributes. [Keyboard and accessibility test gate]
 - **E2E suite**: new interactive UI has a row in `e2e/coverage-matrix.ts` and a spec tagged `@wf:<row-id>` that passes locally. Playwright never runs in CI. [E2E]

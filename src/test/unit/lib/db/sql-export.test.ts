@@ -21,6 +21,8 @@ const SECTION_COMMENTS = [
   "-- Sync Tombstones",
   "-- Cover Templates",
   "-- Settings",
+  "-- Plugin Storage",
+  "-- Plugin Data Versions",
 ];
 
 function stubNoWorker(): void {
@@ -117,6 +119,12 @@ describe("sql-export pure formatter (shared by worker and fallback)", () => {
         "",
         "",
         "-- Settings",
+        "",
+        "",
+        "-- Plugin Storage",
+        "",
+        "",
+        "-- Plugin Data Versions",
         "",
       ].join("\n")
     );

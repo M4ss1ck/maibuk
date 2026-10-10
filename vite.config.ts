@@ -146,6 +146,9 @@ export default defineConfig(() => ({
         "src/features/sync/client.ts",
         "src/features/sync/tombstones.ts",
         "src/lib/async-queue.ts",
+        // Plugin storage (ADR 0023)
+        "src/features/plugins/tables.ts",
+        "src/features/plugins/storage.ts",
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
         "src/components/editor/paste-cleanup.ts",

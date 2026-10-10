@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
 import { DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
 
 // Books table
@@ -226,6 +226,25 @@ export const settings = sqliteTable("settings", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+// Plugin storage (ADR 0023): one JSON value per Plugin id and storage key.
+export const pluginStorage = sqliteTable(
+  "plugin_storage",
+  {
+    pluginId: text("plugin_id").notNull(),
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.pluginId, table.key] })]
+);
+
+// The dataVersion of the manifest that last wrote each Plugin's namespace.
+export const pluginDataVersions = sqliteTable("plugin_data_versions", {
+  pluginId: text("plugin_id").primaryKey(),
+  dataVersion: integer("data_version").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 // TypeScript types derived from schema
 export type Book = typeof books.$inferSelect;
 export type NewBook = typeof books.$inferInsert;
@@ -253,3 +272,7 @@ export type ChapterEpubMetaRow = typeof chapterEpubMeta.$inferSelect;
 export type NewChapterEpubMetaRow = typeof chapterEpubMeta.$inferInsert;
 export type LinkRow = typeof links.$inferSelect;
 export type NewLinkRow = typeof links.$inferInsert;
+export type PluginStorageRow = typeof pluginStorage.$inferSelect;
+export type NewPluginStorageRow = typeof pluginStorage.$inferInsert;
+export type PluginDataVersionRow = typeof pluginDataVersions.$inferSelect;
+export type NewPluginDataVersionRow = typeof pluginDataVersions.$inferInsert;

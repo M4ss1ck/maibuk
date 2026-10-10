@@ -240,6 +240,24 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
     )
   `);
 
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS plugin_storage (
+      plugin_id TEXT NOT NULL,
+      "key" TEXT NOT NULL,
+      "value" TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (plugin_id, "key")
+    )
+  `);
+
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS plugin_data_versions (
+      plugin_id TEXT PRIMARY KEY,
+      data_version INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+
   await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_chapters_book_id ON chapters(book_id)`);
   await adapter.execute(`CREATE INDEX IF NOT EXISTS idx_notes_book_id ON notes(book_id)`);
   await adapter.execute(
