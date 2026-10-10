@@ -556,28 +556,99 @@ export function parsePluginManifest(
 
 type LocaleFieldKind = "string" | "list";
 
-function localeFieldKind(path: string, manifest: PluginManifest): LocaleFieldKind | null {
-  if (path === "name" || path === "description") return "string";
+/** The value a locale override carries: the kind says which one. */
+type LocaleFieldValue = string | readonly string[];
+
+/**
+ * One localizable manifest field: the kind of override it takes, and a write
+ * bound to the manifest the field was found in. This is the one description of
+ * the locale field-path grammar — `parsePluginLocale` reads `kind`, and
+ * `applyPluginLocale` resolves it again against its own copy and calls `write`.
+ */
+interface LocaleField {
+  readonly kind: LocaleFieldKind;
+  readonly write: (value: LocaleFieldValue) => void;
+}
+
+function localeField(path: string, manifest: PluginManifest): LocaleField | null {
+  if (path === "name" || path === "description") {
+    return {
+      kind: "string",
+      write: (value) => {
+        if (typeof value === "string") manifest[path] = value;
+      },
+    };
+  }
   const parts = path.split(".");
   if (parts.length !== 3 || !LOCAL_ID_PATTERN.test(parts[1])) return null;
   const [section, id, field] = parts;
   if (section === "commands") {
-    if (!manifest.contributes?.commands?.some((command) => command.id === id)) return null;
-    if (field === "label") return "string";
-    if (field === "keywords") return "list";
+    const command = manifest.contributes?.commands?.find((item) => item.id === id);
+    if (command === undefined) return null;
+    if (field === "label") {
+      return {
+        kind: "string",
+        write: (value) => {
+          if (typeof value === "string") command.label = value;
+        },
+      };
+    }
+    if (field === "keywords") {
+      return {
+        kind: "list",
+        write: (value) => {
+          if (Array.isArray(value)) command.keywords = [...value];
+        },
+      };
+    }
     return null;
   }
   if (section === "pages") {
-    if (!manifest.contributes?.pages?.some((page) => page.id === id)) return null;
-    return field === "title" ? "string" : null;
+    const page = manifest.contributes?.pages?.find((item) => item.id === id);
+    if (page === undefined || field !== "title") return null;
+    return {
+      kind: "string",
+      write: (value) => {
+        if (typeof value === "string") page.title = value;
+      },
+    };
   }
   if (section === "settingsRows") {
-    if (!manifest.contributes?.settingsRows?.some((row) => row.id === id)) return null;
-    if (field === "label" || field === "description") return "string";
-    if (field === "keywords") return "list";
+    const row = manifest.contributes?.settingsRows?.find((item) => item.id === id);
+    if (row === undefined) return null;
+    if (field === "label" || field === "description") {
+      const key = field;
+      return {
+        kind: "string",
+        write: (value) => {
+          if (typeof value === "string") row[key] = value;
+        },
+      };
+    }
+    if (field === "keywords") {
+      return {
+        kind: "list",
+        write: (value) => {
+          if (Array.isArray(value)) row.keywords = [...value];
+        },
+      };
+    }
     return null;
   }
   return null;
+}
+
+/**
+ * Applies a locale's already-validated overrides to a manifest, returning a new
+ * manifest and leaving the input untouched. A path that does not resolve (an
+ * `x-*` key included) is ignored; `parsePluginLocale` is what refuses one.
+ */
+export function applyPluginLocale(manifest: PluginManifest, locale: PluginLocale): PluginManifest {
+  const next = structuredClone(manifest);
+  for (const [path, value] of Object.entries(locale)) {
+    localeField(path, next)?.write(value);
+  }
+  return next;
 }
 
 /**
@@ -618,15 +689,15 @@ export function parsePluginLocale(
   const locale: Record<string, string | readonly string[]> = {};
   for (const [key, value] of Object.entries(raw)) {
     if (key.startsWith("x-")) continue;
-    const kind = localeFieldKind(key, manifest);
-    if (kind === null) {
+    const field = localeField(key, manifest);
+    if (field === null) {
       problems.push({
         path: key,
         message: `"${key}" does not name a localizable field of this manifest`,
       });
       continue;
     }
-    if (kind === "string") {
+    if (field.kind === "string") {
       if (typeof value !== "string" || value.trim() === "") {
         problems.push({ path: key, message: "must be a non-empty string" });
         continue;

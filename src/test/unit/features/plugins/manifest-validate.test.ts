@@ -4,6 +4,7 @@ import {
   CONTRIBUTION_LIMITS,
   MAX_LOCALE_BYTES,
   MAX_MANIFEST_BYTES,
+  applyPluginLocale,
   parsePluginLocale,
   parsePluginManifest,
   validateManifestValue,
@@ -986,5 +987,50 @@ describe("parsePluginLocale", () => {
   it("refuses locale text that is not a JSON object", () => {
     expect(parsePluginLocale("[]", "es", manifest()).ok).toBe(false);
     expect(parsePluginLocale("nope", "es", manifest()).ok).toBe(false);
+  });
+});
+
+describe("applyPluginLocale", () => {
+  function manifest() {
+    const result = validateManifestValue(baseManifest());
+    if (!result.ok) throw new Error("base manifest must be valid");
+    return result.manifest;
+  }
+
+  it("applies every overridable field to a new manifest and leaves the input unchanged", () => {
+    const input = manifest();
+    const before = structuredClone(input);
+    const result = applyPluginLocale(input, {
+      name: "Ecos",
+      description: "Resalta palabras repetidas.",
+      "commands.showReport.label": "Mostrar informe",
+      "commands.showReport.keywords": ["eco", "informe"],
+      "pages.report.title": "Ecos",
+      "settingsRows.ignore.label": "Palabras ignoradas",
+      "settingsRows.ignore.description": "Se omiten al buscar.",
+      "settingsRows.ignore.keywords": ["omitir"],
+    });
+    expect(result).not.toBe(input);
+    expect(result.name).toBe("Ecos");
+    expect(result.description).toBe("Resalta palabras repetidas.");
+    expect(result.contributes?.commands?.[0].label).toBe("Mostrar informe");
+    expect(result.contributes?.commands?.[0].keywords).toEqual(["eco", "informe"]);
+    expect(result.contributes?.pages?.[0].title).toBe("Ecos");
+    expect(result.contributes?.settingsRows?.[0].label).toBe("Palabras ignoradas");
+    expect(result.contributes?.settingsRows?.[0].description).toBe("Se omiten al buscar.");
+    expect(result.contributes?.settingsRows?.[0].keywords).toEqual(["omitir"]);
+    expect(input).toEqual(before);
+  });
+
+  it("ignores x-* keys and paths that do not name a field", () => {
+    const input = manifest();
+    const result = applyPluginLocale(input, {
+      "x-tool": "kept",
+      "commands.missing.label": "Nope",
+      name: "Ecos",
+    });
+    expect(result.name).toBe("Ecos");
+    expect(result).not.toHaveProperty("x-tool");
+    expect(result.contributes?.commands?.[0].label).toBe("Show report");
   });
 });
