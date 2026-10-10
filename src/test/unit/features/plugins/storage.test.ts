@@ -80,8 +80,11 @@ describe("Plugin storage", () => {
     expect(await getPluginStorageValue("notes-tool", "ignored")).toEqual([1, 2]);
   });
 
-  it("reads a key no write stored as null", async () => {
-    expect(await getPluginStorageValue("echoes", "missing")).toBeNull();
+  it("reads a key no write stored as undefined, distinct from a stored null", async () => {
+    await setPluginStorageValue("echoes", "nothing", null);
+
+    expect(await getPluginStorageValue("echoes", "missing")).toBeUndefined();
+    expect(await getPluginStorageValue("echoes", "nothing")).toBeNull();
   });
 
   it("replaces the value of an existing key", async () => {

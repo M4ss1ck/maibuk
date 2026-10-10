@@ -9,6 +9,7 @@
  */
 
 import { getDatabase } from "@/lib/db";
+import { escapeSqlExportValue } from "@/lib/db/sql-export-format";
 import { PLUGIN_DATA_VERSIONS_TABLE, PLUGIN_STORAGE_TABLE } from "@/features/plugins/tables";
 
 function nowSeconds(): number {
@@ -25,14 +26,14 @@ export async function listPluginStorageKeys(pluginId: string): Promise<string[]>
   return rows.map((row) => row.key);
 }
 
-/** The stored value for one key, or null when the namespace has none. */
+/** The stored value for one key, or undefined when the namespace has none. */
 export async function getPluginStorageValue(pluginId: string, key: string): Promise<unknown> {
   const db = await getDatabase();
   const rows = await db.select<{ value: string }[]>(
     `SELECT "value" FROM "${PLUGIN_STORAGE_TABLE}" WHERE plugin_id = ? AND "key" = ?`,
     [pluginId, key]
   );
-  if (rows.length === 0) return null;
+  if (rows.length === 0) return undefined;
   return JSON.parse(rows[0].value) as unknown;
 }
 
@@ -66,11 +67,14 @@ export async function deletePluginStorageValue(pluginId: string, key: string): P
   );
 }
 
-/** Erases a whole namespace, its dataVersion record included. */
+/** Erases a whole namespace, its dataVersion record included, in one transaction. */
 export async function clearPluginStorage(pluginId: string): Promise<void> {
   const db = await getDatabase();
-  await db.execute(`DELETE FROM "${PLUGIN_STORAGE_TABLE}" WHERE plugin_id = ?`, [pluginId]);
-  await db.execute(`DELETE FROM "${PLUGIN_DATA_VERSIONS_TABLE}" WHERE plugin_id = ?`, [pluginId]);
+  const plugin = escapeSqlExportValue(pluginId);
+  await db.executeAtomic([
+    `DELETE FROM "${PLUGIN_STORAGE_TABLE}" WHERE plugin_id = ${plugin}`,
+    `DELETE FROM "${PLUGIN_DATA_VERSIONS_TABLE}" WHERE plugin_id = ${plugin}`,
+  ]);
 }
 
 /** The dataVersion of the manifest that last wrote the namespace, or null when it has none. */

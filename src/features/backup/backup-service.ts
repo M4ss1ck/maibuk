@@ -52,7 +52,7 @@ const PROTECTED_TRIGGERS = new Set<BackupEntry["trigger"]>(["pre-sync", "pre-res
 const MIN_PROTECTED = 2;
 
 /** Tables a Backup restores into. Plugin tables are Library data (ADR 0023). */
-const RESTORE_TABLES = [
+const RESTORE_INSERT_TABLES = [
   "books",
   "chapters",
   "book_versions",
@@ -69,7 +69,7 @@ const RESTORE_TABLES = [
  * unquoted semicolons, and this regex requires a concrete VALUES clause.
  */
 const RESTORE_TABLE_PATTERN = new RegExp(
-  `^INSERT\\s+(OR\\s+REPLACE\\s+)?INTO\\s+"?(${RESTORE_TABLES.join("|")})"?\\s*(\\([^)]*\\)\\s*)?VALUES\\s*\\(`,
+  `^INSERT\\s+(OR\\s+REPLACE\\s+)?INTO\\s+"?(${RESTORE_INSERT_TABLES.join("|")})"?\\s*(\\([^)]*\\)\\s*)?VALUES\\s*\\(`,
   "i"
 );
 
@@ -156,14 +156,28 @@ function normalizeCanvasRestoreStatement(statement: string): string {
   return `${prefix}${rawColumns ?? ""}VALUES (${values.join(", ")})`;
 }
 
+/**
+ * Whether a Backup carries a table's section: its header comment (outside
+ * quoted values) or at least one row for that table. A Backup made before the
+ * section joined the dump has neither.
+ */
+function backupCovers(
+  sql: string,
+  statements: string[],
+  sectionTitles: readonly string[],
+  insertPattern: RegExp
+): boolean {
+  return (
+    parseSqlLineComments(sql).some((comment) => sectionTitles.includes(comment)) ||
+    statements.some((statement) => insertPattern.test(statement.trim()))
+  );
+}
+
 // Every Backup taken before canvases joined the export (v0.4.14 through
 // v0.7.1) has no Canvases section. Restoring one must keep this device's
 // Canvases instead of replacing them with nothing.
 function backupCoversCanvases(sql: string, statements: string[]): boolean {
-  return (
-    parseSqlLineComments(sql).includes(CANVASES_SECTION_TITLE) ||
-    statements.some((statement) => CANVAS_INSERT_PATTERN.test(statement.trim()))
-  );
+  return backupCovers(sql, statements, [CANVASES_SECTION_TITLE], CANVAS_INSERT_PATTERN);
 }
 
 const PLUGIN_INSERT_PATTERN = new RegExp(
@@ -175,10 +189,7 @@ const PLUGIN_INSERT_PATTERN = new RegExp(
 // section. Restoring one must keep this device's Plugin data instead of
 // replacing it with nothing.
 function backupCoversPluginData(sql: string, statements: string[]): boolean {
-  return (
-    parseSqlLineComments(sql).some((comment) => PLUGIN_SECTION_TITLES.includes(comment)) ||
-    statements.some((statement) => PLUGIN_INSERT_PATTERN.test(statement.trim()))
-  );
+  return backupCovers(sql, statements, PLUGIN_SECTION_TITLES, PLUGIN_INSERT_PATTERN);
 }
 
 /**
@@ -198,10 +209,16 @@ export const RESTORE_DELETE_TABLES: readonly string[] = [
   "sync_state",
 ];
 
-function restoreDeletes(replaceCanvases: boolean, replacePluginData: boolean): string[] {
+/** What a Backup covers, so a Restore knows what to clear before its rows land. */
+interface RestoreScope {
+  canvases: boolean;
+  pluginData: boolean;
+}
+
+function restoreDeletes(scope: RestoreScope): string[] {
   const skipped = new Set<string>();
-  if (!replaceCanvases) skipped.add("canvases");
-  if (!replacePluginData) for (const table of PLUGIN_TABLES) skipped.add(table);
+  if (!scope.canvases) skipped.add("canvases");
+  if (!scope.pluginData) for (const table of PLUGIN_TABLES) skipped.add(table);
   return RESTORE_DELETE_TABLES.filter((table) => !skipped.has(table)).map(
     (table) => `DELETE FROM ${table}`
   );
@@ -210,12 +227,11 @@ function restoreDeletes(replaceCanvases: boolean, replacePluginData: boolean): s
 async function replaceRestoreData(
   db: DatabaseAdapter,
   statements: string[],
-  replaceCanvases: boolean,
-  replacePluginData: boolean
+  scope: RestoreScope
 ): Promise<void> {
   // The deletes and inserts are one transaction, so a failed insert leaves
   // the Library as it was (#344).
-  const deletes = restoreDeletes(replaceCanvases, replacePluginData);
+  const deletes = restoreDeletes(scope);
   try {
     await db.executeAtomic([...deletes, ...statements]);
   } catch (error) {
@@ -337,12 +353,14 @@ export class BackupService {
       throw new Error("RESTORE_INVALID");
     }
 
-    const replaceCanvases = backupCoversCanvases(sql, statements);
-    const replacePluginData = backupCoversPluginData(sql, statements);
+    const scope: RestoreScope = {
+      canvases: backupCoversCanvases(sql, statements),
+      pluginData: backupCoversPluginData(sql, statements),
+    };
     const db = await getDatabase();
 
     try {
-      await replaceRestoreData(db, statements, replaceCanvases, replacePluginData);
+      await replaceRestoreData(db, statements, scope);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error("Restore data replacement failed:", detail);

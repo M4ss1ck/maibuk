@@ -15,8 +15,8 @@ export const CANVASES_SECTION_TITLE = "Canvases";
 
 // Dumps made before Plugin storage joined the export have no section with one
 // of these titles; restore uses that to keep the device's Plugin data.
-export const PLUGIN_STORAGE_SECTION_TITLE = "Plugin Storage";
-export const PLUGIN_DATA_VERSIONS_SECTION_TITLE = "Plugin Data Versions";
+const PLUGIN_STORAGE_SECTION_TITLE = "Plugin Storage";
+const PLUGIN_DATA_VERSIONS_SECTION_TITLE = "Plugin Data Versions";
 export const PLUGIN_SECTION_TITLES: readonly string[] = [
   PLUGIN_STORAGE_SECTION_TITLE,
   PLUGIN_DATA_VERSIONS_SECTION_TITLE,

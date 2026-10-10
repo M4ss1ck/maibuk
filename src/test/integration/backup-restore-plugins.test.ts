@@ -220,10 +220,13 @@ describe("Backup restore and Plugin storage", () => {
     await insertBook(db, "book-1", "Novel");
     await putPluginValue(db, "echoes", "ignored", ["chapter-1"]);
     await putPluginValue(db, "gone-plugin", "draft", { text: "kept" });
+    await putPluginDataVersion(db, "gone-plugin", 3);
     const filename = await service.createBackup("manual");
 
-    // The absent Plugin's rows sit in the Backup like any other namespace.
+    // The absent Plugin's rows sit in the Backup like any other namespace,
+    // its dataVersion record included.
     await db.execute("DELETE FROM plugin_storage WHERE plugin_id = 'gone-plugin'");
+    await db.execute("DELETE FROM plugin_data_versions WHERE plugin_id = 'gone-plugin'");
     await putPluginValue(db, "later-plugin", "fresh", true);
 
     await service.restoreBackup(filename);
@@ -232,6 +235,7 @@ describe("Backup restore and Plugin storage", () => {
       { pluginId: "echoes", key: "ignored", value: ["chapter-1"] },
       { pluginId: "gone-plugin", key: "draft", value: { text: "kept" } },
     ]);
+    expect(await pluginDataVersions(db)).toEqual({ "gone-plugin": 3 });
   });
 
   it("keeps this device's Plugin data when restoring a Backup made before Plugin storage was backed up", async () => {
