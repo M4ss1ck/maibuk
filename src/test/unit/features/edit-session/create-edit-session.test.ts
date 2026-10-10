@@ -342,17 +342,52 @@ describe("createEditSession", () => {
       expect(session.getContent()).toBe("<p>AB</p>");
     });
 
-    it("adopts an outside change, dropping the save queued for the old text", async () => {
+    it("adopts an outside change when nothing is unsaved", async () => {
+      const { session, onExternal } = setup();
+
+      session.externalContent("<p>Pulled from another device</p>");
+
+      expect(onExternal).toHaveBeenCalledWith("<p>Pulled from another device</p>");
+      expect(session.getContent()).toBe("<p>Pulled from another device</p>");
+      expect(session.hasUnsavedChanges()).toBe(false);
+    });
+
+    it("keeps unsaved text when an outside change arrives and saves it on top", async () => {
       const { session, save, onExternal } = setup();
 
       session.update("<p>Typed before the pull</p>");
       session.externalContent("<p>Pulled from another device</p>");
-      await vi.advanceTimersByTimeAsync(5000);
 
-      expect(onExternal).toHaveBeenCalledWith("<p>Pulled from another device</p>");
-      expect(save).not.toHaveBeenCalled();
-      expect(session.getContent()).toBe("<p>Pulled from another device</p>");
+      // The pull is what the store holds now, but the author's text is newer:
+      // it stays, and its pending save writes it over the pulled content.
+      expect(onExternal).not.toHaveBeenCalled();
+      expect(session.getContent()).toBe("<p>Typed before the pull</p>");
+      expect(session.hasUnsavedChanges()).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledWith("<p>Typed before the pull</p>");
       expect(session.hasUnsavedChanges()).toBe(false);
+    });
+
+    it("takes the input the editor still holds before judging an outside change", async () => {
+      const holder: { session?: ReturnType<typeof setup>["session"] } = {};
+      const { session, save, onExternal } = setup({
+        beforeFlush: () => holder.session?.update("<p>Still coalescing</p>"),
+      });
+      holder.session = session;
+
+      session.externalContent("<p>Pulled from another device</p>");
+
+      // The keystrokes were handed over first, so they are the author's newest
+      // text and the pull cannot replace them.
+      expect(onExternal).not.toHaveBeenCalled();
+      expect(session.getContent()).toBe("<p>Still coalescing</p>");
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(save).toHaveBeenCalledWith("<p>Still coalescing</p>");
     });
 
     it("recognizes its own echo after adopting an outside change", async () => {
@@ -364,16 +399,25 @@ describe("createEditSession", () => {
       expect(onExternal).toHaveBeenCalledTimes(1);
     });
 
-    it("clears a failed-save error once an outside change replaces the text", async () => {
-      const { session } = setup({ save: vi.fn<Save>().mockRejectedValue(new Error("disk full")) });
+    it("keeps a failed save's text when an outside change arrives and clears the error on the retry", async () => {
+      const save = vi.fn<Save>().mockRejectedValueOnce(new Error("disk full"));
+      save.mockImplementation(async (content) => content);
+      const { session } = setup({ save });
 
       session.update("<p>a</p>");
       await vi.advanceTimersByTimeAsync(1000);
       expect(session.getStatus()).toBe("error");
 
+      // The outside change does not discard text whose save failed.
       session.externalContent("<p>Restored</p>");
+      expect(session.getStatus()).toBe("error");
+      expect(session.getContent()).toBe("<p>a</p>");
 
-      expect(session.getStatus()).toBe("idle");
+      // The next flush retries it; the successful save clears the error.
+      await session.flush();
+      expect(save).toHaveBeenLastCalledWith("<p>a</p>");
+      expect(session.getStatus()).toBe("saved");
+      expect(session.hasUnsavedChanges()).toBe(false);
     });
   });
 

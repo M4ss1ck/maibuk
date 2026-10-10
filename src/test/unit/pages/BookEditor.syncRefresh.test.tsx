@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { chapter, chapterState, editorProps, mockUpdateChapter } = vi.hoisted(() => {
@@ -181,7 +181,7 @@ describe("BookEditor after a sync pull replaces the open chapter", () => {
     });
   });
 
-  it("drops the save queued for the old text and adopts the pulled word count", async () => {
+  it("keeps the save queued for the typing and writes it over the pulled text", async () => {
     const { rerender } = render(<BookEditor />);
 
     act(() => {
@@ -189,16 +189,15 @@ describe("BookEditor after a sync pull replaces the open chapter", () => {
     });
     chapterState.current = { ...chapter, content: "<p>Remote</p>", wordCount: 42 };
     rerender(<BookEditor />);
-    expect(editorProps.current?.content).toBe("<p>Remote</p>");
-    // The Editor applies the pulled document and reports its word count.
-    act(() => {
-      editorProps.current?.onExternalContent?.("<p>Remote</p>", 42);
-    });
+    // The pull is the store's newer row, but the author's unsaved text is
+    // newer still: it stays on screen and the pending save writes it over.
+    expect(editorProps.current?.content).not.toBe("<p>Remote</p>");
     await act(async () => {
       vi.advanceTimersByTime(1500);
     });
 
-    expect(mockUpdateChapter).not.toHaveBeenCalled();
-    expect(screen.getByText(/^42\s+common\.words$/)).toBeInTheDocument();
+    expect(mockUpdateChapter).toHaveBeenCalledWith("chapter-1", {
+      content: "<p>Typed before the pull</p>",
+    });
   });
 });

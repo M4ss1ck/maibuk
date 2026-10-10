@@ -256,6 +256,29 @@ describe("src/lib/db/index.ts", () => {
       expect(signals).toEqual([{ scope: "all", reason: "resetLibrary" }]);
     });
 
+    it("announces the completed Reset only after the transaction committed", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { resetDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const order: string[] = [];
+      mockDb.executeAtomic.mockImplementation(async () => {
+        order.push("clear");
+      });
+      const off = onChange(() => {
+        order.push("signal");
+      });
+
+      try {
+        await resetDatabase();
+      } finally {
+        off();
+      }
+
+      // A listener reading the Library on the signal sees it already empty;
+      // the page reload that resets the views follows the signal (ADR 0026).
+      expect(order).toEqual(["clear", "signal"]);
+    });
+
     it("clears nothing and announces nothing when a Reset fails partway", async () => {
       const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
       const { resetDatabase } = await import("@/lib/db");
@@ -332,6 +355,29 @@ describe("src/lib/db/index.ts", () => {
       }
 
       expect(signals).toEqual([{ scope: "all", reason: "databaseLoad" }]);
+    });
+
+    it("announces the completed Database File load only after the rows persisted", async () => {
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      const { importDatabase } = await import("@/lib/db");
+      resetChangeFeedForTests();
+      const order: string[] = [];
+      mockDb.executeAtomic.mockImplementation(async () => {
+        order.push("load");
+      });
+      const off = onChange(() => {
+        order.push("signal");
+      });
+
+      try {
+        await importDatabase(`INSERT INTO books (id) VALUES ('1');`);
+      } finally {
+        off();
+      }
+
+      // A listener reading the Library on the signal sees the loaded rows;
+      // the page reload that resets the views follows the signal (ADR 0026).
+      expect(order).toEqual(["load", "signal"]);
     });
 
     it("announces no completion when the load fails", async () => {

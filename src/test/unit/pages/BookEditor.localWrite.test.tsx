@@ -119,6 +119,11 @@ vi.mock("../../../components/editor", async () => {
       editorProps.current = props;
       useImperativeHandle(props.ref, () => ({ flush: drainBurst, focus: () => {} }));
       useEffect(() => () => drainBurst(), []);
+      // The real Editor drops a dirty burst when outside content replaces the
+      // document (ADR 0002); the session must hand the burst over first.
+      useEffect(() => {
+        burst.current = null;
+      }, [props.content]);
       return <div data-testid="editor" />;
     },
     SaveStatus,
@@ -323,5 +328,86 @@ describe("BookEditor after a local write from outside its store", () => {
     });
 
     expect(await storedContent()).toBe("<p>Written outside, then mine</p>");
+  });
+
+  it("keeps typing done while the outside write awaits the database", async () => {
+    const saved = trackChapterSaves();
+    render(<BookEditor />);
+    await settle();
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reachedDatabase = false;
+    mockGetDatabase.mockImplementationOnce(() => {
+      reachedDatabase = true;
+      return gate.then(() => testDb);
+    });
+
+    let write!: Promise<unknown>;
+    await act(async () => {
+      write = updateChapterRow("chapter-1", { content: "<p>Written outside</p>" }, "local");
+      // The write flushed the open editors and is waiting on the database.
+      for (let tick = 0; tick < 50 && !reachedDatabase; tick++) await Promise.resolve();
+    });
+    expect(reachedDatabase).toBe(true);
+
+    // The author types after that flush, before the view refresh lands.
+    act(() => {
+      editorProps.current?.onUpdate("<p>Typed during the write</p>");
+    });
+
+    await act(async () => {
+      release();
+      await write;
+    });
+    await settle();
+    await act(async () => {
+      await flushPendingEdits();
+    });
+
+    expect(saved).toEqual(["<p>Typed during the write</p>"]);
+    expect(await storedContent()).toBe("<p>Typed during the write</p>");
+    // The outside content never replaced what the author was writing.
+    expect(editorProps.current?.content).not.toBe("<p>Written outside</p>");
+  });
+
+  it("keeps a coalescing burst typed while the outside write awaits the database", async () => {
+    const saved = trackChapterSaves();
+    render(<BookEditor />);
+    await settle();
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reachedDatabase = false;
+    mockGetDatabase.mockImplementationOnce(() => {
+      reachedDatabase = true;
+      return gate.then(() => testDb);
+    });
+
+    let write!: Promise<unknown>;
+    await act(async () => {
+      write = updateChapterRow("chapter-1", { content: "<p>Written outside</p>" }, "local");
+      for (let tick = 0; tick < 50 && !reachedDatabase; tick++) await Promise.resolve();
+    });
+    expect(reachedDatabase).toBe(true);
+
+    // The Editor still holds these keystrokes; they were not in the flush.
+    burst.current = "<p>Coalescing during the write</p>";
+
+    await act(async () => {
+      release();
+      await write;
+    });
+    await settle();
+    await act(async () => {
+      await flushPendingEdits();
+    });
+
+    expect(saved).toEqual(["<p>Coalescing during the write</p>"]);
+    expect(await storedContent()).toBe("<p>Coalescing during the write</p>");
   });
 });

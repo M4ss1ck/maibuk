@@ -650,6 +650,43 @@ describe("BackupService", () => {
       expect(signals).toEqual([{ scope: "all", reason: "restore" }]);
     });
 
+    it("reloads the Library views before announcing the Restore", async () => {
+      const order: string[] = [];
+      mockLoadBooks.mockImplementation(async () => {
+        order.push("books");
+      });
+      mockLoadNotes.mockImplementation(async () => {
+        order.push("notes");
+      });
+      mockLoadCanvases.mockImplementation(async () => {
+        order.push("canvases");
+      });
+      mockLoadChapters.mockImplementation(async () => {
+        order.push("chapters");
+      });
+      const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+      resetChangeFeedForTests();
+      const off = onChange(() => {
+        order.push("signal");
+      });
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
+
+      try {
+        await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
+      } finally {
+        off();
+      }
+
+      // A listener reading the stores on the signal sees the restored Library.
+      expect(order).toEqual(["books", "notes", "canvases", "chapters", "signal"]);
+    });
+
     it("announces no completion when the Restore fails", async () => {
       const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
       resetChangeFeedForTests();

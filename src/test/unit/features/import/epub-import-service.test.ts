@@ -284,11 +284,21 @@ describe("EPUB import service", () => {
   });
 
   it("cleans up partially created rows when persistence fails after book creation", async () => {
+    const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
+    resetChangeFeedForTests();
+    const origins: string[] = [];
+    const off = onChange((signal) => {
+      if ("entity" in signal) origins.push(signal.origin);
+    });
     mockInsertBookStyles.mockRejectedValue(new Error("style write failed"));
 
-    await expect(
-      importEpubProject({ bytes: new Uint8Array([1]), acknowledged: true })
-    ).rejects.toThrow("style write failed");
+    try {
+      await expect(
+        importEpubProject({ bytes: new Uint8Array([1]), acknowledged: true })
+      ).rejects.toThrow("style write failed");
+    } finally {
+      off();
+    }
 
     expect(mockDeleteExecute).toHaveBeenCalledWith(
       "DELETE FROM chapter_epub_meta WHERE book_id = ?",
@@ -302,5 +312,8 @@ describe("EPUB import service", () => {
     for (const [sql] of mockDeleteExecute.mock.calls) {
       expect(String(sql)).not.toContain("sync_tombstones");
     }
+    // The cleanup is a local write: its Change refreshes the views so no
+    // phantom book lingers (ADR 0026 rejects labelling local writes remote).
+    expect(origins).toEqual(["local"]);
   });
 });

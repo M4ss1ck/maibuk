@@ -297,9 +297,9 @@ export class BackupService {
       throw new Error(`RESTORE_FAILED: ${detail}`);
     }
 
-    // The replacement committed as one transaction; announce it once.
-    await emitChange({ scope: "all", reason: "restore" });
-
+    // The views now carry the restored Library; only after that does the
+    // completed replacement announce itself, so a listener reading the stores
+    // on the signal sees the restored rows.
     await useBookStore.getState().loadBooks();
     await useNoteStore.getState().loadNotes();
     await useCanvasStore.getState().loadCanvases();
@@ -311,16 +311,17 @@ export class BackupService {
 
     if (currentBookStillExists && previousBookId) {
       await useChapterStore.getState().loadChapters(previousBookId);
-      return;
+    } else {
+      useChapterStore.setState({
+        chapters: [],
+        currentChapter: null,
+        currentBookId: null,
+        isLoading: false,
+        error: null,
+      });
     }
 
-    useChapterStore.setState({
-      chapters: [],
-      currentChapter: null,
-      currentBookId: null,
-      isLoading: false,
-      error: null,
-    });
+    await emitChange({ scope: "all", reason: "restore" });
   }
 
   async deleteByTrigger(trigger: BackupEntry["trigger"]): Promise<void> {

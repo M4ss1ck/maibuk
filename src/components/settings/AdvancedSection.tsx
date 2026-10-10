@@ -88,6 +88,8 @@ export function AdvancedSection() {
           // Empty DB has nothing to back up — safe to continue
         }
         await importDatabase(sqlContent);
+        // importDatabase announced the completed load before returning; this
+        // full reload resets the views after that signal (ADR 0026).
         window.location.reload();
       }
     } catch (error) {
@@ -112,6 +114,8 @@ export function AdvancedSection() {
       }
       await resetDatabase();
       setResetModalOpen(false);
+      // resetDatabase announced the completed Reset before returning; this
+      // full reload resets the views after that signal (ADR 0026).
       window.location.reload();
     } catch (error) {
       console.error("Failed to reset database:", error);

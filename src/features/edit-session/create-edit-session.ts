@@ -12,7 +12,7 @@ export interface EditSessionOptions<T> {
   initial: T;
   /** Writes the content and resolves with it exactly as stored (ADR 0002). */
   save: (content: T) => Promise<T>;
-  /** Content changed outside this editor (a Pull, a Restore): show it. */
+  /** Content changed outside this editor (a Pull, a Restore), with nothing newer unsaved: show it. */
   onExternal?: (content: T) => void;
   /** Hands over input the editor still holds, synchronously, before a Flush. */
   beforeFlush?: () => void;
@@ -29,7 +29,9 @@ export interface EditSession<T> {
   update(content: T): void;
   /**
    * Content arrived from the store. The session's own save coming back is
-   * ignored; anything else replaces what the editor holds.
+   * ignored; outside content replaces what the editor holds only when no
+   * newer edit is unsaved. Newer edits are kept and their pending save writes
+   * them on top of the incoming content.
    */
   externalContent(content: T): void;
   /** Save now, including held input, whether or not anything changed. Rejects when it fails. */
@@ -147,12 +149,18 @@ export function createEditSession<T>(options: EditSessionOptions<T>): EditSessio
 
   function adoptIfOutside(incoming: T) {
     if (disposed || equals(incoming, stored)) return;
+    // The editor may still hold input that has not reached this session: hand
+    // it over first so it counts as the author's newest text (ADR 0002).
+    options.beforeFlush?.();
     stored = incoming;
-    if (equals(incoming, content)) return;
+    if (equals(incoming, content) || edits !== savedEdits) {
+      // Edits newer than the last save win over the incoming content: keep
+      // the author's text and let its pending save write it on top.
+      return;
+    }
     cancelScheduledSave();
     content = incoming;
     savedEdits = edits;
-    if (status === "error") setStatus("idle");
     options.onExternal?.(incoming);
   }
 

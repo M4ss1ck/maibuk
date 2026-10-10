@@ -194,6 +194,48 @@ describe("Canvas Edit Session", () => {
     expect(screen.getByRole("status")).toHaveTextContent("canvas.saved");
   });
 
+  it("flushes a pending edit before an outside doc write", async () => {
+    await insertCanvas(CANVAS_ID, JSON.stringify(createDefaultCanvasDoc()), "Map");
+    renderCanvas();
+    await settleRender();
+    expect(screen.getByTestId("flow")).toBeInTheDocument();
+
+    act(() => {
+      useCanvasStore.getState().addNode({
+        id: "mine",
+        kind: "text",
+        html: "<p>Mine</p>",
+        position: { x: 0, y: 0 },
+      });
+    });
+    const saveDocSpy = vi.spyOn(useCanvasStore.getState(), "saveDoc");
+    await settle();
+
+    const { updateCanvasDocRow } = await import("@/features/canvas/write");
+    const outsideDoc = createDefaultCanvasDoc();
+    outsideDoc.nodes.push({
+      id: "outside",
+      kind: "text",
+      html: "<p>Outside</p>",
+      position: { x: 1, y: 1 },
+    });
+    await act(async () => {
+      await updateCanvasDocRow(CANVAS_ID, outsideDoc, "local");
+    });
+    await settle();
+
+    // The outside write flushed the session first: the pending edit reached
+    // its save (and the store) before the outside doc landed.
+    expect(saveDocSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nodes: expect.arrayContaining([expect.objectContaining({ id: "mine" })]),
+      })
+    );
+    const doc = await storedDoc(CANVAS_ID);
+    const nodeIds = (doc.nodes as { id: string }[]).map((node) => node.id);
+    expect(nodeIds).toEqual(["outside"]);
+  });
+
   it("viewport moves are not content and never save", async () => {
     await insertCanvas(CANVAS_ID, JSON.stringify(createDefaultCanvasDoc()), "Map");
     renderCanvas();

@@ -113,14 +113,16 @@ export async function importEpubProject(input: {
 }
 
 /**
- * Remove a half-imported book through the shared book removal path (no
- * tombstone: a failed import was never synced); its remote Change refreshes
- * the views so no phantom book lingers. Best-effort: the original import
- * error takes precedence.
+ * Remove a half-imported book through the shared book removal path. Records
+ * no tombstone: a failed import was never synced, so there is nothing to push
+ * and nothing for Auto Sync's scheduled run to delete remotely. The Change is
+ * a local write (ADR 0026 rejects mislabelling local writes as remote), so it
+ * refreshes the views and no phantom book lingers. Best-effort: the original
+ * import error takes precedence.
  */
 async function cleanupPartialImport(bookId: string): Promise<void> {
   try {
-    await removeBookRow(bookId, "remote");
+    await removeBookRow(bookId, "local");
   } catch {
     // The import already failed; a cleanup failure must not mask it.
   }

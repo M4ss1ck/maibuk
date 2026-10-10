@@ -5,8 +5,10 @@
 // import, a Version restore) refresh the same views; a store's own save is
 // emitted with the store-view meta, so it is skipped. A local write without
 // the meta flushes open editors before it persists, so a refresh never
-// replaces typing that never reached the database, and the Edit Session drops
-// its own save's echo. Installed once at startup; idempotent.
+// replaces typing that never reached the database; the Edit Session keeps
+// edits newer than its last save — and keystrokes the editor is still
+// coalescing — saving them on top of the incoming content. Installed once at
+// startup; idempotent.
 
 import { isEntityChange, onChange, type Change } from "@/features/sync/change-feed";
 import { useBookStore } from "@/features/books/store";
