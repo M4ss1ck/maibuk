@@ -627,6 +627,13 @@ describe("validateManifestValue: commands", () => {
     );
   });
 
+  it("refuses an empty command keyword", () => {
+    expectProblem(
+      problemsFor((m) => (m.contributes.commands[0].keywords = ["echo", ""])),
+      "contributes.commands[0].keywords[1]"
+    );
+  });
+
   it("refuses a voice spec that would never answer", () => {
     expectProblem(
       problemsFor((m) => (m.contributes.commands[0].voice = { phrases: { fr: ["bonjour"] } })),
@@ -738,6 +745,17 @@ describe("validateManifestValue: pages, sidebar entries, toolbar buttons, Item M
       problemsFor((m) => m.contributes.settingsRows.push({ id: "ignore", label: "Again" })),
       "contributes.settingsRows[1].id",
       /duplicate/i
+    );
+  });
+
+  it("refuses empty Settings row keywords and an empty description", () => {
+    expectProblem(
+      problemsFor((m) => (m.contributes.settingsRows[0].keywords = [""])),
+      "contributes.settingsRows[0].keywords[0]"
+    );
+    expectProblem(
+      problemsFor((m) => (m.contributes.settingsRows[0].description = "")),
+      "contributes.settingsRows[0].description"
     );
   });
 });

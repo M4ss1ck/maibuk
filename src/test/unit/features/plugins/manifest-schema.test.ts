@@ -63,6 +63,15 @@ describe("manifest.schema.json", () => {
     const properties = committed.properties as Record<string, any>;
     expect(properties.manifestVersion.const).toBe(1);
   });
+
+  it("requires non-empty keyword strings and Settings row descriptions", () => {
+    const properties = committed.properties as Record<string, any>;
+    const command = properties.contributes.properties.commands.items;
+    expect(command.properties.keywords.items.minLength).toBe(1);
+    const settingsRow = properties.contributes.properties.settingsRows.items;
+    expect(settingsRow.properties.keywords.items.minLength).toBe(1);
+    expect(settingsRow.properties.description.minLength).toBe(1);
+  });
 });
 
 describe("manifest language and platform names", () => {

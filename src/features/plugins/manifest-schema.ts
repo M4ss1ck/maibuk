@@ -89,7 +89,7 @@ const icon = z
 const commandContribution = strictObject({
   id: localId,
   label: z.string().min(1).describe("The Command's label in the Plugin's default language."),
-  keywords: z.array(z.string()).optional(),
+  keywords: z.array(z.string().min(1)).optional(),
   contexts: z
     .array(z.string().min(1))
     .min(1)
@@ -119,8 +119,8 @@ const sidebarEntryContribution = strictObject({
 const settingsRowContribution = strictObject({
   id: localId,
   label: z.string().min(1),
-  description: z.string().optional(),
-  keywords: z.array(z.string()).optional(),
+  description: z.string().min(1).optional(),
+  keywords: z.array(z.string().min(1)).optional(),
   platforms: contributionPlatforms.optional(),
 });
 
