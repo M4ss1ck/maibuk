@@ -76,6 +76,13 @@ export interface PluginMessagePort {
 }
 
 /**
+ * The host request a Plugin answers to migrate its stored data once, before it
+ * is ready, when the namespace was written by an older `dataVersion` (ADR
+ * 0023). The handler receives `{ from }`, the stored version.
+ */
+export const PLUGIN_MIGRATE_DATA_REQUEST = "migrateData";
+
+/**
  * The sandbox's boot handshake with the Plugin's Worker. `PLUGIN_BOOT_MESSAGE`
  * carries the entry module's `blob:` URL; `PLUGIN_INIT_MESSAGE` carries the
  * Plugin's one MessagePort (`event.ports[0]`). The Worker's fixed prelude

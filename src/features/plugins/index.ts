@@ -41,7 +41,10 @@ export {
   parsePluginManifest,
   validateManifestValue,
 } from "@/features/plugins/manifest-validate";
-export { checkPluginCompatibility, diffPluginPermissions } from "@/features/plugins/manifest-compat";
+export {
+  checkPluginCompatibility,
+  diffPluginPermissions,
+} from "@/features/plugins/manifest-compat";
 export {
   PLUGIN_DATA_VERSIONS_TABLE,
   PLUGIN_STORAGE_TABLE,
@@ -86,7 +89,24 @@ export {
   pluginFileDigests,
 } from "@/features/plugins/directory-hash";
 export { planPluginModules, rewritePluginImports } from "@/features/plugins/modules";
-export { MANIFEST_FILE, STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
-export { startApprovedPlugins } from "@/features/plugins/launch";
+export {
+  MANIFEST_FILE,
+  STARTUP_TIMEOUT_MS,
+  readPluginManifest,
+  startPlugin,
+} from "@/features/plugins/runtime";
+export { scanApprovedPlugins } from "@/features/plugins/launch";
+export {
+  HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_MISS_LIMIT,
+  IDLE_STOP_MS,
+  PLUGIN_STOP_MESSAGE_KEYS,
+  RESTART_DELAY_MS,
+  createPluginLifecycle,
+  getPluginLifecycle,
+  installPluginLifecycle,
+  pluginStoppedMessage,
+  resetPluginLifecycleForTests,
+} from "@/features/plugins/lifecycle";
 export { createPluginHandlers } from "@/features/plugins/handlers";
 export type * from "@/features/plugins/types";

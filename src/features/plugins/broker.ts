@@ -111,7 +111,7 @@ function isStreamResult(value: unknown): value is PluginStreamResult<unknown, un
 }
 
 export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
-  const { pluginId, port, declared, granted, handlers = {}, onStop } = options;
+  const { pluginId, port, declared, granted, handlers = {}, onStop, onCall } = options;
   const now = options.now ?? (() => performance.now());
   const isLibraryAvailable = options.isLibraryAvailable ?? (() => true);
   const rows = new Map((options.table ?? PLUGIN_API_TABLE).map((row) => [row.id, row]));
@@ -244,6 +244,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   }
 
   async function handleCall(id: number, method: string, params: unknown) {
+    onCall?.(method);
     const namespace = method.split(".")[0];
     if (reserved.includes(namespace)) {
       fail(id, refusal("not-implemented", `${method} is not available yet`, { method }));
@@ -397,9 +398,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       // The head is read by a regex and the body by JSON.parse, which keeps the
       // last of duplicate keys; only a body that agrees with its head counts.
       const agrees = record?.kind === "reply" && record.id === awaitedReply.id;
-      handleReply(
-        agrees ? record : { id: awaitedReply.id, ok: false, error: malformedReply() }
-      );
+      handleReply(agrees ? record : { id: awaitedReply.id, ok: false, error: malformedReply() });
       return;
     }
     if (record === null) return;

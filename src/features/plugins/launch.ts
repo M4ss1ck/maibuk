@@ -1,56 +1,46 @@
 /**
- * Launch-time Plugin start. With no approvals this is a no-op: no frame, no
- * Worker, no Directory scan. Approval records exist only through the install
- * and permission flow (#442) or the E2E `prepareDevice` seed until it lands;
- * a folder that changed after pinning is refused by `startPlugin`, so an
- * approved Plugin whose files moved stays off.
+ * The launch scan: which approved Plugins the Plugin Directory holds, each
+ * with its manifest parsed and nothing else. No frame and no Worker is created
+ * here; the lifecycle (#436) decides what starts and when, so on-demand
+ * Plugins never start at launch. With no approvals this never touches the
+ * Plugin Directory.
  */
 
 import { listPluginApprovals } from "@/features/plugins/approvals";
-import { createPluginHandlers } from "@/features/plugins/handlers";
-import { startPlugin } from "@/features/plugins/runtime";
+import { readPluginManifest } from "@/features/plugins/runtime";
 import type {
-  LaunchPluginsOptions,
+  InstalledPlugin,
   PluginLaunchRefusal,
-  PluginLaunchResult,
-  PluginRuntime,
+  PluginScanOptions,
+  PluginScanResult,
 } from "@/features/plugins/types";
 import { getPluginDirectory } from "@/lib/platform";
-import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 
-export async function startApprovedPlugins(
-  options: LaunchPluginsOptions = {}
-): Promise<PluginLaunchResult> {
+export async function scanApprovedPlugins(
+  options: PluginScanOptions = {}
+): Promise<PluginScanResult> {
   const approvals = listPluginApprovals();
-  if (approvals.length === 0) return { launched: [], refusals: [] };
+  if (approvals.length === 0) return { plugins: [], refusals: [] };
 
   const directory = options.directory ?? (await getPluginDirectory());
   const folders = new Set(await directory.listFolders());
-  const launched: PluginRuntime[] = [];
+  const plugins: InstalledPlugin[] = [];
   const refusals: PluginLaunchRefusal[] = [];
-  // A broker call that reads or writes the Library must refuse while the
-  // Tutorial Library is active (ADR 0008), like every other background job.
-  const isLibraryAvailable = options.isLibraryAvailable ?? (() => !isTutorialLibraryActive());
 
   for (const approval of approvals) {
     if (!folders.has(approval.pluginId)) continue;
     const folder = await directory.readFolder(approval.pluginId);
     if (!folder) continue;
-    const result = await startPlugin({
-      folder,
-      pinnedHash: approval.pinnedHash,
-      granted: approval.granted,
-      handlers: options.handlers ?? createPluginHandlers,
-      createFrame: options.createFrame,
-      isLibraryAvailable,
-      timeoutMs: options.timeoutMs,
-    });
-    if (result.ok) launched.push(result.plugin);
-    else refusals.push({ pluginId: approval.pluginId, refusal: result.refusal });
+    const manifest = readPluginManifest(folder);
+    if (!manifest.ok) {
+      refusals.push({
+        pluginId: approval.pluginId,
+        refusal: { code: "manifest-invalid", problems: manifest.problems },
+      });
+      continue;
+    }
+    plugins.push({ pluginId: approval.pluginId, approval, folder, manifest: manifest.manifest });
   }
 
-  for (const { pluginId, refusal } of refusals) {
-    console.warn(`Plugin ${pluginId} did not start: ${refusal.code}`, refusal);
-  }
-  return { launched, refusals };
+  return { plugins, refusals };
 }

@@ -57,11 +57,53 @@ export function pluginFolder(
   entries: Record<string, string>,
   overrides: Partial<PluginManifest> = {}
 ): PluginFolder {
-  return sourceFolder({
-    "manifest.json": JSON.stringify({ ...PLUGIN_MANIFEST, ...overrides }),
+  const manifest = { ...PLUGIN_MANIFEST, ...overrides };
+  const files = sourceFolder({
+    "manifest.json": JSON.stringify(manifest),
     "index.js": "export const a = 1;",
     ...entries,
-  });
+  }).files;
+  return { name: manifest.id, files };
+}
+
+/**
+ * Replaces `MessageChannel` with an in-process pair that delivers through
+ * microtasks. jsdom delivers a real port on a task the fake timers do not
+ * control, so a long `advanceTimersByTime` would starve every broker reply and
+ * the heartbeat would report phantom misses. The sandbox itself is proven in a
+ * browser by the E2E lane; this keeps the state machine's timing tests exact.
+ */
+export function installMicrotaskMessageChannel(): () => void {
+  const original = globalThis.MessageChannel;
+
+  class FakeMessagePort {
+    onmessage: ((event: MessageEvent) => void) | null = null;
+    peer: FakeMessagePort | null = null;
+    postMessage(data: unknown): void {
+      const peer = this.peer;
+      if (!peer) return;
+      queueMicrotask(() => {
+        peer.onmessage?.({ data } as MessageEvent);
+      });
+    }
+    close(): void {
+      this.peer = null;
+    }
+  }
+
+  class FakeMessageChannel {
+    port1 = new FakeMessagePort();
+    port2 = new FakeMessagePort();
+    constructor() {
+      this.port1.peer = this.port2;
+      this.port2.peer = this.port1;
+    }
+  }
+
+  globalThis.MessageChannel = FakeMessageChannel as unknown as typeof MessageChannel;
+  return () => {
+    globalThis.MessageChannel = original;
+  };
 }
 
 export interface FakePluginFrame extends PluginSandboxFrame {
@@ -71,6 +113,15 @@ export interface FakePluginFrame extends PluginSandboxFrame {
   /** Host-to-plugin requests the fake saw, in order. */
   requests: string[];
   healthAnswer: "pong" | "refuse";
+  /**
+   * Answers one host request (health checks, `migrateData`). Defaults to the
+   * `healthAnswer` reply.
+   */
+  hostRequestAnswer: (method: string, params: unknown) => Promise<unknown>;
+  /** While true, host requests are held: the hung Worker heartbeat tests need that. */
+  holdAnswers: boolean;
+  /** Answers every held host request with a pong. */
+  answerHeldRequests(): void;
   /** Plays the plugin side: sends a call to the host broker and settles on its result. */
   call(method: string, params?: unknown): Promise<unknown>;
   signalReady(): void;
@@ -87,6 +138,7 @@ export function fakePluginFrame(options: { ready?: boolean; fail?: string } = {}
     number,
     { resolve: (value: unknown) => void; reject: (error: unknown) => void }
   >();
+  const heldAnswers = new Map<number, MessagePort>();
   const frame: FakePluginFrame = {
     element: {} as HTMLIFrameElement,
     ready: Promise.resolve(),
@@ -95,6 +147,17 @@ export function fakePluginFrame(options: { ready?: boolean; fail?: string } = {}
     pluginPort: null,
     requests: [],
     healthAnswer: "pong",
+    holdAnswers: false,
+    hostRequestAnswer: async () => {
+      if (frame.healthAnswer === "pong") return "pong";
+      throw { code: "internal-error", message: "no handler" };
+    },
+    answerHeldRequests() {
+      for (const [id, port] of heldAnswers) {
+        port.postMessage(JSON.stringify({ kind: "reply", id, ok: true, result: "pong" }));
+      }
+      heldAnswers.clear();
+    },
     get stopped() {
       return stopped;
     },
@@ -111,23 +174,33 @@ export function fakePluginFrame(options: { ready?: boolean; fail?: string } = {}
           kind: string;
           id: number;
           method?: string;
+          params?: unknown;
           ok?: boolean;
           result?: unknown;
           error?: unknown;
         };
         if (message.kind === "request") {
           frame.requests.push(message.method ?? "");
-          port.postMessage(
-            JSON.stringify(
-              frame.healthAnswer === "pong"
-                ? { kind: "reply", id: message.id, ok: true, result: "pong" }
-                : {
-                    kind: "reply",
-                    id: message.id,
-                    ok: false,
-                    error: { code: "internal-error", message: "no handler" },
-                  }
-            )
+          if (frame.holdAnswers) {
+            heldAnswers.set(message.id, port);
+            return;
+          }
+          void frame.hostRequestAnswer(message.method ?? "", message.params).then(
+            (result) => {
+              port.postMessage(JSON.stringify({ kind: "reply", id: message.id, ok: true, result }));
+            },
+            (error: unknown) => {
+              const data =
+                typeof error === "object" && error !== null && "code" in error
+                  ? error
+                  : {
+                      code: "internal-error",
+                      message: error instanceof Error ? error.message : String(error),
+                    };
+              port.postMessage(
+                JSON.stringify({ kind: "reply", id: message.id, ok: false, error: data })
+              );
+            }
           );
           return;
         }
