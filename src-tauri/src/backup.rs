@@ -7,67 +7,38 @@
 //! path the webview may write, so launch can grant it again without asking and
 //! background Backups never open a dialog. See docs/adr/0010.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_fs::FsExt;
+
+use crate::trusted;
 
 pub const NOT_APPROVED: &str = "BACKUP_DIRECTORY_NOT_APPROVED";
 pub const INVALID: &str = "BACKUP_DIRECTORY_INVALID";
 
 const APPROVAL_FILE: &str = "backup-directory.json";
 
-#[derive(Serialize, Deserialize)]
-struct Approval {
-    path: PathBuf,
-}
+pub use crate::trusted::{approval_dir, scope_paths};
 
 /// A Backup Directory must be an absolute path to a folder below a filesystem
 /// root. Relative paths and `~` would resolve against the process's working
 /// directory, and `..` is rejected by the fs plugin anyway.
 pub fn validate_directory(path: &str) -> Result<PathBuf, &'static str> {
-    let path = PathBuf::from(path.trim());
-    if !path.is_absolute() || path.parent().is_none() {
-        return Err(INVALID);
-    }
-    if path.components().any(|c| matches!(c, Component::ParentDir)) {
-        return Err(INVALID);
-    }
-    Ok(path)
-}
-
-/// Where the approval lives: a sibling of the app config directory, not inside
-/// it. The webview may write anywhere under the config directory
-/// (`fs:allow-appconfig-write-recursive`), and scope patterns match case
-/// sensitively, so a denied file inside it could still be reached through a
-/// differently cased path on macOS and Windows. A sibling matches no allowed
-/// pattern in any casing.
-pub fn approval_dir(config_dir: &Path) -> Option<PathBuf> {
-    let name = config_dir.file_name()?.to_str()?;
-    Some(config_dir.with_file_name(format!("{name}.trusted")))
+    trusted::validate_directory(path).map_err(|_| INVALID)
 }
 
 pub fn read_approval(dir: &Path) -> Option<PathBuf> {
-    let text = std::fs::read_to_string(dir.join(APPROVAL_FILE)).ok()?;
-    serde_json::from_str::<Approval>(&text).ok().map(|a| a.path)
+    trusted::read_approval(dir, APPROVAL_FILE)
 }
 
 #[cfg_attr(mobile, allow(dead_code))]
 pub fn write_approval(dir: &Path, path: &Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dir)?;
-    let approval = Approval {
-        path: path.to_path_buf(),
-    };
-    let text = serde_json::to_string(&approval).map_err(std::io::Error::other)?;
-    std::fs::write(dir.join(APPROVAL_FILE), text)
+    trusted::write_approval(dir, APPROVAL_FILE, path)
 }
 
 pub fn clear_approval(dir: &Path) -> std::io::Result<()> {
-    match std::fs::remove_file(dir.join(APPROVAL_FILE)) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
-        _ => Ok(()),
-    }
+    trusted::clear_approval(dir, APPROVAL_FILE)
 }
 
 pub fn is_approved(dir: &Path, path: &Path) -> bool {
@@ -107,22 +78,6 @@ fn app_approval_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     approval_dir(&config_dir).ok_or_else(|| "app config directory has no name".into())
 }
 
-/// The path as given plus where it really lives. The fs scope stores patterns
-/// as given but canonicalizes the paths it checks, so a folder reached through
-/// a symlink needs both. A folder that does not exist yet resolves through its
-/// parent.
-pub fn scope_paths(path: &Path) -> Vec<PathBuf> {
-    let real = std::fs::canonicalize(path).ok().or_else(|| {
-        let parent = std::fs::canonicalize(path.parent()?).ok()?;
-        Some(parent.join(path.file_name()?))
-    });
-    let mut paths = vec![path.to_path_buf()];
-    if let Some(real) = real.filter(|real| real != path) {
-        paths.push(real);
-    }
-    paths
-}
-
 fn grant<R: Runtime>(app: &AppHandle<R>, path: &Path) -> Result<(), String> {
     let scope = app.fs_scope();
     for path in scope_paths(path) {
@@ -143,13 +98,7 @@ fn approve<R: Runtime>(app: &AppHandle<R>, path: &Path) -> Result<(), String> {
 /// for example an author choosing the config folder's parent as a Backup
 /// Directory. Runs at setup, before the webview loads.
 pub fn protect_approval<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    let scope = app.fs_scope();
-    for path in scope_paths(&app_approval_dir(app)?) {
-        scope
-            .forbid_directory(&path, true)
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    trusted::forbid_directory(app, &app_approval_dir(app)?)
 }
 
 /// Open the native folder picker and approve the folder the author picks.

@@ -28,6 +28,12 @@ export interface PluginFolder {
   /** The folder's name in the Plugin Directory. */
   name: string;
   files: PluginFolderFile[];
+  /**
+   * The `h1:` hash the Platform computed while reading, when it computes one
+   * (Rust on desktop and Android, ADR 0020). The runtime recomputes it over
+   * the same bytes; the shared fixture keeps both implementations equal.
+   */
+  hash?: string;
 }
 
 // Entry loading (modules.ts)
