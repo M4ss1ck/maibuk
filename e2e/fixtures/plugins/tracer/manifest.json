@@ -29,6 +29,12 @@
         "defaults": [["Mod+Alt+r"]]
       },
       {
+        "id": "insights",
+        "label": "Interpret",
+        "contexts": ["report"],
+        "defaults": [["Mod+Alt+j"]]
+      },
+      {
         "id": "tagChapter",
         "label": "Tag chapter",
         "contexts": ["chapterItem"],

@@ -53,6 +53,23 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
     });
   });
 
+  test("a page-scoped Command runs from its Shortcut on the Plugin page", async ({ page }) => {
+    await page.goto("/");
+    await expect(toasts(page).filter({ hasText: "tracer ready" })).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(5_200);
+    // Open the Plugin page: its Commands live in the page's own Context.
+    await tabTo(page, navOption(page, "Books"));
+    await pressUntilFocused(page, "ArrowDown", navOption(page, "Tracer report"), { max: 10 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Tracer report", level: 1 })).toBeVisible();
+
+    await page.keyboard.press("ControlOrMeta+Alt+j");
+
+    await expect(toasts(page).filter({ hasText: "tracer ran insights" })).toBeVisible({
+      timeout: 5_000,
+    });
+  });
+
   test("the Settings Plugins accordion opens its rows from the keyboard @wf:plugins-contributions @no-webkit", async ({
     page,
   }) => {

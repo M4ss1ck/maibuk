@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   pluginCommandBindings,
+  pluginPageCommandBindings,
+  pluginPageCommands,
   runPluginCommand,
   type PluginItemTarget,
 } from "@/features/plugins/commands";
@@ -15,6 +17,7 @@ import type {
   PluginRuntime,
 } from "@/features/plugins/types";
 import { registerCommandSource, runCommand } from "@/lib/command-runner";
+import type { PluginCommandId } from "@/lib/shortcut-registry";
 import { pluginFolder } from "@/test/support/plugin-fixtures";
 
 const source = pluginFolder(
@@ -27,6 +30,9 @@ const source = pluginFolder(
       commands: [
         { id: "open", label: "Open report", contexts: ["global"], navigates: true },
         { id: "report", label: "Report", contexts: ["global"] },
+        // A page-scoped Command: its Context is the page's local id, and its
+        // keys are live only on that page.
+        { id: "digest", label: "Digest", contexts: ["report"], defaults: [["Mod+Alt+j"]] },
         { id: "tag", label: "Tag chapter", contexts: ["chapterItem"], targets: ["chapter"] },
       ],
       pages: [{ id: "report", title: "Report", command: "open" }],
@@ -66,6 +72,39 @@ function stubLifecycle(
     runtime: () => runtime,
   } as unknown as PluginLifecycle;
 }
+
+describe("pluginPageCommands", () => {
+  it("lists the Commands whose Context is the page's derived Context", () => {
+    expect(pluginPageCommands("sample", "report")).toEqual([
+      { localId: "digest", id: "plugin.sample.digest" as PluginCommandId },
+    ]);
+    expect(pluginPageCommands("sample", "elsewhere")).toEqual([]);
+  });
+});
+
+describe("pluginPageCommandBindings", () => {
+  it("binds a page Command disabled before ready and bound once ready", () => {
+    const request = vi.fn(async () => null);
+    const runtime = { broker: { request }, stop: vi.fn() } as unknown as PluginRuntime;
+
+    const stopped = pluginPageCommandBindings(
+      stubLifecycle({ status: "stopped", reason: null, refusal: null }, null),
+      "sample",
+      "report"
+    );
+    expect(stopped.map((binding) => binding.id)).toEqual(["plugin.sample.digest"]);
+    expect(stopped[0]?.enabled).toBe(false);
+
+    const ready = pluginPageCommandBindings(
+      stubLifecycle({ status: "ready", startReason: "launch" }, runtime),
+      "sample",
+      "report"
+    );
+    expect(ready[0]?.enabled).toBe(true);
+    ready[0]?.onTrigger();
+    expect(request).toHaveBeenCalledWith("command.run", { id: "digest" });
+  });
+});
 
 describe("pluginCommandBindings", () => {
   it("navigates a page's Command and disables an unready Plugin's worker Command", () => {

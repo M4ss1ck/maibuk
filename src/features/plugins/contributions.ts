@@ -40,6 +40,7 @@ import {
 import type { Language } from "@/features/settings/types";
 import {
   PLUGIN_COMMAND_PREFIX,
+  isCoreContextName,
   registerPluginCommands,
   type PluginCommandDeclaration,
   type PluginCommandId,
@@ -85,8 +86,10 @@ export interface PluginItemMenuEntryDef {
 /**
  * One live Command of a registered Plugin: its derived id, the Contexts it is
  * live in, the item kinds it acts on, and the page it opens when it is a page's
- * navigating Command. Built from the platform-filtered manifest, so it is the
- * single source the runner reads.
+ * navigating Command. The stored Contexts are the same derived names the
+ * shared registry keeps (`plugin.<id>.<page>` for this Plugin's own pages), so
+ * `getPluginCommands` and `getCommand` never disagree about one. Built from
+ * the platform-filtered manifest, so it is the single source the runner reads.
  */
 export interface PluginCommandDef {
   id: PluginCommandId;
@@ -198,6 +201,25 @@ export function getPluginPage(pluginId: string, pageId: string): PluginPageDef |
   return contributions.get(pluginId)?.pages.find((page) => page.localId === pageId);
 }
 
+/**
+ * The Shortcut Contexts of one declared Command, as the shared registry derives
+ * them: a core name passes through, one of this Plugin's page ids becomes the
+ * page's `plugin.<pluginId>.<pageId>` Context. The manifest validator already
+ * refused any other name, so an unknown one keeps its literal (and can only
+ * have arrived from an invalid bypass of the validator).
+ */
+function deriveCommandContexts(
+  pluginId: string,
+  contexts: readonly string[],
+  pageLocalIds: ReadonlySet<string>
+): readonly string[] {
+  return contexts.map((context) => {
+    if (isCoreContextName(context)) return context;
+    if (pageLocalIds.has(context)) return `${PLUGIN_COMMAND_PREFIX}${pluginId}.${context}`;
+    return context;
+  });
+}
+
 /** True while the Plugin has any live contribution registered. */
 export function isPluginRegistered(pluginId: string): boolean {
   return contributions.has(pluginId);
@@ -284,20 +306,26 @@ export function registerPluginContributions(source: PluginContributionsSource): 
     const onPlatform = <T extends { platforms?: readonly SettingsPlatform[] }>(item: T): boolean =>
       item.platforms === undefined || item.platforms.includes(platform);
 
-    const commands = (contributes.commands ?? []).filter(onPlatform);
-    // Declarations carry the default-language label plus every locale's; the
-    // current-language `label` above is only for on-screen strings.
-    const rawCommands = (manifest.contributes?.commands ?? []).filter(onPlatform);
+    // Two views of the same declarations: the localized manifest's labels are
+    // the on-screen strings for the current UI language (item menus, page
+    // titles), the raw manifest's are the default-language literals that stay
+    // stable across languages because the shared Command registry keeps them
+    // plus every locale's label.
+    const localizedCommands = (contributes.commands ?? []).filter(onPlatform);
+    const defaultLanguageCommands = (manifest.contributes?.commands ?? []).filter(onPlatform);
     const pages = (contributes.pages ?? []).filter(onPlatform);
     const sidebarEntries = (contributes.sidebarEntries ?? []).filter(onPlatform);
     const settingsRows = (contributes.settingsRows ?? []).filter(onPlatform);
     const toolbarButtons = (contributes.toolbarButtons ?? []).filter(onPlatform);
     const itemMenuEntries = (contributes.itemMenuEntries ?? []).filter(onPlatform);
 
+    // Every registry below replaces its entries by Plugin id on re-register,
+    // so a re-apply (a language change) updates in place instead of stacking
+    // copies, and the unregister from this apply covers all of them.
     const next: Array<() => void> = [];
 
-    if (rawCommands.length > 0) {
-      const declarations: PluginCommandDeclaration[] = rawCommands.map((command) => ({
+    if (defaultLanguageCommands.length > 0) {
+      const declarations: PluginCommandDeclaration[] = defaultLanguageCommands.map((command) => ({
         id: command.id,
         label: command.label,
         labels: localizedLabelPerLanguage(manifest, locales, command.id),
@@ -356,7 +384,7 @@ export function registerPluginContributions(source: PluginContributionsSource): 
       );
     }
 
-    const commandById = new Map(commands.map((command) => [command.id, command]));
+    const commandById = new Map(localizedCommands.map((command) => [command.id, command]));
     const pageDefs: PluginPageDef[] = pages.map((page) => ({
       pluginId: manifest.id,
       displayName: localized.name,
@@ -389,14 +417,18 @@ export function registerPluginContributions(source: PluginContributionsSource): 
         targets: command.targets,
       });
     }
-    const commandDefs: PluginCommandDef[] = rawCommands.map((command) => {
+    // The stored Contexts are the derived names the shared registry keeps, so
+    // `getPluginCommands` and `getCommand` agree on one Command's Contexts:
+    // the page's own Commands bind on that page and nowhere else.
+    const pageLocalIds = new Set(pageDefs.map((page) => page.localId));
+    const commandDefs: PluginCommandDef[] = defaultLanguageCommands.map((command) => {
       const fullId = `${PLUGIN_COMMAND_PREFIX}${manifest.id}.${command.id}` as PluginCommandId;
       const page = pageDefs.find((candidate) => candidate.commandId === fullId);
       return {
         id: fullId,
         pluginId: manifest.id,
         localId: command.id,
-        contexts: command.contexts,
+        contexts: deriveCommandContexts(manifest.id, command.contexts, pageLocalIds),
         ...(command.targets !== undefined ? { targets: command.targets } : {}),
         ...(page !== undefined ? { pageId: page.localId } : {}),
       };
