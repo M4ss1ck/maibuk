@@ -39,6 +39,12 @@
         "label": "Tag chapter",
         "contexts": ["chapterItem"],
         "targets": ["chapter"]
+      },
+      {
+        "id": "tagNote",
+        "label": "Tag note",
+        "contexts": ["noteItem"],
+        "targets": ["note"]
       }
     ],
     "pages": [{ "id": "report", "title": "Tracer report", "command": "openReport" }],
@@ -47,6 +53,6 @@
     "toolbarButtons": [
       { "id": "reportButton", "command": "report", "icon": "book-open" }
     ],
-    "itemMenuEntries": [{ "command": "tagChapter" }]
+    "itemMenuEntries": [{ "command": "tagChapter" }, { "command": "tagNote" }]
   }
 }

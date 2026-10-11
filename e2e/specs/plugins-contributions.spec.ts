@@ -7,7 +7,7 @@
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
-import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
+import { SEED_BOOK, SEED_CHAPTERS, SEED_NOTES } from "../support/seed/names";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
@@ -17,6 +17,23 @@ const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary na
 const navOption = (page: Page, name: string) =>
   primaryNav(page).getByRole("option", { name: new RegExp(`^${name}`) });
 const toasts = (page: Page) => page.getByRole("status");
+const galleryGrid = (page: Page) => page.getByRole("grid", { name: "Notes" });
+const notesListPane = (page: Page) => page.getByRole("region", { name: "Notes list" });
+const notesListRow = (page: Page, title: string) =>
+  page.getByRole("row", { name: title, exact: true }).first();
+
+/** Opens a seeded Note by keyboard the way an author reaches it (Gallery → Enter). */
+async function openNoteFromGallery(page: Page, title: string): Promise<void> {
+  await page.goto("/notes");
+  await expect(galleryGrid(page).getByRole("row").first()).toBeVisible();
+  await tabTo(page, galleryGrid(page).getByRole("row").first(), { max: 40 });
+  await page.keyboard.press("Home");
+  await pressUntilFocused(page, "ArrowRight", galleryGrid(page).getByRole("row", { name: title }), {
+    max: 10,
+  });
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/notes\/.+/);
+}
 
 test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () => {
   test("the sidebar entry opens the Plugin page and announces its title", async ({ page }) => {
@@ -37,7 +54,35 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
     await expect(toasts(page).filter({ hasText: "Tracer report" })).toBeVisible();
   });
 
-  test("a global Plugin Command runs from its Shortcut and reaches the Plugin", async ({ page }) => {
+  test("the Plugin page shows loading while the launch scan is pending", async ({ page }) => {
+    // The lifecycle installs in idle time after the first render; delaying that
+    // idle callback holds the page's loading copy deterministically so both
+    // shots catch it. Once it releases, the page settles on the Plugin's title.
+    await page.addInitScript(() => {
+      const original = window.requestIdleCallback?.bind(window);
+      if (!original) return;
+      // Delaying the install idle callback three seconds keeps the page's
+      // loading copy up long enough for both shots; it is not cancelled anywhere.
+      window.requestIdleCallback = ((callback: IdleRequestCallback, options?: IdleRequestOptions) =>
+        window.setTimeout(
+          () => original(callback, options),
+          3_000
+        )) as typeof window.requestIdleCallback;
+    });
+
+    await page.goto("/plugin/tracer/report");
+    await expect(page.getByRole("heading", { name: /Loading Plugin/ })).toBeVisible({
+      timeout: 5_000,
+    });
+    await capture(page, "plugins-page-loading");
+    await expect(page.getByRole("heading", { name: "Tracer report", level: 1 })).toBeVisible({
+      timeout: 20_000,
+    });
+  });
+
+  test("a global Plugin Command runs from its Shortcut and reaches the Plugin", async ({
+    page,
+  }) => {
     await page.goto("/");
     // The Plugin's Worker answered the health check (the tracer reports the
     // refused fetch once it is up).
@@ -102,9 +147,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       await page.keyboard.press("1");
       await expect(card).toBeFocused();
       await page.keyboard.press("Enter");
-      await expect(
-        page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
       // Leave the editor for the Chapter list.
       await page.keyboard.press("Escape");
       await page.waitForTimeout(5_200);
@@ -123,9 +166,14 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       });
       await expect(menu).toBeVisible();
       await capture(page, "plugins-chapter-menu");
-      await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: "Tag chapter" }), {
-        max: 15,
-      });
+      await pressUntilFocused(
+        page,
+        "ArrowDown",
+        menu.getByRole("menuitem", { name: "Tag chapter" }),
+        {
+          max: 15,
+        }
+      );
       await page.keyboard.press("Enter");
 
       await expect(
@@ -146,9 +194,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       await page.keyboard.press("1");
       await expect(card).toBeFocused();
       await page.keyboard.press("Enter");
-      await expect(
-        page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
       // Opening the Book also opens its last Chapter in the editor.
       const textbox = page.getByRole("textbox", { name: /^Text of / });
       await expect(textbox).toBeVisible();
@@ -170,6 +216,43 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       await page.keyboard.press("Enter");
 
       await expect(toasts(page).filter({ hasText: "tracer ran report" })).toBeVisible({
+        timeout: 5_000,
+      });
+    });
+  });
+
+  test.describe("with a seeded Note", () => {
+    test.use({ library: "notesWithLinksAndTags", plugins: ["tracer"] });
+
+    test("a Note list Item Menu entry runs with its item as the target @wf:plugins-contributions @no-webkit", async ({
+      page,
+    }) => {
+      await page.goto("/");
+      await expect(toasts(page).filter({ hasText: "tracer ready" })).toBeVisible({
+        timeout: 15_000,
+      });
+      await openNoteFromGallery(page, SEED_NOTES.keeperLog);
+      // Into the Notes list pane, and wait out the notification throttle the
+      // startup report holds so the entry's toast can land.
+      for (let i = 0; i < 6; i++) {
+        if (await isFocusWithin(notesListPane(page))) break;
+        await page.keyboard.press("F6");
+      }
+      await expectFocusWithin(notesListPane(page));
+      await page.waitForTimeout(5_200);
+
+      const row = notesListRow(page, SEED_NOTES.keeperLog);
+      await expect(row).toBeFocused();
+      await page.keyboard.press("Shift+F10");
+      const menu = page.getByRole("menu", { name: `More actions for ${SEED_NOTES.keeperLog}` });
+      await expect(menu).toBeVisible();
+      await capture(page, "plugins-note-list-menu");
+      await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: "Tag note" }), {
+        max: 15,
+      });
+      await page.keyboard.press("Enter");
+
+      await expect(toasts(page).filter({ hasText: "tracer ran tagNote on note" })).toBeVisible({
         timeout: 5_000,
       });
     });
@@ -208,9 +291,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       });
       // Open the seeded Book by tapping its card, then its Chapters drawer.
       await page.getByRole("grid", { name: "Books" }).getByRole("row").tap();
-      await expect(
-        page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
       await page.getByRole("button", { name: "Chapters", exact: true }).tap();
       const grid = page.getByRole("grid", { name: "Chapters" });
       await expect(grid.getByRole("row")).toHaveCount(SEED_CHAPTERS.length);
@@ -239,17 +320,21 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
         timeout: 15_000,
       });
       await page.getByRole("grid", { name: "Books" }).getByRole("row").tap();
-      await expect(
-        page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
       await page.getByRole("button", { name: "Chapters", exact: true }).tap();
       const grid = page.getByRole("grid", { name: "Chapters" });
-      await grid.getByRole("row", { name: SEED_CHAPTERS[0].title }).getByText(SEED_CHAPTERS[0].title).tap();
+      await grid
+        .getByRole("row", { name: SEED_CHAPTERS[0].title })
+        .getByText(SEED_CHAPTERS[0].title)
+        .tap();
       const textbox = page.getByRole("textbox", { name: /^Text of / });
       await expect(textbox).toBeVisible();
       await page.waitForTimeout(5_200);
 
-      await page.getByRole("toolbar", { name: "Toolbar" }).getByRole("button", { name: "Run report" }).tap();
+      await page
+        .getByRole("toolbar", { name: "Toolbar" })
+        .getByRole("button", { name: "Run report" })
+        .tap();
 
       await expect(toasts(page).filter({ hasText: "tracer ran report" })).toBeVisible({
         timeout: 5_000,
