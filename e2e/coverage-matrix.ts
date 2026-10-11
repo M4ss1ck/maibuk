@@ -2105,6 +2105,7 @@ export const ROWS: MatrixRow[] = [
     edges: [
       "The sidebar entry opens the Plugin page and announces its title",
       "A global Plugin Command runs from its Shortcut and reaches the Plugin",
+      "The Settings Plugins accordion opens its rows from the keyboard",
       "A Chapter Item Menu entry runs with its item as the target",
       "An editor toolbar button runs its Command from the keyboard",
       "Touch opens the Plugin page from the navigation menu",
@@ -2113,7 +2114,7 @@ export const ROWS: MatrixRow[] = [
     ],
     terms: ["Plugin", "Item Menu"],
     shortcuts: [],
-    routes: ["/plugin/:pluginId/:pageId", "/book/:bookId"],
+    routes: ["/plugin/:pluginId/:pageId", "/book/:bookId", "/settings"],
     fixture: "empty",
     tags: ["no-webkit"],
     status: "accepted",

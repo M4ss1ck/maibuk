@@ -5,6 +5,7 @@
 // @no-webkit: the seed needs OPFS, which the webkit project does not carry.
 
 import type { Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { seedSettings } from "../support/storage";
@@ -21,6 +22,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
   test("the sidebar entry opens the Plugin page and announces its title", async ({ page }) => {
     await page.goto("/");
     // The Plugin is scanned after the first render; its entry appears then.
+    await capture(page, "plugins-sidebar");
     await expect(navOption(page, "Tracer report")).toBeVisible({ timeout: 15_000 });
 
     // The navigation is one Tab stop; arrows move between its entries.
@@ -30,6 +32,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
 
     await expect(page).toHaveURL(/\/plugin\/tracer\/report$/);
     await expect(page.getByRole("heading", { name: "Tracer report", level: 1 })).toBeVisible();
+    await capture(page, "plugins-page");
     // The route announcer reads the page's heading, so the navigation is heard.
     await expect(toasts(page).filter({ hasText: "Tracer report" })).toBeVisible();
   });
@@ -48,6 +51,21 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
     await expect(toasts(page).filter({ hasText: "tracer ran report" })).toBeVisible({
       timeout: 5_000,
     });
+  });
+
+  test("the Settings Plugins accordion opens its rows from the keyboard @wf:plugins-contributions @no-webkit", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+    await expect(toasts(page).filter({ hasText: "tracer ready" })).toBeVisible({
+      timeout: 15_000,
+    });
+    const accordion = page.getByRole("button", { name: "Tracer Fixture" });
+    await expect(accordion).toBeVisible();
+    await tabTo(page, accordion, { max: 100 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("textbox", { name: "Report threshold" })).toBeVisible();
+    await capture(page, "plugins-settings-accordion");
   });
 
   test.describe("with a Book", () => {
@@ -87,6 +105,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
         name: `More actions for ${SEED_CHAPTERS[1].title}`,
       });
       await expect(menu).toBeVisible();
+      await capture(page, "plugins-chapter-menu");
       await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: "Tag chapter" }), {
         max: 15,
       });
@@ -121,6 +140,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       const toolbar = page.getByRole("toolbar", { name: "Toolbar" });
       const button = toolbar.getByRole("button", { name: "Run report" });
       await expect(button).toBeVisible();
+      await capture(page, "plugins-editor-toolbar");
       // Leave the editor for the Chapter list, then Tab until inside the toolbar.
       await page.keyboard.press("Escape");
       await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
