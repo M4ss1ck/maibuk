@@ -156,7 +156,8 @@ export async function createBackup(customDir?: string | null): Promise<BackupAda
 }
 
 // Plugin Directory factory. The web keeps Plugins in OPFS (ADR 0020); on
-// desktop and Android only Rust reads the folder (#435).
+// desktop and Android only Rust reads the folder, through the commands in
+// src-tauri/src/plugins/.
 export async function getPluginDirectory(): Promise<PluginDirectoryAdapter> {
   if (IS_WEB) {
     const { createWebPluginDirectory } = await import("@/lib/platform/web/plugins");

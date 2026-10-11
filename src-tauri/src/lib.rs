@@ -2,7 +2,9 @@ mod android_exit;
 mod backup;
 mod dictation;
 mod library_db;
+mod plugins;
 mod tray;
+mod trusted;
 #[cfg(desktop)]
 mod window_restore;
 
@@ -13,6 +15,7 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder
         .manage(window_restore::PendingWindowRestore::default())
+        .manage(plugins::watch::PluginWatcher::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             window_restore::show_main_window(app);
         }))
@@ -56,6 +59,18 @@ pub fn run() {
             backup::request_backup_directory,
             backup::restore_backup_directory,
             backup::forget_backup_directory,
+            plugins::list_plugin_folders,
+            plugins::read_plugin_folder,
+            plugins::pick_plugin_directory,
+            plugins::request_plugin_directory,
+            plugins::forget_plugin_directory,
+            plugins::add_plugin_from_zip,
+            #[cfg(desktop)]
+            plugins::add_plugin_from_folder,
+            #[cfg(desktop)]
+            plugins::watch_plugin_directory,
+            #[cfg(desktop)]
+            plugins::unwatch_plugin_directory,
             dictation::commands::dictation_is_supported,
             dictation::commands::dictation_load,
             dictation::commands::dictation_start,
@@ -70,6 +85,17 @@ pub fn run() {
         ])
         .setup(|app| {
             backup::protect_approval(app.handle())?;
+
+            // The Plugin Directory must exist for the author to drop Plugins
+            // into, and must never be readable or writable by the webview
+            // (ADR 0020). Both are best-effort: a device without a Documents
+            // folder still launches, with no Plugins installed.
+            if let Err(error) = plugins::directory::ensure(app.handle()) {
+                eprintln!("Plugin Directory unavailable: {error}");
+            }
+            if let Err(error) = plugins::directory::protect(app.handle()) {
+                eprintln!("Plugin Directory protection failed: {error}");
+            }
 
             #[cfg(desktop)]
             {
