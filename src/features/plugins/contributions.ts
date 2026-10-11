@@ -390,9 +390,10 @@ export function registerPluginContributions(source: PluginContributionsSource): 
       });
     }
     const commandDefs: PluginCommandDef[] = rawCommands.map((command) => {
-      const page = pageDefs.find((candidate) => candidate.commandId.endsWith(`.${command.id}`));
+      const fullId = `${PLUGIN_COMMAND_PREFIX}${manifest.id}.${command.id}` as PluginCommandId;
+      const page = pageDefs.find((candidate) => candidate.commandId === fullId);
       return {
-        id: `${PLUGIN_COMMAND_PREFIX}${manifest.id}.${command.id}` as PluginCommandId,
+        id: fullId,
         pluginId: manifest.id,
         localId: command.id,
         contexts: command.contexts,

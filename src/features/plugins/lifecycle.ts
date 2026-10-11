@@ -21,7 +21,10 @@ import { hasLaunchBackupSettled, onLaunchBackupSettled } from "@/features/backup
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import { registerPluginContributions } from "@/features/plugins/contributions";
 import { createPluginHandlers } from "@/features/plugins/handlers";
-import { setPluginLifecycleInstance } from "@/features/plugins/lifecycle-instance";
+import {
+  getPluginLifecycle,
+  setPluginLifecycleInstance,
+} from "@/features/plugins/lifecycle-instance";
 import { scanApprovedPlugins } from "@/features/plugins/launch";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
@@ -583,10 +586,16 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
           // An approved Plugin is enabled (until the install flow lands, #442):
           // its Commands, pages, Settings rows, toolbar buttons, and Item Menu
           // entries are discoverable now, before any Worker exists (#437).
-          entry.unregisterContributions = registerPluginContributions({
-            manifest: plugin.manifest,
-            folder: plugin.folder,
-          });
+          try {
+            entry.unregisterContributions = registerPluginContributions({
+              manifest: plugin.manifest,
+              folder: plugin.folder,
+            });
+          } catch (error) {
+            // One Plugin's bad contributions must never skip the next one.
+            console.error(`Plugin ${plugin.pluginId} contributions failed to register`, error);
+            continue;
+          }
           entries.set(plugin.pluginId, entry);
         }
         // A surface mounted while the scan ran warm-starts its Plugin now.
@@ -702,19 +711,17 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   };
 }
 
-let installedLifecycle: PluginLifecycle | null = null;
-
 /**
  * The app's one lifecycle. Called from `main.tsx` in idle time after the first
  * render; the launch inside waits for the Library, the launch Auto Sync, and
  * the launch Backup before the first persistent start. The singleton itself
- * lives in `lifecycle-instance.ts`, so the UI reads it without loading this
- * module.
+ * lives in `lifecycle-instance.ts`, which is the single source of truth, so
+ * the UI reads it without loading this module.
  */
 export function installPluginLifecycle(options: PluginLifecycleOptions = {}): PluginLifecycle {
-  if (installedLifecycle) return installedLifecycle;
+  const existing = getPluginLifecycle();
+  if (existing) return existing;
   const lifecycle = createPluginLifecycle(options);
-  installedLifecycle = lifecycle;
   setPluginLifecycleInstance(lifecycle);
   void lifecycle.launch();
   return lifecycle;

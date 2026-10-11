@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { pluginCommandBindings } from "@/features/plugins/commands";
 import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 import {
@@ -14,6 +14,21 @@ import {
   isPluginCommandId,
   pluginIdOfCommand,
 } from "@/lib/shortcut-registry";
+
+/**
+ * The Shortcut Contexts active for a live pathname. `ROUTE_CONTEXTS` is keyed
+ * by route patterns (`/book/:bookId`), so the pathname is matched against each
+ * pattern with the router's own matcher instead of indexing by the live path.
+ */
+export function activeRouteContexts(pathname: string): Set<string> {
+  const active = new Set<string>(["global"]);
+  for (const [pattern, contexts] of Object.entries(ROUTE_CONTEXTS)) {
+    if (matchPath({ path: pattern, end: true }, pathname) !== null) {
+      for (const context of contexts) active.add(context);
+    }
+  }
+  return active;
+}
 
 /**
  * Wires a Plugin's Commands into the shared key handling and the Command
@@ -33,7 +48,7 @@ export function PluginCommands() {
 
   const bindings = useMemo(() => {
     if (!lifecycle) return [];
-    const active = new Set<string>(["global", ...(ROUTE_CONTEXTS[pathname] ?? [])]);
+    const active = activeRouteContexts(pathname);
     return pluginCommandBindings(lifecycle, (route) => navigate(route)).filter((binding) =>
       getCommand(binding.id).contexts.some((context) => active.has(context))
     );
@@ -46,7 +61,7 @@ export function PluginCommands() {
   // persistent (#401).
   useEffect(() => {
     if (!lifecycle) return;
-    const active = new Set<string>(["global", ...(ROUTE_CONTEXTS[pathname] ?? [])]);
+    const active = activeRouteContexts(pathname);
     const pluginIds = new Set<string>();
     for (const id of commandIds()) {
       if (!isPluginCommandId(id)) continue;

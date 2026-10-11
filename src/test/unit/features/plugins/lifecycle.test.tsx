@@ -292,6 +292,35 @@ describe("Plugin lifecycle: launch", () => {
     await advance(0);
     expect(h.framesFor("alpha")).toHaveLength(1);
   });
+
+  it("skips a Plugin whose contributions throw and still registers the rest", async () => {
+    const contributions = await import("@/features/plugins/contributions");
+    const original = contributions.registerPluginContributions;
+    const seen: string[] = [];
+    const spy = vi.spyOn(contributions, "registerPluginContributions").mockImplementation(((source: Parameters<typeof original>[0]) => {
+      seen.push(source.manifest.id);
+      if (source.manifest.id === "bad-one") throw new Error("bad contributions");
+      return original(source);
+    }) as typeof original);
+    try {
+      const bad = makePlugin("bad-one", { lifecycle: "on-demand" });
+      const good = makePlugin("good-two", { lifecycle: "on-demand" });
+      const h = await createHarness({ approved: [bad, good] });
+      await launchAll(h);
+
+      expect(seen).toEqual(["bad-one", "good-two"]);
+      expect(h.lifecycle.installed().map((plugin) => plugin.pluginId)).toEqual(["good-two"]);
+      // The surviving Plugin still warm-starts from a surface.
+      h.lifecycle.surfaceReached("good-two", "page:report");
+      await advanceUntil(
+        () => h.lifecycle.state("good-two")?.status === "ready",
+        "good-two ready"
+      );
+      expect(h.lifecycle.state("good-two")?.status).toBe("ready");
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
 
 describe("Plugin lifecycle: host wiring defaults", () => {
@@ -1022,6 +1051,28 @@ describe("installPluginLifecycle()", () => {
     expect(installPluginLifecycle({ directory })).toBe(installed);
     resetPluginLifecycleForTests();
     expect(getPluginLifecycle()).toBeNull();
+  });
+
+  it("returns a new, non-disposed lifecycle after a reset", async () => {
+    const directory: PluginDirectoryAdapter = {
+      listFolders: async () => [],
+      readFolder: async () => null,
+    };
+    const first = installPluginLifecycle({
+      directory,
+      whenLaunchSettled: async () => undefined,
+    });
+    resetPluginLifecycleForTests();
+    const second = installPluginLifecycle({
+      directory,
+      whenLaunchSettled: async () => undefined,
+    });
+    expect(second).not.toBe(first);
+    expect(getPluginLifecycle()).toBe(second);
+    // A disposed lifecycle drops its state; the new one is usable.
+    expect(second.installed()).toEqual([]);
+    expect(second.state("absent")).toBeNull();
+    resetPluginLifecycleForTests();
   });
 });
 

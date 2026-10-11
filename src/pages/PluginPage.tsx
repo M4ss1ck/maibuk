@@ -33,6 +33,22 @@ export function PluginPage() {
   );
   useShortcuts(bindings);
 
+  // While the lifecycle has not finished its launch scan (it installs in idle
+  // time after the first render), the contributions registry is still empty: a
+  // missing page means "still loading", not "not installed".
+  if (lifecycle === null) {
+    return (
+      <div className="h-full overflow-y-auto px-4 py-6 sm:px-6">
+        <h1 data-route-heading className="text-xl font-semibold tracking-tight">
+          {t("plugins.page.loadingTitle")}
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {t("plugins.page.loadingDescription")}
+        </p>
+      </div>
+    );
+  }
+
   const title = page?.title ?? t("plugins.page.notFoundTitle");
 
   return (

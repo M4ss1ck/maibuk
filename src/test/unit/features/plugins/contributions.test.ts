@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  getPluginCommand,
   getPluginItemMenuEntries,
   getPluginPage,
   getPluginPages,
@@ -202,5 +203,24 @@ describe("registerPluginContributions", () => {
     expect(getPluginPages()).toEqual([]);
     expect(getPluginSidebarEntries()).toEqual([]);
     expect(getPluginItemMenuEntries("chapter")).toEqual([]);
+  });
+
+  it("matches a Command to its page by full id, not by suffix", () => {
+    const folder = sampleFolder({
+      contributes: {
+        commands: [
+          { id: "open", label: "Open report", contexts: ["global"], navigates: true },
+          { id: "pen", label: "Pen", contexts: ["global"] },
+          { id: "openExtra", label: "Open extra", contexts: ["global"] },
+        ],
+        pages: [{ id: "report", title: "Report", command: "open" }],
+      },
+    });
+    cleanups.push(registerPluginContributions(sourceOf(folder)));
+
+    expect(getPluginCommand("sample", "open")?.pageId).toBe("report");
+    // A suffix of the page Command ("pen" is a suffix of "open") must not inherit it.
+    expect(getPluginCommand("sample", "pen")?.pageId).toBeUndefined();
+    expect(getPluginCommand("sample", "openExtra")?.pageId).toBeUndefined();
   });
 });

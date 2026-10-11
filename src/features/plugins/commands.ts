@@ -35,10 +35,12 @@ export function pluginCommandId(pluginId: string, localId: string): CommandId {
 
 /**
  * Sends one `command.run` to the ready Plugin's broker and reports the
- * outcome. `readTarget` captures the target once — the seam an Item Menu with
- * a re-checkable target uses, and where the target-change contract is proved;
- * a null there cancels before anything is sent, and the captured target is
- * what the Plugin receives even if focus moved meanwhile.
+ * outcome. `readTarget` captures the target before the request goes out and
+ * re-checks it after the broker answers: a null there cancels before anything
+ * is sent, a change while the request was pending cancels before any result is
+ * applied, and the captured target is what the Plugin receives even if focus
+ * moved meanwhile. The Item Menu and toolbar paths supply `readTarget`, so the
+ * contract holds outside the unit test too.
  */
 export async function runPluginCommand(
   lifecycle: PluginLifecycle,
@@ -60,10 +62,18 @@ export async function runPluginCommand(
       id: localId,
       ...(target !== null ? { target } : {}),
     });
-    return "ran";
   } catch {
     return "refused";
   }
+  // Editor-dependent work is cancelled if its editor or selection changed: the
+  // result is never applied to the new target.
+  if (options.readTarget !== undefined) {
+    const after = options.readTarget();
+    if (after === null || after.kind !== target?.kind || after.id !== target?.id) {
+      return "cancelled";
+    }
+  }
+  return "ran";
 }
 
 /**

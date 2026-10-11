@@ -83,7 +83,8 @@ export function Layout() {
     label: string;
     icon: ReactNode;
     shortcut: CommandId;
-  }> = [    {
+  }> = [
+    {
       id: "/",
       label: t("common.projects"),
       icon: <ProjectsIcon className="w-5 h-5 shrink-0" />,

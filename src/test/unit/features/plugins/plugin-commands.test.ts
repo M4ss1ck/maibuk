@@ -155,4 +155,29 @@ describe("runPluginCommand", () => {
       target: { kind: "chapter", id: "A" },
     });
   });
+
+  it("reports cancelled when the target changed while the request was pending", async () => {
+    let release: () => void = () => {};
+    const request = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        })
+    );
+    const runtime = { broker: { request }, stop: vi.fn() } as unknown as PluginRuntime;
+    const lifecycle = stubLifecycle({ status: "ready", startReason: "launch" }, runtime);
+
+    let current: PluginItemTarget | null = { kind: "chapter", id: "A" };
+    const pending = runPluginCommand(lifecycle, "sample", "tag", { readTarget: () => current });
+    // The editor or selection changed before the broker answered: the result
+    // must never be applied to the new target.
+    current = { kind: "chapter", id: "B" };
+    release();
+    await expect(pending).resolves.toBe("cancelled");
+    // The Plugin still received the captured target, never the replacement.
+    expect(request).toHaveBeenCalledWith("command.run", {
+      id: "tag",
+      target: { kind: "chapter", id: "A" },
+    });
+  });
 });

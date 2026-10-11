@@ -2101,6 +2101,8 @@
     "page": {
       "notFoundTitle": "Página del Plugin",
       "notFoundDescription": "El Plugin de esta página no está instalado.",
+      "loadingTitle": "Cargando Plugin…",
+      "loadingDescription": "Esperando a que se carguen los Plugins.",
       "placeholderDescription": "{{name}} está instalado. Los controles de su página llegan con el host de UI remota."
     }
   }

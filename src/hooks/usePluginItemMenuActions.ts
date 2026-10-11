@@ -15,7 +15,9 @@ import { commandLabel } from "@/lib/shortcut-registry";
  * Builds the Plugin Item Menu entries for one item kind. The returned factory
  * takes the item being acted on, so a Command invoked from the menu carries
  * its item as the target; it is disabled until the owning Plugin is ready.
- * Maibuk's own actions come first, so callers append these.
+ * The target travels through `readTarget` so a change mid-flight cancels
+ * before any result is applied. Maibuk's own actions come first, so callers
+ * append these.
  */
 export function usePluginItemMenuActions(
   kind: PluginTarget
@@ -36,7 +38,9 @@ export function usePluginItemMenuActions(
         isDisabled: lifecycle?.state(entry.pluginId)?.status !== "ready",
         onAction: () => {
           if (lifecycle) {
-            void runPluginCommand(lifecycle, entry.pluginId, entry.localId, { target });
+            void runPluginCommand(lifecycle, entry.pluginId, entry.localId, {
+              readTarget: () => target,
+            });
           }
         },
       })),
