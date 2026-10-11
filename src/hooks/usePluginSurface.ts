@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   getPluginLifecycle,
   onPluginLifecycleInstalled,
-} from "@/features/plugins/lifecycle";
+} from "@/features/plugins/lifecycle-instance";
 import type { PluginLifecycle } from "@/features/plugins/types";
 
 /**

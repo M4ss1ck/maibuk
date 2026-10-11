@@ -21,6 +21,7 @@ import { hasLaunchBackupSettled, onLaunchBackupSettled } from "@/features/backup
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import { registerPluginContributions } from "@/features/plugins/contributions";
 import { createPluginHandlers } from "@/features/plugins/handlers";
+import { setPluginLifecycleInstance } from "@/features/plugins/lifecycle-instance";
 import { scanApprovedPlugins } from "@/features/plugins/launch";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
@@ -702,39 +703,25 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
 }
 
 let installedLifecycle: PluginLifecycle | null = null;
-const lifecycleInstalledListeners = new Set<() => void>();
-
-/**
- * Runs when the app's one lifecycle is installed. Surfaces that mounted before
- * the idle install (the sidebar, mostly) re-announce themselves then, so an
- * on-demand Plugin still warm-starts from them (#437).
- */
-export function onPluginLifecycleInstalled(listener: () => void): () => void {
-  lifecycleInstalledListeners.add(listener);
-  return () => {
-    lifecycleInstalledListeners.delete(listener);
-  };
-}
 
 /**
  * The app's one lifecycle. Called from `main.tsx` in idle time after the first
  * render; the launch inside waits for the Library, the launch Auto Sync, and
- * the launch Backup before the first persistent start.
+ * the launch Backup before the first persistent start. The singleton itself
+ * lives in `lifecycle-instance.ts`, so the UI reads it without loading this
+ * module.
  */
 export function installPluginLifecycle(options: PluginLifecycleOptions = {}): PluginLifecycle {
   if (installedLifecycle) return installedLifecycle;
   const lifecycle = createPluginLifecycle(options);
   installedLifecycle = lifecycle;
-  for (const listener of [...lifecycleInstalledListeners]) listener();
+  setPluginLifecycleInstance(lifecycle);
   void lifecycle.launch();
   return lifecycle;
 }
 
-export function getPluginLifecycle(): PluginLifecycle | null {
-  return installedLifecycle;
-}
-
-export function resetPluginLifecycleForTests(): void {
-  installedLifecycle?.dispose();
-  installedLifecycle = null;
-}
+export {
+  getPluginLifecycle,
+  onPluginLifecycleInstalled,
+  resetPluginLifecycleForTests,
+} from "@/features/plugins/lifecycle-instance";
