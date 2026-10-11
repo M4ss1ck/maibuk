@@ -42,7 +42,14 @@ export const STARTUP_TIMEOUT_MS = 10_000;
 
 type StartupOutcome = { ok: true } | { ok: false; refusal: PluginStartRefusal };
 
-function readManifest(folder: PluginFolder): { ok: true; manifest: PluginManifest } | { ok: false; problems: ManifestProblem[] } {
+/**
+ * Reads and validates the folder's manifest without starting anything: the
+ * launch scan uses it to learn a Plugin's lifecycle and contributions (#436,
+ * #437) before any frame exists.
+ */
+export function readPluginManifest(
+  folder: PluginFolder
+): { ok: true; manifest: PluginManifest } | { ok: false; problems: ManifestProblem[] } {
   const file = folder.files.find((entry) => entry.path === MANIFEST_FILE);
   if (!file) {
     return {
@@ -70,7 +77,11 @@ async function runStartup(
 ): Promise<StartupOutcome> {
   const ready = new Promise<"ready" | { error: string }>((resolve) => {
     frame.onWorkerMessage((data) => {
-      if (typeof data === "object" && data !== null && (data as { kind?: unknown }).kind === PLUGIN_READY_MESSAGE.kind) {
+      if (
+        typeof data === "object" &&
+        data !== null &&
+        (data as { kind?: unknown }).kind === PLUGIN_READY_MESSAGE.kind
+      ) {
         resolve("ready");
       }
     });
@@ -91,7 +102,10 @@ async function runStartup(
   const entry = modules[modules.length - 1];
   const entryUrl = urls.get(entry.path);
   if (!entryUrl) {
-    return { ok: false, refusal: { code: "worker-error", message: "The entry module was not loaded" } };
+    return {
+      ok: false,
+      refusal: { code: "worker-error", message: "The entry module was not loaded" },
+    };
   }
 
   await frame.startWorker(entryUrl, port);
@@ -150,7 +164,7 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
     return { ok: false, refusal: { code: "hash-mismatch", expected: pinnedHash, actual } };
   }
 
-  const manifestResult = readManifest(folder);
+  const manifestResult = readPluginManifest(folder);
   if (!manifestResult.ok) {
     return { ok: false, refusal: { code: "manifest-invalid", problems: manifestResult.problems } };
   }
@@ -161,7 +175,7 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
     return { ok: false, refusal: { code: "module-refused", problems: plan.problems } };
   }
 
-  const frame = (options.createFrame ?? createPluginFrame)(document);
+  const frame = (options.createFrame ?? createPluginFrame)(document, manifest);
   const channel = new MessageChannel();
   const broker = createPluginBroker({
     pluginId: manifest.id,
@@ -175,6 +189,10 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
     granted: () => options.granted ?? [],
     handlers: options.handlers?.(manifest),
     isLibraryAvailable: options.isLibraryAvailable,
+    // The broker stopping itself (sustained throttling) must reach the
+    // lifecycle; `runtime.stop()` below is filtered by the caller's state.
+    onStop: options.onBrokerStop,
+    onCall: options.onCall,
   });
 
   let stopped = false;
@@ -209,5 +227,8 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
     stop();
     return { ok: false, refusal: outcome.refusal };
   }
+  // From here on a Worker error means the running Plugin crashed or was
+  // killed (an OOM included); startup errors were refusals above.
+  frame.onWorkerError((message) => options.onWorkerError?.(message));
   return { ok: true, plugin: { manifest, broker, stop } };
 }

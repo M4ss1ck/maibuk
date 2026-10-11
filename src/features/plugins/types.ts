@@ -133,9 +133,18 @@ export interface PluginStartOptions {
   /** False while the Library cannot be read or written (the Tutorial Library). */
   isLibraryAvailable?: () => boolean;
   /** Injected by tests: jsdom has no Worker, and a fake frame proves the refusal order. */
-  createFrame?: (document: Document) => PluginSandboxFrame;
+  createFrame?: (document: Document, manifest: PluginManifest) => PluginSandboxFrame;
   /** The startup limit; tests pass a small one. */
   timeoutMs?: number;
+  /**
+   * A Worker error after readiness: the Plugin crashed or was killed. Startup
+   * errors are refusals instead; this watcher exists only while it runs.
+   */
+  onWorkerError?: (message: string) => void;
+  /** The broker stopped the Plugin itself (sustained throttling). */
+  onBrokerStop?: (reason: PluginStopReason) => void;
+  /** Observes calls arriving from the Plugin (the on-demand idle window resets on activity). */
+  onCall?: (method: string) => void;
 }
 
 export type PluginStartResult =
@@ -160,21 +169,139 @@ export interface PluginLaunchRefusal {
   refusal: PluginStartRefusal;
 }
 
-export interface PluginLaunchResult {
-  launched: PluginRuntime[];
+/** An approved Plugin the launch scan found, with its manifest parsed. */
+export interface InstalledPlugin {
+  /** The Plugin's id, which is also its folder name in the Plugin Directory. */
+  pluginId: string;
+  approval: PluginApproval;
+  folder: PluginFolder;
+  manifest: PluginManifest;
+}
+
+export interface PluginScanOptions {
+  /** Injected by tests; defaults to the platform's Plugin Directory. */
+  directory?: PluginDirectoryAdapter;
+}
+
+export interface PluginScanResult {
+  plugins: InstalledPlugin[];
   refusals: PluginLaunchRefusal[];
 }
 
-export interface LaunchPluginsOptions {
+// Lifecycle (lifecycle.ts)
+
+/**
+ * Why a Plugin was activated. The first seven are the manifest decision's
+ * (#400); `warmStart` and `restart` are the performance decision's (#401).
+ */
+export type PluginStartReason =
+  | "enable"
+  | "launch"
+  | "update"
+  | "restore"
+  | "resetLibrary"
+  | "databaseLoad"
+  | "settingsReset"
+  | "warmStart"
+  | "restart";
+
+/**
+ * Why a Plugin stopped. `requested` and `throttled` are the broker's own
+ * reasons; the rest are the lifecycle's: the idle window, the startup limit,
+ * the heartbeat, the Remote UI budget, a Worker out-of-memory, and a crash.
+ */
+export type PluginLifecycleStopReason =
+  | PluginStopReason
+  | "idle"
+  | "startup-timeout"
+  | "unresponsive"
+  | "remote-ui-limit"
+  | "out-of-memory"
+  | "crashed";
+
+/** The dataVersion gate's refusal: data preserved, activation refused (ADR 0023). */
+export type PluginDataRefusal =
+  | { code: "data-newer"; stored: number; manifest: number }
+  | { code: "migration-failed"; from: number; message: string };
+
+/** Why an activation did not happen. */
+export type PluginActivationRefusal =
+  | PluginStartRefusal
+  | PluginDataRefusal
+  | { code: "not-installed" };
+
+export type PluginActivationResult =
+  | { ok: true; startReason: PluginStartReason }
+  | { ok: false; refusal: PluginActivationRefusal };
+
+export type PluginLifecycleState =
+  | {
+      status: "stopped";
+      /** The stop reason; null when it never ran or activation was refused. */
+      reason: PluginLifecycleStopReason | null;
+      /** The activation refusal; null after a run that reached readiness. */
+      refusal: PluginActivationRefusal | null;
+    }
+  | { status: "starting"; startReason: PluginStartReason }
+  | { status: "ready"; startReason: PluginStartReason }
+  | { status: "unavailable"; startReason: PluginStartReason; heartbeatMisses: number };
+
+export interface PluginLifecycleChange {
+  pluginId: string;
+  /** The Plugin's display name, so a listener needs no manifest lookup. */
+  name: string;
+  state: PluginLifecycleState;
+}
+
+/** The dataVersion gate's storage; injectable for tests. */
+export interface PluginDataVersions {
+  get(pluginId: string): Promise<number | null>;
+  set(pluginId: string, dataVersion: number): Promise<void>;
+}
+
+export interface PluginLifecycleOptions {
   /** Injected by tests; defaults to the platform's Plugin Directory. */
   directory?: PluginDirectoryAdapter;
-  /** Builds the method handlers for a Plugin; defaults to the wired API subset. */
-  handlers?: (manifest: PluginManifest) => PluginApiHandlers;
   /** Injected by tests: jsdom has no Worker. */
-  createFrame?: (document: Document) => PluginSandboxFrame;
+  createFrame?: (document: Document, manifest: PluginManifest) => PluginSandboxFrame;
+  /** Builds the method handlers; defaults to the wired API subset. */
+  handlers?: (manifest: PluginManifest) => PluginApiHandlers;
   /** False while the Library cannot be read or written (the Tutorial Library). */
   isLibraryAvailable?: () => boolean;
-  timeoutMs?: number;
+  /** The dataVersion gate's storage; defaults to the Plugin storage rows. */
+  dataVersions?: PluginDataVersions;
+  /**
+   * Waits before the first persistent start: the Library open, the launch Auto
+   * Sync, and the launch Backup. Injected by tests.
+   */
+  whenLaunchSettled?: () => Promise<void>;
+  /** Schedules one start in idle time; defaults to `requestIdleCallback` with a timeout fallback. */
+  scheduleIdle?: (work: () => void) => void;
+  /** The stop toast text, or null for a silent stop. Defaults to the localized copy. */
+  stopMessage?: (name: string, reason: PluginLifecycleStopReason) => string | null;
+}
+
+export interface PluginLifecycle {
+  /** Waits for the launch gates, scans once, and starts persistent Plugins one at a time in idle time. */
+  launch(): Promise<void>;
+  /** Every approved Plugin the scan found, in scan order. */
+  installed(): readonly InstalledPlugin[];
+  /** A surface became reachable: an on-demand Plugin warm-starts. */
+  surfaceReached(pluginId: string, surface: string): void;
+  /** A surface is gone; the idle window starts when the last one goes. */
+  surfaceLeft(pluginId: string, surface: string): void;
+  /** Starts an installed Plugin now (enable, Restart, or a bulk reason). */
+  start(pluginId: string, reason: PluginStartReason): Promise<PluginActivationResult>;
+  /** Stops a running Plugin; the broker's `requested` and the lifecycle's `idle` are silent. */
+  stop(pluginId: string, reason?: PluginLifecycleStopReason): void;
+  /** The Plugin's state, or null for an id the lifecycle has not seen. */
+  state(pluginId: string): PluginLifecycleState | null;
+  /** The running runtime; contributions and Command runs use its broker (#437). */
+  runtime(pluginId: string): PluginRuntime | null;
+  /** State changes, for contributions and Settings. */
+  subscribe(listener: (change: PluginLifecycleChange) => void): () => void;
+  /** Stops everything and drops every timer and listener. */
+  dispose(): void;
 }
 
 // Test kit (test-kit.ts)
@@ -276,10 +403,8 @@ export type PluginPageContribution = NonNullable<Contributions["pages"]>[number]
 export type PluginSidebarEntryContribution = NonNullable<Contributions["sidebarEntries"]>[number];
 export type PluginSettingsRowContribution = NonNullable<Contributions["settingsRows"]>[number];
 export type PluginToolbarButtonContribution = NonNullable<Contributions["toolbarButtons"]>[number];
-export type PluginItemMenuEntryContribution = NonNullable<
-  Contributions["itemMenuEntries"]
->[number];
-export type PluginLifecycle = PluginManifest["lifecycle"];
+export type PluginItemMenuEntryContribution = NonNullable<Contributions["itemMenuEntries"]>[number];
+export type PluginDeclaredLifecycle = PluginManifest["lifecycle"];
 
 /** One of the eight exact Plugin Permission names. */
 export type PluginPermissionName = (typeof PLUGIN_PERMISSION_NAMES)[number];
@@ -420,6 +545,8 @@ export interface PluginBrokerOptions {
   /** False while the Library cannot be read or written (Library rows refuse). */
   isLibraryAvailable?: () => boolean;
   onStop?: (reason: PluginStopReason) => void;
+  /** Observes a call arriving from the Plugin (the on-demand idle window resets on activity). */
+  onCall?: (method: string) => void;
   now?: () => number;
   /** The method table; tests pass an extended copy to prove a new row needs no other change. */
   table?: readonly PluginApiRow[];

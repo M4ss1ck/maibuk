@@ -45,6 +45,8 @@ const {
   runDailyBackupOnce,
   resetBackupLifecycleForTests,
   scheduleDailyBackup,
+  hasLaunchBackupSettled,
+  onLaunchBackupSettled,
 } = await import("@/features/backup/lifecycle");
 const librarySwitch = await import("@/features/tutorial/library-switch");
 
@@ -152,6 +154,21 @@ describe("backup lifecycle", () => {
     expect(mockWaitForDatabaseReady).toHaveBeenCalledTimes(1);
     expect(mockCreateBackup).toHaveBeenCalledTimes(1);
     expect(mockCreateBackup).toHaveBeenCalledWith("daily");
+  });
+
+  it("marks the launch Backup settled once and notifies the waiters", async () => {
+    const settled = vi.fn();
+    const off = onLaunchBackupSettled(settled);
+    expect(hasLaunchBackupSettled()).toBe(false);
+
+    await runDailyBackupOnce();
+
+    expect(hasLaunchBackupSettled()).toBe(true);
+    expect(settled).toHaveBeenCalledTimes(1);
+
+    await runDailyBackupOnce();
+    expect(settled).toHaveBeenCalledTimes(1);
+    off();
   });
 
   it("scheduleDailyBackup runs the backup immediately when not on Android", async () => {

@@ -161,6 +161,7 @@ export default defineConfig(() => ({
         "src/features/plugins/modules.ts",
         "src/features/plugins/sandbox.ts",
         "src/features/plugins/runtime.ts",
+        "src/features/plugins/lifecycle.ts",
         "src/features/plugins/approvals.ts",
         "src/features/plugins/launch.ts",
         "src/features/plugins/handlers.ts",

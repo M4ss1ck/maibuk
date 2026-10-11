@@ -35,7 +35,7 @@ export type HostRequestHandler = (method: string, params: unknown) => unknown;
 export type PluginClient = PluginApi & {
   /** True once the host stopped this Plugin; every call then rejects `plugin-stopped`. */
   readonly stopped: boolean;
-  /** Answers the host's requests to this Plugin (health checks, Command runs). */
+  /** Answers the host's requests to this Plugin (health checks, migrateData, Command runs). */
   onHostRequest(handler: HostRequestHandler): void;
   /**
    * Subscribes to an event. Rejects `permission-denied` when the event's
@@ -63,7 +63,9 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
   // `kind` and `id` lead, then `method` or `event`, so the broker can answer a
   // refused message without decoding it.
   function send(
-    head: { kind: "call"; method: string; params: unknown } | { kind: "subscribe" | "unsubscribe"; event: string },
+    head:
+      | { kind: "call"; method: string; params: unknown }
+      | { kind: "subscribe" | "unsubscribe"; event: string },
     listener?: PluginStreamListener<unknown>
   ): Promise<unknown> {
     if (stopReason !== null) return Promise.reject(stoppedError(stopReason));

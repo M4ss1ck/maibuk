@@ -22,12 +22,14 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 );
 
 // Approved Plugins load after the first render: the Plugin Directory scan must
-// not delay launch (#401). The lifecycle slice (#436) owns the full scheduling;
-// with no approvals this creates no frame and no Worker, and the launcher and
-// its adapters stay out of the first chunk until the idle callback.
+// not delay launch (#401). The lifecycle (#436) decides what starts and when —
+// persistent Plugins after the Library, the launch Auto Sync, and the launch
+// Backup; on-demand Plugins only when one of their surfaces is reachable. With
+// no approvals this creates no frame and no Worker, and the lifecycle and its
+// adapters stay out of the first chunk until the idle callback.
 const loadPlugins = () => {
-  void import("@/features/plugins/launch").then(({ startApprovedPlugins }) =>
-    startApprovedPlugins()
+  void import("@/features/plugins/lifecycle").then(({ installPluginLifecycle }) =>
+    installPluginLifecycle()
   );
 };
 if (typeof requestIdleCallback === "function") requestIdleCallback(loadPlugins);

@@ -5,10 +5,34 @@ import { BackupService } from "@/features/backup/backup-service";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 
 let dailyBackupStarted = false;
+let launchBackupSettled = false;
+const launchBackupSettledListeners = new Set<() => void>();
 let pendingDailyBackupTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingDailyBackupIdleHandle: number | null = null;
 
 const CLOSE_BACKUP_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Whether this launch's daily Backup is behind us (it ran, whatever it
+ * decided). Plugin starts wait on it (#436): they never run ahead of the
+ * launch Backup.
+ */
+export function hasLaunchBackupSettled(): boolean {
+  return launchBackupSettled;
+}
+
+export function onLaunchBackupSettled(listener: () => void): () => void {
+  launchBackupSettledListeners.add(listener);
+  return () => {
+    launchBackupSettledListeners.delete(listener);
+  };
+}
+
+function markLaunchBackupSettled(): void {
+  if (launchBackupSettled) return;
+  launchBackupSettled = true;
+  for (const listener of [...launchBackupSettledListeners]) listener();
+}
 
 function getRetention(): number {
   return useSettingsStore.getState().backupRetention;
@@ -64,12 +88,18 @@ export async function runDailyBackupOnce(): Promise<void> {
   }
 
   dailyBackupStarted = true;
-  await waitForDatabaseReady();
-  await createDailyBackup();
+  try {
+    await waitForDatabaseReady();
+    await createDailyBackup();
+  } finally {
+    markLaunchBackupSettled();
+  }
 }
 
 export function resetBackupLifecycleForTests(): void {
   dailyBackupStarted = false;
+  launchBackupSettled = false;
+  launchBackupSettledListeners.clear();
   try {
     if (pendingDailyBackupTimer !== null) {
       clearTimeout(pendingDailyBackupTimer);
