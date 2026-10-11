@@ -140,7 +140,6 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       const toolbar = page.getByRole("toolbar", { name: "Toolbar" });
       const button = toolbar.getByRole("button", { name: "Run report" });
       await expect(button).toBeVisible();
-      await capture(page, "plugins-editor-toolbar");
       // Leave the editor for the Chapter list, then Tab until inside the toolbar.
       await page.keyboard.press("Escape");
       await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
@@ -149,6 +148,8 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
         await page.keyboard.press("Tab");
       }
       await pressUntilFocused(page, "ArrowRight", button, { max: 100 });
+      // Focused, so the button scrolled into view for its screenshot.
+      await capture(page, "plugins-editor-toolbar");
       await page.keyboard.press("Enter");
 
       await expect(toasts(page).filter({ hasText: "tracer ran report" })).toBeVisible({
