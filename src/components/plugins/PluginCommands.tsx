@@ -1,12 +1,10 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { pluginCommandBindings } from "@/features/plugins/commands";
 import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
-import {
-  useInstalledPluginLifecycle,
-  usePluginLifecycleRevision,
-} from "@/hooks/usePluginSurface";
+import { useInstalledPluginLifecycle, usePluginLifecycleRevision } from "@/hooks/usePluginSurface";
 import { useShortcuts } from "@/lib/shortcuts";
+import type { PluginLifecycle } from "@/features/plugins/types";
 import {
   ROUTE_CONTEXTS,
   commandIds,
@@ -39,6 +37,20 @@ export function activeRouteContexts(pathname: string): Set<string> {
  * Only the Commands whose Contexts are active here are bound, so a Plugin page
  * context stays on its page and a target Command stays behind its Item Menu.
  */
+/**
+ * The Plugins whose Commands live in the active Contexts, in registry order.
+ */
+function pluginsOfActiveContexts(active: ReadonlySet<string>): string[] {
+  const pluginIds = new Set<string>();
+  for (const id of commandIds()) {
+    if (!isPluginCommandId(id)) continue;
+    if (!getCommand(id).contexts.some((context) => active.has(context))) continue;
+    const pluginId = pluginIdOfCommand(id);
+    if (pluginId !== null) pluginIds.add(pluginId);
+  }
+  return [...pluginIds];
+}
+
 export function PluginCommands() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -58,23 +70,44 @@ export function PluginCommands() {
 
   // A screen whose Contexts match a Plugin Command is a reachable surface: an
   // on-demand Plugin warm-starts, and a global Command makes it effectively
-  // persistent (#401).
+  // persistent (#401). Membership is diffed, so navigating inside routes that
+  // keep the Plugin reachable re-arms nothing: retried `surfaceReached` calls
+  // keep restarting the idle window.
+  // Diffed membership: navigating inside routes that keep a Plugin reachable
+  // re-arms nothing, since retried `surfaceReached` calls keep restarting the
+  // on-demand idle window. The effect below has no cleanup — leaving depends
+  // on the set this lifecycle reached, which only the lifecycle change and
+  // the unmount undo (the second effect, which owns the same lifecycle).
+  const reached = useRef<{ owner: PluginLifecycle | null; ids: string[] }>({
+    owner: null,
+    ids: [],
+  });
   useEffect(() => {
     if (!lifecycle) return;
-    const active = activeRouteContexts(pathname);
-    const pluginIds = new Set<string>();
-    for (const id of commandIds()) {
-      if (!isPluginCommandId(id)) continue;
-      if (!getCommand(id).contexts.some((context) => active.has(context))) continue;
-      const pluginId = pluginIdOfCommand(id);
-      if (pluginId !== null) pluginIds.add(pluginId);
+    if (reached.current.owner !== lifecycle) reached.current = { owner: lifecycle, ids: [] };
+    const current = pluginsOfActiveContexts(activeRouteContexts(pathname));
+    for (const pluginId of reached.current.ids) {
+      if (!current.includes(pluginId)) lifecycle.surfaceLeft(pluginId, "context");
     }
-    const reached = [...pluginIds];
-    for (const pluginId of reached) lifecycle.surfaceReached(pluginId, "context");
-    return () => {
-      for (const pluginId of reached) lifecycle.surfaceLeft(pluginId, "context");
-    };
+    for (const pluginId of current) {
+      if (!reached.current.ids.includes(pluginId)) lifecycle.surfaceReached(pluginId, "context");
+    }
+    reached.current = { owner: lifecycle, ids: current };
   }, [lifecycle, pathname, revision]);
+
+  // Teardown bound to the lifecycle: every id reached on THIS lifecycle is
+  // left when it changes or the component unmounts, before the diff above
+  // re-reaches the current membership on a new lifecycle.
+  useEffect(
+    () => () => {
+      if (!lifecycle) return;
+      const { owner, ids } = reached.current;
+      if (owner !== lifecycle) return;
+      for (const pluginId of ids) lifecycle.surfaceLeft(pluginId, "context");
+      reached.current = { owner, ids: [] };
+    },
+    [lifecycle]
+  );
 
   return null;
 }
