@@ -6,13 +6,20 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { type BrowserContext, test as base, expect } from "@playwright/test";
 import { REPO_ROOT } from "./seed/seeds";
-import { prepareDevice, type LibrarySeed, type TutorialProgressSeed } from "./storage";
+import {
+  prepareDevice,
+  type LibrarySeed,
+  type PluginSeed,
+  type TutorialProgressSeed,
+} from "./storage";
 
 interface Options {
   /** Named seed Library written to IndexedDB before the app boots. */
   library: LibrarySeed;
   /** Specs default to a dismissed offer; Tutorial specs set `clean`. */
   tutorialProgress: TutorialProgressSeed;
+  /** Fixture Plugins written into the web Plugin Directory (OPFS) with their approvals. */
+  plugins: PluginSeed[];
   /** Set by the mac-platform project. */
   macPlatform: boolean;
 }
@@ -73,13 +80,14 @@ export async function makeHermetic(context: BrowserContext): Promise<void> {
 export const test = base.extend<Options & Fixtures>({
   library: ["empty", { option: true }],
   tutorialProgress: ["dismissed", { option: true }],
+  plugins: [[], { option: true }],
   macPlatform: [false, { option: true }],
 
   mod: async ({ macPlatform }, use) => {
     await use(macPlatform ? "Meta" : "ControlOrMeta");
   },
 
-  page: async ({ page, library, tutorialProgress, macPlatform }, use) => {
+  page: async ({ page, library, tutorialProgress, plugins, macPlatform }, use) => {
     await makeHermetic(page.context());
     if (macPlatform) {
       // isMac() prefers userAgentData.platform; TipTap reads navigator.platform.
@@ -91,7 +99,7 @@ export const test = base.extend<Options & Fixtures>({
         }
       });
     }
-    await prepareDevice(page, { library, tutorial: tutorialProgress });
+    await prepareDevice(page, { library, tutorial: tutorialProgress, plugins });
     await use(page);
   },
 });

@@ -1,0 +1,9 @@
+{
+  "hash": "h1:P6TsEygkciGHh0nUfbDHf4TRJail2OmZxMAlJyOCSCk=",
+  "files": {
+    "data/notes.txt": "e0704f2ca0f6ebfa8ed7ddddca2a411ad1ab8cfd586ec8b7592ec6a836cbf8ab",
+    "index.js": "7f21eb49004ebb9db0c3df03a237849c892b33d7d093037270e91978b0f3f72d",
+    "lib/util.js": "d1a9c8d3455ad20ddf4f1fee295bd1308880a3ae2cffebac9935d2d44992c9e8",
+    "manifest.json": "66f6074ec8910a0845c60475814763fb7d97f47c88d959440b26a00bcf053574"
+  }
+}

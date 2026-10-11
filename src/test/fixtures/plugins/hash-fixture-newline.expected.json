@@ -1,0 +1,7 @@
+{
+  "refusal": {
+    "code": "filename-newline",
+    "message": "dirhash: filenames with newlines are not supported"
+  },
+  "files": ["manifest.json", "index.js", "data/a\nb.txt"]
+}

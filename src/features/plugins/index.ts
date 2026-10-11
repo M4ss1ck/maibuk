@@ -72,4 +72,21 @@ export {
   THROTTLE_STOP_MS,
   createPluginBroker,
 } from "@/features/plugins/broker";
+export {
+  PLUGIN_APPROVALS_STORAGE_KEY,
+  getPluginApproval,
+  listPluginApprovals,
+  removePluginApproval,
+  savePluginApproval,
+  serializePluginApprovals,
+} from "@/features/plugins/approvals";
+export {
+  PluginDirectoryHashError,
+  hashPluginDirectory,
+  pluginFileDigests,
+} from "@/features/plugins/directory-hash";
+export { planPluginModules, rewritePluginImports } from "@/features/plugins/modules";
+export { MANIFEST_FILE, STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
+export { startApprovedPlugins } from "@/features/plugins/launch";
+export { createPluginHandlers } from "@/features/plugins/handlers";
 export type * from "@/features/plugins/types";

@@ -1,0 +1,17 @@
+{
+  "manifestVersion": 1,
+  "id": "tracer",
+  "name": "Tracer Fixture",
+  "description": "The E2E tracer Plugin: loads from the Plugin Directory, answers the health check, makes one broker call, and proves a direct fetch from its Worker is refused.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web"],
+  "lifecycle": "on-demand",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": [],
+    "optional": []
+  }
+}
