@@ -2092,7 +2092,7 @@
   "plugins": {
     "stopped": {
       "startupTimeout": "{{name}} took too long to start and was stopped.",
-      "unresponsive": "{{name}} stopped responding and was stopped.",
+      "unresponsive": "{{name}} stopped responding and was closed.",
       "throttled": "{{name}} sent too many updates and was stopped.",
       "remoteUiLimit": "{{name}} sent too much interface data and was stopped.",
       "outOfMemory": "{{name}} used too much memory and was stopped.",

@@ -18,9 +18,11 @@
 
 import { hasLaunchAutoSyncSettled, onLaunchAutoSyncSettled } from "@/features/sync/auto-sync";
 import { hasLaunchBackupSettled, onLaunchBackupSettled } from "@/features/backup/lifecycle";
+import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import { createPluginHandlers } from "@/features/plugins/handlers";
 import { scanApprovedPlugins } from "@/features/plugins/launch";
-import { startPlugin } from "@/features/plugins/runtime";
+import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
+import { STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import type {
@@ -38,6 +40,7 @@ import type {
   PluginStopReason,
 } from "@/features/plugins/types";
 import { toast } from "@/components/ui/Toast";
+import { APP_VERSION } from "@/constants";
 import i18n from "@/i18n";
 import { waitForDatabaseReady } from "@/lib/db";
 import { PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
@@ -103,6 +106,52 @@ function refusalStopReason(refusal: PluginStartRefusal): PluginLifecycleStopReas
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Dev-only User Timing marks for one activation's host-side work (the #401
+ * per-start budget). A devtools Performance profile shows them; a production
+ * build and an engine without User Timing emit nothing.
+ */
+function devMark(name: string): void {
+  if (!import.meta.env.DEV) return;
+  if (typeof performance === "undefined" || typeof performance.mark !== "function") return;
+  performance.mark(name);
+}
+
+function devMeasure(name: string, startMark: string, endMark: string): void {
+  if (!import.meta.env.DEV) return;
+  if (typeof performance === "undefined" || typeof performance.measure !== "function") return;
+  try {
+    performance.measure(name, startMark, endMark);
+  } catch {
+    // A missing start mark leaves nothing to measure; never break a start over timing.
+  }
+}
+
+/** Returned when work did not fit in what remained of the startup budget. */
+const STARTUP_DEADLINE_EXCEEDED = Symbol("startup-deadline-exceeded");
+
+/**
+ * Races work against the startup deadline. The 10 s startup limit covers the
+ * handshake and the dataVersion gate (#436), so the gate gets the remaining
+ * budget after `startPlugin`, never a fresh one.
+ */
+async function withinStartupBudget<T>(
+  work: Promise<T>,
+  deadline: number
+): Promise<T | typeof STARTUP_DEADLINE_EXCEEDED> {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) return STARTUP_DEADLINE_EXCEEDED;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof STARTUP_DEADLINE_EXCEEDED>((resolve) => {
+    timer = setTimeout(() => resolve(STARTUP_DEADLINE_EXCEEDED), remaining);
+  });
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function defaultWhenLaunchSettled(): Promise<void> {
@@ -279,10 +328,15 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     applyStopPolicy(entry, reason);
   }
 
-  /** A Worker error, crash or OOM, after readiness. */
+  /** A Worker error, crash or OOM, after the handshake (readiness included). */
   function workerError(entry: Entry, message: string): void {
-    if (entry.state.status !== "ready" && entry.state.status !== "unavailable") return;
-    stopEntry(entry, workerStopReason(message));
+    const status = entry.state.status;
+    if (status !== "ready" && status !== "unavailable" && status !== "starting") return;
+    const reason = workerStopReason(message);
+    stopEntry(entry, reason);
+    // A crash after the handshake but before ready is still a run that began,
+    // so the toast and the restart-once policy apply like any other crash.
+    if (status === "starting") applyStopPolicy(entry, reason);
   }
 
   /** The broker stopped itself (sustained throttling); `requested` stops are ignored. */
@@ -343,10 +397,38 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     }
     entry.limitStopped = false;
     const generation = ++entry.generation;
+    // Readiness is the handshake plus the dataVersion gate, so one budget
+    // covers both (#436).
+    const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+    const startMark = `plugin.start:${pluginId}:begin`;
+    const handshakeMark = `plugin.start:${pluginId}:handshake`;
+    devMark(startMark);
     setState(entry, { status: "starting", startReason: reason });
 
+    // An incompatible manifest stays listed and off (#436): the check runs
+    // before the dataVersion read and before any frame exists.
+    const compatibility = checkPluginCompatibility(manifest, {
+      apiVersion: PLUGIN_API_VERSION,
+      appVersion: APP_VERSION,
+    });
+    if (compatibility.verdict !== "ok") {
+      const refusal: PluginActivationRefusal = { code: "incompatible", compatibility };
+      refuseEntry(entry, refusal);
+      return { ok: false, refusal };
+    }
+
     const manifestVersion = manifest.dataVersion ?? 1;
-    const stored = await dataVersions.get(pluginId);
+    let stored: number | null;
+    try {
+      stored = await dataVersions.get(pluginId);
+    } catch (error) {
+      const refusal: PluginActivationRefusal = {
+        code: "data-version-unavailable",
+        message: messageOf(error),
+      };
+      if (entry.generation === generation) refuseEntry(entry, refusal);
+      return { ok: false, refusal };
+    }
     if (entry.generation !== generation) return { ok: false, refusal: { code: "not-installed" } };
     if (stored !== null && stored > manifestVersion) {
       // Data from a newer release: preserved, activation refused (ADR 0023).
@@ -368,6 +450,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         handlers,
         createFrame: options.createFrame,
         isLibraryAvailable,
+        // The remaining budget, so the handshake cannot grant itself a fresh 10 s.
+        timeoutMs: Math.max(0, deadline - Date.now()),
         onWorkerError: (message) => workerError(entry, message),
         onBrokerStop: (brokerReason) => brokerStopped(entry, brokerReason),
         onCall: () => noteCall(entry),
@@ -395,13 +479,25 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     }
 
     entry.runtime = result.plugin;
+    devMark(handshakeMark);
+    devMeasure(`plugin.start.host:${pluginId}`, startMark, handshakeMark);
 
     // The dataVersion gate runs before ready (ADR 0023). Data at an older
     // version is migrated by the Plugin's own migrateData, once; a throw
     // leaves the data and its version record untouched and refuses activation.
     if (stored !== null && stored < manifestVersion) {
       try {
-        await result.plugin.broker.request(PLUGIN_MIGRATE_DATA_REQUEST, { from: stored });
+        const migration = await withinStartupBudget(
+          result.plugin.broker.request(PLUGIN_MIGRATE_DATA_REQUEST, { from: stored }),
+          deadline
+        );
+        if (migration === STARTUP_DEADLINE_EXCEEDED) {
+          result.plugin.stop();
+          if (entry.generation === generation) {
+            failStart(entry, { code: "startup-timeout" }, "startup-timeout");
+          }
+          return { ok: false, refusal: { code: "startup-timeout" } };
+        }
         await dataVersions.set(pluginId, manifestVersion);
       } catch (error) {
         result.plugin.stop();
@@ -415,8 +511,19 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       }
     } else if (stored === null) {
       // The namespace starts at the manifest's version, so a later release
-      // knows what wrote it.
-      await dataVersions.set(pluginId, manifestVersion);
+      // knows what wrote it. A storage failure stops the runtime it already
+      // created and refuses, never escaping startEntry.
+      try {
+        await dataVersions.set(pluginId, manifestVersion);
+      } catch (error) {
+        const refusal: PluginActivationRefusal = {
+          code: "data-version-unavailable",
+          message: messageOf(error),
+        };
+        result.plugin.stop();
+        if (entry.generation === generation) refuseEntry(entry, refusal);
+        return { ok: false, refusal };
+      }
     }
 
     if (entry.generation !== generation || entry.runtime !== result.plugin) {
@@ -426,6 +533,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     setState(entry, { status: "ready", startReason: reason });
     startHeartbeat(entry);
     armIdle(entry);
+    const readyMark = `plugin.start:${pluginId}:ready`;
+    devMark(readyMark);
+    devMeasure(`plugin.start:${pluginId}`, startMark, readyMark);
+    devMeasure(`plugin.start.gate:${pluginId}`, handshakeMark, readyMark);
     return { ok: true, startReason: reason };
   }
 
@@ -476,7 +587,13 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
           await nextIdle();
           if (disposed) return;
           const entry = entries.get(plugin.pluginId);
-          if (entry) await startEntry(entry, "launch");
+          if (!entry) continue;
+          try {
+            await startEntry(entry, "launch");
+          } catch (error) {
+            // One Plugin's failure must never skip the next one.
+            console.error(`Plugin ${plugin.pluginId} failed to start`, error);
+          }
         }
       } catch (error) {
         console.error("Plugin launch failed", error);
@@ -523,7 +640,15 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     stop(pluginId: string, reason: PluginLifecycleStopReason = "requested"): void {
       const entry = entries.get(pluginId);
       if (!entry) return;
-      if (entry.state.status === "stopped") return;
+      if (entry.state.status === "stopped") {
+        // An explicit stop wins over a pending automatic restart: cancel it
+        // and record the author's intent.
+        if (entry.restartTimer === null) return;
+        clearTimeout(entry.restartTimer);
+        entry.restartTimer = null;
+        setState(entry, { status: "stopped", reason: "requested", refusal: entry.state.refusal });
+        return;
+      }
       stopEntry(entry, reason);
     },
 

@@ -1,7 +1,9 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastViewport } from "@/components/ui/Toast";
+import { APP_VERSION } from "@/constants";
 import { PLUGIN_APPROVALS_STORAGE_KEY, savePluginApproval } from "@/features/plugins/approvals";
+import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import {
   HEARTBEAT_INTERVAL_MS,
@@ -18,6 +20,7 @@ import {
 import { STARTUP_TIMEOUT_MS } from "@/features/plugins/runtime";
 import type {
   PluginApiHandlers,
+  PluginDataVersions,
   PluginFolder,
   PluginLifecycle,
   PluginLifecycleChange,
@@ -65,6 +68,8 @@ interface HarnessOptions {
   disabled?: PluginFolder[];
   /** Stored dataVersion per plugin id. */
   data?: Record<string, number>;
+  /** Overrides the dataVersion store per method; unspecified methods keep the in-memory map. */
+  dataVersions?: Partial<PluginDataVersions>;
   whenLaunchSettled?: () => Promise<void>;
   configureFrame?: (frame: FakePluginFrame, manifest: PluginManifest) => void;
   /** Frames that do not signal ready by themselves. */
@@ -110,10 +115,12 @@ async function createHarness(options: HarnessOptions = {}) {
     isLibraryAvailable: options.isLibraryAvailable,
     whenLaunchSettled: options.whenLaunchSettled ?? (async () => undefined),
     dataVersions: {
-      get: async (pluginId) => dataVersions.get(pluginId) ?? null,
-      set: async (pluginId, version) => {
-        dataVersions.set(pluginId, version);
-      },
+      get: options.dataVersions?.get ?? (async (pluginId) => dataVersions.get(pluginId) ?? null),
+      set:
+        options.dataVersions?.set ??
+        (async (pluginId, version) => {
+          dataVersions.set(pluginId, version);
+        }),
     },
     stopMessage: options.stopMessage,
   });
@@ -395,7 +402,7 @@ describe("Plugin lifecycle: heartbeat", () => {
     });
     expect(frame.stopped).toBe(true);
     expect(screen.getByRole("status")).toHaveTextContent(
-      "alpha stopped responding and was stopped."
+      "alpha stopped responding and was closed."
     );
   });
 
@@ -530,6 +537,38 @@ describe("Plugin lifecycle: persistent restart-once", () => {
     await advance(RESTART_DELAY_MS * 2);
     expect(h.framesFor("alpha")).toHaveLength(2);
   });
+
+  it("cancels a pending automatic restart when stopped explicitly again", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    expect(h.frameCount()).toBe(1);
+
+    h.lifecycle.stop("alpha", "crashed");
+    await advance(0);
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: "crashed",
+      refusal: null,
+    });
+
+    // The author's stop lands while the automatic restart is still pending:
+    // it must cancel the timer and record the intent.
+    h.lifecycle.stop("alpha");
+    await advance(0);
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: "requested",
+      refusal: null,
+    });
+
+    await advance(RESTART_DELAY_MS);
+    expect(h.framesFor("alpha")).toHaveLength(1);
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: "requested",
+      refusal: null,
+    });
+  });
 });
 
 describe("Plugin lifecycle: dataVersion gate", () => {
@@ -621,6 +660,253 @@ describe("Plugin lifecycle: dataVersion gate", () => {
     expect(h.framesFor("alpha")[0].requests).not.toContain("migrateData");
     expect(h.dataVersions.get("alpha")).toBe(4);
   });
+
+  it("stops a hung migrateData within the startup limit, leaving data and version untouched", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { dataVersion: 2 })],
+      data: { alpha: 1 },
+      configureFrame: (frame) => {
+        frame.hostRequestAnswer = async (method) => {
+          if (method === "migrateData") return new Promise(() => {});
+          return "pong";
+        };
+      },
+    });
+    render(<ToastViewport />);
+
+    const launching = h.lifecycle.launch();
+    await advance(0);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "starting", startReason: "launch" });
+    expect(h.framesFor("alpha")[0].requests).toContain("migrateData");
+
+    await advance(STARTUP_TIMEOUT_MS);
+
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: "startup-timeout",
+      refusal: { code: "startup-timeout" },
+    });
+    expect(h.dataVersions.get("alpha")).toBe(1);
+    expect(h.framesFor("alpha")[0].stopped).toBe(true);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "alpha took too long to start and was stopped."
+    );
+    await launching;
+  });
+
+  it("stops with crashed when the Worker errors while migrateData runs", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { dataVersion: 2 })],
+      data: { alpha: 1 },
+      configureFrame: (frame) => {
+        frame.hostRequestAnswer = async (method) => {
+          if (method === "migrateData") return new Promise(() => {});
+          return "pong";
+        };
+      },
+    });
+
+    const launching = h.lifecycle.launch();
+    await advance(0);
+    expect(h.framesFor("alpha")[0].requests).toContain("migrateData");
+
+    h.framesFor("alpha")[0].signalError("boom");
+    await advance(0);
+
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: "crashed",
+      refusal: null,
+    });
+    expect(h.dataVersions.get("alpha")).toBe(1);
+    expect(h.framesFor("alpha")[0].stopped).toBe(true);
+    await launching;
+  });
+
+  it("refuses without a frame when the stored dataVersion cannot be read", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      dataVersions: {
+        get: async () => {
+          throw new Error("db locked");
+        },
+      },
+    });
+
+    await launchAll(h);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: { code: "data-version-unavailable", message: "db locked" },
+    });
+  });
+
+  it("refuses and stops the frame when the dataVersion record cannot be written", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      dataVersions: {
+        set: async () => {
+          throw new Error("db locked");
+        },
+      },
+    });
+
+    await launchAll(h);
+
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: { code: "data-version-unavailable", message: "db locked" },
+    });
+    expect(h.framesFor("alpha")).toHaveLength(1);
+    expect(h.framesFor("alpha")[0].stopped).toBe(true);
+  });
+
+  it("starts the next persistent Plugin after one fails to record its dataVersion", async () => {
+    const stored = new Map<string, number>();
+    const h = await createHarness({
+      approved: [makePlugin("alpha"), makePlugin("beta")],
+      dataVersions: {
+        get: async (pluginId) => stored.get(pluginId) ?? null,
+        set: async (pluginId, version) => {
+          if (pluginId === "alpha") throw new Error("db locked");
+          stored.set(pluginId, version);
+        },
+      },
+    });
+
+    await launchAll(h);
+
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: { code: "data-version-unavailable", message: "db locked" },
+    });
+    expect(h.lifecycle.state("beta")).toEqual({ status: "ready", startReason: "launch" });
+    expect(stored.get("beta")).toBe(1);
+  });
+});
+
+describe("Plugin lifecycle: compatibility gate", () => {
+  it("refuses a manifest that wants a newer Plugin API and never warm-starts it", async () => {
+    const h = await createHarness({
+      approved: [
+        makePlugin("warm-page", { lifecycle: "on-demand", apiVersion: "^9.0" }),
+      ],
+      data: { "warm-page": 1 },
+    });
+
+    await h.lifecycle.launch();
+    h.lifecycle.surfaceReached("warm-page", "page:report");
+    await advance(0);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.dataVersions.get("warm-page")).toBe(1);
+    expect(h.lifecycle.state("warm-page")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: {
+        code: "incompatible",
+        compatibility: {
+          verdict: "needs-newer-app",
+          reason: "api-version",
+          message: `Needs Plugin API ^9.0; this app provides ${PLUGIN_API_VERSION}`,
+        },
+      },
+    });
+
+    // A surface reached later must not warm-start a refused Plugin.
+    h.lifecycle.surfaceReached("warm-page", "page:report");
+    await advance(0);
+    expect(h.frameCount()).toBe(0);
+  });
+
+  it("refuses a manifest built for an older Plugin API", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { apiVersion: "^0.0.1" })],
+    });
+
+    await launchAll(h);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: {
+        code: "incompatible",
+        compatibility: {
+          verdict: "older-api",
+          reason: "api-version",
+          message: `Built for Plugin API ^0.0.1; this app provides ${PLUGIN_API_VERSION}`,
+        },
+      },
+    });
+  });
+
+  it("refuses a manifest whose minAppVersion is newer than this app", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { minAppVersion: "999.0.0" })],
+    });
+
+    await launchAll(h);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: {
+        code: "incompatible",
+        compatibility: {
+          verdict: "needs-newer-app",
+          reason: "min-app-version",
+          message: `Needs Maibuk 999.0.0 or newer; this app is ${APP_VERSION}`,
+        },
+      },
+    });
+  });
+
+  it("starts a compatible manifest normally", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { apiVersion: "^0.1", minAppVersion: "0.1.0" })],
+    });
+
+    await launchAll(h);
+
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
+  });
+});
+
+describe("Plugin lifecycle: dev timing marks", () => {
+  it("marks the host-side work of one activation", async () => {
+    const marks: string[] = [];
+    const measures: string[] = [];
+    const timing = performance as unknown as Record<string, unknown>;
+    const hadMark = "mark" in timing;
+    const hadMeasure = "measure" in timing;
+    timing.mark = (name: string) => marks.push(name);
+    timing.measure = (name: string) => measures.push(name);
+    try {
+      const h = await createHarness({ approved: [makePlugin("alpha")] });
+      await launchAll(h);
+
+      expect(marks).toEqual([
+        "plugin.start:alpha:begin",
+        "plugin.start:alpha:handshake",
+        "plugin.start:alpha:ready",
+      ]);
+      expect(measures).toEqual([
+        "plugin.start.host:alpha",
+        "plugin.start:alpha",
+        "plugin.start.gate:alpha",
+      ]);
+    } finally {
+      // jsdom has no User Timing; drop what this test added.
+      if (!hadMark) delete timing.mark;
+      if (!hadMeasure) delete timing.measure;
+    }
+  });
 });
 
 describe("Plugin lifecycle: stop toasts", () => {
@@ -643,7 +929,7 @@ describe("Plugin lifecycle: stop toasts", () => {
     await i18n.changeLanguage("es");
     try {
       expect(pluginStoppedMessage("Echoes", "unresponsive")).toBe(
-        "Echoes dejó de responder y se detuvo."
+        "Echoes dejó de responder y se cerró."
       );
     } finally {
       await i18n.changeLanguage("en");

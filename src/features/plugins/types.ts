@@ -222,12 +222,16 @@ export type PluginLifecycleStopReason =
 /** The dataVersion gate's refusal: data preserved, activation refused (ADR 0023). */
 export type PluginDataRefusal =
   | { code: "data-newer"; stored: number; manifest: number }
-  | { code: "migration-failed"; from: number; message: string };
+  | { code: "migration-failed"; from: number; message: string }
+  /** The namespace's version record could not be read or written; nothing ran. */
+  | { code: "data-version-unavailable"; message: string };
 
 /** Why an activation did not happen. */
 export type PluginActivationRefusal =
   | PluginStartRefusal
   | PluginDataRefusal
+  /** The manifest cannot run on this app's Plugin API or Release (ADR 0022). */
+  | { code: "incompatible"; compatibility: PluginCompatibility }
   | { code: "not-installed" };
 
 export type PluginActivationResult =
