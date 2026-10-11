@@ -11,7 +11,10 @@ const { mockGetWebDialog, mockOpenWithData, mockUpsertSeparatorAsset } = vi.hois
   mockUpsertSeparatorAsset: vi.fn(),
 }));
 
-vi.mock("react-i18next", () => ({
+vi.mock("react-i18next", async (importOriginal) => ({
+  // The hooks barrel loads @/i18n, which runs .use(initReactI18next); the
+  // mock keeps its useTranslation override and the module's other exports.
+  ...(await importOriginal()),
   useTranslation: () => ({
     t: (key: string) => key,
   }),
