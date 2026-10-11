@@ -10,7 +10,7 @@ pub mod hash;
 #[cfg(desktop)]
 pub mod watch;
 
-use std::io::{Read, Seek};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
@@ -93,26 +93,48 @@ fn stage_and_finish(
     result
 }
 
-/// Installs the Plugin an archive carries into `root`: extract to a staging
-/// folder, hash what was written, then replace the installed copy.
-pub fn install_reader<R: Read + Seek>(root: &Path, reader: R) -> Result<InstalledPlugin, String> {
+/// Installs the Plugin an archive carries into `root`: bound the input,
+/// extract to a staging folder, hash what was written, then replace the
+/// installed copy.
+pub fn install_reader<R: Read>(root: &Path, reader: R) -> Result<InstalledPlugin, String> {
+    install_reader_with_limits(root, reader, &archive::Limits::default())
+}
+
+/// `install_reader` with injectable limits: the compressed input is capped at
+/// `limits.max_total_bytes` before it is buffered whole, so an oversized file
+/// is refused through this function's error path and leaves no staging folder
+/// behind.
+fn install_reader_with_limits<R: Read>(
+    root: &Path,
+    reader: R,
+    limits: &archive::Limits,
+) -> Result<InstalledPlugin, String> {
+    let mut input = Vec::new();
+    reader
+        .take(limits.max_total_bytes + 1)
+        .read_to_end(&mut input)
+        .map_err(|e| e.to_string())?;
+    if input.len() as u64 > limits.max_total_bytes {
+        return Err(archive::ArchiveError::ArchiveTooLarge.to_string());
+    }
     stage_and_finish(root, move |staging| {
-        let extracted = archive::extract(reader, staging, &archive::Limits::default())
+        let extracted = archive::extract(std::io::Cursor::new(input), staging, limits)
             .map_err(|e| e.to_string())?;
         Ok(extracted.id)
     })
 }
 
 /// Copies a Plugin folder into `root` (the Rust-side source must be one the
-/// author picked, never a webview-named path).
+/// author picked, never a webview-named path). The id is read from the
+/// staged manifest after the copy: the source manifest is never followed, and
+/// the installed name always matches the folder that was written.
 #[cfg(desktop)]
 pub fn install_folder(source: &Path, root: &Path) -> Result<InstalledPlugin, String> {
-    let manifest = std::fs::read_to_string(source.join("manifest.json"))
-        .map_err(|e| format!("PLUGIN_FOLDER_MANIFEST: {e}"))?;
-    let id = archive::manifest_id(&manifest).map_err(|e| e.to_string())?;
     stage_and_finish(root, move |staging| {
         directory::copy_folder(source, staging).map_err(|e| e.to_string())?;
-        Ok(id)
+        let manifest = std::fs::read_to_string(staging.join("manifest.json"))
+            .map_err(|e| format!("PLUGIN_FOLDER_MANIFEST: {e}"))?;
+        archive::manifest_id(&manifest).map_err(|e| e.to_string())
     })
 }
 
@@ -168,6 +190,7 @@ pub async fn pick_plugin_directory<R: Runtime>(
         };
         let picked = picked.into_path().map_err(|e| e.to_string())?;
         let path = directory::validate_directory(&picked.to_string_lossy())?;
+        directory::validate_custom_directory(&app, &path)?;
         directory::approve(&app, &path)?;
         Ok(Some(path.to_string_lossy().into_owned()))
     }
@@ -188,6 +211,7 @@ pub async fn request_plugin_directory<R: Runtime>(
     locale: String,
 ) -> Result<bool, String> {
     let path = directory::validate_directory(&path)?;
+    directory::validate_custom_directory(&app, &path)?;
     if directory::approved_directory(&app)? == Some(path.clone()) {
         return Ok(true);
     }
@@ -233,7 +257,7 @@ pub async fn add_plugin_from_zip<R: Runtime>(
     window: tauri::WebviewWindow<R>,
 ) -> Result<Option<InstalledPlugin>, String> {
     use tauri_plugin_dialog::DialogExt;
-    use tauri_plugin_fs::FsExt;
+    use tauri_plugin_fs::{FsExt, OpenOptions};
 
     #[cfg(mobile)]
     let _ = &window;
@@ -243,10 +267,14 @@ pub async fn add_plugin_from_zip<R: Runtime>(
     let Some(picked) = picker.blocking_pick_file() else {
         return Ok(None);
     };
-    // `Fs` reads Android content URIs and desktop paths alike.
-    let bytes = app.fs().read(picked).map_err(|e| e.to_string())?;
+    // `Fs` opens Android content URIs and desktop paths alike. The compressed
+    // input is bounded inside `install_reader` before it is buffered whole;
+    // the `Fs` handle exposes no size, so the read is capped with `take`.
+    let mut options = OpenOptions::new();
+    options.read(true);
+    let file = app.fs().open(picked, options).map_err(|e| e.to_string())?;
     let root = directory::ensure(&app)?;
-    Ok(Some(install_reader(&root, std::io::Cursor::new(bytes))?))
+    Ok(Some(install_reader(&root, file)?))
 }
 
 /// Open the native folder picker for a Plugin folder and copy it in. Resolves
@@ -433,6 +461,60 @@ mod tests {
             let after = directory::read_folder(&root, "tracer").unwrap().unwrap();
             assert_eq!(before.files, after.files);
         }
+        std::fs::remove_dir_all(&root).unwrap();
+        std::fs::remove_dir_all(&source).unwrap();
+    }
+
+    /// The compressed input is capped before it is buffered whole and before
+    /// anything is staged: an oversized file is refused by `install_reader`
+    /// and leaves no staging folder.
+    #[test]
+    fn refuses_an_archive_over_the_installed_input_cap_before_staging() {
+        let root = temp_dir("input-cap");
+        let limits = archive::Limits {
+            max_file_bytes: 32,
+            max_total_bytes: 64,
+            ..archive::Limits::default()
+        };
+
+        let error =
+            install_reader_with_limits(&root, Cursor::new(vec![0u8; 65]), &limits).unwrap_err();
+
+        assert!(error.contains("PLUGIN_ARCHIVE_TOO_LARGE"), "{error}");
+        assert_eq!(
+            std::fs::read_dir(&root).unwrap().count(),
+            0,
+            "nothing may be staged for an oversized input"
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// The id comes from the staged manifest, so a symlinked source manifest
+    /// is refused (the copy refuses symlinks) and the installed copy stays as
+    /// it was.
+    #[cfg(unix)]
+    #[test]
+    fn refuses_a_source_whose_manifest_is_a_symlink_and_keeps_the_installed_copy() {
+        let root = temp_dir("manifest-symlink-root");
+        let source = temp_dir("manifest-symlink-source");
+        std::fs::write(source.join("manifest.json"), r#"{"id":"tracer"}"#).unwrap();
+        std::fs::write(source.join("index.js"), "export const a = 1;").unwrap();
+        let installed = install_folder(&source, &root).unwrap();
+        let before = directory::read_folder(&root, "tracer").unwrap().unwrap();
+
+        // The source manifest becomes a symlink to a valid manifest outside
+        // the folder: following it would install outside content under a
+        // foreign id.
+        std::fs::write(source.join("outside.json"), r#"{"id":"evil"}"#).unwrap();
+        std::fs::remove_file(source.join("manifest.json")).unwrap();
+        std::os::unix::fs::symlink(source.join("outside.json"), source.join("manifest.json"))
+            .unwrap();
+
+        assert!(install_folder(&source, &root).is_err());
+        let after = directory::read_folder(&root, "tracer").unwrap().unwrap();
+        assert_eq!(before.files, after.files);
+        assert_eq!(Some(installed.hash), after.hash);
+        assert!(!root.join("evil").exists());
         std::fs::remove_dir_all(&root).unwrap();
         std::fs::remove_dir_all(&source).unwrap();
     }

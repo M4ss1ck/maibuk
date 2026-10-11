@@ -8,6 +8,7 @@
 //! fs scope, never granted: a Plugin file the webview could overwrite is code
 //! that runs.
 
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use tauri::{AppHandle, Manager, Runtime};
@@ -66,6 +67,63 @@ pub fn validate_directory(path: &str) -> Result<PathBuf, &'static str> {
     trusted::validate_directory(path).map_err(|_| INVALID)
 }
 
+/// Whether `path` is equal to, inside, or a parent of `folder`. With
+/// `fold_case`, components compare case-insensitively: filesystems on Windows
+/// and macOS fold case, the fs scope's patterns do not, so a case-variant
+/// path would slip past its forbid (ADR 0020).
+fn overlaps(path: &Path, folder: &Path, fold_case: bool) -> bool {
+    let components = |path: &Path| -> Vec<String> {
+        path.components()
+            .map(|component| {
+                let text = component.as_os_str().to_string_lossy();
+                if fold_case {
+                    text.to_lowercase()
+                } else {
+                    text.into_owned()
+                }
+            })
+            .collect()
+    };
+    let path = components(path);
+    let folder = components(folder);
+    path.starts_with(&folder) || folder.starts_with(&path)
+}
+
+/// The app-specific folders `fs:default` grants the webview recursively:
+/// `$APPCONFIG`, `$APPDATA`, `$APPLOCALDATA`, `$APPCACHE`, `$APPLOG`.
+fn app_folders<R: Runtime>(app: &AppHandle<R>) -> Vec<PathBuf> {
+    [
+        app.path().app_config_dir(),
+        app.path().app_data_dir(),
+        app.path().app_local_data_dir(),
+        app.path().app_cache_dir(),
+        app.path().app_log_dir(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
+/// Refuses a custom Plugin Directory that is equal to, inside, or a parent of
+/// an app-specific folder. Those folders are webview-writable, and a
+/// case-variant path can walk around the case-sensitive fs forbid on Windows
+/// and macOS (the hazard ADR 0020 records), so there the comparison folds
+/// case.
+pub fn validate_custom_directory<R: Runtime>(
+    app: &AppHandle<R>,
+    path: &Path,
+) -> Result<(), &'static str> {
+    let fold_case = cfg!(any(target_os = "windows", target_os = "macos"));
+    if app_folders(app)
+        .iter()
+        .any(|folder| overlaps(path, folder, fold_case))
+    {
+        Err(INVALID)
+    } else {
+        Ok(())
+    }
+}
+
 /// `$DOCUMENT/Maibuk/Plugins`, outside every folder the fs capability grants
 /// the webview (`$APPCONFIG`, `$APPDATA`, `$APPLOCALDATA`, `$APPCACHE`,
 /// `$APPLOG`), so even a differently cased path matches no allow pattern on
@@ -114,12 +172,22 @@ pub fn approved_directory<R: Runtime>(app: &AppHandle<R>) -> Result<Option<PathB
     ))
 }
 
-/// The active Plugin Directory: the approved folder, or the platform default.
-pub fn plugin_directory<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    match approved_directory(app)? {
+/// The active Plugin Directory: a usable approval, or the platform default.
+/// An approval that overlaps an app-specific folder is ignored and the
+/// default takes over (ADR 0020).
+fn resolve_directory<R: Runtime>(
+    app: &AppHandle<R>,
+    approved: Option<PathBuf>,
+) -> Result<PathBuf, String> {
+    match approved.filter(|path| validate_custom_directory(app, path).is_ok()) {
         Some(approved) => Ok(approved),
         None => default_plugin_directory(app),
     }
+}
+
+/// The active Plugin Directory: the approved folder, or the platform default.
+pub fn plugin_directory<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    resolve_directory(app, approved_directory(app)?)
 }
 
 /// Records an approval and forbids the folder in the fs scope. Never grants
@@ -147,11 +215,14 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
 
 /// Deny the Plugin Directory to the webview at setup, before it loads. The
 /// default is forbidden even while a custom folder is active, so switching
-/// back never opens a window where it is writable.
+/// back never opens a window where it is writable. A stored approval that
+/// fails the overlap check is ignored, like `plugin_directory` does.
 pub fn protect<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     trusted::forbid_directory(app, &default_plugin_directory(app)?)?;
     if let Some(approved) = approved_directory(app)? {
-        trusted::forbid_directory(app, &approved)?;
+        if validate_custom_directory(app, &approved).is_ok() {
+            trusted::forbid_directory(app, &approved)?;
+        }
     }
     Ok(())
 }
@@ -186,9 +257,12 @@ pub fn confirmation_text(locale: &str, path: &Path) -> [String; 4] {
     }
 }
 
-/// A single, safe folder name inside the Plugin Directory.
+/// A single, safe folder name inside the Plugin Directory. A dot-prefixed
+/// name is reserved for internal folders (staging, replaced copies) and is
+/// not a Plugin.
 pub fn is_safe_folder_name(name: &str) -> bool {
-    !name.is_empty()
+    !name.starts_with('.')
+        && !name.is_empty()
         && !name.contains(['/', '\\', ':', '\0'])
         && Path::new(name)
             .components()
@@ -197,7 +271,8 @@ pub fn is_safe_folder_name(name: &str) -> bool {
 }
 
 /// Folder names in the Plugin Directory, sorted; `[]` when there is none.
-/// Loose files, symlinks, and OS litter are not Plugins.
+/// Loose files, symlinks, dot-prefixed internal folders, and OS litter are
+/// not Plugins.
 pub fn list_folders(root: &Path) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(root) else {
         return Vec::new();
@@ -208,6 +283,9 @@ pub fn list_folders(root: &Path) -> Vec<String> {
             continue;
         };
         if !file_type.is_dir() || file_type.is_symlink() {
+            continue;
+        }
+        if entry.file_name().to_string_lossy().starts_with('.') {
             continue;
         }
         if archive::is_os_litter(Path::new(&entry.file_name())) {
@@ -272,14 +350,17 @@ fn walk(
         if !file_type.is_file() {
             return Err(ReadError::NotRegular(relative(root, &path)));
         }
-        let size = entry
-            .metadata()
+        // Read through a cap, not `std::fs::read`: a file growing between the
+        // stat and the read must not slip past `max_file_bytes`.
+        let mut bytes = Vec::new();
+        std::fs::File::open(&path)
             .map_err(|e| ReadError::Io(e.to_string()))?
-            .len();
-        if size > limits.max_file_bytes {
+            .take(limits.max_file_bytes + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| ReadError::Io(e.to_string()))?;
+        if bytes.len() as u64 > limits.max_file_bytes {
             return Err(ReadError::FileTooLarge(relative(root, &path)));
         }
-        let bytes = std::fs::read(&path).map_err(|e| ReadError::Io(e.to_string()))?;
         *total += bytes.len() as u64;
         if *total > limits.max_total_bytes {
             return Err(ReadError::FolderTooLarge);
@@ -427,6 +508,27 @@ mod tests {
     }
 
     #[test]
+    fn does_not_list_dot_prefixed_internal_folders() {
+        let dir = temp_dir("reserved-list");
+        plugin_folder(&dir, "tracer", &[("manifest.json", "{}")]);
+        plugin_folder(&dir, ".x.replaced-1", &[("index.js", "old")]);
+
+        assert_eq!(list_folders(&dir), vec!["tracer".to_string()]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_to_read_dot_prefixed_internal_folders() {
+        let dir = temp_dir("reserved-read");
+        plugin_folder(&dir, ".x.replaced-1", &[("index.js", "old")]);
+
+        let error = read_folder(&dir, ".x.replaced-1").unwrap_err();
+
+        assert!(matches!(error, ReadError::InvalidName(_)), "{error:?}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn reads_a_folder_with_posix_paths_skipping_litter_and_hashes_it() {
         let dir = temp_dir("read");
         plugin_folder(
@@ -539,6 +641,26 @@ mod tests {
         let error = read_files_with(&dir.join("tracer"), &limits).unwrap_err();
 
         assert!(matches!(error, ReadError::FileTooLarge(_)), "{error:?}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The cap is enforced by the bounded read (`File::open(..).take(cap + 1)`),
+    /// so a file that grows after a metadata check still cannot pass it; a file
+    /// exactly at the cap still reads.
+    #[test]
+    fn reads_a_file_exactly_at_the_reader_size_limit() {
+        let dir = temp_dir("read-size-exact");
+        plugin_folder(&dir, "tracer", &[("asset.bin", "1234")]);
+        let limits = archive::Limits {
+            max_entries: 8,
+            max_file_bytes: 4,
+            max_total_bytes: 64,
+        };
+
+        let files = read_files_with(&dir.join("tracer"), &limits).unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].path, "asset.bin");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -659,6 +781,78 @@ mod tests {
         }
     }
 
+    /// The overlap rule is pure, so the Windows/macOS mixed-case paths are
+    /// provable on Linux: a folder inside, equal to, or a parent of an
+    /// app-specific folder is refused, case-folded only where the filesystem
+    /// folds.
+    #[test]
+    fn refuses_custom_directories_that_overlap_an_app_specific_folder() {
+        let app = Path::new("/home/a/.config/maibuk");
+        assert!(overlaps(app, app, false), "equal");
+        assert!(overlaps(&app.join("plugins"), app, false), "inside");
+        assert!(overlaps(Path::new("/home/a/.config"), app, false), "parent");
+        // A sibling that merely shares a prefix is not contained.
+        assert!(!overlaps(
+            Path::new("/home/a/.config/maibuk-other"),
+            app,
+            true
+        ));
+        // Case variants: refused on Windows and macOS, distinct on Linux.
+        let variant = Path::new("/HOME/A/.CONFIG/MAIBUK/Plugins");
+        assert!(overlaps(variant, app, true));
+        assert!(!overlaps(variant, app, false));
+    }
+
+    #[cfg(desktop)]
+    #[test]
+    fn refuses_a_custom_plugin_directory_inside_an_app_specific_folder() {
+        let app = tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let handle = app.handle().clone();
+        let data = handle.path().app_data_dir().unwrap();
+
+        assert_eq!(
+            validate_custom_directory(&handle, &data.join("plugins")),
+            Err(INVALID),
+            "a custom folder inside the app data folder is webview-writable"
+        );
+        assert!(
+            validate_custom_directory(&handle, &default_plugin_directory(&handle).unwrap()).is_ok(),
+            "the Documents default lives outside every app-specific folder"
+        );
+    }
+
+    /// A stored approval that predates the overlap rule (or was hand-edited)
+    /// is ignored, like an invalid one: reads fall back to the default
+    /// instead of trusting an app-specific path.
+    #[cfg(desktop)]
+    #[test]
+    fn an_approval_that_overlaps_an_app_folder_falls_back_to_the_default() {
+        let app = tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let handle = app.handle().clone();
+        let overlap = handle.path().app_data_dir().unwrap().join("plugins");
+        let default = default_plugin_directory(&handle).unwrap();
+
+        assert_eq!(
+            resolve_directory(&handle, Some(overlap)).unwrap(),
+            default,
+            "an overlapping approval is ignored"
+        );
+        assert_eq!(
+            resolve_directory(&handle, Some(default.clone())).unwrap(),
+            default,
+            "an approval outside the app folders is kept"
+        );
+        assert_eq!(
+            resolve_directory(&handle, None).unwrap(),
+            default,
+            "no approval means the default"
+        );
+    }
+
     #[cfg(desktop)]
     #[test]
     fn the_desktop_default_lives_under_the_documents_folder() {
@@ -760,5 +954,30 @@ mod tests {
         assert!(!scope.is_allowed(link.join("manifest.json")));
         assert!(!scope.is_allowed(real.join("manifest.json")));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The Android layout in miniature: the app data folder is granted
+    /// recursively, then the Plugin Directory inside it is forbidden. The
+    /// forbid wins, and the sibling app-data file stays reachable. No
+    /// `desktop` gate: the rule is the same on every target.
+    #[test]
+    fn a_recursive_grant_does_not_beat_a_forbid_on_a_nested_plugin_directory() {
+        use tauri_plugin_fs::FsExt;
+
+        let app = tauri::test::mock_builder()
+            .plugin(tauri_plugin_fs::init())
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let handle = app.handle().clone();
+        let app_data = handle.path().app_data_dir().unwrap();
+        let plugins = app_data.join("plugins");
+        let scope = handle.fs_scope();
+        scope.allow_directory(&app_data, true).unwrap();
+
+        trusted::forbid_directory(&handle, &plugins).unwrap();
+
+        assert!(!scope.is_allowed(plugins.join("manifest.json")));
+        assert!(scope.is_forbidden(plugins.join("manifest.json")));
+        assert!(scope.is_allowed(app_data.join("library.sqlite")));
     }
 }
