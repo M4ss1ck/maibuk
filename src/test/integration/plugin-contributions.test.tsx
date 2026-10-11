@@ -108,6 +108,82 @@ describe("a launched Plugin's contributions", () => {
     expect(getPluginSidebarEntries()).toEqual([]);
   });
 
+  it.each([
+    ["Command", () => expect(isCommandId("plugin.sample.open")).toBe(true)],
+    [
+      "page",
+      () => expect(getPluginPages().map((page) => page.localId)).toEqual(["report"]),
+    ],
+    [
+      "sidebar entry",
+      () =>
+        expect(getPluginSidebarEntries().map((entry) => entry.pageRoute)).toEqual([
+          "/plugin/sample/report",
+        ]),
+    ],
+    [
+      "Settings row",
+      () =>
+        expect(getPluginSettingsOwners().map((owner) => owner.pluginId)).toContain("sample"),
+    ],
+    [
+      "toolbar button",
+      () =>
+        expect(registeredToolbarButtons().map((button) => button.id)).toEqual([
+          "plugin.sample.reportButton",
+        ]),
+    ],
+    [
+      "Item Menu entry",
+      () =>
+        expect(getPluginItemMenuEntries("chapter").map((entry) => entry.localId)).toEqual([
+          "report",
+        ]),
+    ],
+  ])("presents its %s while enabled and removes it on dispose", async (_kind, present) => {
+    const lifecycle = await launchApproved();
+    present();
+    lifecycle.dispose();
+    expect(isCommandId("plugin.sample.open")).toBe(false);
+    expect(getPluginPages()).toEqual([]);
+    expect(getPluginSidebarEntries()).toEqual([]);
+    expect(getPluginSettingsOwners()).toEqual([]);
+    expect(registeredToolbarButtons()).toEqual([]);
+    expect(getPluginItemMenuEntries("chapter")).toEqual([]);
+  });
+
+  it("leaves retained preferences intact on disable", async () => {
+    const { useShortcutSettingsStore } = await import("@/features/settings/shortcut-store");
+    const { resolveStoredToolbarButtonId, isLiveToolbarEntry } = await import(
+      "@/features/settings/toolbar-config"
+    );
+    useShortcutSettingsStore.setState({
+      custom: { "plugin.sample.refresh": [["Mod", "Alt", "r"]] },
+      voice: {},
+      singleKeyEnabled: true,
+      version: 2,
+    });
+
+    const lifecycle = await launchApproved();
+    await waitFor(() => expect(lifecycle.state("sample")?.status).toBe("ready"));
+    expect(isCommandId("plugin.sample.refresh")).toBe(true);
+    expect(isLiveToolbarEntry("plugin.sample.reportButton")).toBe(true);
+
+    lifecycle.dispose();
+
+    // Disabling removes the surfaces but keeps the author's preferences for return.
+    expect(isCommandId("plugin.sample.refresh")).toBe(false);
+    expect(isLiveToolbarEntry("plugin.sample.reportButton")).toBe(false);
+    expect(useShortcutSettingsStore.getState().custom["plugin.sample.refresh"]).toEqual([
+      ["Mod", "Alt", "r"],
+    ]);
+    // The toolbar arrangement retains the absent Plugin's button id.
+    expect(resolveStoredToolbarButtonId("plugin.sample.reportButton")).toBe(
+      "plugin.sample.reportButton"
+    );
+    useShortcutSettingsStore.setState({ custom: {}, voice: {} });
+  });
+
   it("bind its Command once ready, run it through the broker, and unbind it once stopped", async () => {
     const lifecycle = await launchApproved();
     await waitFor(() => expect(lifecycle.state("sample")?.status).toBe("ready"));

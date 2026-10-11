@@ -1,15 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { PluginToolbarButton } from "@/components/plugins/PluginToolbarButton";
 import {
   registerPluginContributions,
   resetPluginContributionsForTests,
 } from "@/features/plugins/contributions";
 import { readPluginManifest } from "@/features/plugins/runtime";
-import type { PluginLifecycle } from "@/features/plugins/types";
+import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
 import { pluginFolder } from "@/test/support/plugin-fixtures";
 
 const cleanups: Array<() => void> = [];
+
+let lifecycleStatus: "ready" | "stopped" = "ready";
+let brokerRequest = vi.fn(async () => null);
 
 vi.mock("@/hooks/usePluginSurface", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/hooks/usePluginSurface")>();
@@ -23,8 +27,15 @@ vi.mock("@/hooks/usePluginSurface", async (importOriginal) => {
 
 const stubLifecycle = {
   state: (pluginId: string) =>
-    pluginId === "sample" ? { status: "ready", startReason: "launch" } : null,
-  runtime: () => null,
+    pluginId === "sample"
+      ? lifecycleStatus === "ready"
+        ? { status: "ready", startReason: "launch" }
+        : { status: "stopped", reason: null, refusal: null }
+      : null,
+  runtime: (pluginId: string) =>
+    pluginId === "sample" && lifecycleStatus === "ready"
+      ? ({ broker: { request: brokerRequest }, stop: vi.fn() } as unknown as PluginRuntime)
+      : null,
 } as unknown as PluginLifecycle;
 
 function registerSample(): void {
@@ -54,6 +65,8 @@ function registerSample(): void {
 afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
   resetPluginContributionsForTests();
+  lifecycleStatus = "ready";
+  brokerRequest = vi.fn(async () => null);
 });
 
 describe("PluginToolbarButton with targets (#395)", () => {
@@ -74,5 +87,33 @@ describe("PluginToolbarButton with targets (#395)", () => {
 
     render(<PluginToolbarButton id="plugin.sample.plainButton" iconSize="md" />);
     expect(screen.getByRole("button", { name: "Plain" })).toBeEnabled();
+  });
+
+  it("runs its Command from the keyboard once ready", async () => {
+    registerSample();
+    lifecycleStatus = "ready";
+    const user = userEvent.setup();
+
+    render(<PluginToolbarButton id="plugin.sample.plainButton" iconSize="md" />);
+    const button = screen.getByRole("button", { name: "Plain" });
+    button.focus();
+    expect(button).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(brokerRequest).toHaveBeenCalledWith("command.run", { id: "plain" });
+  });
+
+  it("does nothing from the keyboard until ready", async () => {
+    registerSample();
+    lifecycleStatus = "stopped";
+    const user = userEvent.setup();
+
+    render(<PluginToolbarButton id="plugin.sample.plainButton" iconSize="md" />);
+    const button = screen.getByRole("button", { name: "Plain" });
+    expect(button).toBeDisabled();
+    button.focus();
+    await user.keyboard("{Enter}");
+
+    expect(brokerRequest).not.toHaveBeenCalled();
   });
 });
