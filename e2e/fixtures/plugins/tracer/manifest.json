@@ -50,9 +50,7 @@
     "pages": [{ "id": "report", "title": "Tracer report", "command": "openReport" }],
     "sidebarEntries": [{ "page": "report", "icon": "book-open" }],
     "settingsRows": [{ "id": "threshold", "label": "Report threshold" }],
-    "toolbarButtons": [
-      { "id": "reportButton", "command": "report", "icon": "book-open" }
-    ],
+    "toolbarButtons": [{ "id": "reportButton", "command": "report", "icon": "book-open" }],
     "itemMenuEntries": [{ "command": "tagChapter" }, { "command": "tagNote" }]
   }
 }

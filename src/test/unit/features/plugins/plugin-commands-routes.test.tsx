@@ -75,15 +75,15 @@ function registerRoutesPlugin(): void {
   cleanups.push(registerPluginContributions({ manifest: parsed.manifest, folder }));
 }
 
-function BoundList(): string {
+function BoundList() {
   const bound = useBoundShortcuts();
   return <output data-testid="bound">{bound.join(" ")}</output>;
 }
 
-function NavButton({ target, label }: { target: string; label: string }) {
+function NavButton({ label, to }: { label: string; to: string }) {
   const navigate = useNavigate();
   return (
-    <button type="button" onClick={() => navigate(target)}>
+    <button type="button" onClick={() => navigate(to)}>
       {label}
     </button>
   );
@@ -93,7 +93,10 @@ function boundIds(): string {
   return screen.getByTestId("bound").textContent ?? "";
 }
 
-async function navigateTo(user: Awaited<ReturnType<typeof userEvent.setup>>, target: string, label: string): Promise<void> {
+async function navigateByLabel(
+  user: Awaited<ReturnType<typeof userEvent.setup>>,
+  label: string
+): Promise<void> {
   await user.click(screen.getByRole("button", { name: label }));
   expect(screen.getByTestId("bound")).toBeInTheDocument();
 }
@@ -108,13 +111,13 @@ function renderPluginCommands(): void {
             <>
               <PluginCommands />
               <BoundList />
-              <NavButton target="/" label="home" />
-              <NavButton target="/book/abc" label="book editor" />
-              <NavButton target="/notes" label="notes list" />
-              <NavButton target="/notes/n1" label="note editor" />
-              <NavButton target="/canvas/c1" label="canvas" />
-              <NavButton target="/settings" label="settings" />
-              <NavButton target="/book/abc/cover" label="cover designer" />
+              <NavButton to="/" label="home" />
+              <NavButton to="/book/abc" label="book editor" />
+              <NavButton to="/notes" label="notes list" />
+              <NavButton to="/notes/n1" label="note editor" />
+              <NavButton to="/canvas/c1" label="canvas" />
+              <NavButton to="/settings" label="settings" />
+              <NavButton to="/book/abc/cover" label="cover designer" />
             </>
           }
         />
@@ -140,27 +143,27 @@ describe("<PluginCommands /> route-matched Contexts", () => {
     expect(boundIds()).toContain("plugin.sample.edit");
     expect(boundIds()).toContain("plugin.sample.summarize");
 
-    await navigateTo(user, "/", "home");
+    await navigateByLabel(user, "home");
     expect(boundIds()).toBe("");
 
-    await navigateTo(user, "/book/abc", "book editor");
+    await navigateByLabel(user, "book editor");
     expect(boundIds()).toContain("plugin.sample.edit");
     expect(boundIds()).toContain("plugin.sample.summarize");
 
-    await navigateTo(user, "/notes", "notes list");
+    await navigateByLabel(user, "notes list");
     expect(boundIds()).toBe("");
 
-    await navigateTo(user, "/notes/n1", "note editor");
+    await navigateByLabel(user, "note editor");
     expect(boundIds()).toContain("plugin.sample.edit");
     expect(boundIds()).not.toContain("plugin.sample.summarize");
 
-    await navigateTo(user, "/canvas/c1", "canvas");
+    await navigateByLabel(user, "canvas");
     expect(boundIds()).toContain("plugin.sample.edit");
 
-    await navigateTo(user, "/settings", "settings");
+    await navigateByLabel(user, "settings");
     expect(boundIds()).toBe("");
 
-    await navigateTo(user, "/book/abc/cover", "cover designer");
+    await navigateByLabel(user, "cover designer");
     expect(boundIds()).not.toContain("plugin.sample.edit");
     expect(boundIds()).not.toContain("plugin.sample.summarize");
   });
@@ -176,24 +179,24 @@ describe("<PluginCommands /> warm start", () => {
     expect(surfaceLeft).not.toHaveBeenCalled();
 
     // The editor Context is left once; no re-arm by a second pass.
-    await navigateTo(user, "/", "home");
+    await navigateByLabel(user, "home");
     expect(surfaceLeft).toHaveBeenCalledTimes(1);
     expect(surfaceLeft).toHaveBeenLastCalledWith("sample", "context");
     expect(surfaceReached).toHaveBeenCalledTimes(1);
 
     // Within routes without a Context for the Plugin: still nothing new.
-    await navigateTo(user, "/settings", "settings");
+    await navigateByLabel(user, "settings");
     expect(surfaceReached).toHaveBeenCalledTimes(1);
     expect(surfaceLeft).toHaveBeenCalledTimes(1);
 
     // The membership rises again exactly once.
-    await navigateTo(user, "/book/abc", "book editor");
+    await navigateByLabel(user, "book editor");
     expect(surfaceReached).toHaveBeenCalledTimes(2);
     expect(surfaceReached).toHaveBeenLastCalledWith("sample", "context");
     expect(surfaceLeft).toHaveBeenCalledTimes(1);
 
     // The note editor keeps the membership exactly as the book did (editor).
-    await navigateTo(user, "/notes/n1", "note editor");
+    await navigateByLabel(user, "note editor");
     expect(surfaceReached).toHaveBeenCalledTimes(2);
     expect(surfaceLeft).toHaveBeenCalledTimes(1);
   });

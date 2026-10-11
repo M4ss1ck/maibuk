@@ -61,12 +61,12 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
     await page.addInitScript(() => {
       const original = window.requestIdleCallback?.bind(window);
       if (!original) return;
-      // Delaying the install idle callback three seconds keeps the page's
-      // loading copy up long enough for both shots; it is not cancelled anywhere.
+      // Delaying the install idle callback five seconds keeps the page's
+      // loading copy up long enough for both shots; it is not cancelled here.
       window.requestIdleCallback = ((callback: IdleRequestCallback, options?: IdleRequestOptions) =>
         window.setTimeout(
           () => original(callback, options),
-          3_000
+          5_000
         )) as typeof window.requestIdleCallback;
     });
 
