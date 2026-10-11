@@ -75,10 +75,7 @@ describe("Plugin sidebar entry via keyboard", () => {
     const entry = within(nav).getByRole("option", { name: /Sample report/ });
     expect(entry).toBeInTheDocument();
 
-    // Tab into the nav, arrow to the Plugin entry, Enter opens its page.
-    await user.tab();
-    await waitFor(() => expect(entry).toHaveFocus(), { timeout: 5000 }).catch(() => {});
-    // Focus the entry directly via keyboard arrows from the first option.
+    // Arrow to the Plugin entry from the first option, Enter opens its page.
     const books = within(nav).getByRole("option", { name: /^Books/ });
     books.focus();
     await user.keyboard("{ArrowDown}");
