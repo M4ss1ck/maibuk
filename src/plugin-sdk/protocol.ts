@@ -85,8 +85,10 @@ export const PLUGIN_MIGRATE_DATA_REQUEST = "migrateData";
 /**
  * The host request a ready Plugin answers to run one of its Commands. `params`
  * is `{ id, target? }`: `id` is the Command's Plugin-local id, `target` the
- * item it was invoked on when the Command declares `targets`. The host captures
- * the target before it sends the request and never re-reads focus afterwards.
+ * item it was invoked on when the Command declares `targets`. The host
+ * captures the target before it sends the request and that captured target is
+ * what the Plugin receives; the host re-reads it once more after the reply
+ * only to decide whether the outcome is reported as ran or cancelled.
  */
 export const PLUGIN_COMMAND_RUN_REQUEST = "command.run";
 

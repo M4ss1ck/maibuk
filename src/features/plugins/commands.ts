@@ -4,10 +4,16 @@
  * invocation into either host navigation (a page's navigating Command) or one
  * `command.run` request to the ready Plugin's broker.
  *
- * The intended target is captured before the request goes out and never
- * re-read: a Command invoked on Chapter A while focus moves to Chapter B runs
- * against A, and an invocation with no valid target is cancelled rather than
- * guessed (the Command decision, #397).
+ * The item a Command acts on is captured before the request goes out and what
+ * goes out is that captured target: a Command invoked on Chapter A while
+ * focus moves to Chapter B still runs against A, and an invocation whose
+ * target is already invalid is cancelled rather than guessed (the Command
+ * decision, #397). When the caller supplies `readTarget`, it is re-read once
+ * after the broker answers, and a changed or vanished target cancels the
+ * outcome instead of reporting that it ran. The Item Menu path supplies one
+ * that reads whether the item still exists; the live editor and selection
+ * tracking of the #397 contract arrives with the focused editor reads (#441)
+ * and matters when results apply to items (#452).
  */
 
 import {
@@ -35,12 +41,15 @@ export function pluginCommandId(pluginId: string, localId: string): CommandId {
 
 /**
  * Sends one `command.run` to the ready Plugin's broker and reports the
- * outcome. `readTarget` captures the target before the request goes out and
- * re-checks it after the broker answers: a null there cancels before anything
- * is sent, a change while the request was pending cancels before any result is
- * applied, and the captured target is what the Plugin receives even if focus
- * moved meanwhile. The Item Menu and toolbar paths supply `readTarget`, so the
- * contract holds outside the unit test too.
+ * outcome. The target is captured before the request goes out and it is that
+ * captured target the Plugin receives, even if focus moved meanwhile. With
+ * `readTarget`, it is read once before sending (a null there cancels before
+ * anything is sent) and re-read once after the broker answers: a change while
+ * the request was pending cancels before any result is applied. Callers
+ * re-reading only what the invocation already knew get a constant fixture
+ * behavior; the Item Menu path re-reads live state (whether the item still
+ * exists) and the toolbar path supplies no target at all (its buttons stay
+ * disabled for Commands that need one, #395).
  */
 export async function runPluginCommand(
   lifecycle: PluginLifecycle,

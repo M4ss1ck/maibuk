@@ -7,6 +7,8 @@ import {
   resetPluginContributionsForTests,
 } from "@/features/plugins/contributions";
 import { readPluginManifest } from "@/features/plugins/runtime";
+import type { Chapter } from "@/features/chapters/types";
+import { useChapterStore } from "@/features/chapters/store";
 import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
 import type { PluginItemTarget } from "@/features/plugins/commands";
 import { pluginFolder } from "@/test/support/plugin-fixtures";
@@ -59,6 +61,13 @@ function registerSample(): void {
   cleanups.push(registerPluginContributions({ manifest: parsed.manifest, folder }));
 }
 
+/** Seeds the Chapter the menu item targets; the live read is the store, not a constant. */
+function seedChapters(ids: string[]): void {
+  useChapterStore.setState({
+    chapters: ids.map<Chapter>((id) => ({ id } as unknown as Chapter)),
+  });
+}
+
 function MenuHarness({ target }: { target: PluginItemTarget }) {
   const buildActions = usePluginItemMenuActions("chapter");
   const actions = buildActions(target);
@@ -82,6 +91,7 @@ function MenuHarness({ target }: { target: PluginItemTarget }) {
 afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
   resetPluginContributionsForTests();
+  useChapterStore.setState({ chapters: [] });
   lifecycleStatus = "ready";
   brokerRequest = vi.fn(async () => null);
 });
@@ -89,6 +99,7 @@ afterEach(() => {
 describe("Plugin Item Menu entry via keyboard", () => {
   it("runs with the menu's item as its target once ready", async () => {
     registerSample();
+    seedChapters(["c1"]);
     lifecycleStatus = "ready";
     const user = userEvent.setup();
 
@@ -105,8 +116,22 @@ describe("Plugin Item Menu entry via keyboard", () => {
     });
   });
 
+  it("reads the target live: an item deleted from the store cancels before the request", async () => {
+    registerSample();
+    seedChapters(["other"]);
+    const user = userEvent.setup();
+
+    render(<MenuHarness target={{ kind: "chapter", id: "c1" }} />);
+    const entry = screen.getByRole("menuitem", { name: "Tag chapter" });
+    entry.focus();
+    await user.keyboard("{Enter}");
+
+    expect(brokerRequest).not.toHaveBeenCalled();
+  });
+
   it("does nothing from the keyboard until ready", async () => {
     registerSample();
+    seedChapters(["c1"]);
     lifecycleStatus = "stopped";
     const user = userEvent.setup();
 
