@@ -32,19 +32,19 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
     await expect(toasts(page).filter({ hasText: "Tracer report" })).toBeVisible();
   });
 
-  test("a global Plugin Command runs from its Shortcut and reaches the Plugin", async ({
-    page,
-  }) => {
+  test("a global Plugin Command runs from its Shortcut and reaches the Plugin", async ({ page }) => {
     await page.goto("/");
     // The Plugin's Worker answered the health check (the tracer reports the
-    // refused fetch once it is up); retry the Shortcut until it is ready.
+    // refused fetch once it is up).
     await expect(toasts(page).filter({ hasText: "tracer ready" })).toBeVisible({ timeout: 15_000 });
+    // `notifications.show` admits one call per 5 s, and the startup report holds
+    // that slot; the Command's own toast can only land after the window passes.
+    await page.waitForTimeout(5_200);
 
-    await expect(async () => {
-      await page.keyboard.press("ControlOrMeta+Alt+r");
-      await expect(toasts(page).filter({ hasText: "tracer ran report" })).toBeVisible({
-        timeout: 1_000,
-      });
-    }).toPass({ timeout: 15_000 });
+    await page.keyboard.press("ControlOrMeta+Alt+r");
+
+    await expect(toasts(page).filter({ hasText: "tracer ran report" })).toBeVisible({
+      timeout: 5_000,
+    });
   });
 });

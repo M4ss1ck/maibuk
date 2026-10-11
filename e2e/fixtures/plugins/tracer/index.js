@@ -15,6 +15,9 @@ const LEAK_URL = "https://tracer.invalid/leak";
 export function setup(port, options = {}) {
   const fetchImpl = options.fetch ?? fetch;
   let nextId = 1;
+  // The heartbeat asks the health check every second; the fetch report is a
+  // one-time proof, and a second notification would hit the 1-per-5s limit.
+  let reported = false;
 
   port.onmessage = (event) => {
     const message = event.data;
@@ -24,7 +27,10 @@ export function setup(port, options = {}) {
         port.postMessage(
           JSON.stringify({ kind: "reply", id: message.id, ok: true, result: "pong" })
         );
-        void report(port, fetchImpl, nextId++);
+        if (!reported) {
+          reported = true;
+          void report(port, fetchImpl, nextId++);
+        }
         return;
       }
       if (message.method === "command.run") {
