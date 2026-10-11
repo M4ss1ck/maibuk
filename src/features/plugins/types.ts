@@ -101,6 +101,7 @@ export interface PluginSandboxFrame {
 
 export type PluginStartRefusal =
   | { code: "hash-mismatch"; expected: string; actual: string }
+  | { code: "hash-refused"; reason: "filename-newline"; path: string; message: string }
   | { code: "manifest-invalid"; problems: ManifestProblem[] }
   | { code: "module-refused"; problems: PluginModuleProblem[] }
   | { code: "startup-timeout" }

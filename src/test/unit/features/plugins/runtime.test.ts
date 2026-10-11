@@ -39,6 +39,32 @@ describe("startPlugin()", () => {
     expect(createFrame).not.toHaveBeenCalled();
   });
 
+  it("refuses a folder with a newline in a path, before any frame exists", async () => {
+    const folder: PluginFolder = {
+      name: "tracer",
+      files: [
+        { path: "manifest.json", bytes: new TextEncoder().encode("{}") },
+        { path: "a\nb.js", bytes: new TextEncoder().encode("export {};") },
+      ],
+    };
+    const createFrame = vi.fn(() => fakePluginFrame());
+    const result = await startPlugin({
+      folder,
+      pinnedHash: "h1:anything",
+      createFrame,
+    });
+    expect(result).toEqual({
+      ok: false,
+      refusal: {
+        code: "hash-refused",
+        reason: "filename-newline",
+        path: "a\nb.js",
+        message: "dirhash: filenames with newlines are not supported",
+      },
+    });
+    expect(createFrame).not.toHaveBeenCalled();
+  });
+
   it("starts a plugin that matches its pin, health-checks it, and is ready", async () => {
     const frame = fakePluginFrame();
     const result = await start(pluginFolder({}), { createFrame: () => frame });

@@ -12,7 +12,7 @@
  * called, so a folder changed after approval never reaches a Worker.
  */
 
-import { hashPluginDirectory } from "@/features/plugins/directory-hash";
+import { PluginDirectoryHashError, hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { planPluginModules, rewritePluginImports } from "@/features/plugins/modules";
 import { createPluginFrame } from "@/features/plugins/sandbox";
@@ -129,7 +129,23 @@ async function withTimeout(work: Promise<StartupOutcome>, timeoutMs: number) {
 export async function startPlugin(options: PluginStartOptions): Promise<PluginStartResult> {
   const { folder, pinnedHash } = options;
 
-  const actual = await hashPluginDirectory(folder.files);
+  let actual: string;
+  try {
+    actual = await hashPluginDirectory(folder.files);
+  } catch (error) {
+    if (error instanceof PluginDirectoryHashError) {
+      return {
+        ok: false,
+        refusal: {
+          code: "hash-refused",
+          reason: error.code,
+          path: error.path,
+          message: error.message,
+        },
+      };
+    }
+    throw error;
+  }
   if (actual !== pinnedHash) {
     return { ok: false, refusal: { code: "hash-mismatch", expected: pinnedHash, actual } };
   }

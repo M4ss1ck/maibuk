@@ -4,7 +4,10 @@
  * lowercase hex SHA-256, two spaces, POSIX-relative path, newline — with the
  * lines sorted by the path's UTF-8 bytes; SHA-256 of the summary, standard
  * base64, prefixed `h1:`. The web and Rust implementations read the same
- * fixture (`src/test/fixtures/plugins/hash-fixture`), so the two cannot drift.
+ * fixtures (`src/test/fixtures/plugins/hash-fixture` and its
+ * `hash-fixture-newline` sibling, which pins the refusal), so the two cannot
+ * drift; a path containing a newline is refused because it would write two
+ * summary lines for one file.
  *
  * A file changed after the author pinned the folder produces a different
  * value; the runtime refuses it before any byte reaches a Worker.
@@ -14,6 +17,25 @@ import type { PluginFolderFile } from "@/features/plugins/types";
 import { computeChecksum } from "@/lib/checksum";
 
 const encoder = new TextEncoder();
+
+/**
+ * A Plugin folder whose paths the Go `dirhash.Hash1` scheme cannot represent:
+ * a filename with a newline would let two paths write one summary line, so a
+ * singular file named `a\n<digest>  b` could hash like the two files `a` and
+ * `b`. Go refuses the folder, and the Rust adapter (#435) matches it; `path`
+ * carries the offender for the refusal.
+ */
+export class PluginDirectoryHashError extends Error {
+  /** Stable reason for callers and the shared `hash-fixture-newline` contract. */
+  readonly code = "filename-newline" as const;
+  readonly path: string;
+
+  constructor(path: string) {
+    super("dirhash: filenames with newlines are not supported");
+    this.name = "PluginDirectoryHashError";
+    this.path = path;
+  }
+}
 
 // Byte order over UTF-8, matching Go's `sort.Strings` on paths.
 function compareUtf8(left: string, right: string): number {
@@ -43,6 +65,9 @@ export async function pluginFileDigests(
 
 /** The folder's pinned `h1:` hash. */
 export async function hashPluginDirectory(files: readonly PluginFolderFile[]): Promise<string> {
+  for (const file of files) {
+    if (file.path.includes("\n")) throw new PluginDirectoryHashError(file.path);
+  }
   const digests = await pluginFileDigests(files);
   let summary = "";
   for (const [path, digest] of digests) {

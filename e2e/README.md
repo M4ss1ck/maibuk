@@ -556,4 +556,6 @@ undefined in the WebKit build that ships with Playwright 1.62.1
 (microsoft/playwright#18235, fixed by the WebKit r2339 roll in a later
 Playwright), so specs that seed the web Plugin Directory cannot run there.
 They carry `@no-webkit` and the matrix records the exclusion; the row returns
-to WebKit with the Playwright bump.
+to WebKit with the Playwright bump
+([#479](https://github.com/M4ss1ck/maibuk/issues/479)). The sandbox wire
+harness (`specs/plugins-sandbox.spec.ts`) needs no OPFS and runs on WebKit.

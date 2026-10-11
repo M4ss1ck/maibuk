@@ -25,6 +25,7 @@ import {
   PLUGIN_BOOT_MESSAGE,
   PLUGIN_ERROR_MESSAGE,
   PLUGIN_INIT_MESSAGE,
+  PLUGIN_READY_MESSAGE,
 } from "@/plugin-sdk/protocol";
 
 /** The prelude's error report; the bootstrap turns it into a Worker error. */
@@ -35,13 +36,18 @@ const PLUGIN_ERROR_KIND = PLUGIN_ERROR_MESSAGE.kind;
  * messages until it has both, imports the host-verified entry module, and
  * hands the init message — its MessagePort included — to the Plugin's own
  * handler (or dispatches a fresh one for a Plugin that used
- * `addEventListener`).
+ * `addEventListener`). The first boot detaches the prelude for good: a Plugin
+ * that used `addEventListener` keeps the prelude as its `onmessage`, so
+ * replaying the init through a dispatch would otherwise re-enter `boot()`
+ * forever.
  */
 export const PRELUDE_SOURCE = `"use strict";
 (() => {
   let entry = null;
   let initEvent = null;
+  let booted = false;
   const preludeHandler = (event) => {
+    if (booted) return;
     const message = event.data;
     if (typeof message !== "object" || message === null) return;
     if (message.kind === "${PLUGIN_BOOT_MESSAGE.kind}" && typeof message.entry === "string") {
@@ -56,9 +62,13 @@ export const PRELUDE_SOURCE = `"use strict";
   self.onmessage = preludeHandler;
 
   async function boot() {
-    if (entry === null || initEvent === null) return;
+    if (booted || entry === null || initEvent === null) return;
+    booted = true;
     const event = initEvent;
     initEvent = null;
+    // Hand the message path to the Plugin before its code runs and never take
+    // it back: from here on the replay is the only init the Plugin sees.
+    self.onmessage = null;
     try {
       await import(entry);
     } catch (error) {
@@ -69,7 +79,7 @@ export const PRELUDE_SOURCE = `"use strict";
       return;
     }
     const pluginHandler = self.onmessage;
-    if (pluginHandler && pluginHandler !== preludeHandler) {
+    if (pluginHandler) {
       pluginHandler.call(self, event);
     } else {
       self.dispatchEvent(new MessageEvent("message", { data: event.data, ports: event.ports }));
@@ -116,13 +126,24 @@ export const BOOTSTRAP_HTML = `<!doctype html>
         }
         const prelude = URL.createObjectURL(new Blob([preludeSource], { type: "text/javascript" }));
         const worker = new Worker(prelude);
+        let readyForwarded = false;
+        let errorForwarded = false;
         worker.onmessage = (workerEvent) => {
           const data = workerEvent.data;
           if (data && typeof data === "object" && data.kind === "${PLUGIN_ERROR_KIND}") {
+            if (errorForwarded) return;
+            errorForwarded = true;
             send({ kind: "worker-error", message: String(data.message) });
             return;
           }
-          send({ kind: "worker-message", data: data });
+          if (data && typeof data === "object" && data.kind === "${PLUGIN_READY_MESSAGE.kind}") {
+            if (readyForwarded) return;
+            readyForwarded = true;
+            send({ kind: "worker-message", data: data });
+          }
+          // Everything else a Plugin posts is its own business: the host
+          // talks to a Plugin over the broker MessagePort only, so the
+          // Worker's message channel is not a side channel to the window.
         };
         worker.onerror = (workerEvent) =>
           send({

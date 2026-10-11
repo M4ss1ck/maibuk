@@ -43,8 +43,12 @@ async function report(port, fetchImpl, id) {
   let outcome = "allowed";
   try {
     await fetchImpl(LEAK_URL);
-  } catch {
-    outcome = "refused";
+  } catch (error) {
+    // Report the real error, not a bare "refused": a throw for any reason
+    // (DNS, abort, the CSP) must stay distinguishable in the toast.
+    const name = (error && error.name) || "Error";
+    const message = (error && error.message) || String(error);
+    outcome = `refused (${name}: ${message})`;
   }
   port.postMessage(
     JSON.stringify({

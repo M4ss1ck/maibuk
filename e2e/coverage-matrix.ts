@@ -30,8 +30,9 @@ export const EXCLUSIONS: Exclusion[] = [
     kind: "behavior",
     items: ["Plugin tracer on Playwright WebKit"],
     reason:
-      "The pinned Playwright 1.62.1 WebKit build has no OPFS (navigator.storage is undefined; microsoft/playwright#18235, fixed by the WebKit r2339 roll in a later Playwright), so the web Plugin Directory cannot be seeded there. The row is tagged @no-webkit and runs on chromium and firefox; the sandbox itself is engine-verified on WebKit by the T1 probe (docs/research/plugins-engine-verification.md)",
-    owner: "Playwright version bump; the row returns to WebKit with it",
+      "The pinned Playwright 1.62.1 WebKit build has no OPFS (navigator.storage is undefined; microsoft/playwright#18235, fixed by the WebKit r2339 roll in a later Playwright), so the web Plugin Directory cannot be seeded there. The row is tagged @no-webkit and runs on chromium and firefox; the sandbox itself is engine-verified on WebKit by the T1 probe (docs/research/plugins-engine-verification.md), and the prelude/bootstrap wire harness (e2e/specs/plugins-sandbox.spec.ts) runs on WebKit because it needs no OPFS",
+    owner:
+      "Playwright version bump (https://github.com/M4ss1ck/maibuk/issues/479); the row returns to WebKit with it",
   },
   {
     kind: "shortcut",

@@ -4,6 +4,7 @@
 // direct fetch from its Worker. Tagged @sandbox: the Plugin testing strategy
 // runs that group on chromium, webkit, and firefox.
 
+import { waitForIdleWork } from "../support/idle";
 import { expect, test } from "../support/test";
 
 const LEAK_URL = "https://tracer.invalid/leak";
@@ -23,7 +24,7 @@ test.describe("Plugin sandbox tracer @wf:plugins-sandbox-tracer @sandbox @no-web
 
     await page.goto("/");
     const toast = page.getByRole("status").filter({ hasText: "Tracer Fixture" });
-    await expect(toast).toContainText("tracer ready; direct fetch: refused");
+    await expect(toast).toContainText(/tracer ready; direct fetch: refused \([A-Za-z]+Error:/);
     expect(requests).toEqual([]);
   });
 });
@@ -32,6 +33,9 @@ test.describe("Plugin sandbox tracer with no Plugins @wf:plugins-sandbox-tracer 
   test("launch creates no sandbox frame", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+    // Plugins start from requestIdleCallback after the first render; wait for
+    // one idle turn plus a settle so a late frame cannot hide from the count.
+    await waitForIdleWork(page);
     // A hidden sandbox frame has no accessible name to locate it by; the count
     // is the assertion, and no frame is the only way no Plugin Worker exists.
     expect(await page.locator("iframe").count()).toBe(0);

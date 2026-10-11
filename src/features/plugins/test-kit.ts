@@ -50,6 +50,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
     port: channel.port2,
     broker,
     notifications,
+    // The host renderer that applies these overrides lands with the UI slice
+    // (#438); until it exists the kit only carries them, so a Plugin test can
+    // assert the hand-off without a UI.
     locale: options.locale ?? null,
     setGranted(permissions) {
       granted = new Set(permissions);

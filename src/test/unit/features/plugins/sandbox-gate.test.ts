@@ -10,7 +10,12 @@
 
 import { describe, expect, it } from "vitest";
 import { BOOTSTRAP_HTML, PRELUDE_SOURCE, createPluginFrame } from "@/features/plugins/sandbox";
-import { PLUGIN_BOOT_MESSAGE, PLUGIN_INIT_MESSAGE } from "@/plugin-sdk/protocol";
+import {
+  PLUGIN_BOOT_MESSAGE,
+  PLUGIN_ERROR_MESSAGE,
+  PLUGIN_INIT_MESSAGE,
+  PLUGIN_READY_MESSAGE,
+} from "@/plugin-sdk/protocol";
 
 function bootstrapScript(): string {
   const match = /<script>([\s\S]*)<\/script>/.exec(BOOTSTRAP_HTML);
@@ -52,7 +57,6 @@ describe("the sandbox bootstrap source", () => {
       "sessionStorage",
       "indexedDB",
       "caches",
-      "indexedDB",
     ]) {
       expect(script, `bootstrap contains ${banned}`).not.toContain(banned);
     }
@@ -73,10 +77,22 @@ describe("the sandbox bootstrap source", () => {
     expect(script).not.toContain('type: "module"');
   });
 
-  it("speaks the protocol's boot and init kinds and forwards Worker messages", () => {
+  it("speaks the protocol's sandbox kinds and forwards only the first ready or error", () => {
     expect(script).toContain(PLUGIN_BOOT_MESSAGE.kind);
     expect(script).toContain(PLUGIN_INIT_MESSAGE.kind);
+    expect(script).toContain(PLUGIN_READY_MESSAGE.kind);
+    expect(script).toContain(PLUGIN_ERROR_MESSAGE.kind);
+    // Exactly one worker-message send, and its one-shot guard runs first:
+    // a Plugin's own self.postMessage chatter never reaches the host window.
     expect(script).toContain('kind: "worker-message"');
+    expect(script.match(/kind: "worker-message"/g)).toHaveLength(1);
+    const readyGuard = script.indexOf("if (readyForwarded) return;");
+    const readySend = script.indexOf('kind: "worker-message"');
+    expect(readyGuard).toBeGreaterThan(-1);
+    expect(readyGuard).toBeLessThan(readySend);
+    expect(script).toContain("readyForwarded = true;");
+    expect(script).toContain("if (errorForwarded) return;");
+    expect(script).toContain("errorForwarded = true;");
   });
 });
 

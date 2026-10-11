@@ -80,7 +80,11 @@ export {
   savePluginApproval,
   serializePluginApprovals,
 } from "@/features/plugins/approvals";
-export { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
+export {
+  PluginDirectoryHashError,
+  hashPluginDirectory,
+  pluginFileDigests,
+} from "@/features/plugins/directory-hash";
 export { planPluginModules, rewritePluginImports } from "@/features/plugins/modules";
 export { MANIFEST_FILE, STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
 export { startApprovedPlugins } from "@/features/plugins/launch";

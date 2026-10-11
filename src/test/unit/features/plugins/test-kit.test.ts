@@ -9,10 +9,12 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { PLUGIN_READY_MESSAGE } from "@/plugin-sdk/protocol";
 import { createPluginClient } from "@/plugin-sdk";
+import { readFolderFiles } from "@/test/support/plugin-fixtures";
 
 const FIXTURE_DIR = resolve(process.cwd(), "e2e/fixtures/plugins/tracer");
 const LEAK_URL = "https://tracer.invalid/leak";
@@ -56,7 +58,10 @@ describe("createTestHost()", () => {
       await expect(host.broker.request("health.check", {})).resolves.toBe("pong");
       await vi.waitFor(() => {
         expect(host.notifications).toEqual([
-          { variant: "info", message: "tracer ready; direct fetch: refused" },
+          {
+            variant: "info",
+            message: "tracer ready; direct fetch: refused (TypeError: Failed to fetch)",
+          },
         ]);
       });
       expect(fetchImpl).toHaveBeenCalledWith(LEAK_URL);
@@ -120,5 +125,12 @@ describe("the tracer fixture and the protocol", () => {
   it("signals readiness with the protocol's ready kind", () => {
     const source = readFileSync(join(FIXTURE_DIR, "index.js"), "utf8");
     expect(source).toContain(PLUGIN_READY_MESSAGE.kind);
+  });
+
+  it("matches the committed pin the E2E seed writes into the approval record", async () => {
+    const expected = JSON.parse(
+      readFileSync(resolve(FIXTURE_DIR, "../tracer.expected.json"), "utf8")
+    ) as { hash: string };
+    await expect(hashPluginDirectory(readFolderFiles(FIXTURE_DIR))).resolves.toBe(expected.hash);
   });
 });
