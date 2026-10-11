@@ -7,6 +7,7 @@
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { delayIdleWork } from "../support/idle";
 import { SEED_BOOK, SEED_CHAPTERS, SEED_NOTES } from "../support/seed/names";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
@@ -58,17 +59,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
     // The lifecycle installs in idle time after the first render; delaying that
     // idle callback holds the page's loading copy deterministically so both
     // shots catch it. Once it releases, the page settles on the Plugin's title.
-    await page.addInitScript(() => {
-      const original = window.requestIdleCallback?.bind(window);
-      if (!original) return;
-      // Delaying the install idle callback five seconds keeps the page's
-      // loading copy up long enough for both shots; it is not cancelled here.
-      window.requestIdleCallback = ((callback: IdleRequestCallback, options?: IdleRequestOptions) =>
-        window.setTimeout(
-          () => original(callback, options),
-          5_000
-        )) as typeof window.requestIdleCallback;
-    });
+    await delayIdleWork(page, 5_000);
 
     await page.goto("/plugin/tracer/report");
     await expect(page.getByRole("heading", { name: /Loading Plugin/ })).toBeVisible({

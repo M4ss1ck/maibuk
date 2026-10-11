@@ -7,6 +7,22 @@
 import type { Page } from "@playwright/test";
 
 /**
+ * Delays every idle callback by `ms` milliseconds for the rest of the page's
+ * life: the lifecycle install happens in one idle callback after the first
+ * render, so a test that must hold the app in its pre-scan copy (the Plugin
+ * page's loading state) parks it deterministically. Setup-only, like the
+ * storage helpers: page script, never an assertion surface.
+ */
+export async function delayIdleWork(page: Page, ms: number): Promise<void> {
+  await page.addInitScript((ms) => {
+    const original = window.requestIdleCallback?.bind(window);
+    if (!original) return;
+    window.requestIdleCallback = (callback: IdleRequestCallback, options?: IdleRequestOptions) =>
+      window.setTimeout(() => original(callback, options), ms);
+  }, ms);
+}
+
+/**
  * Waits until idle work scheduled before this call has certainly run: queues
  * one requestIdleCallback (callbacks run in registration order, so an earlier
  * one is done), then waits one short settle for the work it started. Falls
