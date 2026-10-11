@@ -57,6 +57,54 @@ async function advance(ms: number): Promise<void> {
   await flushTasks();
 }
 
+/**
+ * A pass ceiling well above any real start (the pinned-hash digests, the broker
+ * round trips, and one idle callback per persistent Plugin all land in a
+ * handful of passes). If the ceiling is reached the helper throws a clear error
+ * instead of letting the test run into the suite timeout.
+ */
+const MAX_ADVANCE_PASSES = 1_000;
+
+/**
+ * Advances until `condition` holds. A fixed pass count is not enough for work
+ * the fake timers do not control: Web Crypto hashing inside `startPlugin`
+ * settles on the real event loop, and a start that finishes late schedules its
+ * next fake `setTimeout(0)` idle callback, which then needs one more pass.
+ */
+async function advanceUntil(condition: () => boolean, what: string): Promise<void> {
+  for (let pass = 0; pass < MAX_ADVANCE_PASSES && !condition(); pass += 1) {
+    await advance(0);
+  }
+  if (!condition()) {
+    throw new Error(`${what} was not reached within ${MAX_ADVANCE_PASSES} timer passes`);
+  }
+}
+
+/**
+ * Advances until `work` settles, then rethrows its rejection. The same reason
+ * as `advanceUntil`: real async work can finish after any fixed number of
+ * passes, so the wait must be driven by the promise itself.
+ */
+async function advanceUntilSettled(work: Promise<unknown>, what: string): Promise<void> {
+  const outcome: { settled: boolean; error?: unknown } = { settled: false };
+  void work.then(
+    () => {
+      outcome.settled = true;
+    },
+    (error: unknown) => {
+      outcome.settled = true;
+      outcome.error = error;
+    }
+  );
+  for (let pass = 0; pass < MAX_ADVANCE_PASSES && !outcome.settled; pass += 1) {
+    await advance(0);
+  }
+  if (!outcome.settled) {
+    throw new Error(`${what} did not settle within ${MAX_ADVANCE_PASSES} timer passes`);
+  }
+  if (outcome.error !== undefined) throw outcome.error;
+}
+
 function makePlugin(id: string, overrides: Partial<PluginManifest> = {}): PluginFolder {
   return pluginFolder({}, { id, name: id, ...overrides });
 }
@@ -169,12 +217,12 @@ type Harness = Awaited<ReturnType<typeof createHarness>>;
 
 /**
  * Launches and lets every persistent start run. A persistent start waits for
- * an idle callback, so it needs a timer pass before `launch()` can resolve.
+ * an idle callback, so the wait is driven until `launch()` resolves rather than
+ * a fixed number of timer passes: a start that finishes late schedules the next
+ * Plugin's idle callback, and a pass short of it would hang.
  */
 async function launchAll(h: Harness): Promise<void> {
-  const launching = h.lifecycle.launch();
-  await advance(0);
-  await launching;
+  await advanceUntilSettled(h.lifecycle.launch(), "lifecycle.launch()");
   await advance(0);
 }
 
@@ -208,16 +256,16 @@ describe("Plugin lifecycle: launch", () => {
     });
 
     const launching = h.lifecycle.launch();
-    await advance(0);
+    await advanceUntil(() => h.framesFor("alpha").length === 1, "alpha's frame");
     expect(h.framesFor("alpha")).toHaveLength(1);
     expect(h.framesFor("beta")).toHaveLength(0);
 
     h.framesFor("alpha")[0].signalReady();
-    await advance(0);
+    await advanceUntil(() => h.framesFor("beta").length === 1, "beta's frame");
     expect(h.framesFor("beta")).toHaveLength(1);
 
     h.framesFor("beta")[0].signalReady();
-    await launching;
+    await advanceUntilSettled(launching, "lifecycle.launch()");
     await advance(0);
 
     expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
@@ -240,9 +288,8 @@ describe("Plugin lifecycle: launch", () => {
     expect(h.frameCount()).toBe(0);
 
     settleLaunch();
+    await advanceUntilSettled(launching, "lifecycle.launch()");
     await advance(0);
-    await advance(0);
-    await launching;
     expect(h.framesFor("alpha")).toHaveLength(1);
   });
 });
@@ -284,7 +331,10 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
     expect(h.frameCount()).toBe(0);
 
     h.lifecycle.surfaceReached("warm-page", "page:report");
-    await advance(0);
+    await advanceUntil(
+      () => h.lifecycle.state("warm-page")?.status === "ready",
+      "warm-page ready"
+    );
 
     expect(h.framesFor("warm-page")).toHaveLength(1);
     expect(h.lifecycle.state("warm-page")).toEqual({ status: "ready", startReason: "warmStart" });
@@ -302,7 +352,10 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
     h.lifecycle.surfaceReached("warm-page", "page:report");
 
     await h.lifecycle.launch();
-    await advance(0);
+    await advanceUntil(
+      () => h.lifecycle.state("warm-page")?.status === "ready",
+      "warm-page ready"
+    );
 
     expect(h.framesFor("warm-page")).toHaveLength(1);
     expect(h.lifecycle.state("warm-page")).toEqual({ status: "ready", startReason: "warmStart" });
@@ -314,7 +367,10 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
     });
     await h.lifecycle.launch();
     h.lifecycle.surfaceReached("warm-page", "page:report");
-    await advance(0);
+    await advanceUntil(
+      () => h.lifecycle.state("warm-page")?.status === "ready",
+      "warm-page ready"
+    );
 
     h.lifecycle.surfaceLeft("warm-page", "page:report");
     await advance(IDLE_STOP_MS - 1_000);
@@ -335,7 +391,10 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
     });
     await h.lifecycle.launch();
     h.lifecycle.surfaceReached("warm-page", "page:report");
-    await advance(0);
+    await advanceUntil(
+      () => h.lifecycle.state("warm-page")?.status === "ready",
+      "warm-page ready"
+    );
     const frame = h.framesFor("warm-page")[0];
     h.lifecycle.surfaceLeft("warm-page", "page:report");
 
@@ -354,7 +413,10 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
     });
     await h.lifecycle.launch();
     h.lifecycle.surfaceReached("warm-page", "page:report");
-    await advance(0);
+    await advanceUntil(
+      () => h.lifecycle.state("warm-page")?.status === "ready",
+      "warm-page ready"
+    );
     h.framesFor("warm-page")[0].signalError("boom");
     await advance(0);
     expect(h.lifecycle.state("warm-page")).toEqual({
@@ -492,7 +554,10 @@ describe("Plugin lifecycle: stop reasons", () => {
     const h = await createHarness({ approved: [makePlugin("slow")], deferReady: true });
     render(<ToastViewport />);
     const launching = h.lifecycle.launch();
-    await advance(0);
+    await advanceUntil(
+      () => h.lifecycle.state("slow")?.status === "starting",
+      'the "slow" Plugin starting'
+    );
     expect(h.lifecycle.state("slow")).toEqual({ status: "starting", startReason: "launch" });
 
     await advance(STARTUP_TIMEOUT_MS);
@@ -505,7 +570,7 @@ describe("Plugin lifecycle: stop reasons", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "slow took too long to start and was stopped."
     );
-    await launching;
+    await advanceUntilSettled(launching, "lifecycle.launch()");
   });
 });
 
@@ -675,7 +740,10 @@ describe("Plugin lifecycle: dataVersion gate", () => {
     render(<ToastViewport />);
 
     const launching = h.lifecycle.launch();
-    await advance(0);
+    await advanceUntil(
+      () => h.framesFor("alpha")[0]?.requests.includes("migrateData") ?? false,
+      "alpha's migrateData request"
+    );
     expect(h.lifecycle.state("alpha")).toEqual({ status: "starting", startReason: "launch" });
     expect(h.framesFor("alpha")[0].requests).toContain("migrateData");
 
@@ -691,7 +759,7 @@ describe("Plugin lifecycle: dataVersion gate", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "alpha took too long to start and was stopped."
     );
-    await launching;
+    await advanceUntilSettled(launching, "lifecycle.launch()");
   });
 
   it("stops with crashed when the Worker errors while migrateData runs", async () => {
@@ -707,7 +775,10 @@ describe("Plugin lifecycle: dataVersion gate", () => {
     });
 
     const launching = h.lifecycle.launch();
-    await advance(0);
+    await advanceUntil(
+      () => h.framesFor("alpha")[0]?.requests.includes("migrateData") ?? false,
+      "alpha's migrateData request"
+    );
     expect(h.framesFor("alpha")[0].requests).toContain("migrateData");
 
     h.framesFor("alpha")[0].signalError("boom");
@@ -720,7 +791,7 @@ describe("Plugin lifecycle: dataVersion gate", () => {
     });
     expect(h.dataVersions.get("alpha")).toBe(1);
     expect(h.framesFor("alpha")[0].stopped).toBe(true);
-    await launching;
+    await advanceUntilSettled(launching, "lifecycle.launch()");
   });
 
   it("refuses without a frame when the stored dataVersion cannot be read", async () => {
