@@ -2098,6 +2098,22 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-contributions",
+    area: "plugins",
+    workflow:
+      "A tracer Plugin's contributions become ordinary Maibuk surfaces: the sidebar entry opens its page (announced by its title), and a global Command the Plugin declares runs from its Shortcut and reaches the Plugin's Worker, whose toast proves the round trip; asserts: the sidebar entry, the page heading, the command toast; persists: no",
+    edges: [
+      "The sidebar entry opens the Plugin page and announces its title",
+      "A global Plugin Command runs from its Shortcut and reaches the Plugin",
+    ],
+    terms: ["Plugin"],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["no-webkit"],
+    status: "accepted",
+  },
+  {
     id: "settings-outline",
     area: "settings",
     workflow:

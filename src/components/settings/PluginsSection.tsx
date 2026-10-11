@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
+import { PluginSurface } from "@/components/plugins/PluginSurface";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 import {
   currentSettingsPlatform,
@@ -67,6 +68,7 @@ export function PluginsSection() {
                 </button>
                 {open && (
                   <div id={`plugin-accordion-${owner.pluginId}`}>
+                    <PluginSurface pluginId={owner.pluginId} surface="settings" />
                     {rows.map((row) => (
                       <SettingRow key={row.id} id={row.id} className={SETTINGS_ROW_CLASS}>
                         {/* Placeholder field until the remote-UI host renders the

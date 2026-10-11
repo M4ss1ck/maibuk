@@ -1671,6 +1671,10 @@ export const ROUTE_CONTEXTS: Readonly<Record<string, readonly ShortcutContext[]>
   "/ephemeral": ["ephemeral", "editor", "image", "footnoteItem", "commandPalette"],
   "/metrics": ["commandPalette"],
   "/settings": ["commandPalette"],
+  // A Plugin page is its own runtime-derived Context (`plugin.<id>.<page>`),
+  // so only the palette is static here; `contextsOverlap` compares the
+  // derived Contexts by name.
+  "/plugin/:pluginId/:pageId": ["commandPalette"],
   "/embed": [],
   "/book/:bookId": [
     "bookEditor",

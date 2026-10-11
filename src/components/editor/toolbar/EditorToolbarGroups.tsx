@@ -52,6 +52,7 @@ import { SceneBreakMenu } from "@/components/editor/SceneBreakMenu";
 import { TableMenu } from "@/components/editor/TableMenu";
 import { TextCaseMenu } from "@/components/editor/TextCaseMenu";
 import { ToolbarButton } from "@/components/editor/ToolbarButton";
+import { PluginToolbarButton } from "@/components/plugins/PluginToolbarButton";
 import { adjustPosition } from "@/components/editor/editor-context-menu-utils";
 import { Tooltip } from "@/components/ui";
 import { getEditorToolbarState } from "@/components/editor/toolbar/editor-toolbar-state";
@@ -173,7 +174,9 @@ export function EditorToolbarGroups({
   const renderGroup = (id: ToolbarEntryId): ReactNode => {
     // Plugin buttons render nothing until the wiring slice (#437) binds them
     // to their Commands; the config keeps their order meanwhile.
-    if (isPluginToolbarButtonId(id)) return null;
+    if (isPluginToolbarButtonId(id)) {
+      return <PluginToolbarButton id={id} iconSize={iconSize} />;
+    }
     switch (id) {
       case "history":
         return (

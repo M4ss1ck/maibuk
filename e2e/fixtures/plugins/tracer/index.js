@@ -27,6 +27,24 @@ export function setup(port, options = {}) {
         void report(port, fetchImpl, nextId++);
         return;
       }
+      if (message.method === "command.run") {
+        // The host ran one of this Plugin's Commands. Answer, then surface the
+        // round trip as a toast so the spec can see the target travel intact.
+        const params = message.params || {};
+        const target = params.target ? ` on ${params.target.kind}` : "";
+        port.postMessage(
+          JSON.stringify({ kind: "reply", id: message.id, ok: true, result: null })
+        );
+        port.postMessage(
+          JSON.stringify({
+            kind: "call",
+            id: nextId++,
+            method: "notifications.show",
+            params: { variant: "info", message: `tracer ran ${params.id}${target}` },
+          })
+        );
+        return;
+      }
       port.postMessage(
         JSON.stringify({
           kind: "reply",

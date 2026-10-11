@@ -2097,6 +2097,11 @@
       "remoteUiLimit": "{{name}} sent too much interface data and was stopped.",
       "outOfMemory": "{{name}} used too much memory and was stopped.",
       "crashed": "{{name}} stopped unexpectedly."
+    },
+    "page": {
+      "notFoundTitle": "Plugin page",
+      "notFoundDescription": "This page's Plugin is not installed.",
+      "placeholderDescription": "{{name}} is installed. Its page controls arrive with the Remote UI host."
     }
   }
 }

@@ -19,6 +19,7 @@
 import { hasLaunchAutoSyncSettled, onLaunchAutoSyncSettled } from "@/features/sync/auto-sync";
 import { hasLaunchBackupSettled, onLaunchBackupSettled } from "@/features/backup/lifecycle";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
+import { registerPluginContributions } from "@/features/plugins/contributions";
 import { createPluginHandlers } from "@/features/plugins/handlers";
 import { scanApprovedPlugins } from "@/features/plugins/launch";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
@@ -183,6 +184,8 @@ interface Entry {
   installed: InstalledPlugin;
   state: PluginLifecycleState;
   runtime: PluginRuntime | null;
+  /** Removes this Plugin's contributions from the shared registries (#437). */
+  unregisterContributions: (() => void) | null;
   /** Reachable surfaces, by whatever id the wire caller uses (#437). */
   surfaces: Set<string>;
   heartbeat: ReturnType<typeof setInterval> | null;
@@ -545,6 +548,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       installed,
       state: { status: "stopped", reason: null, refusal: null },
       runtime: null,
+      unregisterContributions: null,
       surfaces: surfacesOf(installed.pluginId),
       heartbeat: null,
       beatInFlight: false,
@@ -573,7 +577,17 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         for (const { pluginId, refusal } of scan.refusals) {
           console.warn(`Plugin ${pluginId} did not load: ${refusal.code}`, refusal);
         }
-        for (const plugin of scan.plugins) entries.set(plugin.pluginId, createEntry(plugin));
+        for (const plugin of scan.plugins) {
+          const entry = createEntry(plugin);
+          // An approved Plugin is enabled (until the install flow lands, #442):
+          // its Commands, pages, Settings rows, toolbar buttons, and Item Menu
+          // entries are discoverable now, before any Worker exists (#437).
+          entry.unregisterContributions = registerPluginContributions({
+            manifest: plugin.manifest,
+            folder: plugin.folder,
+          });
+          entries.set(plugin.pluginId, entry);
+        }
         // A surface mounted while the scan ran warm-starts its Plugin now.
         for (const plugin of scan.plugins) {
           if (plugin.manifest.lifecycle !== "on-demand") continue;
@@ -676,6 +690,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         const runtime = entry.runtime;
         entry.runtime = null;
         runtime?.stop();
+        entry.unregisterContributions?.();
+        entry.unregisterContributions = null;
         entry.state = { status: "stopped", reason: "requested", refusal: null };
       }
       entries.clear();
@@ -686,6 +702,19 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
 }
 
 let installedLifecycle: PluginLifecycle | null = null;
+const lifecycleInstalledListeners = new Set<() => void>();
+
+/**
+ * Runs when the app's one lifecycle is installed. Surfaces that mounted before
+ * the idle install (the sidebar, mostly) re-announce themselves then, so an
+ * on-demand Plugin still warm-starts from them (#437).
+ */
+export function onPluginLifecycleInstalled(listener: () => void): () => void {
+  lifecycleInstalledListeners.add(listener);
+  return () => {
+    lifecycleInstalledListeners.delete(listener);
+  };
+}
 
 /**
  * The app's one lifecycle. Called from `main.tsx` in idle time after the first
@@ -696,6 +725,7 @@ export function installPluginLifecycle(options: PluginLifecycleOptions = {}): Pl
   if (installedLifecycle) return installedLifecycle;
   const lifecycle = createPluginLifecycle(options);
   installedLifecycle = lifecycle;
+  for (const listener of [...lifecycleInstalledListeners]) listener();
   void lifecycle.launch();
   return lifecycle;
 }

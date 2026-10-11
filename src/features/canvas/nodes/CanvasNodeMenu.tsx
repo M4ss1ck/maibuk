@@ -5,6 +5,7 @@ import { ItemActionsPopover } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
 import { useItemCommands } from "@/hooks/useItemCommands";
+import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
 import { useCanvasStore } from "@/features/canvas/store";
 
 /**
@@ -18,6 +19,7 @@ export function useCanvasNodeMenu(nodeId: string, { isDisabled }: { isDisabled: 
   const selectNode = useCanvasStore((state) => state.selectNode);
   const removeNode = useCanvasStore((state) => state.removeNode);
   const openConnectPicker = useCanvasStore((state) => state.openConnectPicker);
+  const buildPluginActions = usePluginItemMenuActions("canvasNode");
   const { itemProps } = useItemContextMenu({
     isDisabled,
     onOpen: () => {
@@ -41,6 +43,7 @@ export function useCanvasNodeMenu(nodeId: string, { isDisabled }: { isDisabled: 
       commandId: "canvasNode.delete",
       onAction: () => removeNode(nodeId),
     },
+    ...buildPluginActions({ kind: "canvasNode", id: nodeId }),
   ];
   useItemCommands(anchorRef, actions, { enabled: !isDisabled });
 
