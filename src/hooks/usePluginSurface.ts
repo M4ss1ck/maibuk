@@ -31,6 +31,21 @@ export function usePluginLifecycleRevision(lifecycle: PluginLifecycle | null): n
 }
 
 /**
+ * True once the lifecycle's launch scan has settled (Plugins registered,
+ * refused, or none at all): the contributions registries a surface reads are
+ * complete then. False earlier and while there is no lifecycle yet.
+ */
+export function usePluginLaunchScanned(lifecycle: PluginLifecycle | null): boolean {
+  const [scanned, setScanned] = useState(() => lifecycle?.launchScanned() ?? false);
+  useEffect(() => {
+    if (!lifecycle) return;
+    setScanned(lifecycle.launchScanned());
+    return lifecycle.onLaunchScanned(() => setScanned(true));
+  }, [lifecycle]);
+  return scanned;
+}
+
+/**
  * Declares that a surface is reachable while mounted: an on-demand Plugin
  * warm-starts from it and its idle window resets. Safe when there is no
  * lifecycle yet or no such Plugin; the signal is delivered once it installs.

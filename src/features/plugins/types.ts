@@ -290,6 +290,10 @@ export interface PluginLifecycle {
   launch(): Promise<void>;
   /** Every approved Plugin the scan found, in scan order. */
   installed(): readonly InstalledPlugin[];
+  /** True once launch has finished its one scan (or gave up trying): its registries hold every approved Plugin's contributions, so a page stops showing loading then. */
+  launchScanned(): boolean;
+  /** Runs when the launch scan settles, whether it registered Plugins or nothing. Returns unsubscribe. */
+  onLaunchScanned(listener: () => void): () => void;
   /** A surface became reachable: an on-demand Plugin warm-starts. */
   surfaceReached(pluginId: string, surface: string): void;
   /** A surface is gone; the idle window starts when the last one goes. */

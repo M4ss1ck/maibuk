@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
@@ -29,6 +29,8 @@ const stubLifecycle = {
   installed: () => [],
   surfaceReached: () => undefined,
   surfaceLeft: () => undefined,
+  launchScanned: () => true,
+  onLaunchScanned: () => () => undefined,
 } as unknown as import("@/features/plugins/types").PluginLifecycle;
 
 function registerSample(): void {
@@ -91,5 +93,3 @@ describe("Plugin sidebar entry via keyboard", () => {
     });
   });
 });
-
-import { within } from "@testing-library/react";

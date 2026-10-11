@@ -221,6 +221,16 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   const listeners = new Set<(change: PluginLifecycleChange) => void>();
   let disposed = false;
   let launched = false;
+  // The launch scan's own signal: surfaces that read the contributions
+  // registries (a Plugin page) stay in loading copy until it settles.
+  let scanned = false;
+  const scanListeners = new Set<() => void>();
+
+  function markScanned(): void {
+    if (scanned) return;
+    scanned = true;
+    for (const listener of [...scanListeners]) listener();
+  }
 
   // Reachable surfaces are tracked per Plugin id even before the launch scan
   // registers it, so a surface mounted during launch still warm-starts it.
@@ -598,6 +608,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
           }
           entries.set(plugin.pluginId, entry);
         }
+        // The scan and every contribution it registers are in; surfaces may
+        // leave their loading copy even while the persistent starts are
+        // still queued.
+        markScanned();
         // A surface mounted while the scan ran warm-starts its Plugin now.
         for (const plugin of scan.plugins) {
           if (plugin.manifest.lifecycle !== "on-demand") continue;
@@ -621,11 +635,23 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         }
       } catch (error) {
         console.error("Plugin launch failed", error);
+        markScanned();
       }
     },
 
     installed() {
       return [...entries.values()].map((entry) => entry.installed);
+    },
+
+    launchScanned() {
+      return scanned;
+    },
+
+    onLaunchScanned(listener: () => void): () => void {
+      scanListeners.add(listener);
+      return () => {
+        scanListeners.delete(listener);
+      };
     },
 
     surfaceReached(pluginId: string, surface: string): void {
@@ -694,6 +720,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      // A lifecycle stopped mid-launch must not leave loading surfaces behind.
+      markScanned();
+      scanListeners.clear();
       for (const entry of entries.values()) {
         entry.generation += 1;
         clearTimers(entry);

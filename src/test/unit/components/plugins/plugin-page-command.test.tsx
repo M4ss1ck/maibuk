@@ -41,6 +41,8 @@ const stubLifecycle = {
     pluginId === "sample" && lifecycleStatus === "ready"
       ? ({ broker: { request: brokerRequest }, stop: vi.fn() } as unknown as PluginRuntime)
       : null,
+  launchScanned: () => true,
+  onLaunchScanned: () => () => undefined,
 } as unknown as PluginLifecycle;
 
 const cleanups: Array<() => void> = [];

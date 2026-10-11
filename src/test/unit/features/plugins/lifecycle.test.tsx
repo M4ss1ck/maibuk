@@ -293,6 +293,50 @@ describe("Plugin lifecycle: launch", () => {
     expect(h.framesFor("alpha")).toHaveLength(1);
   });
 
+  it("marks the launch scan settled and notifies once the registrations ran", async () => {
+    let settleLaunch!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      settleLaunch = resolve;
+    });
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      whenLaunchSettled: () => gate,
+    });
+    let notified = 0;
+    h.lifecycle.onLaunchScanned(() => {
+      notified += 1;
+    });
+
+    const launching = h.lifecycle.launch();
+    await advance(0);
+    expect(h.lifecycle.launchScanned()).toBe(false);
+    expect(h.frameCount()).toBe(0);
+    expect(notified).toBe(0);
+
+    settleLaunch();
+    await advanceUntil(() => h.lifecycle.launchScanned(), "the launch scan settling");
+    expect(notified).toBe(1);
+    expect(h.lifecycle.installed().map((plugin) => plugin.pluginId)).toEqual(["alpha"]);
+    await advanceUntilSettled(launching, "lifecycle.launch()");
+  });
+
+  it("marks the scan settled when the launch fails, so loading surfaces end", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    let notified = 0;
+    h.lifecycle.onLaunchScanned(() => {
+      notified += 1;
+    });
+    (h.directory.listFolders as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("directory unreadable")
+    );
+
+    await advanceUntilSettled(h.lifecycle.launch(), "the failing launch");
+    await advance(0);
+
+    expect(h.lifecycle.launchScanned()).toBe(true);
+    expect(notified).toBe(1);
+  });
+
   it("skips a Plugin whose contributions throw and still registers the rest", async () => {
     const contributions = await import("@/features/plugins/contributions");
     const original = contributions.registerPluginContributions;
