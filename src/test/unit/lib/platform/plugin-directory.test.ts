@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 describe("getPluginDirectory()", () => {
-  it("reads the web Plugin Directory from OPFS without any Rust command", async () => {
+  it("reports an empty web Plugin Directory without any Rust command", async () => {
     const { getPluginDirectory } = await loadPlatform("web");
     const directory = await getPluginDirectory();
 

@@ -12,7 +12,7 @@ use std::path::{Component, Path, PathBuf};
 
 use tauri::{AppHandle, Manager, Runtime};
 
-use crate::plugins::{archive, hash};
+use crate::plugins::{archive, hash, PluginFile};
 use crate::trusted;
 
 pub const PLUGIN_APPROVAL_FILE: &str = "plugin-directory.json";
@@ -57,7 +57,7 @@ impl std::fmt::Display for ReadError {
 pub struct ReadFolder {
     pub name: String,
     pub hash: Option<String>,
-    pub files: Vec<(String, Vec<u8>)>,
+    pub files: Vec<PluginFile>,
 }
 
 /// A Plugin Directory must be an absolute path to a folder below a filesystem
@@ -228,22 +228,27 @@ fn relative(root: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
-/// Every regular file under `root`, as `(POSIX-relative path, bytes)` sorted by
-/// the path's UTF-8 bytes. Refuses symlinks and non-regular files, skips OS
-/// litter, and caps the folder's size like an archive would.
-pub fn read_files(root: &Path) -> Result<Vec<(String, Vec<u8>)>, ReadError> {
-    let limits = archive::Limits::default();
+/// Every regular file under `root`, as `PluginFile`s sorted by the path's
+/// UTF-8 bytes. Refuses symlinks and non-regular files, skips OS litter, and
+/// caps the folder's size like an archive would.
+pub fn read_files(root: &Path) -> Result<Vec<PluginFile>, ReadError> {
+    read_files_with(root, &archive::Limits::default())
+}
+
+/// `read_files` with injectable caps, so the refusal paths are testable
+/// without writing 64 MiB.
+fn read_files_with(root: &Path, limits: &archive::Limits) -> Result<Vec<PluginFile>, ReadError> {
     let mut files = Vec::new();
     let mut total = 0u64;
-    walk(root, root, &mut files, &mut total, &limits)?;
-    files.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    walk(root, root, &mut files, &mut total, limits)?;
+    files.sort_by(|a, b| a.path.as_bytes().cmp(b.path.as_bytes()));
     Ok(files)
 }
 
 fn walk(
     root: &Path,
     directory: &Path,
-    files: &mut Vec<(String, Vec<u8>)>,
+    files: &mut Vec<PluginFile>,
     total: &mut u64,
     limits: &archive::Limits,
 ) -> Result<(), ReadError> {
@@ -279,7 +284,10 @@ fn walk(
         if *total > limits.max_total_bytes {
             return Err(ReadError::FolderTooLarge);
         }
-        files.push((relative(root, &path), bytes));
+        files.push(PluginFile {
+            path: relative(root, &path),
+            bytes,
+        });
     }
     Ok(())
 }
@@ -327,12 +335,12 @@ pub fn read_folder(root: &Path, name: &str) -> Result<Option<ReadFolder>, ReadEr
 pub fn copy_folder(source: &Path, destination: &Path) -> Result<(), ReadError> {
     let files = read_files(source)?;
     std::fs::create_dir_all(destination).map_err(|e| ReadError::Io(e.to_string()))?;
-    for (path, bytes) in files {
-        let target = destination.join(path);
+    for file in files {
+        let target = destination.join(&file.path);
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent).map_err(|e| ReadError::Io(e.to_string()))?;
         }
-        std::fs::write(&target, bytes).map_err(|e| ReadError::Io(e.to_string()))?;
+        std::fs::write(&target, file.bytes).map_err(|e| ReadError::Io(e.to_string()))?;
     }
     Ok(())
 }
@@ -438,7 +446,7 @@ mod tests {
             folder
                 .files
                 .iter()
-                .map(|(path, _)| path.as_str())
+                .map(|file| file.path.as_str())
                 .collect::<Vec<_>>(),
             vec!["lib/util.js", "manifest.json"]
         );
@@ -511,6 +519,57 @@ mod tests {
 
         assert_eq!(folder.hash, None);
         assert_eq!(folder.files.len(), 2);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_a_file_over_the_reader_size_limit() {
+        let dir = temp_dir("read-size");
+        plugin_folder(
+            &dir,
+            "tracer",
+            &[("manifest.json", "{}"), ("asset.bin", "12345")],
+        );
+        let limits = archive::Limits {
+            max_entries: 8,
+            max_file_bytes: 4,
+            max_total_bytes: 64,
+        };
+
+        let error = read_files_with(&dir.join("tracer"), &limits).unwrap_err();
+
+        assert!(matches!(error, ReadError::FileTooLarge(_)), "{error:?}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_a_folder_over_the_reader_total_size_limit() {
+        let dir = temp_dir("read-total");
+        plugin_folder(&dir, "tracer", &[("a.bin", "1234"), ("b.bin", "5678")]);
+        let limits = archive::Limits {
+            max_entries: 8,
+            max_file_bytes: 8,
+            max_total_bytes: 4,
+        };
+
+        let error = read_files_with(&dir.join("tracer"), &limits).unwrap_err();
+
+        assert_eq!(error, ReadError::FolderTooLarge);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_a_non_regular_file() {
+        let dir = temp_dir("read-socket");
+        plugin_folder(&dir, "tracer", &[("manifest.json", "{}")]);
+        // A Unix socket is neither a regular file nor a directory; reading
+        // through it would block or serve bytes the hash never covered.
+        let _socket = std::os::unix::net::UnixListener::bind(dir.join("tracer/pipe")).unwrap();
+
+        let error = read_folder(&dir, "tracer").unwrap_err();
+
+        assert!(matches!(error, ReadError::NotRegular(_)), "{error:?}");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -614,8 +673,9 @@ mod tests {
     /// outside every folder the fs capability grants the webview, so even a
     /// differently cased path matches no allow pattern (the Windows hazard
     /// ADR 0020 records; this fails if the default moves under an app-specific
-    /// folder).
-    #[cfg(target_os = "linux")]
+    /// folder). Runs on every desktop OS, so a case-insensitive filesystem
+    /// exercises the case-variant path for real.
+    #[cfg(desktop)]
     #[test]
     fn the_webview_scope_cannot_read_or_write_the_plugin_directory() {
         use tauri_plugin_fs::FsExt;

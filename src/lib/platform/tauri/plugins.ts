@@ -4,8 +4,8 @@
  * bytes it hashed (ADR 0020): every command returns the files Rust read, so
  * nothing can change between the hash check and the load. A folder Rust
  * refuses (a symlink, a path that leaves the directory, a newline filename)
- * reads as `null`, like a folder that is not there; the runtime then reports
- * the refusal it can see.
+ * reads as `null`, like a folder that is not there, and the Plugin stays off;
+ * the install flow (#442) owns surfacing the reason.
  *
  * The webview has no fs access to the Plugin Directory, so these commands are
  * the only way in. A failed invoke reports an empty directory, never an error:

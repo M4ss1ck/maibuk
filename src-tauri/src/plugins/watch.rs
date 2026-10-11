@@ -40,7 +40,7 @@ impl PluginWatcher {
             let mut changed: Vec<String> = Vec::new();
             for event in events {
                 for path in &event.paths {
-                    if let Some(id) = plugin_id_of(&watched, path) {
+                    if let Some(id) = plugin_folder_of(&watched, path) {
                         if !changed.contains(&id) {
                             changed.push(id);
                         }
@@ -70,7 +70,7 @@ impl PluginWatcher {
 /// The Plugin folder a changed path belongs to: its first component under
 /// `root`, when that component is a folder (a loose file at the root is not a
 /// Plugin).
-fn plugin_id_of(root: &Path, path: &Path) -> Option<String> {
+fn plugin_folder_of(root: &Path, path: &Path) -> Option<String> {
     let relative = path.strip_prefix(root).ok()?;
     let mut components = relative.components();
     let Some(Component::Normal(name)) = components.next() else {
@@ -104,16 +104,16 @@ mod tests {
         std::fs::write(root.join("loose.txt"), "x").unwrap();
 
         assert_eq!(
-            plugin_id_of(&root, &root.join("tracer/index.js")),
+            plugin_folder_of(&root, &root.join("tracer/index.js")),
             Some("tracer".to_string())
         );
         assert_eq!(
-            plugin_id_of(&root, &root.join("tracer")),
+            plugin_folder_of(&root, &root.join("tracer")),
             Some("tracer".to_string())
         );
-        assert_eq!(plugin_id_of(&root, &root.join("loose.txt")), None);
-        assert_eq!(plugin_id_of(&root, Path::new("/elsewhere/file")), None);
-        assert_eq!(plugin_id_of(&root, &root), None);
+        assert_eq!(plugin_folder_of(&root, &root.join("loose.txt")), None);
+        assert_eq!(plugin_folder_of(&root, Path::new("/elsewhere/file")), None);
+        assert_eq!(plugin_folder_of(&root, &root), None);
         std::fs::remove_dir_all(&root).unwrap();
     }
 

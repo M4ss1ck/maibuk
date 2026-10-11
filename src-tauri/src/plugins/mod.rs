@@ -17,6 +17,13 @@ use base64::Engine;
 use serde::Serialize;
 use tauri::{AppHandle, Runtime};
 
+/// One file in a Plugin folder: its POSIX-relative path and its exact bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginFile {
+    pub path: String,
+    pub bytes: Vec<u8>,
+}
+
 /// One Plugin folder as the webview receives it: every file's bytes, base64,
 /// and the `h1:` hash Rust computed over exactly those bytes (`null` when the
 /// Go scheme cannot represent the folder, which the runtime refuses).
@@ -66,17 +73,19 @@ fn finish_install(id: &str, staging: &Path, root: &Path) -> Result<InstalledPlug
     })
 }
 
-/// Installs the Plugin an archive carries into `root`: extract to a staging
-/// folder, hash what was written, then replace the installed copy. A refused
-/// archive leaves the installed copy exactly as it was.
-pub fn install_reader<R: Read + Seek>(root: &Path, reader: R) -> Result<InstalledPlugin, String> {
+/// Creates the staging folder, runs `stage`, then hashes what it wrote and
+/// replaces the installed copy. Any failure cleans the staging folder and
+/// leaves the installed copy exactly as it was.
+fn stage_and_finish(
+    root: &Path,
+    stage: impl FnOnce(&Path) -> Result<String, String>,
+) -> Result<InstalledPlugin, String> {
     std::fs::create_dir_all(root).map_err(|e| e.to_string())?;
     let staging = staging_path(root);
     let _ = std::fs::remove_dir_all(&staging);
     let result = (|| {
-        let extracted = archive::extract(reader, &staging, &archive::Limits::default())
-            .map_err(|e| e.to_string())?;
-        finish_install(&extracted.id, &staging, root)
+        let id = stage(&staging)?;
+        finish_install(&id, &staging, root)
     })();
     if result.is_err() {
         let _ = std::fs::remove_dir_all(&staging);
@@ -84,25 +93,27 @@ pub fn install_reader<R: Read + Seek>(root: &Path, reader: R) -> Result<Installe
     result
 }
 
+/// Installs the Plugin an archive carries into `root`: extract to a staging
+/// folder, hash what was written, then replace the installed copy.
+pub fn install_reader<R: Read + Seek>(root: &Path, reader: R) -> Result<InstalledPlugin, String> {
+    stage_and_finish(root, move |staging| {
+        let extracted = archive::extract(reader, staging, &archive::Limits::default())
+            .map_err(|e| e.to_string())?;
+        Ok(extracted.id)
+    })
+}
+
 /// Copies a Plugin folder into `root` (the Rust-side source must be one the
-/// author picked, never a webview-named path): copy to a staging folder, hash
-/// what was written, then replace the installed copy.
+/// author picked, never a webview-named path).
 #[cfg(desktop)]
 pub fn install_folder(source: &Path, root: &Path) -> Result<InstalledPlugin, String> {
     let manifest = std::fs::read_to_string(source.join("manifest.json"))
         .map_err(|e| format!("PLUGIN_FOLDER_MANIFEST: {e}"))?;
     let id = archive::manifest_id(&manifest).map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(root).map_err(|e| e.to_string())?;
-    let staging = staging_path(root);
-    let _ = std::fs::remove_dir_all(&staging);
-    let result = (|| {
-        directory::copy_folder(source, &staging).map_err(|e| e.to_string())?;
-        finish_install(&id, &staging, root)
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_dir_all(&staging);
-    }
-    result
+    stage_and_finish(root, move |staging| {
+        directory::copy_folder(source, staging).map_err(|e| e.to_string())?;
+        Ok(id)
+    })
 }
 
 #[tauri::command]
@@ -124,9 +135,9 @@ pub async fn read_plugin_folder<R: Runtime>(
         files: folder
             .files
             .into_iter()
-            .map(|(path, bytes)| PluginFolderFilePayload {
-                path,
-                bytes: base64::engine::general_purpose::STANDARD.encode(bytes),
+            .map(|file| PluginFolderFilePayload {
+                path: file.path,
+                bytes: base64::engine::general_purpose::STANDARD.encode(file.bytes),
             })
             .collect(),
     }))

@@ -12,6 +12,8 @@
 use base64::Engine;
 use sha2::{Digest, Sha256};
 
+use super::PluginFile;
+
 /// The refusal code the shared `hash-fixture-newline` contract pins.
 pub const NEWLINE_CODE: &str = "filename-newline";
 pub const NEWLINE_MESSAGE: &str = "dirhash: filenames with newlines are not supported";
@@ -46,13 +48,15 @@ fn digest_hex(bytes: &[u8]) -> String {
         .collect()
 }
 
-fn sorted<'a>(files: &'a [(String, Vec<u8>)]) -> Result<Vec<&'a (String, Vec<u8>)>, HashError> {
+fn sorted<'a>(files: &'a [PluginFile]) -> Result<Vec<&'a PluginFile>, HashError> {
     let mut sorted: Vec<_> = files.iter().collect();
     // Byte order over UTF-8, matching Go's `sort.Strings` on paths.
-    sorted.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
-    for (path, _) in &sorted {
-        if path.contains('\n') {
-            return Err(HashError { path: path.clone() });
+    sorted.sort_by(|a, b| a.path.as_bytes().cmp(b.path.as_bytes()));
+    for file in &sorted {
+        if file.path.contains('\n') {
+            return Err(HashError {
+                path: file.path.clone(),
+            });
         }
     }
     Ok(sorted)
@@ -60,15 +64,15 @@ fn sorted<'a>(files: &'a [(String, Vec<u8>)]) -> Result<Vec<&'a (String, Vec<u8>
 
 /// Every file's lowercase hex SHA-256, in path order: the per-file list a
 /// re-review diff shows.
-pub fn file_digests(files: &[(String, Vec<u8>)]) -> Result<Vec<(String, String)>, HashError> {
+pub fn file_digests(files: &[PluginFile]) -> Result<Vec<(String, String)>, HashError> {
     Ok(sorted(files)?
         .into_iter()
-        .map(|(path, bytes)| (path.clone(), digest_hex(bytes)))
+        .map(|file| (file.path.clone(), digest_hex(&file.bytes)))
         .collect())
 }
 
 /// The folder's pinned `h1:` hash.
-pub fn hash1(files: &[(String, Vec<u8>)]) -> Result<String, HashError> {
+pub fn hash1(files: &[PluginFile]) -> Result<String, HashError> {
     let mut summary = String::new();
     for (path, digest) in file_digests(files)? {
         summary.push_str(&format!("{digest}  {path}\n"));
@@ -88,8 +92,8 @@ mod tests {
     /// Every regular file under `dir` as `(POSIX-relative path, bytes)`; the
     /// production walker's behavior is proven in `directory.rs`, and this
     /// reader keeps the fixture tests independent of it.
-    fn read_fixture(dir: &Path) -> Vec<(String, Vec<u8>)> {
-        fn walk(root: &Path, dir: &Path, files: &mut Vec<(String, Vec<u8>)>) {
+    fn read_fixture(dir: &Path) -> Vec<PluginFile> {
+        fn walk(root: &Path, dir: &Path, files: &mut Vec<PluginFile>) {
             for entry in std::fs::read_dir(dir).unwrap() {
                 let entry = entry.unwrap();
                 let path = entry.path();
@@ -101,7 +105,10 @@ mod tests {
                         .unwrap()
                         .to_string_lossy()
                         .replace('\\', "/");
-                    files.push((relative, std::fs::read(&path).unwrap()));
+                    files.push(PluginFile {
+                        path: relative,
+                        bytes: std::fs::read(&path).unwrap(),
+                    });
                 }
             }
         }
@@ -170,11 +177,14 @@ mod tests {
         let files = read_fixture(&fixture_dir("hash-fixture"));
         let changed: Vec<_> = files
             .iter()
-            .map(|(path, bytes)| {
-                if path == "index.js" {
-                    (path.clone(), b"changed".to_vec())
+            .map(|file| {
+                if file.path == "index.js" {
+                    PluginFile {
+                        path: file.path.clone(),
+                        bytes: b"changed".to_vec(),
+                    }
                 } else {
-                    (path.clone(), bytes.clone())
+                    file.clone()
                 }
             })
             .collect();
@@ -185,14 +195,14 @@ mod tests {
     #[test]
     fn refuses_a_path_with_a_newline_as_the_shared_contract_pins() {
         let expected = expected("hash-fixture-newline");
-        let files: Vec<(String, Vec<u8>)> = expected["files"]
+        let files: Vec<PluginFile> = expected["files"]
             .as_array()
             .unwrap()
             .iter()
             .map(|path| {
                 let path = path.as_str().unwrap().to_string();
                 let bytes = format!("contents of {path}").into_bytes();
-                (path, bytes)
+                PluginFile { path, bytes }
             })
             .collect();
 
