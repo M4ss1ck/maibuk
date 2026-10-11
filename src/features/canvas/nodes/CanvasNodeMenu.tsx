@@ -5,7 +5,7 @@ import { ItemActionsPopover } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
 import { useItemCommands } from "@/hooks/useItemCommands";
-import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
+import { usePluginItemMenuActions } from "@/hooks";
 import { useCanvasStore } from "@/features/canvas/store";
 
 /**

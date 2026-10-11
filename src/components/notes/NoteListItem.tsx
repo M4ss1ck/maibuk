@@ -9,6 +9,7 @@ import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
 import { useItemCommands } from "@/hooks/useItemCommands";
+import { usePluginItemMenuActions } from "@/hooks";
 
 export interface NoteMoveTarget {
   bookId: string | null;
@@ -75,6 +76,7 @@ export function NoteListItem({
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(note.title);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const buildPluginActions = usePluginItemMenuActions("note");
   const title = note.title || t("notes.untitled");
   const preview = toPreview(note.content);
 
@@ -135,6 +137,8 @@ export function NoteListItem({
       onAction: () => onDelete(note.id),
     });
   }
+  // The Plugin Item Menu entries for a Note, appended after Maibuk's own (#437).
+  actions.push(...buildPluginActions({ kind: "note", id: note.id }));
   const hasActions = actions.length > 0;
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const { itemProps, setOwnerRef } = useItemContextMenu({
