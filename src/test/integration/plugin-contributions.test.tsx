@@ -157,12 +157,12 @@ describe("a launched Plugin's contributions", () => {
     const { resolveStoredToolbarButtonId, isLiveToolbarEntry } = await import(
       "@/features/settings/toolbar-config"
     );
-    useShortcutSettingsStore.setState({
-      custom: { "plugin.sample.refresh": [["Mod", "Alt", "r"]] },
-      voice: {},
-      singleKeyEnabled: true,
-      version: 2,
-    });
+    useShortcutSettingsStore.setState((state) => ({
+      shortcuts: {
+        ...state.shortcuts,
+        custom: { ...state.shortcuts.custom, "plugin.sample.refresh": [["Mod", "Alt", "r"]] },
+      },
+    }));
 
     const lifecycle = await launchApproved();
     await waitFor(() => expect(lifecycle.state("sample")?.status).toBe("ready"));
@@ -174,14 +174,14 @@ describe("a launched Plugin's contributions", () => {
     // Disabling removes the surfaces but keeps the author's preferences for return.
     expect(isCommandId("plugin.sample.refresh")).toBe(false);
     expect(isLiveToolbarEntry("plugin.sample.reportButton")).toBe(false);
-    expect(useShortcutSettingsStore.getState().custom["plugin.sample.refresh"]).toEqual([
-      ["Mod", "Alt", "r"],
-    ]);
+    expect(
+      useShortcutSettingsStore.getState().shortcuts.custom["plugin.sample.refresh"]
+    ).toEqual([["Mod", "Alt", "r"]]);
     // The toolbar arrangement retains the absent Plugin's button id.
     expect(resolveStoredToolbarButtonId("plugin.sample.reportButton")).toBe(
       "plugin.sample.reportButton"
     );
-    useShortcutSettingsStore.setState({ custom: {}, voice: {} });
+    useShortcutSettingsStore.getState().resetAllShortcuts();
   });
 
   it("bind its Command once ready, run it through the broker, and unbind it once stopped", async () => {
