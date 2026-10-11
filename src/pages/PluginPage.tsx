@@ -27,10 +27,9 @@ export function PluginPage() {
   const page = getPluginPage(pluginId, pageId);
   usePluginSurface(pluginId, `page:${pageId}`, page !== undefined);
 
-  const installed = lifecycle?.installed().find((plugin) => plugin.pluginId === pluginId) ?? null;
   const bindings = useMemo(
-    () => (lifecycle && installed ? pluginPageCommandBindings(lifecycle, installed, pageId) : []),
-    [lifecycle, installed, pageId, revision, lifecycleRevision]
+    () => (lifecycle ? pluginPageCommandBindings(lifecycle, pluginId, pageId) : []),
+    [lifecycle, pluginId, pageId, revision, lifecycleRevision]
   );
   useShortcuts(bindings);
 

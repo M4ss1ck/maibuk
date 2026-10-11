@@ -11,7 +11,7 @@ import { readPluginManifest } from "@/features/plugins/runtime";
 import type { PluginFolder, PluginManifest } from "@/features/plugins/types";
 import { getPluginSettingsOwners, getPluginSettingsRows } from "@/features/settings/rows";
 import { registeredToolbarButtons } from "@/features/settings/toolbar-config";
-import { getCommand, isCommandId, isPluginCommandDef } from "@/lib/shortcut-registry";
+import { commandLabel, getCommand, isCommandId, isPluginCommandDef } from "@/lib/shortcut-registry";
 import { pluginFolder } from "@/test/support/plugin-fixtures";
 import i18n from "@/i18n";
 
@@ -97,6 +97,15 @@ describe("registerPluginContributions", () => {
 
     expect(getPluginPage("sample", "report")?.title).toBe("Informe de la muestra");
     expect(getPluginSettingsRows("sample")[0].label).toBe("Umbral");
+    // The Command keeps its default-language literal and gains the locale, so
+    // an English UI still shows English after a Spanish session.
+    const definition = getCommand("plugin.sample.report" as const);
+    if (!isPluginCommandDef(definition)) throw new Error("expected a Plugin Command");
+    expect(definition.label).toBe("Report");
+    expect(definition.labels.es).toBe("Informe");
+    const translate = (key: string) => key;
+    expect(commandLabel("plugin.sample.report" as const, translate, "en")).toBe("Report");
+    expect(commandLabel("plugin.sample.report" as const, translate, "es")).toBe("Informe");
   });
 
   it("filters out a contribution that does not run on this platform", () => {
@@ -138,6 +147,43 @@ describe("registerPluginContributions", () => {
     cleanups.push(registerPluginContributions(sourceOf(builtIn)));
 
     expect(getPluginSettingsOwners().map((owner) => owner.pluginId)).toEqual([
+      "maibuk",
+      "alpha",
+      "zebra",
+    ]);
+  });
+
+  it("orders sidebar and Item Menu entries Maibuk first, then Plugin name, then declared order", () => {
+    const make = (id: string, name: string) =>
+      sourceOf(
+        pluginFolder(
+          {},
+          {
+            id,
+            name,
+            platforms: ["desktop"],
+            contributes: {
+              commands: [
+                { id: "open", label: "Open", contexts: ["global"], navigates: true },
+                { id: "tag", label: "Tag", contexts: ["chapterItem"], targets: ["chapter"] },
+              ],
+              pages: [{ id: "page", title: `${name} page`, command: "open" }],
+              sidebarEntries: [{ page: "page", icon: "book-open" }],
+              itemMenuEntries: [{ command: "tag" }],
+            },
+          }
+        )
+      );
+    cleanups.push(registerPluginContributions(make("zebra", "Zebra")));
+    cleanups.push(registerPluginContributions(make("alpha", "Alpha")));
+    cleanups.push(registerPluginContributions(make("maibuk", "Zulu")));
+
+    expect(getPluginSidebarEntries().map((entry) => entry.pluginId)).toEqual([
+      "maibuk",
+      "alpha",
+      "zebra",
+    ]);
+    expect(getPluginItemMenuEntries("chapter").map((entry) => entry.pluginId)).toEqual([
       "maibuk",
       "alpha",
       "zebra",

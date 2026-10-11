@@ -59,8 +59,6 @@ export interface PluginPageDef {
   /** The navigating Command that opens the page. */
   commandId: PluginCommandId;
   icon?: string;
-  /** The page's declared position within its Plugin. */
-  order: number;
 }
 
 /** An optional sidebar entry that navigates to a page. */
@@ -72,7 +70,6 @@ export interface PluginSidebarEntryDef {
   title: string;
   icon?: string;
   commandId: PluginCommandId;
-  order: number;
 }
 
 /** A Command explicitly listed for the Item Menus of its target kinds. */
@@ -83,7 +80,21 @@ export interface PluginItemMenuEntryDef {
   localId: string;
   label: string;
   targets: readonly PluginTarget[];
-  order: number;
+}
+
+/**
+ * One live Command of a registered Plugin: its derived id, the Contexts it is
+ * live in, the item kinds it acts on, and the page it opens when it is a page's
+ * navigating Command. Built from the platform-filtered manifest, so it is the
+ * single source the runner reads.
+ */
+export interface PluginCommandDef {
+  id: PluginCommandId;
+  pluginId: string;
+  localId: string;
+  contexts: readonly string[];
+  targets?: readonly PluginTarget[];
+  pageId?: string;
 }
 
 /** The route a Plugin page lives at. */
@@ -94,7 +105,7 @@ export function pluginPageRoute(pluginId: string, pageId: string): string {
 interface RegisteredContributions {
   pluginId: string;
   displayName: string;
-  order: number;
+  commands: readonly PluginCommandDef[];
   pages: readonly PluginPageDef[];
   sidebarEntries: readonly PluginSidebarEntryDef[];
   itemMenuEntries: readonly PluginItemMenuEntryDef[];
@@ -102,7 +113,6 @@ interface RegisteredContributions {
 }
 
 const contributions = new Map<string, RegisteredContributions>();
-let contributionsOrder = 0;
 let revision = 0;
 const listeners = new Set<() => void>();
 // Referentially stable snapshots for useSyncExternalStore, refreshed on change.
@@ -172,6 +182,16 @@ export function getPluginItemMenuEntries(kind: PluginTarget): PluginItemMenuEntr
     .filter((entry) => entry.targets.includes(kind));
   cachedItemMenu.set(kind, entries);
   return entries;
+}
+
+/** Every live Command of one Plugin, in declared order. */
+export function getPluginCommands(pluginId: string): PluginCommandDef[] {
+  return [...(contributions.get(pluginId)?.commands ?? [])];
+}
+
+/** One live Command of one Plugin, or undefined. */
+export function getPluginCommand(pluginId: string, localId: string): PluginCommandDef | undefined {
+  return contributions.get(pluginId)?.commands.find((command) => command.localId === localId);
 }
 
 export function getPluginPage(pluginId: string, pageId: string): PluginPageDef | undefined {
@@ -265,6 +285,9 @@ export function registerPluginContributions(source: PluginContributionsSource): 
       item.platforms === undefined || item.platforms.includes(platform);
 
     const commands = (contributes.commands ?? []).filter(onPlatform);
+    // Declarations carry the default-language label plus every locale's; the
+    // current-language `label` above is only for on-screen strings.
+    const rawCommands = (manifest.contributes?.commands ?? []).filter(onPlatform);
     const pages = (contributes.pages ?? []).filter(onPlatform);
     const sidebarEntries = (contributes.sidebarEntries ?? []).filter(onPlatform);
     const settingsRows = (contributes.settingsRows ?? []).filter(onPlatform);
@@ -273,8 +296,8 @@ export function registerPluginContributions(source: PluginContributionsSource): 
 
     const next: Array<() => void> = [];
 
-    if (commands.length > 0) {
-      const declarations: PluginCommandDeclaration[] = commands.map((command) => ({
+    if (rawCommands.length > 0) {
+      const declarations: PluginCommandDeclaration[] = rawCommands.map((command) => ({
         id: command.id,
         label: command.label,
         labels: localizedLabelPerLanguage(manifest, locales, command.id),
@@ -334,14 +357,13 @@ export function registerPluginContributions(source: PluginContributionsSource): 
     }
 
     const commandById = new Map(commands.map((command) => [command.id, command]));
-    const pageDefs: PluginPageDef[] = pages.map((page, order) => ({
+    const pageDefs: PluginPageDef[] = pages.map((page) => ({
       pluginId: manifest.id,
       displayName: localized.name,
       localId: page.id,
       id: `${PLUGIN_PREFIX}${manifest.id}.${page.id}` as PluginContributionId,
       title: page.title,
       commandId: `${PLUGIN_COMMAND_PREFIX}${manifest.id}.${page.command}` as PluginCommandId,
-      order,
     }));
     const sidebarDefs: PluginSidebarEntryDef[] = [];
     for (const entry of sidebarEntries) {
@@ -355,7 +377,7 @@ export function registerPluginContributions(source: PluginContributionsSource): 
       });
     }
     const itemMenuDefs: PluginItemMenuEntryDef[] = [];
-    for (const [order, entry] of itemMenuEntries.entries()) {
+    for (const entry of itemMenuEntries) {
       const command = commandById.get(entry.command);
       if (command === undefined || command.targets === undefined) continue;
       itemMenuDefs.push({
@@ -365,17 +387,32 @@ export function registerPluginContributions(source: PluginContributionsSource): 
         localId: command.id,
         label: command.label,
         targets: command.targets,
-        order,
       });
     }
+    const commandDefs: PluginCommandDef[] = rawCommands.map((command) => {
+      const page = pageDefs.find((candidate) => candidate.commandId.endsWith(`.${command.id}`));
+      return {
+        id: `${PLUGIN_COMMAND_PREFIX}${manifest.id}.${command.id}` as PluginCommandId,
+        pluginId: manifest.id,
+        localId: command.id,
+        contexts: command.contexts,
+        ...(command.targets !== undefined ? { targets: command.targets } : {}),
+        ...(page !== undefined ? { pageId: page.localId } : {}),
+      };
+    });
 
     const previous = contributions.get(manifest.id);
     const token = Symbol(manifest.id);
-    if (pageDefs.length > 0 || sidebarDefs.length > 0 || itemMenuDefs.length > 0) {
+    if (
+      commandDefs.length > 0 ||
+      pageDefs.length > 0 ||
+      sidebarDefs.length > 0 ||
+      itemMenuDefs.length > 0
+    ) {
       contributions.set(manifest.id, {
         pluginId: manifest.id,
         displayName: localized.name,
-        order: previous?.order ?? contributionsOrder++,
+        commands: commandDefs,
         pages: pageDefs,
         sidebarEntries: sidebarDefs,
         itemMenuEntries: itemMenuDefs,
@@ -408,6 +445,5 @@ export function registerPluginContributions(source: PluginContributionsSource): 
 /** Drops every registered contribution; tests use it between cases. */
 export function resetPluginContributionsForTests(): void {
   contributions.clear();
-  contributionsOrder = 0;
   notifyContributionsChange();
 }

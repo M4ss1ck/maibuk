@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { ToolbarButton } from "@/components/editor/ToolbarButton";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
 import { pluginCommandId, runPluginCommand } from "@/features/plugins/commands";
+import { currentUILanguage } from "@/features/plugins/contributions";
 import { registeredToolbarButtons } from "@/features/settings/toolbar-config";
 import type { PluginToolbarButtonId } from "@/features/settings/toolbar-config";
 import {
@@ -25,7 +26,7 @@ export function PluginToolbarButton({
   id: PluginToolbarButtonId;
   iconSize: "sm" | "md";
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   useToolbarRegistryRevision();
   const lifecycle = useInstalledPluginLifecycle();
   usePluginLifecycleRevision(lifecycle);
@@ -34,8 +35,7 @@ export function PluginToolbarButton({
 
   if (button === undefined || button.command === undefined) return null;
   const commandId = pluginCommandId(button.pluginId, button.command);
-  const language = i18n.resolvedLanguage === "es" ? "es" : "en";
-  const label = commandLabel(commandId, t, language);
+  const label = commandLabel(commandId, t, currentUILanguage());
   const ready = lifecycle?.state(button.pluginId)?.status === "ready";
   const icon = iconSize === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
 

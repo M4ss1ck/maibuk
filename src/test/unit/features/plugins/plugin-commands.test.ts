@@ -14,6 +14,7 @@ import type {
   PluginLifecycleState,
   PluginRuntime,
 } from "@/features/plugins/types";
+import { registerCommandSource, runCommand } from "@/lib/command-runner";
 import { pluginFolder } from "@/test/support/plugin-fixtures";
 
 const source = pluginFolder(
@@ -96,6 +97,19 @@ describe("pluginCommandBindings", () => {
     // A target Command is never runnable without an Item Menu target to supply.
     const tag = bindings.find((binding) => binding.id === "plugin.sample.tag");
     expect(tag?.enabled).toBe(false);
+  });
+
+  it("runs through the shared runner the keyboard, palette, and voice all call", async () => {
+    const request = vi.fn(async () => null);
+    const runtime = { broker: { request }, stop: vi.fn() } as unknown as PluginRuntime;
+    const lifecycle = stubLifecycle({ status: "ready", startReason: "launch" }, runtime);
+    const unregister = registerCommandSource(() => pluginCommandBindings(lifecycle, vi.fn()));
+    try {
+      expect(await runCommand("plugin.sample.report", { source: "palette" })).toBe("ran");
+      expect(request).toHaveBeenCalledWith("command.run", { id: "report" });
+    } finally {
+      unregister();
+    }
   });
 });
 

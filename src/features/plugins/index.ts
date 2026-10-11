@@ -110,6 +110,7 @@ export {
   resetPluginLifecycleForTests,
 } from "@/features/plugins/lifecycle";
 export {
+  getPluginCommands,
   getPluginItemMenuEntries,
   getPluginPage,
   getPluginPages,
@@ -134,6 +135,7 @@ export type {
   PluginItemTarget,
 } from "@/features/plugins/commands";
 export type {
+  PluginCommandDef,
   PluginContributionsSource,
   PluginItemMenuEntryDef,
   PluginPageDef,

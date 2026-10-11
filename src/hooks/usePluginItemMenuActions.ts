@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { ItemAction } from "@/components/ui";
 import { runPluginCommand, type PluginItemTarget } from "@/features/plugins/commands";
 import {
+  currentUILanguage,
   getPluginItemMenuEntries,
   onPluginContributionsChange,
   type PluginTarget,
@@ -19,12 +20,12 @@ import { commandLabel } from "@/lib/shortcut-registry";
 export function usePluginItemMenuActions(
   kind: PluginTarget
 ): (target: PluginItemTarget) => ItemAction[] {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const lifecycle = useInstalledPluginLifecycle();
   const lifecycleRevision = usePluginLifecycleRevision(lifecycle);
   const getSnapshot = useCallback(() => getPluginItemMenuEntries(kind), [kind]);
   const entries = useSyncExternalStore(onPluginContributionsChange, getSnapshot, getSnapshot);
-  const language = i18n.resolvedLanguage === "es" ? "es" : "en";
+  const language = currentUILanguage();
 
   return useCallback(
     (target: PluginItemTarget): ItemAction[] =>
