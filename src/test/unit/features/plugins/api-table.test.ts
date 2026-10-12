@@ -199,12 +199,22 @@ describe("generated SDK files", () => {
 });
 
 describe("SDK entry point", () => {
-  it("imports nothing outside src/plugin-sdk/, because Plugins bundle it", () => {
+  // The SDK bundles into Plugins. It may import its own modules and the
+  // libraries a Plugin bundles with it (React, Remote DOM); it must never
+  // import host code (`@/features/`, `@/components/`, `@/lib/`).
+  const BUNDLED_DEPENDENCIES = ["react", "@remote-dom/core", "@remote-dom/react"];
+
+  it("imports nothing outside src/plugin-sdk/ and its bundled libraries", () => {
     for (const file of readdirSync("src/plugin-sdk")) {
       const source = readFileSync(`src/plugin-sdk/${file}`, "utf8");
       const specifiers = [...source.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
       for (const specifier of specifiers) {
-        expect(specifier, `${file} imports ${specifier}`).toMatch(/^@\/plugin-sdk\//);
+        const allowed =
+          specifier.startsWith("@/plugin-sdk/") ||
+          BUNDLED_DEPENDENCIES.some(
+            (dependency) => specifier === dependency || specifier.startsWith(`${dependency}/`)
+          );
+        expect(allowed, `${file} imports ${specifier}`).toBe(true);
       }
     }
   });

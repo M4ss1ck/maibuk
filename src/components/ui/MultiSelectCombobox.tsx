@@ -18,6 +18,8 @@ interface MultiSelectComboboxProps {
   chipClassName?: string;
   getChipStyle?: (value: string) => CSSProperties;
   autoFocus?: boolean;
+  /** The control's accessible name, when no visible `<label>` points at it. */
+  ariaLabel?: string;
 }
 
 function normalize(value: string) {
@@ -56,6 +58,7 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
       chipClassName = "",
       getChipStyle,
       autoFocus = false,
+      ariaLabel,
     },
     forwardedRef
   ) {
@@ -185,6 +188,7 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
             ref={setInputRef}
             type="text"
             role="combobox"
+            aria-label={ariaLabel}
             aria-expanded={isOpen}
             value={query}
             onFocus={() => setOpen(true)}

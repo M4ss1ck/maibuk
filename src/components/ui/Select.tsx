@@ -28,6 +28,8 @@ interface SelectProps<T> {
   triggerClassName?: string;
   id?: string;
   ariaLabel?: string;
+  /** Shown in the trigger until a value is selected. */
+  placeholder?: string;
   /**
    * "chip" is a narrow stacked trigger (the value over a small chevron), the
    * size of the editor toolbar's language button; its list keeps a readable
@@ -63,6 +65,7 @@ export function Select<T extends string | number>({
   triggerClassName = "",
   id,
   ariaLabel,
+  placeholder,
   variant = "default",
 }: SelectProps<T>) {
   const chip = variant === "chip";
@@ -76,6 +79,7 @@ export function Select<T extends string | number>({
       className={`relative ${className}`}
       id={id}
       aria-label={ariaLabel}
+      placeholder={placeholder}
     >
       <Button className={selectTriggerClassName({ variant, minWidth, triggerClassName })}>
         <SelectValue>

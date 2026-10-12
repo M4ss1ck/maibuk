@@ -2104,6 +2104,10 @@
       "loadingTitle": "Loading Plugin…",
       "loadingDescription": "Waiting for Plugins to load.",
       "placeholderDescription": "{{name}} is installed. Its page controls arrive with the Remote UI host."
+    },
+    "ui": {
+      "couldNotDisplay": "This Plugin's interface could not be displayed.",
+      "removeValue": "Remove {{value}}"
     }
   }
 }

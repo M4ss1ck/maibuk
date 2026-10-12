@@ -550,6 +550,10 @@ _Avoid_: plugins folder, extensions folder
 One kind of access a Plugin declares, such as reading the Library or reaching a named web host, and that the author grants or revokes.
 _Avoid_: grant, scope, capability (Tauri's word in code)
 
+**Host-rendered UI**:
+A Plugin's interface drawn by Maibuk from the React/JSX the Plugin writes against the SDK's component counterparts, so Maibuk owns focus, keyboard behavior, and typing. The other path is a custom `Frame`. (ADR 0021)
+_Avoid_: extension UI, add-on UI, mod UI
+
 **Plugin Command**:
 A Command a Plugin declares, with the same identity, Shortcuts, Voice Commands, availability, and Command Palette behavior as a Maibuk Command. The host derives its id as `plugin.<pluginId>.<localId>`, so no Plugin can claim Maibuk's or another Plugin's ids. (ADR 0022)
 

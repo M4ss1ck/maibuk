@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Suspense, lazy, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { pluginPageCommandBindings } from "@/features/plugins/commands";
@@ -13,11 +13,20 @@ import {
 import { useShortcuts } from "@/lib/shortcuts";
 
 /**
+ * The Remote UI host renderer is only needed when a Plugin page opens, so it is
+ * split out of the entry chunk (#438).
+ */
+const PluginRemoteUiBoundary = lazy(() =>
+  import("@/features/plugins/remote-ui").then((module) => ({
+    default: module.PluginRemoteUiBoundary,
+  }))
+);
+
+/**
  * The one route a Plugin's page opens at. It is its own Shortcut Context, so
  * the Commands declared for this page bind here and nowhere else, and mounting
- * it marks the page reachable (an on-demand Plugin warm-starts). Until the
- * Remote UI host renderer lands (#438), the page body is a placeholder; the
- * host still discovers, routes to, and announces the page.
+ * it marks the page reachable (an on-demand Plugin warm-starts). The body is
+ * the Remote UI host renderer, which draws whatever tree the Plugin sends.
  */
 export function PluginPage() {
   const { t } = useTranslation();
@@ -62,9 +71,9 @@ export function PluginPage() {
       {page === undefined ? (
         <p className="mt-2 text-sm text-muted-foreground">{t("plugins.page.notFoundDescription")}</p>
       ) : (
-        <p className="mt-2 text-sm text-muted-foreground">
-          {t("plugins.page.placeholderDescription", { name: page.displayName })}
-        </p>
+        <Suspense fallback={null}>
+          <PluginRemoteUiBoundary pluginId={pluginId} />
+        </Suspense>
       )}
     </div>
   );

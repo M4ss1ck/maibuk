@@ -170,6 +170,16 @@ export default defineConfig(() => ({
         "src/lib/platform/tauri/plugins.ts",
         "src/plugin-sdk/index.ts",
         "src/plugin-sdk/protocol.ts",
+        // Remote UI host renderer (ADR 0021, #438)
+        "src/plugin-sdk/ui-table.ts",
+        "src/plugin-sdk/ui.tsx",
+        "src/features/plugins/ui-codegen.ts",
+        "src/features/plugins/remote-ui/echo.ts",
+        "src/features/plugins/remote-ui/validate.ts",
+        "src/features/plugins/remote-ui/receiver.ts",
+        "src/features/plugins/remote-ui/components.tsx",
+        "src/features/plugins/remote-ui/surface.tsx",
+        "src/features/plugins/remote-ui/use-plugin-remote-ui.ts",
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
         "src/components/editor/paste-cleanup.ts",

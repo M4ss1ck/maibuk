@@ -2104,6 +2104,10 @@
       "loadingTitle": "Cargando Plugin…",
       "loadingDescription": "Esperando a que se carguen los Plugins.",
       "placeholderDescription": "{{name}} está instalado. Los controles de su página llegarán con la interfaz que el host dibuja."
+    },
+    "ui": {
+      "couldNotDisplay": "No se pudo mostrar la interfaz de este Plugin.",
+      "removeValue": "Quitar {{value}}"
     }
   }
 }
