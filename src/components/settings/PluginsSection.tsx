@@ -1,8 +1,12 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
+import { PluginPermissionDialog } from "@/components/plugins/PluginPermissionDialog";
+import { PluginSurface } from "@/components/plugins/PluginSurface";
+import { PluginRow } from "@/components/settings/PluginRow";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
-import { PluginSurface } from "@/components/plugins/PluginSurface";
+import { usePluginManagementStore } from "@/features/plugins/management";
+import type { PluginManagementEntry, PluginPermissionId } from "@/features/plugins/types";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 import {
   currentSettingsPlatform,
@@ -11,16 +15,18 @@ import {
   onSettingsRowsChange,
   rowOnPlatform,
 } from "@/features/settings/rows";
+import { useShortcuts } from "@/lib/shortcuts";
 
 /**
- * The Plugins Settings section: one accordion per Plugin that declares
- * Settings rows, ordered Maibuk first, then owner display name, owner id for
- * ties, declared order within. With no known Plugin it shows its empty state.
- * Live controls arrive with the wiring slice (#437); each row renders a
- * placeholder field meanwhile so search and reveal already work end to end.
+ * The Plugins Settings section: one row per known Plugin, from the management
+ * store, ordered by name, then any Plugin that only declares Settings rows.
+ * A row carries its origin and state badges, its startup error, and — expanded
+ * — its Plugin Permissions and the enable/disable action. With no known Plugin
+ * it shows its empty state.
  */
 export function PluginsSection() {
   const { t } = useTranslation();
+  const plugins = usePluginManagementStore((state) => state.plugins);
   const owners = useSyncExternalStore(
     onSettingsRowsChange,
     getPluginSettingsOwners,
@@ -28,8 +34,40 @@ export function PluginsSection() {
   );
   const pluginOpen = useSettingsRevealStore((state) => state.pluginOpen);
   const setPluginOpen = useSettingsRevealStore((state) => state.setPluginOpen);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   const platform = currentSettingsPlatform();
+
+  // The section is the one reader of the Plugin Directory the author reaches:
+  // refresh on mount so a copy that changed elsewhere shows its state here.
+  useEffect(() => {
+    void usePluginManagementStore
+      .getState()
+      .refresh()
+      .catch(() => {});
+  }, []);
+
+  const entries = Object.values(plugins).sort((a, b) =>
+    a.manifest.name.localeCompare(b.manifest.name)
+  );
+  const known = new Set(entries.map((entry) => entry.pluginId));
+  const legacyOwners = owners.filter((owner) => !known.has(owner.pluginId));
+
+  const reviewable = entries.filter(
+    (entry) => entry.review.status !== "approved" || hasMissingRequired(entry)
+  );
+  useShortcuts([
+    {
+      id: "settings.reviewPlugin",
+      enabled: reviewable.length > 0,
+      onTrigger: () => {
+        const first = reviewable[0];
+        if (first) setReviewingId(first.pluginId);
+      },
+    },
+  ]);
+
+  const reviewing = reviewingId !== null ? (plugins[reviewingId] ?? null) : null;
 
   return (
     <SettingsSection
@@ -37,7 +75,7 @@ export function PluginsSection() {
       title={t("settings.plugins")}
       description={t("settings.pluginsDescription")}
     >
-      {owners.length === 0 ? (
+      {entries.length === 0 && legacyOwners.length === 0 ? (
         <div className={SETTINGS_ROW_CLASS}>
           <div>
             <p className="font-medium">{t("settings.pluginsEmpty")}</p>
@@ -46,7 +84,17 @@ export function PluginsSection() {
         </div>
       ) : (
         <div className="divide-y divide-border">
-          {owners.map((owner) => {
+          {entries.map((entry) => (
+            <PluginRow
+              key={entry.pluginId}
+              entry={entry}
+              open={pluginOpen[entry.pluginId] ?? false}
+              onToggle={() => setPluginOpen(entry.pluginId, !(pluginOpen[entry.pluginId] ?? false))}
+              onReview={() => setReviewingId(entry.pluginId)}
+              platform={platform}
+            />
+          ))}
+          {legacyOwners.map((owner) => {
             const rows = getPluginSettingsRows(owner.pluginId).filter((row) =>
               rowOnPlatform(row, platform)
             );
@@ -90,6 +138,27 @@ export function PluginsSection() {
           })}
         </div>
       )}
+
+      <PluginPermissionDialog
+        isOpen={reviewing !== null}
+        manifest={reviewing?.manifest ?? null}
+        onClose={() => setReviewingId(null)}
+        onApprove={(optionalGranted) => {
+          const pluginId = reviewingId;
+          setReviewingId(null);
+          if (pluginId !== null) {
+            void usePluginManagementStore.getState().approve(pluginId, optionalGranted);
+          }
+        }}
+      />
     </SettingsSection>
+  );
+}
+
+/** True when an approved copy no longer grants one of its required permissions. */
+function hasMissingRequired(entry: PluginManagementEntry): boolean {
+  if (entry.approval === null) return false;
+  return entry.manifest.permissions.required.some(
+    (permission) => !entry.approval?.granted.includes(permission as PluginPermissionId)
   );
 }

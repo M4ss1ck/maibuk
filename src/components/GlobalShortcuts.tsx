@@ -202,6 +202,14 @@ export function GlobalShortcuts() {
       onTrigger: () => useReleaseStore.getState().openNotes(),
     },
     {
+      id: "global.openPluginsSettings",
+      onTrigger: () => {
+        if (location.pathname !== "/settings") {
+          navigate("/settings");
+        }
+      },
+    },
+    {
       id: "global.openCommandPalette",
       allowInInput: true,
       onTrigger: () => {
