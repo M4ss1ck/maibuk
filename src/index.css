@@ -850,8 +850,9 @@ option {
 }
 
 /* Plugin editor highlights (#441): view-only decorations that never enter the
-   document. Each kind carries its own underline shape as well as its color, so
-   overlapping highlights from several Plugins stay discoverable. */
+   document. Each kind carries its own underline shape, color, and offset, so
+   when several Plugins overlap the same text their underlines stack instead of
+   drawing on top of each other and every highlight stays discoverable (#395). */
 .plugin-highlight {
   border-radius: 2px;
   padding: 0 1px;
@@ -868,14 +869,14 @@ option {
   background-color: color-mix(in srgb, var(--color-warning-bg) 70%, transparent);
   -webkit-text-decoration: underline dashed var(--color-warning-text);
   text-decoration: underline dashed var(--color-warning-text);
-  text-underline-offset: 2px;
+  text-underline-offset: 4px;
 }
 
 .plugin-highlight--repetition {
   background-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
   -webkit-text-decoration: underline dotted var(--color-destructive);
   text-decoration: underline dotted var(--color-destructive);
-  text-underline-offset: 2px;
+  text-underline-offset: 6px;
 }
 
 /* Placeholder styles */

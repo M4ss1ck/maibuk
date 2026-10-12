@@ -1,6 +1,6 @@
 import { Editor } from "@tiptap/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { buildPlainTextMap, plainRangeToPmRange, pmToPlainOffset } from "@/components/editor/plain-text-offsets";
@@ -280,6 +280,35 @@ describe("editor highlights", () => {
 
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(0);
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--warning")).toHaveLength(1);
+  });
+
+  it("keeps overlapping highlights from two Plugins individually discoverable", () => {
+    const editor = mountEditor("<p>one two</p>");
+    editor.view.dom.focus();
+    register(editor);
+
+    setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 3, label: "A" }] });
+    setPluginEditorHighlights("b", {
+      kind: "repetition",
+      ranges: [{ from: 0, to: 3, label: "B" }],
+    });
+
+    const marks = within(editor.view.dom).getAllByRole("mark");
+    expect(marks).toHaveLength(2);
+    const byPlugin = new Map(marks.map((mark) => [mark.getAttribute("data-plugin-highlight"), mark]));
+    const a = byPlugin.get("a");
+    const b = byPlugin.get("b");
+    expect(a).toHaveAttribute("aria-description", "A");
+    expect(b).toHaveAttribute("aria-description", "B");
+    expect(a).toHaveTextContent("one");
+    expect(b).toHaveTextContent("one");
+
+    clearPluginHighlights("a");
+
+    const remaining = within(editor.view.dom).getAllByRole("mark");
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]).toHaveAttribute("data-plugin-highlight", "b");
+    expect(remaining[0]).toHaveTextContent("one");
   });
 
   it("replaces a Plugin's whole set on every call", () => {

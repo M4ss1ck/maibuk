@@ -166,6 +166,11 @@ function buildHighlightDecorations(
       if (pm === null) continue;
       decorations.push(
         Decoration.inline(pm.from, pm.to, {
+          // `nodeName` forces ProseMirror to give this decoration its own
+          // nested wrapper instead of merging it with another Plugin's
+          // overlapping highlight, so each keeps its own class, role,
+          // data-plugin-highlight, and label (#395).
+          nodeName: "span",
           class: `plugin-highlight plugin-highlight--${set.kind}`,
           role: "mark",
           "data-plugin-highlight": pluginId,
