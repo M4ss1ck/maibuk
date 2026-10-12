@@ -655,6 +655,25 @@ export interface PluginRoute {
 /** The app shell's `navigate`, without importing the router into the handlers. */
 export type PluginNavigator = (to: string, options?: { state?: unknown }) => void;
 
+// Plugin editor host (editor-host.ts, #441)
+
+/** The highlight kinds the host renders with theme-safe tokens. */
+export type PluginHighlightKind = PluginApiInput<"editor.setHighlights">["kind"];
+
+/** One highlight range in plain-text offsets, with an optional accessible label. */
+export type PluginHighlightRange = PluginApiInput<"editor.setHighlights">["ranges"][number];
+
+/** One Plugin's whole highlight set for one editor. */
+export interface PluginHighlightSet {
+  kind: PluginHighlightKind;
+  ranges: readonly PluginHighlightRange[];
+}
+
+export type PluginEditorContentResult = PluginApiOutput<"editor.getContent">;
+export type PluginEditorSelectionResult = PluginApiOutput<"editor.getSelection">;
+export type PluginEditorApplied = PluginApiOutput<"editor.reveal">;
+
+
 // Broker (broker.ts)
 
 export type PluginStopReason = "throttled" | "requested";

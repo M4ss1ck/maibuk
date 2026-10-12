@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Editor } from "@tiptap/core";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import i18n from "@/i18n";
+import { resetPluginEditorHostForTests, registerPluginEditor } from "@/features/plugins/editor-host";
 import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
@@ -88,6 +91,50 @@ describe("createPluginHandlers(): the wired rows", () => {
       await expect(read({}, context)).resolves.toEqual({ language: "es" });
     } finally {
       await i18n.changeLanguage("en");
+    }
+  });
+
+  it("returns a typed no-target from the editor rows with no focused editor", async () => {
+    resetPluginEditorHostForTests();
+    const handlers = createPluginHandlers(PLUGIN_MANIFEST);
+    expect(handlers["editor.getContent"]?.({}, context)).toEqual({ status: "no-target" });
+    expect(handlers["editor.getSelection"]?.({}, context)).toEqual({ status: "no-target" });
+    expect(handlers["editor.reveal"]?.({ range: { from: 0, to: 1 } }, context)).toEqual({
+      status: "no-target",
+    });
+    expect(
+      handlers["editor.setHighlights"]?.({ kind: "info", ranges: [] }, context)
+    ).toEqual({ status: "no-target" });
+  });
+
+  it("serves the focused editor through the wired handlers", async () => {
+    resetPluginEditorHostForTests();
+    const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>Hello</p>" });
+    document.body.appendChild(editor.view.dom);
+    editor.view.dom.focus();
+    const unregister = registerPluginEditor({
+      id: "handler-editor",
+      editor,
+      entity: { kind: "chapter", id: "c1" },
+    });
+    try {
+      const handlers = createPluginHandlers(PLUGIN_MANIFEST);
+      expect(handlers["editor.getContent"]?.({}, context)).toMatchObject({
+        status: "ok",
+        entity: { kind: "chapter", id: "c1" },
+        content: { text: "Hello" },
+      });
+      expect(
+        handlers["editor.setHighlights"]?.(
+          { kind: "info", ranges: [{ from: 0, to: 5 }] },
+          { pluginId: "tracer" }
+        )
+      ).toEqual({ status: "applied" });
+      expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
+    } finally {
+      unregister();
+      editor.view.dom.remove();
+      editor.destroy();
     }
   });
 });

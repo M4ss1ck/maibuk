@@ -159,6 +159,19 @@ export {
   setPluginNavigator,
 } from "@/features/plugins/navigation";
 export {
+  EDITOR_CONTENT_EVENT_MS,
+  clearPluginHighlights,
+  getPluginEditorContent,
+  getPluginEditorSelection,
+  onEditorContentChanged,
+  onEditorFocusChanged,
+  registerPluginEditor,
+  requestEditorReveal,
+  resetPluginEditorHostForTests,
+  revealInFocusedEditor,
+  setPluginEditorHighlights,
+} from "@/features/plugins/editor-host";
+export {
   currentPluginLanguage,
   onPluginLanguageChange,
 } from "@/features/plugins/language";

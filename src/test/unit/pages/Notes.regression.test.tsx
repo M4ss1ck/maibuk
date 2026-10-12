@@ -12,6 +12,11 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+const { mockRequestReveal } = vi.hoisted(() => ({ mockRequestReveal: vi.fn() }));
+vi.mock("@/features/plugins/editor-host", () => ({
+  requestEditorReveal: mockRequestReveal,
+}));
+
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
 vi.mock("../../../lib/db", () => ({ getDatabase: mockGetDatabase }));
 
@@ -288,5 +293,73 @@ describe("Notes repeated heading regression (behavioral)", () => {
 
     expect(useSettingsStore.getState().notesSidebarWidth).toBe(296);
     expect(handle).toHaveAttribute("aria-valuenow", "296");
+  });
+
+  it("queues a Plugin reveal carried as navigation state", async () => {
+    const { useNoteStore } = await import("@/features/notes/store");
+    const { useBookStore } = await import("@/features/books/store");
+    const { useSettingsStore } = await import("@/features/settings/store");
+
+    const note = {
+      id: "n1",
+      title: "Note",
+      content: "<p>one two three</p>",
+      bookId: null,
+      language: "en",
+      tags: [],
+      pinned: false,
+      order: 0,
+      wordCount: 3,
+      collapsedHeadings: [],
+      createdAt: 0,
+      updatedAt: 0,
+      contentUpdatedAt: 0,
+    } as never;
+
+    useNoteStore.setState({
+      notes: [note],
+      currentNote: note,
+      isLoading: false,
+      error: null,
+      loadNotes: vi.fn(async () => {}),
+      loadNote: vi.fn(async (_id: string) => {
+        useNoteStore.setState({ currentNote: note });
+      }),
+      createNote: vi.fn(async () => note),
+      updateNote: vi.fn(async () => {}),
+      deleteNote: vi.fn(async () => {}),
+      reorderNotes: vi.fn(async () => {}),
+      setCurrentNote: vi.fn(),
+    } as never);
+
+    useBookStore.setState({
+      books: [],
+      currentBook: null,
+      isLoading: false,
+      error: null,
+      loadBooks: vi.fn(async () => {}),
+    } as never);
+
+    useSettingsStore.setState({ notesSidebarWidth: 280, lastNoteId: null } as never);
+    mockRequestReveal.mockClear();
+
+    const { Notes } = await import("@/pages/Notes");
+
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: "/notes/n1", state: { reveal: { from: 4, to: 7 } } }]}
+      >
+        <Routes>
+          <Route path="/notes/:noteId" element={<Notes />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() =>
+      expect(mockRequestReveal).toHaveBeenCalledWith(
+        { kind: "note", id: "n1" },
+        { from: 4, to: 7 }
+      )
+    );
   });
 });

@@ -12,6 +12,8 @@ import {
 import { FocusScope, useOverlay } from "react-aria";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
+import { requestEditorReveal } from "@/features/plugins/editor-host";
+import type { PluginRevealRange } from "@/features/plugins/types";
 import type { Chapter, ChapterStatus, ChapterType } from "@/features/chapters/types";
 import { Editor, ChapterList, SaveStatus, type EditorTutorialAnchors } from "@/components/editor";
 import type { Editor as TiptapEditor } from "@tiptap/core";
@@ -425,12 +427,18 @@ export function BookEditor() {
     const state = location.state as {
       openChapterId?: string;
       scrollToHeadingId?: string;
+      reveal?: PluginRevealRange;
     } | null;
     if (!state?.openChapterId || chapters.length === 0) return;
 
     const target = chapters.find((c) => c.id === state.openChapterId);
     if (target) {
       setCurrentChapter(target);
+      // A Plugin's `navigation.openEntity(..., reveal)` lands the caret on its
+      // spot once this Chapter's editor mounts (the host queues the range).
+      if (state.reveal) {
+        requestEditorReveal({ kind: "chapter", id: target.id }, state.reveal);
+      }
       if (state.scrollToHeadingId) {
         const headingId = state.scrollToHeadingId;
         // Wait for the editor to render the chapter, then scroll to the anchor.
@@ -1362,6 +1370,7 @@ export function BookEditor() {
               showInlineFootnotes={showInlineFootnotes}
               bookId={bookId ?? null}
               chapterId={currentChapter.id}
+              pluginEntity={{ kind: "chapter", id: currentChapter.id }}
               spellCheckLanguage={normalizeLanguage(currentBook.language)}
               onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
               restoreKey={`chapter:${currentChapter.id}`}
