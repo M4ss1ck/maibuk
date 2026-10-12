@@ -160,7 +160,9 @@ test.describe("Host-rendered Plugin UI kit @wf:plugins-remote-ui-kit @no-webkit"
     await expect(target).toBeVisible({ timeout: 15_000 });
 
     await tabTo(page, target);
-    await expect(page.getByRole("tooltip")).toHaveText("Saved locally");
+    // Tabbing here passes chrome controls whose tooltips may still be closing,
+    // so name the Plugin's tooltip rather than expecting it to be the only one.
+    await expect(page.getByRole("tooltip", { name: "Saved locally" })).toBeVisible();
     await capture(page, "plugin-kit-tooltip");
   });
 
