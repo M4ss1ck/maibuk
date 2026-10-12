@@ -85,6 +85,27 @@ interface TreeShadow {
   nodes: number;
 }
 
+/**
+ * What a batch has built so far, for the required-prop check that runs once the
+ * whole batch has replayed: the ids of elements inserted in this batch (a
+ * subtree's descendants included), and the prop names each id has had set by a
+ * serialization or by an UPDATE_PROPERTY record in the same batch.
+ */
+interface BatchTracking {
+  inserted: Set<string>;
+  setProps: Map<string, Set<string>>;
+}
+
+/** Records that a batch set the prop `name` on the element `id`. */
+function rememberProp(tracking: BatchTracking, id: string, name: string): void {
+  let names = tracking.setProps.get(id);
+  if (names === undefined) {
+    names = new Set();
+    tracking.setProps.set(id, names);
+  }
+  names.add(name);
+}
+
 function buildShadow(root: RemoteReceiverRoot): TreeShadow {
   const shadow: TreeShadow = { tags: new Map(), children: new Map(), nodes: 0 };
   function visit(node: RemoteReceiverRoot | RemoteReceiverNode): void {
@@ -174,7 +195,11 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
   }
 
   /** Validates one serialized subtree and registers it in the shadow tree. */
-  function checkSerialization(serialization: RemoteNodeSerialization, shadow: TreeShadow): boolean {
+  function checkSerialization(
+    serialization: RemoteNodeSerialization,
+    shadow: TreeShadow,
+    tracking: BatchTracking
+  ): boolean {
     if (serialization.type === NODE_TYPE_ELEMENT) {
       const element = getPluginUiElement(serialization.element);
       if (element === undefined) {
@@ -185,6 +210,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
         });
       }
       shadow.tags.set(serialization.id, serialization.element);
+      tracking.inserted.add(serialization.id);
       for (const name of Object.keys(serialization.attributes ?? {})) {
         return refuse({
           code: "unknown-prop",
@@ -193,19 +219,8 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
           prop: name,
         });
       }
-      for (const [name, prop] of Object.entries(element.props)) {
-        if (
-          prop.required === true &&
-          prop.kind !== "node" &&
-          serialization.properties?.[name] === undefined
-        ) {
-          return refuse({
-            code: "invalid-prop",
-            message: `${serialization.element} is missing the required prop ${name}`,
-            tag: serialization.element,
-            prop: name,
-          });
-        }
+      for (const name of Object.keys(serialization.properties ?? {})) {
+        rememberProp(tracking, serialization.id, name);
       }
       for (const [name, value] of Object.entries(serialization.properties ?? {})) {
         const prop = element.props[name];
@@ -240,7 +255,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
       const ids: string[] = [];
       for (const child of serialization.children) {
         ids.push(child.id);
-        if (!checkSerialization(child, shadow)) return false;
+        if (!checkSerialization(child, shadow, tracking)) return false;
       }
       shadow.children.set(serialization.id, ids);
       shadow.nodes += 1;
@@ -260,6 +275,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
    */
   function applyRecords(records: readonly RemoteMutationRecord[]): void {
     const shadow = buildShadow(receiver.root);
+    const tracking: BatchTracking = { inserted: new Set(), setProps: new Map() };
 
     for (const record of records) {
       switch (record[0]) {
@@ -267,7 +283,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
           const parentId = record[1];
           const child = record[2];
           const index = record[3];
-          if (!checkSerialization(child, shadow)) return;
+          if (!checkSerialization(child, shadow, tracking)) return;
           const children = shadow.children.get(parentId);
           if (children === undefined) {
             return void refuse({
@@ -340,8 +356,33 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
               prop: name,
             });
           }
+          rememberProp(tracking, id, name);
           break;
         }
+      }
+    }
+
+    // The required-prop check is deferred to the end of the batch: a real Plugin
+    // Worker's `createRemoteComponent` sets props in a layout effect, so an
+    // insert carries `properties: {}` and a same-batch UPDATE_PROPERTY carries a
+    // required prop such as `label`. Refuse only when the batch ends with an
+    // element it inserted (and never removed) still missing a required prop.
+    for (const id of tracking.inserted) {
+      const tag = shadow.tags.get(id);
+      if (tag === undefined) continue;
+      const element = getPluginUiElement(tag);
+      if (element === undefined) continue;
+      const set = tracking.setProps.get(id);
+      for (const [name, prop] of Object.entries(element.props)) {
+        if (prop.required !== true || prop.kind === "node") continue;
+        if (set?.has(name) === true) continue;
+        refuse({
+          code: "invalid-prop",
+          message: `${tag} is missing the required prop ${name}`,
+          tag,
+          prop: name,
+        });
+        return;
       }
     }
 

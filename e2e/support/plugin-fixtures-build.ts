@@ -34,7 +34,12 @@ async function buildPlugin(name: string): Promise<void> {
     resolve: { alias: [{ find: "@", replacement: resolve(REPO_ROOT, "src") }] },
     // A Plugin bundle is React/JSX, but the app's React plugin is not loaded
     // here; esbuild's automatic runtime resolves `react/jsx-runtime` instead.
-    esbuild: { jsx: "automatic" },
+    // `jsxDev` is pinned off: Vite reads `process.env.NODE_ENV` to pick the JSX
+    // transform, and this Node build entry never sets it, so the automatic
+    // runtime would otherwise emit `jsxDEV` — which React's production
+    // `react/jsx-dev-runtime` (what `define` above resolves) ships as
+    // `undefined`, so the first render would throw "jsxDEV is not a function".
+    esbuild: { jsx: "automatic", jsxDev: false },
     build: {
       outDir,
       emptyOutDir: true,

@@ -12,6 +12,10 @@
 import { PLUGIN_UI_BATCH_MS, frameBatch, servePluginUi } from "@/plugin-sdk/worker-ui";
 import { ui } from "@/plugin-sdk/ui";
 import {
+  createValidatedConnection,
+  type PluginUiViolation,
+} from "@/features/plugins/remote-ui/validate";
+import {
   MUTATION_TYPE_UPDATE_TEXT,
   NODE_TYPE_ELEMENT,
   NODE_TYPE_TEXT,
@@ -47,6 +51,30 @@ function createHost() {
   });
   channel.port1.start();
   return { receiver, port: channel.port2 };
+}
+
+/**
+ * The real host end wrapped in the validator, exactly as the host builds it: a
+ * `RemoteReceiver` and `createValidatedConnection`, whose `mutate`/`call` are
+ * what the Worker reaches over the thread.
+ */
+function createValidatedHost() {
+  const channel = new MessageChannel();
+  channels.push(channel);
+  const receiver = new RemoteReceiver({ retain, release });
+  const violations: PluginUiViolation[] = [];
+  const connection = createValidatedConnection({
+    receiver,
+    onViolation: (violation) => violations.push(violation),
+  });
+  new ThreadMessagePort(channel.port1, {
+    exports: {
+      mutate: (records: readonly RemoteMutationRecord[]) => connection.mutate(records),
+      call: (id: string, method: string, ...args: unknown[]) => connection.call(id, method, ...args),
+    },
+  });
+  channel.port1.start();
+  return { receiver, violations, port: channel.port2 };
 }
 
 /** A minimal `PluginClient`: it keeps the one host-request handler. */
@@ -140,6 +168,23 @@ describe("servePluginUi", () => {
 
     // Unmounting an unknown surface is a no-op.
     expect(client.request("ui.unmount", { surface: "main#1" })).toBeNull();
+  });
+
+  it("accepts a page whose required prop arrives behind its insert", async () => {
+    // The regression: the Worker's `createRemoteComponent` sets props after the
+    // element is inserted, so the validator sees the insert without the required
+    // `label` and a same-batch UPDATE_PROPERTY that carries it. The host must not
+    // report a violation and the label must arrive.
+    const host = createValidatedHost();
+    const client = createClient();
+    servePluginUi(client.client, { pages: { main: Page } });
+
+    client.request("ui.mount", { surface: "main#1", page: "main", port: host.port });
+
+    await vi.waitFor(() => {
+      expect(element(host.receiver, "maibuk-text-field")?.properties.label).toBe("Search");
+    });
+    expect(host.violations).toEqual([]);
   });
 
   it("rejects a mount of an unknown page", () => {

@@ -1,4 +1,5 @@
 import { RemoteReceiver } from "@remote-dom/core/receivers";
+import type { RemoteReceiverElement } from "@remote-dom/core/receivers";
 import {
   MUTATION_TYPE_INSERT_CHILD,
   MUTATION_TYPE_REMOVE_CHILD,
@@ -91,6 +92,41 @@ describe("the connection validator", () => {
     connection.mutate([insert(element("1", "maibuk-text-field", { properties: { value: "x" } }))]);
     expect(violations[0]?.code).toBe("invalid-prop");
     expect(violations[0]?.prop).toBe("label");
+  });
+
+  it("accepts a required prop set by an update in the same batch", () => {
+    // A real Plugin Worker inserts the element with `properties: {}` and sets
+    // its props from a layout effect, so the required prop arrives as an
+    // UPDATE_PROPERTY behind the insert in the same batch.
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-text-field")),
+      [MUTATION_TYPE_UPDATE_PROPERTY, "1", "label", "Search"],
+    ]);
+    expect(violations).toEqual([]);
+    expect(receiver.root.children).toHaveLength(1);
+    expect((receiver.root.children[0] as RemoteReceiverElement).properties.label).toBe("Search");
+  });
+
+  it("accepts a required prop set on a descendant of an inserted subtree", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-view", { children: [element("2", "maibuk-text-field")] })),
+      [MUTATION_TYPE_UPDATE_PROPERTY, "2", "label", "Search"],
+    ]);
+    expect(violations).toEqual([]);
+    const view = receiver.root.children[0] as RemoteReceiverElement;
+    expect((view.children[0] as RemoteReceiverElement).properties.label).toBe("Search");
+  });
+
+  it("does not require a prop for an element removed later in the batch", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-text-field")),
+      [MUTATION_TYPE_REMOVE_CHILD, ROOT, 0],
+    ]);
+    expect(violations).toEqual([]);
+    expect(receiver.root.children).toHaveLength(0);
   });
 
   it("refuses a script URL in a link", () => {
