@@ -8,6 +8,7 @@ import type { PLUGIN_API_EVENTS, PLUGIN_API_TABLE } from "@/features/plugins/api
 import type { pluginManifestSchema } from "@/features/plugins/manifest-schema";
 import type { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-validate";
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
+import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { PluginMessagePort } from "@/plugin-sdk/protocol";
 
 // Identity (ids.ts)
@@ -330,8 +331,21 @@ export interface TestHostOptions {
   permissions?: readonly PluginPermissionId[];
   /** In-memory Library the read handlers serve. */
   library?: TestLibrary;
-  /** UI-string overrides the host renderer applies once it exists (#438). */
+  /** UI-string overrides `renderPage` applies to the manifest before rendering. */
   locale?: PluginLocale;
+}
+
+/**
+ * One Plugin page `renderPage` opened: the host container it renders into, every
+ * declaration the validator refused, and how to tear it back down.
+ */
+export interface TestPage {
+  /** The host `div` the page's tree renders into, appended to `document.body`. */
+  container: HTMLElement;
+  /** Every declaration the validator refused while this page was open. */
+  violations: PluginUiViolation[];
+  /** Unmounts the host renderer and closes the mount; idempotent. */
+  unmount(): void;
 }
 
 export interface TestHost {
@@ -339,12 +353,21 @@ export interface TestHost {
   port: MessagePort;
   /** The real broker over the in-process channel. */
   broker: PluginBroker;
+  /** The manifest, with any `locale` overrides already applied. */
+  manifest: PluginManifest;
   /** Every `notifications.show` the Plugin asked for, in order. */
   notifications: TestNotification[];
-  /** The UI-string overrides this host carries. */
+  /** The UI-string overrides this host carries, before they are applied. */
   locale: PluginLocale | null;
   /** Changes the granted Plugin Permissions; the next call reads them again. */
   setGranted(permissions: readonly PluginPermissionId[]): void;
+  /**
+   * Renders one of the Plugin's pages through the real host renderer, over a
+   * fresh Remote UI mount, and resolves once the Plugin accepts it. Rejects when
+   * the Plugin has no such page. Every page opened this way is unmounted by
+   * `stop()` too.
+   */
+  renderPage(page: string): Promise<TestPage>;
   stop(): void;
 }
 
@@ -563,8 +586,12 @@ export interface PluginBrokerOptions {
 }
 
 export interface PluginBroker {
-  /** Sends a host to Plugin request; settles on the Plugin's first reply with its id. */
-  request(method: string, params: unknown): Promise<unknown>;
+  /**
+   * Sends a host to Plugin request; settles on the Plugin's first reply with
+   * its id. `transfer` lists the transferables handed to the Plugin with the
+   * message, such as the MessagePort of a Remote UI mount.
+   */
+  request(method: string, params: unknown, transfer?: Transferable[]): Promise<unknown>;
   /**
    * Delivers an event if the Plugin subscribed to it and still holds its
    * Plugin Permission. Returns whether it was sent. Throws when the payload

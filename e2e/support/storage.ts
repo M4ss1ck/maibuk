@@ -3,7 +3,7 @@
 // They prepare the device before the app boots; they never stand in for the
 // behavior a spec is testing.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
@@ -12,6 +12,7 @@ import {
   PLUGIN_APPROVALS_STORAGE_KEY,
   serializePluginApprovals,
 } from "@/features/plugins/approvals";
+import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { PASTE_CLEANUP_PRESETS, type PasteCleanupPreset } from "@/features/settings/types";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
 import type { SeedName } from "./seed/libraries";
@@ -24,9 +25,11 @@ export type LibrarySeed = SeedName | "empty";
 export type TutorialProgressSeed = "dismissed" | "clean";
 
 /** A fixture Plugin the seed writes into the web Plugin Directory (OPFS). */
-export type PluginSeed = "tracer";
+export type PluginSeed = "tracer" | "remote-ui";
 
 const PLUGIN_FIXTURES_DIR = resolve(REPO_ROOT, "e2e/fixtures/plugins");
+/** The source-built fixture Plugins `buildPluginFixtures` leaves at global setup. */
+const PLUGIN_BUILD_DIR = resolve(REPO_ROOT, "e2e/.output/plugins");
 
 const BLANK_PATH = "/__e2e__/blank";
 
@@ -37,16 +40,37 @@ interface PluginSeedData {
   pinnedHash: string;
 }
 
-function readPluginSeed(name: PluginSeed): PluginSeedData {
-  const dir = resolve(PLUGIN_FIXTURES_DIR, name);
-  const expected = JSON.parse(
-    readFileSync(resolve(PLUGIN_FIXTURES_DIR, `${name}.expected.json`), "utf8")
-  ) as { hash: string };
+async function readPluginSeed(name: PluginSeed): Promise<PluginSeedData> {
+  // `tracer` is committed and used as-is, pinned by its committed
+  // `tracer.expected.json`. `remote-ui` is built from source at global setup, so
+  // its pin is computed from the built bytes the app will hash from OPFS.
+  const { dir, pinnedHash } =
+    name === "tracer"
+      ? {
+          dir: resolve(PLUGIN_FIXTURES_DIR, name),
+          pinnedHash: (
+            JSON.parse(
+              readFileSync(resolve(PLUGIN_FIXTURES_DIR, `${name}.expected.json`), "utf8")
+            ) as { hash: string }
+          ).hash,
+        }
+      : await builtPluginSeed(name);
   const files = readFolderFiles(dir).map((file) => ({
     path: file.path,
     base64: Buffer.from(file.bytes).toString("base64"),
   }));
-  return { name, files, pinnedHash: expected.hash };
+  return { name, files, pinnedHash };
+}
+
+/** The folder and pinned hash of a source-built fixture Plugin under `.output`. */
+async function builtPluginSeed(name: PluginSeed): Promise<{ dir: string; pinnedHash: string }> {
+  const dir = resolve(PLUGIN_BUILD_DIR, name);
+  if (!existsSync(dir)) {
+    throw new Error(
+      `the built fixture Plugin "${name}" is missing at ${dir}; run the E2E global setup`
+    );
+  }
+  return { dir, pinnedHash: await hashPluginDirectory(readFolderFiles(dir)) };
 }
 
 /**
@@ -68,7 +92,7 @@ export async function prepareDevice(
     library === "empty"
       ? null
       : (await readFile(resolve(SEED_DIR, `${library}.sqlite`))).toString("base64");
-  const seeds = plugins.map(readPluginSeed);
+  const seeds = await Promise.all(plugins.map(readPluginSeed));
   const approvals = serializePluginApprovals(
     seeds.map((seed) => ({ pluginId: seed.name, pinnedHash: seed.pinnedHash, granted: [] }))
   );

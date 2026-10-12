@@ -418,7 +418,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   };
 
   return {
-    request(method, params) {
+    request(method, params, transfer) {
       if (stopped) {
         return Promise.reject(new PluginApiError(refusal("plugin-stopped", "Plugin stopped")));
       }
@@ -426,7 +426,10 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       return new Promise((resolve, reject) => {
         pending.set(id, { resolve, reject });
         pendingMethods.set(id, method);
-        port.postMessage({ kind: "request", id, method, params } satisfies HostToPluginMessage);
+        port.postMessage(
+          { kind: "request", id, method, params } satisfies HostToPluginMessage,
+          transfer ?? []
+        );
       });
     },
     emit(event, payload) {

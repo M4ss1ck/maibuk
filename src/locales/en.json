@@ -2094,7 +2094,7 @@
       "startupTimeout": "{{name}} took too long to start and was stopped.",
       "unresponsive": "{{name}} stopped responding and was closed.",
       "throttled": "{{name}} sent too many updates and was stopped.",
-      "remoteUiLimit": "{{name}} sent too much interface data and was stopped.",
+      "remoteUiLimit": "{{name}} declared an interface Maibuk could not accept and was stopped.",
       "outOfMemory": "{{name}} used too much memory and was stopped.",
       "crashed": "{{name}} stopped unexpectedly."
     },
@@ -2102,8 +2102,11 @@
       "notFoundTitle": "Plugin page",
       "notFoundDescription": "This page's Plugin is not installed.",
       "loadingTitle": "Loading Plugin…",
-      "loadingDescription": "Waiting for Plugins to load.",
-      "placeholderDescription": "{{name}} is installed. Its page controls arrive with the Remote UI host."
+      "loadingDescription": "Waiting for Plugins to load."
+    },
+    "ui": {
+      "couldNotDisplay": "This Plugin's interface could not be displayed.",
+      "removeValue": "Remove {{value}}"
     }
   }
 }

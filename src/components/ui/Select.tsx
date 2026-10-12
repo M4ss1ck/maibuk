@@ -2,7 +2,7 @@ import { Select as RACSelect, SelectValue } from "react-aria-components";
 import { Button } from "react-aria-components/Button";
 import { Popover } from "react-aria-components/Popover";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { ChevronIcon } from "@/components/icons";
 
 type SelectKey = string | number;
@@ -28,6 +28,14 @@ interface SelectProps<T> {
   triggerClassName?: string;
   id?: string;
   ariaLabel?: string;
+  /** Shown in the trigger until a value is selected. */
+  placeholder?: string;
+  /** Disables the select: it is not focusable and keyboard cannot change it. */
+  isDisabled?: boolean;
+  /** Ids of the elements describing the select, for `aria-describedby`. */
+  ariaDescribedBy?: string;
+  /** Marks the select invalid, for `aria-invalid`. */
+  isInvalid?: boolean;
   /**
    * "chip" is a narrow stacked trigger (the value over a small chevron), the
    * size of the editor toolbar's language button; its list keeps a readable
@@ -50,7 +58,7 @@ export function selectTriggerClassName({
     variant === "chip"
       ? "flex flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none text-foreground hover:bg-muted/20 data-pressed:bg-muted/20"
       : `relative flex w-full ${minWidthClass} items-center gap-1 px-3 py-1.5 pr-8 text-sm text-left border border-border rounded-lg bg-background text-foreground`
-  } cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 ${triggerClassName}`;
+  } cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 data-disabled:cursor-not-allowed data-disabled:opacity-50 ${triggerClassName}`;
 }
 
 export function Select<T extends string | number>({
@@ -63,9 +71,23 @@ export function Select<T extends string | number>({
   triggerClassName = "",
   id,
   ariaLabel,
+  placeholder,
+  isDisabled = false,
+  ariaDescribedBy,
+  isInvalid = false,
   variant = "default",
 }: SelectProps<T>) {
   const chip = variant === "chip";
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // React Aria drops `aria-invalid` on the trigger (its labelable allowlist
+  // excludes it), so the invalid state is applied to the button directly.
+  useEffect(() => {
+    const button = buttonRef.current;
+    if (!button) return;
+    if (isInvalid) button.setAttribute("aria-invalid", "true");
+    else button.removeAttribute("aria-invalid");
+  }, [isInvalid]);
 
   return (
     <RACSelect
@@ -76,8 +98,17 @@ export function Select<T extends string | number>({
       className={`relative ${className}`}
       id={id}
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
+      aria-invalid={isInvalid || undefined}
+      placeholder={placeholder}
+      isDisabled={isDisabled}
+      isInvalid={isInvalid}
     >
-      <Button className={selectTriggerClassName({ variant, minWidth, triggerClassName })}>
+      <Button
+        ref={buttonRef}
+        aria-invalid={isInvalid || undefined}
+        className={selectTriggerClassName({ variant, minWidth, triggerClassName })}
+      >
         <SelectValue>
           {({ selectedItem, selectedText, isPlaceholder }) => {
             const selected = selectedItem as SelectOption<T> | null;

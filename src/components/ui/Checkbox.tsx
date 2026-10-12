@@ -10,6 +10,7 @@ interface CheckboxProps {
   indeterminate?: boolean;
   disabled?: boolean;
   className?: string;
+  id?: string;
   inputRef?: RefObject<HTMLInputElement | null>;
 }
 
@@ -20,11 +21,13 @@ export function Checkbox({
   indeterminate = false,
   disabled = false,
   className = "",
+  id,
   inputRef,
 }: CheckboxProps) {
   return (
     <AriaCheckbox
       inputRef={inputRef}
+      id={id}
       isSelected={checked}
       isIndeterminate={indeterminate}
       onChange={onChange}

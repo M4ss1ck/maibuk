@@ -8,12 +8,18 @@
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useState, createElement, Fragment } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { PLUGIN_READY_MESSAGE } from "@/plugin-sdk/protocol";
 import { createPluginClient } from "@/plugin-sdk";
+import { ui } from "@/plugin-sdk/ui";
+import { servePluginUi } from "@/plugin-sdk/ui-serve";
+import "@/i18n";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
 
 const FIXTURE_DIR = resolve(process.cwd(), "e2e/fixtures/plugins/tracer");
@@ -115,6 +121,94 @@ describe("createTestHost()", () => {
     });
     try {
       expect(host.locale).toEqual({ "commands.hello.label": "Hola" });
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+describe("renderPage", () => {
+  it("renders a Plugin page through the real host renderer, by keyboard alone", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+
+      /** A Plugin page that searches, echoes what was typed, and reports on Go. */
+      function SearchPage() {
+        const [value, setValue] = useState("");
+        return createElement(
+          Fragment,
+          null,
+          createElement(ui.Heading, null, "Find"),
+          createElement(ui.TextField, {
+            label: "Search",
+            value,
+            onInput: (event: { detail: string }) => setValue(event.detail),
+          }),
+          createElement(ui.Text, null, `You typed: ${value}`),
+          createElement(
+            ui.Button,
+            {
+              onPress: () => {
+                void client.notifications.show({ variant: "info", message: value });
+              },
+            },
+            "Go"
+          )
+        );
+      }
+
+      servePluginUi(client, { pages: { main: SearchPage } });
+
+      const page = await host.renderPage("main");
+      const user = userEvent.setup();
+
+      expect(await screen.findByRole("heading", { name: "Find" })).toBeInTheDocument();
+
+      const field = screen.getByRole("textbox", { name: "Search" });
+      for (let i = 0; i < 10 && document.activeElement !== field; i++) await user.tab();
+      expect(field).toHaveFocus();
+      await user.keyboard("dune");
+      expect(await screen.findByText("You typed: dune")).toBeInTheDocument();
+
+      const go = screen.getByRole("button", { name: "Go" });
+      for (let i = 0; i < 10 && document.activeElement !== go; i++) await user.tab();
+      expect(go).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => {
+        expect(host.notifications).toContainEqual({ variant: "info", message: "dune" });
+      });
+      expect(page.violations).toEqual([]);
+
+      page.unmount();
+      await waitFor(() => {
+        expect(screen.queryByRole("heading", { name: "Find" })).not.toBeInTheDocument();
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("rejects rendering a page the Plugin never declared", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      servePluginUi(client, { pages: {} });
+
+      await expect(host.renderPage("missing")).rejects.toThrow("Unknown page missing");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("applies the locale override to the manifest it carries", () => {
+    const host = createTestHost({
+      manifest: fixtureManifest(),
+      locale: { "commands.openReport.label": "Abrir informe" },
+    });
+    try {
+      expect(host.manifest.contributes?.commands?.[0]?.label).toBe("Abrir informe");
     } finally {
       host.stop();
     }

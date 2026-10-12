@@ -223,6 +223,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
     "shown only as a badge inside the Shortcut Editor, which the Tutorial does not open",
   "Retained Plugin Preference":
     "device-local settings inside the Shortcut Editor, which the Tutorial does not open",
+  "Host-rendered UI":
+    "decided, not built (ADR 0021); it draws inside a Plugin's own page, and there is no Plugin in the app to point at",
   Pane: "a keyboard concept: F6 and the arrow keys move between Panes, and a Tutorial run keeps the app inert, so no step can show focus travelling",
   "Command Palette":
     "Opened from any screen with F1 or its button; the Tutorial runs keep the app inert and the palette refuses to open during a run, so no step can show it.",

@@ -18,6 +18,14 @@ interface ComboboxProps {
   inputClasses?: string;
   autoFocus?: boolean;
   ariaLabel?: string;
+  /** The field's id, so a visible `<label htmlFor>` can name it. */
+  id?: string;
+  /** Disables the field: it is not focusable and keyboard cannot change it. */
+  isDisabled?: boolean;
+  /** Ids of the elements describing the field, for `aria-describedby`. */
+  ariaDescribedBy?: string;
+  /** Marks the field invalid, for `aria-invalid`. */
+  isInvalid?: boolean;
 }
 
 export function Combobox({
@@ -29,6 +37,10 @@ export function Combobox({
   inputClasses = "w-17.5",
   autoFocus = false,
   ariaLabel,
+  id,
+  isDisabled = false,
+  ariaDescribedBy,
+  isInvalid = false,
 }: ComboboxProps) {
   const [query, setQuery] = useState("");
 
@@ -52,6 +64,7 @@ export function Combobox({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isDisabled) return;
     if ((e.key === "Enter" || e.key === "NumpadEnter") && query) {
       e.preventDefault();
       e.stopPropagation();
@@ -70,11 +83,15 @@ export function Combobox({
       onSelectionChange={handleSelectionChange}
       defaultFilter={() => true}
       aria-label={ariaLabel}
+      isDisabled={isDisabled}
+      isInvalid={isInvalid}
+      aria-describedby={ariaDescribedBy}
       className={`relative ${className}`}
     >
       <div className="relative">
         <Input
-          className={`${inputClasses} pl-2 pr-6 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 line-clamp-1`}
+          id={id}
+          className={`${inputClasses} pl-2 pr-6 py-1.5 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 line-clamp-1 disabled:cursor-not-allowed disabled:opacity-50`}
           placeholder={placeholder}
           autoFocus={autoFocus}
           onKeyDown={handleKeyDown}

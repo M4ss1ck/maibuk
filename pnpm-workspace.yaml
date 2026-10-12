@@ -8,3 +8,6 @@ peerDependencyRules:
   allowedVersions:
     i18next>typescript: "7"
     react-i18next>typescript: "7"
+    # @remote-dom/react declares react ^17 || ^18; Maibuk runs React 19, which
+    # the Remote UI tests prove (src/test/unit/plugins/plugin-ui-renderer.test.tsx).
+    "@remote-dom/react>react": "19"

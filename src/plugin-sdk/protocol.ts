@@ -71,7 +71,7 @@ export type HostToPluginMessage =
 
 /** The subset of `MessagePort` both ends use. */
 export interface PluginMessagePort {
-  postMessage(message: unknown): void;
+  postMessage(message: unknown, transfer?: Transferable[]): void;
   onmessage: ((event: MessageEvent) => void) | null;
 }
 
@@ -91,6 +91,32 @@ export const PLUGIN_MIGRATE_DATA_REQUEST = "migrateData";
  * only to decide whether the outcome is reported as ran or cancelled.
  */
 export const PLUGIN_COMMAND_RUN_REQUEST = "command.run";
+
+/**
+ * The host request a Plugin answers to mount one Remote UI surface. `params` is
+ * `PluginUiMountParams`: `surface` is the host-chosen id of this one mount,
+ * `page` is the Plugin-local page id from the manifest, and `port` is a fresh
+ * MessagePort transferred with the request. The Plugin renders that page over
+ * it, and the host closes its own end on unmount.
+ */
+export const PLUGIN_UI_MOUNT_REQUEST = "ui.mount";
+
+export interface PluginUiMountParams {
+  surface: string;
+  page: string;
+  port: MessagePort;
+}
+
+/**
+ * The host request a Plugin answers to tear one mount down. `params` is
+ * `PluginUiUnmountParams`: `surface` is the id the host chose for the mount it
+ * wants the Plugin to release.
+ */
+export const PLUGIN_UI_UNMOUNT_REQUEST = "ui.unmount";
+
+export interface PluginUiUnmountParams {
+  surface: string;
+}
 
 /**
  * The sandbox's boot handshake with the Plugin's Worker. `PLUGIN_BOOT_MESSAGE`

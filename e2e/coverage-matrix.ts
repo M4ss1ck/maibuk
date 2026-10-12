@@ -2123,6 +2123,24 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-remote-ui",
+    area: "plugins",
+    workflow:
+      "A Plugin page draws Host-rendered UI: the Plugin writes React/JSX against the SDK's component counterparts, Remote DOM carries the tree, and Maibuk renders its own React Aria controls, so typing into a Plugin text field stays host-owned, a Plugin button runs from the keyboard, and a refused declaration stops the Plugin with its reason; asserts: the control roles and their accessible names, the Plugin's own handler ran; persists: no",
+    edges: [
+      "The Plugin page renders the tree its Worker sends",
+      "A Plugin text field keeps focus and typing on the host",
+      "A Plugin button runs its handler from the keyboard",
+      "A declaration outside the kit stops the Plugin",
+    ],
+    terms: ["Plugin", "Host-rendered UI"],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["no-webkit"],
+    status: "accepted",
+  },
+  {
     id: "settings-outline",
     area: "settings",
     workflow:

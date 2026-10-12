@@ -2094,7 +2094,7 @@
       "startupTimeout": "{{name}} tardó demasiado en iniciarse y se detuvo.",
       "unresponsive": "{{name}} dejó de responder y se cerró.",
       "throttled": "{{name}} envió demasiadas actualizaciones y se detuvo.",
-      "remoteUiLimit": "{{name}} envió demasiados datos de interfaz y se detuvo.",
+      "remoteUiLimit": "{{name}} declaró una interfaz que Maibuk no pudo aceptar y se detuvo.",
       "outOfMemory": "{{name}} usó demasiada memoria y se detuvo.",
       "crashed": "{{name}} se detuvo inesperadamente."
     },
@@ -2102,8 +2102,11 @@
       "notFoundTitle": "Página del Plugin",
       "notFoundDescription": "El Plugin de esta página no está instalado.",
       "loadingTitle": "Cargando Plugin…",
-      "loadingDescription": "Esperando a que se carguen los Plugins.",
-      "placeholderDescription": "{{name}} está instalado. Los controles de su página llegarán con la interfaz que el host dibuja."
+      "loadingDescription": "Esperando a que se carguen los Plugins."
+    },
+    "ui": {
+      "couldNotDisplay": "No se pudo mostrar la interfaz de este Plugin.",
+      "removeValue": "Quitar {{value}}"
     }
   }
 }

@@ -29,6 +29,7 @@ import {
 
 export * from "@/plugin-sdk/api.generated";
 export * from "@/plugin-sdk/protocol";
+export * from "@/plugin-sdk/ui";
 
 export type HostRequestHandler = (method: string, params: unknown) => unknown;
 
