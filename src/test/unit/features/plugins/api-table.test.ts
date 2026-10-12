@@ -202,7 +202,13 @@ describe("SDK entry point", () => {
   // The SDK bundles into Plugins. It may import its own modules and the
   // libraries a Plugin bundles with it (React, Remote DOM); it must never
   // import host code (`@/features/`, `@/components/`, `@/lib/`).
-  const BUNDLED_DEPENDENCIES = ["react", "@remote-dom/core", "@remote-dom/react"];
+  const BUNDLED_DEPENDENCIES = [
+    "react",
+    "react-dom",
+    "@remote-dom/core",
+    "@remote-dom/react",
+    "@quilted/threads",
+  ];
 
   it("imports nothing outside src/plugin-sdk/ and its bundled libraries", () => {
     for (const file of readdirSync("src/plugin-sdk")) {

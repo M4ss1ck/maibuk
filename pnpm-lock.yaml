@@ -38,6 +38,9 @@ importers:
       '@floating-ui/react':
         specifier: ^0.27.19
         version: 0.27.19(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@quilted/threads':
+        specifier: 4.1.0
+        version: 4.1.0(@preact/signals-core@1.14.4)
       '@react-pdf/renderer':
         specifier: ^4.3.2
         version: 4.3.2(react@19.2.3)
@@ -1378,6 +1381,19 @@ packages:
 
   '@preact/signals-core@1.14.4':
     resolution: {integrity: sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==}
+
+  '@quilted/events@2.1.5':
+    resolution: {integrity: sha512-WUsJtSI2npAVo1WZNl60dagmC7JxBbMqTikvGuAMzGP9ZKPBpLw0AnhaBoX6mmCfvUTylMLDYbMW8zHqSinUfw==}
+    engines: {node: '>=14.0.0'}
+
+  '@quilted/threads@4.1.0':
+    resolution: {integrity: sha512-jBt1tVPoo6rznPHel0xLkmcmp/IFYyDkGHCfgkdcQnk/kHyh63XlYSGpjxZQcm/As0NMOjj7AJ8ry/T7tSGNhQ==}
+    engines: {node: '>=14.0.0'}
+    peerDependencies:
+      '@preact/signals-core': ^1.14.2
+    peerDependenciesMeta:
+      '@preact/signals-core':
+        optional: true
 
   '@react-pdf/fns@3.1.2':
     resolution: {integrity: sha512-qTKGUf0iAMGg2+OsUcp9ffKnKi41RukM/zYIWMDJ4hRVYSr89Q7e3wSDW/Koqx3ea3Uy/z3h2y3wPX6Bdfxk6g==}
@@ -4824,8 +4840,17 @@ snapshots:
     dependencies:
       playwright: 1.62.1
 
-  '@preact/signals-core@1.14.4':
-    optional: true
+  '@preact/signals-core@1.14.4': {}
+
+  '@quilted/events@2.1.5':
+    dependencies:
+      '@preact/signals-core': 1.14.4
+
+  '@quilted/threads@4.1.0(@preact/signals-core@1.14.4)':
+    dependencies:
+      '@quilted/events': 2.1.5
+    optionalDependencies:
+      '@preact/signals-core': 1.14.4
 
   '@react-pdf/fns@3.1.2': {}
 

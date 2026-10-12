@@ -60,6 +60,7 @@
     "@codemirror/view": "^6.40.0",
     "@emmetio/codemirror6-plugin": "^0.4.0",
     "@floating-ui/react": "^0.27.19",
+    "@quilted/threads": "4.1.0",
     "@react-pdf/renderer": "^4.3.2",
     "@remote-dom/core": "1.12.0",
     "@remote-dom/react": "1.2.2",
