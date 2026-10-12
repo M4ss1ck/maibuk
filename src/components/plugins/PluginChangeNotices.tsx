@@ -34,19 +34,23 @@ export function PluginChangeNotices() {
           <span className="flex-1">
             {notification.kind === "changed"
               ? t("plugins.changedNotice", { name: notification.name })
-              : `${notification.name} · ${t("plugins.available")}`}
+              : notification.kind === "size"
+                ? t("plugins.management.sizeWarning")
+                : `${notification.name} · ${t("plugins.available")}`}
           </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => {
-              usePluginManagementStore.getState().dismissNotification(notification.pluginId);
-              requestPluginReview(notification.pluginId);
-              navigate("/settings#plugins");
-            }}
-          >
-            {t("plugins.noticeReview")}
-          </Button>
+          {notification.kind !== "size" && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                usePluginManagementStore.getState().dismissNotification(notification.pluginId);
+                requestPluginReview(notification.pluginId);
+                navigate("/settings#plugins");
+              }}
+            >
+              {t("plugins.noticeReview")}
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"

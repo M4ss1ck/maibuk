@@ -2184,6 +2184,7 @@
     "management": {
       "list": "Known Plugins",
       "add": "Add Plugin",
+      "addHelp": "Install a Plugin from a .zip file, or open and change the Plugin Directory.",
       "addError": "Could not add the Plugin.",
       "addFolder": "Add from folder",
       "all": "All statuses",
@@ -2210,7 +2211,7 @@
       "none": "None",
       "yes": "Present",
       "no": "Absent",
-      "removeTitle": "Remove Plugin?",
+      "removeTitleNamed": "Remove {{name}}?",
       "removeText": "Files, approvals, and saved credentials will be deleted. Custom Shortcuts and Voice Commands stay.",
       "thirdWarning": "Maibuk cannot recover this third-party Plugin. To use it again, you must manually add its files.",
       "deleteAlso": "Also delete this Plugin’s data",
@@ -2238,6 +2239,7 @@
       "updateText": "Replacing this modified copy discards your edits. Keeping it leaves Update available without repeated prompts.",
       "filters": {
         "label": "Filter by status",
+        "help": "Show Plugins by status; a row stays when it matches any selected status.",
         "count": "{{count}} statuses",
         "installed": "Installed",
         "available": "Available",

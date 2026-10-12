@@ -2184,6 +2184,7 @@
     "management": {
       "list": "Plugins conocidos",
       "add": "Añadir Plugin",
+      "addHelp": "Instala un Plugin desde un archivo .zip, o abre y cambia la carpeta de Plugins.",
       "addError": "No se pudo añadir el Plugin.",
       "addFolder": "Añadir desde carpeta",
       "all": "Todos los estados",
@@ -2210,7 +2211,7 @@
       "none": "Ninguno",
       "yes": "Presentes",
       "no": "Ausentes",
-      "removeTitle": "¿Eliminar Plugin?",
+      "removeTitleNamed": "¿Eliminar {{name}}?",
       "removeText": "Se eliminarán los archivos, las aprobaciones y las credenciales guardadas. Los Atajos personalizados y los Comandos de voz se conservan.",
       "thirdWarning": "Maibuk no puede recuperar este Plugin de terceros. Para volver a usarlo, debes añadir sus archivos manualmente.",
       "deleteAlso": "Eliminar también los datos de este Plugin",
@@ -2238,6 +2239,7 @@
       "updateText": "Reemplazar esta copia modificada descarta tus cambios. Conservarla mantiene Actualización disponible sin avisos repetidos.",
       "filters": {
         "label": "Filtrar por estado",
+        "help": "Muestra los Plugins por estado; una fila permanece si coincide con algún estado seleccionado.",
         "count": "{{count}} estados",
         "installed": "Instalado",
         "available": "Disponible",

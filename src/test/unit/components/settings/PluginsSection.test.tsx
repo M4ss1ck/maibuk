@@ -146,11 +146,13 @@ beforeEach(() => {
   usePluginManagementStore.setState({
     plugins: {},
     notifications: [],
+    dataSizes: {},
     refresh: async () => {},
     approve: async () => ({ ok: true }),
     revoke: async () => {},
     enable: async () => {},
     disable: () => {},
+    refreshDataSize: async () => {},
   });
 });
 
@@ -670,7 +672,7 @@ describe("Plugin management (#443)", () => {
 
     await openRow(user);
     expect(screen.getByText("Stopped")).toBeInTheDocument();
-    expect(screen.getByText("Stopped because it exceeded the runtime limit.")).toBeInTheDocument();
+    expect(screen.getByText("Echoes stopped unexpectedly.")).toBeInTheDocument();
 
     const restartButton = screen.getByRole("button", { name: "Restart" });
     await tabTo(user, restartButton);
@@ -770,5 +772,222 @@ describe("Plugin management (#443)", () => {
     expect(
       useBoundShortcutStore.getState().counts["settings.changePluginDirectory"]
     ).toBeUndefined();
+  });
+
+  it("shows each Stopped reason's own copy", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        pluginId: "alpha",
+        manifest: manifest({ id: "alpha", name: "Alpha" }),
+        approval: approval({ enabled: true }),
+        review: review({ status: "approved" }),
+        stopped: { reason: "unresponsive" },
+      }),
+      entry({
+        pluginId: "beta",
+        manifest: manifest({ id: "beta", name: "Beta" }),
+        approval: approval({ enabled: true }),
+        review: review({ status: "approved" }),
+        stopped: { reason: "out-of-memory" },
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user, "Alpha");
+    expect(screen.getByText("Alpha stopped responding and was closed.")).toBeInTheDocument();
+    await openRow(user, "Beta");
+    expect(screen.getByText("Beta used too much memory and was stopped.")).toBeInTheDocument();
+  });
+
+  it("shows the Plugin's data size when expanded", async () => {
+    const user = userEvent.setup();
+    seed(entry());
+    usePluginManagementStore.setState({ dataSizes: { echoes: 4 * 1024 * 1024 } });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.getByText("4 MB")).toBeInTheDocument();
+  });
+
+  it("shows the custom-UI disclosure only for a Plugin that declares one", async () => {
+    const user = userEvent.setup();
+    seed(entry({ manifest: manifest({ customUi: true }) }));
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(
+      screen.getByText("Custom UI: accessibility not verified by Maibuk")
+    ).toBeInTheDocument();
+  });
+
+  it("hides the custom-UI disclosure for a Plugin with none", async () => {
+    const user = userEvent.setup();
+    seed(entry({ manifest: manifest({ customUi: false }) }));
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(
+      screen.queryByText("Custom UI: accessibility not verified by Maibuk")
+    ).toBeNull();
+  });
+
+  it("removes a third-party Plugin, warning it cannot be recovered, and deletes its data", async () => {
+    const user = userEvent.setup();
+    seed(entry({ approval: approval({ enabled: true }), review: review({ status: "approved" }) }));
+    const remove = vi.fn(async () => {});
+    usePluginManagementStore.setState({ remove });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const removeButton = screen.getByRole("button", { name: "Remove" });
+    await tabTo(user, removeButton);
+    await user.keyboard("{Enter}");
+
+    const dialog = await screen.findByRole("alertdialog", { name: "Remove Echoes?" });
+    expect(
+      within(dialog).getByText(
+        "Maibuk cannot recover this third-party Plugin. To use it again, you must manually add its files."
+      )
+    ).toBeInTheDocument();
+
+    const checkbox = within(dialog).getByRole("checkbox", {
+      name: "Also delete this Plugin’s data",
+    });
+    expect(checkbox).not.toBeChecked();
+    await tabTo(user, checkbox);
+    await user.keyboard(" ");
+    expect(checkbox).toBeChecked();
+
+    const confirm = within(dialog).getByRole("button", { name: "Confirm" });
+    await tabTo(user, confirm);
+    await user.keyboard("{Enter}");
+
+    expect(remove).toHaveBeenCalledWith("echoes", { deleteData: true });
+  });
+
+  it("removes a Built-in without the third-party warning or data deletion", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        builtIn: true,
+        approval: approval({ enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    const remove = vi.fn(async () => {});
+    usePluginManagementStore.setState({ remove });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const removeButton = screen.getByRole("button", { name: "Remove" });
+    await tabTo(user, removeButton);
+    await user.keyboard("{Enter}");
+
+    const dialog = await screen.findByRole("alertdialog", { name: "Remove Echoes?" });
+    expect(within(dialog).queryByText(/cannot recover this third-party Plugin/)).toBeNull();
+
+    const confirm = within(dialog).getByRole("button", { name: "Confirm" });
+    await tabTo(user, confirm);
+    await user.keyboard("{Enter}");
+
+    expect(remove).toHaveBeenCalledWith("echoes", { deleteData: false });
+  });
+
+  it("cancels removal with Escape and returns focus to the Remove button", async () => {
+    const user = userEvent.setup();
+    seed(entry({ approval: approval({ enabled: true }), review: review({ status: "approved" }) }));
+    const remove = vi.fn(async () => {});
+    usePluginManagementStore.setState({ remove });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const removeButton = screen.getByRole("button", { name: "Remove" });
+    await tabTo(user, removeButton);
+    await user.keyboard("{Enter}");
+    await screen.findByRole("alertdialog");
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(remove).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.activeElement).toBe(removeButton));
+  });
+
+  it("deletes a removed row's retained data by keyboard and keeps the row", async () => {
+    const user = userEvent.setup();
+    seed(entry({ installed: false, removed: true }));
+    const deleteData = vi.fn(async () => {});
+    usePluginManagementStore.setState({ deleteData, dataSizes: { echoes: 4096 } });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const deleteButton = screen.getByRole("button", { name: "Delete data" });
+    await tabTo(user, deleteButton);
+    await user.keyboard("{Enter}");
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(
+      within(dialog).getByText(
+        "Delete this Plugin’s retained Library data? This cannot be undone here. The Plugin row and Command preferences stay."
+      )
+    ).toBeInTheDocument();
+    const confirm = within(dialog).getByRole("button", { name: "Delete data" });
+    await tabTo(user, confirm);
+    await user.keyboard("{Enter}");
+
+    expect(deleteData).toHaveBeenCalledWith("echoes");
+    expect(screen.getByRole("button", { name: "Echoes" })).toBeInTheDocument();
+  });
+
+  it("reinstalls a removed Built-in after confirming in the dialog", async () => {
+    const user = userEvent.setup();
+    seed(entry({ builtIn: true, installed: false, removed: true, available: true }));
+    const reinstallBuiltIn = vi.fn(async () => true);
+    usePluginManagementStore.setState({ reinstallBuiltIn });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const reinstall = screen.getByRole("button", { name: "Reinstall" });
+    await tabTo(user, reinstall, 20);
+    await user.keyboard("{Enter}");
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(
+      within(dialog).getByText(
+        "Install the bundled copy again. Retained Library data reconnects; revoked access is not silently restored."
+      )
+    ).toBeInTheDocument();
+    const confirm = within(dialog).getByRole("button", { name: "Reinstall" });
+    await tabTo(user, confirm);
+    await user.keyboard("{Enter}");
+
+    expect(reinstallBuiltIn).toHaveBeenCalledWith("echoes");
+  });
+
+  it("cancels Reinstall with Escape without reinstalling", async () => {
+    const user = userEvent.setup();
+    seed(entry({ builtIn: true, installed: false, removed: true, available: true }));
+    const reinstallBuiltIn = vi.fn(async () => true);
+    usePluginManagementStore.setState({ reinstallBuiltIn });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const reinstall = screen.getByRole("button", { name: "Reinstall" });
+    await tabTo(user, reinstall, 20);
+    await user.keyboard("{Enter}");
+    await screen.findByRole("alertdialog");
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(reinstallBuiltIn).not.toHaveBeenCalled();
+  });
+
+  it("offers no Reinstall for a removed third-party Plugin", async () => {
+    const user = userEvent.setup();
+    seed(entry({ installed: false, removed: true }));
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.queryByRole("button", { name: "Reinstall" })).toBeNull();
   });
 });

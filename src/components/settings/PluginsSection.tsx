@@ -327,19 +327,17 @@ export function PluginsSection() {
         </div>
       </div>
 
-      {entries.length > 0 && (
-        <div data-settings-row="pluginsFilter" className={SETTINGS_ROW_CLASS}>
-          <MultiSelectFilter
-            label={t("plugins.management.filters.label")}
-            options={filterOptions}
-            value={selected}
-            counts={counts}
-            onChange={setSelected}
-            allLabel={t("plugins.management.all")}
-            countLabel={(count) => t("plugins.management.filters.count", { count })}
-          />
-        </div>
-      )}
+      <div data-settings-row="pluginsFilter" className={SETTINGS_ROW_CLASS}>
+        <MultiSelectFilter
+          label={t("plugins.management.filters.label")}
+          options={filterOptions}
+          value={selected}
+          counts={counts}
+          onChange={setSelected}
+          allLabel={t("plugins.management.all")}
+          countLabel={(count) => t("plugins.management.filters.count", { count })}
+        />
+      </div>
 
       {entries.length === 0 && legacyOwners.length === 0 ? (
         <div className={SETTINGS_ROW_CLASS}>

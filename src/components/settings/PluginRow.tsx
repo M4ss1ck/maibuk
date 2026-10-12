@@ -1,8 +1,9 @@
 /**
- * One Plugin row in Settings (#442): the name, its origin and state badges, a
- * startup error when one is recorded, and — expanded — the Plugin's granted
- * Plugin Permissions with their revoke controls, the enable/disable action,
- * and the Settings rows the Plugin declares.
+ * One Plugin row in Settings (#442, #443): the name, its origin and state
+ * badges, a startup error when one is recorded, and — expanded — the Plugin's
+ * stored data size, its custom-UI disclosure, its granted Plugin Permissions
+ * with their revoke controls, the enable/disable action, the removal and
+ * reinstatement actions, and the Settings rows the Plugin declares.
  *
  * The row reads the management store's entry, so the enable state, review
  * state, and grants all come from one place. A required grant is revocable
@@ -10,11 +11,19 @@
  * optional grant is revocable on its own and leaves the Plugin enabled. Inline
  * permission toggles stay locked until the copy is approved, so a changed copy
  * is only ever approved through the review dialog.
+ *
+ * An installed row offers Remove (with the optional data deletion); a removed
+ * Built-in offers Reinstall from the bundled copy; a removed row with retained
+ * data offers Delete data. Every destructive action confirms in an alert dialog
+ * first (#443).
  */
 
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button as AriaButton, Disclosure, DisclosurePanel } from "react-aria-components";
+import { PluginConfirmDialog } from "@/components/plugins/PluginConfirmDialog";
 import { PluginPermissionList } from "@/components/plugins/PluginPermissionList";
+import { PluginRemoveDialog } from "@/components/plugins/PluginRemoveDialog";
 import {
   pluginStartupErrorText,
   type StartupErrorTranslate,
@@ -22,9 +31,11 @@ import {
 import { PluginSurface } from "@/components/plugins/PluginSurface";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
+import { formatPluginDataSize } from "@/components/settings/plugin-data-size";
 import { Button } from "@/components/ui/Button";
 import { hasMissingRequired } from "@/features/plugins/approvals";
 import { usePluginManagementStore } from "@/features/plugins/management";
+import { pluginStopMessageKey } from "@/features/plugins/stop-messages";
 import type { PluginManagementEntry, PluginPermissionId } from "@/features/plugins/types";
 import {
   getPluginSettingsRows,
@@ -47,8 +58,15 @@ interface PluginRowProps {
 }
 
 export function PluginRow({ entry, open, onToggle, onReview, onReplace, platform }: PluginRowProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const translate = t as unknown as (key: string, options?: Record<string, unknown>) => string;
   const store = usePluginManagementStore.getState();
+  // The data size lives in the store's `dataSizes`, filled by `refreshDataSize`;
+  // subscribing here is what re-renders the row when the size arrives.
+  const dataSize = usePluginManagementStore((state) => state.dataSizes[entry.pluginId] ?? 0);
+  const [removing, setRemoving] = useState(false);
+  const [deletingData, setDeletingData] = useState(false);
+  const [reinstalling, setReinstalling] = useState(false);
   const manifest = entry.manifest;
   const approval = entry.approval;
   const required = manifest.permissions.required;
@@ -68,6 +86,23 @@ export function PluginRow({ entry, open, onToggle, onReview, onReplace, platform
   // but disabled so the row explains itself instead of acting.
   const enableable = entry.installed && entry.duplicateFolders.length === 0 && !entry.unsupported;
   const stopped = entry.stopped !== null;
+  const stoppedKey = entry.stopped !== null ? pluginStopMessageKey(entry.stopped.reason) : null;
+  const showCustomUi = manifest.customUi === true;
+  // A removed Built-in offers Reinstall from the bundled copy; a removed
+  // third-party Plugin offers none (the author must add its files again).
+  const canReinstall = !entry.installed && entry.builtIn;
+  // A removed row keeps its retained data; when it has any, offer to erase it.
+  const canDeleteData = !entry.installed && entry.removed && dataSize > 0;
+
+  // Expanding a row reads the Plugin's stored data size (#443). The action is
+  // read off the store rather than the captured `store` so the effect does not
+  // re-run on every unrelated state change (the size write included).
+  useEffect(() => {
+    if (!open) return;
+    void Promise.resolve(
+      usePluginManagementStore.getState().refreshDataSize(entry.pluginId)
+    ).catch(() => {});
+  }, [open, entry.pluginId]);
 
   return (
     <Disclosure isExpanded={open} onExpandedChange={onToggle} className="py-2">
@@ -118,9 +153,17 @@ export function PluginRow({ entry, open, onToggle, onReview, onReplace, platform
             {t("plugins.management.duplicateText", { folders: entry.duplicateFolders.join(", ") })}
           </p>
         )}
-        {stopped && (
-          <p className="mt-2 text-sm text-destructive">{t("plugins.management.limit")}</p>
+        {stopped && stoppedKey !== null && (
+          <p className="mt-2 text-sm text-destructive">
+            {translate(stoppedKey, { name: manifest.name })}
+          </p>
         )}
+        {showCustomUi && (
+          <p className="mt-2 text-sm text-muted-foreground">{t("plugins.management.custom")}</p>
+        )}
+        <p className="mt-2 text-sm text-muted-foreground">
+          {t("plugins.management.data")}: <strong>{formatPluginDataSize(dataSize, i18n.language)}</strong>
+        </p>
 
         <div className="mt-2 flex flex-wrap gap-2">
           {!entry.installed ? null : enabled ? (
@@ -158,7 +201,39 @@ export function PluginRow({ entry, open, onToggle, onReview, onReplace, platform
               {t("plugins.management.restart")}
             </Button>
           )}
+          {entry.installed && (
+            <Button
+              variant="destructive"
+              className="pointer-coarse:min-h-12"
+              onClick={() => setRemoving(true)}
+            >
+              {t("plugins.management.remove")}
+            </Button>
+          )}
         </div>
+
+        {!entry.installed && (canReinstall || canDeleteData) && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {canReinstall && (
+              <Button
+                variant="secondary"
+                className="pointer-coarse:min-h-12"
+                onClick={() => setReinstalling(true)}
+              >
+                {t("plugins.management.reinstall")}
+              </Button>
+            )}
+            {canDeleteData && (
+              <Button
+                variant="destructive"
+                className="pointer-coarse:min-h-12"
+                onClick={() => setDeletingData(true)}
+              >
+                {t("plugins.management.delete")}
+              </Button>
+            )}
+          </div>
+        )}
 
         {entry.updateAvailable && (
           <div className="mt-2 flex flex-wrap gap-2">
@@ -240,6 +315,45 @@ export function PluginRow({ entry, open, onToggle, onReview, onReplace, platform
             />
           </SettingRow>
         ))}
+
+        {removing && (
+          <PluginRemoveDialog
+            isOpen
+            name={manifest.name}
+            builtIn={entry.builtIn}
+            onClose={() => setRemoving(false)}
+            onConfirm={(deleteData) => {
+              setRemoving(false);
+              void store.remove(entry.pluginId, { deleteData });
+            }}
+          />
+        )}
+        {deletingData && (
+          <PluginConfirmDialog
+            isOpen
+            title={t("plugins.management.delete")}
+            text={t("plugins.management.deleteText")}
+            confirmLabel={t("plugins.management.delete")}
+            onClose={() => setDeletingData(false)}
+            onConfirm={() => {
+              setDeletingData(false);
+              void store.deleteData(entry.pluginId);
+            }}
+          />
+        )}
+        {reinstalling && (
+          <PluginConfirmDialog
+            isOpen
+            title={t("plugins.management.reinstall")}
+            text={t("plugins.management.reinstallText")}
+            confirmLabel={t("plugins.management.reinstall")}
+            onClose={() => setReinstalling(false)}
+            onConfirm={() => {
+              setReinstalling(false);
+              void store.reinstallBuiltIn(entry.pluginId);
+            }}
+          />
+        )}
       </DisclosurePanel>
     </Disclosure>
   );
