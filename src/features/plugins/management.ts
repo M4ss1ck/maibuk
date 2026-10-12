@@ -160,6 +160,32 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
     };
   }
 
+  /**
+   * The record for a modified Built-in copy the author never approved: pinned
+   * to the shipped copy so its review compares the installed files and
+   * permissions against what shipped. It grants nothing and stays off until the
+   * author reviews it (#442, plan decision 5).
+   */
+  async function modifiedBuiltInCopy(
+    manifest: PluginManagementEntry["manifest"],
+    builtIn: BuiltInPlugin
+  ): Promise<PluginApproval> {
+    const shippedDigests = await pluginFileDigests(builtIn.files);
+    return {
+      pluginId: manifest.id,
+      pinnedHash: builtIn.hash,
+      granted: [],
+      enabled: false,
+      approvedVersion: builtIn.manifest.version,
+      approvedPermissions: {
+        required: [...builtIn.manifest.permissions.required],
+        optional: [...builtIn.manifest.permissions.optional],
+      },
+      approvedFiles: Object.fromEntries(shippedDigests),
+      builtIn: { shippedHash: builtIn.hash },
+    };
+  }
+
   return create<PluginManagement>((set, get) => {
     let unsubscribe: (() => void) | null = null;
     let unwatch: (() => void) | null = null;
@@ -424,10 +450,15 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
             continue;
           }
           let approval = getPluginApproval(manifest.id);
-          // First sight of an untouched Built-in: pre-grant every declared
-          // Plugin Permission and enable it. A modified copy is left for review.
-          if (builtIn && approval === null && hash === builtIn.hash) {
-            approval = approveBuiltInCopy(manifest, hash, digests, builtIn.hash);
+          // First sight of a Built-in: an untouched copy is pre-granted and
+          // enabled, while a modified copy is recorded against the shipped one
+          // so it reads "review-required" (with its file and permission diff)
+          // instead of "never approved". Nothing is granted until review.
+          if (builtIn && approval === null) {
+            approval =
+              hash === builtIn.hash
+                ? approveBuiltInCopy(manifest, hash, digests, builtIn.hash)
+                : await modifiedBuiltInCopy(manifest, builtIn);
             savePluginApproval(approval);
           }
           const entry = buildEntry(manifest.id, { manifest, digests, hash }, approval, builtIn);

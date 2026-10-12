@@ -25,6 +25,21 @@ describe("destructive action warnings", () => {
     expect(es.backup.restoreConfirm).toContain("también los lienzos si la copia los incluye");
   });
 
+  it("Reset settings names what it clears and what it keeps", () => {
+    // resetAllSettings clears the settings store, Shortcuts, approvals, and
+    // credentials; it never touches Plugin files or Library data.
+    expect(en.settings.resetBody).toContain("Saved credentials are deleted.");
+    expect(en.settings.resetBody).toContain("Installed Plugin files and Library data stay.");
+    expect(en.settings.resetBody).toContain("Third-party Plugins need approval again.");
+    expect(es.settings.resetBody).toContain("Se borran las credenciales guardadas.");
+    expect(es.settings.resetBody).toContain(
+      "Se conservan los archivos de Plugins y los datos de la Biblioteca."
+    );
+    expect(es.settings.resetBody).toContain(
+      "Los Plugins de terceros requieren aprobación de nuevo."
+    );
+  });
+
   it("a failed restore does not claim the library is untouched", () => {
     // replaceRestoreData deletes before it inserts, so a failure can leave a
     // partial library; the Pre-restore backup is the way back.

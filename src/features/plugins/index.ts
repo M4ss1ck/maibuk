@@ -79,6 +79,7 @@ export {
   PLUGIN_APPROVALS_STORAGE_KEY,
   approveBuiltInCopy,
   approvePluginCopy,
+  clearPluginApprovals,
   disablePlugin,
   enablePlugin,
   getPluginApproval,

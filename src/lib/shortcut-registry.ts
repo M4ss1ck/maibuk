@@ -309,6 +309,11 @@ export const COMMANDS = {
     contexts: ["settings"],
     defaults: [],
   },
+  "settings.resetSettings": {
+    labelKey: "settings.resetSettings",
+    contexts: ["settings"],
+    defaults: [],
+  },
 
   "dictation.toggle": {
     labelKey: "dictation.toggle",

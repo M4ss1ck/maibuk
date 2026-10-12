@@ -839,6 +839,10 @@
     "resetDatabaseFailed": "Could not reset the library. Try restarting the app.",
     "resetDatabaseConfirm": "Reset your library? This deletes all books, chapters, notes, canvases, cover templates, version history, and writing metrics on this device. Your settings are kept. If it can, Maibuk first saves a backup you can restore your books, notes, and canvases from; writing metrics, cover templates, and imported EPUB details can't be recovered. If sync is on, your books and notes come back from your other devices.",
     "confirmReset": "Yes, reset everything",
+    "resetSettings": "Reset settings",
+    "resetTitle": "Reset all settings?",
+    "resetBody": "All custom settings, Custom Shortcuts, custom Voice Commands, enabled preferences, permissions and approvals return to defaults. Saved credentials are deleted. Installed Plugin files and Library data stay. Third-party Plugins need approval again. Untouched Built-in Plugins return to shipped defaults; modified copies still require review.",
+    "reset": "Reset settings and delete credentials",
     "metrics": {
       "title": "Metrics",
       "description": "Choose which local writing patterns Maibuk records on this device.",

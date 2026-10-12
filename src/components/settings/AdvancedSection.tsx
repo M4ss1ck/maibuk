@@ -8,20 +8,31 @@ import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { getFileSystem, IS_TAURI, getDialog, getWebDialog, createBackup } from "@/lib/platform";
 import { BackupService } from "@/features/backup/backup-service";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
+import { resetAllSettings } from "@/features/settings/reset-all";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
+import { useShortcuts } from "@/lib/shortcuts";
 
 export function AdvancedSection() {
   const { t } = useTranslation();
   const advancedOpen = useSettingsRevealStore((state) => state.advancedOpen);
   const setAdvancedOpen = useSettingsRevealStore((state) => state.setAdvancedOpen);
   const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetSettingsModalOpen, setResetSettingsModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isResettingSettings, setIsResettingSettings] = useState(false);
   // A fresh mount starts closed, like the old local state: reset on unmount
   // so one visit's open block never leaks into the next mount.
   useEffect(() => () => setAdvancedOpen(false), [setAdvancedOpen]);
+
+  useShortcuts([
+    {
+      id: "settings.resetSettings",
+      onTrigger: () => setResetSettingsModalOpen(true),
+    },
+  ]);
 
   const handleExportDatabase = async () => {
     setIsExporting(true);
@@ -125,6 +136,18 @@ export function AdvancedSection() {
     }
   };
 
+  const handleResetSettings = async () => {
+    setIsResettingSettings(true);
+    try {
+      await resetAllSettings();
+      setResetSettingsModalOpen(false);
+    } catch (error) {
+      console.error("Failed to reset settings:", error);
+    } finally {
+      setIsResettingSettings(false);
+    }
+  };
+
   return (
     <>
       <SettingsSection
@@ -179,6 +202,21 @@ export function AdvancedSection() {
                 {t("settings.resetDatabaseButton")}
               </Button>
             </SettingRow>
+
+            <SettingRow
+              id="resetSettings"
+              labelClassName="font-medium text-destructive"
+              className={SETTINGS_ROW_CLASS}
+            >
+              <Button
+                variant="destructive"
+                size="sm"
+                data-command="settings.resetSettings"
+                onClick={() => setResetSettingsModalOpen(true)}
+              >
+                {t("settings.resetSettings")}
+              </Button>
+            </SettingRow>
           </>
         )}
       </SettingsSection>
@@ -199,6 +237,29 @@ export function AdvancedSection() {
         }
       >
         <p className="text-muted-foreground">{t("settings.resetDatabaseConfirm")}</p>
+      </Modal>
+
+      <Modal
+        isOpen={resetSettingsModalOpen}
+        onClose={() => setResetSettingsModalOpen(false)}
+        title={t("settings.resetTitle")}
+        role="alertdialog"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setResetSettingsModalOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleResetSettings}
+              disabled={isResettingSettings}
+            >
+              {isResettingSettings ? t("common.loading") : t("settings.reset")}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-muted-foreground">{t("settings.resetBody")}</p>
       </Modal>
     </>
   );

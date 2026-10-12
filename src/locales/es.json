@@ -839,6 +839,10 @@
     "resetDatabaseFailed": "No se pudo reiniciar la biblioteca. Intenta reiniciar la aplicación.",
     "resetDatabaseConfirm": "¿Reiniciar tu biblioteca? Esto elimina todos los libros, capítulos, notas, lienzos, plantillas de portada, historial de versiones y métricas de escritura de este dispositivo. Tu configuración se mantiene. Si puede, Maibuk guarda antes una copia de seguridad desde la que puedes restaurar tus libros, notas y lienzos; las métricas de escritura, las plantillas de portada y los datos de EPUB importados no se pueden recuperar. Si la sincronización está activa, tus libros y notas vuelven desde tus otros dispositivos.",
     "confirmReset": "Sí, reiniciar todo",
+    "resetSettings": "Reiniciar ajustes",
+    "resetTitle": "¿Reiniciar todos los ajustes?",
+    "resetBody": "Todos los ajustes personalizados, Atajos personalizados, Comandos de voz personalizados, preferencias de activación, permisos y aprobaciones vuelven a sus valores predeterminados. Se borran las credenciales guardadas. Se conservan los archivos de Plugins y los datos de la Biblioteca. Los Plugins de terceros requieren aprobación de nuevo. Los integrados sin modificar vuelven a sus valores originales; las copias modificadas aún requieren revisión.",
+    "reset": "Reiniciar ajustes y borrar credenciales",
     "metrics": {
       "title": "Métricas",
       "description": "Elige qué patrones locales de escritura registra Maibuk en este dispositivo.",

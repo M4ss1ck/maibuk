@@ -132,6 +132,15 @@ export function removePluginApproval(pluginId: string): void {
 }
 
 /**
+ * Removes every stored Plugin approval: grants, enable state, and pinned
+ * hashes. Reset settings (#442) clears them so a refresh re-seeds an untouched
+ * Built-in from its shipped defaults while a modified copy stays for review.
+ */
+export function clearPluginApprovals(): void {
+  localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
+}
+
+/**
  * Builds the record for a first-time approval: every required Plugin
  * Permission granted, the chosen optional ones, the author's copy pinned and
  * enabled. `digests` is the `pluginFileDigests` output for the approved folder.

@@ -246,6 +246,12 @@ interface Entry {
   limitStopped: boolean;
   /** Invalidates in-flight work when a stop or a new start supersedes it. */
   generation: number;
+  /**
+   * The start in flight while the review gate reads the folder, before the
+   * state turns "starting": a concurrent start joins it instead of bumping
+   * the generation and failing the first caller (#442).
+   */
+  pendingStart: Promise<PluginActivationResult> | null;
 }
 
 export function createPluginLifecycle(options: PluginLifecycleOptions = {}): PluginLifecycle {
@@ -367,6 +373,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     const runtime = entry.runtime;
     entry.runtime = null;
     entry.generation += 1;
+    entry.pendingStart = null;
     clearTimers(entry);
     setState(entry, { status: "stopped", reason, refusal: null });
     runtime?.stop();
@@ -376,6 +383,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   function refuseEntry(entry: Entry, refusal: PluginActivationRefusal): void {
     entry.runtime = null;
     entry.generation += 1;
+    entry.pendingStart = null;
     clearTimers(entry);
     setState(entry, { status: "stopped", reason: null, refusal });
   }
@@ -388,6 +396,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   ): void {
     entry.runtime = null;
     entry.generation += 1;
+    entry.pendingStart = null;
     clearTimers(entry);
     setState(entry, { status: "stopped", reason, refusal });
     applyStopPolicy(entry, reason);
@@ -450,7 +459,16 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     }, HEARTBEAT_INTERVAL_MS);
   }
 
-  async function startEntry(
+  function startEntry(entry: Entry, reason: PluginStartReason): Promise<PluginActivationResult> {
+    if (entry.pendingStart) return entry.pendingStart;
+    const pending = runStart(entry, reason).finally(() => {
+      if (entry.pendingStart === pending) entry.pendingStart = null;
+    });
+    entry.pendingStart = pending;
+    return pending;
+  }
+
+  async function runStart(
     entry: Entry,
     reason: PluginStartReason
   ): Promise<PluginActivationResult> {
@@ -467,25 +485,12 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;
     const startMark = `plugin.start:${pluginId}:begin`;
     const handshakeMark = `plugin.start:${pluginId}:handshake`;
-    devMark(startMark);
-    setState(entry, { status: "starting", startReason: reason });
-
-    // An incompatible manifest stays listed and off (#436): the check runs
-    // before the dataVersion read and before any frame exists.
-    const compatibility = checkPluginCompatibility(manifest, {
-      apiVersion: PLUGIN_API_VERSION,
-      appVersion: APP_VERSION,
-    });
-    if (compatibility.verdict !== "ok") {
-      const refusal: PluginActivationRefusal = { code: "incompatible", compatibility };
-      refuseEntry(entry, refusal);
-      return { ok: false, refusal };
-    }
 
     // The review gate (#442): only the copy the author approved starts. It runs
-    // before any frame, in addition to `startPlugin`'s own pinned-hash check,
-    // and reports the review so a changed copy notifies once. The live record
-    // is read so a re-review (markReviewed) takes effect on the next start.
+    // before the state turns "starting" and before any frame, in addition to
+    // `startPlugin`'s own pinned-hash check, so a changed copy is refused
+    // without ever being reported as starting. The live record is read so a
+    // re-review (markReviewed) takes effect on the next start.
     const liveApproval = getPluginApproval(pluginId);
     let review: PluginReview | null = null;
     try {
@@ -502,17 +507,33 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       // check; the review cannot be computed, so the start falls through.
       review = null;
     }
+    if (entry.generation !== generation) return { ok: false, refusal: { code: "not-installed" } };
     if (review !== null && review.status !== "approved") {
       const refusal: PluginActivationRefusal = {
         code: "review-required",
         status: review.status,
       };
-      if (entry.generation === generation) refuseEntry(entry, refusal);
+      refuseEntry(entry, refusal);
       return { ok: false, refusal };
     }
     if (liveApproval === null && review === null) {
       const refusal: PluginActivationRefusal = { code: "review-required", status: "not-approved" };
-      if (entry.generation === generation) refuseEntry(entry, refusal);
+      refuseEntry(entry, refusal);
+      return { ok: false, refusal };
+    }
+
+    devMark(startMark);
+    setState(entry, { status: "starting", startReason: reason });
+
+    // An incompatible manifest stays listed and off (#436): the check runs
+    // before the dataVersion read and before any frame exists.
+    const compatibility = checkPluginCompatibility(manifest, {
+      apiVersion: PLUGIN_API_VERSION,
+      appVersion: APP_VERSION,
+    });
+    if (compatibility.verdict !== "ok") {
+      const refusal: PluginActivationRefusal = { code: "incompatible", compatibility };
+      refuseEntry(entry, refusal);
       return { ok: false, refusal };
     }
 
@@ -660,6 +681,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       restartTimer: null,
       autoRestarted: false,
       limitStopped: false,
+      pendingStart: null,
       generation: 0,
     };
   }
@@ -892,6 +914,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       if (!entry) return;
       clearPluginHighlights(pluginId);
       entry.generation += 1;
+      entry.pendingStart = null;
       clearTimers(entry);
       const runtime = entry.runtime;
       entry.runtime = null;
@@ -946,6 +969,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       scanListeners.clear();
       for (const entry of entries.values()) {
         entry.generation += 1;
+        entry.pendingStart = null;
         clearTimers(entry);
         const runtime = entry.runtime;
         entry.runtime = null;

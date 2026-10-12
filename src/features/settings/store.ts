@@ -90,6 +90,8 @@ interface SettingsStore extends Settings {
   setLaunchOnStartup: (enabled: boolean) => void;
   setCloseToTray: (enabled: boolean) => void;
   setPluginDevelopmentMode: (enabled: boolean) => void;
+  /** Returns every setting to its shipped default; Reset settings (#442). */
+  resetSettings: () => void;
   setDefaultExportFormat: (format: ExportFormat) => void;
   setBackupRetention: (retention: number) => void;
   setBackupDirectory: (directory: string | null) => void;
@@ -330,6 +332,18 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       setCloseToTray: (closeToTray) => set({ closeToTray }),
       setPluginDevelopmentMode: (pluginDevelopmentMode) => set({ pluginDevelopmentMode }),
+      // Reset settings (#442, plan decision 7): every setting returns to its
+      // shipped default — the toolbar layout included — and the app language
+      // follows. Session location (`lastPath`/`lastNoteId`) is not a setting.
+      resetSettings: () => {
+        const language = defaultSettings.language;
+        i18n.changeLanguage(language);
+        set({
+          ...defaultSettings,
+          language,
+          toolbarConfig: withRegisteredToolbarButtons(makeResetToolbarConfig()),
+        });
+      },
       setDefaultExportFormat: (defaultExportFormat) => set({ defaultExportFormat }),
       setBackupRetention: (backupRetention) =>
         set({ backupRetention: Math.max(1, Math.floor(backupRetention)) }),

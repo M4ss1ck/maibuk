@@ -1136,14 +1136,57 @@ describe("Plugin lifecycle: review gate", () => {
     });
     await h.lifecycle.launch();
     h.lifecycle.surfaceReached("warm-page", "page:report");
-    await advance(0);
+    // The review gate hashes the folder on the real event loop; wait for the
+    // refusal itself rather than a fixed number of timer passes.
+    await advanceUntil(() => {
+      const state = h.lifecycle.state("warm-page");
+      return state?.status === "stopped" && state.refusal?.code === "review-required";
+    }, "warm-page review refusal");
 
     expect(h.frameCount()).toBe(0);
+    // A changed copy is refused before the state ever turns "starting".
+    expect(h.changes.map((change) => change.state.status)).not.toContain("starting");
     expect(h.lifecycle.state("warm-page")).toEqual({
       status: "stopped",
       reason: null,
       refusal: { code: "review-required", status: "review-required" },
     });
+  });
+
+  it("joins a concurrent start made while the review gate reads the folder", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { lifecycle: "on-demand" })],
+    });
+    await h.lifecycle.launch();
+
+    // Both calls land before the gate's folder hash resolves, while the state
+    // is still "stopped"; the second must not supersede the first.
+    const [first, second] = await Promise.all([
+      h.lifecycle.start("alpha", "enable"),
+      h.lifecycle.start("alpha", "enable"),
+    ]);
+    await advance(0);
+
+    expect(first).toEqual(second);
+    expect(first.ok).toBe(true);
+    expect(h.framesFor("alpha")).toHaveLength(1);
+  });
+
+  it("starts again after a stop that lands while the review gate reads the folder", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { lifecycle: "on-demand" })],
+    });
+    await h.lifecycle.launch();
+
+    const superseded = h.lifecycle.start("alpha", "enable");
+    h.lifecycle.stop("alpha");
+    const restarted = await h.lifecycle.start("alpha", "enable");
+    await superseded;
+    await advance(0);
+
+    expect(restarted.ok).toBe(true);
+    expect(h.framesFor("alpha")).toHaveLength(1);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "enable" });
   });
 });
 
