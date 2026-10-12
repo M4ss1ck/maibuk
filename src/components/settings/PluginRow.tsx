@@ -172,7 +172,7 @@ export function PluginRow({ entry, open, onToggle, onReview, onReplace, platform
                 )
               }
               rowClassName="border-b border-border py-2 last:border-b-0"
-              rowFlexClassName="flex flex-wrap items-center gap-2"
+              rowFlexClassName="flex items-center gap-2"
             />
           </div>
         )}

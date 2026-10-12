@@ -83,8 +83,8 @@ export function PluginPermissionList({
                   onToggle(permission, next);
                 }}
               />
-              <span className="font-medium">{label}</span>
-              {renderAction?.(permission)}
+              <span className="min-w-0 flex-1 font-medium">{label}</span>
+              {renderAction ? <span className="shrink-0">{renderAction(permission)}</span> : null}
             </div>
             {renderDetail ? (
               renderDetail(permission, { isRequired, checked: isChecked, detail: copy.detail })
