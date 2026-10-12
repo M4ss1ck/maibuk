@@ -1,4 +1,6 @@
+import { Editor } from "@tiptap/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
@@ -118,8 +120,33 @@ describe("Plugin Library reads", () => {
     expect(sanitizePluginHtml(null)).toBe("");
   });
 
-  it("drops markup for the plain text and collapses whitespace", () => {
+  it("separates block elements and turns a hard break into a newline", () => {
+    expect(htmlToPlainText("<h1>Title</h1><p>Body</p>")).toBe("Title\n\nBody");
+    expect(htmlToPlainText("<p>a<br>b</p>")).toBe("a\nb");
+    // The bug this locks: tags dropped without separation glued "onetwo".
+    const list = htmlToPlainText("<ul><li>one</li><li>two</li></ul>");
+    expect(list).not.toBe("onetwo");
+    expect(list).toContain("one");
+    expect(list).toContain("two");
+    const quote = htmlToPlainText("<blockquote><p>q</p></blockquote><p>after</p>");
+    expect(quote).not.toBe("qafter");
     expect(htmlToPlainText("<p>Hello <strong>world</strong></p>")).toBe("Hello world");
     expect(htmlToPlainText(null)).toBe("");
+    expect(htmlToPlainText("")).toBe("");
+  });
+
+  it("matches the real editor's getText for a fixture document", () => {
+    // The offset contract (#396): Library text and the editor's own plain text
+    // are one coordinate system for selection, highlights, and reveal ranges.
+    const html =
+      "<h1>Title</h1><p>Intro <strong>bold</strong>.</p>" +
+      "<ul><li>one</li><li>two</li></ul>" +
+      "<blockquote><p>Quote</p></blockquote><p>a<br>b</p>";
+    const editor = new Editor({ extensions: createRichTextExtensions(), content: html });
+    try {
+      expect(htmlToPlainText(html)).toBe(editor.getText());
+    } finally {
+      editor.destroy();
+    }
   });
 });

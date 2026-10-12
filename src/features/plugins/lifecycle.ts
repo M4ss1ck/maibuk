@@ -36,7 +36,7 @@ import { scanApprovedPlugins } from "@/features/plugins/launch";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
-import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
+import { isTutorialLibraryActive, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
   InstalledPlugin,
   PluginActivationRefusal,
@@ -224,6 +224,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   // A broker call that reads or writes the Library must refuse while the
   // Tutorial Library is active (ADR 0008), like every other background job.
   const isLibraryAvailable = options.isLibraryAvailable ?? (() => !isTutorialLibraryActive());
+  // Accepted Library work is registered with the Tutorial switch, so entering
+  // the Tutorial waits for it and no call finishes against the sample Library
+  // (ADR 0008, #398).
+  const trackLibraryWork = options.trackLibraryWork ?? trackAuthorLibraryWork;
   const entries = new Map<string, Entry>();
   const listeners = new Set<(change: PluginLifecycleChange) => void>();
   let disposed = false;
@@ -474,6 +478,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         handlers,
         createFrame: options.createFrame,
         isLibraryAvailable,
+        trackLibraryWork,
         eventSnapshot: (event) =>
           event === "language.changed" ? { language: currentPluginLanguage() } : undefined,
         // The remaining budget, so the handshake cannot grant itself a fresh 10 s.

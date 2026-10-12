@@ -566,6 +566,7 @@ Opens a Book, Chapter, Note, or Canvas, optionally revealing a range.
 
 - Plugin Permission: none (rate-limited instead)
 - Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
 
 Input:
 

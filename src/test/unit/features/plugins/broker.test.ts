@@ -238,6 +238,50 @@ describe("typed errors", () => {
     await expect(client.editor.getContent()).resolves.toEqual({ status: "no-target" });
   });
 
+  it("tracks every requiresLibrary call so a Library switch can settle accepted work", async () => {
+    const tracked: Promise<unknown>[] = [];
+    const { client } = setup({
+      declared: ["library:read"],
+      trackLibraryWork: (work) => {
+        tracked.push(work);
+        return work;
+      },
+      handlers: { "library.books.list": async () => [BOOK] },
+    });
+    await expect(client.library.books.list()).resolves.toEqual([BOOK]);
+    expect(tracked).toHaveLength(1);
+    await expect(tracked[0]).resolves.toEqual([BOOK]);
+  });
+
+  it("does not track a call that does not read the Library", async () => {
+    const tracked: Promise<unknown>[] = [];
+    const { client } = setup({
+      trackLibraryWork: (work) => {
+        tracked.push(work);
+        return work;
+      },
+    });
+    await client.notifications.show({ variant: "info", message: "hi" });
+    expect(tracked).toEqual([]);
+  });
+
+  it("refuses a requiresLibrary result that resolves after the Library left", async () => {
+    // The handler starts against the author's Library and flips availability
+    // before it returns, as the Tutorial switch does (ADR 0008, #398).
+    let open = true;
+    const { client } = setup({
+      declared: ["library:read"],
+      isLibraryAvailable: () => open,
+      handlers: {
+        "library.books.list": async () => {
+          open = false;
+          return [BOOK];
+        },
+      },
+    });
+    expect((await refusal(client.library.books.list())).code).toBe("library-unavailable");
+  });
+
   it("hides a handler's own failure behind internal-error", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { client } = setup({

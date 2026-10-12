@@ -133,6 +133,8 @@ export interface PluginStartOptions {
   handlers?: (manifest: PluginManifest) => PluginApiHandlers;
   /** False while the Library cannot be read or written (the Tutorial Library). */
   isLibraryAvailable?: () => boolean;
+  /** Registers a `requiresLibrary` handler's work so the Tutorial switch settles it (ADR 0008, #398). */
+  trackLibraryWork?: <T>(work: Promise<T>) => Promise<T>;
   /** The current payload of a replaying event, delivered on subscription. */
   eventSnapshot?: (event: string) => unknown;
   /** Injected by tests: jsdom has no Worker, and a fake frame proves the refusal order. */
@@ -275,6 +277,8 @@ export interface PluginLifecycleOptions {
   handlers?: (manifest: PluginManifest) => PluginApiHandlers;
   /** False while the Library cannot be read or written (the Tutorial Library). */
   isLibraryAvailable?: () => boolean;
+  /** Registers `requiresLibrary` handler work so the Tutorial switch settles it (ADR 0008, #398). */
+  trackLibraryWork?: <T>(work: Promise<T>) => Promise<T>;
   /** The dataVersion gate's storage; defaults to the Plugin storage rows. */
   dataVersions?: PluginDataVersions;
   /**
@@ -686,6 +690,13 @@ export interface PluginBrokerOptions {
   handlers?: PluginApiHandlers;
   /** False while the Library cannot be read or written (Library rows refuse). */
   isLibraryAvailable?: () => boolean;
+  /**
+   * Registers a `requiresLibrary` handler's in-flight work so the Tutorial
+   * switch can settle it before switching Libraries (ADR 0008, #398). Injected
+   * by the lifecycle so the broker stays Tutorial-agnostic; defaults to running
+   * the work untracked.
+   */
+  trackLibraryWork?: <T>(work: Promise<T>) => Promise<T>;
   /**
    * The current payload of a replaying event (`replays: true`), delivered to a
    * Plugin the moment it subscribes. Returns `undefined` when the event has no

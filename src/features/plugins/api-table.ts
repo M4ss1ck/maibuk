@@ -281,6 +281,7 @@ export const PLUGIN_API_TABLE = [
     output: ok,
     permission: null,
     effect: "write",
+    requiresLibrary: true,
   }),
   defineApiRow({
     id: "language.get",

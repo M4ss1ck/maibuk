@@ -10,6 +10,7 @@
  */
 
 import DOMPurify from "dompurify";
+import { htmlToPlainText } from "@/components/editor/html-to-text";
 import type {
   PluginBook,
   PluginCanvasSummary,
@@ -27,12 +28,9 @@ export function sanitizePluginHtml(html: string | null | undefined): string {
   return DOMPurify.sanitize(html);
 }
 
-/** The plain text a reader wants, with tags dropped and whitespace collapsed. */
-export function htmlToPlainText(html: string | null | undefined): string {
-  if (!html) return "";
-  const body = new DOMParser().parseFromString(html, "text/html").body;
-  return (body.textContent ?? "").trim();
-}
+// The plain-text helper lives with the editor schema it mirrors (#396), so the
+// Library reads and #441's selection/reveal share one coordinate system.
+export { htmlToPlainText };
 
 function pluginContent(html: string | null | undefined): PluginContent {
   // Plain text comes from the sanitized HTML, so a script's own text never

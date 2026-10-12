@@ -212,6 +212,25 @@ describe("createTestHost()", () => {
     }
   });
 
+  it("refuses navigation.openEntity with library-unavailable while the Tutorial runs", async () => {
+    // Decision #398: the Tutorial refuses Library access, and navigation reads
+    // the Library to resolve a route and drives the router out of the run.
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      host.setLibraryAvailable(false);
+      await expect(
+        client.navigation.openEntity({ entity: { kind: "book", id: "b1" } })
+      ).rejects.toMatchObject({ code: "library-unavailable" });
+      expect(host.navigations).toEqual([]);
+      host.setLibraryAvailable(true);
+      await client.navigation.openEntity({ entity: { kind: "book", id: "b1" } });
+      expect(host.navigations).toEqual([{ entity: { kind: "book", id: "b1" } }]);
+    } finally {
+      host.stop();
+    }
+  });
+
   it("refuses a Library call with library-unavailable while the Tutorial runs", async () => {
     const host = createTestHost({
       manifest: {
