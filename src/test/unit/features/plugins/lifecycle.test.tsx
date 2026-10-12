@@ -645,6 +645,10 @@ describe("Plugin lifecycle: stop reasons", () => {
       'the "slow" Plugin starting'
     );
     expect(h.lifecycle.state("slow")).toEqual({ status: "starting", startReason: "launch" });
+    // "starting" is set before the frame exists, and the startup timeout is
+    // armed only when `startPlugin` creates the frame, after real async work the
+    // fake timers do not control. Wait for the frame so the timer exists.
+    await advanceUntil(() => h.framesFor("slow").length === 1, 'the "slow" frame created');
 
     await advance(STARTUP_TIMEOUT_MS);
 
@@ -674,6 +678,13 @@ describe("Plugin lifecycle: persistent restart-once", () => {
     });
 
     await advance(RESTART_DELAY_MS);
+    // The restart's frame is created only after real async work the fake timers
+    // do not control; wait for the new frame and the ready state it leads to.
+    await advanceUntil(
+      () =>
+        h.framesFor("alpha").length === 2 && h.lifecycle.state("alpha")?.status === "ready",
+      "alpha's automatic restart"
+    );
     expect(h.framesFor("alpha")).toHaveLength(2);
     expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "restart" });
 
@@ -832,6 +843,9 @@ describe("Plugin lifecycle: dataVersion gate", () => {
     );
     expect(h.lifecycle.state("alpha")).toEqual({ status: "starting", startReason: "launch" });
     expect(h.framesFor("alpha")[0].requests).toContain("migrateData");
+    // The startup timeout is armed only once the frame exists (runtime.ts);
+    // the migrateData wait above already implies it, and this makes it explicit.
+    await advanceUntil(() => h.framesFor("alpha").length === 1, "alpha's frame created");
 
     await advance(STARTUP_TIMEOUT_MS);
 
