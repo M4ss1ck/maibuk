@@ -56,22 +56,18 @@ export interface PluginUiValidatorOptions {
   onViolation: (violation: PluginUiViolation) => void;
   limits?: PluginUiLimits;
   /**
-   * The current animation-frame index; the connection refuses a second batch
-   * in the same frame. Injectable so tests measure frames with a manual clock.
+   * The current time in milliseconds; the connection refuses a batch once the
+   * limit is already met inside the last second. Injectable so tests control
+   * time.
    */
-  frame?: () => number;
+  now?: () => number;
 }
 
 const MAX_OPTIONS = 200;
 const MAX_STRING = 1_000_000;
 
-/** One animation frame, the window the batch-rate cap is measured over. */
-export const FRAME_MS = 1000 / 60;
-
-/** The default frame clock: a frame-long window over `performance.now()`. */
-export function defaultFrame(now: () => number = () => performance.now()): () => number {
-  return () => Math.floor(now() / FRAME_MS);
-}
+/** The sliding window the batch-rate cap is measured over: one second. */
+const BATCH_WINDOW_MS = 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -165,9 +161,9 @@ function propertyProblem(prop: PluginUiProp, value: unknown): string | null {
 export function createValidatedConnection(options: PluginUiValidatorOptions): RemoteConnection {
   const { receiver, onViolation } = options;
   const limits = options.limits ?? PLUGIN_UI_LIMITS;
-  const frame = options.frame ?? defaultFrame();
+  const now = options.now ?? (() => performance.now());
   let tags = new Map<string, string>();
-  let lastBatchFrame: number | null = null;
+  const batchTimes: number[] = [];
   let tripped = false;
 
   function refuse(violation: PluginUiViolation): false {
@@ -371,15 +367,18 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
         });
         return;
       }
-      const currentFrame = frame();
-      if (currentFrame === lastBatchFrame) {
+      const t = now();
+      while (batchTimes.length > 0 && batchTimes[0] <= t - BATCH_WINDOW_MS) {
+        batchTimes.shift();
+      }
+      if (batchTimes.length >= limits.maxBatchesPerSecond) {
         refuse({
           code: "too-many-batches",
-          message: "The interface sent more than one update in a frame",
+          message: `The interface sent more than ${limits.maxBatchesPerSecond} updates in a second`,
         });
         return;
       }
-      lastBatchFrame = currentFrame;
+      batchTimes.push(t);
       applyRecords(records);
     },
     call(id, method, ...args) {

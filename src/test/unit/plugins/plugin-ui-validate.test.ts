@@ -30,21 +30,16 @@ function element(
   return { id, type: 1, element: tag, children: [], ...extra } as RemoteNodeSerialization;
 }
 
-function advancingFrame(): () => number {
-  let frame = 0;
-  return () => frame++;
-}
-
 function setup(
   limits?: Parameters<typeof createValidatedConnection>[0]["limits"],
-  frame: () => number = advancingFrame()
+  now: () => number = () => 0
 ) {
   const receiver = new RemoteReceiver();
   const violations: PluginUiViolation[] = [];
   const connection = createValidatedConnection({
     receiver,
     onViolation: (violation) => violations.push(violation),
-    frame,
+    now,
     ...(limits === undefined ? {} : { limits }),
   });
   return { receiver, violations, connection };
@@ -237,24 +232,45 @@ describe("the connection validator", () => {
   });
 
   it("refuses a batch with too many records", () => {
-    const { violations, connection } = setup({ maxNodes: 10, maxRecordsPerBatch: 1, maxBatchesPerFrame: 1 });
+    const { violations, connection } = setup({ maxNodes: 10, maxRecordsPerBatch: 1, maxBatchesPerSecond: 120 });
     connection.mutate([insert(element("1", "maibuk-text")), insert(element("2", "maibuk-text"), 1)]);
     expect(violations[0]?.code).toBe("too-many-records");
   });
 
-  it("refuses a second batch in the same animation frame", () => {
-    const frame = 0;
-    const { violations, connection } = setup(undefined, () => frame);
-    connection.mutate([insert(element("1", "maibuk-text"))]);
-    connection.mutate([insert(element("2", "maibuk-text"), 1)]);
+  it("accepts 120 batches in one second", () => {
+    let t = 0;
+    const { receiver, violations, connection } = setup(undefined, () => t);
+    for (let i = 0; i < 120; i++) {
+      t = i * 8;
+      connection.mutate([insert(element(`${i}`, "maibuk-text"), i)]);
+    }
+    expect(violations).toEqual([]);
+    expect(receiver.root.children).toHaveLength(120);
+  });
+
+  it("refuses the 121st batch inside one second", () => {
+    const { violations, connection } = setup(undefined, () => 0);
+    for (let i = 0; i < 121; i++) {
+      connection.mutate([insert(element(`${i}`, "maibuk-text"), i)]);
+    }
     expect(violations[0]?.code).toBe("too-many-batches");
   });
 
-  it("accepts one batch per animation frame", () => {
-    let frame = 0;
-    const { receiver, violations, connection } = setup(undefined, () => frame);
+  it("accepts again once the window slides", () => {
+    let t = 0;
+    const { receiver, violations, connection } = setup(undefined, () => t);
+    for (let i = 0; i < 120; i++) {
+      connection.mutate([insert(element(`${i}`, "maibuk-text"), i)]);
+    }
+    t = 1000;
+    connection.mutate([insert(element("last", "maibuk-text"), 120)]);
+    expect(violations).toEqual([]);
+    expect(receiver.root.children).toHaveLength(121);
+  });
+
+  it("accepts back-to-back batches at the same instant under the cap", () => {
+    const { receiver, violations, connection } = setup(undefined, () => 0);
     connection.mutate([insert(element("1", "maibuk-text"))]);
-    frame += 1;
     connection.mutate([insert(element("2", "maibuk-text"), 1)]);
     expect(violations).toEqual([]);
     expect(receiver.root.children).toHaveLength(2);
@@ -264,12 +280,12 @@ describe("the connection validator", () => {
     expect(PLUGIN_UI_LIMITS).toEqual({
       maxNodes: 10_000,
       maxRecordsPerBatch: 2_000,
-      maxBatchesPerFrame: 1,
+      maxBatchesPerSecond: 120,
     });
   });
 
   it("refuses a tree over the node budget", () => {
-    const { violations, connection } = setup({ maxNodes: 1, maxRecordsPerBatch: 10, maxBatchesPerFrame: 1 });
+    const { violations, connection } = setup({ maxNodes: 1, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
     connection.mutate([insert(element("1", "maibuk-text")), insert(element("2", "maibuk-text"), 1)]);
     expect(violations[0]?.code).toBe("too-many-nodes");
   });

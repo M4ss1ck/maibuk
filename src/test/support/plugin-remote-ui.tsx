@@ -33,13 +33,8 @@ export function renderRemoteUi(options?: {
   wrapper?: ComponentType<{ children: ReactNode }>;
 }): RemoteUiHarness {
   const violations: PluginUiViolation[] = [];
-  // Each delivered batch is its own frame: the harness drives the host
-  // directly, so there is no real frame boundary to measure. The per-frame
-  // batch cap is proven in the validator's own tests.
-  let frame = 0;
   const ui = createPluginRemoteUi({
     onViolation: (violation) => violations.push(violation),
-    frame: () => frame++,
   });
 
   // Kept out of the document so RTL queries see only the host tree; a

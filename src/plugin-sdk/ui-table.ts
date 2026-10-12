@@ -488,12 +488,15 @@ export interface PluginUiLimits {
   maxNodes: number;
   /** Most mutation records accepted in one batch. */
   maxRecordsPerBatch: number;
-  /** Most mutation batches accepted in one animation frame. */
-  maxBatchesPerFrame: number;
+  /**
+   * Most mutation batches accepted in any 1 s window (#401: the SDK sends at
+   * most one per frame; the host allows 2x for message jitter).
+   */
+  maxBatchesPerSecond: number;
 }
 
 export const PLUGIN_UI_LIMITS: PluginUiLimits = {
   maxNodes: 10_000,
   maxRecordsPerBatch: 2_000,
-  maxBatchesPerFrame: 1,
+  maxBatchesPerSecond: 120,
 };
