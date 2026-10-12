@@ -49,16 +49,16 @@ describe("scopePluginCss", () => {
 
   it("recurses into media queries and scopes the inner selectors", () => {
     expect(scopePluginCss("@media (min-width: 40rem) { .a { color: red } }", SCOPE)).toBe(
-      `@media (min-width: 40rem) {${SCOPE} .a { color: red }}`
+      `@media (min-width: 40rem) { ${SCOPE} .a { color: red } }`
     );
   });
 
   it("recurses into supports and container queries", () => {
     expect(scopePluginCss("@supports (display: grid) { .a { display: grid } }", SCOPE)).toBe(
-      `@supports (display: grid) {${SCOPE} .a { display: grid }}`
+      `@supports (display: grid) { ${SCOPE} .a { display: grid } }`
     );
     expect(scopePluginCss("@container (min-width: 20rem) { .a { color: red } }", SCOPE)).toBe(
-      `@container (min-width: 20rem) {${SCOPE} .a { color: red }}`
+      `@container (min-width: 20rem) { ${SCOPE} .a { color: red } }`
     );
   });
 
@@ -112,5 +112,70 @@ describe("scopePluginCss", () => {
     expect(two).toContain('[data-plugin-ui="plugin-ui-2"] .a');
     expect(two).not.toContain("plugin-ui-1");
     expect(one).not.toContain("plugin-ui-2");
+  });
+
+  describe("hostile selectors (#439)", () => {
+    // A hand-rolled scanner that does not tokenize `url()` per CSS Syntax Level
+    // 3 reads the `}` inside it as the rule's end, so the rest of the
+    // stylesheet — here the `body` rule — lands unscoped (#439). The real
+    // parser keeps `url(} )` one value and scopes both rules.
+    it("does not let a `}` inside url() break out of the declaration block", () => {
+      const result = scopePluginCss(".a{b:url(} ) } body{display:none}", SCOPE);
+      expect(result).toContain(`${SCOPE} .a`);
+      // `body` is itself prefixed, so it can only match a descendant of the
+      // surface and can never hide the app shell. Every `body` occurrence is
+      // part of a `[scope] body` selector.
+      expect(result).toContain(`${SCOPE} body`);
+      expect(result.split("body").length).toBe(result.split(`${SCOPE} body`).length);
+    });
+
+    it("drops a selector led by a sibling combinator, which the prefix would turn into a Maibuk sibling", () => {
+      // `[scope] ~ .x` matches a `.x` preceded by the surface: a sibling of the
+      // surface, i.e. Maibuk chrome. Drop it rather than scope it.
+      expect(scopePluginCss("~ .x{color:red}", SCOPE)).toBe("");
+      expect(scopePluginCss("+ .x{color:red}", SCOPE)).toBe("");
+      expect(scopePluginCss("> .x{color:red}", SCOPE)).toBe("");
+    });
+
+    it("keeps the safe selectors of a list and drops the combinator-led ones", () => {
+      expect(scopePluginCss(".a, ~ .b{color:red}", SCOPE)).toBe(`${SCOPE} .a{color:red}`);
+    });
+
+    it("drops @scope, which would override the surface prefix with the Plugin's own root", () => {
+      const result = scopePluginCss("@scope (body) { p { color: red } }", SCOPE);
+      expect(result).toBe("");
+    });
+
+    it("strips an escaped brace in a selector instead of misreading it", () => {
+      // `\}` is an escaped code point, not a block terminator; the rule scopes
+      // normally and the following rule stays scoped too.
+      const result = scopePluginCss(".a\\} { color: red } body { display: none }", SCOPE);
+      expect(result).toContain(`${SCOPE} body`);
+    });
+
+    it("returns an empty string when the stylesheet does not parse", () => {
+      expect(scopePluginCss(".a { color: red", SCOPE)).toBe("");
+      expect(scopePluginCss(".a { color: red } } .b { color: blue }", SCOPE)).toBe("");
+      expect(scopePluginCss('/* unclosed', SCOPE)).toBe("");
+    });
+
+    it("keeps :root, html, and body inert by prefixing them under the surface", () => {
+      // None of them can be a descendant of the surface, so the prefixed rule
+      // matches nothing; the Plugin cannot restyle the app shell.
+      expect(scopePluginCss(":root { color: red }", SCOPE)).toBe(`${SCOPE} :root { color: red }`);
+      expect(scopePluginCss("html { color: red }", SCOPE)).toBe(`${SCOPE} html { color: red }`);
+      expect(scopePluginCss("body { display: none }", SCOPE)).toBe(
+        `${SCOPE} body { display: none }`
+      );
+    });
+
+    it("scopes :has() as a descendant query", () => {
+      expect(scopePluginCss(":has(p) { color: red }", SCOPE)).toBe(`${SCOPE} :has(p) { color: red }`);
+    });
+
+    it("drops a nesting selector, which would refer to a parent the surface never provided", () => {
+      expect(scopePluginCss("& .x { color: red }", SCOPE)).toBe("");
+      expect(scopePluginCss(".a { & { color: red } }", SCOPE)).toBe("");
+    });
   });
 });
