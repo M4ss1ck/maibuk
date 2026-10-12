@@ -252,7 +252,7 @@ export function ItemActionsMenu({
           aria-label={label}
           data-item-actions=""
           data-item-menu-owner={ownerId}
-          className={`shrink-0 rounded p-1 pointer-coarse:p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-pressed:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
+          className={`shrink-0 rounded p-1 pointer-coarse:p-1.5 pointer-coarse:min-h-10 pointer-coarse:min-w-10 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-pressed:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
         >
           <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
         </Button>

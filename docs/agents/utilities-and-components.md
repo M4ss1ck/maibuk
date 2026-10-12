@@ -303,6 +303,7 @@ Every store follows this structure (see `src/features/books/store.ts`):
 | `ReleaseBadge` / `NewReleaseChip` / `ReleaseNotesDialog` (the Release number button that opens What's new; the opaque New chip; the dialog, mounted once in `GlobalShortcuts`) | `src/components/releases/` |
 | `Modal` `size="lg"` (a reading width between `md` and `wide`) | `src/components/ui/Modal.tsx` |
 | `Modal` `placement="top"` (pins the panel to the top edge on every screen size; the Command Palette uses it with `unstyled`) | `src/components/ui/Modal.tsx` |
+| `Modal` `role="alertdialog"` (announces the dialog's urgency; the Plugin `ConfirmDialog` uses it, the default stays `dialog`) | `src/components/ui/Modal.tsx` |
 | `useModalScope(isOpen, close?)` (modal ID registration with its own close path, removed on unregister; `Modal` passes the Escape path, other callers may omit it)                                                                                                                                                                            | `src/hooks/useModalScope.ts`                                           |
 | `useRestoreFocus(isOpen)` (returns focus to the opener after an overlay closes; call it after `useModalOverlay`, whose `inert` cleanup must run first) | `src/hooks/useRestoreFocus.ts` |
 | `data-focus-pane` / `data-focus-pane-nested` (F6 pane stops; nested panes collapse into the innermost, unless the inner one is marked nested, like the Footnotes after the text) | `src/components/GlobalShortcuts.tsx` |
