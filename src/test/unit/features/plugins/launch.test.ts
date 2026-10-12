@@ -15,6 +15,7 @@ function fakeDirectory(folders: Record<string, PluginFolder>): PluginDirectoryAd
   readFolder: ReturnType<typeof vi.fn>;
 } {
   return {
+    kind: "web",
     listFolders: vi.fn(async () => Object.keys(folders)),
     readFolder: vi.fn(async (name: string) => folders[name] ?? null),
   };

@@ -87,6 +87,7 @@ async function setup(): Promise<Harness> {
   ]);
   const replaceCalls = { value: 0 };
   const directory: PluginDirectoryAdapter = {
+    kind: "web",
     listFolders: async () => [...folders.keys()],
     readFolder: async (name) => folders.get(name) ?? null,
     replaceFolder: async () => {

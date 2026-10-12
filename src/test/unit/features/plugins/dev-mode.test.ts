@@ -57,6 +57,7 @@ function makeDirectory(initial: PluginFolder) {
   let reads = 0;
   const watchers = new Set<(id: string) => void>();
   const adapter: PluginDirectoryAdapter = {
+    kind: "web",
     listFolders: async () => [current.name],
     readFolder: async (name) => {
       if (name !== current.name) return null;

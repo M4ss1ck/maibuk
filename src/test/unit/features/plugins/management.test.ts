@@ -53,6 +53,7 @@ async function setup(options: SetupOptions = {}) {
   const folder = pluginFolder({}, { id, name: id, ...options.manifest });
   const folders = new Map([[folder.name, folder]]);
   const directory: PluginDirectoryAdapter = {
+    kind: "web",
     listFolders: async () => [...folders.keys()],
     readFolder: async (name) => folders.get(name) ?? null,
   };
@@ -260,6 +261,7 @@ describe("Plugin management: enable and disable", () => {
 describe("Plugin management: zero Plugins", () => {
   it("refreshes to an empty list without touching anything", async () => {
     const directory: PluginDirectoryAdapter = {
+      kind: "web",
       listFolders: async () => [],
       readFolder: async () => null,
     };
@@ -291,6 +293,7 @@ describe("Plugin management: startup error codes", () => {
     });
     const folders = new Map([[folder.name, folder]]);
     const directory: PluginDirectoryAdapter = {
+      kind: "web",
       listFolders: async () => [...folders.keys()],
       readFolder: async (name) => folders.get(name) ?? null,
     };

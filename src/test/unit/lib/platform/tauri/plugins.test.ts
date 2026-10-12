@@ -121,3 +121,101 @@ describe("createTauriPluginDirectory()", () => {
     await vi.waitFor(() => expect(unlisten).toHaveBeenCalled());
   });
 });
+
+describe("createTauriPluginDirectory(): install, remove, and directory ops (#443)", () => {
+  it("reports the desktop platform and offers the desktop-only operations", () => {
+    const adapter = createTauriPluginDirectory();
+    expect(adapter.kind).toBe("desktop");
+    expect(adapter.addFromFolder).toBeDefined();
+    expect(adapter.openDirectory).toBeDefined();
+    expect(adapter.changeDirectory).toBeDefined();
+    expect(adapter.addFromZip).toBeDefined();
+    expect(adapter.removeFolder).toBeDefined();
+  });
+
+  it("installs a .zip through Rust and resolves the Plugin id", async () => {
+    mockInvoke.mockResolvedValue({ id: "tracer", hash: "h1:x" });
+    const adapter = createTauriPluginDirectory();
+
+    await expect(adapter.addFromZip?.()).resolves.toBe("tracer");
+    expect(mockInvoke).toHaveBeenCalledWith("add_plugin_from_zip");
+  });
+
+  it("resolves null when the .zip picker is cancelled", async () => {
+    mockInvoke.mockResolvedValue(null);
+    const adapter = createTauriPluginDirectory();
+
+    await expect(adapter.addFromZip?.()).resolves.toBeNull();
+  });
+
+  it("installs from a folder on desktop", async () => {
+    mockInvoke.mockResolvedValue({ id: "tracer", hash: "h1:x" });
+    const adapter = createTauriPluginDirectory();
+
+    await expect(adapter.addFromFolder?.()).resolves.toBe("tracer");
+    expect(mockInvoke).toHaveBeenCalledWith("add_plugin_from_folder");
+  });
+
+  it("removes a Plugin folder through Rust, passing the id", async () => {
+    mockInvoke.mockResolvedValue(true);
+    const adapter = createTauriPluginDirectory();
+
+    await expect(adapter.removeFolder?.("tracer")).resolves.toBe(true);
+    expect(mockInvoke).toHaveBeenCalledWith("remove_plugin_folder", { id: "tracer" });
+  });
+
+  it("reports a folder that was already gone as not removed", async () => {
+    mockInvoke.mockResolvedValue(false);
+    const adapter = createTauriPluginDirectory();
+
+    await expect(adapter.removeFolder?.("absent")).resolves.toBe(false);
+  });
+
+  it("opens the Plugin Directory through Rust", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    const adapter = createTauriPluginDirectory();
+
+    await adapter.openDirectory?.();
+
+    expect(mockInvoke).toHaveBeenCalledWith("open_plugin_directory");
+  });
+
+  it("changes the Plugin Directory through the native picker", async () => {
+    mockInvoke.mockResolvedValue("/home/a/Maibuk/Plugins");
+    const adapter = createTauriPluginDirectory();
+
+    await expect(adapter.changeDirectory?.()).resolves.toBe(true);
+    expect(mockInvoke).toHaveBeenCalledWith("pick_plugin_directory", { defaultPath: null });
+  });
+
+  it("reports no change when the directory picker is cancelled", async () => {
+    mockInvoke.mockResolvedValue(null);
+    const adapter = createTauriPluginDirectory();
+
+    await expect(adapter.changeDirectory?.()).resolves.toBe(false);
+  });
+});
+
+describe("createTauriPluginDirectory() on Android (#443)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("reports android and omits the desktop-only operations", async () => {
+    vi.stubEnv("VITE_BUILD_TARGET", "tauri");
+    vi.stubEnv("TAURI_ENV_PLATFORM", "android");
+    vi.resetModules();
+    const { createTauriPluginDirectory: createAndroidPluginDirectory } = await import(
+      "@/lib/platform/tauri/plugins"
+    );
+    const adapter = createAndroidPluginDirectory();
+
+    expect(adapter.kind).toBe("android");
+    expect(adapter.addFromZip).toBeDefined();
+    expect(adapter.removeFolder).toBeDefined();
+    expect(adapter.addFromFolder).toBeUndefined();
+    expect(adapter.openDirectory).toBeUndefined();
+    expect(adapter.changeDirectory).toBeUndefined();
+  });
+});

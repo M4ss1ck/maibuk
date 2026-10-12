@@ -74,6 +74,7 @@ async function launchApproved(overrides: Parameters<typeof pluginFolder>[1] = {}
   });
   const lifecycle = createPluginLifecycle({
     directory: {
+      kind: "web",
       listFolders: async () => ["sample"],
       readFolder: async () => folder,
     },
