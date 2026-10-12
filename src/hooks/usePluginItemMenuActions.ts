@@ -7,7 +7,7 @@ import {
   getPluginItemMenuEntries,
   onPluginContributionsChange,
   type PluginTarget,
-} from "@/features/plugins/contributions";
+} from "@/features/plugins/contributions-registry";
 import { useBookStore } from "@/features/books/store";
 import { useCanvasStore } from "@/features/canvas/store";
 import { useChapterStore } from "@/features/chapters/store";

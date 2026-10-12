@@ -26,13 +26,6 @@ vi.mock("@/features/import/epub-project-repo", () => ({
   listBookStyles: mockListBookStyles,
 }));
 
-// Raw keys throughout: the dialog's copy is not this suite's subject, and the
-// hooks barrel loads the real i18n, which would otherwise resolve the labels.
-vi.mock("react-i18next", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("react-i18next")>()),
-  useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
-}));
-
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((r) => {

@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { ToolbarButton } from "@/components/editor/ToolbarButton";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
 import { pluginCommandId, runPluginCommand } from "@/features/plugins/commands";
-import { currentUILanguage, getPluginCommand } from "@/features/plugins/contributions";
+import { currentUILanguage, getPluginCommand } from "@/features/plugins/contributions-registry";
 import { registeredToolbarButtons } from "@/features/settings/toolbar-config";
 import type { PluginToolbarButtonId } from "@/features/settings/toolbar-config";
 import {

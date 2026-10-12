@@ -9,7 +9,7 @@ import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
 import { useItemCommands } from "@/hooks/useItemCommands";
-import { usePluginItemMenuActions } from "@/hooks";
+import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
 
 export interface NoteMoveTarget {
   bookId: string | null;

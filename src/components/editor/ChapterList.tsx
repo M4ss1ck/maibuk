@@ -28,7 +28,7 @@ import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
 import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import type { ItemAction } from "@/components/ui";
 import { useItemCommands } from "@/hooks/useItemCommands";
-import { usePluginItemMenuActions } from "@/hooks";
+import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
 import { useShortcuts } from "@/lib/shortcuts";
 import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 import { toast } from "@/components/ui/Toast";

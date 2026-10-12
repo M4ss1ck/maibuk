@@ -1,4 +1,4 @@
-import type { PluginSidebarEntryDef } from "@/features/plugins/contributions";
+import type { PluginSidebarEntryDef } from "@/features/plugins/contributions-registry";
 import { usePluginSurface } from "@/hooks/usePluginSurface";
 
 /**

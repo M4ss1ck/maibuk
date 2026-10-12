@@ -1,10 +1,11 @@
 /**
  * Turns a validated manifest's `contributes` into live Maibuk surfaces without
  * running the Worker: the shared Command registry (`registerPluginCommands`),
- * the Settings rows registry, the toolbar button registry, and this module's
- * own page, sidebar-entry, and Item Menu registries. Registering is metadata
- * only, so the Command Palette, Settings search, the toolbar arrangement, and
- * the sidebar all discover an installed Plugin before it is ready (ADR 0022).
+ * the Settings rows registry, the toolbar button registry, and the page,
+ * sidebar-entry, and Item Menu registries in `contributions-registry.ts`.
+ * Registering is metadata only, so the Command Palette, Settings search, the
+ * toolbar arrangement, and the sidebar all discover an installed Plugin before
+ * it is ready (ADR 0022).
  *
  * Contributions are filtered by platform and localized: the manifest's literal
  * strings are its `defaultLanguage`, and `locales/<lang>.json` overrides them
@@ -12,15 +13,29 @@
  * Commands resolve the current one; the other surfaces use the current UI
  * language and re-register in place when it changes.
  *
- * One Plugin's entries are ordered Maibuk first, then Plugin display name,
- * Plugin id for ties, then the declared order within the Plugin (the placement
- * decision, #395).
+ * This is the write side, and the only module that parses a manifest. It is
+ * reached from `lifecycle.ts`, which `main.tsx` dynamic-imports in idle time;
+ * the read side lives in the zod-free `contributions-registry.ts` so the entry
+ * chunk never ships the manifest validator (#437).
  */
 
 import i18n from "@/i18n";
 import { PLUGIN_PREFIX } from "@/features/plugins/ids";
-import { MANIFEST_LANGUAGES, PLUGIN_TARGETS } from "@/features/plugins/manifest-schema";
+import { MANIFEST_LANGUAGES } from "@/features/plugins/manifest-constants";
 import { applyPluginLocale, parsePluginLocale } from "@/features/plugins/manifest-validate";
+import {
+  currentUILanguage,
+  deleteRegisteredContributions,
+  getRegisteredContributions,
+  notifyContributionsChange,
+  pluginPageRoute,
+  setRegisteredContributions,
+  type PluginCommandDef,
+  type PluginItemMenuEntryDef,
+  type PluginPageDef,
+  type PluginSidebarEntryDef,
+  type PluginTarget,
+} from "@/features/plugins/contributions-registry";
 import type {
   PluginContributionId,
   PluginFolder,
@@ -46,160 +61,29 @@ import {
   type PluginCommandId,
 } from "@/lib/shortcut-registry";
 
-/** The item kinds a contributed Command can act on (the v1 API entities). */
-export type PluginTarget = (typeof PLUGIN_TARGETS)[number];
-
-/** A Plugin page reachable at `/plugin/<pluginId>/<pageId>`. */
-export interface PluginPageDef {
-  pluginId: string;
-  displayName: string;
-  /** The Plugin-local page id, which is also its Shortcut Context. */
-  localId: string;
-  id: PluginContributionId;
-  title: string;
-  /** The navigating Command that opens the page. */
-  commandId: PluginCommandId;
-  icon?: string;
-}
-
-/** An optional sidebar entry that navigates to a page. */
-export interface PluginSidebarEntryDef {
-  pluginId: string;
-  displayName: string;
-  pageId: string;
-  pageRoute: string;
-  title: string;
-  icon?: string;
-  commandId: PluginCommandId;
-}
-
-/** A Command explicitly listed for the Item Menus of its target kinds. */
-export interface PluginItemMenuEntryDef {
-  pluginId: string;
-  displayName: string;
-  commandId: PluginCommandId;
-  localId: string;
-  label: string;
-  targets: readonly PluginTarget[];
-}
-
-/**
- * One live Command of a registered Plugin: its derived id, the Contexts it is
- * live in, the item kinds it acts on, and the page it opens when it is a page's
- * navigating Command. The stored Contexts are the same derived names the
- * shared registry keeps (`plugin.<id>.<page>` for this Plugin's own pages), so
- * `getPluginCommands` and `getCommand` never disagree about one. Built from
- * the platform-filtered manifest, so it is the single source the runner reads.
- */
-export interface PluginCommandDef {
-  id: PluginCommandId;
-  pluginId: string;
-  localId: string;
-  contexts: readonly string[];
-  targets?: readonly PluginTarget[];
-  pageId?: string;
-}
-
-/** The route a Plugin page lives at. */
-export function pluginPageRoute(pluginId: string, pageId: string): string {
-  return `/plugin/${pluginId}/${pageId}`;
-}
-
-interface RegisteredContributions {
-  pluginId: string;
-  displayName: string;
-  commands: readonly PluginCommandDef[];
-  pages: readonly PluginPageDef[];
-  sidebarEntries: readonly PluginSidebarEntryDef[];
-  itemMenuEntries: readonly PluginItemMenuEntryDef[];
-  token: symbol;
-}
-
-const contributions = new Map<string, RegisteredContributions>();
-let revision = 0;
-const listeners = new Set<() => void>();
-// Referentially stable snapshots for useSyncExternalStore, refreshed on change.
-let cachedPages: PluginPageDef[] | null = null;
-let cachedSidebar: PluginSidebarEntryDef[] | null = null;
-const cachedItemMenu = new Map<PluginTarget, PluginItemMenuEntryDef[]>();
-
-function notifyContributionsChange(): void {
-  revision += 1;
-  cachedPages = null;
-  cachedSidebar = null;
-  cachedItemMenu.clear();
-  for (const listener of [...listeners]) listener();
-}
-
-export function pluginContributionsRevision(): number {
-  return revision;
-}
-
-/** Runs after every contribution register and unregister. Returns unregister. */
-export function onPluginContributionsChange(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-function isMaibukOwner(pluginId: string): boolean {
-  return pluginId === "maibuk" || pluginId.startsWith("maibuk-");
-}
-
-function compareOwners(
-  a: { displayName: string; pluginId: string },
-  b: { displayName: string; pluginId: string }
-): number {
-  const aMaibuk = isMaibukOwner(a.pluginId) ? 0 : 1;
-  const bMaibuk = isMaibukOwner(b.pluginId) ? 0 : 1;
-  if (aMaibuk !== bMaibuk) return aMaibuk - bMaibuk;
-  const byName = a.displayName.localeCompare(b.displayName);
-  if (byName !== 0) return byName;
-  return a.pluginId.localeCompare(b.pluginId);
-}
-
-/** Every Plugin page, ordered by owner then declared order. */
-export function getPluginPages(): PluginPageDef[] {
-  if (cachedPages !== null) return cachedPages;
-  const records = [...contributions.values()].sort(compareOwners);
-  cachedPages = records.flatMap((record) => [...record.pages]);
-  return cachedPages;
-}
-
-/** Every Plugin sidebar entry, ordered by owner then declared order. */
-export function getPluginSidebarEntries(): PluginSidebarEntryDef[] {
-  if (cachedSidebar !== null) return cachedSidebar;
-  const records = [...contributions.values()].sort(compareOwners);
-  cachedSidebar = records.flatMap((record) => [...record.sidebarEntries]);
-  return cachedSidebar;
-}
-
-/** The Item Menu entries for one item kind, ordered by owner then declaration. */
-export function getPluginItemMenuEntries(kind: PluginTarget): PluginItemMenuEntryDef[] {
-  const cached = cachedItemMenu.get(kind);
-  if (cached !== undefined) return cached;
-  const records = [...contributions.values()].sort(compareOwners);
-  const entries = records
-    .flatMap((record) => [...record.itemMenuEntries])
-    .filter((entry) => entry.targets.includes(kind));
-  cachedItemMenu.set(kind, entries);
-  return entries;
-}
-
-/** Every live Command of one Plugin, in declared order. */
-export function getPluginCommands(pluginId: string): PluginCommandDef[] {
-  return [...(contributions.get(pluginId)?.commands ?? [])];
-}
-
-/** One live Command of one Plugin, or undefined. */
-export function getPluginCommand(pluginId: string, localId: string): PluginCommandDef | undefined {
-  return contributions.get(pluginId)?.commands.find((command) => command.localId === localId);
-}
-
-export function getPluginPage(pluginId: string, pageId: string): PluginPageDef | undefined {
-  return contributions.get(pluginId)?.pages.find((page) => page.localId === pageId);
-}
+// The read side of the registry, re-exported so existing callers keep one
+// import path. New UI code imports `contributions-registry.ts` directly.
+export {
+  currentUILanguage,
+  getPluginCommand,
+  getPluginCommands,
+  getPluginItemMenuEntries,
+  getPluginPage,
+  getPluginPages,
+  getPluginSidebarEntries,
+  isPluginRegistered,
+  onPluginContributionsChange,
+  pluginContributionsRevision,
+  resetPluginContributionsForTests,
+} from "@/features/plugins/contributions-registry";
+export { pluginPageRoute };
+export type {
+  PluginCommandDef,
+  PluginItemMenuEntryDef,
+  PluginPageDef,
+  PluginSidebarEntryDef,
+  PluginTarget,
+};
 
 /**
  * The Shortcut Contexts of one declared Command, as the shared registry derives
@@ -218,17 +102,6 @@ function deriveCommandContexts(
     if (pageLocalIds.has(context)) return `${PLUGIN_COMMAND_PREFIX}${pluginId}.${context}`;
     return context;
   });
-}
-
-/** True while the Plugin has any live contribution registered. */
-export function isPluginRegistered(pluginId: string): boolean {
-  return contributions.has(pluginId);
-}
-
-/** The current UI language, narrowed to the languages a manifest may use. */
-export function currentUILanguage(): Language {
-  const raw = i18n.resolvedLanguage ?? i18n.language ?? "en";
-  return raw.split("-")[0] === "es" ? "es" : "en";
 }
 
 const LOCALE_FILE_PATTERN = /^locales\/([a-z]+)\.json$/;
@@ -446,7 +319,7 @@ export function registerPluginContributions(source: PluginContributionsSource): 
         };
       });
 
-      const previous = contributions.get(manifest.id);
+      const previous = getRegisteredContributions(manifest.id);
       const token = Symbol(manifest.id);
       if (
         commandDefs.length > 0 ||
@@ -454,7 +327,7 @@ export function registerPluginContributions(source: PluginContributionsSource): 
         sidebarDefs.length > 0 ||
         itemMenuDefs.length > 0
       ) {
-        contributions.set(manifest.id, {
+        setRegisteredContributions(manifest.id, {
           pluginId: manifest.id,
           displayName: localized.name,
           commands: commandDefs,
@@ -464,12 +337,12 @@ export function registerPluginContributions(source: PluginContributionsSource): 
           token,
         });
       } else if (previous !== undefined) {
-        contributions.delete(manifest.id);
+        deleteRegisteredContributions(manifest.id);
       }
       next.push(() => {
-        const current = contributions.get(manifest.id);
+        const current = getRegisteredContributions(manifest.id);
         if (current?.token !== token) return;
-        contributions.delete(manifest.id);
+        deleteRegisteredContributions(manifest.id);
         notifyContributionsChange();
       });
 
@@ -500,10 +373,4 @@ export function registerPluginContributions(source: PluginContributionsSource): 
     for (const unregister of unregisters.slice().reverse()) unregister();
     unregisters = [];
   };
-}
-
-/** Drops every registered contribution; tests use it between cases. */
-export function resetPluginContributionsForTests(): void {
-  contributions.clear();
-  notifyContributionsChange();
 }

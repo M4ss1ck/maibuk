@@ -20,7 +20,7 @@ import {
   getPluginCommands,
   pluginPageRoute,
   type PluginTarget,
-} from "@/features/plugins/contributions";
+} from "@/features/plugins/contributions-registry";
 import type { PluginLifecycle } from "@/features/plugins/types";
 import type { RunnableBinding } from "@/lib/command-runner";
 import { PLUGIN_COMMAND_PREFIX, type CommandId } from "@/lib/shortcut-registry";

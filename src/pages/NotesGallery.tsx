@@ -36,7 +36,7 @@ import { useShortcuts } from "@/lib/shortcuts";
 import { droppedTextToEditorHtml } from "@/features/markdown";
 import { useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
-import { usePluginItemMenuActions } from "@/hooks";
+import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
 
 export function NotesGallery() {
   const { t, i18n } = useTranslation();

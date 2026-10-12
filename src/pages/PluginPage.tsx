@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { pluginPageCommandBindings } from "@/features/plugins/commands";
-import { getPluginPage } from "@/features/plugins/contributions";
+import { getPluginPage } from "@/features/plugins/contributions-registry";
 import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 import {
   useInstalledPluginLifecycle,

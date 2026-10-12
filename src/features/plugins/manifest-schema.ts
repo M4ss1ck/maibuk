@@ -12,13 +12,12 @@
  */
 import { z } from "zod";
 import { LOCAL_ID_SOURCE, PLUGIN_ID_SOURCE } from "@/features/plugins/ids";
+import { MANIFEST_LANGUAGES, PLUGIN_TARGETS } from "@/features/plugins/manifest-constants";
 import { SEMVER_SOURCE } from "@/features/plugins/semver";
 import type { SettingsPlatform } from "@/features/settings/rows";
-import type { Language } from "@/features/settings/types";
 import { VOICE_VOCABULARY, type VoiceVerbClass } from "@/features/dictation/voice-commands";
 
-/** The languages a manifest's literal strings and its `locales/` files may use. */
-export const MANIFEST_LANGUAGES = ["en", "es"] as const satisfies readonly Language[];
+export { MANIFEST_LANGUAGES, PLUGIN_TARGETS } from "@/features/plugins/manifest-constants";
 
 /** The platforms a Plugin can declare, matching the Settings row platforms. */
 export const PLUGIN_PLATFORMS = [
@@ -26,9 +25,6 @@ export const PLUGIN_PLATFORMS = [
   "web",
   "android",
 ] as const satisfies readonly SettingsPlatform[];
-
-/** The item kinds a contributed Command may act on (the v1 API entities). */
-export const PLUGIN_TARGETS = ["book", "chapter", "note", "canvas", "canvasNode"] as const;
 
 const VOICE_VERB_CLASSES = Object.keys(VOICE_VOCABULARY.en.verbs) as readonly VoiceVerbClass[];
 

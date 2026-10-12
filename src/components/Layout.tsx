@@ -17,7 +17,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import {
   getPluginSidebarEntries,
   onPluginContributionsChange,
-} from "@/features/plugins/contributions";
+} from "@/features/plugins/contributions-registry";
 import { MAIN_SIDEBAR_MAX_WIDTH, MAIN_SIDEBAR_MIN_WIDTH } from "@/features/settings/types";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 import { useCommandHint } from "@/lib/command-keys";

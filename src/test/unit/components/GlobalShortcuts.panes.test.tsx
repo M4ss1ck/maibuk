@@ -2,10 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("react-i18next", async (importOriginal) => ({
-  // The hooks barrel loads @/i18n, which runs .use(initReactI18next); the
-  // mock keeps its useTranslation override and the module's other exports.
-  ...(await importOriginal()),
+vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
