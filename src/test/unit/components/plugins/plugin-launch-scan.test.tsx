@@ -98,6 +98,10 @@ describe("PluginPage while the launch scan is pending", () => {
       pluginId: "sample",
       pinnedHash: await hashPluginDirectory(folder.files),
       granted: [],
+      enabled: true,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
     });
     const lifecycle = createPluginLifecycle({
       directory: await appDirectory(folder),

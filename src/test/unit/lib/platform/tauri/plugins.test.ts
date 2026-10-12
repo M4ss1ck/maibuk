@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockInvoke = vi.hoisted(() => vi.fn());
+const mockListen = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: mockListen }));
 
 import { createTauriPluginDirectory } from "@/lib/platform/tauri/plugins";
 
 beforeEach(() => {
   mockInvoke.mockReset();
+  mockListen.mockReset();
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
@@ -73,5 +76,48 @@ describe("createTauriPluginDirectory()", () => {
 
     await expect(adapter.listFolders()).resolves.toEqual([]);
     await expect(adapter.readFolder("tracer")).resolves.toBeNull();
+  });
+
+  it("watches the Plugin Directory and routes plugins://changed to onChanged", async () => {
+    const unlisten = vi.fn();
+    mockListen.mockResolvedValue(unlisten);
+    mockInvoke.mockResolvedValue(undefined);
+    const adapter = createTauriPluginDirectory();
+    const seen: string[] = [];
+
+    const stop = adapter.watch?.((id) => seen.push(id));
+    await vi.waitFor(() => expect(mockListen).toHaveBeenCalled());
+
+    expect(mockInvoke).toHaveBeenCalledWith("watch_plugin_directory");
+    expect(mockListen).toHaveBeenCalledWith("plugins://changed", expect.any(Function));
+
+    const callback = mockListen.mock.calls[0][1] as (event: {
+      payload: { id: string };
+    }) => void;
+    callback({ payload: { id: "tracer" } });
+    expect(seen).toEqual(["tracer"]);
+
+    stop?.();
+    expect(unlisten).toHaveBeenCalled();
+    expect(mockInvoke).toHaveBeenCalledWith("unwatch_plugin_directory");
+  });
+
+  it("stops the listener when the unsubscribe runs before listen resolves", async () => {
+    const pending: { resolve: (stop: () => void) => void } = { resolve: () => undefined };
+    const unlisten = vi.fn();
+    mockListen.mockImplementation(
+      () =>
+        new Promise<() => void>((resolve) => {
+          pending.resolve = resolve;
+        })
+    );
+    mockInvoke.mockResolvedValue(undefined);
+    const adapter = createTauriPluginDirectory();
+
+    const stop = adapter.watch?.(() => undefined);
+    stop?.();
+    pending.resolve(unlisten);
+
+    await vi.waitFor(() => expect(unlisten).toHaveBeenCalled());
   });
 });

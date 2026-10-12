@@ -17,3 +17,12 @@ export function focusSettingsRow(
 ): void {
   useSettingsRevealStore.getState().requestRow(id, align);
 }
+
+/**
+ * Ask the Settings page to open a Plugin's review dialog once the Plugins
+ * section knows the Plugin. The changed-files notice uses it alongside the
+ * navigation to Settings > Plugins (#442).
+ */
+export function requestPluginReview(pluginId: string): void {
+  useSettingsRevealStore.getState().requestPluginReview(pluginId);
+}

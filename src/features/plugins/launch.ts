@@ -1,5 +1,5 @@
 /**
- * The launch scan: which approved Plugins the Plugin Directory holds, each
+ * The launch scan: which enabled Plugins the Plugin Directory holds, each
  * with its manifest parsed and nothing else. No frame and no Worker is created
  * here; the lifecycle (#436) decides what starts and when, so on-demand
  * Plugins never start at launch. With no approvals this never touches the
@@ -7,6 +7,7 @@
  */
 
 import { listPluginApprovals } from "@/features/plugins/approvals";
+import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { readPluginManifest } from "@/features/plugins/runtime";
 import type {
   InstalledPlugin,
@@ -19,11 +20,17 @@ import { getPluginDirectory } from "@/lib/platform";
 export async function scanApprovedPlugins(
   options: PluginScanOptions = {}
 ): Promise<PluginScanResult> {
-  const approvals = listPluginApprovals();
+  // A disabled Plugin stays installed but off: it is never scanned, so it has
+  // no entry and no Worker at launch (#442).
+  const approvals = listPluginApprovals().filter((approval) => approval.enabled);
   if (approvals.length === 0) return { plugins: [], refusals: [] };
 
   const directory = options.directory ?? (await getPluginDirectory());
   const folders = new Set(await directory.listFolders());
+  // A reserved `maibuk-` id the shipped Built-in source lists parses under the
+  // Built-in schema; a third-party folder stays under the other one (#442).
+  const builtInSource = options.builtInSource ?? createBuiltInPluginSource();
+  const builtInIds = new Set((await builtInSource.list()).map((entry) => entry.id));
   const plugins: InstalledPlugin[] = [];
   const refusals: PluginLaunchRefusal[] = [];
 
@@ -31,7 +38,7 @@ export async function scanApprovedPlugins(
     if (!folders.has(approval.pluginId)) continue;
     const folder = await directory.readFolder(approval.pluginId);
     if (!folder) continue;
-    const manifest = readPluginManifest(folder);
+    const manifest = readPluginManifest(folder, { builtIn: builtInIds.has(approval.pluginId) });
     if (!manifest.ok) {
       refusals.push({
         pluginId: approval.pluginId,
@@ -39,7 +46,13 @@ export async function scanApprovedPlugins(
       });
       continue;
     }
-    plugins.push({ pluginId: approval.pluginId, approval, folder, manifest: manifest.manifest });
+    plugins.push({
+      pluginId: approval.pluginId,
+      approval,
+      folder,
+      manifest: manifest.manifest,
+      builtIn: builtInIds.has(approval.pluginId),
+    });
   }
 
   return { plugins, refusals };

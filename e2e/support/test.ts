@@ -8,8 +8,11 @@ import { type BrowserContext, test as base, expect } from "@playwright/test";
 import { REPO_ROOT } from "./seed/seeds";
 import {
   prepareDevice,
+  type BuiltInPluginSeed,
   type LibrarySeed,
+  type PluginApprovalSeed,
   type PluginSeed,
+  type PluginSeedOverride,
   type TutorialProgressSeed,
 } from "./storage";
 
@@ -19,7 +22,13 @@ interface Options {
   /** Specs default to a dismissed offer; Tutorial specs set `clean`. */
   tutorialProgress: TutorialProgressSeed;
   /** Fixture Plugins written into the web Plugin Directory (OPFS) with their approvals. */
-  plugins: PluginSeed[];
+  plugins: (PluginSeed | PluginSeedOverride)[];
+  /** Fixture Plugins written into OPFS with no approval record (installed but unapproved). */
+  unapprovedPlugins: PluginSeed[];
+  /** Approval records written as declared, overriding the default per Plugin. */
+  pluginApprovals: PluginApprovalSeed[];
+  /** Built-in Plugins the E2E seam reports for the seeded folders. */
+  builtInPlugins: BuiltInPluginSeed[];
   /** Set by the mac-platform project. */
   macPlatform: boolean;
 }
@@ -81,13 +90,19 @@ export const test = base.extend<Options & Fixtures>({
   library: ["empty", { option: true }],
   tutorialProgress: ["dismissed", { option: true }],
   plugins: [[], { option: true }],
+  unapprovedPlugins: [[], { option: true }],
+  pluginApprovals: [[], { option: true }],
+  builtInPlugins: [[], { option: true }],
   macPlatform: [false, { option: true }],
 
   mod: async ({ macPlatform }, use) => {
     await use(macPlatform ? "Meta" : "ControlOrMeta");
   },
 
-  page: async ({ page, library, tutorialProgress, plugins, macPlatform }, use) => {
+  page: async (
+    { page, library, tutorialProgress, plugins, unapprovedPlugins, pluginApprovals, builtInPlugins, macPlatform },
+    use
+  ) => {
     await makeHermetic(page.context());
     if (macPlatform) {
       // isMac() prefers userAgentData.platform; TipTap reads navigator.platform.
@@ -99,7 +114,14 @@ export const test = base.extend<Options & Fixtures>({
         }
       });
     }
-    await prepareDevice(page, { library, tutorial: tutorialProgress, plugins });
+    await prepareDevice(page, {
+      library,
+      tutorial: tutorialProgress,
+      plugins,
+      unapprovedPlugins,
+      pluginApprovals,
+      builtInPlugins,
+    });
     await use(page);
   },
 });

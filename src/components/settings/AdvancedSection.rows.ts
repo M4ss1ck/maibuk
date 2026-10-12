@@ -23,5 +23,10 @@ export const ADVANCED_SECTION = {
       keywordsKey: "settings.keywords.resetDatabase",
       reveal: { kind: "advanced" },
     },
+    {
+      id: "resetSettings",
+      labelKey: "settings.resetSettings",
+      reveal: { kind: "advanced" },
+    },
   ],
 } as const satisfies SettingsSectionDef;

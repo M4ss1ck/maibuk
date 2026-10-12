@@ -42,6 +42,7 @@ export const CORE_CONTEXTS = [
   "image",
   "footnoteItem",
   "commandPalette",
+  "settings",
 ] as const;
 
 export type CoreShortcutContext = (typeof CORE_CONTEXTS)[number];
@@ -286,6 +287,32 @@ export const COMMANDS = {
     contexts: ["global"],
     defaults: [],
     keywordsKey: "shortcuts.keywords.openReleaseNotes",
+  },
+  "global.openPluginsSettings": {
+    labelKey: "plugins.openSettings",
+    contexts: ["global"],
+    defaults: [],
+    navigates: true,
+  },
+  "settings.reviewPlugin": {
+    labelKey: "plugins.reviewEnable",
+    contexts: ["settings"],
+    defaults: [],
+  },
+  "settings.keepMyCopy": {
+    labelKey: "plugins.keep",
+    contexts: ["settings"],
+    defaults: [],
+  },
+  "settings.replaceBuiltIn": {
+    labelKey: "plugins.replace",
+    contexts: ["settings"],
+    defaults: [],
+  },
+  "settings.resetSettings": {
+    labelKey: "settings.resetSettings",
+    contexts: ["settings"],
+    defaults: [],
   },
 
   "dictation.toggle": {
@@ -1670,7 +1697,7 @@ export const ROUTE_CONTEXTS: Readonly<Record<string, readonly ShortcutContext[]>
   "/canvas/:canvasId": ["canvas", "canvasNode", "editor", "commandPalette"],
   "/ephemeral": ["ephemeral", "editor", "image", "footnoteItem", "commandPalette"],
   "/metrics": ["commandPalette"],
-  "/settings": ["commandPalette"],
+  "/settings": ["settings", "commandPalette"],
   // A Plugin page is its own runtime-derived Context (`plugin.<id>.<page>`),
   // so only the palette is static here; `contextsOverlap` compares the
   // derived Contexts by name.
@@ -1716,6 +1743,7 @@ export const SHORTCUT_SECTIONS = [
     labelKey: "shortcuts.sections.commandPalette",
     contexts: ["commandPalette"],
   },
+  { id: "settings", labelKey: "shortcuts.sections.settings", contexts: ["settings"] },
   { id: "focus", labelKey: "shortcuts.sections.focus", contexts: [] },
   { id: "plugins", labelKey: "shortcuts.sections.plugins", contexts: [] },
 ] as const satisfies readonly {

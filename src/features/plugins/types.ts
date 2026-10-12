@@ -127,8 +127,14 @@ export interface PluginStartOptions {
   folder: PluginFolder;
   /** The `h1:` value the author pinned when approving the Plugin. */
   pinnedHash: string;
-  /** The Plugin Permissions granted right now; none by default. */
-  granted?: readonly PluginPermissionId[];
+  /** A Built-in Plugin may use the reserved `maibuk-` prefix (manifest validation). */
+  builtIn?: boolean;
+  /**
+   * The Plugin Permissions granted right now; none by default. A provider is
+   * read on every broker call, so revoking an optional grant refuses the next
+   * call without restarting the Plugin (#442).
+   */
+  granted?: readonly PluginPermissionId[] | (() => Iterable<PluginPermissionId>);
   /** Builds the method handlers for this Plugin; a row without one refuses `not-implemented`. */
   handlers?: (manifest: PluginManifest) => PluginApiHandlers;
   /** False while the Library cannot be read or written (the Tutorial Library). */
@@ -156,8 +162,44 @@ export type PluginStartResult =
   | { ok: true; plugin: PluginRuntime }
   | { ok: false; refusal: PluginStartRefusal };
 
+// Built-in Plugins (builtin.ts)
+
+/**
+ * One Built-in Plugin the app ships: its manifest and the copy Maibuk bundles.
+ * `files` carries the shipped bytes, so a replace can write them (the store
+ * takes their digests for the review diff); `hash` is the `h1:` value over
+ * exactly those bytes.
+ */
+export interface BuiltInPlugin {
+  /** The Plugin id, which is also its folder name in the Plugin Directory. */
+  id: string;
+  manifest: PluginManifest;
+  /** The `h1:` hash of the shipped copy. */
+  hash: string;
+  /** The shipped copy's files, with the bytes a replace writes. */
+  files: PluginFolderFile[];
+}
+
+/** The Built-in Plugins this platform ships; a production build lists none yet. */
+export interface BuiltInPluginSource {
+  list(): Promise<BuiltInPlugin[]>;
+}
+
 // Approvals (approvals.ts)
 
+/** A Built-in Plugin's shipped copy, and a modified copy kept on purpose. */
+export interface PluginApprovalBuiltIn {
+  /** The hash of the copy Maibuk ships. */
+  shippedHash: string;
+  /** The shipped hash the author chose to keep their modified copy at. */
+  keptModifiedHash?: string;
+}
+
+/**
+ * The v2 approval record: the pinned copy, its Plugin Permissions, whether the
+ * Plugin is enabled, and what the author reviewed. A v1 record (`granted` only)
+ * migrates on read. Device-local: never synced, never in a Backup.
+ */
 export interface PluginApproval {
   /** The Plugin's folder name in the Plugin Directory. */
   pluginId: string;
@@ -165,6 +207,183 @@ export interface PluginApproval {
   pinnedHash: string;
   /** The Plugin Permissions granted right now. */
   granted: PluginPermissionId[];
+  /** Whether the Plugin starts; a disabled Plugin stays installed but off. */
+  enabled: boolean;
+  /** The manifest `version` the author approved; compared for "Older version". */
+  approvedVersion: string;
+  /** The manifest permissions as declared when this copy was approved. */
+  approvedPermissions: { required: string[]; optional: string[] };
+  /** The per-file lowercase hex SHA-256 the author approved, keyed by path. */
+  approvedFiles: Record<string, string>;
+  /** Present for a Built-in Plugin; absent for a third-party one. */
+  builtIn?: PluginApprovalBuiltIn;
+  /** The last startup failure, shown until the next successful start clears it. */
+  startupError?: string;
+  /**
+   * The `h1:` hash of the last changed-files notification shown, so the same
+   * change never notifies twice (#442).
+   */
+  notifiedHash?: string;
+  /**
+   * The shipped hash of the last Built-in update prompt shown, so the same
+   * shipped hash never prompts twice (#442). Cleared when the copy is replaced.
+   */
+  notifiedBuiltInHash?: string;
+}
+
+/** What `enablePlugin` returns: the enabled record, or why it refused. */
+export type PluginEnableResult =
+  | { ok: true; approval: PluginApproval }
+  | {
+      ok: false;
+      reason: "required-permissions-missing";
+      /** The required Plugin Permissions the record does not grant. */
+      missing: string[];
+      /** The record, unchanged. */
+      approval: PluginApproval;
+    };
+
+/**
+ * What `approve` returns. A copy whose files changed (`review-required`) is
+ * refused: it must go through the changed-files review (`markReviewed`), so an
+ * inline permission toggle never re-pins and starts an unreviewed copy (#442).
+ */
+export type PluginApproveResult =
+  | { ok: true }
+  | { ok: false; reason: "review-required" }
+  | { ok: false; reason: "copy-unavailable" };
+
+// Review (review.ts)
+
+/** Whether a copy needs the author's review before it may start again. */
+export type PluginReviewStatus = "approved" | "review-required" | "not-approved";
+
+/** The per-file diff a re-review shows, by POSIX-relative path. */
+export interface PluginFileDiff {
+  added: string[];
+  removed: string[];
+  changed: string[];
+}
+
+/** The pure review of an installed copy against its approval record. */
+export interface PluginReview {
+  status: PluginReviewStatus;
+  files: PluginFileDiff;
+  /** The permission diff since approval, including `nowRequired`. */
+  permissions: PluginPermissionDiff;
+  /** True when the installed copy's version is older than the approved one. */
+  olderVersion: boolean;
+}
+
+/** What a review reads: the record, the folder's current digests and pin, and the manifest. */
+export interface PluginReviewInput {
+  /** The stored approval, or null when the Plugin was never approved. */
+  approval: PluginApproval | null;
+  /** The folder's current per-file digests (`pluginFileDigests` output). */
+  digests: ReadonlyMap<string, string>;
+  /** The folder's current `h1:` hash. */
+  hash: string;
+  /** The manifest parsed from the folder now. */
+  manifest: PluginManifest;
+}
+
+// Management (management.ts)
+
+/** One non-blocking notification the store shows, at most one per Plugin (#442). */
+export interface PluginNotification {
+  pluginId: string;
+  /** The Plugin's display name at the time of the change. */
+  name: string;
+  /**
+   * The `h1:` hash the copy changed to, for a changed copy, or the shipped
+   * hash that became available, for a Built-in update.
+   */
+  hash: string;
+  /**
+   * `changed`: the copy's files changed and it stays off until reviewed;
+   * `available`: a Built-in update is offered (Keep my copy / Replace).
+   */
+  kind: "changed" | "available";
+}
+
+/** One known Plugin as the management store lists it. */
+export interface PluginManagementEntry {
+  pluginId: string;
+  manifest: PluginManifest;
+  /** The approval record, or null for a copy never approved. */
+  approval: PluginApproval | null;
+  review: PluginReview;
+  /** True while the lifecycle has a runtime for it. */
+  running: boolean;
+  /** True for a Built-in Plugin the app ships. */
+  builtIn: boolean;
+  /** True when a Built-in's installed copy differs from the shipped copy. */
+  modified: boolean;
+  /**
+   * True when a modified Built-in's shipped copy changed since it was
+   * installed or kept: an update is offered (never repeats per shipped hash).
+   */
+  updateAvailable: boolean;
+}
+
+/** The management store's dependencies; injected in tests. */
+export interface PluginManagementOptions {
+  /** Injected by tests; defaults to the platform's Plugin Directory. */
+  directory?: PluginDirectoryAdapter;
+  /** The app's one lifecycle; defaults to `getPluginLifecycle`. */
+  lifecycle?: () => PluginLifecycle | null;
+  /** The shipped Built-in Plugins; defaults to the production source (`[]`). */
+  builtInSource?: BuiltInPluginSource;
+  /** Shows the non-blocking notification; defaults to a no-op. The app renders the store's `notifications` through `PluginChangeNotices`. Injected by tests. */
+  notify?: (notification: PluginNotification) => void;
+  /**
+   * Reports whether Plugin development mode is on; defaults to the device
+   * setting (`useSettingsStore`). Injected by tests.
+   */
+  isDevelopmentMode?: () => boolean;
+  /** The change debounce before a watched folder is read; defaults to 300 ms. */
+  debounceMs?: number;
+}
+
+/** The Plugin management store: the orchestrator the Settings UI talks to (#442). */
+export interface PluginManagement {
+  /** Every known Plugin the Plugin Directory holds, by id. */
+  plugins: Record<string, PluginManagementEntry>;
+  /** The changed-files notifications shown now, at most one per Plugin. */
+  notifications: PluginNotification[];
+  /** Re-reads the Plugin Directory and each copy's review state. */
+  refresh(): Promise<void>;
+  /** Approves the current copy with the chosen optional grants and starts it. */
+  approve(pluginId: string, optionalGranted?: readonly PluginPermissionId[]): Promise<PluginApproveResult>;
+  /** Revokes one Plugin Permission; a required revoke disables and stops it. */
+  revoke(pluginId: string, permission: PluginPermissionId): Promise<void>;
+  /** Enables the copy when every required Plugin Permission is still granted. */
+  enable(pluginId: string): Promise<void>;
+  /** Disables the Plugin without removing it; it stops if running. */
+  disable(pluginId: string): void;
+  /**
+   * Approves the current copy: re-pins its hash, digests, version, and
+   * permissions. `optionalGranted` replaces the optional grants kept from the
+   * previous approval; omitted keeps the ones the copy still declares.
+   */
+  markReviewed(pluginId: string, optionalGranted?: readonly PluginPermissionId[]): Promise<void>;
+  /**
+   * Keeps a modified Built-in copy: sets `keptModifiedHash` to the shipped
+   * hash, so that shipped hash never prompts again. Files and grants stay; the
+   * "Update available" state is still reported (#442).
+   */
+  keepMyCopy(pluginId: string): Promise<void>;
+  /**
+   * Replaces a modified Built-in copy with the shipped copy. Requires an
+   * explicit `confirmed` flag (the dialog is a later slice); without it it
+   * refuses. Library data, credentials, and revoked grants stay as they are,
+   * and the author's pin is re-pinned to the shipped copy (#442).
+   */
+  replaceBuiltIn(pluginId: string, confirmed: boolean): Promise<boolean>;
+  /** Shows one notification per (Plugin, changed hash); the same hash never repeats. */
+  notifyChanged(pluginId: string, hash: string): void;
+  /** Removes one Plugin's notification. */
+  dismissNotification(pluginId: string): void;
 }
 
 // Launch (launch.ts)
@@ -181,11 +400,18 @@ export interface InstalledPlugin {
   approval: PluginApproval;
   folder: PluginFolder;
   manifest: PluginManifest;
+  /** True for a Built-in Plugin the shipped source lists (reserved `maibuk-` id). */
+  builtIn?: boolean;
 }
 
 export interface PluginScanOptions {
   /** Injected by tests; defaults to the platform's Plugin Directory. */
   directory?: PluginDirectoryAdapter;
+  /**
+   * The shipped Built-in Plugins. A reserved `maibuk-` id it lists parses
+   * under the Built-in schema; defaults to the production source (`[]`).
+   */
+  builtInSource?: BuiltInPluginSource;
 }
 
 export interface PluginScanResult {
@@ -237,7 +463,12 @@ export type PluginActivationRefusal =
   | PluginDataRefusal
   /** The manifest cannot run on this app's Plugin API or Release (ADR 0022). */
   | { code: "incompatible"; compatibility: PluginCompatibility }
-  | { code: "not-installed" };
+  | { code: "not-installed" }
+  /**
+   * The copy is not the one the author approved (#442): its files changed, or
+   * it was never approved. Only `approved` copies start.
+   */
+  | { code: "review-required"; status: Exclude<PluginReviewStatus, "approved"> };
 
 export type PluginActivationResult =
   | { ok: true; startReason: PluginStartReason }
@@ -271,6 +502,11 @@ export interface PluginDataVersions {
 export interface PluginLifecycleOptions {
   /** Injected by tests; defaults to the platform's Plugin Directory. */
   directory?: PluginDirectoryAdapter;
+  /**
+   * The shipped Built-in Plugins. A reserved `maibuk-` id it lists parses
+   * under the Built-in schema; defaults to the production source (`[]`).
+   */
+  builtInSource?: BuiltInPluginSource;
   /** Injected by tests: jsdom has no Worker. */
   createFrame?: (document: Document, manifest: PluginManifest) => PluginSandboxFrame;
   /** Builds the method handlers; defaults to the wired API subset. */
@@ -307,6 +543,15 @@ export interface PluginLifecycle {
   surfaceLeft(pluginId: string, surface: string): void;
   /** Starts an installed Plugin now (enable, Restart, or a bulk reason). */
   start(pluginId: string, reason: PluginStartReason): Promise<PluginActivationResult>;
+  /**
+   * Registers one Plugin now, after the launch scan: reads its folder, parses
+   * its manifest, registers its contributions, and starts it by the normal
+   * warm-start rules (a persistent Plugin starts; an on-demand one waits for a
+   * surface). Used when a Plugin is approved or enabled mid-session (#442).
+   */
+  install(pluginId: string, reason: PluginStartReason): Promise<PluginActivationResult>;
+  /** Removes one Plugin's entry and contributions: disabling it (#442). */
+  uninstall(pluginId: string): void;
   /** Stops a running Plugin; the broker's `requested` and the lifecycle's `idle` are silent. */
   stop(pluginId: string, reason?: PluginLifecycleStopReason): void;
   /** The Plugin's state, or null for an id the lifecycle has not seen. */

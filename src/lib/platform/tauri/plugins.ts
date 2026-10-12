@@ -1,7 +1,7 @@
 /**
  * The desktop and Android Plugin Directory adapter. Only Rust lists, reads,
- * hashes, copies, and watches the folder there, and hands the webview the
- * bytes it hashed (ADR 0020): every command returns the files Rust read, so
+ * hashes, copies, replaces, and watches the folder there, and hands the webview
+ * the bytes it hashed (ADR 0020): every command returns the files Rust read, so
  * nothing can change between the hash check and the load. A folder Rust
  * refuses (a symlink, a path that leaves the directory, a newline filename)
  * reads as `null`, like a folder that is not there, and the Plugin stays off;
@@ -13,6 +13,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { PluginDirectoryAdapter, PluginFolder } from "@/lib/platform/types";
 
 interface PluginFolderFilePayload {
@@ -65,6 +66,56 @@ export function createTauriPluginDirectory(): PluginDirectoryAdapter {
         console.warn(`The Plugin folder ${name} could not be read`, error);
         return null;
       }
+    },
+
+    /**
+     * Replaces the installed Built-in copy with the one Maibuk ships. Rust
+     * resolves the shipped copy from the app's bundled resources itself
+     * (`plugins/<id>/`), so `files` is ignored here: no bytes cross IPC and the
+     * webview cannot choose what a Built-in runs (ADR 0020). An id with no
+     * bundled copy is refused.
+     */
+    async replaceFolder(name: string): Promise<boolean> {
+      try {
+        await invoke("replace_builtin_plugin_folder", { name });
+        return true;
+      } catch (error) {
+        console.warn(`The Built-in Plugin folder ${name} could not be replaced`, error);
+        return false;
+      }
+    },
+
+    /**
+     * Watches the Plugin Directory through Rust (development mode, #442).
+     * Rust owns the folder and emits `plugins://changed` with the folder name
+     * once a debounced burst of writes settles; this listens for it. The
+     * returned unsubscribe stops both the listener and the Rust watcher.
+     */
+    watch(onChanged: (id: string) => void): () => void {
+      void invoke("watch_plugin_directory").catch((error) => {
+        console.warn("The Plugin Directory could not be watched", error);
+      });
+      let unlisten: UnlistenFn | null = null;
+      let stopped = false;
+      void listen<{ id: string }>("plugins://changed", (event) => {
+        const id = event.payload?.id;
+        if (typeof id === "string") onChanged(id);
+      })
+        .then((stop) => {
+          if (stopped) stop();
+          else unlisten = stop;
+        })
+        .catch((error) => {
+          console.warn("The Plugin change listener could not be attached", error);
+        });
+      return () => {
+        stopped = true;
+        unlisten?.();
+        unlisten = null;
+        void invoke("unwatch_plugin_directory").catch(() => {
+          // Nothing watched: a failed unwatch is not worth surfacing.
+        });
+      };
     },
   };
 }

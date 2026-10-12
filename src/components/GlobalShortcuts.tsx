@@ -202,6 +202,15 @@ export function GlobalShortcuts() {
       onTrigger: () => useReleaseStore.getState().openNotes(),
     },
     {
+      id: "global.openPluginsSettings",
+      onTrigger: () => {
+        // The hash reveals the Plugins section (its heading at the top), the
+        // same way a `#<section id>` link does (#442). Navigating with the hash
+        // also re-focuses when Settings is already the current screen.
+        navigate("/settings#plugins");
+      },
+    },
+    {
       id: "global.openCommandPalette",
       allowInInput: true,
       onTrigger: () => {

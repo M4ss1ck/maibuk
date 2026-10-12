@@ -25,7 +25,10 @@ import {
   onChange,
 } from "@/features/sync/change-feed";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
+import { clearStartupError, getPluginApproval, recordStartupError } from "@/features/plugins/approvals";
+import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { registerPluginContributions } from "@/features/plugins/contributions";
+import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
 import {
   clearPluginHighlights,
   onEditorContentChanged,
@@ -38,8 +41,10 @@ import {
   setPluginLifecycleInstance,
 } from "@/features/plugins/lifecycle-instance";
 import { scanApprovedPlugins } from "@/features/plugins/launch";
+import { usePluginManagementStore } from "@/features/plugins/management";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
-import { STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
+import { reviewPluginCopy } from "@/features/plugins/review";
+import { STARTUP_TIMEOUT_MS, readPluginManifest, startPlugin } from "@/features/plugins/runtime";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
 import { isTutorialLibraryActive, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
@@ -52,14 +57,17 @@ import type {
   PluginLifecycleState,
   PluginLifecycleStopReason,
   PluginRuntime,
+  PluginReview,
   PluginStartReason,
   PluginStartRefusal,
   PluginStopReason,
 } from "@/features/plugins/types";
 import { toast } from "@/components/ui/Toast";
 import { APP_VERSION } from "@/constants";
+import { useSettingsStore } from "@/features/settings/store";
 import i18n from "@/i18n";
 import { waitForDatabaseReady } from "@/lib/db";
+import { getPluginDirectory } from "@/lib/platform";
 import { PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 
 /** Heartbeat period; one missed beat makes the Plugin's contributions unusable. */
@@ -215,6 +223,12 @@ interface Entry {
   limitStopped: boolean;
   /** Invalidates in-flight work when a stop or a new start supersedes it. */
   generation: number;
+  /**
+   * The start in flight while the review gate reads the folder, before the
+   * state turns "starting": a concurrent start joins it instead of bumping
+   * the generation and failing the first caller (#442).
+   */
+  pendingStart: Promise<PluginActivationResult> | null;
 }
 
 export function createPluginLifecycle(options: PluginLifecycleOptions = {}): PluginLifecycle {
@@ -233,6 +247,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   // the Tutorial waits for it and no call finishes against the sample Library
   // (ADR 0008, #398).
   const trackLibraryWork = options.trackLibraryWork ?? trackAuthorLibraryWork;
+  const builtInSource = options.builtInSource ?? createBuiltInPluginSource();
   const entries = new Map<string, Entry>();
   const listeners = new Set<(change: PluginLifecycleChange) => void>();
   let disposed = false;
@@ -335,6 +350,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     const runtime = entry.runtime;
     entry.runtime = null;
     entry.generation += 1;
+    entry.pendingStart = null;
     clearTimers(entry);
     setState(entry, { status: "stopped", reason, refusal: null });
     runtime?.stop();
@@ -344,6 +360,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   function refuseEntry(entry: Entry, refusal: PluginActivationRefusal): void {
     entry.runtime = null;
     entry.generation += 1;
+    entry.pendingStart = null;
     clearTimers(entry);
     setState(entry, { status: "stopped", reason: null, refusal });
   }
@@ -356,6 +373,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   ): void {
     entry.runtime = null;
     entry.generation += 1;
+    entry.pendingStart = null;
     clearTimers(entry);
     setState(entry, { status: "stopped", reason, refusal });
     applyStopPolicy(entry, reason);
@@ -418,11 +436,20 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     }, HEARTBEAT_INTERVAL_MS);
   }
 
-  async function startEntry(
+  function startEntry(entry: Entry, reason: PluginStartReason): Promise<PluginActivationResult> {
+    if (entry.pendingStart) return entry.pendingStart;
+    const pending = runStart(entry, reason).finally(() => {
+      if (entry.pendingStart === pending) entry.pendingStart = null;
+    });
+    entry.pendingStart = pending;
+    return pending;
+  }
+
+  async function runStart(
     entry: Entry,
     reason: PluginStartReason
   ): Promise<PluginActivationResult> {
-    const { pluginId, manifest, folder, approval } = entry.installed;
+    const { pluginId, manifest, folder } = entry.installed;
     if (disposed) return { ok: false, refusal: { code: "not-installed" } };
     if (entry.state.status !== "stopped") {
       // Already starting, ready, or unavailable: nothing to do.
@@ -435,6 +462,43 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;
     const startMark = `plugin.start:${pluginId}:begin`;
     const handshakeMark = `plugin.start:${pluginId}:handshake`;
+
+    // The review gate (#442): only the copy the author approved starts. It runs
+    // before the state turns "starting" and before any frame, in addition to
+    // `startPlugin`'s own pinned-hash check, so a changed copy is refused
+    // without ever being reported as starting. The live record is read so a
+    // re-review (markReviewed) takes effect on the next start.
+    const liveApproval = getPluginApproval(pluginId);
+    let review: PluginReview | null = null;
+    try {
+      const digests = await pluginFileDigests(folder.files);
+      const hash = await hashPluginDirectory(folder.files);
+      review = reviewPluginCopy({
+        approval: liveApproval,
+        digests,
+        hash,
+        manifest,
+      });
+    } catch {
+      // A folder the hash scheme refuses is reported by `startPlugin`'s own
+      // check; the review cannot be computed, so the start falls through.
+      review = null;
+    }
+    if (entry.generation !== generation) return { ok: false, refusal: { code: "not-installed" } };
+    if (review !== null && review.status !== "approved") {
+      const refusal: PluginActivationRefusal = {
+        code: "review-required",
+        status: review.status,
+      };
+      refuseEntry(entry, refusal);
+      return { ok: false, refusal };
+    }
+    if (liveApproval === null && review === null) {
+      const refusal: PluginActivationRefusal = { code: "review-required", status: "not-approved" };
+      refuseEntry(entry, refusal);
+      return { ok: false, refusal };
+    }
+
     devMark(startMark);
     setState(entry, { status: "starting", startReason: reason });
 
@@ -478,8 +542,12 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     try {
       result = await startPlugin({
         folder,
-        pinnedHash: approval.pinnedHash,
-        granted: approval.granted,
+        pinnedHash: (liveApproval ?? entry.installed.approval).pinnedHash,
+        // A Built-in id parses under the Built-in schema in `startPlugin` too.
+        builtIn: entry.installed.builtIn,
+        // Read the live record on every broker call, so revoking an optional
+        // grant refuses the next call without restarting the Plugin (#442).
+        granted: () => getPluginApproval(pluginId)?.granted ?? [],
         handlers,
         createFrame: options.createFrame,
         isLibraryAvailable,
@@ -590,6 +658,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       restartTimer: null,
       autoRestarted: false,
       limitStopped: false,
+      pendingStart: null,
       generation: 0,
     };
   }
@@ -652,16 +721,21 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       try {
         await whenLaunchSettled();
         if (disposed) return;
-        const scan = await scanApprovedPlugins({ directory: options.directory });
+        const scan = await scanApprovedPlugins({
+          directory: options.directory,
+          builtInSource,
+        });
         if (disposed) return;
         for (const { pluginId, refusal } of scan.refusals) {
           console.warn(`Plugin ${pluginId} did not load: ${refusal.code}`, refusal);
+          recordStartupError(pluginId, refusal);
         }
         for (const plugin of scan.plugins) {
           const entry = createEntry(plugin);
-          // An approved Plugin is enabled (until the install flow lands, #442):
-          // its Commands, pages, Settings rows, toolbar buttons, and Item Menu
-          // entries are discoverable now, before any Worker exists (#437).
+          // Only an enabled Plugin reaches this scan (#442): its Commands,
+          // pages, Settings rows, toolbar buttons, and Item Menu entries are
+          // discoverable now, before any Worker exists (#437). A disabled
+          // Plugin stays installed but is never scanned, so it is off.
           try {
             entry.unregisterContributions = registerPluginContributions({
               manifest: plugin.manifest,
@@ -693,7 +767,11 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
           const entry = entries.get(plugin.pluginId);
           if (!entry) continue;
           try {
-            await startEntry(entry, "launch");
+            const result = await startEntry(entry, "launch");
+            // A launch failure is a startup error the row shows until the next
+            // successful start clears it (#442, item 5).
+            if (result.ok) clearStartupError(plugin.pluginId);
+            else recordStartupError(plugin.pluginId, result.refusal);
           } catch (error) {
             // One Plugin's failure must never skip the next one.
             console.error(`Plugin ${plugin.pluginId} failed to start`, error);
@@ -753,6 +831,77 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       return startEntry(entry, reason);
     },
 
+    async install(pluginId: string, reason: PluginStartReason) {
+      if (disposed) return { ok: false, refusal: { code: "not-installed" } };
+      const approval = getPluginApproval(pluginId);
+      if (!approval || !approval.enabled) {
+        return { ok: false, refusal: { code: "not-installed" } };
+      }
+      const directory = options.directory ?? (await getPluginDirectory());
+      const folder = await directory.readFolder(pluginId);
+      if (!folder) return { ok: false, refusal: { code: "not-installed" } };
+      // A reserved `maibuk-` id the shipped Built-in source lists parses under
+      // the Built-in schema; a third-party folder stays under the other one
+      // (#442), so a Built-in is not refused at start.
+      const builtInIds = new Set((await builtInSource.list()).map((entry) => entry.id));
+      const read = readPluginManifest(folder, { builtIn: builtInIds.has(pluginId) });
+      if (!read.ok) {
+        return { ok: false, refusal: { code: "manifest-invalid", problems: read.problems } };
+      }
+      const installed: InstalledPlugin = {
+        pluginId,
+        approval,
+        folder,
+        manifest: read.manifest,
+        builtIn: builtInIds.has(pluginId),
+      };
+      let entry = entries.get(pluginId);
+      if (!entry) {
+        entry = createEntry(installed);
+        try {
+          entry.unregisterContributions = registerPluginContributions({
+            manifest: installed.manifest,
+            folder,
+          });
+        } catch (error) {
+          // One Plugin's bad contributions must never leave a half entry.
+          console.error(`Plugin ${pluginId} contributions failed to register`, error);
+          return { ok: false, refusal: { code: "module-refused", problems: [] } };
+        }
+        entries.set(pluginId, entry);
+      } else {
+        // A re-review refreshes what the entry was scanned with, and clears a
+        // stale refusal or limit-stop so a later warm start works.
+        entry.installed = installed;
+        entry.limitStopped = false;
+        if (entry.state.status === "stopped" && entry.state.refusal !== null) {
+          entry.state = { status: "stopped", reason: null, refusal: null };
+        }
+      }
+      // The normal warm-start rules: an on-demand Plugin waits for a surface; a
+      // persistent one starts now.
+      if (installed.manifest.lifecycle === "on-demand" && entry.surfaces.size === 0) {
+        return { ok: true, startReason: reason };
+      }
+      return startEntry(entry, reason);
+    },
+
+    uninstall(pluginId: string): void {
+      const entry = entries.get(pluginId);
+      if (!entry) return;
+      clearPluginHighlights(pluginId);
+      entry.generation += 1;
+      entry.pendingStart = null;
+      clearTimers(entry);
+      const runtime = entry.runtime;
+      entry.runtime = null;
+      runtime?.stop();
+      entry.unregisterContributions?.();
+      entry.unregisterContributions = null;
+      setState(entry, { status: "stopped", reason: "requested", refusal: null });
+      entries.delete(pluginId);
+    },
+
     stop(pluginId: string, reason: PluginLifecycleStopReason = "requested"): void {
       const entry = entries.get(pluginId);
       if (!entry) return;
@@ -797,6 +946,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       scanListeners.clear();
       for (const entry of entries.values()) {
         entry.generation += 1;
+        entry.pendingStart = null;
         clearTimers(entry);
         const runtime = entry.runtime;
         entry.runtime = null;
@@ -824,7 +974,15 @@ export function installPluginLifecycle(options: PluginLifecycleOptions = {}): Pl
   if (existing) return existing;
   const lifecycle = createPluginLifecycle(options);
   setPluginLifecycleInstance(lifecycle);
-  void lifecycle.launch();
+  void lifecycle.launch().then(() => {
+    // Development mode at launch: a copy whose files changed while the app was
+    // closed must go through the dev reload policy, and the folder watcher must
+    // subscribe now, not only when Settings mounts (#442, plan decision 6). The
+    // management store's refresh does both; it stays behind this dynamic
+    // lifecycle import so the manifest validator never reaches the entry chunk.
+    if (!useSettingsStore.getState().pluginDevelopmentMode) return;
+    return usePluginManagementStore.getState().refresh();
+  });
   return lifecycle;
 }
 

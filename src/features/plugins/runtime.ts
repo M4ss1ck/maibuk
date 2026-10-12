@@ -18,6 +18,7 @@ import { planPluginModules, rewritePluginImports } from "@/features/plugins/modu
 import { createPluginFrame } from "@/features/plugins/sandbox";
 import type {
   ManifestProblem,
+  ManifestValidationOptions,
   PluginBroker,
   PluginFolder,
   PluginManifest,
@@ -48,7 +49,8 @@ type StartupOutcome = { ok: true } | { ok: false; refusal: PluginStartRefusal };
  * #437) before any frame exists.
  */
 export function readPluginManifest(
-  folder: PluginFolder
+  folder: PluginFolder,
+  options: ManifestValidationOptions = {}
 ): { ok: true; manifest: PluginManifest } | { ok: false; problems: ManifestProblem[] } {
   const file = folder.files.find((entry) => entry.path === MANIFEST_FILE);
   if (!file) {
@@ -66,7 +68,7 @@ export function readPluginManifest(
       problems: [{ path: MANIFEST_FILE, message: `${MANIFEST_FILE} is not valid UTF-8` }],
     };
   }
-  return parsePluginManifest(text);
+  return parsePluginManifest(text, options);
 }
 
 async function runStartup(
@@ -164,7 +166,7 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
     return { ok: false, refusal: { code: "hash-mismatch", expected: pinnedHash, actual } };
   }
 
-  const manifestResult = readPluginManifest(folder);
+  const manifestResult = readPluginManifest(folder, { builtIn: options.builtIn });
   if (!manifestResult.ok) {
     return { ok: false, refusal: { code: "manifest-invalid", problems: manifestResult.problems } };
   }
@@ -177,6 +179,9 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
 
   const frame = (options.createFrame ?? createPluginFrame)(document, manifest);
   const channel = new MessageChannel();
+  // A provider is read on every broker call, so a revocation applies to the
+  // next call without restarting the Plugin (#442); an array is read once.
+  const granted = options.granted;
   const broker = createPluginBroker({
     pluginId: manifest.id,
     port: channel.port1,
@@ -186,7 +191,7 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
       ...manifest.permissions.required,
       ...manifest.permissions.optional,
     ] as PluginPermissionId[],
-    granted: () => options.granted ?? [],
+    granted: typeof granted === "function" ? granted : () => granted ?? [],
     handlers: options.handlers?.(manifest),
     isLibraryAvailable: options.isLibraryAvailable,
     trackLibraryWork: options.trackLibraryWork,

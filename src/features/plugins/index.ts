@@ -77,12 +77,28 @@ export {
 } from "@/features/plugins/broker";
 export {
   PLUGIN_APPROVALS_STORAGE_KEY,
+  approveBuiltInCopy,
+  approvePluginCopy,
+  clearPluginApprovals,
+  clearStartupError,
+  disablePlugin,
+  enablePlugin,
   getPluginApproval,
+  hasMissingRequired,
   listPluginApprovals,
+  recordStartupError,
   removePluginApproval,
+  revokePermission,
   savePluginApproval,
   serializePluginApprovals,
 } from "@/features/plugins/approvals";
+export { reviewPluginCopy } from "@/features/plugins/review";
+export { startupErrorValue } from "@/features/plugins/startup-error";
+export { createBuiltInPluginSource } from "@/features/plugins/builtin";
+export {
+  createPluginManagementStore,
+  usePluginManagementStore,
+} from "@/features/plugins/management";
 export {
   PluginDirectoryHashError,
   hashPluginDirectory,

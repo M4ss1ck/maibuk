@@ -17,6 +17,7 @@ import { PluginPage } from "@/pages/PluginPage";
 import { StartupRedirect } from "@/components/StartupRedirect";
 import { PathTracker } from "@/components/PathTracker";
 import { PluginCommands } from "@/components/plugins/PluginCommands";
+import { PluginChangeNotices } from "@/components/plugins/PluginChangeNotices";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { ToastViewport } from "@/components/ui";
 import { ClickBadges, DictationLiveRegion } from "@/components/dictation";
@@ -108,6 +109,7 @@ function App() {
         <TutorialRunner />
         <TutorialOffer />
         <ToastViewport />
+        <PluginChangeNotices />
         <DictationLiveRegion />
         <ClickBadges />
       </StartupRedirect>

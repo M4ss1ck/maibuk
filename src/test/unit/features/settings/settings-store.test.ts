@@ -601,6 +601,23 @@ describe("useSettingsStore", () => {
 
 import { clampEditorZoom } from "@/features/settings/types";
 
+describe("pluginDevelopmentMode", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useSettingsStore.setState({ pluginDevelopmentMode: false } as any);
+  });
+
+  it("defaults to off and toggles through the setter", () => {
+    expect(useSettingsStore.getState().pluginDevelopmentMode).toBe(false);
+
+    useSettingsStore.getState().setPluginDevelopmentMode(true);
+    expect(useSettingsStore.getState().pluginDevelopmentMode).toBe(true);
+
+    useSettingsStore.getState().setPluginDevelopmentMode(false);
+    expect(useSettingsStore.getState().pluginDevelopmentMode).toBe(false);
+  });
+});
+
 describe("editorZoom", () => {
   beforeEach(() => {
     localStorage.clear();

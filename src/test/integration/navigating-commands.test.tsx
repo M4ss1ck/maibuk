@@ -223,6 +223,7 @@ const GOTO_TARGET: Partial<Record<CommandId, string>> = {
   "global.gotoEphemeral": "/ephemeral",
   "global.gotoMetrics": "/metrics",
   "global.gotoSettings": "/settings",
+  "global.openPluginsSettings": "/settings",
 };
 
 // Commands whose runner navigates from one screen but acts in place on

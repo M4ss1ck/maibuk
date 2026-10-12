@@ -1,6 +1,6 @@
 // Platform adapter interfaces for cross-platform compatibility
 
-import type { PluginFolder } from "@/features/plugins/types";
+import type { PluginFolder, PluginFolderFile } from "@/features/plugins/types";
 
 export interface DatabaseAdapter {
   execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }>;
@@ -87,6 +87,22 @@ export interface PluginDirectoryAdapter {
   listFolders(): Promise<string[]>;
   /** A folder's files with the bytes they were hashed from; null when the folder is gone. */
   readFolder(name: string): Promise<PluginFolder | null>;
+  /**
+   * Replaces one folder's files, in the place `readFolder` reads (a Built-in
+   * update, #442). `true` when the folder now holds the shipped copy. The web
+   * adapter writes `files` into OPFS; the Tauri adapter ignores `files` and has
+   * Rust resolve the shipped copy from the app's bundled resources, so no bytes
+   * cross IPC and the webview cannot choose what a Built-in runs (ADR 0020).
+   * Absent on an adapter that cannot write; a Built-in replace then refuses.
+   */
+  replaceFolder?(name: string, files: readonly PluginFolderFile[]): Promise<boolean>;
+  /**
+   * Watches the Plugin Directory for changes to a Plugin's files (development
+   * mode, #442): calls `onChanged` with the folder id once a write settles.
+   * Returns an unsubscribe that stops watching. Absent on an adapter that
+   * cannot watch; development mode then reloads only on an explicit refresh.
+   */
+  watch?(onChanged: (id: string) => void): () => void;
 }
 
 export type { ModelFiles, RecognizerHost } from "@/features/dictation/types";

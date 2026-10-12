@@ -124,6 +124,10 @@ interface HarnessOptions {
   approved?: PluginFolder[];
   /** Folders in the Plugin Directory that are not approved (disabled). */
   disabled?: PluginFolder[];
+  /** Folders whose approval record is disabled: installed, but off. */
+  disabledApprovals?: PluginFolder[];
+  /** Folders whose approval pins a stale hash: installed, but the files changed. */
+  changed?: PluginFolder[];
   /** Stored dataVersion per plugin id. */
   data?: Record<string, number>;
   /** Overrides the dataVersion store per method; unspecified methods keep the in-memory map. */
@@ -143,12 +147,41 @@ interface HarnessOptions {
 async function createHarness(options: HarnessOptions = {}) {
   const folders = new Map<string, PluginFolder>();
   for (const folder of options.disabled ?? []) folders.set(folder.name, folder);
+  for (const folder of options.disabledApprovals ?? []) {
+    folders.set(folder.name, folder);
+    savePluginApproval({
+      pluginId: folder.name,
+      pinnedHash: await hashPluginDirectory(folder.files),
+      granted: options.granted ?? [],
+      enabled: false,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
+    });
+  }
+  for (const folder of options.changed ?? []) {
+    folders.set(folder.name, folder);
+    // A pin that does not match the folder's current hash: the copy changed.
+    savePluginApproval({
+      pluginId: folder.name,
+      pinnedHash: "h1:stale",
+      granted: options.granted ?? [],
+      enabled: true,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
+    });
+  }
   for (const folder of options.approved ?? []) {
     folders.set(folder.name, folder);
     savePluginApproval({
       pluginId: folder.name,
       pinnedHash: await hashPluginDirectory(folder.files),
       granted: options.granted ?? [],
+      enabled: true,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
     });
   }
 
@@ -260,6 +293,17 @@ describe("Plugin lifecycle: launch", () => {
       reason: null,
       refusal: null,
     });
+  });
+
+  it("never registers or starts a Plugin whose approval is disabled", async () => {
+    const h = await createHarness({ disabledApprovals: [makePlugin("off-one")] });
+
+    await launchAll(h);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.installed()).toEqual([]);
+    expect(h.lifecycle.state("off-one")).toBeNull();
+    expect(h.directory.readFolder).not.toHaveBeenCalled();
   });
 
   it("starts persistent Plugins one at a time in idle time", async () => {
@@ -1046,6 +1090,103 @@ describe("Plugin lifecycle: compatibility gate", () => {
     await launchAll(h);
 
     expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
+  });
+});
+
+describe("Plugin lifecycle: review gate", () => {
+  it("never creates a frame for a changed copy and records the review refusal", async () => {
+    const h = await createHarness({ changed: [makePlugin("alpha")] });
+
+    await launchAll(h);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: { code: "review-required", status: "review-required" },
+    });
+  });
+
+  it("starts a changed copy once its current files are approved again", async () => {
+    const folder = makePlugin("alpha");
+    const h = await createHarness({ changed: [folder] });
+    await launchAll(h);
+    expect(h.frameCount()).toBe(0);
+
+    // Re-pin to the folder's current hash: the review is approved now.
+    savePluginApproval({
+      pluginId: "alpha",
+      pinnedHash: await hashPluginDirectory(folder.files),
+      granted: [],
+      enabled: true,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
+    });
+    await h.lifecycle.start("alpha", "enable");
+    await advance(0);
+
+    expect(h.framesFor("alpha")).toHaveLength(1);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "enable" });
+  });
+
+  it("refuses an on-demand copy that changed before any warm start", async () => {
+    const h = await createHarness({
+      changed: [makePlugin("warm-page", { lifecycle: "on-demand" })],
+    });
+    await h.lifecycle.launch();
+    h.lifecycle.surfaceReached("warm-page", "page:report");
+    // The review gate hashes the folder on the real event loop; wait for the
+    // refusal itself rather than a fixed number of timer passes.
+    await advanceUntil(() => {
+      const state = h.lifecycle.state("warm-page");
+      return state?.status === "stopped" && state.refusal?.code === "review-required";
+    }, "warm-page review refusal");
+
+    expect(h.frameCount()).toBe(0);
+    // A changed copy is refused before the state ever turns "starting".
+    expect(h.changes.map((change) => change.state.status)).not.toContain("starting");
+    expect(h.lifecycle.state("warm-page")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: { code: "review-required", status: "review-required" },
+    });
+  });
+
+  it("joins a concurrent start made while the review gate reads the folder", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { lifecycle: "on-demand" })],
+    });
+    await h.lifecycle.launch();
+
+    // Both calls land before the gate's folder hash resolves, while the state
+    // is still "stopped"; the second must not supersede the first.
+    const [first, second] = await Promise.all([
+      h.lifecycle.start("alpha", "enable"),
+      h.lifecycle.start("alpha", "enable"),
+    ]);
+    await advance(0);
+
+    expect(first).toEqual(second);
+    expect(first.ok).toBe(true);
+    expect(h.framesFor("alpha")).toHaveLength(1);
+  });
+
+  it("starts again after a stop that lands while the review gate reads the folder", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { lifecycle: "on-demand" })],
+    });
+    await h.lifecycle.launch();
+
+    const superseded = h.lifecycle.start("alpha", "enable");
+    h.lifecycle.stop("alpha");
+    const restarted = await h.lifecycle.start("alpha", "enable");
+    await superseded;
+    await advance(0);
+
+    expect(restarted.ok).toBe(true);
+    expect(h.framesFor("alpha")).toHaveLength(1);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "enable" });
   });
 });
 

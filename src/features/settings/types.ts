@@ -164,6 +164,10 @@ export interface Settings {
   customDictionary: string[];
   dictionaryOpenInBrowser: boolean;
 
+  // Plugin development mode (#442): device-local, off by default. When on, a
+  // watched Plugin folder's completed builds reload the Plugin automatically.
+  pluginDevelopmentMode: boolean;
+
   // Scene break settings
   lastSceneBreak: SceneBreakDescriptor;
   sceneBreakPresets: SceneBreakDescriptor[];

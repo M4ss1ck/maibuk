@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine;
 use serde::Serialize;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 
 /// One file in a Plugin folder: its POSIX-relative path and its exact bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,6 +163,52 @@ pub async fn read_plugin_folder<R: Runtime>(
             })
             .collect(),
     }))
+}
+
+/// The folder a Built-in Plugin ships in, under the app's resource root
+/// (`<resource>/plugins/<id>/`). A pure function of the root so the resolve and
+/// refuse rules are testable without an app: the id must pass the same safe
+/// folder-name check the Plugin Directory uses, and a shipped folder must be
+/// there and be a folder (never a symlink to one).
+pub fn resolve_builtin_plugin_folder(resource_root: &Path, name: &str) -> Result<PathBuf, String> {
+    if !directory::is_safe_folder_name(name) {
+        return Err(format!("PLUGIN_FOLDER_INVALID_NAME: {name}"));
+    }
+    let folder = resource_root.join("plugins").join(name);
+    match std::fs::symlink_metadata(&folder) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => Ok(folder),
+        _ => Err(format!("PLUGIN_BUILT_IN_MISSING: {name}")),
+    }
+}
+
+/// Replaces the installed copy of `name` under `root` with the shipped folder,
+/// through a staging folder: the copy is read and hashed before it moves onto
+/// the installed copy, so a failed copy leaves the installed copy as it was.
+fn replace_from_folder(
+    root: &Path,
+    name: &str,
+    shipped: PathBuf,
+) -> Result<InstalledPlugin, String> {
+    stage_and_finish(root, move |staging| {
+        directory::copy_folder(&shipped, staging).map_err(|e| e.to_string())?;
+        Ok(name.to_string())
+    })
+}
+
+/// Replace a Built-in Plugin's installed folder with the copy Maibuk ships, so
+/// the author's modified files are discarded in favour of the shipped ones. The
+/// shipped copy is resolved from the app's bundled resources in Rust: no bytes
+/// cross the IPC boundary, so the webview cannot choose what a Built-in runs
+/// (ADR 0020). An id with no bundled copy is refused.
+#[tauri::command]
+pub fn replace_builtin_plugin_folder<R: Runtime>(
+    app: AppHandle<R>,
+    name: String,
+) -> Result<InstalledPlugin, String> {
+    let resource_root = app.path().resource_dir().map_err(|e| e.to_string())?;
+    let shipped = resolve_builtin_plugin_folder(&resource_root, &name)?;
+    let root = directory::ensure(&app)?;
+    replace_from_folder(&root, &name, shipped)
 }
 
 /// Open the native folder picker and approve the folder the author picks.
@@ -517,5 +563,61 @@ mod tests {
         assert!(!root.join("evil").exists());
         std::fs::remove_dir_all(&root).unwrap();
         std::fs::remove_dir_all(&source).unwrap();
+    }
+
+    #[test]
+    fn resolves_a_bundled_built_in_folder_and_refuses_missing_or_unsafe_ids() {
+        let root = temp_dir("builtin-resources");
+        let shipped = root.join("plugins").join("tracer");
+        std::fs::create_dir_all(&shipped).unwrap();
+        std::fs::write(shipped.join("manifest.json"), r#"{"id":"tracer"}"#).unwrap();
+
+        assert_eq!(
+            resolve_builtin_plugin_folder(&root, "tracer").unwrap(),
+            shipped,
+            "a present bundled folder resolves"
+        );
+
+        // The id must pass the Plugin Directory's own safe-name check.
+        for name in ["", "..", "a/b", "a\\b", "a:b", ".hidden"] {
+            let error = resolve_builtin_plugin_folder(&root, name).unwrap_err();
+            assert!(
+                error.contains("PLUGIN_FOLDER_INVALID_NAME"),
+                "{name:?}: {error}"
+            );
+        }
+
+        // A shipped folder that is not there, and a loose file, are refused.
+        assert!(resolve_builtin_plugin_folder(&root, "absent").is_err());
+        std::fs::write(root.join("plugins").join("loose"), "x").unwrap();
+        assert!(resolve_builtin_plugin_folder(&root, "loose").is_err());
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn replaces_an_installed_copy_with_a_bundled_built_in_folder() {
+        let resources = temp_dir("builtin-shipped");
+        let shipped = resources.join("plugins").join("tracer");
+        std::fs::create_dir_all(&shipped).unwrap();
+        std::fs::write(shipped.join("manifest.json"), r#"{"id":"tracer"}"#).unwrap();
+        std::fs::write(shipped.join("index.js"), "new").unwrap();
+
+        let root = temp_dir("builtin-root");
+        std::fs::create_dir_all(root.join("tracer")).unwrap();
+        std::fs::write(root.join("tracer/index.js"), "old").unwrap();
+
+        let resolved = resolve_builtin_plugin_folder(&resources, "tracer").unwrap();
+        let installed = replace_from_folder(&root, "tracer", resolved).unwrap();
+
+        assert_eq!(installed.id, "tracer");
+        assert_eq!(
+            std::fs::read_to_string(root.join("tracer/index.js")).unwrap(),
+            "new"
+        );
+        let folder = directory::read_folder(&root, "tracer").unwrap().unwrap();
+        assert_eq!(Some(installed.hash), folder.hash);
+        std::fs::remove_dir_all(&root).unwrap();
+        std::fs::remove_dir_all(&resources).unwrap();
     }
 }

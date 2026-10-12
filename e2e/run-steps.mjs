@@ -60,7 +60,9 @@ export function buildWeb({ sourcemap = false } = {}) {
       "warn",
       ...(sourcemap ? ["--sourcemap"] : []),
     ],
-    { VITE_BUILD_TARGET: "web" }
+    // The E2E-only Built-in seed (src/features/plugins/builtin.ts) is compiled
+    // in only here; every other build drops it.
+    { VITE_BUILD_TARGET: "web", VITE_E2E_BUILTIN_SEED: "1" }
   );
 }
 

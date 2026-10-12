@@ -139,6 +139,7 @@ describe("GlobalShortcuts", () => {
       "global.gotoProjects",
       "global.gotoSettings",
       "global.openCommandPalette",
+      "global.openPluginsSettings",
       "global.openReleaseNotes",
       "global.showHelp",
       "global.syncNow",
