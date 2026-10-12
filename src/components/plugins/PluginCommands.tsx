@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { pluginCommandBindings } from "@/features/plugins/commands";
+import { setPluginNavigator } from "@/features/plugins/navigation";
 import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 import { useInstalledPluginLifecycle, usePluginLifecycleRevision } from "@/hooks/usePluginSurface";
 import { useShortcuts } from "@/lib/shortcuts";
@@ -68,6 +69,11 @@ export function PluginCommands() {
   }, [lifecycle, pathname, navigate, revision, lifecycleRevision]);
 
   useShortcuts(bindings);
+
+  // `navigation.openEntity` opens entities through the same navigator the
+  // Plugin Commands use, so a Plugin page cannot move the app without the
+  // app shell's own router.
+  useEffect(() => setPluginNavigator((to, options) => navigate(to, options)), [navigate]);
 
   // A screen whose Contexts match a Plugin Command is a reachable surface: an
   // on-demand Plugin warm-starts, and a global Command makes it effectively

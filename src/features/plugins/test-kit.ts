@@ -29,6 +29,7 @@ import type {
   PluginPermissionId,
   TestHost,
   TestHostOptions,
+  TestNavigation,
   TestNotification,
   TestPage,
 } from "@/features/plugins/types";
@@ -46,7 +47,14 @@ function inAct(step: () => void): void {
 export function createTestHost(options: TestHostOptions): TestHost {
   const channel = new MessageChannel();
   const notifications: TestNotification[] = [];
+  const navigations: TestNavigation[] = [];
   const books = [...(options.library?.books ?? [])];
+  const chapters = [...(options.library?.chapters ?? [])];
+  const notes = [...(options.library?.notes ?? [])];
+  const canvases = [...(options.library?.canvases ?? [])];
+  const storage = new Map<string, unknown>();
+  let language = options.language ?? "en";
+  let libraryAvailable = true;
   const declared = [
     ...options.manifest.permissions.required,
     ...options.manifest.permissions.optional,
@@ -60,6 +68,48 @@ export function createTestHost(options: TestHostOptions): TestHost {
     },
     "library.books.list": () => books,
     "library.books.get": ({ bookId }) => books.find((book) => book.id === bookId) ?? null,
+    "library.chapters.list": ({ bookId }) =>
+      chapters
+        .filter((chapter) => chapter.bookId === bookId)
+        .map(({ content: _content, ...summary }) => summary),
+    "library.chapters.get": ({ chapterId }) => {
+      const chapter = chapters.find((entry) => entry.id === chapterId);
+      if (!chapter) return null;
+      const { content, ...summary } = chapter;
+      return { ...summary, content: content ?? { text: "", html: "" } };
+    },
+    "library.notes.list": ({ bookId }) =>
+      notes
+        .filter((note) => bookId === undefined || note.bookId === bookId)
+        .map(({ content: _content, ...summary }) => summary),
+    "library.notes.get": ({ noteId }) => {
+      const note = notes.find((entry) => entry.id === noteId);
+      if (!note) return null;
+      const { content, ...summary } = note;
+      return { ...summary, content: content ?? { text: "", html: "" } };
+    },
+    "library.canvases.list": ({ bookId }) =>
+      bookId === undefined ? canvases : canvases.filter((canvas) => canvas.bookId === bookId),
+    "library.canvases.get": ({ canvasId }) =>
+      canvases.find((canvas) => canvas.id === canvasId) ?? null,
+    "storage.get": ({ key }) => {
+      const value = storage.get(key);
+      return value === undefined ? null : value;
+    },
+    "storage.set": ({ key, value }) => {
+      storage.set(key, value);
+      return null;
+    },
+    "storage.delete": ({ key }) => {
+      storage.delete(key);
+      return null;
+    },
+    "storage.keys": () => [...storage.keys()].sort(),
+    "navigation.openEntity": ({ entity, reveal }) => {
+      navigations.push(reveal === undefined ? { entity } : { entity, reveal });
+      return null;
+    },
+    "language.get": () => ({ language }),
   };
 
   const broker = createPluginBroker({
@@ -68,6 +118,8 @@ export function createTestHost(options: TestHostOptions): TestHost {
     declared,
     granted: () => granted,
     handlers,
+    isLibraryAvailable: () => libraryAvailable,
+    eventSnapshot: (event) => (event === "language.changed" ? { language } : undefined),
   });
 
   /** Every page `renderPage` opened and has not unmounted yet. */
@@ -132,9 +184,20 @@ export function createTestHost(options: TestHostOptions): TestHost {
     broker,
     manifest: applyPluginLocale(options.manifest, options.locale ?? {}),
     notifications,
+    navigations,
     locale: options.locale ?? null,
+    get language() {
+      return language;
+    },
     setGranted(permissions) {
       granted = new Set(permissions);
+    },
+    setLanguage(next) {
+      language = next;
+      broker.emit("language.changed", { language });
+    },
+    setLibraryAvailable(available) {
+      libraryAvailable = available;
     },
     renderPage,
     stopWorker() {

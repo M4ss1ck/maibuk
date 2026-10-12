@@ -123,6 +123,13 @@ export async function enterTutorialLibrary(options: EnterTutorialLibraryOptions)
 
     const database = await createMemoryDatabase();
     await initializeSchema(database);
+    // Close the entry window: the first settle ran before the Flush and these
+    // awaits, so a requiresLibrary call accepted during them is tracked but not
+    // yet waited for. Settle again with nothing awaited before the synchronous
+    // activation. Plugin calls arrive as MessagePort macrotasks, so none can be
+    // accepted between this settle's last check and activate, and no handler
+    // can wake against the sample Library (ADR 0008, #398).
+    await settleAuthorLibraryWork();
     activateTutorialDatabase(database);
     // The author's Library is unavailable for as long as the Tutorial Library
     // is active; consumers suspend Library work on this signal.

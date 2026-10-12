@@ -40,7 +40,7 @@ import {
   type PluginApiMethods,
 } from "@/plugin-sdk/api.generated";
 
-const UNGATED = new Set(["storage", "notifications", "navigation"]);
+const UNGATED = new Set(["storage", "notifications", "navigation", "language"]);
 
 describe("PLUGIN_API_TABLE", () => {
   it("names every method <namespace>.<verb> with unique ids", () => {
@@ -117,20 +117,22 @@ function propertyNames(schema: unknown): string[] {
 }
 
 describe("PLUGIN_API_EVENTS", () => {
-  it("lists the v1 events: library.changed, availability, and the two editor events", () => {
+  it("lists the v1 events: library.changed, availability, language, and the two editor events", () => {
     expect(PLUGIN_API_EVENTS.map((event) => event.id)).toEqual([
       "library.changed",
       "library.availabilityChanged",
+      "language.changed",
       "editor.contentChanged",
       "editor.focusChanged",
     ]);
   });
 
-  it("gates each event by its namespace's read permission, availability by none", () => {
+  it("gates each event by its namespace's read permission, availability and language by none", () => {
     for (const event of PLUGIN_API_EVENTS) {
       const namespace = event.id.split(".")[0];
       expect(PLUGIN_API_NAMESPACES).toContain(namespace);
-      const expected = event.id === "library.availabilityChanged" ? null : `${namespace}:read`;
+      const ungated = event.id === "library.availabilityChanged" || event.id === "language.changed";
+      const expected = ungated ? null : `${namespace}:read`;
       expect(event.permission, event.id).toBe(expected);
     }
   });

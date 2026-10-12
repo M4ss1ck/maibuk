@@ -18,6 +18,7 @@ import {
   resetPluginLifecycleForTests,
 } from "@/features/plugins/lifecycle";
 import { STARTUP_TIMEOUT_MS } from "@/features/plugins/runtime";
+import { emitChange } from "@/features/sync/change-feed";
 import type {
   PluginApiHandlers,
   PluginDataVersions,
@@ -26,6 +27,7 @@ import type {
   PluginLifecycleChange,
   PluginLifecycleStopReason,
   PluginManifest,
+  PluginPermissionId,
 } from "@/features/plugins/types";
 import type { DatabaseAdapter, PluginDirectoryAdapter } from "@/lib/platform/types";
 import {
@@ -126,6 +128,8 @@ interface HarnessOptions {
   /** Method handlers; omitted leaves the lifecycle's own default wiring. */
   handlers?: (manifest: PluginManifest) => PluginApiHandlers;
   isLibraryAvailable?: () => boolean;
+  /** Plugin Permissions granted at approval; defaults to none. */
+  granted?: PluginPermissionId[];
 }
 
 async function createHarness(options: HarnessOptions = {}) {
@@ -136,7 +140,7 @@ async function createHarness(options: HarnessOptions = {}) {
     savePluginApproval({
       pluginId: folder.name,
       pinnedHash: await hashPluginDirectory(folder.files),
-      granted: [],
+      granted: options.granted ?? [],
     });
   }
 
@@ -1131,6 +1135,92 @@ describe("Plugin lifecycle: dispose", () => {
     expect(frame.stopped).toBe(true);
     expect(h.lifecycle.state("alpha")).toBeNull();
     expect(h.lifecycle.installed()).toEqual([]);
+  });
+});
+
+describe("Plugin lifecycle: library and language events", () => {
+  it("forwards availability and language changes to a running Plugin", async () => {
+    await i18n.changeLanguage("en");
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    const port = h.framesFor("alpha")[0].pluginPort;
+    if (!port) throw new Error("alpha has no plugin port");
+
+    const events: { event: string; payload: { language?: string; available?: boolean } }[] = [];
+    const original = port.onmessage;
+    port.onmessage = (event) => {
+      const data = event.data as { kind?: string; event?: string; payload?: unknown } | null;
+      if (data && data.kind === "event" && data.event) {
+        events.push({ event: data.event, payload: data.payload as { language?: string } });
+        return;
+      }
+      original?.call(port, event);
+    };
+    // Both events are ungated, so a Plugin with no granted permissions can hear them.
+    port.postMessage(
+      JSON.stringify({ kind: "subscribe", id: 1, event: "library.availabilityChanged" })
+    );
+    port.postMessage(JSON.stringify({ kind: "subscribe", id: 2, event: "language.changed" }));
+    await advance(0);
+
+    await emitChange({ available: false, reason: "tutorial" });
+    await i18n.changeLanguage("es");
+    await advance(0);
+
+    expect(events).toContainEqual({
+      event: "library.availabilityChanged",
+      payload: { available: false },
+    });
+    // The language subscription replays the current value, then the change.
+    expect(
+      events.filter((entry) => entry.event === "language.changed").map((entry) => entry.payload.language)
+    ).toEqual(["en", "es"]);
+  });
+
+  it("delivers no Library content signal while the Library is unavailable (the Tutorial)", async () => {
+    let available = false;
+    const h = await createHarness({
+      approved: [
+        makePlugin("alpha", { permissions: { required: ["library:read"], optional: [] } }),
+      ],
+      granted: ["library:read"],
+      isLibraryAvailable: () => available,
+    });
+    await launchAll(h);
+    const port = h.framesFor("alpha")[0].pluginPort;
+    if (!port) throw new Error("alpha has no plugin port");
+
+    const events: string[] = [];
+    const original = port.onmessage;
+    port.onmessage = (event) => {
+      const data = event.data as { kind?: string; event?: string } | null;
+      if (data && data.kind === "event" && data.event) {
+        events.push(data.event);
+        return;
+      }
+      original?.call(port, event);
+    };
+    port.postMessage(JSON.stringify({ kind: "subscribe", id: 1, event: "library.changed" }));
+    port.postMessage(
+      JSON.stringify({ kind: "subscribe", id: 2, event: "library.availabilityChanged" })
+    );
+    await advance(0);
+
+    // The Tutorial Library's own sample saves never reach a Plugin...
+    await emitChange({ entity: "book", id: "tutorial-b1", origin: "local", kind: "content" });
+    await advance(0);
+    expect(events).toEqual([]);
+
+    // ...but the availability signal itself still does, so it can stop calling.
+    await emitChange({ available: false, reason: "tutorial" });
+    await advance(0);
+    expect(events).toEqual(["library.availabilityChanged"]);
+
+    // Once the Library is back, content signals flow again.
+    available = true;
+    await emitChange({ entity: "book", id: "b1", origin: "local", kind: "content" });
+    await advance(0);
+    expect(events).toEqual(["library.availabilityChanged", "library.changed"]);
   });
 });
 

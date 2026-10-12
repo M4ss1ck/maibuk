@@ -369,6 +369,7 @@ Reads the focused rich-text editor's content, or no-target when none is focused.
 
 - Plugin Permission: `editor:read`
 - Effect: read
+- Refused with `library-unavailable` while the Library cannot be read or written
 
 Input:
 
@@ -402,6 +403,7 @@ Reads the focused editor's selection as plain-text offsets.
 
 - Plugin Permission: `editor:read`
 - Effect: read
+- Refused with `library-unavailable` while the Library cannot be read or written
 
 Input:
 
@@ -434,6 +436,7 @@ Scrolls the focused editor to a range and places the caret there.
 
 - Plugin Permission: `editor:read`
 - Effect: read
+- Refused with `library-unavailable` while the Library cannot be read or written
 
 Input:
 
@@ -462,6 +465,7 @@ Replaces this Plugin's whole set of highlights in the focused editor. Never chan
 
 - Plugin Permission: `editor:decorate`
 - Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
 
 Input:
 
@@ -492,6 +496,7 @@ Inserts text or an HTML fragment at the caret as one undoable step.
 
 - Plugin Permission: `editor:write`
 - Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
 
 Input:
 
@@ -523,6 +528,7 @@ Replaces a range with text or an HTML fragment as one undoable step.
 
 - Plugin Permission: `editor:write`
 - Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
 
 Input:
 
@@ -560,6 +566,7 @@ Opens a Book, Chapter, Note, or Canvas, optionally revealing a range.
 
 - Plugin Permission: none (rate-limited instead)
 - Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
 
 Input:
 
@@ -580,6 +587,29 @@ Output:
 
 ```ts
 null
+```
+
+## language
+
+### `language.get`
+
+Reads the language Maibuk runs in. No permission is required.
+
+- Plugin Permission: none (rate-limited instead)
+- Effect: read
+
+Input:
+
+```ts
+Record<string, never>
+```
+
+Output:
+
+```ts
+{
+  language: string;
+}
 ```
 
 ## secrets
@@ -878,6 +908,20 @@ Payload:
 ```ts
 {
   available: boolean;
+}
+```
+
+### `language.changed`
+
+Maibuk's language changed. The current value is delivered on subscription, so a Plugin that starts after a change never misses it.
+
+- Plugin Permission: none
+
+Payload:
+
+```ts
+{
+  language: string;
 }
 ```
 

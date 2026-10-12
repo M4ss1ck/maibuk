@@ -189,6 +189,8 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
     granted: () => options.granted ?? [],
     handlers: options.handlers?.(manifest),
     isLibraryAvailable: options.isLibraryAvailable,
+    trackLibraryWork: options.trackLibraryWork,
+    eventSnapshot: options.eventSnapshot,
     // The broker stopping itself (sustained throttling) must reach the
     // lifecycle; `runtime.stop()` below is filtered by the caller's state.
     onStop: options.onBrokerStop,

@@ -133,6 +133,10 @@ export interface PluginStartOptions {
   handlers?: (manifest: PluginManifest) => PluginApiHandlers;
   /** False while the Library cannot be read or written (the Tutorial Library). */
   isLibraryAvailable?: () => boolean;
+  /** Registers a `requiresLibrary` handler's work so the Tutorial switch settles it (ADR 0008, #398). */
+  trackLibraryWork?: <T>(work: Promise<T>) => Promise<T>;
+  /** The current payload of a replaying event, delivered on subscription. */
+  eventSnapshot?: (event: string) => unknown;
   /** Injected by tests: jsdom has no Worker, and a fake frame proves the refusal order. */
   createFrame?: (document: Document, manifest: PluginManifest) => PluginSandboxFrame;
   /** The startup limit; tests pass a small one. */
@@ -273,6 +277,8 @@ export interface PluginLifecycleOptions {
   handlers?: (manifest: PluginManifest) => PluginApiHandlers;
   /** False while the Library cannot be read or written (the Tutorial Library). */
   isLibraryAvailable?: () => boolean;
+  /** Registers `requiresLibrary` handler work so the Tutorial switch settles it (ADR 0008, #398). */
+  trackLibraryWork?: <T>(work: Promise<T>) => Promise<T>;
   /** The dataVersion gate's storage; defaults to the Plugin storage rows. */
   dataVersions?: PluginDataVersions;
   /**
@@ -318,6 +324,25 @@ export interface PluginLifecycle {
 /** The in-memory Library the read handlers serve. */
 export interface TestLibrary {
   books?: ReadonlyArray<PluginApiOutput<"library.books.list">[number]>;
+  chapters?: ReadonlyArray<TestChapter>;
+  notes?: ReadonlyArray<TestNote>;
+  canvases?: ReadonlyArray<PluginApiOutput<"library.canvases.list">[number]>;
+}
+
+/** A Chapter the test host serves, with the content a `get` returns. */
+export type TestChapter = PluginApiOutput<"library.chapters.list">[number] & {
+  content?: PluginContent;
+};
+
+/** A Note the test host serves, with the content a `get` returns. */
+export type TestNote = PluginApiOutput<"library.notes.list">[number] & {
+  content?: PluginContent;
+};
+
+/** One `navigation.openEntity` a Plugin asked for, in order. */
+export interface TestNavigation {
+  entity: PluginEntityTarget;
+  reveal?: PluginRevealRange;
 }
 
 export interface TestNotification {
@@ -331,6 +356,8 @@ export interface TestHostOptions {
   permissions?: readonly PluginPermissionId[];
   /** In-memory Library the read handlers serve. */
   library?: TestLibrary;
+  /** The app language the host serves; defaults to `en`. */
+  language?: string;
   /** UI-string overrides `renderPage` applies to the manifest before rendering. */
   locale?: PluginLocale;
 }
@@ -357,10 +384,18 @@ export interface TestHost {
   manifest: PluginManifest;
   /** Every `notifications.show` the Plugin asked for, in order. */
   notifications: TestNotification[];
+  /** Every `navigation.openEntity` the Plugin asked for, in order. */
+  navigations: TestNavigation[];
+  /** The app language the host serves right now. */
+  language: string;
   /** The UI-string overrides this host carries, before they are applied. */
   locale: PluginLocale | null;
   /** Changes the granted Plugin Permissions; the next call reads them again. */
   setGranted(permissions: readonly PluginPermissionId[]): void;
+  /** Publishes a language change to every subscribed Plugin. */
+  setLanguage(language: string): void;
+  /** Makes the Library available or unavailable, as the Tutorial does. */
+  setLibraryAvailable(available: boolean): void;
   /**
    * Renders one of the Plugin's pages through the real host renderer, over a
    * fresh Remote UI mount, and resolves once the Plugin accepts it. Rejects when
@@ -520,6 +555,12 @@ export interface PluginApiEventRow<
   payload: Payload;
   /** The read permission of the event's namespace, or `null` when ungated. */
   permission: PluginPermissionName | null;
+  /**
+   * True when the host delivers the event's current value the moment a Plugin
+   * subscribes, so a Plugin that starts after a change still learns it and no
+   * change is missed between startup and subscription.
+   */
+  replays?: boolean;
 }
 
 export type PluginApiTable = typeof PLUGIN_API_TABLE;
@@ -547,6 +588,72 @@ export interface McpToolProjection {
   outputSchema: Record<string, unknown>;
   annotations: { readOnlyHint: boolean };
 }
+
+// Plugin Library reads and navigation (library.ts, navigation.ts)
+
+/** The plain text and sanitized HTML a content read returns. */
+export interface PluginContent {
+  text: string;
+  html: string;
+}
+
+/** A Book as the Library read returns it; timestamps are milliseconds since the epoch. */
+export interface PluginBook {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  authorName: string;
+  language: string;
+  wordCount: number;
+  updatedAt: number;
+}
+
+export interface PluginChapterSummary {
+  id: string;
+  bookId: string;
+  title: string;
+  order: number;
+  parentId: string | null;
+  wordCount: number;
+  updatedAt: number;
+}
+
+export interface PluginNoteSummary {
+  id: string;
+  bookId: string | null;
+  title: string;
+  tags: string[];
+  wordCount: number;
+  updatedAt: number;
+}
+
+export interface PluginCanvasSummary {
+  id: string;
+  bookId: string | null;
+  title: string;
+  updatedAt: number;
+}
+
+export type PluginEntityKind = "book" | "chapter" | "note" | "canvas";
+
+export interface PluginEntityTarget {
+  kind: PluginEntityKind;
+  id: string;
+}
+
+export interface PluginRevealRange {
+  from: number;
+  to: number;
+}
+
+/** The route an entity opens, with the editor state that opens it there. */
+export interface PluginRoute {
+  to: string;
+  state?: { openChapterId?: string; reveal?: PluginRevealRange };
+}
+
+/** The app shell's `navigate`, without importing the router into the handlers. */
+export type PluginNavigator = (to: string, options?: { state?: unknown }) => void;
 
 // Broker (broker.ts)
 
@@ -583,6 +690,19 @@ export interface PluginBrokerOptions {
   handlers?: PluginApiHandlers;
   /** False while the Library cannot be read or written (Library rows refuse). */
   isLibraryAvailable?: () => boolean;
+  /**
+   * Registers a `requiresLibrary` handler's in-flight work so the Tutorial
+   * switch can settle it before switching Libraries (ADR 0008, #398). Injected
+   * by the lifecycle so the broker stays Tutorial-agnostic; defaults to running
+   * the work untracked.
+   */
+  trackLibraryWork?: <T>(work: Promise<T>) => Promise<T>;
+  /**
+   * The current payload of a replaying event (`replays: true`), delivered to a
+   * Plugin the moment it subscribes. Returns `undefined` when the event has no
+   * current value to send.
+   */
+  eventSnapshot?: (event: string) => unknown;
   onStop?: (reason: PluginStopReason) => void;
   /** Observes a call arriving from the Plugin (the on-demand idle window resets on activity). */
   onCall?: (method: string) => void;

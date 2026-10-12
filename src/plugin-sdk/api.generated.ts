@@ -23,6 +23,7 @@ export const PLUGIN_API_METHODS = [
   "editor.insert",
   "editor.replace",
   "navigation.openEntity",
+  "language.get",
   "secrets.set",
   "secrets.delete",
   "secrets.listNames",
@@ -339,6 +340,13 @@ export interface PluginApiMethods {
     };
     output: null;
   };
+  /** Reads the language Maibuk runs in. No permission is required. */
+  "language.get": {
+    input: Record<string, never>;
+    output: {
+      language: string;
+    };
+  };
   /** Stores a secret by name. Secrets are never read back into the Plugin. */
   "secrets.set": {
     input: {
@@ -431,6 +439,7 @@ export interface PluginApiMethods {
 export const PLUGIN_API_EVENT_IDS = [
   "library.changed",
   "library.availabilityChanged",
+  "language.changed",
   "editor.contentChanged",
   "editor.focusChanged",
 ] as const;
@@ -452,6 +461,10 @@ export interface PluginApiEvents {
   /** The Library became available or unavailable (the Tutorial makes it unavailable). */
   "library.availabilityChanged": {
     available: boolean;
+  };
+  /** Maibuk's language changed. The current value is delivered on subscription, so a Plugin that starts after a change never misses it. */
+  "language.changed": {
+    language: string;
   };
   /** The focused editor's content changed; sent once per typing burst. */
   "editor.contentChanged": {
@@ -519,6 +532,10 @@ export interface PluginApi {
   navigation: {
     /** Opens a Book, Chapter, Note, or Canvas, optionally revealing a range. */
     openEntity(params: PluginApiMethods["navigation.openEntity"]["input"]): Promise<PluginApiMethods["navigation.openEntity"]["output"]>;
+  };
+  language: {
+    /** Reads the language Maibuk runs in. No permission is required. */
+    get(params?: PluginApiMethods["language.get"]["input"]): Promise<PluginApiMethods["language.get"]["output"]>;
   };
   secrets: {
     /** Stores a secret by name. Secrets are never read back into the Plugin. */

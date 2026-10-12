@@ -18,9 +18,16 @@
 
 import { hasLaunchAutoSyncSettled, onLaunchAutoSyncSettled } from "@/features/sync/auto-sync";
 import { hasLaunchBackupSettled, onLaunchBackupSettled } from "@/features/backup/lifecycle";
+import {
+  isBulkSignal,
+  isEntityChange,
+  isLibraryAvailability,
+  onChange,
+} from "@/features/sync/change-feed";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import { registerPluginContributions } from "@/features/plugins/contributions";
 import { createPluginHandlers } from "@/features/plugins/handlers";
+import { currentPluginLanguage, onPluginLanguageChange } from "@/features/plugins/language";
 import {
   getPluginLifecycle,
   setPluginLifecycleInstance,
@@ -29,7 +36,7 @@ import { scanApprovedPlugins } from "@/features/plugins/launch";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
-import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
+import { isTutorialLibraryActive, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
   InstalledPlugin,
   PluginActivationRefusal,
@@ -217,6 +224,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   // A broker call that reads or writes the Library must refuse while the
   // Tutorial Library is active (ADR 0008), like every other background job.
   const isLibraryAvailable = options.isLibraryAvailable ?? (() => !isTutorialLibraryActive());
+  // Accepted Library work is registered with the Tutorial switch, so entering
+  // the Tutorial waits for it and no call finishes against the sample Library
+  // (ADR 0008, #398).
+  const trackLibraryWork = options.trackLibraryWork ?? trackAuthorLibraryWork;
   const entries = new Map<string, Entry>();
   const listeners = new Set<(change: PluginLifecycleChange) => void>();
   let disposed = false;
@@ -467,6 +478,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         handlers,
         createFrame: options.createFrame,
         isLibraryAvailable,
+        trackLibraryWork,
+        eventSnapshot: (event) =>
+          event === "language.changed" ? { language: currentPluginLanguage() } : undefined,
         // The remaining budget, so the handshake cannot grant itself a fresh 10 s.
         timeoutMs: Math.max(0, deadline - Date.now()),
         onWorkerError: (message) => workerError(entry, message),
@@ -578,6 +592,38 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   function nextIdle(): Promise<void> {
     return new Promise((resolve) => scheduleIdle(resolve));
   }
+
+  // Every running Plugin hears the Library's own signals (#430) and the app
+  // language. Only a ready runtime has a broker, and a stopped one is gone, so
+  // no event is delivered to a Plugin that is not running; each subscription
+  // dies with its broker. While the Library is unavailable (the Tutorial) no
+  // content signal reaches a Plugin — its rows refuse — but the availability
+  // signal itself still does, so a Plugin can stop calling.
+  const offChange = onChange((signal) => {
+    for (const entry of entries.values()) {
+      const broker = entry.runtime?.broker;
+      if (!broker) continue;
+      if (isLibraryAvailability(signal)) {
+        broker.emit("library.availabilityChanged", { available: signal.available });
+      } else if (isLibraryAvailable()) {
+        if (isEntityChange(signal)) {
+          broker.emit("library.changed", {
+            entity: signal.entity,
+            id: signal.id,
+            origin: signal.origin,
+            kind: signal.kind,
+          });
+        } else if (isBulkSignal(signal)) {
+          broker.emit("library.changed", { scope: "all", reason: signal.reason });
+        }
+      }
+    }
+  });
+  const offLanguage = onPluginLanguageChange((language) => {
+    for (const entry of entries.values()) {
+      entry.runtime?.broker.emit("language.changed", { language });
+    }
+  });
 
   return {
     async launch(): Promise<void> {
@@ -720,6 +766,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      offChange();
+      offLanguage();
       // A lifecycle stopped mid-launch must not leave loading surfaces behind.
       markScanned();
       scanListeners.clear();

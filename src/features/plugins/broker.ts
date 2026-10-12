@@ -114,6 +114,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   const { pluginId, port, declared, granted, handlers = {}, onStop, onCall } = options;
   const now = options.now ?? (() => performance.now());
   const isLibraryAvailable = options.isLibraryAvailable ?? (() => true);
+  const trackLibraryWork = options.trackLibraryWork ?? (<T,>(work: Promise<T>) => work);
   const rows = new Map((options.table ?? PLUGIN_API_TABLE).map((row) => [row.id, row]));
   const events = new Map((options.events ?? PLUGIN_API_EVENTS).map((row) => [row.id, row]));
   const reserved: readonly string[] = PLUGIN_API_RESERVED_NAMESPACES;
@@ -291,11 +292,20 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
 
     let outcome: unknown;
     try {
-      outcome = await (handler as (p: unknown, c: PluginHandlerContext) => unknown)(parsed.data, {
-        pluginId,
-      });
+      // A `requiresLibrary` handler runs against exactly one Library.
+      // Registering it lets the Tutorial switch wait for accepted calls before
+      // switching, and the re-check below keeps a late result from crossing
+      // into the replacement Library (ADR 0008, #398).
+      const executed = Promise.resolve(
+        (handler as (p: unknown, c: PluginHandlerContext) => unknown)(parsed.data, { pluginId })
+      );
+      outcome = await (row.requiresLibrary ? trackLibraryWork(executed) : executed);
     } catch (error) {
       fail(id, handlerFailure(method, error));
+      return;
+    }
+    if (row.requiresLibrary && !isLibraryAvailable()) {
+      fail(id, refusal("library-unavailable", "The Library is not available", { method }));
       return;
     }
     if (row.chunk) {
@@ -333,6 +343,14 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     }
     subscriptions.add(event);
     post({ kind: "result", id, ok: true, result: null });
+    // A replaying event delivers its current value on subscription, so a Plugin
+    // that starts after the change still learns it and no change is missed
+    // between startup and subscription. The subscription is registered and its
+    // reply posted first, so the Plugin's listener exists when this arrives.
+    if (row.replays) {
+      const snapshot = options.eventSnapshot?.(event);
+      if (snapshot !== undefined) post({ kind: "event", event, payload: row.payload.parse(snapshot) });
+    }
   }
 
   function handleReply(message: Record<string, unknown>) {

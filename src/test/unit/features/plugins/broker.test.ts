@@ -224,7 +224,7 @@ describe("typed errors", () => {
     expect(error.message).toContain("bookId");
   });
 
-  it("refuses Library methods with library-unavailable while the Library is closed", async () => {
+  it("refuses Library and editor methods with library-unavailable while the Library is closed", async () => {
     let open = false;
     const { client } = setup({
       declared: ["library:read", "editor:read"],
@@ -232,9 +232,54 @@ describe("typed errors", () => {
     });
     expect((await refusal(client.library.books.list())).code).toBe("library-unavailable");
     expect((await refusal(client.storage.keys())).code).toBe("library-unavailable");
-    await expect(client.editor.getContent()).resolves.toEqual({ status: "no-target" });
+    expect((await refusal(client.editor.getContent())).code).toBe("library-unavailable");
     open = true;
     await expect(client.library.books.list()).resolves.toEqual([BOOK]);
+    await expect(client.editor.getContent()).resolves.toEqual({ status: "no-target" });
+  });
+
+  it("tracks every requiresLibrary call so a Library switch can settle accepted work", async () => {
+    const tracked: Promise<unknown>[] = [];
+    const { client } = setup({
+      declared: ["library:read"],
+      trackLibraryWork: (work) => {
+        tracked.push(work);
+        return work;
+      },
+      handlers: { "library.books.list": async () => [BOOK] },
+    });
+    await expect(client.library.books.list()).resolves.toEqual([BOOK]);
+    expect(tracked).toHaveLength(1);
+    await expect(tracked[0]).resolves.toEqual([BOOK]);
+  });
+
+  it("does not track a call that does not read the Library", async () => {
+    const tracked: Promise<unknown>[] = [];
+    const { client } = setup({
+      trackLibraryWork: (work) => {
+        tracked.push(work);
+        return work;
+      },
+    });
+    await client.notifications.show({ variant: "info", message: "hi" });
+    expect(tracked).toEqual([]);
+  });
+
+  it("refuses a requiresLibrary result that resolves after the Library left", async () => {
+    // The handler starts against the author's Library and flips availability
+    // before it returns, as the Tutorial switch does (ADR 0008, #398).
+    let open = true;
+    const { client } = setup({
+      declared: ["library:read"],
+      isLibraryAvailable: () => open,
+      handlers: {
+        "library.books.list": async () => {
+          open = false;
+          return [BOOK];
+        },
+      },
+    });
+    expect((await refusal(client.library.books.list())).code).toBe("library-unavailable");
   });
 
   it("hides a handler's own failure behind internal-error", async () => {
@@ -689,6 +734,33 @@ describe("events", () => {
       });
     });
     await expect(payload).resolves.toEqual({ available: false });
+  });
+
+  it("replays a replaying event's current value on subscription, then delivers changes", async () => {
+    const { broker, client } = setup({
+      eventSnapshot: (event) => (event === "language.changed" ? { language: "en" } : undefined),
+    });
+    const seen: string[] = [];
+    const first = new Promise<void>((resolve) => {
+      void client.on("language.changed", (payload) => {
+        seen.push(payload.language);
+        resolve();
+      });
+    });
+    await first;
+    expect(seen).toEqual(["en"]);
+
+    broker.emit("language.changed", { language: "es" });
+    await nextEvent(() => {});
+    expect(seen).toEqual(["en", "es"]);
+  });
+
+  it("does not replay an event without a snapshot", async () => {
+    const { client } = setup();
+    const seen: unknown[] = [];
+    await client.on("library.availabilityChanged", (payload) => seen.push(payload));
+    await nextEvent(() => {});
+    expect(seen).toEqual([]);
   });
 
   it("refuses an unknown event with unknown-method", async () => {

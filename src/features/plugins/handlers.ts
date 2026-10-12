@@ -1,11 +1,32 @@
 /**
- * The host-side Plugin API handlers this slice wires. `notifications.show`
- * renders a toast naming the Plugin; the API slice (#440) extends this module
- * with the Library, storage, navigation, and language handlers, and the
- * broker already enforces the row's rate limit and input schema.
+ * The host-side Plugin API handlers this app wires (ADR 0022, #440):
+ * `notifications.show` renders a toast naming the Plugin; the Library reads
+ * serve Books, Chapters, Notes, and Canvas metadata; `storage.*` reads and
+ * writes the Plugin's own Library namespace; `navigation.openEntity` opens an
+ * entity through the app shell; `language.get` reads the app language. The
+ * broker already enforces each row's Plugin Permission, input schema, Library
+ * availability, and rate limit, so a handler only does its work.
  */
 
 import { toast } from "@/components/ui/Toast";
+import { currentPluginLanguage } from "@/features/plugins/language";
+import {
+  getPluginBook,
+  getPluginCanvas,
+  getPluginChapter,
+  getPluginNote,
+  listPluginBooks,
+  listPluginCanvases,
+  listPluginChapters,
+  listPluginNotes,
+} from "@/features/plugins/library";
+import { openPluginEntity } from "@/features/plugins/navigation";
+import {
+  deletePluginStorageValue,
+  getPluginStorageValue,
+  listPluginStorageKeys,
+  setPluginStorageValue,
+} from "@/features/plugins/storage";
 import type { PluginApiHandlers, PluginManifest } from "@/features/plugins/types";
 
 export function createPluginHandlers(manifest: PluginManifest): PluginApiHandlers {
@@ -17,5 +38,28 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
       else toast.info(text);
       return null;
     },
+    "library.books.list": () => listPluginBooks(),
+    "library.books.get": ({ bookId }) => getPluginBook(bookId),
+    "library.chapters.list": ({ bookId }) => listPluginChapters(bookId),
+    "library.chapters.get": ({ chapterId }) => getPluginChapter(chapterId),
+    "library.notes.list": ({ bookId }) => listPluginNotes(bookId),
+    "library.notes.get": ({ noteId }) => getPluginNote(noteId),
+    "library.canvases.list": ({ bookId }) => listPluginCanvases(bookId),
+    "library.canvases.get": ({ canvasId }) => getPluginCanvas(canvasId),
+    "storage.get": async ({ key }, { pluginId }) => {
+      const value = await getPluginStorageValue(pluginId, key);
+      return value === undefined ? null : value;
+    },
+    "storage.set": async ({ key, value }, { pluginId }) => {
+      await setPluginStorageValue(pluginId, key, value);
+      return null;
+    },
+    "storage.delete": async ({ key }, { pluginId }) => {
+      await deletePluginStorageValue(pluginId, key);
+      return null;
+    },
+    "storage.keys": (_params, context) => listPluginStorageKeys(context.pluginId),
+    "navigation.openEntity": ({ entity, reveal }) => openPluginEntity(entity, reveal).then(() => null),
+    "language.get": async () => ({ language: currentPluginLanguage() }),
   };
 }
