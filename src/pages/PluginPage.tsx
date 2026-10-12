@@ -72,7 +72,7 @@ export function PluginPage() {
         <p className="mt-2 text-sm text-muted-foreground">{t("plugins.page.notFoundDescription")}</p>
       ) : (
         <Suspense fallback={null}>
-          <PluginRemoteUiBoundary pluginId={pluginId} />
+          <PluginRemoteUiBoundary pluginId={pluginId} pageId={pageId} />
         </Suspense>
       )}
     </div>

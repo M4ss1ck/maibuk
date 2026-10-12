@@ -3,11 +3,26 @@ import type { RemoteMutationRecord } from "@remote-dom/core";
 import { describe, expect, it, vi } from "vitest";
 import { stopRemoteUi } from "@/features/plugins/remote-ui/boundary";
 import { usePluginRemoteUi } from "@/features/plugins/remote-ui/use-plugin-remote-ui";
-import type { PluginLifecycle } from "@/features/plugins/types";
+import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
 
 const INSERTS = [
   [0, "~", { id: "1", type: 1, element: "maibuk-evil", children: [] }, 0],
 ] as unknown as RemoteMutationRecord[];
+
+/**
+ * A runtime whose broker never answers a mount: the hook under test only needs
+ * a broker to open the mount over, and every reply is irrelevant here.
+ */
+function fakeRuntime(): Pick<PluginRuntime, "broker"> {
+  return {
+    broker: {
+      request: () => new Promise<unknown>(() => {}),
+      emit: () => false,
+      stop: () => {},
+      stopped: false,
+    },
+  };
+}
 
 describe("the Remote UI stop wiring", () => {
   it("stops the Plugin with remote-ui-limit", () => {
@@ -25,17 +40,21 @@ describe("the Remote UI stop wiring", () => {
 describe("usePluginRemoteUi", () => {
   it("reports a refused declaration", () => {
     const onViolation = vi.fn();
-    const { result } = renderHook(() => usePluginRemoteUi(onViolation));
+    const runtime = fakeRuntime();
+    const { result } = renderHook(() => usePluginRemoteUi(runtime, "page.one", onViolation));
     act(() => {
-      result.current?.connection.mutate(INSERTS);
+      result.current.ui?.connection.mutate(INSERTS);
     });
     expect(onViolation).toHaveBeenCalledTimes(1);
     expect(onViolation.mock.calls[0][0].code).toBe("unknown-element");
   });
 
   it("disposes the receiver on unmount", () => {
-    const { result, unmount } = renderHook(() => usePluginRemoteUi(() => {}));
-    const ui = result.current;
+    const runtime = fakeRuntime();
+    const { result, unmount } = renderHook(() =>
+      usePluginRemoteUi(runtime, "page.one", () => {})
+    );
+    const ui = result.current.ui;
     expect(ui).not.toBeNull();
     unmount();
     expect(ui?.disposed).toBe(true);

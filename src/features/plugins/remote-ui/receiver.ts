@@ -11,6 +11,7 @@
 import type { RemoteConnection } from "@remote-dom/core";
 import { RemoteReceiver } from "@remote-dom/core/receivers";
 import type { RemoteComponentRendererMap } from "@remote-dom/react/host";
+import { release, retain } from "@quilted/threads";
 import { createPluginUiComponents } from "@/features/plugins/remote-ui/components";
 import {
   createValidatedConnection,
@@ -34,7 +35,9 @@ export function createPluginRemoteUi(options: {
   /** Injectable clock in milliseconds; the default reads the real time. */
   now?: () => number;
 }): PluginRemoteUi {
-  const receiver = new RemoteReceiver();
+  // `retain`/`release` keep a function prop proxied over the mount's thread
+  // alive while the receiver holds it, and free it when the node leaves.
+  const receiver = new RemoteReceiver({ retain, release });
   let disposed = false;
   let report: (violation: PluginUiViolation) => void = options.onViolation;
   const connection = createValidatedConnection({
