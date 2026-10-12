@@ -673,7 +673,6 @@ export type PluginEditorContentResult = PluginApiOutput<"editor.getContent">;
 export type PluginEditorSelectionResult = PluginApiOutput<"editor.getSelection">;
 export type PluginEditorApplied = PluginApiOutput<"editor.reveal">;
 
-
 // Broker (broker.ts)
 
 export type PluginStopReason = "throttled" | "requested";

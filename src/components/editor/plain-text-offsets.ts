@@ -53,51 +53,72 @@ export function buildPlainTextMap(doc: ProseMirrorNode): PlainTextMap {
 /**
  * A document position as a plain-text offset. A position in a block gap (the
  * space between two text runs, where no character exists) resolves to the next
- * run's start; a position past the last run resolves to its end.
+ * run's start; a position past the last run resolves to its end. Segments are
+ * in document order and their plain-text ends ascend, so the run is found by
+ * binary search.
  */
 export function pmToPlainOffset(map: PlainTextMap, pos: number): number {
-  for (const segment of map.segments) {
-    if (pos <= segment.pmStart) return segment.textStart;
-    const length = segment.textEnd - segment.textStart;
-    if (pos <= segment.pmStart + length) return segment.textStart + (pos - segment.pmStart);
+  const segments = map.segments;
+  if (segments.length === 0) return 0;
+  let low = 0;
+  let high = segments.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    const segment = segments[mid];
+    if (segment.pmStart + (segment.textEnd - segment.textStart) >= pos) high = mid;
+    else low = mid + 1;
   }
-  const last = map.segments[map.segments.length - 1];
-  return last ? last.textEnd : 0;
+  if (low === segments.length) {
+    return segments[segments.length - 1].textEnd;
+  }
+  const segment = segments[low];
+  if (pos <= segment.pmStart) return segment.textStart;
+  return segment.textStart + (pos - segment.pmStart);
 }
 
 /**
  * A plain-text offset as a document position. `start` picks the position of the
  * character at the offset (an offset in a gap lands on the next run), `end`
  * picks the position just after the character before it (an offset in a gap
- * lands on the previous run's end).
+ * lands on the previous run's end). Runs are found by binary search, so a
+ * highlight set on a long Chapter does not walk every text run per range.
  */
 export function plainOffsetToPm(map: PlainTextMap, offset: number, bias: "start" | "end"): number {
   const segments = map.segments;
   if (segments.length === 0) return 0;
   const first = segments[0];
   const last = segments[segments.length - 1];
+  const lastEnd = last.pmStart + (last.textEnd - last.textStart);
   if (offset <= 0) return first.pmStart;
-  if (offset >= map.text.length) return last.pmStart + (last.textEnd - last.textStart);
+  if (offset >= map.text.length) return lastEnd;
 
   if (bias === "start") {
-    for (const segment of segments) {
-      if (offset <= segment.textStart) return segment.pmStart;
-      if (offset < segment.textEnd) return segment.pmStart + (offset - segment.textStart);
+    let low = 0;
+    let high = segments.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (segments[mid].textEnd > offset) high = mid;
+      else low = mid + 1;
     }
-    return last.pmStart + (last.textEnd - last.textStart);
+    if (low === segments.length) return lastEnd;
+    const segment = segments[low];
+    if (offset <= segment.textStart) return segment.pmStart;
+    return segment.pmStart + (offset - segment.textStart);
   }
 
-  let result = first.pmStart;
-  for (const segment of segments) {
-    if (offset >= segment.textEnd) {
-      result = segment.pmStart + (segment.textEnd - segment.textStart);
-    } else if (offset > segment.textStart) {
-      return segment.pmStart + (offset - segment.textStart);
-    } else {
-      break;
-    }
+  let low = 0;
+  let high = segments.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (segments[mid].textEnd <= offset) low = mid + 1;
+    else high = mid;
   }
-  return result;
+  if (low === segments.length) return lastEnd;
+  const next = segments[low];
+  if (offset > next.textStart) return next.pmStart + (offset - next.textStart);
+  if (low === 0) return first.pmStart;
+  const previous = segments[low - 1];
+  return previous.pmStart + (previous.textEnd - previous.textStart);
 }
 
 /**

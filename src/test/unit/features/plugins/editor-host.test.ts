@@ -1,11 +1,14 @@
 import { Editor } from "@tiptap/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { buildPlainTextMap, plainRangeToPmRange, pmToPlainOffset } from "@/components/editor/plain-text-offsets";
+import * as plainTextOffsets from "@/components/editor/plain-text-offsets";
 import type { PluginEntityTarget } from "@/features/plugins/types";
 import {
   EDITOR_CONTENT_EVENT_MS,
+  PENDING_REVEAL_TTL_MS,
   clearPluginHighlights,
   flushPendingEditorReveal,
   getPluginEditorContent,
@@ -18,6 +21,7 @@ import {
   revealInFocusedEditor,
   setPluginEditorHighlights,
 } from "@/features/plugins/editor-host";
+import { longChapterHtml, spreadHighlightRanges } from "@/test/support/long-chapter";
 
 const editors: Editor[] = [];
 let nextId = 0;
@@ -43,6 +47,7 @@ afterEach(() => {
     editor.view.dom.remove();
     editor.destroy();
   }
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -112,7 +117,8 @@ describe("the focused editor reads", () => {
     expect(highlighted).toBe(expected);
   });
 
-  it("prefers the last editor to take focus", () => {    const first = mountEditor("<p>First</p>");
+  it("prefers the last editor to take focus", () => {
+    const first = mountEditor("<p>First</p>");
     const second = mountEditor("<p>Second</p>");
     register(first, { kind: "chapter", id: "c1" });
     register(second, { kind: "chapter", id: "c2" });
@@ -121,6 +127,134 @@ describe("the focused editor reads", () => {
     expect(getPluginEditorContent()).toMatchObject({ entity: { kind: "chapter", id: "c2" } });
     first.view.dom.focus();
     expect(getPluginEditorContent()).toMatchObject({ entity: { kind: "chapter", id: "c1" } });
+  });
+
+  it("reports focusChanged to another editor's entity when another takes focus", () => {
+    const seen = vi.fn();
+    const first = mountEditor("<p>First</p>");
+    const second = mountEditor("<p>Second</p>");
+    first.view.dom.focus();
+    register(first, { kind: "chapter", id: "c1" });
+    const off = onEditorFocusChanged(seen);
+
+    second.view.dom.focus();
+    register(second, { kind: "chapter", id: "c2" });
+
+    expect(seen).toHaveBeenLastCalledWith({ kind: "chapter", id: "c2" });
+    off();
+  });
+
+  it("keeps addressing the last focused editor after focus moves to a button", () => {
+    vi.useFakeTimers();
+    const editor = mountEditor("<p>one two</p>");
+    editor.view.dom.focus();
+    register(editor);
+    const seen = vi.fn();
+    const off = onEditorFocusChanged(seen);
+
+    // A Plugin toolbar button (or any control outside the editor) takes focus.
+    const button = document.createElement("button");
+    button.type = "button";
+    document.body.appendChild(button);
+    button.focus();
+    vi.advanceTimersByTime(0);
+    expect(document.activeElement).toBe(button);
+
+    expect(getPluginEditorSelection()).toMatchObject({
+      status: "ok",
+      entity: { kind: "chapter", id: "c1" },
+    });
+    expect(setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 3 }] })).toEqual({
+      status: "applied",
+    });
+    expect(revealInFocusedEditor({ from: 0, to: 3 })).toEqual({ status: "applied" });
+    // Blur alone never clears the target.
+    expect(seen).not.toHaveBeenCalledWith(null);
+    button.remove();
+    off();
+  });
+
+  it("serves editor.getSelection when a Plugin toolbar button holds focus", () => {
+    vi.useFakeTimers();
+    const editor = mountEditor("<p>one two</p>");
+    editor.view.dom.focus();
+    const id = `editor-${nextId++}`;
+    registerPluginEditor({ id, editor, entity: { kind: "chapter", id: "c1" } });
+
+    // The toolbar button a Plugin command runs from is outside the editor.
+    const button = document.createElement("button");
+    button.type = "button";
+    document.body.appendChild(button);
+    button.focus();
+    vi.advanceTimersByTime(0);
+
+    expect(getPluginEditorSelection()).toMatchObject({
+      status: "ok",
+      entity: { kind: "chapter", id: "c1" },
+    });
+    button.remove();
+  });
+
+  it("reports no target after the focused editor unmounts, with focusChanged(null)", () => {
+    vi.useFakeTimers();
+    const editor = mountEditor("<p>one two</p>");
+    editor.view.dom.focus();
+    const seen = vi.fn();
+    const off = onEditorFocusChanged(seen);
+    const dispose = register(editor);
+    expect(seen).toHaveBeenLastCalledWith({ kind: "chapter", id: "c1" });
+
+    dispose();
+
+    expect(getPluginEditorSelection()).toEqual({ status: "no-target" });
+    expect(setPluginEditorHighlights("a", { kind: "info", ranges: [] })).toEqual({
+      status: "no-target",
+    });
+    vi.advanceTimersByTime(0);
+    expect(seen).toHaveBeenLastCalledWith(null);
+    off();
+  });
+
+  it("ignores an editor behind an open modal", () => {
+    const editor = mountEditor("<p>one two</p>");
+    editor.view.dom.focus();
+    register(editor);
+
+    const modal = document.createElement("div");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.appendChild(modal);
+    modal.appendChild(editor.view.dom);
+
+    expect(getPluginEditorSelection()).toEqual({ status: "no-target" });
+    expect(setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 3 }] })).toEqual({
+      status: "no-target",
+    });
+
+    document.body.appendChild(editor.view.dom);
+    modal.remove();
+  });
+});
+
+describe("re-registering the same editor id", () => {
+  it("keeps the target and emits one focusChanged with the new entity", () => {
+    const editor = mountEditor("<p>one</p>");
+    editor.view.dom.focus();
+    const seen = vi.fn();
+    const off = onEditorFocusChanged(seen);
+    registerPluginEditor({ id: "note-editor", editor, entity: { kind: "note", id: "n1" } });
+    seen.mockClear();
+
+    // A Note switch re-registers the same editor instance and id.
+    registerPluginEditor({ id: "note-editor", editor, entity: { kind: "note", id: "n2" } });
+
+    expect(seen).not.toHaveBeenCalledWith(null);
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(seen).toHaveBeenLastCalledWith({ kind: "note", id: "n2" });
+    expect(getPluginEditorContent()).toMatchObject({
+      status: "ok",
+      entity: { kind: "note", id: "n2" },
+    });
+    off();
   });
 });
 
@@ -168,18 +302,52 @@ describe("editor highlights", () => {
     ).toBe("again");
   });
 
-  it("repaints the same offsets through local edits", () => {
+  it("keeps a highlight on the same word when typing before it", () => {
     const editor = mountEditor("<p>one two</p>");
     editor.view.dom.focus();
     register(editor);
-    setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 4, to: 7 }] });
+    expect(editor.view.dom.querySelector(".plugin-highlight--info")?.textContent).toBe("two");
 
     editor.commands.insertContentAt(1, "X");
 
+    expect(editor.getText()).toBe("Xone two");
+    expect(editor.view.dom.querySelector(".plugin-highlight--info")?.textContent).toBe("two");
+  });
+
+  it("exposes a labelled highlight as a mark with its description", () => {
+    const editor = mountEditor("<p>one two</p>");
+    editor.view.dom.focus();
+    register(editor);
+
+    setPluginEditorHighlights("a", {
+      kind: "repetition",
+      ranges: [{ from: 4, to: 7, label: "again" }],
+    });
+
+    const mark = screen.getByRole("mark");
+    expect(mark).toHaveTextContent("two");
+    expect(mark).toHaveAccessibleDescription("again");
+    expect(mark).toHaveAttribute("data-plugin-highlight-label", "again");
+  });
+
+  it("maps highlights without rebuilding them on a keystroke in a long Chapter", () => {
+    const editor = mountEditor(longChapterHtml());
+    editor.view.dom.focus();
+    register(editor);
     const map = buildPlainTextMap(editor.state.doc);
-    expect(editor.view.dom.querySelector(".plugin-highlight--info")?.textContent).toBe(
-      map.text.slice(0, 3)
-    );
+    const ranges = spreadHighlightRanges(map.text);
+    const spy = vi.spyOn(plainTextOffsets, "buildPlainTextMap");
+
+    setPluginEditorHighlights("a", { kind: "info", ranges });
+    // The set meta walks the document once to build the decorations.
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    editor.commands.insertContentAt(1, "X");
+
+    // A keystroke maps the stored decorations; it never walks the text again.
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info").length).toBeGreaterThan(0);
   });
 
   it("never becomes saved formatting", () => {
@@ -235,6 +403,19 @@ describe("editor reveal", () => {
     expect(pmToPlainOffset(map, editor.state.selection.from)).toBe(4);
   });
 
+  it("drops a queued reveal that goes stale before it is consumed", () => {
+    vi.useFakeTimers();
+    requestEditorReveal({ kind: "chapter", id: "c9" }, { from: 4, to: 7 });
+    vi.advanceTimersByTime(PENDING_REVEAL_TTL_MS + 1);
+
+    const editor = mountEditor("<p>one two three</p>");
+    editor.view.dom.focus();
+    register(editor, { kind: "chapter", id: "c9" });
+
+    const map = buildPlainTextMap(editor.state.doc);
+    expect(pmToPlainOffset(map, editor.state.selection.from)).toBe(0);
+  });
+
   it("flushes a reveal queued while the editor was behind a modal", () => {
     const editor = mountEditor("<p>one two three</p>");
     editor.view.dom.focus();
@@ -276,7 +457,7 @@ describe("editor events", () => {
     off();
   });
 
-  it("reports focus changes, including none", () => {
+  it("does not report a focus change when the editor blurs", () => {
     vi.useFakeTimers();
     const editor = mountEditor("<p>one</p>");
     const seen = vi.fn();
@@ -285,10 +466,11 @@ describe("editor events", () => {
     editor.view.dom.focus();
     register(editor);
     expect(seen).toHaveBeenLastCalledWith({ kind: "chapter", id: "c1" });
+    seen.mockClear();
 
     editor.view.dom.blur();
     vi.advanceTimersByTime(0);
-    expect(seen).toHaveBeenLastCalledWith(null);
+    expect(seen).not.toHaveBeenCalled();
     off();
   });
 });

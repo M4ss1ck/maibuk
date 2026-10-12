@@ -2,14 +2,19 @@
  * The focused-editor registry the Plugin editor API reads (#441), the concept
  * the dictation hub already uses for its targets. A Chapter or Note editor
  * registers itself with its entity and its TipTap instance; the host resolves
- * "the focused editor" as the last editor to take focus that is still mounted
- * and not behind a modal. Reads, reveal, and highlights all address that one
- * editor, in the plain-text offsets the Library reads share (#396).
+ * "the focused editor" as the last editor to take focus that is still mounted,
+ * not destroyed, and not behind a modal. Losing focus to a toolbar button or a
+ * Plugin page does not clear the target; taking focus in another editor moves
+ * it, and it becomes none only when the target unregisters or unmounts. Reads,
+ * reveal, and highlights all address that one editor, in the plain-text offsets
+ * the Library reads share (#396).
  *
  * Highlights live in a per-editor ProseMirror plugin, keyed by Plugin id, so
  * each Plugin replaces only its own set, several coexist, and disabling one
  * removes only its own. They are view-only decorations: they never enter the
- * document, so they never become saved formatting.
+ * document, so they never become saved formatting. The plugin state holds the
+ * built DecorationSet and maps it through local edits, so a keystroke never
+ * rebuilds the decorations; the Plugin re-highlights on editor.contentChanged.
  *
  * Editor events are invalidation-only (`editor.contentChanged`,
  * `editor.focusChanged`); the lifecycle forwards them to subscribed Plugins.
@@ -24,7 +29,6 @@ import {
   plainOffsetToPm,
   plainRangeToPmRange,
   pmRangeToPlainRange,
-  type PlainTextMap,
 } from "@/components/editor/plain-text-offsets";
 import { sanitizePluginHtml } from "@/features/plugins/library";
 import type {
@@ -41,6 +45,13 @@ import { isOutsideLayer } from "@/lib/top-layer";
 /** How long a burst of keystrokes coalesces into one `editor.contentChanged`. */
 export const EDITOR_CONTENT_EVENT_MS = 300;
 
+/**
+ * How long a reveal queued for an entity whose editor has not mounted stays
+ * queued. A stale range must never move the caret when the author opens that
+ * Chapter or Note manually later.
+ */
+export const PENDING_REVEAL_TTL_MS = 5_000;
+
 export interface PluginEditorRegistration {
   /** A stable id for one editor instance across entity changes. */
   id: string;
@@ -55,6 +66,7 @@ type HighlightMeta =
 
 interface HighlightsState {
   sets: Map<string, PluginHighlightSet>;
+  decorations: DecorationSet;
 }
 
 interface EditorEntry {
@@ -63,17 +75,23 @@ interface EditorEntry {
   editor: Editor;
   key: PluginKey<HighlightsState>;
   contentTimer: ReturnType<typeof setTimeout> | null;
-  blurTimer: ReturnType<typeof setTimeout> | null;
   dispose: () => void;
 }
 
+interface PendingReveal {
+  range: PluginRevealRange;
+  /** When it was queued, so a stale reveal can be dropped. */
+  at: number;
+}
+
 const editors = new Map<string, EditorEntry>();
-const pendingReveals = new Map<string, PluginRevealRange>();
+const pendingReveals = new Map<string, PendingReveal>();
 const contentListeners = new Set<(entity: PluginEntityTarget) => void>();
 const focusListeners = new Set<(entity: PluginEntityTarget | null) => void>();
 
 let focusedId: string | null = null;
-let lastFocusId: string | null = null;
+let lastFocusKey: string | null = null;
+let focusClearTimer: ReturnType<typeof setTimeout> | null = null;
 
 function entityKey(entity: PluginEntityTarget): string {
   return `${entity.kind}:${entity.id}`;
@@ -84,12 +102,9 @@ function isUsable(entry: EditorEntry): boolean {
 }
 
 function resolveFocusedEditor(): EditorEntry | null {
-  const focused = focusedId === null ? null : editors.get(focusedId);
-  if (focused && isUsable(focused)) return focused;
-  for (const entry of editors.values()) {
-    if (entry.editor.isFocused && isUsable(entry)) return entry;
-  }
-  return null;
+  if (focusedId === null) return null;
+  const entry = editors.get(focusedId);
+  return entry !== undefined && isUsable(entry) ? entry : null;
 }
 
 function findEditorForEntity(entity: PluginEntityTarget): EditorEntry | null {
@@ -101,11 +116,30 @@ function findEditorForEntity(entity: PluginEntityTarget): EditorEntry | null {
 }
 
 function setFocused(id: string | null): void {
+  if (focusClearTimer !== null) {
+    clearTimeout(focusClearTimer);
+    focusClearTimer = null;
+  }
   focusedId = id;
-  if (lastFocusId === id) return;
-  lastFocusId = id;
   const entity = id === null ? null : (editors.get(id)?.entity ?? null);
+  const key = entity === null ? null : entityKey(entity);
+  if (lastFocusKey === key) return;
+  lastFocusKey = key;
   for (const listener of [...focusListeners]) listener(entity);
+}
+
+/**
+ * Drops the focus after a tick rather than at once, so re-registering the same
+ * id in the same commit (a Note switch) keeps the target and never reports an
+ * intermediate "none".
+ */
+function scheduleFocusClear(): void {
+  if (focusClearTimer !== null) clearTimeout(focusClearTimer);
+  focusClearTimer = setTimeout(() => {
+    focusClearTimer = null;
+    if (focusedId !== null && editors.has(focusedId)) return;
+    setFocused(null);
+  }, 0);
 }
 
 function notifyContentChanged(entry: EditorEntry): void {
@@ -118,54 +152,65 @@ function notifyContentChanged(entry: EditorEntry): void {
   }, EDITOR_CONTENT_EVENT_MS);
 }
 
+/** Builds every Plugin's decorations against one document walk. */
+function buildHighlightDecorations(
+  doc: ProseMirrorNode,
+  sets: Map<string, PluginHighlightSet>
+): DecorationSet {
+  if (sets.size === 0) return DecorationSet.empty;
+  const map = buildPlainTextMap(doc);
+  const decorations: Decoration[] = [];
+  for (const [pluginId, set] of sets) {
+    for (const range of set.ranges) {
+      const pm = plainRangeToPmRange(map, range.from, range.to);
+      if (pm === null) continue;
+      decorations.push(
+        Decoration.inline(pm.from, pm.to, {
+          class: `plugin-highlight plugin-highlight--${set.kind}`,
+          role: "mark",
+          "data-plugin-highlight": pluginId,
+          ...(range.label
+            ? { "aria-description": range.label, "data-plugin-highlight-label": range.label }
+            : {}),
+        })
+      );
+    }
+  }
+  return decorations.length > 0 ? DecorationSet.create(doc, decorations) : DecorationSet.empty;
+}
+
 function createHighlightsPlugin(entryId: string): {
   key: PluginKey<HighlightsState>;
   plugin: Plugin<HighlightsState>;
 } {
   const key = new PluginKey<HighlightsState>(`pluginHighlights-${entryId}`);
-  let cachedDoc: ProseMirrorNode | null = null;
-  let cachedMap: PlainTextMap | null = null;
 
   const plugin = new Plugin<HighlightsState>({
     key,
     state: {
-      init: () => ({ sets: new Map() }),
+      init: () => ({ sets: new Map(), decorations: DecorationSet.empty }),
       apply: (tr, value) => {
+        // A local edit maps the decorations through it, keeping each highlight
+        // on the same characters until the Plugin re-highlights on
+        // editor.contentChanged (#396).
+        const mapped = tr.docChanged
+          ? { sets: value.sets, decorations: value.decorations.map(tr.mapping, tr.doc) }
+          : value;
         const meta = tr.getMeta(key) as HighlightMeta | undefined;
-        if (!meta) return value;
-        if (meta.type === "clearAll") return { sets: new Map() };
-        const sets = new Map(value.sets);
+        if (!meta) return mapped;
+        if (meta.type === "clearAll") {
+          return { sets: new Map(), decorations: DecorationSet.empty };
+        }
+        const sets = new Map(mapped.sets);
         if (meta.type === "clear") sets.delete(meta.pluginId);
         else sets.set(meta.pluginId, meta.set);
-        return { sets };
+        // One document walk per set or clear, never per transaction.
+        return { sets, decorations: buildHighlightDecorations(tr.doc, sets) };
       },
     },
     props: {
       decorations(state) {
-        const sets = key.getState(state)?.sets;
-        if (!sets || sets.size === 0) return null;
-        // The map is O(document); cache it so a selection-only transaction on
-        // an unchanged document does not walk the text again.
-        if (cachedDoc !== state.doc) {
-          cachedDoc = state.doc;
-          cachedMap = buildPlainTextMap(state.doc);
-        }
-        const map = cachedMap as PlainTextMap;
-        const decorations: Decoration[] = [];
-        for (const [pluginId, set] of sets) {
-          for (const range of set.ranges) {
-            const pm = plainRangeToPmRange(map, range.from, range.to);
-            if (pm === null) continue;
-            decorations.push(
-              Decoration.inline(pm.from, pm.to, {
-                class: `plugin-highlight plugin-highlight--${set.kind}`,
-                "data-plugin-highlight": pluginId,
-                ...(range.label ? { "data-plugin-highlight-label": range.label } : {}),
-              })
-            );
-          }
-        }
-        return decorations.length > 0 ? DecorationSet.create(state.doc, decorations) : null;
+        return key.getState(state)?.decorations ?? DecorationSet.empty;
       },
     },
   });
@@ -178,20 +223,32 @@ function applyReveal(entry: EditorEntry, range: PluginRevealRange): void {
   entry.editor.chain().focus().setTextSelection(pos).scrollIntoView().run();
 }
 
+function isPendingRevealStale(pending: PendingReveal, now: number): boolean {
+  return now - pending.at > PENDING_REVEAL_TTL_MS;
+}
+
 function consumePendingReveal(entry: EditorEntry): void {
   const key = entityKey(entry.entity);
-  const range = pendingReveals.get(key);
-  if (range === undefined) return;
+  const pending = pendingReveals.get(key);
+  if (pending === undefined) return;
   pendingReveals.delete(key);
-  applyReveal(entry, range);
+  if (isPendingRevealStale(pending, Date.now())) return;
+  applyReveal(entry, pending.range);
 }
 
 /**
- * Registers one focused editor. Re-registering the same id (the entity moved)
- * replaces the old entry; the returned function unregisters it.
+ * Registers one focused editor. Re-registering the same id (the entity moved,
+ * a Note switch) keeps the target in place: the previous editor is replaced
+ * without an intermediate "none", and the new entity is reported once.
  */
 export function registerPluginEditor(input: PluginEditorRegistration): () => void {
+  const hadFocus = focusedId === input.id;
   editors.get(input.id)?.dispose();
+  if (hadFocus && focusClearTimer !== null) {
+    clearTimeout(focusClearTimer);
+    focusClearTimer = null;
+  }
+
   const { key, plugin } = createHighlightsPlugin(input.id);
   const entry: EditorEntry = {
     id: input.id,
@@ -199,54 +256,35 @@ export function registerPluginEditor(input: PluginEditorRegistration): () => voi
     editor: input.editor,
     key,
     contentTimer: null,
-    blurTimer: null,
     dispose: () => {},
   };
 
   const onUpdate = () => notifyContentChanged(entry);
-  const onFocus = () => {
-    if (entry.blurTimer !== null) {
-      clearTimeout(entry.blurTimer);
-      entry.blurTimer = null;
-    }
-    setFocused(entry.id);
-  };
-  const onBlur = () => {
-    if (entry.blurTimer !== null) clearTimeout(entry.blurTimer);
-    // Another editor's focus lands in the same tick; only report "none" once
-    // no registered editor holds focus.
-    entry.blurTimer = setTimeout(() => {
-      entry.blurTimer = null;
-      if (focusedId !== entry.id) return;
-      for (const other of editors.values()) if (other.editor.isFocused) return;
-      setFocused(null);
-    }, 0);
-  };
+  const onFocus = () => setFocused(entry.id);
 
   input.editor.on("update", onUpdate);
   input.editor.on("focus", onFocus);
-  input.editor.on("blur", onBlur);
   input.editor.registerPlugin(plugin);
   editors.set(entry.id, entry);
-  if (input.editor.isFocused) onFocus();
+  if (hadFocus) setFocused(entry.id);
+  else if (input.editor.isFocused) onFocus();
   consumePendingReveal(entry);
 
   entry.dispose = () => {
     if (entry.contentTimer !== null) clearTimeout(entry.contentTimer);
-    if (entry.blurTimer !== null) clearTimeout(entry.blurTimer);
     input.editor.off("update", onUpdate);
     input.editor.off("focus", onFocus);
-    input.editor.off("blur", onBlur);
     if (!input.editor.isDestroyed) input.editor.unregisterPlugin(key);
     editors.delete(entry.id);
-    if (focusedId === entry.id) setFocused(null);
+    if (focusedId === entry.id) scheduleFocusClear();
   };
   return entry.dispose;
 }
 
 /**
  * Queues a reveal for an entity: applied now when its editor is open, or when
- * that editor registers (a Chapter or Note route mounting under it).
+ * that editor registers (a Chapter or Note route mounting under it). A reveal
+ * not consumed within `PENDING_REVEAL_TTL_MS` is dropped.
  */
 export function requestEditorReveal(entity: PluginEntityTarget, range: PluginRevealRange): void {
   const entry = findEditorForEntity(entity);
@@ -254,7 +292,11 @@ export function requestEditorReveal(entity: PluginEntityTarget, range: PluginRev
     applyReveal(entry, range);
     return;
   }
-  pendingReveals.set(entityKey(entity), range);
+  const now = Date.now();
+  for (const [key, pending] of pendingReveals) {
+    if (isPendingRevealStale(pending, now)) pendingReveals.delete(key);
+  }
+  pendingReveals.set(entityKey(entity), { range, at: now });
 }
 
 /** Applies a reveal queued for this editor's entity, once its content is ready. */
@@ -348,5 +390,9 @@ export function resetPluginEditorHostForTests(): void {
   contentListeners.clear();
   focusListeners.clear();
   focusedId = null;
-  lastFocusId = null;
+  lastFocusKey = null;
+  if (focusClearTimer !== null) {
+    clearTimeout(focusClearTimer);
+    focusClearTimer = null;
+  }
 }

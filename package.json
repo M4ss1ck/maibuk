@@ -45,6 +45,7 @@
     "bench:dictation": "vitest bench --run src/test/bench/dictation-interpreter.bench.ts --outputJson .bench/dictation.json && node scripts/dictation-bench-budget.mjs .bench/dictation.json",
     "bench:palette": "vitest bench --run src/test/bench/command-palette.bench.ts --outputJson .bench/palette.json && node scripts/palette-bench-budget.mjs .bench/palette.json",
     "bench:plugin-start": "vitest bench --run src/test/bench/plugin-start.bench.ts --outputJson .bench/plugin-start.json && node scripts/plugin-start-bench-budget.mjs .bench/plugin-start.json",
+    "bench:editor-highlights": "vitest bench --run src/test/bench/editor-highlights.bench.ts --outputJson .bench/editor-highlights.json && node scripts/editor-highlights-bench-budget.mjs .bench/editor-highlights.json",
     "bench:dictation:android": "node scripts/dictation-bench/android.mjs .bench/dictation-android.json",
     "bench:frames": "tsx e2e/run-frames.ts",
     "e2e:voice-audio": "bash scripts/e2e-voice-audio.sh"
