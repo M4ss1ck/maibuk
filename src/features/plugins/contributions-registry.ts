@@ -89,7 +89,6 @@ export function pluginPageRoute(pluginId: string, pageId: string): string {
 }
 
 const contributions = new Map<string, RegisteredContributions>();
-let revision = 0;
 const listeners = new Set<() => void>();
 // Referentially stable snapshots for useSyncExternalStore, refreshed on change.
 let cachedPages: PluginPageDef[] | null = null;
@@ -98,15 +97,10 @@ const cachedItemMenu = new Map<PluginTarget, PluginItemMenuEntryDef[]>();
 
 /** Runs after every contribution register and unregister. */
 export function notifyContributionsChange(): void {
-  revision += 1;
   cachedPages = null;
   cachedSidebar = null;
   cachedItemMenu.clear();
   for (const listener of [...listeners]) listener();
-}
-
-export function pluginContributionsRevision(): number {
-  return revision;
 }
 
 /** Runs after every contribution register and unregister. Returns unregister. */
@@ -128,11 +122,6 @@ export function setRegisteredContributions(
   record: RegisteredContributions
 ): void {
   contributions.set(pluginId, record);
-}
-
-/** True while the Plugin has any live contribution registered. */
-export function isPluginRegistered(pluginId: string): boolean {
-  return contributions.has(pluginId);
 }
 
 /** Removes one Plugin's record; the registration side notifies when it does. */

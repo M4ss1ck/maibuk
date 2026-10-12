@@ -29,15 +29,6 @@ export function activeRouteContexts(pathname: string): Set<string> {
 }
 
 /**
- * Wires a Plugin's Commands into the shared key handling and the Command
- * runner, and warms the Plugins whose Commands live in the current screen's
- * Shortcut Contexts. Mounted once in the app shell: it renders nothing and,
- * with no Plugins, binds nothing.
- *
- * Only the Commands whose Contexts are active here are bound, so a Plugin page
- * context stays on its page and a target Command stays behind its Item Menu.
- */
-/**
  * The Plugins whose Commands live in the active Contexts, in registry order.
  */
 function pluginsOfActiveContexts(active: ReadonlySet<string>): string[] {
@@ -51,6 +42,16 @@ function pluginsOfActiveContexts(active: ReadonlySet<string>): string[] {
   return [...pluginIds];
 }
 
+/**
+ * Wires a Plugin's Commands into the shared key handling and the Command
+ * runner, and warms the Plugins whose Commands live in the current screen's
+ * Shortcut Contexts. Mounted once in the app shell: it renders nothing and,
+ * with no Plugins, binds nothing.
+ *
+ * Only the Commands whose Contexts are active here are bound, so a Plugin page
+ * context stays on its page and a target Command stays disabled here — its
+ * item's focused row binds it through `useItemCommands`.
+ */
 export function PluginCommands() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -71,13 +72,11 @@ export function PluginCommands() {
   // A screen whose Contexts match a Plugin Command is a reachable surface: an
   // on-demand Plugin warm-starts, and a global Command makes it effectively
   // persistent (#401). Membership is diffed, so navigating inside routes that
-  // keep the Plugin reachable re-arms nothing: retried `surfaceReached` calls
-  // keep restarting the idle window.
-  // Diffed membership: navigating inside routes that keep a Plugin reachable
-  // re-arms nothing, since retried `surfaceReached` calls keep restarting the
-  // on-demand idle window. The effect below has no cleanup — leaving depends
-  // on the set this lifecycle reached, which only the lifecycle change and
-  // the unmount undo (the second effect, which owns the same lifecycle).
+  // keep the Plugin reachable re-arms nothing (retried `surfaceReached` calls
+  // keep restarting the idle window). The effect below has no cleanup —
+  // leaving depends on the set this lifecycle reached, which only the
+  // lifecycle change and the unmount undo (the second effect, which owns the
+  // same lifecycle).
   const reached = useRef<{ owner: PluginLifecycle | null; ids: string[] }>({
     owner: null,
     ids: [],

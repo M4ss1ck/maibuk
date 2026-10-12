@@ -71,9 +71,7 @@ export {
   getPluginPage,
   getPluginPages,
   getPluginSidebarEntries,
-  isPluginRegistered,
   onPluginContributionsChange,
-  pluginContributionsRevision,
   resetPluginContributionsForTests,
 } from "@/features/plugins/contributions-registry";
 export { pluginPageRoute };
