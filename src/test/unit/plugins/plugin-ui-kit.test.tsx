@@ -186,6 +186,44 @@ describe("the Remote UI kit, part 2", () => {
       expect(actions).toEqual(["rename"]);
     });
 
+    it("opens a row Item Menu from the ⋯ button (touch path) and runs an action", async () => {
+      harness = renderRemoteUi();
+      const actions: string[] = [];
+      await harness.mount(
+        <ui.Collection label="Chapters" selectionMode="none">
+          <ui.CollectionRow
+            id="two"
+            label="Two"
+            menuItems={[
+              { value: "rename", label: "Rename" },
+              { value: "delete", label: "Delete" },
+            ]}
+            onMenuAction={(event) => actions.push(event.detail)}
+          />
+        </ui.Collection>
+      );
+
+      // The ⋯ button is the pointer/touch path: the collection is one Tab stop,
+      // so a touch user opens the menu from this control, not from the row.
+      const more = screen.getByRole("button", { name: "More actions for Two" });
+      // A comfortable coarse-pointer target, matching the repo convention.
+      expect(more.className).toContain("pointer-coarse:min-h-10");
+      expect(more.className).toContain("pointer-coarse:min-w-10");
+
+      await userEvent.click(more);
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Rename" }));
+
+      expect(actions).toEqual(["rename"]);
+    });
+
+    it("gives the kit IconButton a coarse-pointer target", async () => {
+      harness = renderRemoteUi();
+      await harness.mount(<ui.IconButton label="Mark favourite" icon="star" />);
+      const button = screen.getByRole("button", { name: "Mark favourite" });
+      expect(button.className).toContain("pointer-coarse:min-h-10");
+      expect(button.className).toContain("pointer-coarse:min-w-10");
+    });
+
     it("keeps focus on the same row through a reordering update", async () => {
       harness = renderRemoteUi();
       const plugin = { setRows: (_: string[]) => {} };
@@ -325,6 +363,125 @@ describe("the Remote UI kit, part 2", () => {
       await waitFor(() => expect(document.activeElement).toBe(trigger));
     });
 
+    it("dismisses a modal on Escape and returns focus after the Worker stops @ui-kbd:maibuk-modal", async () => {
+      harness = renderRemoteUi();
+      function Plugin() {
+        const [open, setOpen] = useState(false);
+        // The Plugin never answers `onOpenChange`, and its Worker is stopped
+        // after the dialog opens: the host must dismiss and return focus on its
+        // own, never waiting for an echo.
+        return (
+          <>
+            <ui.Button onPress={() => setOpen(true)}>Open details</ui.Button>
+            <ui.Modal title="Details" isOpen={open} onOpenChange={() => {}}>
+              <ui.Text>Modal body</ui.Text>
+            </ui.Modal>
+          </>
+        );
+      }
+      await harness.mount(<Plugin />);
+
+      const trigger = screen.getByRole("button", { name: "Open details" });
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+
+      harness.stopWorker();
+
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it("dismisses a popover on Escape and returns focus after the Worker stops @ui-kbd:maibuk-popover", async () => {
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.Popover label="Options">
+          <ui.Text>Popover body</ui.Text>
+        </ui.Popover>
+      );
+
+      const trigger = screen.getByRole("button", { name: "Options" });
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      expect(await screen.findByText("Popover body")).toBeInTheDocument();
+
+      harness.stopWorker();
+
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByText("Popover body")).not.toBeInTheDocument();
+      await waitFor(() => expect(document.activeElement).toBe(trigger));
+    });
+
+    it("does not reopen on a late isOpen=true the Plugin never acknowledged", async () => {
+      harness = renderRemoteUi();
+      function Plugin() {
+        const [open, setOpen] = useState(false);
+        const [tick, setTick] = useState(0);
+        // The Plugin ignores `onOpenChange` and keeps `isOpen` true. A redraw
+        // that sends no acknowledgement must not reopen the host's dialog.
+        return (
+          <>
+            <ui.Button onPress={() => setOpen(true)}>Open details</ui.Button>
+            <ui.Button onPress={() => setTick((value) => value + 1)}>Redraw</ui.Button>
+            <ui.Text>{`tick ${tick}`}</ui.Text>
+            <ui.Modal title="Details" isOpen={open} onOpenChange={() => {}}>
+              <ui.Text>Modal body</ui.Text>
+            </ui.Modal>
+          </>
+        );
+      }
+      await harness.mount(<Plugin />);
+
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      // Focus is back on the trigger; Tab to Redraw and re-render with the
+      // still-true `isOpen`.
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      expect(await screen.findByText("tick 1")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("reopens a modal after the Plugin acknowledges the dismissal and asks again", async () => {
+      harness = renderRemoteUi();
+      function Plugin() {
+        const [open, setOpen] = useState(false);
+        return (
+          <>
+            <ui.Button onPress={() => setOpen(true)}>Open details</ui.Button>
+            <ui.Modal
+              title="Details"
+              isOpen={open}
+              onOpenChange={(event) => setOpen(event.detail)}
+            >
+              <ui.Text>Modal body</ui.Text>
+            </ui.Modal>
+          </>
+        );
+      }
+      await harness.mount(<Plugin />);
+
+      const trigger = screen.getByRole("button", { name: "Open details" });
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+
+      // Escape: the host dismisses, the Plugin acknowledges with isOpen=false.
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(document.activeElement).toBe(trigger);
+
+      // The Plugin asks again: isOpen=false -> true is a real reopen.
+      await userEvent.keyboard("{Enter}");
+      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+    });
+
     it("shows a tooltip on focus @ui-kbd:maibuk-tooltip", async () => {
       harness = renderRemoteUi();
       await harness.mount(
@@ -335,7 +492,7 @@ describe("the Remote UI kit, part 2", () => {
 
       await userEvent.tab();
 
-      const tooltip = await screen.findByRole("tooltip", {}, { timeout: 2000 });
+      const tooltip = await screen.findByRole("tooltip");
       expect(tooltip).toHaveTextContent("Save the chapter");
     });
   });
@@ -424,6 +581,63 @@ describe("the Remote UI kit, part 2", () => {
           expect(rule).toContain("[data-plugin-ui=");
         }
       }
+    });
+
+    it("keeps Maibuk chrome and a second surface intact under hostile Plugin CSS", async () => {
+      harness = renderRemoteUi({
+        wrapper: ({ children }) => (
+          <>
+            <p data-testid="chrome">Maibuk chrome</p>
+            <span data-testid="chrome-span">Also chrome</span>
+            {children}
+          </>
+        ),
+      });
+      const hostile = `
+        p { color: rgb(1, 2, 3) }
+        * { background-color: rgb(200, 1, 1) }
+        :root { background-color: rgb(200, 2, 2) }
+        html { background-color: rgb(200, 3, 3) }
+        body { background-color: rgb(200, 4, 4) }
+        ~ p { color: rgb(200, 5, 5) }
+        + p { color: rgb(200, 6, 6) }
+        :has(p) { background-color: rgb(200, 7, 7) }
+        .a { b: url(} ) } body { display: none }
+        @media (max-width: 10000px) { body { letter-spacing: 9px } }
+      `;
+      await harness.mount(
+        <>
+          <ui.Surface css={hostile}>
+            <ui.Text>Hostile surface</ui.Text>
+          </ui.Surface>
+          <ui.Surface css="p { color: rgb(4, 5, 6) }">
+            <ui.Text>Second surface</ui.Text>
+          </ui.Surface>
+        </>
+      );
+
+      const hostileText = screen.getByText("Hostile surface");
+      const secondText = screen.getByText("Second surface");
+      const chrome = screen.getByTestId("chrome");
+      const chromeSpan = screen.getByTestId("chrome-span");
+
+      // The safe part still reaches the Plugin's own surface.
+      expect(getComputedStyle(hostileText).color).toBe("rgb(1, 2, 3)");
+      // The second surface keeps its own rule.
+      expect(getComputedStyle(secondText).color).toBe("rgb(4, 5, 6)");
+
+      // None of the hostile rules reaches Maibuk chrome: the `}` inside url()
+      // cannot break the block, the sibling combinators are dropped, and
+      // `:root`/`html`/`body`/`:has()` are inert under the prefix.
+      expect(getComputedStyle(chrome).color).not.toBe("rgb(1, 2, 3)");
+      expect(getComputedStyle(chrome).backgroundColor).not.toBe("rgb(200, 1, 1)");
+      expect(getComputedStyle(chrome).backgroundColor).not.toBe("rgb(200, 2, 2)");
+      expect(getComputedStyle(chrome).backgroundColor).not.toBe("rgb(200, 3, 3)");
+      expect(getComputedStyle(chrome).backgroundColor).not.toBe("rgb(200, 4, 4)");
+      expect(getComputedStyle(chrome).backgroundColor).not.toBe("rgb(200, 7, 7)");
+      expect(getComputedStyle(chrome).display).not.toBe("none");
+      expect(getComputedStyle(chrome).letterSpacing).not.toBe("9px");
+      expect(getComputedStyle(chromeSpan).color).not.toBe("rgb(1, 2, 3)");
     });
   });
 });

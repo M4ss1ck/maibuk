@@ -133,6 +133,26 @@ test.describe("Host-rendered Plugin UI kit @wf:plugins-remote-ui-kit @no-webkit"
     await expect(dialog).toHaveCount(0);
   });
 
+  test("the confirmation dialog reopens after Escape", async ({ page }) => {
+    await openGallery(page);
+    const trigger = page.getByRole("button", { name: "Delete chapter" });
+    await expect(trigger).toBeVisible({ timeout: 15_000 });
+    const dialog = page.getByRole("alertdialog", { name: "Delete chapter?" });
+
+    // Escape dismisses immediately; the Plugin acknowledges through
+    // onOpenChange, so opening it again is a real reopen (the same pattern as
+    // the Modal, whose Worker never echoes).
+    await tabTo(page, trigger);
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
+  });
+
   test("a tooltip shows on focus", async ({ page }) => {
     await openGallery(page);
     const target = page.getByRole("button", { name: "Tooltip target" });

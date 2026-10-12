@@ -173,7 +173,7 @@ function Gallery() {
         isDestructive
         isOpen={confirmOpen}
         onConfirm={() => setConfirmOpen(false)}
-        onOpenChange={(open) => setConfirmOpen(open)}
+        onOpenChange={(event) => setConfirmOpen(event.detail)}
       />
     </ui.Surface>
   );

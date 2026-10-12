@@ -368,6 +368,14 @@ export interface TestHost {
    * `stop()` too.
    */
   renderPage(page: string): Promise<TestPage>;
+  /**
+   * Stops the Worker: stops the broker and severs every open Remote UI mount,
+   * while leaving the host renderer mounted. This is what a stopped Worker
+   * leaves behind — a host tree that can no longer receive a mutation or an
+   * echo — and is how the overlay dismissal tests prove Escape does not wait
+   * for the Worker.
+   */
+  stopWorker(): void;
   stop(): void;
 }
 

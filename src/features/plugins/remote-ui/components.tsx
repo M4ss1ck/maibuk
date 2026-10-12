@@ -601,7 +601,7 @@ function IconButtonHost({ label, icon, variant = "ghost", isDisabled, onPress }:
       aria-label={label}
       disabled={isDisabled}
       onClick={() => onPress?.()}
-      className="px-2"
+      className="px-2 pointer-coarse:min-h-10 pointer-coarse:min-w-10"
     >
       <PluginIcon icon={icon} className="h-4 w-4" />
     </Button>
@@ -796,16 +796,44 @@ function CodeHost({ block, children }: { block?: boolean; children?: ReactNode }
 /** Organization: tabs, disclosure, collections, tables (#439). */
 
 /**
- * A prop the host mirrors into its own state. A host-driven change (Escape, an
- * outside press, a row activation) applies immediately and is reported to the
- * Plugin; a Plugin-driven change arrives as the prop. `fallback` covers a prop
- * the Plugin never set, and the state is left alone while the prop stays
- * undefined.
+ * Open state the host mirrors from a Plugin prop, shared by the overlays and
+ * the disclosure. A host-driven close (Escape, an outside press, a row
+ * activation) applies immediately and tells the Plugin; a Plugin-driven change
+ * arrives as the prop on a later render. The mirror is deliberate: it is what
+ * lets the host dismiss an overlay even when the Worker is stopped and never
+ * echoes the change back.
+ *
+ * A Plugin that keeps `isOpen` true after a host dismissal stays closed — the
+ * prop did not change, so there is nothing new to open. To reopen, the Plugin
+ * acknowledges the dismissal by setting `isOpen` false (usually from its
+ * `onOpenChange(false)` handler) and then sets it true again.
  */
-function useMirroredProp<T>(prop: T | undefined, fallback: T): [T, (next: T) => void] {
-  const [value, setValue] = useState<T>(prop ?? fallback);
-  useEffect(() => setValue(prop ?? fallback), [prop, fallback]);
-  return [value, setValue];
+function useMirroredOpen(
+  isOpen: boolean | undefined,
+  onOpenChange?: (open: boolean) => void
+): [boolean, (next: boolean) => void] {
+  const [open, setOpen] = useState(isOpen ?? false);
+  const previous = useRef(isOpen);
+  useEffect(() => {
+    if (isOpen === previous.current) return;
+    previous.current = isOpen;
+    setOpen(isOpen ?? false);
+  }, [isOpen]);
+  const set = useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      // The notification is best-effort: a stopped Worker's event channel throws
+      // or rejects when called, and the host's dismissal must not depend on the
+      // Plugin receiving it.
+      try {
+        void Promise.resolve(onOpenChange?.(next)).catch(() => {});
+      } catch {
+        // The Worker is gone; there is nobody to tell.
+      }
+    },
+    [onOpenChange]
+  );
+  return [open, set];
 }
 
 /** The disclosure and expandable-row chevron; decorative, the row owns the control. */
@@ -869,14 +897,11 @@ function DisclosureHost({
   children,
   onExpandedChange,
 }: DisclosureHostProps) {
-  const [expanded, setExpanded] = useMirroredProp(isExpanded, false);
+  const [expanded, setExpanded] = useMirroredOpen(isExpanded, onExpandedChange);
   return (
     <AriaDisclosure
       isExpanded={expanded}
-      onExpandedChange={(next) => {
-        setExpanded(next);
-        onExpandedChange?.(next);
-      }}
+      onExpandedChange={setExpanded}
       isDisabled={isDisabled}
       className="w-full"
     >
@@ -955,7 +980,7 @@ function CollectionRowHost({
   onMenuAction,
 }: CollectionRowHostProps) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useMirroredProp(isExpanded, false);
+  const [expanded, setExpanded] = useMirroredOpen(isExpanded, onExpandedChange);
   const [menuOpen, setMenuOpen] = useState(false);
   const actions = (menuItems ?? []).map(
     // command-exempt: a Plugin row action runs the Plugin's own event, not a Maibuk Command (ADR 0019).
@@ -973,9 +998,7 @@ function CollectionRowHost({
       aria-expanded={isExpandable ? expanded : undefined}
       onAction={() => {
         if (isExpandable) {
-          const next = !expanded;
-          setExpanded(next);
-          onExpandedChange?.(next);
+          setExpanded(!expanded);
           return;
         }
         // A collection is one Tab stop, so its row is the keyboard path to the
@@ -1054,13 +1077,10 @@ interface ModalHostProps {
 }
 
 function ModalHost({ title, isOpen, children, onOpenChange }: ModalHostProps) {
-  const [open, setOpen] = useMirroredProp(isOpen, false);
+  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange);
   // The host closes immediately on Escape or outside press and notifies the
   // Plugin afterwards; it never waits for the Plugin's echo to close.
-  const close = useCallback(() => {
-    setOpen(false);
-    onOpenChange?.(false);
-  }, [onOpenChange, setOpen]);
+  const close = useCallback(() => setOpen(false), [setOpen]);
   return (
     <Modal isOpen={open} onClose={close} title={title}>
       {children}
@@ -1090,11 +1110,8 @@ function ConfirmDialogHost({
   onOpenChange,
 }: ConfirmDialogHostProps) {
   const { t } = useTranslation();
-  const [open, setOpen] = useMirroredProp(isOpen, false);
-  const close = useCallback(() => {
-    setOpen(false);
-    onOpenChange?.(false);
-  }, [onOpenChange, setOpen]);
+  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange);
+  const close = useCallback(() => setOpen(false), [setOpen]);
   return (
     <Modal
       isOpen={open}
@@ -1132,20 +1149,14 @@ interface PopoverHostProps {
 }
 
 function PopoverHost({ label, icon, isOpen, children, onOpenChange }: PopoverHostProps) {
-  const [open, setOpen] = useMirroredProp(isOpen, false);
+  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange);
   const triggerRef = useRef<HTMLButtonElement>(null);
   // A non-modal popover does not return focus by itself when the host dismisses
   // it; the shared hook restores the trigger, immediately and without a Worker
   // echo.
   useRestoreFocus(open, { getTarget: () => triggerRef.current });
   return (
-    <DialogTrigger
-      isOpen={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        onOpenChange?.(next);
-      }}
-    >
+    <DialogTrigger isOpen={open} onOpenChange={setOpen}>
       <AriaButton
         ref={triggerRef}
         className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none transition-colors hover:bg-muted data-focus-visible:ring-2 data-focus-visible:ring-primary"

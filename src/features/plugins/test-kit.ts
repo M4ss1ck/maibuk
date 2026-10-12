@@ -20,7 +20,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { createPluginBroker } from "@/features/plugins/broker";
 import { applyPluginLocale } from "@/features/plugins/manifest-validate";
-import { openPluginUiMount } from "@/features/plugins/remote-ui/mount";
+import { openPluginUiMount, type PluginUiMount } from "@/features/plugins/remote-ui/mount";
 import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import { PluginRemoteUiSurface } from "@/features/plugins/remote-ui/surface";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
@@ -72,6 +72,8 @@ export function createTestHost(options: TestHostOptions): TestHost {
 
   /** Every page `renderPage` opened and has not unmounted yet. */
   const openPages = new Set<TestPage>();
+  /** The live mount behind each open page, so `stopWorker` can sever it. */
+  const openMounts = new Map<TestPage, { mount: PluginUiMount; thread: { close(): void } }>();
 
   function renderPage(page: string): Promise<TestPage> {
     const violations: PluginUiViolation[] = [];
@@ -101,6 +103,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
       violations,
       unmount() {
         if (!openPages.delete(testPage)) return;
+        openMounts.delete(testPage);
         mount.unmount();
         thread.close();
         inAct(() => {
@@ -113,7 +116,10 @@ export function createTestHost(options: TestHostOptions): TestHost {
     openPages.add(testPage);
 
     return mount.mounted.then(
-      () => testPage,
+      () => {
+        openMounts.set(testPage, { mount, thread });
+        return testPage;
+      },
       (error: unknown) => {
         testPage.unmount();
         throw error;
@@ -131,6 +137,15 @@ export function createTestHost(options: TestHostOptions): TestHost {
       granted = new Set(permissions);
     },
     renderPage,
+    stopWorker() {
+      broker.stop("requested");
+      // Sever every mount so no mutation or echo can arrive, but leave the
+      // host renderer mounted: a stopped Worker leaves a host tree behind.
+      for (const { mount, thread } of openMounts.values()) {
+        thread.close();
+        mount.port.close();
+      }
+    },
     stop() {
       for (const page of [...openPages]) page.unmount();
       broker.stop("requested");
