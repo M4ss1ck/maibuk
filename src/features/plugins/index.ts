@@ -105,8 +105,40 @@ export {
   createPluginLifecycle,
   getPluginLifecycle,
   installPluginLifecycle,
+  onPluginLifecycleInstalled,
   pluginStoppedMessage,
   resetPluginLifecycleForTests,
 } from "@/features/plugins/lifecycle";
+export {
+  getPluginCommands,
+  getPluginItemMenuEntries,
+  getPluginPage,
+  getPluginPages,
+  getPluginSidebarEntries,
+  onPluginContributionsChange,
+  pluginPageRoute,
+  readPluginLocales,
+  registerPluginContributions,
+  resetPluginContributionsForTests,
+} from "@/features/plugins/contributions";
+export {
+  pluginCommandBindings,
+  pluginCommandId,
+  pluginPageCommandBindings,
+  pluginPageCommands,
+  runPluginCommand,
+} from "@/features/plugins/commands";
+export type {
+  PluginCommandOutcome,
+  PluginItemTarget,
+} from "@/features/plugins/commands";
+export type {
+  PluginCommandDef,
+  PluginContributionsSource,
+  PluginItemMenuEntryDef,
+  PluginPageDef,
+  PluginSidebarEntryDef,
+  PluginTarget,
+} from "@/features/plugins/contributions";
 export { createPluginHandlers } from "@/features/plugins/handlers";
 export type * from "@/features/plugins/types";

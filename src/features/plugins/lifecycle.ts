@@ -19,7 +19,12 @@
 import { hasLaunchAutoSyncSettled, onLaunchAutoSyncSettled } from "@/features/sync/auto-sync";
 import { hasLaunchBackupSettled, onLaunchBackupSettled } from "@/features/backup/lifecycle";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
+import { registerPluginContributions } from "@/features/plugins/contributions";
 import { createPluginHandlers } from "@/features/plugins/handlers";
+import {
+  getPluginLifecycle,
+  setPluginLifecycleInstance,
+} from "@/features/plugins/lifecycle-instance";
 import { scanApprovedPlugins } from "@/features/plugins/launch";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
@@ -183,6 +188,8 @@ interface Entry {
   installed: InstalledPlugin;
   state: PluginLifecycleState;
   runtime: PluginRuntime | null;
+  /** Removes this Plugin's contributions from the shared registries (#437). */
+  unregisterContributions: (() => void) | null;
   /** Reachable surfaces, by whatever id the wire caller uses (#437). */
   surfaces: Set<string>;
   heartbeat: ReturnType<typeof setInterval> | null;
@@ -214,6 +221,16 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   const listeners = new Set<(change: PluginLifecycleChange) => void>();
   let disposed = false;
   let launched = false;
+  // The launch scan's own signal: surfaces that read the contributions
+  // registries (a Plugin page) stay in loading copy until it settles.
+  let scanned = false;
+  const scanListeners = new Set<() => void>();
+
+  function markScanned(): void {
+    if (scanned) return;
+    scanned = true;
+    for (const listener of [...scanListeners]) listener();
+  }
 
   // Reachable surfaces are tracked per Plugin id even before the launch scan
   // registers it, so a surface mounted during launch still warm-starts it.
@@ -545,6 +562,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       installed,
       state: { status: "stopped", reason: null, refusal: null },
       runtime: null,
+      unregisterContributions: null,
       surfaces: surfacesOf(installed.pluginId),
       heartbeat: null,
       beatInFlight: false,
@@ -573,7 +591,27 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         for (const { pluginId, refusal } of scan.refusals) {
           console.warn(`Plugin ${pluginId} did not load: ${refusal.code}`, refusal);
         }
-        for (const plugin of scan.plugins) entries.set(plugin.pluginId, createEntry(plugin));
+        for (const plugin of scan.plugins) {
+          const entry = createEntry(plugin);
+          // An approved Plugin is enabled (until the install flow lands, #442):
+          // its Commands, pages, Settings rows, toolbar buttons, and Item Menu
+          // entries are discoverable now, before any Worker exists (#437).
+          try {
+            entry.unregisterContributions = registerPluginContributions({
+              manifest: plugin.manifest,
+              folder: plugin.folder,
+            });
+          } catch (error) {
+            // One Plugin's bad contributions must never skip the next one.
+            console.error(`Plugin ${plugin.pluginId} contributions failed to register`, error);
+            continue;
+          }
+          entries.set(plugin.pluginId, entry);
+        }
+        // The scan and every contribution it registers are in; surfaces may
+        // leave their loading copy even while the persistent starts are
+        // still queued.
+        markScanned();
         // A surface mounted while the scan ran warm-starts its Plugin now.
         for (const plugin of scan.plugins) {
           if (plugin.manifest.lifecycle !== "on-demand") continue;
@@ -597,11 +635,23 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         }
       } catch (error) {
         console.error("Plugin launch failed", error);
+        markScanned();
       }
     },
 
     installed() {
       return [...entries.values()].map((entry) => entry.installed);
+    },
+
+    launchScanned() {
+      return scanned;
+    },
+
+    onLaunchScanned(listener: () => void): () => void {
+      scanListeners.add(listener);
+      return () => {
+        scanListeners.delete(listener);
+      };
     },
 
     surfaceReached(pluginId: string, surface: string): void {
@@ -670,12 +720,17 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      // A lifecycle stopped mid-launch must not leave loading surfaces behind.
+      markScanned();
+      scanListeners.clear();
       for (const entry of entries.values()) {
         entry.generation += 1;
         clearTimers(entry);
         const runtime = entry.runtime;
         entry.runtime = null;
         runtime?.stop();
+        entry.unregisterContributions?.();
+        entry.unregisterContributions = null;
         entry.state = { status: "stopped", reason: "requested", refusal: null };
       }
       entries.clear();
@@ -685,26 +740,24 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   };
 }
 
-let installedLifecycle: PluginLifecycle | null = null;
-
 /**
  * The app's one lifecycle. Called from `main.tsx` in idle time after the first
  * render; the launch inside waits for the Library, the launch Auto Sync, and
- * the launch Backup before the first persistent start.
+ * the launch Backup before the first persistent start. The singleton itself
+ * lives in `lifecycle-instance.ts`, which is the single source of truth, so
+ * the UI reads it without loading this module.
  */
 export function installPluginLifecycle(options: PluginLifecycleOptions = {}): PluginLifecycle {
-  if (installedLifecycle) return installedLifecycle;
+  const existing = getPluginLifecycle();
+  if (existing) return existing;
   const lifecycle = createPluginLifecycle(options);
-  installedLifecycle = lifecycle;
+  setPluginLifecycleInstance(lifecycle);
   void lifecycle.launch();
   return lifecycle;
 }
 
-export function getPluginLifecycle(): PluginLifecycle | null {
-  return installedLifecycle;
-}
-
-export function resetPluginLifecycleForTests(): void {
-  installedLifecycle?.dispose();
-  installedLifecycle = null;
-}
+export {
+  getPluginLifecycle,
+  onPluginLifecycleInstalled,
+  resetPluginLifecycleForTests,
+} from "@/features/plugins/lifecycle-instance";

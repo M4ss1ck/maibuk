@@ -83,6 +83,16 @@ export interface PluginMessagePort {
 export const PLUGIN_MIGRATE_DATA_REQUEST = "migrateData";
 
 /**
+ * The host request a ready Plugin answers to run one of its Commands. `params`
+ * is `{ id, target? }`: `id` is the Command's Plugin-local id, `target` the
+ * item it was invoked on when the Command declares `targets`. The host
+ * captures the target before it sends the request and that captured target is
+ * what the Plugin receives; the host re-reads it once more after the reply
+ * only to decide whether the outcome is reported as ran or cancelled.
+ */
+export const PLUGIN_COMMAND_RUN_REQUEST = "command.run";
+
+/**
  * The sandbox's boot handshake with the Plugin's Worker. `PLUGIN_BOOT_MESSAGE`
  * carries the entry module's `blob:` URL; `PLUGIN_INIT_MESSAGE` carries the
  * Plugin's one MessagePort (`event.ports[0]`). The Worker's fixed prelude

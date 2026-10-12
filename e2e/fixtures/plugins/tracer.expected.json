@@ -1,8 +1,8 @@
 {
-  "hash": "h1:E/OoPjI886bKw9P2JWNaBMx/jOn/XWWVFZ5T08tuJ5E=",
+  "hash": "h1:bn42cISzRFaBLo+cToTHiNfkBCLrv7rn+WV9Zf/DS2A=",
   "files": {
-    "index.js": "f54e753c4547a4bcb7a664a333414c9888891a08d91413880c0dbbba39829af7",
-    "manifest.json": "4737dce4f34b3a0f93d54c25da91c050379f9f7d1c3cc1a6e86d8627fbac8d3c",
+    "index.js": "2bc32242b48bb85856df586267151baa67534859f9bbc30e62657e6b7406f920",
+    "manifest.json": "8268d92307f40111d647e735736ed290e717f70f23e715e29178a99412188221",
     "report.js": "d2bf49e58a5ec374c86d29301d2256795a7f08ae8c92fcda91752f0a8383eaf9"
   }
 }

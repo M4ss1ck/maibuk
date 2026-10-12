@@ -292,6 +292,79 @@ describe("Plugin lifecycle: launch", () => {
     await advance(0);
     expect(h.framesFor("alpha")).toHaveLength(1);
   });
+
+  it("marks the launch scan settled and notifies once the registrations ran", async () => {
+    let settleLaunch!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      settleLaunch = resolve;
+    });
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      whenLaunchSettled: () => gate,
+    });
+    let notified = 0;
+    h.lifecycle.onLaunchScanned(() => {
+      notified += 1;
+    });
+
+    const launching = h.lifecycle.launch();
+    await advance(0);
+    expect(h.lifecycle.launchScanned()).toBe(false);
+    expect(h.frameCount()).toBe(0);
+    expect(notified).toBe(0);
+
+    settleLaunch();
+    await advanceUntil(() => h.lifecycle.launchScanned(), "the launch scan settling");
+    expect(notified).toBe(1);
+    expect(h.lifecycle.installed().map((plugin) => plugin.pluginId)).toEqual(["alpha"]);
+    await advanceUntilSettled(launching, "lifecycle.launch()");
+  });
+
+  it("marks the scan settled when the launch fails, so loading surfaces end", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    let notified = 0;
+    h.lifecycle.onLaunchScanned(() => {
+      notified += 1;
+    });
+    (h.directory.listFolders as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("directory unreadable")
+    );
+
+    await advanceUntilSettled(h.lifecycle.launch(), "the failing launch");
+    await advance(0);
+
+    expect(h.lifecycle.launchScanned()).toBe(true);
+    expect(notified).toBe(1);
+  });
+
+  it("skips a Plugin whose contributions throw and still registers the rest", async () => {
+    const contributions = await import("@/features/plugins/contributions");
+    const original = contributions.registerPluginContributions;
+    const seen: string[] = [];
+    const spy = vi.spyOn(contributions, "registerPluginContributions").mockImplementation(((source: Parameters<typeof original>[0]) => {
+      seen.push(source.manifest.id);
+      if (source.manifest.id === "bad-one") throw new Error("bad contributions");
+      return original(source);
+    }) as typeof original);
+    try {
+      const bad = makePlugin("bad-one", { lifecycle: "on-demand" });
+      const good = makePlugin("good-two", { lifecycle: "on-demand" });
+      const h = await createHarness({ approved: [bad, good] });
+      await launchAll(h);
+
+      expect(seen).toEqual(["bad-one", "good-two"]);
+      expect(h.lifecycle.installed().map((plugin) => plugin.pluginId)).toEqual(["good-two"]);
+      // The surviving Plugin still warm-starts from a surface.
+      h.lifecycle.surfaceReached("good-two", "page:report");
+      await advanceUntil(
+        () => h.lifecycle.state("good-two")?.status === "ready",
+        "good-two ready"
+      );
+      expect(h.lifecycle.state("good-two")?.status).toBe("ready");
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
 
 describe("Plugin lifecycle: host wiring defaults", () => {
@@ -1022,6 +1095,28 @@ describe("installPluginLifecycle()", () => {
     expect(installPluginLifecycle({ directory })).toBe(installed);
     resetPluginLifecycleForTests();
     expect(getPluginLifecycle()).toBeNull();
+  });
+
+  it("returns a new, non-disposed lifecycle after a reset", async () => {
+    const directory: PluginDirectoryAdapter = {
+      listFolders: async () => [],
+      readFolder: async () => null,
+    };
+    const first = installPluginLifecycle({
+      directory,
+      whenLaunchSettled: async () => undefined,
+    });
+    resetPluginLifecycleForTests();
+    const second = installPluginLifecycle({
+      directory,
+      whenLaunchSettled: async () => undefined,
+    });
+    expect(second).not.toBe(first);
+    expect(getPluginLifecycle()).toBe(second);
+    // A disposed lifecycle drops its state; the new one is usable.
+    expect(second.installed()).toEqual([]);
+    expect(second.state("absent")).toBeNull();
+    resetPluginLifecycleForTests();
   });
 });
 

@@ -2097,6 +2097,13 @@
       "remoteUiLimit": "{{name}} envió demasiados datos de interfaz y se detuvo.",
       "outOfMemory": "{{name}} usó demasiada memoria y se detuvo.",
       "crashed": "{{name}} se detuvo inesperadamente."
+    },
+    "page": {
+      "notFoundTitle": "Página del Plugin",
+      "notFoundDescription": "El Plugin de esta página no está instalado.",
+      "loadingTitle": "Cargando Plugin…",
+      "loadingDescription": "Esperando a que se carguen los Plugins.",
+      "placeholderDescription": "{{name}} está instalado. Los controles de su página llegarán con la interfaz que el host dibuja."
     }
   }
 }

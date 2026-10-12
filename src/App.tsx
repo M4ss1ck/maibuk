@@ -13,8 +13,10 @@ import { Canvas } from "@/pages/Canvas";
 import { CanvasGallery } from "@/pages/CanvasGallery";
 import { Ephemeral } from "@/pages/Ephemeral";
 import { Embed } from "@/pages/Embed";
+import { PluginPage } from "@/pages/PluginPage";
 import { StartupRedirect } from "@/components/StartupRedirect";
 import { PathTracker } from "@/components/PathTracker";
+import { PluginCommands } from "@/components/plugins/PluginCommands";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { ToastViewport } from "@/components/ui";
 import { ClickBadges, DictationLiveRegion } from "@/components/dictation";
@@ -80,6 +82,7 @@ function App() {
         <PathTracker />
         <RouteAnnouncer />
         <GlobalShortcuts />
+        <PluginCommands />
         <PaneFocusFrame />
         <CommandPalette />
         <TutorialBoundary>
@@ -91,6 +94,7 @@ function App() {
               <Route path="ephemeral" element={<Ephemeral />} />
               <Route path="metrics" element={<Metrics />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="plugin/:pluginId/:pageId" element={<PluginPage />} />
             </Route>
             {/* Full-page editors without sidebar */}
             <Route element={<FullPageScreen />}>

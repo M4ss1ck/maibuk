@@ -36,6 +36,7 @@ import { useShortcuts } from "@/lib/shortcuts";
 import { droppedTextToEditorHtml } from "@/features/markdown";
 import { useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
+import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
 
 export function NotesGallery() {
   const { t, i18n } = useTranslation();
@@ -43,6 +44,7 @@ export function NotesGallery() {
   const notes = useNoteStore((s) => s.notes);
   const loadNotes = useNoteStore((s) => s.loadNotes);
   const notesError = useNoteStore((s) => s.error);
+  const buildPluginNoteActions = usePluginItemMenuActions("note");
   const createNote = useNoteStore((s) => s.createNote);
   const updateNote = useNoteStore((s) => s.updateNote);
   const deleteNote = useNoteStore((s) => s.deleteNote);
@@ -217,6 +219,7 @@ export function NotesGallery() {
       commandId: "noteItem.delete",
       onAction: () => requestDelete(note.id),
     },
+    ...buildPluginNoteActions({ kind: "note", id: note.id }),
   ];
 
   const pendingDeleteNote = notes.find((note) => note.id === pendingDeleteId) ?? null;

@@ -2098,6 +2098,31 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-contributions",
+    area: "plugins",
+    workflow:
+      "A tracer Plugin's contributions become ordinary Maibuk surfaces: the sidebar entry opens its page (announced by its title), a global Command the Plugin declares runs from its Shortcut and reaches the Plugin's Worker, a page-scoped Command runs from its Shortcut on the Plugin page, a Chapter Item Menu entry runs with its item as the target, a target Command runs from its Shortcut while the Chapter row has focus, a Note list Item Menu entry runs with its item, and an editor toolbar button runs its Command from the keyboard, each toast proving the round trip; touch opens the page, the Item Menu entry, and the toolbar button; asserts: the sidebar entry, the page heading, the command toasts with their targets; persists: no",
+    edges: [
+      "The sidebar entry opens the Plugin page and announces its title",
+      "A global Plugin Command runs from its Shortcut and reaches the Plugin",
+      "A page-scoped Command runs from its Shortcut on the Plugin page",
+      "The Settings Plugins accordion opens its rows from the keyboard",
+      "A Chapter Item Menu entry runs with its item as the target",
+      "A target Command runs from its Shortcut while the Chapter row has focus",
+      "A Note list Item Menu entry runs with its item as the target",
+      "An editor toolbar button runs its Command from the keyboard",
+      "Touch opens the Plugin page from the navigation menu",
+      "Touch runs the Chapter Item Menu entry with its item",
+      "Touch runs the editor toolbar button",
+    ],
+    terms: ["Plugin", "Item Menu"],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId", "/book/:bookId", "/notes/:noteId", "/settings"],
+    fixture: "empty",
+    tags: ["no-webkit", "touch"],
+    status: "accepted",
+  },
+  {
     id: "settings-outline",
     area: "settings",
     workflow:

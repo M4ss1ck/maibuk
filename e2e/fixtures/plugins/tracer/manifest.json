@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "tracer",
   "name": "Tracer Fixture",
-  "description": "The E2E tracer Plugin: loads from the Plugin Directory, answers the health check, makes one broker call, and proves a direct fetch from its Worker is refused.",
+  "description": "The E2E tracer Plugin: loads from the Plugin Directory, answers the health check, contributes one of every surface (page, sidebar entry, Settings row, toolbar button, Item Menu entry, Commands), and proves a direct fetch from its Worker is refused.",
   "author": "Maibuk",
   "version": "1.0.0",
   "apiVersion": "^0.1",
@@ -13,5 +13,45 @@
   "permissions": {
     "required": [],
     "optional": []
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "openReport",
+        "label": "Open report",
+        "contexts": ["global"],
+        "navigates": true
+      },
+      {
+        "id": "report",
+        "label": "Run report",
+        "contexts": ["global"],
+        "defaults": [["Mod+Alt+r"]]
+      },
+      {
+        "id": "insights",
+        "label": "Interpret",
+        "contexts": ["report"],
+        "defaults": [["Mod+Alt+j"]]
+      },
+      {
+        "id": "tagChapter",
+        "label": "Tag chapter",
+        "contexts": ["chapterItem"],
+        "targets": ["chapter"],
+        "defaults": [["Mod+Alt+g"]]
+      },
+      {
+        "id": "tagNote",
+        "label": "Tag note",
+        "contexts": ["noteItem"],
+        "targets": ["note"]
+      }
+    ],
+    "pages": [{ "id": "report", "title": "Tracer report", "command": "openReport" }],
+    "sidebarEntries": [{ "page": "report", "icon": "book-open" }],
+    "settingsRows": [{ "id": "threshold", "label": "Report threshold" }],
+    "toolbarButtons": [{ "id": "reportButton", "command": "report", "icon": "book-open" }],
+    "itemMenuEntries": [{ "command": "tagChapter" }, { "command": "tagNote" }]
   }
 }

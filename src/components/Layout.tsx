@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { FocusScope, Overlay, useModalOverlay } from "react-aria";
 import { Dialog, RouterProvider } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
@@ -10,8 +10,14 @@ import { CommandPaletteButton } from "@/components/command-palette/CommandPalett
 import { ReleaseBadge } from "@/components/releases/ReleaseBadge";
 import { CloseIcon, MaibukLogo, ProjectsIcon, SettingsIcon } from "@/components/icons";
 import { KeyboardShortcut, ResizeHandle, Tooltip } from "@/components/ui";
+import { PluginIcon } from "@/components/plugins/PluginIcon";
+import { PluginSidebarSurfaces } from "@/components/plugins/PluginSidebarSurfaces";
 import { useRestoreFocus } from "@/hooks";
 import { useSettingsStore } from "@/features/settings/store";
+import {
+  getPluginSidebarEntries,
+  onPluginContributionsChange,
+} from "@/features/plugins/contributions-registry";
 import { MAIN_SIDEBAR_MAX_WIDTH, MAIN_SIDEBAR_MIN_WIDTH } from "@/features/settings/types";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 import { useCommandHint } from "@/lib/command-keys";
@@ -38,6 +44,11 @@ export function Layout() {
   const mainSidebarWidth = useSettingsStore((s) => s.mainSidebarWidth);
   const setMainSidebarWidth = useSettingsStore((s) => s.setMainSidebarWidth);
   const mobileDialogRef = useRef<HTMLDivElement>(null);
+  const pluginSidebarEntries = useSyncExternalStore(
+    onPluginContributionsChange,
+    getPluginSidebarEntries,
+    getPluginSidebarEntries
+  );
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
   const mobileMenuState = useMemo(
@@ -111,8 +122,21 @@ export function Layout() {
     },
   ];
 
+  // Plugin sidebar entries follow Maibuk's own, ordered by the contributions
+  // registry (Plugin name, then id, then declared order). A sidebar entry is
+  // its page's navigation Command, so it shows the same Shortcut hint as any
+  // other navigation control.
+  const pluginNavItems: typeof navigationItems = pluginSidebarEntries.map((entry) => ({
+    id: entry.pageRoute,
+    label: entry.title,
+    icon: <PluginIcon icon={entry.icon} className="w-5 h-5 shrink-0" />,
+    shortcut: entry.commandId,
+  }));
+  const allNavItems = [...navigationItems, ...pluginNavItems];
+
   const sidebarContent = (mobile: boolean) => (
     <>
+      <PluginSidebarSurfaces entries={mobile ? [] : pluginSidebarEntries} />
       <div className="px-4 border-b border-border flex flex-row items-end gap-2 justify-start">
         <MaibukLogo className="w-14 text-primary" />
         <div className="text-3xl mb-1 font-semibold">{t("app.title")}</div>
@@ -137,8 +161,8 @@ export function Layout() {
         <RouterProvider navigate={navigate} useHref={useHref}>
           <ListBox
             aria-label={t("nav.primary")}
-            items={navigationItems}
-            dependencies={[i18n.resolvedLanguage, location.pathname]}
+            items={allNavItems}
+            dependencies={[i18n.resolvedLanguage, location.pathname, pluginSidebarEntries]}
             selectionMode="none"
             className="flex flex-col gap-2"
           >

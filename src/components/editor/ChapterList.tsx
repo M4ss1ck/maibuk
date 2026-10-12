@@ -28,6 +28,7 @@ import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
 import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import type { ItemAction } from "@/components/ui";
 import { useItemCommands } from "@/hooks/useItemCommands";
+import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
 import { useShortcuts } from "@/lib/shortcuts";
 import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 import { toast } from "@/components/ui/Toast";
@@ -129,6 +130,7 @@ export function ChapterList({
   const setChapterListView = useSettingsStore((state) => state.setChapterListView);
   const showChapterOutline = useSettingsStore((state) => state.showChapterOutline);
   const setShowChapterOutline = useSettingsStore((state) => state.setShowChapterOutline);
+  const buildPluginChapterActions = usePluginItemMenuActions("chapter");
   const isCompactView = chapterListView === "compact";
   const listContainerRef = useRef<HTMLDivElement>(null);
   const onImportFilesRef = useRef(onImportFiles);
@@ -582,6 +584,7 @@ export function ChapterList({
                 commandId: "chapterItem.delete",
                 onAction: () => openDeleteConfirm(chapter.id),
               },
+              ...buildPluginChapterActions({ kind: "chapter", id: chapter.id }),
             ];
 
             return (

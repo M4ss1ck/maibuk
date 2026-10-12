@@ -246,6 +246,35 @@ function checkContributionPlatforms(
   if (new Set(platforms).size !== platforms.length) add(path, "must not list a platform twice");
 }
 
+/**
+ * A contribution's effective platforms (its own, otherwise the Plugin's) must
+ * be a subset of the effective platforms of what it references — its Command,
+ * or for a sidebar entry its page. Anything else is a surface the host would
+ * register while the Command or page it points at is filtered out on the same
+ * platform, which crashes the shell (#482). `host` names the reference in the
+ * message ("Command" or "page").
+ */
+function checkReferencePlatforms(
+  platforms: readonly string[] | undefined,
+  hostPlatforms: readonly string[] | undefined,
+  host: string,
+  path: string,
+  manifest: PluginManifest,
+  add: AddProblem
+): void {
+  const effective = platforms ?? manifest.platforms;
+  const hostEffective = hostPlatforms ?? manifest.platforms;
+  const allowed = new Set<string>(hostEffective);
+  for (const platform of effective) {
+    if (!allowed.has(platform)) {
+      add(
+        path,
+        `"${platform}" is not one of the platforms its ${host} runs on (${hostEffective.join(", ")})`
+      );
+    }
+  }
+}
+
 function collapseRenames(
   mapName: "commandRenames" | "rowRenames" | "buttonRenames",
   renames: Readonly<Record<string, string>> | undefined,
@@ -336,6 +365,7 @@ function collectProblems(manifest: PluginManifest): ManifestProblem[] {
   const itemMenuEntries = contributes?.itemMenuEntries ?? [];
   const commandById = new Map(commands.map((command) => [command.id, command]));
   const pageIds = new Set(pages.map((page) => page.id));
+  const pageById = new Map(pages.map((page) => [page.id, page]));
 
   const checkCount = <K extends keyof typeof CONTRIBUTION_LIMITS>(
     kind: K,
@@ -401,8 +431,18 @@ function collectProblems(manifest: PluginManifest): ManifestProblem[] {
     const command = commandById.get(page.command);
     if (command === undefined) {
       add(`${base}.command`, `"${page.command}" must name a declared Command`);
-    } else if (command.navigates !== true) {
-      add(`${base}.command`, `"${page.command}" must declare navigates: true to open a page`);
+    } else {
+      if (command.navigates !== true) {
+        add(`${base}.command`, `"${page.command}" must declare navigates: true to open a page`);
+      }
+      checkReferencePlatforms(
+        page.platforms,
+        command.platforms,
+        "Command",
+        `${base}.command`,
+        manifest,
+        add
+      );
     }
     checkContributionPlatforms(page.platforms, `${base}.platforms`, manifest, add);
   });
@@ -410,10 +450,20 @@ function collectProblems(manifest: PluginManifest): ManifestProblem[] {
   const seenSidebarPages = new Set<string>();
   sidebarEntries.forEach((entry, index) => {
     const base = `contributes.sidebarEntries[${index}]`;
-    if (!pageIds.has(entry.page)) {
+    const page = pageById.get(entry.page);
+    if (page === undefined) {
       add(`${base}.page`, `"${entry.page}" must name a declared page`);
     } else if (seenSidebarPages.has(entry.page)) {
       add(`${base}.page`, `duplicate sidebar entry for page "${entry.page}"`);
+    } else {
+      checkReferencePlatforms(
+        entry.platforms,
+        page.platforms,
+        "page",
+        `${base}.page`,
+        manifest,
+        add
+      );
     }
     seenSidebarPages.add(entry.page);
     const iconIssue = iconProblem(entry.icon);
@@ -434,8 +484,18 @@ function collectProblems(manifest: PluginManifest): ManifestProblem[] {
   checkDuplicateIds(toolbarButtons, "contributes.toolbarButtons", "toolbar button", add);
   toolbarButtons.forEach((button, index) => {
     const base = `contributes.toolbarButtons[${index}]`;
-    if (!commandById.has(button.command)) {
+    const command = commandById.get(button.command);
+    if (command === undefined) {
       add(`${base}.command`, `"${button.command}" must name a declared Command`);
+    } else {
+      checkReferencePlatforms(
+        button.platforms,
+        command.platforms,
+        "Command",
+        `${base}.command`,
+        manifest,
+        add
+      );
     }
     const iconIssue = iconProblem(button.icon);
     if (iconIssue !== null) add(`${base}.icon`, iconIssue);
@@ -448,13 +508,23 @@ function collectProblems(manifest: PluginManifest): ManifestProblem[] {
     const command = commandById.get(entry.command);
     if (command === undefined) {
       add(`${base}.command`, `"${entry.command}" must name a declared Command`);
-    } else if ((command.targets?.length ?? 0) === 0) {
-      add(
+    } else {
+      if ((command.targets?.length ?? 0) === 0) {
+        add(
+          `${base}.command`,
+          `"${entry.command}" must declare targets before it can join an Item Menu`
+        );
+      } else if (seenMenuCommands.has(entry.command)) {
+        add(`${base}.command`, `duplicate Item Menu entry for Command "${entry.command}"`);
+      }
+      checkReferencePlatforms(
+        entry.platforms,
+        command.platforms,
+        "Command",
         `${base}.command`,
-        `"${entry.command}" must declare targets before it can join an Item Menu`
+        manifest,
+        add
       );
-    } else if (seenMenuCommands.has(entry.command)) {
-      add(`${base}.command`, `duplicate Item Menu entry for Command "${entry.command}"`);
     }
     seenMenuCommands.add(entry.command);
     checkContributionPlatforms(entry.platforms, `${base}.platforms`, manifest, add);
