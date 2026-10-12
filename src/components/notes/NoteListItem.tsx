@@ -1,6 +1,6 @@
 import type { DragEvent, KeyboardEvent } from "react";
 import { keepRowFromActing } from "@/lib/arrow-navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import type { Note } from "@/features/notes";
@@ -141,12 +141,21 @@ export function NoteListItem({
   actions.push(...buildPluginActions({ kind: "note", id: note.id }));
   const hasActions = actions.length > 0;
   const menuAnchorRef = useRef<HTMLDivElement>(null);
+  // React Aria focuses the row around this body, so the Commands follow the row.
+  const rowRef = useRef<HTMLElement | null>(null);
   const { itemProps, setOwnerRef } = useItemContextMenu({
     onOpen: () => setIsMenuOpen(true),
     isDisabled: !hasActions || isEditing,
     anchorRef: menuAnchorRef,
   });
-  useItemCommands(menuAnchorRef, actions, { enabled: !isEditing });
+  const setBodyRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      setOwnerRef(node);
+      rowRef.current = node?.closest<HTMLElement>('[role="row"]') ?? node;
+    },
+    [setOwnerRef]
+  );
+  useItemCommands(rowRef, actions, { enabled: !isEditing });
 
   const commitTitle = () => {
     const nextTitle = draftTitle.trim();
@@ -194,7 +203,7 @@ export function NoteListItem({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      ref={setOwnerRef}
+      ref={setBodyRef}
       {...itemProps}
       className={`group relative border-l-2 py-3 pl-2 pr-3 transition-colors pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
         draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"

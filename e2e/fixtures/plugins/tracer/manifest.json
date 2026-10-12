@@ -38,7 +38,8 @@
         "id": "tagChapter",
         "label": "Tag chapter",
         "contexts": ["chapterItem"],
-        "targets": ["chapter"]
+        "targets": ["chapter"],
+        "defaults": [["Mod+Alt+g"]]
       },
       {
         "id": "tagNote",

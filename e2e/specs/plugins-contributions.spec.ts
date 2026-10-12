@@ -172,6 +172,40 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       ).toBeVisible({ timeout: 5_000 });
     });
 
+    test("a target Command runs from its Shortcut while the Chapter row has focus @wf:plugins-contributions @no-webkit", async ({
+      page,
+    }) => {
+      await page.goto("/");
+      await expect(toasts(page).filter({ hasText: "tracer ready" })).toBeVisible({
+        timeout: 15_000,
+      });
+      // Open the seeded Book from the keyboard, then wait out the notification
+      // throttle so the Command's own toast can land.
+      const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
+      await expect(card).toHaveCount(1);
+      await page.keyboard.press("1");
+      await expect(card).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
+      // Leave the editor for the Chapter list.
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(5_200);
+
+      const grid = page.getByRole("grid", { name: "Chapters" });
+      const row = grid.getByRole("row", { name: SEED_CHAPTERS[1].title });
+      await expect(row).toBeVisible();
+      await tabTo(page, grid.getByRole("row", { selected: true }));
+      await pressUntilFocused(page, "ArrowUp", row);
+      await expect(row).toBeFocused();
+
+      // No menu: the target Command's own Shortcut runs against the focused row.
+      await page.keyboard.press("ControlOrMeta+Alt+g");
+
+      await expect(
+        toasts(page).filter({ hasText: "tracer ran tagChapter on chapter" })
+      ).toBeVisible({ timeout: 5_000 });
+    });
+
     test("an editor toolbar button runs its Command from the keyboard @wf:plugins-contributions @no-webkit", async ({
       page,
     }) => {
