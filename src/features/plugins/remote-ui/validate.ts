@@ -161,6 +161,7 @@ function propertyProblem(prop: PluginUiProp, value: unknown): string | null {
     }
     case "number": {
       if (typeof value !== "number" || !Number.isFinite(value)) return "must be a number";
+      if (prop.integer === true && !Number.isInteger(value)) return "must be a whole number";
       if (prop.minimum !== undefined && value < prop.minimum) return "is below its minimum";
       if (prop.maximum !== undefined && value > prop.maximum) return "is above its maximum";
       return null;

@@ -33,8 +33,15 @@ export interface PluginUiProp {
   /** A `number` prop's bounds. */
   minimum?: number;
   maximum?: number;
+  /** A `number` prop that must be a whole number. */
+  integer?: boolean;
   /** A `string` prop that must use this format; `data-url` keeps images offline, `url` keeps links safe. */
   format?: "data-url" | "url";
+  /**
+   * Set by the SDK, never by a Plugin; omitted from the generated public types.
+   * The validator and the host still accept it, because the SDK sends it.
+   */
+  internal?: boolean;
   /** One line for the SDK reference and generated types. */
   description?: string;
 }
@@ -81,11 +88,13 @@ export interface PluginUiElement {
 
 /**
  * The reopen contract the overlays share. The host dismisses immediately, even
- * with a stopped Worker, and a batched `false`→`true` reaches it as no change,
- * so a Plugin reopens with two separate updates.
+ * with a stopped Worker. Once the Worker has handled the event, the Plugin's
+ * `isOpen` is authoritative again: the SDK carries the host's answer in the
+ * internal `openSeq` count, so a Plugin that sets `isOpen` from this handler
+ * (a batched false→true included) reopens the dialog.
  */
 const REOPEN_CONTRACT =
-  "Fires when the host dismisses or opens the dialog. The host dismisses immediately, even with a stopped Worker. To reopen after a dismissal, set `isOpen` false and then true in separate updates; a batched false\u2192true reaches the host as no change.";
+  "Fires when the host dismisses or opens the dialog. The host closes immediately, even with a stopped Worker. Once the Worker has handled this event, the Plugin's `isOpen` is authoritative again: set it from this handler. A Plugin that ignores this event and keeps `isOpen` true reopens the dialog.";
 
 /**
  * The v1 kit: structure, forms, and actions (#416, #438); organization,
@@ -659,6 +668,14 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     props: {
       title: { kind: "string", required: true, maxLength: 512 },
       isOpen: { kind: "boolean", description: "Whether the dialog is open." },
+      openSeq: {
+        kind: "number",
+        minimum: 0,
+        maximum: Number.MAX_SAFE_INTEGER,
+        integer: true,
+        internal: true,
+        description: "How many open changes the host has delivered; the host treats a newer value as the Plugin's answer.",
+      },
       children: { kind: "node" },
     },
     events: [
@@ -685,6 +702,14 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       cancelLabel: { kind: "string", maxLength: 512, description: "Defaults to the localized Cancel." },
       isDestructive: { kind: "boolean", description: "Styles the confirm action as destructive." },
       isOpen: { kind: "boolean" },
+      openSeq: {
+        kind: "number",
+        minimum: 0,
+        maximum: Number.MAX_SAFE_INTEGER,
+        integer: true,
+        internal: true,
+        description: "How many open changes the host has delivered; the host treats a newer value as the Plugin's answer.",
+      },
     },
     events: [
       { prop: "onConfirm", event: "confirm", detail: "none" },
@@ -703,6 +728,14 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       label: { kind: "string", required: true, maxLength: 512, description: "The trigger's accessible name." },
       icon: { kind: "string", maxLength: 64, description: "An optional Lucide icon name for the trigger." },
       isOpen: { kind: "boolean" },
+      openSeq: {
+        kind: "number",
+        minimum: 0,
+        maximum: Number.MAX_SAFE_INTEGER,
+        integer: true,
+        internal: true,
+        description: "How many open changes the host has delivered; the host treats a newer value as the Plugin's answer.",
+      },
       children: { kind: "node" },
     },
     events: [

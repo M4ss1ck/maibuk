@@ -281,16 +281,21 @@ describe("the Remote UI kit, part 2", () => {
   });
 
   describe("overlays", () => {
-    it("closes a modal on Escape and returns focus without a Plugin echo @ui-kbd:maibuk-modal", async () => {
+    it("closes a modal on Escape and returns focus before the Plugin answers @ui-kbd:maibuk-modal", async () => {
       harness = renderRemoteUi();
       function Plugin() {
         const [open, setOpen] = useState(false);
-        // The Plugin never answers `onOpenChange`: this is a stopped or delayed
-        // Worker, and the host must still dismiss and return focus.
+        // The host must close on Escape at once and return focus, before the
+        // Plugin's acknowledgement comes back over the Worker. The Plugin then
+        // sets `isOpen` from the event, so it stays closed.
         return (
           <>
             <ui.Button onPress={() => setOpen(true)}>Open details</ui.Button>
-            <ui.Modal title="Details" isOpen={open}>
+            <ui.Modal
+              title="Details"
+              isOpen={open}
+              onOpenChange={(event) => setOpen(event.detail)}
+            >
               <ui.Text>Modal body</ui.Text>
             </ui.Modal>
           </>
@@ -325,7 +330,7 @@ describe("the Remote UI kit, part 2", () => {
               onConfirm={() => {
                 confirmed += 1;
               }}
-              onOpenChange={() => {}}
+              onOpenChange={(event) => setOpen(event.detail)}
             />
           </>
         );
@@ -413,18 +418,17 @@ describe("the Remote UI kit, part 2", () => {
       await waitFor(() => expect(document.activeElement).toBe(trigger));
     });
 
-    it("does not reopen on a late isOpen=true the Plugin never acknowledged", async () => {
+    it("reopens a modal after Escape when the Plugin ignores onOpenChange and keeps isOpen true", async () => {
       harness = renderRemoteUi();
       function Plugin() {
         const [open, setOpen] = useState(false);
-        const [tick, setTick] = useState(0);
-        // The Plugin ignores `onOpenChange` and keeps `isOpen` true. A redraw
-        // that sends no acknowledgement must not reopen the host's dialog.
+        // The Plugin ignores `onOpenChange` and keeps `isOpen` true. Once its
+        // Worker handles the host's dismissal, the SDK's internal `openSeq`
+        // makes `isOpen` authoritative again, so the still-true `isOpen`
+        // reopens the dialog.
         return (
           <>
             <ui.Button onPress={() => setOpen(true)}>Open details</ui.Button>
-            <ui.Button onPress={() => setTick((value) => value + 1)}>Redraw</ui.Button>
-            <ui.Text>{`tick ${tick}`}</ui.Text>
             <ui.Modal title="Details" isOpen={open} onOpenChange={() => {}}>
               <ui.Text>Modal body</ui.Text>
             </ui.Modal>
@@ -437,15 +441,10 @@ describe("the Remote UI kit, part 2", () => {
       await userEvent.keyboard("{Enter}");
       expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
 
+      // Escape dismisses at once; the Worker's answer then reopens it, because
+      // the Plugin still says `isOpen` is true.
       await userEvent.keyboard("{Escape}");
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
-      // Focus is back on the trigger; Tab to Redraw and re-render with the
-      // still-true `isOpen`.
-      await userEvent.tab();
-      await userEvent.keyboard("{Enter}");
-      expect(await screen.findByText("tick 1")).toBeInTheDocument();
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
     });
 
     it("reopens a modal after the Plugin acknowledges the dismissal and asks again", async () => {
@@ -482,7 +481,7 @@ describe("the Remote UI kit, part 2", () => {
       expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
     });
 
-    it("does not reopen on a same-tick isOpen false then true (separate updates are required)", async () => {
+    it("reopens a modal on a same-tick isOpen false then true", async () => {
       harness = renderRemoteUi();
       function Plugin() {
         const [open, setOpen] = useState(false);
@@ -491,15 +490,16 @@ describe("the Remote UI kit, part 2", () => {
             <ui.Button onPress={() => setOpen(true)}>Open details</ui.Button>
             <ui.Button
               onPress={() => {
-                // Batched: the net prop is unchanged (true -> true), so the
-                // host sees no Plugin-driven update and stays closed.
+                // Batched: the net is still true. Under the new contract the
+                // Plugin's `isOpen` is authoritative again once it answers, so
+                // this reopens the host's dialog.
                 setOpen(false);
                 setOpen(true);
               }}
             >
               Reopen in one tick
             </ui.Button>
-            <ui.Modal title="Details" isOpen={open} onOpenChange={() => {}}>
+            <ui.Modal title="Details" isOpen={open} onOpenChange={(event) => setOpen(event.detail)}>
               <ui.Text>Modal body</ui.Text>
             </ui.Modal>
           </>
@@ -510,13 +510,80 @@ describe("the Remote UI kit, part 2", () => {
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
       expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+
+      // Escape: the host dismisses, the Plugin acknowledges with isOpen=false.
       await userEvent.keyboard("{Escape}");
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
       // Focus is back on the trigger; Tab to the reopen button and press it.
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+    });
+
+    it("reopens a confirmation dialog when the Plugin answers Escape with a batched false then true @ui-kbd:maibuk-confirm-dialog", async () => {
+      harness = renderRemoteUi();
+      function Plugin() {
+        const [open, setOpen] = useState(false);
+        return (
+          <>
+            <ui.Button onPress={() => setOpen(true)}>Ask</ui.Button>
+            <ui.ConfirmDialog
+              title="Delete chapter?"
+              description="This cannot be undone."
+              isOpen={open}
+              onOpenChange={(event) => {
+                // Both updates batch into one render, so the net `isOpen` the
+                // Plugin sends is unchanged (true). The SDK's internal openSeq
+                // is what tells the host the Plugin said true again.
+                setOpen(event.detail);
+                setOpen(true);
+              }}
+            />
+          </>
+        );
+      }
+      await harness.mount(<Plugin />);
+
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      expect(await screen.findByRole("alertdialog", { name: "Delete chapter?" })).toBeInTheDocument();
+
+      await userEvent.keyboard("{Escape}");
+      expect(await screen.findByRole("alertdialog", { name: "Delete chapter?" })).toBeInTheDocument();
+    });
+
+    it("reopens a modal when the Plugin answers Escape with a batched false then true @ui-kbd:maibuk-modal", async () => {
+      harness = renderRemoteUi();
+      function Plugin() {
+        const [open, setOpen] = useState(false);
+        return (
+          <>
+            <ui.Button onPress={() => setOpen(true)}>Open details</ui.Button>
+            <ui.Modal
+              title="Details"
+              isOpen={open}
+              onOpenChange={(event) => {
+                // Batched: the net `isOpen` the Plugin sends is unchanged
+                // (true), the collapsed case the host cannot see. The SDK's
+                // openSeq carries the Plugin's answer.
+                setOpen(event.detail);
+                setOpen(true);
+              }}
+            >
+              <ui.Text>Modal body</ui.Text>
+            </ui.Modal>
+          </>
+        );
+      }
+      await harness.mount(<Plugin />);
+
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+
+      await userEvent.keyboard("{Escape}");
+      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
     });
 
     it("shows a tooltip on focus @ui-kbd:maibuk-tooltip", async () => {

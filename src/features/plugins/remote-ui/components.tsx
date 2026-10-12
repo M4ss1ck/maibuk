@@ -803,22 +803,37 @@ function CodeHost({ block, children }: { block?: boolean; children?: ReactNode }
  * lets the host dismiss an overlay even when the Worker is stopped and never
  * echoes the change back.
  *
- * A Plugin that keeps `isOpen` true after a host dismissal stays closed — the
- * prop did not change, so there is nothing new to open. To reopen, the Plugin
- * acknowledges the dismissal by setting `isOpen` false (usually from its
- * `onOpenChange(false)` handler) and then sets it true again.
+ * The overlays carry an internal `openSeq` (the disclosure does not). When the
+ * Worker answers a host dismissal, the SDK bumps `openSeq` even if the Plugin's
+ * batched state nets to no change, so the host sees a newer count and re-syncs
+ * `open` to `isOpen`: the Plugin's `isOpen` is authoritative again, and a
+ * batched false→true reopens the dialog. A stopped Worker never answers, so the
+ * dialog stays closed. The counter speaks for the Plugin only when the Plugin
+ * passes `isOpen`: an uncontrolled overlay (a Popover with no `isOpen`) stays
+ * host-owned, and without an `openSeq` (the disclosure, a row) only a real
+ * `isOpen` change re-syncs, as before.
  */
 function useMirroredOpen(
   isOpen: boolean | undefined,
-  onOpenChange?: (open: boolean) => void
+  onOpenChange?: (open: boolean) => void,
+  openSeq?: number
 ): [boolean, (next: boolean) => void] {
   const [open, setOpen] = useState(isOpen ?? false);
-  const previous = useRef(isOpen);
+  const previousIsOpen = useRef(isOpen);
+  const previousOpenSeq = useRef(openSeq);
   useEffect(() => {
-    if (isOpen === previous.current) return;
-    previous.current = isOpen;
+    const isOpenChanged = isOpen !== previousIsOpen.current;
+    // `openSeq` is the answer channel of a Plugin-controlled overlay: it only
+    // speaks for the Plugin when the Plugin passes `isOpen`. An overlay with no
+    // `isOpen` (an uncontrolled Popover) stays host-owned, so its `openSeq` is
+    // ignored and only a real `isOpen` change (there is none) would re-sync.
+    const openSeqChanged =
+      openSeq !== undefined && isOpen !== undefined && openSeq !== previousOpenSeq.current;
+    if (!isOpenChanged && !openSeqChanged) return;
+    previousIsOpen.current = isOpen;
+    previousOpenSeq.current = openSeq;
     setOpen(isOpen ?? false);
-  }, [isOpen]);
+  }, [isOpen, openSeq]);
   const set = useCallback(
     (next: boolean) => {
       setOpen(next);
@@ -1072,12 +1087,13 @@ function TableRowHost({ cells }: { cells: readonly PluginUiOption[] }) {
 interface ModalHostProps {
   title: string;
   isOpen?: boolean;
+  openSeq?: number;
   children?: ReactNode;
   onOpenChange?: (open: boolean) => void;
 }
 
-function ModalHost({ title, isOpen, children, onOpenChange }: ModalHostProps) {
-  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange);
+function ModalHost({ title, isOpen, openSeq, children, onOpenChange }: ModalHostProps) {
+  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange, openSeq);
   // The host closes immediately on Escape or outside press and notifies the
   // Plugin afterwards; it never waits for the Plugin's echo to close.
   const close = useCallback(() => setOpen(false), [setOpen]);
@@ -1095,6 +1111,7 @@ interface ConfirmDialogHostProps {
   cancelLabel?: string;
   isDestructive?: boolean;
   isOpen?: boolean;
+  openSeq?: number;
   onConfirm?: () => void;
   onOpenChange?: (open: boolean) => void;
 }
@@ -1106,11 +1123,12 @@ function ConfirmDialogHost({
   cancelLabel,
   isDestructive,
   isOpen,
+  openSeq,
   onConfirm,
   onOpenChange,
 }: ConfirmDialogHostProps) {
   const { t } = useTranslation();
-  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange);
+  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange, openSeq);
   const close = useCallback(() => setOpen(false), [setOpen]);
   return (
     <Modal
@@ -1144,12 +1162,13 @@ interface PopoverHostProps {
   label: string;
   icon?: string;
   isOpen?: boolean;
+  openSeq?: number;
   children?: ReactNode;
   onOpenChange?: (open: boolean) => void;
 }
 
-function PopoverHost({ label, icon, isOpen, children, onOpenChange }: PopoverHostProps) {
-  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange);
+function PopoverHost({ label, icon, isOpen, openSeq, children, onOpenChange }: PopoverHostProps) {
+  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange, openSeq);
   const triggerRef = useRef<HTMLButtonElement>(null);
   // A non-modal popover does not return focus by itself when the host dismisses
   // it; the shared hook restores the trigger, immediately and without a Worker

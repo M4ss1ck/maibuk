@@ -9,6 +9,7 @@
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
+import { withCpuThrottle } from "../support/cpu-throttle";
 import { checkCssScopeCorpus } from "../support/css-scope-corpus";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
@@ -141,8 +142,8 @@ test.describe("Host-rendered Plugin UI kit @wf:plugins-remote-ui-kit @no-webkit"
     const dialog = page.getByRole("alertdialog", { name: "Delete chapter?" });
 
     // Escape dismisses immediately; the Plugin acknowledges through
-    // onOpenChange, so opening it again is a real reopen (the same pattern as
-    // the Modal, whose Worker never echoes).
+    // onOpenChange, so opening it again is a real reopen (the Modal echoes the
+    // same way).
     await tabTo(page, trigger);
     await page.keyboard.press("Enter");
     await expect(dialog).toBeVisible();
@@ -151,6 +152,29 @@ test.describe("Host-rendered Plugin UI kit @wf:plugins-remote-ui-kit @no-webkit"
     await expect(trigger).toBeFocused();
 
     await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
+  });
+
+  test("the confirmation dialog reopens on Escape then Enter pressed back to back", async ({
+    page,
+  }) => {
+    await openGallery(page);
+    const trigger = page.getByRole("button", { name: "Delete chapter" });
+    await expect(trigger).toBeVisible({ timeout: 15_000 });
+    const dialog = page.getByRole("alertdialog", { name: "Delete chapter?" });
+
+    await tabTo(page, trigger);
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
+
+    // Slowed down, the Escape and the Enter land before the Worker renders, so
+    // the Plugin's close then open batch into one render with an unchanged
+    // `isOpen`. The SDK's internal openSeq still reaches the host, which treats
+    // the newer count as the Plugin's answer and reopens the dialog.
+    await withCpuThrottle(page, 30, async () => {
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Enter");
+    });
     await expect(dialog).toBeVisible();
   });
 

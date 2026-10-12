@@ -163,7 +163,11 @@ function Gallery() {
         </ui.Tooltip>
       </ui.View>
 
-      <ui.Modal title="Chapter details" isOpen={modalOpen} onOpenChange={() => {}}>
+      <ui.Modal
+        title="Chapter details"
+        isOpen={modalOpen}
+        onOpenChange={(event) => setModalOpen(event.detail)}
+      >
         <ui.Text>Modal body</ui.Text>
       </ui.Modal>
       <ui.ConfirmDialog

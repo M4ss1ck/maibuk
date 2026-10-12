@@ -320,7 +320,7 @@ export interface PluginUiElementProps {
     /** Whether the dialog is open. */
     isOpen?: boolean;
     children?: ReactNode;
-    /** Fires when the host dismisses or opens the dialog. The host dismisses immediately, even with a stopped Worker. To reopen after a dismissal, set `isOpen` false and then true in separate updates; a batched false→true reaches the host as no change. */
+    /** Fires when the host dismisses or opens the dialog. The host closes immediately, even with a stopped Worker. Once the Worker has handled this event, the Plugin's `isOpen` is authoritative again: set it from this handler. A Plugin that ignores this event and keeps `isOpen` true reopens the dialog. */
     onOpenChange?: (event: { detail: boolean }) => void;
   };
   /** A confirmation dialog with a confirm and a cancel action. Keyboard-interactive. */
@@ -335,7 +335,7 @@ export interface PluginUiElementProps {
     isDestructive?: boolean;
     isOpen?: boolean;
     onConfirm?: () => void;
-    /** Fires when the host dismisses or opens the dialog. The host dismisses immediately, even with a stopped Worker. To reopen after a dismissal, set `isOpen` false and then true in separate updates; a batched false→true reaches the host as no change. */
+    /** Fires when the host dismisses or opens the dialog. The host closes immediately, even with a stopped Worker. Once the Worker has handled this event, the Plugin's `isOpen` is authoritative again: set it from this handler. A Plugin that ignores this event and keeps `isOpen` true reopens the dialog. */
     onOpenChange?: (event: { detail: boolean }) => void;
   };
   /** A trigger button that opens a small panel anchored to it. Keyboard-interactive. */
@@ -346,7 +346,7 @@ export interface PluginUiElementProps {
     icon?: string;
     isOpen?: boolean;
     children?: ReactNode;
-    /** Fires when the host dismisses or opens the dialog. The host dismisses immediately, even with a stopped Worker. To reopen after a dismissal, set `isOpen` false and then true in separate updates; a batched false→true reaches the host as no change. */
+    /** Fires when the host dismisses or opens the dialog. The host closes immediately, even with a stopped Worker. Once the Worker has handled this event, the Plugin's `isOpen` is authoritative again: set it from this handler. A Plugin that ignores this event and keeps `isOpen` true reopens the dialog. */
     onOpenChange?: (event: { detail: boolean }) => void;
   };
   /** A short hint shown on hover or focus of its child. Keyboard-interactive. */

@@ -2153,6 +2153,7 @@ export const ROWS: MatrixRow[] = [
       "The confirmation dialog cancels with Escape and returns focus",
       "The confirmation dialog confirms from the keyboard",
       "The confirmation dialog reopens after Escape",
+      "The confirmation dialog reopens on Escape then Enter pressed back to back",
       "A tooltip shows on focus",
       "The popover opens from the keyboard and closes with Escape",
       "Plugin CSS styles its surface and not Maibuk chrome",
