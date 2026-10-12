@@ -1,0 +1,28 @@
+{
+  "manifestVersion": 1,
+  "id": "approvals",
+  "name": "Approvals Fixture",
+  "description": "The E2E fixture for the Plugin approval flow (#442): declares one required and one optional Plugin Permission, a global Command that reads the focused editor (its optional permission), and a Settings row, so a spec can approve the Plugin, revoke a grant, watch it start or refuse, and see its surfaces appear and disappear.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web"],
+  "lifecycle": "persistent",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": ["library:read"],
+    "optional": ["editor:read"]
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "readEditor",
+        "label": "Approvals read editor",
+        "contexts": ["global"],
+        "defaults": [["Mod+Alt+e"]]
+      }
+    ],
+    "settingsRows": [{ "id": "kept", "label": "Approvals kept data" }]
+  }
+}

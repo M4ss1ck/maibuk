@@ -12,7 +12,9 @@ import {
   PLUGIN_APPROVALS_STORAGE_KEY,
   serializePluginApprovals,
 } from "@/features/plugins/approvals";
-import { hashPluginDirectory } from "@/features/plugins/directory-hash";
+import { E2E_BUILTIN_PLUGINS_STORAGE_KEY } from "@/features/plugins/builtin";
+import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
+import type { PluginApproval, PluginFolderFile, PluginManifest } from "@/features/plugins/types";
 import { PASTE_CLEANUP_PRESETS, type PasteCleanupPreset } from "@/features/settings/types";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
 import type { SeedName } from "./seed/libraries";
@@ -24,8 +26,60 @@ export type LibrarySeed = SeedName | "empty";
 /** `dismissed`: the first-launch Tutorial offer was already answered "Not now". */
 export type TutorialProgressSeed = "dismissed" | "clean";
 
-/** A fixture Plugin the seed writes into the web Plugin Directory (OPFS). */
-export type PluginSeed = "tracer" | "remote-ui";
+/**
+ * A fixture Plugin the seed can write into the web Plugin Directory (OPFS). The
+ * `tracer` and `approvals` folders are committed and used as-is; `remote-ui` is
+ * built from source at global setup.
+ */
+export type PluginSeed = "tracer" | "remote-ui" | "approvals";
+
+/** A seeded folder with files overridden (path -> UTF-8 text), never committed. */
+export interface PluginSeedOverride {
+  name: PluginSeed;
+  /** Replaces or adds files by POSIX-relative path, e.g. a changed manifest. */
+  files?: Record<string, string>;
+}
+
+/**
+ * The approval record the seed writes for a Plugin, matching the v2 payload
+ * (#442). Omitted fields default from the seeded folder and the fixture, so a
+ * spec states only what it changes: a stale pin (changed files), a grant list,
+ * a permission snapshot (a permission that became required), or a Built-in
+ * shipped hash.
+ */
+export interface PluginApprovalSeed {
+  pluginId: string;
+  /** The pinned `h1:`; defaults to the folder's own hash. A stale value means changed files. */
+  pinnedHash?: string;
+  /** The granted Plugin Permissions; defaults to none. */
+  granted?: string[];
+  /** Whether the Plugin starts; defaults to true. */
+  enabled?: boolean;
+  /** The approved manifest version; defaults to the folder manifest's version. */
+  approvedVersion?: string;
+  /** The permission snapshot; defaults to the folder manifest's permissions. */
+  approvedPermissions?: { required: string[]; optional: string[] };
+  /** The approved per-file digests; defaults to the folder's own. */
+  approvedFiles?: Record<string, string>;
+  /** Replaces this path's approved digest, so a re-review shows it Changed. */
+  changedFile?: string;
+  /** Present for a Built-in Plugin; the shipped copy its record pins. */
+  builtIn?: { shippedHash: string; keptModifiedHash?: string };
+  /** The changed-files hash already notified, so it never notifies again. */
+  notifiedHash?: string;
+  /** The shipped hash already offered, so it never prompts again. */
+  notifiedBuiltInHash?: string;
+}
+
+/**
+ * A Built-in Plugin the E2E lane injects (the seam `createBuiltInPluginSource`
+ * reads). `id` must name a seeded folder; the manifest is read from it.
+ */
+export interface BuiltInPluginSeed {
+  id: PluginSeed;
+  /** The shipped copy's `h1:` hash the source reports. */
+  hash: string;
+}
 
 const PLUGIN_FIXTURES_DIR = resolve(REPO_ROOT, "e2e/fixtures/plugins");
 /** The source-built fixture Plugins `buildPluginFixtures` leaves at global setup. */
@@ -40,43 +94,107 @@ interface PluginSeedData {
   pinnedHash: string;
 }
 
-async function readPluginSeed(name: PluginSeed): Promise<PluginSeedData> {
+async function readPluginSeed(
+  seed: PluginSeed | PluginSeedOverride
+): Promise<PluginSeedData> {
+  const name = typeof seed === "string" ? seed : seed.name;
+  const overrides = typeof seed === "string" ? undefined : seed.files;
   // `tracer` is committed and used as-is, pinned by its committed
-  // `tracer.expected.json`. `remote-ui` is built from source at global setup, so
-  // its pin is computed from the built bytes the app will hash from OPFS.
-  const { dir, pinnedHash } =
+  // `tracer.expected.json`. `approvals` is committed without a pinned file:
+  // its folder hash is computed here, so a single fixture serves approved,
+  // changed, and Built-in seeds. `remote-ui` is built from source at global
+  // setup, so its pin is computed from the built bytes the app will hash.
+  const dir =
+    name === "remote-ui"
+      ? await builtPluginSeed(name)
+      : { dir: resolve(PLUGIN_FIXTURES_DIR, name) };
+  let files = readFolderFiles(dir.dir);
+  if (overrides !== undefined) {
+    files = files.filter((file) => !(file.path in overrides));
+    for (const [path, text] of Object.entries(overrides)) {
+      files.push({ path, bytes: new TextEncoder().encode(text) });
+    }
+  }
+  const pinnedHash =
     name === "tracer"
-      ? {
-          dir: resolve(PLUGIN_FIXTURES_DIR, name),
-          pinnedHash: (
-            JSON.parse(
-              readFileSync(resolve(PLUGIN_FIXTURES_DIR, `${name}.expected.json`), "utf8")
-            ) as { hash: string }
-          ).hash,
-        }
-      : await builtPluginSeed(name);
-  const files = readFolderFiles(dir).map((file) => ({
-    path: file.path,
-    base64: Buffer.from(file.bytes).toString("base64"),
-  }));
-  return { name, files, pinnedHash };
+      ? (
+          JSON.parse(
+            readFileSync(resolve(PLUGIN_FIXTURES_DIR, `${name}.expected.json`), "utf8")
+          ) as { hash: string }
+        ).hash
+      : await hashPluginDirectory(files);
+  return {
+    name,
+    files: files.map((file) => ({
+      path: file.path,
+      base64: Buffer.from(file.bytes).toString("base64"),
+    })),
+    pinnedHash,
+  };
 }
 
 /** The folder and pinned hash of a source-built fixture Plugin under `.output`. */
-async function builtPluginSeed(name: PluginSeed): Promise<{ dir: string; pinnedHash: string }> {
+async function builtPluginSeed(name: PluginSeed): Promise<{ dir: string }> {
   const dir = resolve(PLUGIN_BUILD_DIR, name);
   if (!existsSync(dir)) {
     throw new Error(
       `the built fixture Plugin "${name}" is missing at ${dir}; run the E2E global setup`
     );
   }
-  return { dir, pinnedHash: await hashPluginDirectory(readFolderFiles(dir)) };
+  return { dir };
+}
+
+/** The decoded files of one seeded fixture folder, for building an approval record. */
+function seedFolderFiles(seed: PluginSeedData): PluginFolderFile[] {
+  return seed.files.map((file) => ({
+    path: file.path,
+    bytes: Uint8Array.from(atob(file.base64), (char) => char.charCodeAt(0)),
+  }));
+}
+
+function manifestOf(seed: PluginSeedData): PluginManifest {
+  const file = seed.files.find((entry) => entry.path === "manifest.json");
+  if (!file) throw new Error(`fixture Plugin "${seed.name}" has no manifest.json`);
+  return JSON.parse(Buffer.from(file.base64, "base64").toString("utf8")) as PluginManifest;
+}
+
+/**
+ * Builds one approval record from the seed's defaults and the folder's own
+ * bytes, then applies the spec's overrides. The per-file snapshot defaults to
+ * the folder's digests, so a stale `pinnedHash` alone reads as "files changed".
+ */
+async function buildApproval(seed: PluginSeedData, overrides: PluginApprovalSeed): Promise<PluginApproval> {
+  const files = seedFolderFiles(seed);
+  const manifest = manifestOf(seed);
+  const digests = Object.fromEntries(await pluginFileDigests(files));
+  const approvedFiles = { ...(overrides.approvedFiles ?? digests) };
+  if (overrides.changedFile !== undefined) {
+    approvedFiles[overrides.changedFile] = "0".repeat(64);
+  }
+  return {
+    pluginId: overrides.pluginId,
+    pinnedHash: overrides.pinnedHash ?? seed.pinnedHash,
+    granted: (overrides.granted ?? []) as PluginApproval["granted"],
+    enabled: overrides.enabled ?? true,
+    approvedVersion: overrides.approvedVersion ?? manifest.version,
+    approvedPermissions:
+      overrides.approvedPermissions ?? {
+        required: [...manifest.permissions.required],
+        optional: [...manifest.permissions.optional],
+      },
+    approvedFiles,
+    ...(overrides.builtIn !== undefined ? { builtIn: overrides.builtIn } : {}),
+    ...(overrides.notifiedHash !== undefined ? { notifiedHash: overrides.notifiedHash } : {}),
+    ...(overrides.notifiedBuiltInHash !== undefined
+      ? { notifiedBuiltInHash: overrides.notifiedBuiltInHash }
+      : {}),
+  };
 }
 
 /**
  * Writes the seed into the web adapter's IndexedDB store, the Tutorial
  * progress into localStorage, and any fixture Plugins into the web Plugin
- * Directory (OPFS) with the approval record the runtime reads, from a blank
+ * Directory (OPFS) with the approval records the runtime reads, from a blank
  * same-origin page, before any app code runs. The page is left on the blank
  * page; the spec navigates.
  */
@@ -86,15 +204,44 @@ export async function prepareDevice(
     library,
     tutorial,
     plugins = [],
-  }: { library: LibrarySeed; tutorial: TutorialProgressSeed; plugins?: PluginSeed[] }
+    unapprovedPlugins = [],
+    pluginApprovals = [],
+    builtInPlugins = [],
+  }: {
+    library: LibrarySeed;
+    tutorial: TutorialProgressSeed;
+    plugins?: (PluginSeed | PluginSeedOverride)[];
+    /** Folders seeded with no approval record at all (installed but unapproved). */
+    unapprovedPlugins?: PluginSeed[];
+    /** Approval records written as declared, overriding the default per Plugin. */
+    pluginApprovals?: PluginApprovalSeed[];
+    /** Built-in Plugins the E2E seam reports for the seeded folders. */
+    builtInPlugins?: BuiltInPluginSeed[];
+  }
 ): Promise<void> {
   const bytes =
     library === "empty"
       ? null
       : (await readFile(resolve(SEED_DIR, `${library}.sqlite`))).toString("base64");
-  const seeds = await Promise.all(plugins.map(readPluginSeed));
-  const approvals = serializePluginApprovals(
-    seeds.map((seed) => ({
+  const seeds = await Promise.all(
+    [...plugins, ...unapprovedPlugins].map((seed) => readPluginSeed(seed))
+  );
+  const byId = new Map(seeds.map((seed) => [seed.name, seed]));
+  const custom = new Map(pluginApprovals.map((approval) => [approval.pluginId, approval]));
+  const unapproved = new Set(unapprovedPlugins);
+
+  const approvals: PluginApproval[] = [];
+  for (const seed of seeds) {
+    if (unapproved.has(seed.name)) continue;
+    const override = custom.get(seed.name);
+    if (override !== undefined) {
+      approvals.push(await buildApproval(seed, override));
+      custom.delete(seed.name);
+      continue;
+    }
+    // A folder seeded without a spec record keeps the historic shape: enabled
+    // and pinned to the current bytes, no grants (`plugins: ["tracer"]`).
+    approvals.push({
       pluginId: seed.name,
       pinnedHash: seed.pinnedHash,
       granted: [],
@@ -102,15 +249,37 @@ export async function prepareDevice(
       approvedVersion: "",
       approvedPermissions: { required: [], optional: [] },
       approvedFiles: {},
-    }))
-  );
+    });
+  }
+  const orphan = [...custom.keys()][0];
+  if (orphan !== undefined) {
+    throw new Error(`plugin approval seed "${orphan}" names no seeded (approved) Plugin folder`);
+  }
+  const serialized = serializePluginApprovals(approvals);
+
+  const builtIns = builtInPlugins.map((entry) => {
+    const seed = byId.get(entry.id);
+    if (seed === undefined) {
+      throw new Error(`built-in "${entry.id}" names no seeded Plugin folder`);
+    }
+    return { id: entry.id, manifest: manifestOf(seed), hash: entry.hash };
+  });
 
   await page.route(`**${BLANK_PATH}`, (route) =>
     route.fulfill({ contentType: "text/html", body: "<!doctype html><title>e2e</title>" })
   );
   await page.goto(BLANK_PATH);
   await page.evaluate(
-    async ({ bytes, dismissed, seeds, approvals, approvalsKey, directoryName }) => {
+    async ({
+      bytes,
+      dismissed,
+      seeds,
+      approvals,
+      approvalsKey,
+      directoryName,
+      builtIns,
+      builtInsKey,
+    }) => {
       if (dismissed) {
         const progress = {
           dismissedAt: 1,
@@ -144,6 +313,9 @@ export async function prepareDevice(
         }
         localStorage.setItem(approvalsKey, approvals);
       }
+      if (builtIns.length > 0) {
+        localStorage.setItem(builtInsKey, JSON.stringify({ version: 1, plugins: builtIns }));
+      }
       if (bytes === null) return;
       const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
       await new Promise<void>((resolve, reject) => {
@@ -165,9 +337,11 @@ export async function prepareDevice(
       bytes,
       dismissed: tutorial === "dismissed",
       seeds,
-      approvals,
+      approvals: serialized,
       approvalsKey: PLUGIN_APPROVALS_STORAGE_KEY,
       directoryName: WEB_PLUGIN_DIRECTORY_NAME,
+      builtIns,
+      builtInsKey: E2E_BUILTIN_PLUGINS_STORAGE_KEY,
     }
   );
   await page.unroute(`**${BLANK_PATH}`);

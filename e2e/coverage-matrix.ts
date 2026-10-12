@@ -20,13 +20,6 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "none: nothing to test",
   },
   {
-    kind: "term",
-    items: ["Built-in Plugin", "Plugin Permission"],
-    reason:
-      "Decided, not built (ADR 0019, ADR 0020): the Plugins section exists but the Built-in list is empty and permissions land with the install flow (#442)",
-    owner: "Plugin platform v1 implementation (#425) replaces this with rows",
-  },
-  {
     kind: "behavior",
     items: ["Plugin tracer on Playwright WebKit"],
     reason:
@@ -2082,6 +2075,26 @@ export const ROWS: MatrixRow[] = [
     routes: ["/settings"],
     fixture: "empty",
     tags: [],
+    status: "accepted",
+  },
+  {
+    id: "plugins-approvals",
+    area: "plugins",
+    workflow:
+      "A Plugin installed but not approved is approved from Settings → Plugins by keyboard: Review and enable opens the permission dialog, the required Plugin Permission is locked and labelled Required to enable this Plugin, and Approve this copy and enable starts it (its Worker reports that it ran); revoking an optional grant leaves it enabled while the next call is refused, and revoking a required grant disables and stops it; a copy whose files changed never runs before review — one notification with Review, a Review required row, the per-file diff, then an approve that starts it; a copy where an optional permission became required shows Now required, locked; a modified Built-in Plugin with a newer shipped hash offers Update available and Keep my copy, which keeps the badge and never prompts again after a reload; asserts: the permission labels and lock, the fixture's start and refusal reports, the row states, the notice text, the per-file diff; persists: yes (device-local approvals)",
+    edges: [
+      "An installed but unapproved Plugin is approved from the permission dialog and starts",
+      "Revoking an optional grant keeps the Plugin enabled and the next call is refused",
+      "Revoking a required grant disables the Plugin and unregisters its surfaces",
+      "A changed copy never runs before review, notifies once with Review, and starts after the per-file diff is approved",
+      "A permission that became required shows Now required, locked",
+      "A modified Built-in with a newer shipped hash offers Update available; Keep my copy keeps the badge and never prompts again after a reload",
+    ],
+    terms: ["Plugin", "Plugin Permission", "Built-in Plugin"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "empty",
+    tags: ["no-webkit"],
     status: "accepted",
   },
   {
