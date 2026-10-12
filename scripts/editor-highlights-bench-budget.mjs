@@ -6,14 +6,17 @@
 //
 //   node scripts/editor-highlights-bench-budget.mjs <bench.json>
 //
-// Vitest bench reports no p95 field, so the check uses p99 instead; a p99
-// inside the 16 ms frame interval is stricter than the spec's p95.
+// Vitest bench reports no p95 field, so the check uses p99 instead. Two
+// budgets: the keystroke's 16 ms frame interval and the highlight update's
+// 10 ms #401 Echoes main-thread budget.
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 /** p99 budgets in milliseconds, by benchmark name prefix (issue #441). */
 export const BUDGETS_MS = {
   "keystroke with highlights:": 16,
+  // Host share of the update; jsdom overstates the getContent DOMPurify pass ~15x, so the end-to-end update is measured in bench:frames (#403).
+  "highlight update:": 10,
 };
 
 export function checkBudgets(report) {

@@ -1,10 +1,11 @@
 /**
  * The long Chapter the Plugin highlight budget is measured on (#401): the
  * `perfLongChapter` seed's shape, 300 paragraphs and 19771 words by countWords,
- * generated from a fixed seed so every run measures the same document. The
- * frame-rate lane's seed (`e2e/support/seed/perf-libraries.ts`) is the same
- * document; this copy is free of app and platform imports so a unit test or a
- * bench can build it without a Library.
+ * generated from a fixed seed so every run measures the same document. This
+ * module is the single source, never a separate copy: the frame-rate lane's
+ * seed (`e2e/support/seed/perf-libraries.ts`) imports `longChapterHtml` from
+ * here. It has no app or platform imports, so a unit test, a bench, and the
+ * seed can all build it.
  */
 
 import type { PluginHighlightRange } from "@/features/plugins/types";
