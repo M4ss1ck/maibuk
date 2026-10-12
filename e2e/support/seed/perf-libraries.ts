@@ -10,47 +10,8 @@ import { createCanvasRow, updateCanvasDocRow } from "@/features/canvas/write";
 import { CURRENT_CANVAS_SCHEMA_VERSION, type CanvasDoc } from "@/features/canvas/types";
 import { createChapterRow, updateChapterRow } from "@/features/chapters/write";
 import { createNoteRow } from "@/features/notes/write";
+import { longChapterHtml, random, sentence } from "@/test/support/long-chapter";
 import { PERF_BOOK, PERF_CANVAS, PERF_MANY_CHAPTERS_BOOK, PERF_NOTES, PERF_SIZES } from "./names";
-
-const WORDS =
-  "the lamp held through the long gale while salt spray hissed on hot glass and the keeper counted every slow turn of the lens until grey dawn found the harbor quiet again with gulls crying over broken rope and tide pools full of cold light".split(
-    " "
-  );
-
-/** Park-Miller: the same sequence on every build. */
-function random(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state = (state * 48271) % 2147483647;
-    return state / 2147483647;
-  };
-}
-
-function sentence(next: () => number): string {
-  const length = 8 + Math.floor(next() * 14);
-  const words = Array.from({ length }, () => WORDS[Math.floor(next() * WORDS.length)]);
-  words[0] = words[0][0].toUpperCase() + words[0].slice(1);
-  return `${words.join(" ")}.`;
-}
-
-function paragraph(next: () => number): string {
-  const count = 3 + Math.floor(next() * 4);
-  return Array.from({ length: count }, () => sentence(next)).join(" ");
-}
-
-/** A long Chapter's HTML: paragraphs with a heading and a list now and then. */
-export function longChapterHtml(): string {
-  const next = random(372);
-  const blocks: string[] = [];
-  for (let i = 0; i < PERF_SIZES.longChapterParagraphs; i++) {
-    if (i % 40 === 0) blocks.push(`<h2>Watch ${i / 40 + 1}</h2>`);
-    if (i % 55 === 27) {
-      blocks.push(`<ul>${[0, 1, 2].map(() => `<li><p>${sentence(next)}</p></li>`).join("")}</ul>`);
-    }
-    blocks.push(`<p>${paragraph(next)}</p>`);
-  }
-  return blocks.join("");
-}
 
 async function perfLongChapter(): Promise<void> {
   const book = await createBookRow({ ...PERF_BOOK }, "local");

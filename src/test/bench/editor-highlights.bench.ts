@@ -1,5 +1,5 @@
 // Periodic lane for Plugin editor highlights (#441, #396). The #401 budget
-// measures the long Chapter (`perfLongChapter`, 19,449 words) with ~500
+// measures the long Chapter (`perfLongChapter`, 19771 words by countWords) with ~500
 // highlights from Echoes; a keystroke there must map the stored decorations,
 // never rebuild them. Run `pnpm bench:editor-highlights`;
 // scripts/editor-highlights-bench-budget.mjs fails the run when the p99 budget

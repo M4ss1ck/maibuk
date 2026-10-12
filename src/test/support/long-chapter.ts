@@ -1,6 +1,6 @@
 /**
  * The long Chapter the Plugin highlight budget is measured on (#401): the
- * `perfLongChapter` seed's shape, 300 paragraphs and about 19,449 words,
+ * `perfLongChapter` seed's shape, 300 paragraphs and 19771 words by countWords,
  * generated from a fixed seed so every run measures the same document. The
  * frame-rate lane's seed (`e2e/support/seed/perf-libraries.ts`) is the same
  * document; this copy is free of app and platform imports so a unit test or a
@@ -15,7 +15,7 @@ const WORDS =
   );
 
 /** Park-Miller: the same sequence on every build. */
-function random(seed: number): () => number {
+export function random(seed: number): () => number {
   let state = seed;
   return () => {
     state = (state * 48271) % 2147483647;
@@ -23,7 +23,7 @@ function random(seed: number): () => number {
   };
 }
 
-function sentence(next: () => number): string {
+export function sentence(next: () => number): string {
   const length = 8 + Math.floor(next() * 14);
   const words = Array.from({ length }, () => WORDS[Math.floor(next() * WORDS.length)]);
   words[0] = words[0][0].toUpperCase() + words[0].slice(1);
@@ -35,7 +35,7 @@ function paragraph(next: () => number): string {
   return Array.from({ length: count }, () => sentence(next)).join(" ");
 }
 
-/** `perfLongChapter`'s long Chapter: 300 paragraphs, about 19,449 words. */
+/** `perfLongChapter`'s long Chapter: 300 paragraphs, 19771 words by countWords. */
 export const LONG_CHAPTER_PARAGRAPHS = 300;
 
 /** The ~500 ranges the Echoes budget places on a long Chapter (#401, #403). */
