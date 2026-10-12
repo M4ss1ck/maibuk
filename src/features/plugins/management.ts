@@ -25,9 +25,11 @@ import { create } from "zustand";
 import {
   approveBuiltInCopy,
   approvePluginCopy,
+  clearStartupError,
   disablePlugin,
   enablePlugin,
   getPluginApproval,
+  recordStartupError,
   revokePermission,
   savePluginApproval,
 } from "@/features/plugins/approvals";
@@ -36,7 +38,6 @@ import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/direc
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { planPluginModules } from "@/features/plugins/modules";
 import { reviewPluginCopy } from "@/features/plugins/review";
-import { startupErrorValue } from "@/features/plugins/startup-error";
 import type {
   BuiltInPlugin,
   PluginActivationResult,
@@ -249,26 +250,17 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
     /**
      * Records a startup failure on the approval record, or clears a stale one
      * on a successful start, so Settings shows the last error until the Plugin
-     * runs again (#442).
+     * runs again (#442). The two writes are the shared approvals helpers.
      */
     async function applyStartResult(
       pluginId: string,
       result: PluginActivationResult
     ): Promise<void> {
-      const approval = getPluginApproval(pluginId);
-      if (!approval) return;
       if (!result.ok) {
-        const message = startupErrorValue(result.refusal);
-        if (message !== null && approval.startupError !== message) {
-          savePluginApproval({ ...approval, startupError: message });
-        }
+        recordStartupError(pluginId, result.refusal);
         return;
       }
-      if (approval.startupError !== undefined) {
-        const cleared: PluginApproval = { ...approval };
-        delete cleared.startupError;
-        savePluginApproval(cleared);
-      }
+      clearStartupError(pluginId);
     }
 
     /** Stops watching the Plugin Directory and drops any pending reload. */
@@ -473,7 +465,19 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           }
         }
         set({ plugins });
-        for (const { pluginId, hash } of changed) get().notifyChanged(pluginId, hash);
+        if (isDevelopmentMode()) {
+          // Development mode at launch: a copy that changed while the app was
+          // closed goes through the dev reload policy — a completed build is
+          // re-pinned and started, a partial one is left alone — instead of a
+          // change notification (#442, plan decision 6).
+          for (const entry of Object.values(plugins)) {
+            if (entry.review.status === "review-required") {
+              await reloadDevelopmentCopy(entry.pluginId);
+            }
+          }
+        } else {
+          for (const { pluginId, hash } of changed) get().notifyChanged(pluginId, hash);
+        }
         for (const { pluginId, name, hash } of available) {
           notifyBuiltInUpdate(pluginId, name, hash);
         }
@@ -481,7 +485,20 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
 
       async approve(pluginId, optionalGranted = []) {
         const copy = await readCopy(pluginId);
-        if (!copy) return;
+        if (!copy) return { ok: false, reason: "copy-unavailable" };
+        const current = getPluginApproval(pluginId);
+        const review = reviewPluginCopy({
+          approval: current,
+          digests: copy.digests,
+          hash: copy.hash,
+          manifest: copy.manifest,
+        });
+        // Only a copy that matches the author's pin may be approved here. A
+        // changed copy must be reviewed through `markReviewed` (the dialog), so
+        // an inline permission toggle can never re-pin and start it (#442).
+        if (review.status === "review-required") {
+          return { ok: false, reason: "review-required" };
+        }
         const approval = approvePluginCopy(copy.manifest, copy.hash, copy.digests, optionalGranted);
         const builtIn = (await listBuiltIns()).get(pluginId);
         // A Built-in keeps its shipped record through a re-approval.
@@ -489,6 +506,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         savePluginApproval(approval);
         applyApproval(pluginId, copy, approval, builtIn);
         await start(pluginId);
+        return { ok: true };
       },
 
       async revoke(pluginId, permission: PluginPermissionId) {

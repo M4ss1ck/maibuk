@@ -226,6 +226,11 @@ Clearing everything in the Library on this device, including history, sync state
 _UI_: en "Reset Library" / es "Reiniciar biblioteca"
 _Avoid_: wipe, factory reset
 
+**Reset settings**:
+Returning Maibuk's custom settings, Custom Shortcuts, custom Voice Commands, enabled preferences, Plugin approvals, and saved Plugin credentials to their defaults on this device; installed Plugin files and Library data stay.
+_UI_: en "Reset settings", "Reset settings and delete credentials" / es "Reiniciar ajustes", "Reiniciar ajustes y borrar credenciales"
+_Avoid_: wipe, factory reset
+
 **Compare**:
 Viewing the differences between a Version and the current Book.
 _Avoid_: diff

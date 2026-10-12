@@ -2141,6 +2141,8 @@
       "revokeRequired": "Desactivar Plugin y revocar acceso",
       "requiredMissing": "Falta un permiso obligatorio. Revísalo y apruébalo para activar este Plugin.",
       "responsibility": "Activa solo Plugins en los que confíes. Eres responsable de lo que instalas. Esta revisión muestra el acceso solicitado; no verifica el código del Plugin.",
+      "first": "Debes aceptar los permisos obligatorios para activar este Plugin. Los opcionales se pueden denegar. No se concede acceso hasta que apruebes.",
+      "grantIntro": "Los permisos opcionales se pueden cambiar por separado. Revocar un permiso obligatorio desactiva este Plugin. Para volver a activarlo debes aprobar ese acceso.",
       "frame": "Interfaz personalizada: Maibuk no ha verificado su accesibilidad. El soporte de teclado y lectores de pantalla puede variar.",
       "process": "Ejecutar programas en tu equipo",
       "processDetail": "Los programas pueden leer o modificar archivos y acceder a la red fuera de los permisos de Biblioteca de Maibuk. Solo en escritorio. La API de Terminal aún se está definiendo.",

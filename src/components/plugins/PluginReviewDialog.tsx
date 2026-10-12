@@ -16,12 +16,12 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { PluginPermissionList } from "@/components/plugins/PluginPermissionList";
 import {
   pluginPermissionCopy,
   type PermissionTranslate,
 } from "@/components/plugins/plugin-permission-copy";
 import { Button } from "@/components/ui/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
 import { Modal } from "@/components/ui/Modal";
 import type {
   PluginManagementEntry,
@@ -125,37 +125,23 @@ export function PluginReviewDialog({
         {noChanges && (
           <p className="mt-1 text-sm text-muted-foreground">{t("plugins.noChanges")}</p>
         )}
-        {declared.map((permission) => {
-          const isRequired = required.includes(permission);
-          const checked = isRequired || chosen.includes(permission);
-          const copy = pluginPermissionCopy(permission, translate);
-          const labelKey = changeLabelKey(permission, review.permissions);
-          const label = `${copy.title} · ${t(
-            isRequired ? "plugins.permissions.requiredLabel" : "plugins.permissions.optionalLabel"
-          )}${labelKey !== null ? ` · ${translate(labelKey)}` : ""}`;
-          return (
-            <div key={permission} className="border-b border-border py-3 last:border-b-0">
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  checked={checked}
-                  disabled={isRequired}
-                  label={label}
-                  onChange={(next) => {
-                    if (isRequired) return;
-                    setSelection((current) => {
-                      const base = current ?? optional;
-                      return next
-                        ? [...base, permission]
-                        : base.filter((entry) => entry !== permission);
-                    });
-                  }}
-                />
-                <span className="font-medium">{label}</span>
-              </div>
-              <p className="mt-1 pl-6 text-sm text-muted-foreground">{copy.detail}</p>
-            </div>
-          );
-        })}
+        <PluginPermissionList
+          declared={declared}
+          required={required}
+          checked={(permission) => required.includes(permission) || chosen.includes(permission)}
+          onToggle={(permission, next) =>
+            setSelection((current) => {
+              const base = current ?? optional;
+              return next
+                ? [...base, permission]
+                : base.filter((entry) => entry !== permission);
+            })
+          }
+          labelSuffix={(permission) => {
+            const labelKey = changeLabelKey(permission, review.permissions);
+            return labelKey === null ? null : translate(labelKey);
+          }}
+        />
         {review.permissions.removed.length > 0 && (
           <ul className="mt-2 space-y-1">
             {review.permissions.removed.map((change) => {

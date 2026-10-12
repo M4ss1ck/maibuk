@@ -98,7 +98,7 @@ beforeEach(() => {
     plugins: {},
     notifications: [],
     refresh: async () => {},
-    approve: async () => {},
+    approve: async () => ({ ok: true }),
     revoke: async () => {},
     enable: async () => {},
     disable: () => {},
@@ -169,6 +169,7 @@ describe("PluginsSection", () => {
           },
         };
       });
+      return { ok: true as const };
     });
     usePluginManagementStore.setState({ approve });
     render(<PluginsSection />);
@@ -181,6 +182,12 @@ describe("PluginsSection", () => {
     const approveButton = await screen.findByRole("button", {
       name: "Approve this copy and enable",
     });
+    // The prototype's "first" copy frames the decision above the permission rows.
+    expect(
+      screen.getByText(
+        "Required permissions must be accepted to enable this Plugin. Optional permissions can stay off. No access is granted until you approve."
+      )
+    ).toBeInTheDocument();
     await tabTo(user, approveButton);
     await user.keyboard("{Enter}");
 
@@ -235,6 +242,31 @@ describe("PluginsSection", () => {
     expect(disable).not.toHaveBeenCalled();
     await waitFor(() => expect(optional).not.toBeChecked());
     expect(screen.getByText("Enabled")).toBeInTheDocument();
+  });
+
+  it("locks the inline permission toggles on a copy that needs review", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({
+          permissions: { required: ["library:read"], optional: ["network:api.example.com"] },
+        }),
+        approval: approval({ granted: ["library:read"], enabled: false }),
+        review: review({ status: "review-required" }),
+      })
+    );
+    const approve = vi.fn(async () => ({ ok: true as const }));
+    usePluginManagementStore.setState({ approve });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const optional = screen.getByRole("checkbox", {
+      name: "Connect to api.example.com · Optional",
+    });
+    // A changed copy must be reviewed first: the inline toggle is not operable.
+    expect(optional).toBeDisabled();
+    await user.keyboard(" ");
+    expect(approve).not.toHaveBeenCalled();
   });
 
   it("revoking a required permission disables the Plugin and shows requiredMissing", async () => {

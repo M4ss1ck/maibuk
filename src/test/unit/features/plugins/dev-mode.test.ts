@@ -191,6 +191,45 @@ describe("Plugin development mode: completed build", () => {
   });
 });
 
+describe("Plugin development mode: launch reload", () => {
+  it("reloads a copy that changed while the app was closed", async () => {
+    const h = await setup();
+    // The author edited the files while the app was closed: the launch scan
+    // finds a copy its pin no longer matches.
+    const next = pluginFolder(
+      { "index.js": "export const a = 2;" },
+      { id: ID, name: ID, version: "1.1.0" }
+    );
+    h.dir.setFolder(next);
+
+    await h.lifecycle.launch();
+    expect(h.frames).toHaveLength(0);
+
+    // The dev-launch step picks the completed build up: re-pinned and started.
+    await h.store.getState().refresh();
+
+    expect(h.frames).toHaveLength(1);
+    expect(h.lifecycle.state(ID)?.status).toBe("ready");
+    expect(getPluginApproval(ID)?.pinnedHash).toBe(await hashPluginDirectory(next.files));
+    expect(h.store.getState().plugins[ID].review.status).toBe("approved");
+  });
+
+  it("does not load a partial build at launch", async () => {
+    const h = await setup();
+    // A half-written build: the manifest is valid but its entry file is gone.
+    h.dir.setFolder(
+      sourceFolder({ "manifest.json": JSON.stringify({ ...PLUGIN_MANIFEST, id: ID, name: ID }) })
+    );
+
+    await h.lifecycle.launch();
+    await h.store.getState().refresh();
+
+    expect(h.frames).toHaveLength(0);
+    expect(h.store.getState().plugins[ID].review.status).toBe("review-required");
+    expect(h.lifecycle.state(ID)?.status).not.toBe("ready");
+  });
+});
+
 describe("Plugin development mode: partial build", () => {
   it("keeps the previous build and re-pins nothing when the two reads disagree", async () => {
     const h = await setup();

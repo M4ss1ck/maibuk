@@ -10,23 +10,10 @@
 import { diffPluginPermissions } from "@/features/plugins/manifest-compat";
 import { compareSemver, parseSemver } from "@/features/plugins/semver";
 import type {
-  PluginApproval,
   PluginFileDiff,
-  PluginManifest,
   PluginReview,
+  PluginReviewInput,
 } from "@/features/plugins/types";
-
-/** What a review reads: the record, the folder's current digests and pin, and the manifest. */
-export interface PluginReviewInput {
-  /** The stored approval, or null when the Plugin was never approved. */
-  approval: PluginApproval | null;
-  /** The folder's current per-file digests (`pluginFileDigests` output). */
-  digests: ReadonlyMap<string, string>;
-  /** The folder's current `h1:` hash. */
-  hash: string;
-  /** The manifest parsed from the folder now. */
-  manifest: PluginManifest;
-}
 
 function diffFiles(
   approvedFiles: Record<string, string>,

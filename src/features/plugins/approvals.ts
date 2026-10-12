@@ -7,10 +7,13 @@
  * write v2. Approvals are device-local: never synced, never in a Backup.
  */
 
+import { startupErrorValue } from "@/features/plugins/startup-error";
 import type {
+  PluginActivationRefusal,
   PluginApproval,
   PluginEnableResult,
   PluginManifest,
+  PluginManagementEntry,
   PluginPermissionId,
 } from "@/features/plugins/types";
 
@@ -207,6 +210,42 @@ export function revokePermission(
 /** Turns a Plugin off; it stays installed with its grants and data. */
 export function disablePlugin(approval: PluginApproval): PluginApproval {
   return { ...approval, enabled: false };
+}
+
+/**
+ * True when an approved copy no longer grants one of its required Plugin
+ * Permissions, so it must be reviewed and re-approved before it can start.
+ * Shared by the Settings row and the section's review wiring (#442).
+ */
+export function hasMissingRequired(
+  entry: Pick<PluginManagementEntry, "approval" | "manifest">
+): boolean {
+  if (entry.approval === null) return false;
+  return entry.manifest.permissions.required.some(
+    (permission) => !entry.approval?.granted.includes(permission as PluginPermissionId)
+  );
+}
+
+/**
+ * Records a failed activation's startup error on the approval record, so
+ * Settings shows the last failure until the Plugin starts again (#442). A
+ * review state or an id the lifecycle never installed stores nothing.
+ */
+export function recordStartupError(pluginId: string, refusal: PluginActivationRefusal): void {
+  const message = startupErrorValue(refusal);
+  if (message === null) return;
+  const approval = getPluginApproval(pluginId);
+  if (!approval || approval.startupError === message) return;
+  savePluginApproval({ ...approval, startupError: message });
+}
+
+/** Clears a stale startup error now that the Plugin started (#442). */
+export function clearStartupError(pluginId: string): void {
+  const approval = getPluginApproval(pluginId);
+  if (!approval || approval.startupError === undefined) return;
+  const cleared: PluginApproval = { ...approval };
+  delete cleared.startupError;
+  savePluginApproval(cleared);
 }
 
 /**

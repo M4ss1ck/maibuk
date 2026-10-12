@@ -116,6 +116,22 @@ describe("Plugin management: approve", () => {
     expect(h.store.getState().plugins.tracer.review.status).toBe("approved");
   });
 
+  it("refuses to approve a copy that requires review, re-pinning and starting nothing", async () => {
+    const h = await setup({ changed: true });
+    await h.lifecycle.launch();
+    await h.store.getState().refresh();
+    expect(h.store.getState().plugins.tracer.review.status).toBe("review-required");
+    const pinned = getPluginApproval("tracer")?.pinnedHash;
+
+    const result = await h.store.getState().approve("tracer", []);
+
+    expect(result).toMatchObject({ ok: false, reason: "review-required" });
+    // The changed hash is never re-pinned, and no copy starts.
+    expect(getPluginApproval("tracer")?.pinnedHash).toBe(pinned);
+    expect(h.frames).toHaveLength(0);
+    expect(h.lifecycle.state("tracer")?.status).not.toBe("ready");
+  });
+
   it("registers and starts a never-approved Plugin without a relaunch", async () => {
     const h = await setup({ manifest: { permissions: { required: [], optional: [] } } });
     // No launch: the Plugin is not installed yet.

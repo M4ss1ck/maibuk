@@ -243,6 +243,16 @@ export type PluginEnableResult =
       approval: PluginApproval;
     };
 
+/**
+ * What `approve` returns. A copy whose files changed (`review-required`) is
+ * refused: it must go through the changed-files review (`markReviewed`), so an
+ * inline permission toggle never re-pins and starts an unreviewed copy (#442).
+ */
+export type PluginApproveResult =
+  | { ok: true }
+  | { ok: false; reason: "review-required" }
+  | { ok: false; reason: "copy-unavailable" };
+
 // Review (review.ts)
 
 /** Whether a copy needs the author's review before it may start again. */
@@ -263,6 +273,18 @@ export interface PluginReview {
   permissions: PluginPermissionDiff;
   /** True when the installed copy's version is older than the approved one. */
   olderVersion: boolean;
+}
+
+/** What a review reads: the record, the folder's current digests and pin, and the manifest. */
+export interface PluginReviewInput {
+  /** The stored approval, or null when the Plugin was never approved. */
+  approval: PluginApproval | null;
+  /** The folder's current per-file digests (`pluginFileDigests` output). */
+  digests: ReadonlyMap<string, string>;
+  /** The folder's current `h1:` hash. */
+  hash: string;
+  /** The manifest parsed from the folder now. */
+  manifest: PluginManifest;
 }
 
 // Management (management.ts)
@@ -312,7 +334,7 @@ export interface PluginManagementOptions {
   lifecycle?: () => PluginLifecycle | null;
   /** The shipped Built-in Plugins; defaults to the production source (`[]`). */
   builtInSource?: BuiltInPluginSource;
-  /** Shows the non-blocking notification; defaults to a toast. Injected by tests. */
+  /** Shows the non-blocking notification; defaults to a no-op. The app renders the store's `notifications` through `PluginChangeNotices`. Injected by tests. */
   notify?: (notification: PluginNotification) => void;
   /**
    * Reports whether Plugin development mode is on; defaults to the device
@@ -332,7 +354,7 @@ export interface PluginManagement {
   /** Re-reads the Plugin Directory and each copy's review state. */
   refresh(): Promise<void>;
   /** Approves the current copy with the chosen optional grants and starts it. */
-  approve(pluginId: string, optionalGranted?: readonly PluginPermissionId[]): Promise<void>;
+  approve(pluginId: string, optionalGranted?: readonly PluginPermissionId[]): Promise<PluginApproveResult>;
   /** Revokes one Plugin Permission; a required revoke disables and stops it. */
   revoke(pluginId: string, permission: PluginPermissionId): Promise<void>;
   /** Enables the copy when every required Plugin Permission is still granted. */

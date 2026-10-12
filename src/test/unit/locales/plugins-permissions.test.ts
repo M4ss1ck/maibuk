@@ -56,6 +56,26 @@ describe("Plugin permission copy", () => {
     expect(es.plugins.permissions.read).toBe("Leer tu Biblioteca");
   });
 
+  it("uses the prototype's typographic apostrophes and first/grantIntro copy", () => {
+    // PR #410's dictionary writes a typographic apostrophe, not a straight one.
+    expect(en.plugins.permissions.responsibility).toContain("Plugin’s code");
+    expect(en.plugins.permissions.responsibility).not.toContain("Plugin's");
+    expect(en.plugins.permissions.processDetail).toContain("Maibuk’s Library");
+    expect(en.plugins.permissions.processDetail).not.toContain("Maibuk's");
+    expect(en.plugins.permissions.first).toBe(
+      "Required permissions must be accepted to enable this Plugin. Optional permissions can stay off. No access is granted until you approve."
+    );
+    expect(es.plugins.permissions.first).toBe(
+      "Debes aceptar los permisos obligatorios para activar este Plugin. Los opcionales se pueden denegar. No se concede acceso hasta que apruebes."
+    );
+    expect(en.plugins.permissions.grantIntro).toBe(
+      "Optional permissions can be changed independently. Revoking required access disables this Plugin. Enabling it again requires approval of that access."
+    );
+    expect(es.plugins.permissions.grantIntro).toBe(
+      "Los permisos opcionales se pueden cambiar por separado. Revocar un permiso obligatorio desactiva este Plugin. Para volver a activarlo debes aprobar ese acceso."
+    );
+  });
+
   it("names the row badges, states, and actions in both locales", () => {
     for (const locale of [en, es]) {
       expect(locale.plugins.builtInBadge.length).toBeGreaterThan(0);

@@ -8,8 +8,9 @@ import { PluginRow } from "@/components/settings/PluginRow";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 import { Switch } from "@/components/ui";
+import { hasMissingRequired } from "@/features/plugins/approvals";
 import { usePluginManagementStore } from "@/features/plugins/management";
-import type { PluginManagementEntry, PluginPermissionId } from "@/features/plugins/types";
+import type { PluginManagementEntry } from "@/features/plugins/types";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 import { useSettingsStore } from "@/features/settings/store";
 import {
@@ -248,13 +249,5 @@ export function PluginsSection() {
         />
       )}
     </SettingsSection>
-  );
-}
-
-/** True when an approved copy no longer grants one of its required permissions. */
-function hasMissingRequired(entry: PluginManagementEntry): boolean {
-  if (entry.approval === null) return false;
-  return entry.manifest.permissions.required.some(
-    (permission) => !entry.approval?.granted.includes(permission as PluginPermissionId)
   );
 }

@@ -25,7 +25,7 @@ import {
   onChange,
 } from "@/features/sync/change-feed";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
-import { getPluginApproval, savePluginApproval } from "@/features/plugins/approvals";
+import { clearStartupError, getPluginApproval, recordStartupError } from "@/features/plugins/approvals";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { registerPluginContributions } from "@/features/plugins/contributions";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
@@ -41,17 +41,16 @@ import {
   setPluginLifecycleInstance,
 } from "@/features/plugins/lifecycle-instance";
 import { scanApprovedPlugins } from "@/features/plugins/launch";
+import { usePluginManagementStore } from "@/features/plugins/management";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { reviewPluginCopy } from "@/features/plugins/review";
 import { STARTUP_TIMEOUT_MS, readPluginManifest, startPlugin } from "@/features/plugins/runtime";
-import { startupErrorValue } from "@/features/plugins/startup-error";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
 import { isTutorialLibraryActive, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
   InstalledPlugin,
   PluginActivationRefusal,
   PluginActivationResult,
-  PluginApproval,
   PluginLifecycle,
   PluginLifecycleChange,
   PluginLifecycleOptions,
@@ -65,6 +64,7 @@ import type {
 } from "@/features/plugins/types";
 import { toast } from "@/components/ui/Toast";
 import { APP_VERSION } from "@/constants";
+import { useSettingsStore } from "@/features/settings/store";
 import i18n from "@/i18n";
 import { waitForDatabaseReady } from "@/lib/db";
 import { getPluginDirectory } from "@/lib/platform";
@@ -131,29 +131,6 @@ function refusalStopReason(refusal: PluginStartRefusal): PluginLifecycleStopReas
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/**
- * Records the last startup failure on the approval record, so Settings shows it
- * until the Plugin starts again (#442). The stored value is the refusal's own
- * message, or its stable code for a refusal without one; a review state records
- * nothing.
- */
-function recordStartupError(pluginId: string, refusal: PluginActivationRefusal): void {
-  const message = startupErrorValue(refusal);
-  if (message === null) return;
-  const approval = getPluginApproval(pluginId);
-  if (!approval || approval.startupError === message) return;
-  savePluginApproval({ ...approval, startupError: message });
-}
-
-/** Clears a stale startup error now that the Plugin started (#442). */
-function clearStartupError(pluginId: string): void {
-  const approval = getPluginApproval(pluginId);
-  if (!approval || approval.startupError === undefined) return;
-  const cleared: PluginApproval = { ...approval };
-  delete cleared.startupError;
-  savePluginApproval(cleared);
 }
 
 /**
@@ -997,7 +974,15 @@ export function installPluginLifecycle(options: PluginLifecycleOptions = {}): Pl
   if (existing) return existing;
   const lifecycle = createPluginLifecycle(options);
   setPluginLifecycleInstance(lifecycle);
-  void lifecycle.launch();
+  void lifecycle.launch().then(() => {
+    // Development mode at launch: a copy whose files changed while the app was
+    // closed must go through the dev reload policy, and the folder watcher must
+    // subscribe now, not only when Settings mounts (#442, plan decision 6). The
+    // management store's refresh does both; it stays behind this dynamic
+    // lifecycle import so the manifest validator never reaches the entry chunk.
+    if (!useSettingsStore.getState().pluginDevelopmentMode) return;
+    return usePluginManagementStore.getState().refresh();
+  });
   return lifecycle;
 }
 

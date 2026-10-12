@@ -2180,6 +2180,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "settings-reset-all",
+    area: "settings",
+    workflow:
+      "Settings > Advanced: Reset settings opens a confirm dialog; Escape cancels (the approved third-party Plugin keeps running and a changed setting stays); confirming clears every Plugin approval so the third-party Plugin shows Review and enable and does not run, its contributed surfaces are gone, and a changed setting (Development mode) returns to its default; asserts: dialog focus, the Plugin row state, the contributed surface gone, the setting default; persists: yes (device-local)",
+    edges: [],
+    terms: ["Reset settings", "Plugin", "Plugin Permission"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "empty",
+    tags: ["no-webkit"],
+    status: "accepted",
+  },
+  {
     id: "settings-outline",
     area: "settings",
     workflow:

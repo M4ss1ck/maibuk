@@ -2,10 +2,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   PLUGIN_APPROVALS_STORAGE_KEY,
   approvePluginCopy,
+  clearStartupError,
   disablePlugin,
   enablePlugin,
   getPluginApproval,
+  hasMissingRequired,
   listPluginApprovals,
+  recordStartupError,
   removePluginApproval,
   revokePermission,
   savePluginApproval,
@@ -168,5 +171,51 @@ describe("disablePlugin() and enablePlugin()", () => {
     const result = enablePlugin(disablePlugin(APPROVAL), MANIFEST);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.approval.enabled).toBe(true);
+  });
+});
+
+describe("hasMissingRequired()", () => {
+  it("is true when an approved copy no longer grants a required permission", () => {
+    expect(hasMissingRequired({ approval: { ...APPROVAL, granted: [] }, manifest: MANIFEST })).toBe(
+      true
+    );
+  });
+
+  it("is false while every required permission is still granted", () => {
+    expect(hasMissingRequired({ approval: APPROVAL, manifest: MANIFEST })).toBe(false);
+  });
+
+  it("is false for a copy that was never approved", () => {
+    expect(hasMissingRequired({ approval: null, manifest: MANIFEST })).toBe(false);
+  });
+});
+
+describe("startup errors", () => {
+  it("records a refusal's code and clears it on the next successful start", () => {
+    savePluginApproval(APPROVAL);
+
+    recordStartupError("tracer", { code: "incompatible", compatibility: { verdict: "ok" } });
+
+    expect(getPluginApproval("tracer")?.startupError).toBe("incompatible");
+
+    clearStartupError("tracer");
+
+    expect(getPluginApproval("tracer")?.startupError).toBeUndefined();
+  });
+
+  it("records a refusal's own message when it has one", () => {
+    savePluginApproval(APPROVAL);
+
+    recordStartupError("tracer", { code: "worker-error", message: "boom" });
+
+    expect(getPluginApproval("tracer")?.startupError).toBe("boom");
+  });
+
+  it("records nothing for a review state", () => {
+    savePluginApproval(APPROVAL);
+
+    recordStartupError("tracer", { code: "review-required", status: "review-required" });
+
+    expect(getPluginApproval("tracer")?.startupError).toBeUndefined();
   });
 });
