@@ -7,6 +7,7 @@
 // @no-webkit: the seed needs OPFS, which the webkit project does not carry.
 
 import type { Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 
@@ -42,6 +43,7 @@ test.describe("Host-rendered Plugin UI @wf:plugins-remote-ui @no-webkit", () => 
     await expect(page.getByRole("textbox", { name: "Search" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Break" })).toBeVisible();
+    await capture(page, "plugin-page-open");
   });
 
   test("a Plugin text field keeps focus and typing on the host", async ({ page }) => {
@@ -56,6 +58,7 @@ test.describe("Host-rendered Plugin UI @wf:plugins-remote-ui @no-webkit", () => 
     await expect(field).toBeFocused();
     await expect(field).toHaveValue("echo");
     await expect(page.getByText("Searching: echo")).toBeVisible();
+    await capture(page, "plugin-page-typed");
   });
 
   test("a Plugin button runs its handler from the keyboard", async ({ page }) => {
