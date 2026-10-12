@@ -11,6 +11,6 @@
     "allowImportingTsExtensions": true,
     "paths": { "@/*": ["../src/*"] }
   },
-  "include": ["**/*.ts"],
+  "include": ["**/*.ts", "../src/types/**/*.d.ts"],
   "exclude": [".output"]
 }

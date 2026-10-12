@@ -2156,6 +2156,7 @@ export const ROWS: MatrixRow[] = [
       "A tooltip shows on focus",
       "The popover opens from the keyboard and closes with Escape",
       "Plugin CSS styles its surface and not Maibuk chrome",
+      "The scoper keeps a hostile corpus fully inside the surface in Chromium",
     ],
     terms: ["Plugin", "Host-rendered UI"],
     shortcuts: [],

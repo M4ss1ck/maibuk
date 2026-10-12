@@ -482,6 +482,43 @@ describe("the Remote UI kit, part 2", () => {
       expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
     });
 
+    it("does not reopen on a same-tick isOpen false then true (separate updates are required)", async () => {
+      harness = renderRemoteUi();
+      function Plugin() {
+        const [open, setOpen] = useState(false);
+        return (
+          <>
+            <ui.Button onPress={() => setOpen(true)}>Open details</ui.Button>
+            <ui.Button
+              onPress={() => {
+                // Batched: the net prop is unchanged (true -> true), so the
+                // host sees no Plugin-driven update and stays closed.
+                setOpen(false);
+                setOpen(true);
+              }}
+            >
+              Reopen in one tick
+            </ui.Button>
+            <ui.Modal title="Details" isOpen={open} onOpenChange={() => {}}>
+              <ui.Text>Modal body</ui.Text>
+            </ui.Modal>
+          </>
+        );
+      }
+      await harness.mount(<Plugin />);
+
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      // Focus is back on the trigger; Tab to the reopen button and press it.
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
     it("shows a tooltip on focus @ui-kbd:maibuk-tooltip", async () => {
       harness = renderRemoteUi();
       await harness.mount(
@@ -613,11 +650,18 @@ describe("the Remote UI kit, part 2", () => {
           <ui.Surface css="p { color: rgb(4, 5, 6) }">
             <ui.Text>Second surface</ui.Text>
           </ui.Surface>
+          {/* A raw newline in a string is a bad-string to the browser: the whole
+              stylesheet must be dropped, not passed through with an unscoped
+              `body` rule. */}
+          <ui.Surface css={'.a{b:"x\n} body{display:none} .z{c:"}'}>
+            <ui.Text>Newline escape surface</ui.Text>
+          </ui.Surface>
         </>
       );
 
       const hostileText = screen.getByText("Hostile surface");
       const secondText = screen.getByText("Second surface");
+      const escapeText = screen.getByText("Newline escape surface");
       const chrome = screen.getByTestId("chrome");
       const chromeSpan = screen.getByTestId("chrome-span");
 
@@ -638,6 +682,14 @@ describe("the Remote UI kit, part 2", () => {
       expect(getComputedStyle(chrome).display).not.toBe("none");
       expect(getComputedStyle(chrome).letterSpacing).not.toBe("9px");
       expect(getComputedStyle(chromeSpan).color).not.toBe("rgb(1, 2, 3)");
+
+      // The bad-string stylesheet is dropped whole: its `body{display:none}`
+      // never reaches any style element, and the escape surface keeps the
+      // chrome's styling.
+      expect(getComputedStyle(escapeText).color).not.toBe("rgb(1, 2, 3)");
+      for (const style of document.querySelectorAll("style")) {
+        expect(style.textContent ?? "").not.toContain("body{display:none}");
+      }
     });
   });
 });

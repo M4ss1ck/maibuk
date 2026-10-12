@@ -177,5 +177,39 @@ describe("scopePluginCss", () => {
       expect(scopePluginCss("& .x { color: red }", SCOPE)).toBe("");
       expect(scopePluginCss(".a { & { color: red } }", SCOPE)).toBe("");
     });
+
+    // PostCSS accepts a string that runs across a raw newline, but the browser
+    // ends it there (a CSS Syntax Level 3 bad-string), so the rest of the
+    // stylesheet — including a `body` rule — would land unscoped. The scoper
+    // must not trust PostCSS's tokenizer to match the browser's (#484).
+    it("drops a double-quoted bad string that runs across a newline", () => {
+      expect(scopePluginCss('.a{b:"x\n} body{display:none} .z{c:"}', SCOPE)).toBe("");
+    });
+
+    it("drops a single-quoted bad string that runs across a newline", () => {
+      expect(scopePluginCss(".a{b:'x\n} body{display:none} .z{c:'}", SCOPE)).toBe("");
+    });
+
+    it("keeps a valid backslash-newline continuation", () => {
+      const result = scopePluginCss('.a{b:"x\\\n y"}', SCOPE);
+      // The continuation is a single string value, so the rule scopes normally.
+      expect(result).toContain(`${SCOPE} .a`);
+      expect(result).toContain("\\\n");
+    });
+
+    it("keeps a valid backslash-CRLF continuation", () => {
+      const result = scopePluginCss('.a{b:"x\\\r\n y"}', SCOPE);
+      expect(result).toContain(`${SCOPE} .a`);
+    });
+
+    it("drops a carriage return or form feed inside a string", () => {
+      expect(scopePluginCss('.a{b:"x\r} body{}', SCOPE)).toBe("");
+      expect(scopePluginCss('.a{b:"x\f} body{}', SCOPE)).toBe("");
+    });
+
+    it("drops an unclosed string and an unclosed comment", () => {
+      expect(scopePluginCss('.a{b:"x}', SCOPE)).toBe("");
+      expect(scopePluginCss(".a{b:c/*x", SCOPE)).toBe("");
+    });
   });
 });

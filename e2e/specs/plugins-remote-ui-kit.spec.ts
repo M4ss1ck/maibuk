@@ -9,6 +9,7 @@
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
+import { checkCssScopeCorpus } from "../support/css-scope-corpus";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 
@@ -188,5 +189,17 @@ test.describe("Host-rendered Plugin UI kit @wf:plugins-remote-ui-kit @no-webkit"
     // rule cannot reach it and the app's headings keep their casing.
     const chromeHeading = page.getByRole("heading", { name: PAGE_TITLE, level: 1 });
     await expect(chromeHeading).toHaveCSS("text-transform", "none");
+  });
+
+  test("the scoper keeps a hostile corpus fully inside the surface in Chromium", async ({
+    page,
+  }) => {
+    // Chromium's CSS parser is the ground truth; jsdom's is not. Every scoped
+    // output is re-parsed by the engine, and no style rule may escape the scope.
+    const result = await checkCssScopeCorpus(page);
+    const failing = new Set(result.leaks.map((leak) => leak.split(":")[0]));
+    const scoped = result.total - failing.size;
+    console.log(`[plugins-remote-ui-kit] hostile CSS corpus: ${scoped}/${result.total} scoped`);
+    expect(result.leaks, JSON.stringify(result.leaks, null, 2)).toEqual([]);
   });
 });

@@ -80,6 +80,14 @@ export interface PluginUiElement {
 }
 
 /**
+ * The reopen contract the overlays share. The host dismisses immediately, even
+ * with a stopped Worker, and a batched `false`→`true` reaches it as no change,
+ * so a Plugin reopens with two separate updates.
+ */
+const REOPEN_CONTRACT =
+  "Fires when the host dismisses or opens the dialog. The host dismisses immediately, even with a stopped Worker. To reopen after a dismissal, set `isOpen` false and then true in separate updates; a batched false\u2192true reaches the host as no change.";
+
+/**
  * The v1 kit: structure, forms, and actions (#416, #438); organization,
  * overlays, feedback, and Plugin CSS (#439).
  */
@@ -658,7 +666,7 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
         prop: "onOpenChange",
         event: "openchange",
         detail: "boolean",
-        description: "Fires when the host dismisses or opens the dialog.",
+        description: REOPEN_CONTRACT,
       },
     ],
     methods: [],
@@ -680,7 +688,7 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     },
     events: [
       { prop: "onConfirm", event: "confirm", detail: "none" },
-      { prop: "onOpenChange", event: "openchange", detail: "boolean" },
+      { prop: "onOpenChange", event: "openchange", detail: "boolean", description: REOPEN_CONTRACT },
     ],
     methods: [],
   },
@@ -698,7 +706,7 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       children: { kind: "node" },
     },
     events: [
-      { prop: "onOpenChange", event: "openchange", detail: "boolean" },
+      { prop: "onOpenChange", event: "openchange", detail: "boolean", description: REOPEN_CONTRACT },
     ],
     methods: [],
   },
