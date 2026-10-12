@@ -31,6 +31,8 @@ export interface PluginRemoteUi {
 
 export function createPluginRemoteUi(options: {
   onViolation: (violation: PluginUiViolation) => void;
+  /** Injectable frame clock; the default measures real animation frames. */
+  frame?: () => number;
 }): PluginRemoteUi {
   const receiver = new RemoteReceiver();
   let disposed = false;
@@ -40,6 +42,7 @@ export function createPluginRemoteUi(options: {
     onViolation: (violation) => {
       if (!disposed) report(violation);
     },
+    ...(options.frame === undefined ? {} : { frame: options.frame }),
   });
   const components = createPluginUiComponents();
   return {

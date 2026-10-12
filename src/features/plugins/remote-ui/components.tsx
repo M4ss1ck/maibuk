@@ -12,7 +12,7 @@
  * a type error, and the coverage gate fails when a table component has no test.
  */
 
-import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FieldError,
@@ -37,6 +37,7 @@ import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
 import { createEchoTracker, type PluginEchoTracker } from "@/features/plugins/remote-ui/echo";
+import { openExternal } from "@/lib/platform";
 import { PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 import type { PluginUiOption } from "@/plugin-sdk/ui.generated";
 
@@ -68,25 +69,11 @@ function useHostValue(remote: string | undefined, onInput?: (value: string) => v
   return { local, send };
 }
 
-function FieldShell({
-  label,
-  description,
-  errorMessage,
-  children,
-}: {
-  label: string;
-  description?: string;
-  errorMessage?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="w-full">
-      <span className="block text-sm font-medium mb-1.5">{label}</span>
-      {children}
-      {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
-      {errorMessage && <p className="mt-1 text-sm text-destructive">{errorMessage}</p>}
-    </div>
-  );
+/** The number a NumberField's raw text stands for; empty or partial is undefined. */
+function parseNumber(text: string): number | undefined {
+  if (text.trim() === "") return undefined;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 interface TextFieldHostProps {
@@ -127,20 +114,25 @@ function TextFieldHost({
       isDisabled={isDisabled}
       isReadOnly={isReadOnly}
       autoFocus={autoFocus}
-      aria-label={label}
+      isInvalid={errorMessage !== undefined}
       className="w-full"
     >
-      <FieldShell label={label} description={description} errorMessage={errorMessage}>
-        <AriaInput
-          type={type}
-          placeholder={placeholder}
-          className={INPUT_CLASS}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") onChange?.(local);
-          }}
-          onBlur={() => onChange?.(local)}
-        />
-      </FieldShell>
+      <AriaLabel className="block text-sm font-medium mb-1.5">{label}</AriaLabel>
+      <AriaInput
+        type={type}
+        placeholder={placeholder}
+        className={INPUT_CLASS}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") onChange?.(local);
+        }}
+        onBlur={() => onChange?.(local)}
+      />
+      {description && (
+        <AriaText slot="description" className="mt-1 block text-sm text-muted-foreground">
+          {description}
+        </AriaText>
+      )}
+      <FieldError className="mt-1 block text-sm text-destructive">{errorMessage}</FieldError>
     </AriaTextField>
   );
 }
@@ -183,17 +175,22 @@ function TextAreaHost({
       isDisabled={isDisabled}
       isReadOnly={isReadOnly}
       autoFocus={autoFocus}
-      aria-label={label}
+      isInvalid={errorMessage !== undefined}
       className="w-full"
     >
-      <FieldShell label={label} description={description} errorMessage={errorMessage}>
-        <AriaTextArea
-          rows={rows}
-          placeholder={placeholder}
-          className={INPUT_CLASS}
-          onBlur={() => onChange?.(local)}
-        />
-      </FieldShell>
+      <AriaLabel className="block text-sm font-medium mb-1.5">{label}</AriaLabel>
+      <AriaTextArea
+        rows={rows}
+        placeholder={placeholder}
+        className={INPUT_CLASS}
+        onBlur={() => onChange?.(local)}
+      />
+      {description && (
+        <AriaText slot="description" className="mt-1 block text-sm text-muted-foreground">
+          {description}
+        </AriaText>
+      )}
+      <FieldError className="mt-1 block text-sm text-destructive">{errorMessage}</FieldError>
     </AriaTextField>
   );
 }
@@ -225,30 +222,39 @@ function NumberFieldHost({
   onInput,
   onChange,
 }: NumberFieldHostProps) {
-  const { local, send } = useHostValue(value === undefined ? undefined : String(value), (next) =>
-    onInput?.(Number(next))
-  );
+  const { local, send } = useHostValue(value === undefined ? undefined : String(value), (next) => {
+    const parsed = parseNumber(next);
+    if (parsed !== undefined) onInput?.(parsed);
+  });
   return (
     <AriaNumberField
-      value={local === "" ? undefined : Number(local)}
-      // RAC's `onChange` fires on commit (blur, Enter, stepping); live typing is
-      // read from the input's own `onInput` below, so the Plugin sees each
-      // keystroke the way it does from a text field.
-      onChange={(next) => onChange?.(next)}
+      value={parseNumber(local)}
+      // RAC's `onChange` fires on commit (blur, Enter, stepping) and is NaN when
+      // the field is empty; only a real number is reported. Live typing is read
+      // from the input's own `onInput` below, so the Plugin sees each keystroke
+      // the way it does from a text field.
+      onChange={(next) => {
+        if (Number.isFinite(next)) onChange?.(next);
+      }}
       minValue={minValue}
       maxValue={maxValue}
       step={step}
       isRequired={isRequired}
       isDisabled={isDisabled}
-      aria-label={label}
+      isInvalid={errorMessage !== undefined}
       className="w-full"
     >
-      <FieldShell label={label} description={description} errorMessage={errorMessage}>
-        <AriaInput
-          className={INPUT_CLASS}
-          onInput={(event) => send(event.currentTarget.value)}
-        />
-      </FieldShell>
+      <AriaLabel className="block text-sm font-medium mb-1.5">{label}</AriaLabel>
+      <AriaInput
+        className={INPUT_CLASS}
+        onInput={(event) => send(event.currentTarget.value)}
+      />
+      {description && (
+        <AriaText slot="description" className="mt-1 block text-sm text-muted-foreground">
+          {description}
+        </AriaText>
+      )}
+      <FieldError className="mt-1 block text-sm text-destructive">{errorMessage}</FieldError>
     </AriaNumberField>
   );
 }
@@ -270,17 +276,21 @@ function CheckboxHost({
   isDisabled,
   onChange,
 }: CheckboxHostProps) {
+  const id = useId();
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
         <Checkbox
+          id={id}
           checked={isSelected}
           indeterminate={isIndeterminate}
           disabled={isDisabled}
           label={label}
           onChange={(checked) => onChange?.(checked)}
         />
-        <span className="text-sm text-foreground">{label}</span>
+        <label htmlFor={id} className="text-sm text-foreground">
+          {label}
+        </label>
       </div>
       {description && <p className="text-sm text-muted-foreground">{description}</p>}
     </div>
@@ -302,15 +312,20 @@ function SwitchHost({
   isDisabled,
   onChange,
 }: SwitchHostProps) {
+  const id = useId();
   return (
     <div className="flex flex-col gap-1">
-      <Switch
-        checked={isSelected}
-        disabled={isDisabled}
-        label={label}
-        onChange={(checked) => onChange?.(checked)}
-      />
-      <span className="text-sm text-foreground">{label}</span>
+      <div className="flex items-center gap-2">
+        <Switch
+          id={id}
+          checked={isSelected}
+          disabled={isDisabled}
+          onChange={(checked) => onChange?.(checked)}
+        />
+        <label htmlFor={id} className="text-sm text-foreground">
+          {label}
+        </label>
+      </div>
       {description && <p className="text-sm text-muted-foreground">{description}</p>}
     </div>
   );
@@ -344,21 +359,39 @@ function SelectHost({
   errorMessage,
   onChange,
 }: SelectHostProps) {
+  const id = useId();
+  const descriptionId = `${id}-description`;
+  const errorId = `${id}-error`;
+  const describedBy = [description ? descriptionId : null, errorMessage ? errorId : null]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <FieldShell label={label} description={description} errorMessage={errorMessage}>
-      <div
-        className={isDisabled === true ? "pointer-events-none opacity-50" : ""}
-        aria-disabled={isDisabled}
-      >
-        <Select
-          value={selectedKey}
-          options={[...options]}
-          ariaLabel={label}
-          onChange={(value) => onChange?.(String(value))}
-          {...(placeholder === undefined ? {} : { placeholder })}
-        />
-      </div>
-    </FieldShell>
+    <div className="w-full">
+      <label htmlFor={id} className="block text-sm font-medium mb-1.5">
+        {label}
+      </label>
+      <Select
+        id={id}
+        value={selectedKey}
+        options={[...options]}
+        ariaLabel={label}
+        isDisabled={isDisabled}
+        isInvalid={errorMessage !== undefined}
+        ariaDescribedBy={describedBy || undefined}
+        onChange={(value) => onChange?.(String(value))}
+        {...(placeholder === undefined ? {} : { placeholder })}
+      />
+      {description && (
+        <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
+          {description}
+        </p>
+      )}
+      {errorMessage && (
+        <p id={errorId} className="mt-1 text-sm text-destructive">
+          {errorMessage}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -382,22 +415,31 @@ function ComboboxHost({
   onChange,
 }: ComboboxHostProps) {
   const { labels, labelToValue } = optionMaps(options);
+  const id = useId();
+  const errorId = `${id}-error`;
   return (
-    <FieldShell label={label} errorMessage={errorMessage}>
-      <div
-        className={isDisabled === true ? "pointer-events-none opacity-50" : ""}
-        aria-disabled={isDisabled}
-      >
-        <Combobox
-          value={selectedKey}
-          options={labels}
-          ariaLabel={label}
-          inputClasses="w-40"
-          {...(placeholder === undefined ? {} : { placeholder })}
-          onChange={(next) => onChange?.(labelToValue.get(next) ?? next)}
-        />
-      </div>
-    </FieldShell>
+    <div className="w-full">
+      <label htmlFor={id} className="block text-sm font-medium mb-1.5">
+        {label}
+      </label>
+      <Combobox
+        value={selectedKey}
+        options={labels}
+        ariaLabel={label}
+        id={id}
+        inputClasses="w-40"
+        isDisabled={isDisabled}
+        isInvalid={errorMessage !== undefined}
+        ariaDescribedBy={errorMessage ? errorId : undefined}
+        {...(placeholder === undefined ? {} : { placeholder })}
+        onChange={(next) => onChange?.(labelToValue.get(next) ?? next)}
+      />
+      {errorMessage && (
+        <p id={errorId} className="mt-1 text-sm text-destructive">
+          {errorMessage}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -425,23 +467,32 @@ function MultiSelectComboboxHost({
   const { t } = useTranslation();
   const { labels, labelToValue } = optionMaps(options);
   const value = selectedKeys.map((key) => labelToValue.get(key) ?? key);
+  const id = useId();
+  const errorId = `${id}-error`;
   return (
-    <FieldShell label={label} errorMessage={errorMessage}>
-      <div
-        className={isDisabled === true ? "pointer-events-none opacity-50" : ""}
-        aria-disabled={isDisabled}
-      >
-        <MultiSelectCombobox
-          value={[...value]}
-          options={labels}
-          allowCustom={allowsCustomValue}
-          ariaLabel={label}
-          removeLabel={(item) => t("plugins.ui.removeValue", { value: item })}
-          onChange={(next) => onChange?.(next.map((item) => labelToValue.get(item) ?? item))}
-          {...(placeholder === undefined ? {} : { placeholder })}
-        />
-      </div>
-    </FieldShell>
+    <div className="w-full">
+      <label htmlFor={id} className="block text-sm font-medium mb-1.5">
+        {label}
+      </label>
+      <MultiSelectCombobox
+        id={id}
+        value={[...value]}
+        options={labels}
+        allowCustom={allowsCustomValue}
+        ariaLabel={label}
+        isDisabled={isDisabled}
+        isInvalid={errorMessage !== undefined}
+        ariaDescribedBy={errorMessage ? errorId : undefined}
+        removeLabel={(item) => t("plugins.ui.removeValue", { value: item })}
+        onChange={(next) => onChange?.(next.map((item) => labelToValue.get(item) ?? item))}
+        {...(placeholder === undefined ? {} : { placeholder })}
+      />
+      {errorMessage && (
+        <p id={errorId} className="mt-1 text-sm text-destructive">
+          {errorMessage}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -472,6 +523,7 @@ function RadioGroupHost({
       onChange={(value) => onChange?.(value)}
       orientation={orientation}
       isDisabled={isDisabled}
+      isInvalid={errorMessage !== undefined}
       className="w-full"
     >
       <AriaLabel className="block text-sm font-medium mb-1.5">{label}</AriaLabel>
@@ -552,6 +604,13 @@ function LinkHost({ href, isDisabled, children, onPress }: LinkHostProps) {
     <AriaLink
       href={href}
       isDisabled={isDisabled}
+      // A Plugin link never navigates Maibuk: an https href would replace the
+      // webview (on desktop, the whole app). Prevent the client/native
+      // navigation and hand the URL to the platform opener instead.
+      onClick={(event) => {
+        event.preventDefault();
+        void openExternal(href);
+      }}
       onPress={() => onPress?.()}
       className="text-primary underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-primary"
     >

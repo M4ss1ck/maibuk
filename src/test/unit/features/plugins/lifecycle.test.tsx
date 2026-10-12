@@ -585,7 +585,7 @@ describe("Plugin lifecycle: stop reasons", () => {
       refusal: null,
     });
     expect(screen.getByRole("status")).toHaveTextContent(
-      "alpha sent too much interface data and was stopped."
+      "alpha declared an interface Maibuk could not accept and was stopped."
     );
   });
 

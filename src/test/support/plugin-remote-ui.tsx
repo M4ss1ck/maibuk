@@ -14,7 +14,7 @@ import { act, render } from "@testing-library/react";
 import { RemoteMutationObserver } from "@remote-dom/core/elements";
 import { RemoteRootRenderer } from "@remote-dom/react/host";
 import { createRoot, type Root } from "react-dom/client";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import type { PluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
@@ -29,9 +29,18 @@ export interface RemoteUiHarness {
   cleanup(): void;
 }
 
-export function renderRemoteUi(): RemoteUiHarness {
+export function renderRemoteUi(options?: {
+  wrapper?: ComponentType<{ children: ReactNode }>;
+}): RemoteUiHarness {
   const violations: PluginUiViolation[] = [];
-  const ui = createPluginRemoteUi({ onViolation: (violation) => violations.push(violation) });
+  // Each delivered batch is its own frame: the harness drives the host
+  // directly, so there is no real frame boundary to measure. The per-frame
+  // batch cap is proven in the validator's own tests.
+  let frame = 0;
+  const ui = createPluginRemoteUi({
+    onViolation: (violation) => violations.push(violation),
+    frame: () => frame++,
+  });
 
   // Kept out of the document so RTL queries see only the host tree; a
   // MutationObserver still observes a detached subtree.
@@ -41,7 +50,8 @@ export function renderRemoteUi(): RemoteUiHarness {
   let root: Root | null = createRoot(container);
 
   // The host side is a second React root, as in the app; RTL cleans it up.
-  render(<RemoteRootRenderer receiver={ui.receiver} components={ui.components} />);
+  const host = <RemoteRootRenderer receiver={ui.receiver} components={ui.components} />;
+  render(options?.wrapper ? <options.wrapper>{host}</options.wrapper> : host);
 
   return {
     ui,

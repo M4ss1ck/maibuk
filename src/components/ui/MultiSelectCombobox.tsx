@@ -20,6 +20,14 @@ interface MultiSelectComboboxProps {
   autoFocus?: boolean;
   /** The control's accessible name, when no visible `<label>` points at it. */
   ariaLabel?: string;
+  /** The input's id, so a visible `<label htmlFor>` can name it. */
+  id?: string;
+  /** Disables the field: it is not focusable and keyboard cannot change it. */
+  isDisabled?: boolean;
+  /** Ids of the elements describing the field, for `aria-describedby`. */
+  ariaDescribedBy?: string;
+  /** Marks the field invalid, for `aria-invalid`. */
+  isInvalid?: boolean;
 }
 
 function normalize(value: string) {
@@ -59,6 +67,10 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
       getChipStyle,
       autoFocus = false,
       ariaLabel,
+      id,
+      isDisabled = false,
+      ariaDescribedBy,
+      isInvalid = false,
     },
     forwardedRef
   ) {
@@ -78,6 +90,7 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
       !selected.has(normalize(trimmedQuery));
 
     const setOpen = (open: boolean) => {
+      if (isDisabled) return;
       setIsOpen(open);
       onOpenChange?.(open);
     };
@@ -91,7 +104,7 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
     );
 
     useEffect(() => {
-      if (autoFocus) {
+      if (autoFocus && !isDisabled) {
         inputRef.current?.focus();
         setOpen(true);
       }
@@ -112,6 +125,7 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
     }, [isOpen]);
 
     const commitValue = (nextValue: string) => {
+      if (isDisabled) return;
       const trimmed = nextValue.trim();
       if (!trimmed) return;
 
@@ -125,18 +139,20 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
     };
 
     const createCustomValue = (shouldClose = closeOnCreate) => {
-      if (!allowCustom || !trimmedQuery || selected.has(normalize(trimmedQuery))) return;
+      if (isDisabled || !allowCustom || !trimmedQuery || selected.has(normalize(trimmedQuery))) return;
       onChange(uniqueValues([...value, trimmedQuery]));
       setQuery("");
       if (shouldClose) setOpen(false);
     };
 
     const removeValue = (item: string) => {
+      if (isDisabled) return;
       const key = normalize(item);
       onChange(value.filter((selectedItem) => normalize(selectedItem) !== key));
     };
 
     const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+      if (isDisabled) return;
       if (event.key === "Escape") {
         setOpen(false);
         setQuery("");
@@ -150,9 +166,14 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
     };
 
     return (
-      <div ref={rootRef} className={`relative ${className}`}>
+      <div
+        ref={rootRef}
+        className={`relative ${className} ${isDisabled ? "opacity-50" : ""}`}
+        aria-disabled={isDisabled || undefined}
+      >
         <div
           onMouseDown={(event) => {
+            if (isDisabled) return;
             if (event.target instanceof HTMLElement && event.target.closest("button,input")) {
               return;
             }
@@ -160,7 +181,7 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
             setOpen(true);
             inputRef.current?.focus();
           }}
-          className="flex min-h-9 w-full cursor-text flex-wrap items-center gap-1 rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
+          className={`flex min-h-9 w-full flex-wrap items-center gap-1 rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 ${isDisabled ? "cursor-not-allowed" : "cursor-text"}`}
         >
           {value.map((item) => (
             <span
@@ -176,6 +197,7 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
                     event.stopPropagation();
                     removeValue(item);
                   }}
+                  disabled={isDisabled}
                   className="rounded-full text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                   aria-label={removeLabel(item)}
                 >
@@ -186,19 +208,24 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
           ))}
           <input
             ref={setInputRef}
+            id={id}
             type="text"
             role="combobox"
             aria-label={ariaLabel}
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={isInvalid || undefined}
             aria-expanded={isOpen}
+            disabled={isDisabled}
             value={query}
             onFocus={() => setOpen(true)}
             onChange={(event) => {
+              if (isDisabled) return;
               setQuery(event.target.value);
               setOpen(true);
             }}
             onKeyDown={handleKeyDown}
             placeholder={value.length === 0 ? placeholder : ""}
-            className="min-w-24 flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            className="min-w-24 flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
           />
           <button
             type="button"
@@ -207,7 +234,8 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
               setOpen(!isOpen);
               inputRef.current?.focus();
             }}
-            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+            disabled={isDisabled}
+            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed"
             aria-expanded={isOpen}
           >
             <ChevronDown className="h-4 w-4" />

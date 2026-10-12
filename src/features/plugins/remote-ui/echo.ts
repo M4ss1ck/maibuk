@@ -9,13 +9,18 @@
  *
  * The rule: the host records every value it sends. An incoming remote value is
  * applied only when the host never sent it; an echo drops itself and everything
- * sent before it. Values the host sent that are no longer pending are still
- * recognized as echoes, so a delayed or out-of-order echo never rolls the field
- * back. A value the host never sent (a programmatic reset, a fill) resets the
- * tracking and is applied.
+ * sent before it. A value the host never sent (a programmatic reset, a fill)
+ * resets the tracking and is applied.
+ *
+ * Why the history can be dropped once `pending` empties: the Remote DOM channel
+ * is FIFO, so the echo of the newest sent value is the last echo the Plugin can
+ * still deliver. When it arrives, no older echo remains in flight, and any
+ * later remote value is a real programmatic change — a stale "abc" can no
+ * longer resurrect text a Clear replaced. Keeping history across that point
+ * would make a programmatic reset to a value the host ever sent a no-op.
  */
 
-/** How many host-sent values are remembered after they stop being pending. */
+/** How many host-sent values are remembered while echoes are still pending. */
 export const ECHO_HISTORY_LIMIT = 200;
 
 export interface PluginEchoTracker {
@@ -47,15 +52,18 @@ export function createEchoTracker(historyLimit = ECHO_HISTORY_LIMIT): PluginEcho
       const index = pending.lastIndexOf(remote);
       if (index !== -1) {
         pending = pending.slice(index + 1);
+        // FIFO: the echo of the newest sent value leaves nothing in flight, so
+        // the history stops being useful and is dropped. From here a remote
+        // value is a real programmatic change.
+        if (pending.length === 0) history = [];
         return false;
       }
-      // A delayed or out-of-order echo of an already-superseded value must not
-      // roll the field back. It is not applied.
-      if (history.includes(remote)) return false;
-      // The host never sent this value: the Plugin replaced the text. The
-      // history stays, so a stale echo of an earlier host value still cannot
-      // resurrect the text the reset replaced.
+      // A delayed echo of an already-superseded value must not roll the field
+      // back. It is not applied while anything is still in flight.
+      if (pending.length > 0 && history.includes(remote)) return false;
+      // Nothing is pending: the Plugin replaced the text (a reset, a fill).
       pending = [];
+      history = [];
       return true;
     },
     reset() {

@@ -294,8 +294,20 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       isDisabled: { kind: "boolean" },
     },
     events: [
-      { prop: "onInput", event: "input", detail: "number" },
-      { prop: "onChange", event: "change", detail: "number" },
+      {
+        prop: "onInput",
+        event: "input",
+        detail: "number",
+        description:
+          "Fires with the parsed number; it does not fire while the field is empty or holds a partial value such as `-`.",
+      },
+      {
+        prop: "onChange",
+        event: "change",
+        detail: "number",
+        description:
+          "Fires with the parsed number when the value is committed; an empty field does not report 0.",
+      },
     ],
     methods: [],
   },
@@ -476,9 +488,12 @@ export interface PluginUiLimits {
   maxNodes: number;
   /** Most mutation records accepted in one batch. */
   maxRecordsPerBatch: number;
+  /** Most mutation batches accepted in one animation frame. */
+  maxBatchesPerFrame: number;
 }
 
 export const PLUGIN_UI_LIMITS: PluginUiLimits = {
-  maxNodes: 5_000,
-  maxRecordsPerBatch: 1_000,
+  maxNodes: 10_000,
+  maxRecordsPerBatch: 2_000,
+  maxBatchesPerFrame: 1,
 };

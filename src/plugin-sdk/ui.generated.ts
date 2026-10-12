@@ -138,7 +138,9 @@ export interface PluginUiElementProps {
     errorMessage?: string;
     isRequired?: boolean;
     isDisabled?: boolean;
+    /** Fires with the parsed number; it does not fire while the field is empty or holds a partial value such as `-`. */
     onInput?: (event: { detail: number }) => void;
+    /** Fires with the parsed number when the value is committed; an empty field does not report 0. */
     onChange?: (event: { detail: number }) => void;
   };
   /** A checkbox with a label. Keyboard-interactive. */

@@ -25,7 +25,11 @@ import {
   type RemoteMutationRecord,
   type RemoteNodeSerialization,
 } from "@remote-dom/core";
-import type { RemoteReceiver } from "@remote-dom/core/receivers";
+import type {
+  RemoteReceiver,
+  RemoteReceiverNode,
+  RemoteReceiverRoot,
+} from "@remote-dom/core/receivers";
 import { getPluginUiElement, PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
 import type { PluginUiLimits, PluginUiProp } from "@/plugin-sdk/ui-table";
 
@@ -36,7 +40,8 @@ export type PluginUiViolationCode =
   | "unknown-event"
   | "unknown-method"
   | "too-many-nodes"
-  | "too-many-records";
+  | "too-many-records"
+  | "too-many-batches";
 
 /** One refused declaration, in plain language, for the stop reason and tests. */
 export interface PluginUiViolation {
@@ -50,26 +55,63 @@ export interface PluginUiValidatorOptions {
   receiver: RemoteReceiver;
   onViolation: (violation: PluginUiViolation) => void;
   limits?: PluginUiLimits;
+  /**
+   * The current animation-frame index; the connection refuses a second batch
+   * in the same frame. Injectable so tests measure frames with a manual clock.
+   */
+  frame?: () => number;
 }
 
 const MAX_OPTIONS = 200;
 const MAX_STRING = 1_000_000;
 
+/** One animation frame, the window the batch-rate cap is measured over. */
+export const FRAME_MS = 1000 / 60;
+
+/** The default frame clock: a frame-long window over `performance.now()`. */
+export function defaultFrame(now: () => number = () => performance.now()): () => number {
+  return () => Math.floor(now() / FRAME_MS);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function nodeCount(serialization: RemoteNodeSerialization): number {
-  if (serialization.type !== NODE_TYPE_ELEMENT) return 1;
-  return 1 + serialization.children.reduce((sum, child) => sum + nodeCount(child), 0);
+/**
+ * A working copy of the accepted tree, replayed record by record before a batch
+ * is committed. `children` mirrors every parent's ordered child ids (the root
+ * included), so a REMOVE_CHILD index resolves against the state the batch
+ * itself has built so far, not the receiver's pre-batch state.
+ */
+interface TreeShadow {
+  tags: Map<string, string>;
+  children: Map<string, string[]>;
+  nodes: number;
 }
 
-function receiverNodeCount(node: {
-  type: number;
-  children?: readonly { type: number; children?: readonly unknown[] }[];
-}): number {
-  if (node.type !== NODE_TYPE_ELEMENT) return 1;
-  return 1 + (node.children ?? []).reduce((sum, child) => sum + receiverNodeCount(child as never), 0);
+function buildShadow(root: RemoteReceiverRoot): TreeShadow {
+  const shadow: TreeShadow = { tags: new Map(), children: new Map(), nodes: 0 };
+  function visit(node: RemoteReceiverRoot | RemoteReceiverNode): void {
+    shadow.nodes += 1;
+    const ids: string[] = [];
+    if (node.type === NODE_TYPE_ELEMENT) shadow.tags.set(node.id, node.element);
+    for (const child of "children" in node ? node.children : []) {
+      ids.push(child.id);
+      visit(child);
+    }
+    shadow.children.set(node.id, ids);
+  }
+  visit(root);
+  return shadow;
+}
+
+/** Removes a node and its descendants from the shadow, returning nothing. */
+function unindexSubtree(id: string, shadow: TreeShadow): void {
+  const children = shadow.children.get(id) ?? [];
+  for (const child of children) unindexSubtree(child, shadow);
+  shadow.children.delete(id);
+  shadow.tags.delete(id);
+  shadow.nodes -= 1;
 }
 
 function propertyProblem(prop: PluginUiProp, value: unknown): string | null {
@@ -123,8 +165,9 @@ function propertyProblem(prop: PluginUiProp, value: unknown): string | null {
 export function createValidatedConnection(options: PluginUiValidatorOptions): RemoteConnection {
   const { receiver, onViolation } = options;
   const limits = options.limits ?? PLUGIN_UI_LIMITS;
-  const tags = new Map<string, string>();
-  let nodes = 0;
+  const frame = options.frame ?? defaultFrame();
+  let tags = new Map<string, string>();
+  let lastBatchFrame: number | null = null;
   let tripped = false;
 
   function refuse(violation: PluginUiViolation): false {
@@ -134,8 +177,8 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
     return false;
   }
 
-  /** Validates one serialized element subtree, collecting its tags and size. */
-  function checkSerialization(serialization: RemoteNodeSerialization, found: Map<string, string>): boolean {
+  /** Validates one serialized subtree and registers it in the shadow tree. */
+  function checkSerialization(serialization: RemoteNodeSerialization, shadow: TreeShadow): boolean {
     if (serialization.type === NODE_TYPE_ELEMENT) {
       const element = getPluginUiElement(serialization.element);
       if (element === undefined) {
@@ -145,7 +188,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
           tag: serialization.element,
         });
       }
-      found.set(serialization.id, serialization.element);
+      shadow.tags.set(serialization.id, serialization.element);
       for (const name of Object.keys(serialization.attributes ?? {})) {
         return refuse({
           code: "unknown-prop",
@@ -198,36 +241,54 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
           });
         }
       }
+      const ids: string[] = [];
       for (const child of serialization.children) {
-        if (!checkSerialization(child, found)) return false;
+        ids.push(child.id);
+        if (!checkSerialization(child, shadow)) return false;
       }
+      shadow.children.set(serialization.id, ids);
+      shadow.nodes += 1;
+    } else {
+      shadow.children.set(serialization.id, []);
+      shadow.nodes += 1;
     }
     return true;
   }
 
+  /**
+   * Replays the whole batch on a shadow of the accepted tree and commits it to
+   * the receiver only when every record passes. Remote DOM applies records in
+   * order and never rolls a batch back, so a partly-valid batch must be refused
+   * whole; the shadow also lets a record read what earlier records in the same
+   * batch just inserted or removed.
+   */
   function applyRecords(records: readonly RemoteMutationRecord[]): void {
-    const found = new Map<string, string>();
-    const removedIds: string[] = [];
-    let delta = 0;
+    const shadow = buildShadow(receiver.root);
 
     for (const record of records) {
       switch (record[0]) {
         case MUTATION_TYPE_INSERT_CHILD: {
+          const parentId = record[1];
           const child = record[2];
-          if (!checkSerialization(child, found)) return;
-          delta += nodeCount(child);
+          const index = record[3];
+          if (!checkSerialization(child, shadow)) return;
+          const children = shadow.children.get(parentId);
+          if (children === undefined) {
+            return void refuse({
+              code: "unknown-element",
+              message: "A child was inserted under an element the interface never declared",
+            });
+          }
+          const at = Math.max(0, Math.min(index ?? children.length, children.length));
+          children.splice(at, 0, child.id);
           break;
         }
         case MUTATION_TYPE_REMOVE_CHILD: {
-          const parent = receiver.get({ id: record[1] });
-          const children =
-            parent !== undefined && "children" in parent
-              ? (parent.children as readonly unknown[])
-              : undefined;
-          const child = children?.[record[2]];
-          if (child !== undefined) {
-            delta -= receiverNodeCount(child as never);
-            collectIds(child as never, removedIds);
+          const children = shadow.children.get(record[1]);
+          const childId = children?.[record[2]];
+          if (children !== undefined && childId !== undefined) {
+            children.splice(record[2], 1);
+            unindexSubtree(childId, shadow);
           }
           break;
         }
@@ -238,7 +299,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
           const name = record[2];
           const value = record[3];
           const updateType = record[4] ?? UPDATE_PROPERTY_TYPE_PROPERTY;
-          const tag = tags.get(id);
+          const tag = shadow.tags.get(id);
           const element = tag === undefined ? undefined : getPluginUiElement(tag);
           if (element === undefined) {
             return void refuse({
@@ -288,7 +349,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
       }
     }
 
-    if (nodes + delta > limits.maxNodes) {
+    if (shadow.nodes > limits.maxNodes) {
       refuse({
         code: "too-many-nodes",
         message: `The interface has more than ${limits.maxNodes} elements`,
@@ -296,20 +357,8 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
       return;
     }
 
-    for (const [id, tag] of found) tags.set(id, tag);
-    for (const id of removedIds) tags.delete(id);
-    nodes += delta;
     receiver.connection.mutate(records);
-  }
-
-  function collectIds(
-    node: { id: string; type: number; children?: readonly unknown[] },
-    out: string[]
-  ): void {
-    out.push(node.id);
-    if (node.type === NODE_TYPE_ELEMENT) {
-      for (const child of node.children ?? []) collectIds(child as never, out);
-    }
+    tags = shadow.tags;
   }
 
   return {
@@ -322,6 +371,15 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
         });
         return;
       }
+      const currentFrame = frame();
+      if (currentFrame === lastBatchFrame) {
+        refuse({
+          code: "too-many-batches",
+          message: "The interface sent more than one update in a frame",
+        });
+        return;
+      }
+      lastBatchFrame = currentFrame;
       applyRecords(records);
     },
     call(id, method, ...args) {

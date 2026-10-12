@@ -14,6 +14,7 @@ import {
   createValidatedConnection,
   type PluginUiViolation,
 } from "@/features/plugins/remote-ui/validate";
+import { PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
 
 const ROOT = "~";
 
@@ -29,12 +30,21 @@ function element(
   return { id, type: 1, element: tag, children: [], ...extra } as RemoteNodeSerialization;
 }
 
-function setup(limits?: Parameters<typeof createValidatedConnection>[0]["limits"]) {
+function advancingFrame(): () => number {
+  let frame = 0;
+  return () => frame++;
+}
+
+function setup(
+  limits?: Parameters<typeof createValidatedConnection>[0]["limits"],
+  frame: () => number = advancingFrame()
+) {
   const receiver = new RemoteReceiver();
   const violations: PluginUiViolation[] = [];
   const connection = createValidatedConnection({
     receiver,
     onViolation: (violation) => violations.push(violation),
+    frame,
     ...(limits === undefined ? {} : { limits }),
   });
   return { receiver, violations, connection };
@@ -112,6 +122,71 @@ describe("the connection validator", () => {
     expect(violations[0]?.code).toBe("unknown-prop");
   });
 
+  it("validates an update for an element inserted in the same batch", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-button")),
+      [MUTATION_TYPE_UPDATE_PROPERTY, "1", "isDisabled", true],
+    ]);
+    expect(violations).toEqual([]);
+    expect(receiver.root.children).toHaveLength(1);
+  });
+
+  it("keeps an element re-inserted after its removal in the same batch", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([insert(element("1", "maibuk-button"))]);
+    connection.mutate([
+      [MUTATION_TYPE_REMOVE_CHILD, ROOT, 0],
+      [MUTATION_TYPE_INSERT_CHILD, ROOT, element("1", "maibuk-button"), 0],
+    ]);
+    connection.mutate([[MUTATION_TYPE_UPDATE_PROPERTY, "1", "isDisabled", true]]);
+    expect(violations).toEqual([]);
+    expect(receiver.root.children).toHaveLength(1);
+  });
+
+  it("applies a move and the moved element's update in one batch", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(element("row-a", "maibuk-button"), 0),
+      insert(element("row-b", "maibuk-button"), 1),
+    ]);
+    // A keyed reorder moves row-b in front of row-a and disables it before the
+    // batch is delivered.
+    connection.mutate([
+      [MUTATION_TYPE_REMOVE_CHILD, ROOT, 1],
+      [MUTATION_TYPE_INSERT_CHILD, ROOT, element("row-b", "maibuk-button"), 0],
+      [MUTATION_TYPE_UPDATE_PROPERTY, "row-b", "isDisabled", true],
+    ]);
+    expect(violations).toEqual([]);
+    expect(receiver.root.children.map((child) => child.id)).toEqual(["row-b", "row-a"]);
+  });
+
+  it("does not commit any part of a batch that fails", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-button")),
+      insert(element("2", "maibuk-evil"), 1),
+    ]);
+    expect(violations[0]?.code).toBe("unknown-element");
+    // The valid first record was not committed: a later update on it is unknown.
+    connection.mutate([[MUTATION_TYPE_UPDATE_PROPERTY, "1", "isDisabled", true]]);
+    expect(receiver.root.children).toHaveLength(0);
+  });
+
+  it("updates a descendant inserted as part of a subtree in the same batch", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(
+        element("1", "maibuk-view", {
+          children: [element("2", "maibuk-button")],
+        })
+      ),
+      [MUTATION_TYPE_UPDATE_PROPERTY, "2", "isDisabled", true],
+    ]);
+    expect(violations).toEqual([]);
+    expect(receiver.root.children).toHaveLength(1);
+  });
+
   it("refuses an attribute update", () => {
     const { violations, connection } = setup();
     connection.mutate([insert(element("1", "maibuk-button"))]);
@@ -162,13 +237,39 @@ describe("the connection validator", () => {
   });
 
   it("refuses a batch with too many records", () => {
-    const { violations, connection } = setup({ maxNodes: 10, maxRecordsPerBatch: 1 });
+    const { violations, connection } = setup({ maxNodes: 10, maxRecordsPerBatch: 1, maxBatchesPerFrame: 1 });
     connection.mutate([insert(element("1", "maibuk-text")), insert(element("2", "maibuk-text"), 1)]);
     expect(violations[0]?.code).toBe("too-many-records");
   });
 
+  it("refuses a second batch in the same animation frame", () => {
+    const frame = 0;
+    const { violations, connection } = setup(undefined, () => frame);
+    connection.mutate([insert(element("1", "maibuk-text"))]);
+    connection.mutate([insert(element("2", "maibuk-text"), 1)]);
+    expect(violations[0]?.code).toBe("too-many-batches");
+  });
+
+  it("accepts one batch per animation frame", () => {
+    let frame = 0;
+    const { receiver, violations, connection } = setup(undefined, () => frame);
+    connection.mutate([insert(element("1", "maibuk-text"))]);
+    frame += 1;
+    connection.mutate([insert(element("2", "maibuk-text"), 1)]);
+    expect(violations).toEqual([]);
+    expect(receiver.root.children).toHaveLength(2);
+  });
+
+  it("carries the #401 Remote UI budget", () => {
+    expect(PLUGIN_UI_LIMITS).toEqual({
+      maxNodes: 10_000,
+      maxRecordsPerBatch: 2_000,
+      maxBatchesPerFrame: 1,
+    });
+  });
+
   it("refuses a tree over the node budget", () => {
-    const { violations, connection } = setup({ maxNodes: 1, maxRecordsPerBatch: 10 });
+    const { violations, connection } = setup({ maxNodes: 1, maxRecordsPerBatch: 10, maxBatchesPerFrame: 1 });
     connection.mutate([insert(element("1", "maibuk-text")), insert(element("2", "maibuk-text"), 1)]);
     expect(violations[0]?.code).toBe("too-many-nodes");
   });
