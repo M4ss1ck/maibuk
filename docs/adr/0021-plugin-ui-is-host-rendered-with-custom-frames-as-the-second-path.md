@@ -19,4 +19,5 @@ Decided in [Remote UI rendering for sandboxed React plugins](https://github.com/
 
 - Every public kit component has a documented subset of props and a row in the one component-definition table. Unsupported declarations fail at validation instead of being silently ignored. A coverage gate requires a keyboard test per interactive component through the real remote renderer.
 - Text inputs are host-owned, and echoes are matched against the list of values still in flight, not the last value sent, so burst typing never rolls a field back.
+- Plugin CSS is scoped by rewriting every selector under the surface's own `data-plugin-ui` attribute, including inside conditional at-rules. Syntax that cannot be scoped (`@import`, `@keyframes`, `@font-face`, `@page`, and CSS nesting) is dropped, so a Plugin's CSS can style its own host-rendered surface and nothing of Maibuk's or another Plugin's.
 - `Frame` on Android returns only after Tauri IPC reachability from sandboxed frames is fixed. That is a separate effort.

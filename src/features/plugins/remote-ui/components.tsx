@@ -25,6 +25,17 @@ import {
 import { NumberField as AriaNumberField } from "react-aria-components/NumberField";
 import { Radio, RadioGroup as AriaRadioGroup } from "react-aria-components/RadioGroup";
 import { Link as AriaLink } from "react-aria-components/Link";
+import { Tabs as AriaTabs, TabList, Tab, TabPanel } from "react-aria-components/Tabs";
+import {
+  Disclosure as AriaDisclosure,
+  DisclosurePanel,
+} from "react-aria-components/Disclosure";
+import { Button as AriaButton } from "react-aria-components/Button";
+import { Heading as AriaHeading } from "react-aria-components/Heading";
+import { ProgressBar as AriaProgressBar } from "react-aria-components/ProgressBar";
+import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
+import { DialogTrigger, Dialog, Popover as AriaPopover } from "react-aria-components/Popover";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   createRemoteComponentRenderer,
   type RemoteComponentRendererMap,
@@ -32,11 +43,16 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Combobox } from "@/components/ui/Combobox";
+import { ItemActionsMenu } from "@/components/ui/ItemActionsMenu";
+import { Modal } from "@/components/ui/Modal";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
+import { scopePluginCss } from "@/features/plugins/remote-ui/css-scope";
 import { createEchoTracker, type PluginEchoTracker } from "@/features/plugins/remote-ui/echo";
+import { useRestoreFocus } from "@/hooks";
 import { openExternal } from "@/lib/platform";
 import { PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 import type { PluginUiOption } from "@/plugin-sdk/ui.generated";
@@ -777,6 +793,493 @@ function CodeHost({ block, children }: { block?: boolean; children?: ReactNode }
   return <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm text-foreground">{children}</code>;
 }
 
+/** Organization: tabs, disclosure, collections, tables (#439). */
+
+/**
+ * A prop the host mirrors into its own state. A host-driven change (Escape, an
+ * outside press, a row activation) applies immediately and is reported to the
+ * Plugin; a Plugin-driven change arrives as the prop. `fallback` covers a prop
+ * the Plugin never set, and the state is left alone while the prop stays
+ * undefined.
+ */
+function useMirroredProp<T>(prop: T | undefined, fallback: T): [T, (next: T) => void] {
+  const [value, setValue] = useState<T>(prop ?? fallback);
+  useEffect(() => setValue(prop ?? fallback), [prop, fallback]);
+  return [value, setValue];
+}
+
+/** The disclosure and expandable-row chevron; decorative, the row owns the control. */
+function Chevron({ expanded }: { expanded: boolean }) {
+  return expanded ? (
+    <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+  ) : (
+    <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+  );
+}
+
+interface TabsHostProps {
+  label: string;
+  items: readonly PluginUiOption[];
+  selectedKey?: string;
+  children?: ReactNode;
+  onChange?: (key: string) => void;
+}
+
+function TabsHost({ label, items, selectedKey, children, onChange }: TabsHostProps) {
+  const activeKey = selectedKey ?? items[0]?.value ?? "";
+  return (
+    <AriaTabs
+      selectedKey={activeKey}
+      onSelectionChange={(key) => onChange?.(String(key))}
+      className="w-full"
+    >
+      <TabList
+        aria-label={label}
+        className="flex flex-wrap gap-1 border-b border-border pb-px"
+      >
+        {items.map((item) => (
+          <Tab
+            key={item.value}
+            id={item.value}
+            className="-mb-px cursor-pointer rounded-t-lg border-b-2 border-transparent px-3 py-1.5 text-sm text-muted-foreground outline-none transition-colors data-selected:border-primary data-selected:text-foreground data-focus-visible:ring-2 data-focus-visible:ring-primary"
+          >
+            {item.label}
+          </Tab>
+        ))}
+      </TabList>
+      <TabPanel id={activeKey} className="pt-3 outline-none">
+        {children}
+      </TabPanel>
+    </AriaTabs>
+  );
+}
+
+interface DisclosureHostProps {
+  label: string;
+  isExpanded?: boolean;
+  isDisabled?: boolean;
+  children?: ReactNode;
+  onExpandedChange?: (expanded: boolean) => void;
+}
+
+function DisclosureHost({
+  label,
+  isExpanded,
+  isDisabled,
+  children,
+  onExpandedChange,
+}: DisclosureHostProps) {
+  const [expanded, setExpanded] = useMirroredProp(isExpanded, false);
+  return (
+    <AriaDisclosure
+      isExpanded={expanded}
+      onExpandedChange={(next) => {
+        setExpanded(next);
+        onExpandedChange?.(next);
+      }}
+      isDisabled={isDisabled}
+      className="w-full"
+    >
+      <AriaHeading className="m-0">
+        <AriaButton
+          slot="trigger"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-foreground outline-none transition-colors hover:bg-muted data-focus-visible:ring-2 data-focus-visible:ring-primary"
+        >
+          <Chevron expanded={expanded} />
+          {label}
+        </AriaButton>
+      </AriaHeading>
+      <DisclosurePanel className="px-2 py-1.5 text-sm text-foreground outline-none">
+        {children}
+      </DisclosurePanel>
+    </AriaDisclosure>
+  );
+}
+
+interface CollectionHostProps {
+  label: string;
+  selectionMode?: "none" | "single" | "multiple";
+  selectedKeys?: readonly string[];
+  children?: ReactNode;
+  onSelectionChange?: (keys: readonly string[]) => void;
+}
+
+function CollectionHost({
+  label,
+  selectionMode = "none",
+  selectedKeys,
+  children,
+  onSelectionChange,
+}: CollectionHostProps) {
+  // The host owns the collection: one Tab stop, arrow navigation, stable row
+  // identity by id, and a bounded scroll area. The Remote UI node cap (10,000)
+  // keeps a list the Plugin sends within the host's budget.
+  return (
+    <ListBox
+      aria-label={label}
+      selectionMode={selectionMode}
+      selectedKeys={selectedKeys}
+      onSelectionChange={(keys) => onSelectionChange?.([...keys].map(String))}
+      className="max-h-80 w-full overflow-auto rounded-lg border border-border py-1 outline-none"
+    >
+      {children}
+    </ListBox>
+  );
+}
+
+interface CollectionRowHostProps {
+  id: string;
+  label: string;
+  description?: string;
+  isExpandable?: boolean;
+  isExpanded?: boolean;
+  isDisabled?: boolean;
+  menuItems?: readonly PluginUiOption[];
+  children?: ReactNode;
+  onExpandedChange?: (expanded: boolean) => void;
+  onAction?: () => void;
+  onMenuAction?: (value: string) => void;
+}
+
+function CollectionRowHost({
+  id,
+  label,
+  description,
+  isExpandable,
+  isExpanded,
+  isDisabled,
+  menuItems,
+  children,
+  onExpandedChange,
+  onAction,
+  onMenuAction,
+}: CollectionRowHostProps) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useMirroredProp(isExpanded, false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const actions = (menuItems ?? []).map(
+    // command-exempt: a Plugin row action runs the Plugin's own event, not a Maibuk Command (ADR 0019).
+    (item) => ({
+      id: item.value,
+      label: item.label,
+      onAction: () => onMenuAction?.(item.value),
+    })
+  );
+  return (
+    <ListBoxItem
+      id={id}
+      textValue={label}
+      isDisabled={isDisabled}
+      aria-expanded={isExpandable ? expanded : undefined}
+      onAction={() => {
+        if (isExpandable) {
+          const next = !expanded;
+          setExpanded(next);
+          onExpandedChange?.(next);
+          return;
+        }
+        // A collection is one Tab stop, so its row is the keyboard path to the
+        // row's Item Menu; the ⋯ button stays the pointer path.
+        if (actions.length > 0) {
+          setMenuOpen(true);
+          return;
+        }
+        onAction?.();
+      }}
+      className="flex cursor-pointer flex-col gap-1 px-2 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted data-selected:bg-primary/10 data-disabled:cursor-default data-disabled:opacity-50"
+    >
+      <div className="flex items-center gap-2">
+        {isExpandable ? <Chevron expanded={expanded} /> : null}
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {description ? (
+          <span className="min-w-0 truncate text-sm text-muted-foreground">{description}</span>
+        ) : null}
+        {actions.length > 0 ? (
+          <ItemActionsMenu
+            label={t("common.moreActionsFor", { title: label })}
+            actions={actions}
+            isOpen={menuOpen}
+            onOpenChange={setMenuOpen}
+          />
+        ) : null}
+      </div>
+      {expanded && children ? <div className="pl-7 text-muted-foreground">{children}</div> : null}
+    </ListBoxItem>
+  );
+}
+
+interface TableHostProps {
+  label: string;
+  columns: readonly PluginUiOption[];
+  children?: ReactNode;
+}
+
+function TableHost({ label, columns, children }: TableHostProps) {
+  return (
+    <table className="w-full border-collapse text-sm">
+      <caption className="sr-only">{label}</caption>
+      <thead>
+        <tr className="border-b border-border text-left">
+          {columns.map((column) => (
+            <th key={column.value} scope="col" className="px-2 py-1.5 font-medium text-foreground">
+              {column.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>{children}</tbody>
+    </table>
+  );
+}
+
+function TableRowHost({ cells }: { cells: readonly PluginUiOption[] }) {
+  return (
+    <tr className="border-b border-border last:border-b-0">
+      {cells.map((cell) => (
+        <td key={cell.value} className="px-2 py-1.5 text-foreground">
+          {cell.label}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+/** Overlays: modal, confirmation dialog, popover, tooltip (#439). */
+
+interface ModalHostProps {
+  title: string;
+  isOpen?: boolean;
+  children?: ReactNode;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function ModalHost({ title, isOpen, children, onOpenChange }: ModalHostProps) {
+  const [open, setOpen] = useMirroredProp(isOpen, false);
+  // The host closes immediately on Escape or outside press and notifies the
+  // Plugin afterwards; it never waits for the Plugin's echo to close.
+  const close = useCallback(() => {
+    setOpen(false);
+    onOpenChange?.(false);
+  }, [onOpenChange, setOpen]);
+  return (
+    <Modal isOpen={open} onClose={close} title={title}>
+      {children}
+    </Modal>
+  );
+}
+
+interface ConfirmDialogHostProps {
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  isDestructive?: boolean;
+  isOpen?: boolean;
+  onConfirm?: () => void;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function ConfirmDialogHost({
+  title,
+  description,
+  confirmLabel,
+  cancelLabel,
+  isDestructive,
+  isOpen,
+  onConfirm,
+  onOpenChange,
+}: ConfirmDialogHostProps) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useMirroredProp(isOpen, false);
+  const close = useCallback(() => {
+    setOpen(false);
+    onOpenChange?.(false);
+  }, [onOpenChange, setOpen]);
+  return (
+    <Modal
+      isOpen={open}
+      onClose={close}
+      title={title}
+      role="alertdialog"
+      footer={
+        <>
+          <Button variant="secondary" onClick={close}>
+            {cancelLabel ?? t("common.cancel")}
+          </Button>
+          <Button
+            variant={isDestructive ? "destructive" : "primary"}
+            onClick={() => {
+              onConfirm?.();
+              close();
+            }}
+          >
+            {confirmLabel ?? t("common.confirm")}
+          </Button>
+        </>
+      }
+    >
+      {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+    </Modal>
+  );
+}
+
+interface PopoverHostProps {
+  label: string;
+  icon?: string;
+  isOpen?: boolean;
+  children?: ReactNode;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function PopoverHost({ label, icon, isOpen, children, onOpenChange }: PopoverHostProps) {
+  const [open, setOpen] = useMirroredProp(isOpen, false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // A non-modal popover does not return focus by itself when the host dismisses
+  // it; the shared hook restores the trigger, immediately and without a Worker
+  // echo.
+  useRestoreFocus(open, { getTarget: () => triggerRef.current });
+  return (
+    <DialogTrigger
+      isOpen={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        onOpenChange?.(next);
+      }}
+    >
+      <AriaButton
+        ref={triggerRef}
+        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none transition-colors hover:bg-muted data-focus-visible:ring-2 data-focus-visible:ring-primary"
+      >
+        {icon ? <PluginIcon icon={icon} className="h-4 w-4" /> : null}
+        {label}
+      </AriaButton>
+      <AriaPopover className="z-50 max-w-xs rounded-lg border border-border bg-card p-3 shadow-lg">
+        <Dialog className="outline-none">{children}</Dialog>
+      </AriaPopover>
+    </DialogTrigger>
+  );
+}
+
+function TooltipHost({ content, children }: { content: string; children?: ReactNode }) {
+  return (
+    <Tooltip content={content}>
+      <span className="inline-flex">{children}</span>
+    </Tooltip>
+  );
+}
+
+/** Feedback: progress, inline status, empty states (#439). */
+
+function ProgressBarHost({
+  label,
+  value,
+  maxValue,
+  isIndeterminate,
+}: {
+  label: string;
+  value?: number;
+  maxValue?: number;
+  isIndeterminate?: boolean;
+}) {
+  return (
+    <AriaProgressBar
+      aria-label={label}
+      value={value}
+      maxValue={maxValue}
+      isIndeterminate={isIndeterminate}
+      className="w-full"
+    >
+      {({ percentage, valueText, isIndeterminate: indeterminate }) => (
+        <>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-foreground">{label}</span>
+            {!indeterminate ? <span className="text-muted-foreground">{valueText}</span> : null}
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full bg-primary ${
+                indeterminate ? "w-2/5 animate-pulse" : "transition-[width]"
+              }`}
+              style={indeterminate ? undefined : { width: `${percentage ?? 0}%` }}
+            />
+          </div>
+        </>
+      )}
+    </AriaProgressBar>
+  );
+}
+
+type StatusTone = "info" | "success" | "warning" | "danger";
+
+const STATUS_TONE: Record<StatusTone, string> = {
+  info: "bg-info-bg text-info-text",
+  success: "bg-feedback-success-bg text-feedback-success-text",
+  warning: "bg-warning-bg text-warning-text",
+  danger: "bg-feedback-error-bg text-feedback-error-text",
+};
+
+function StatusHost({ tone = "info", children }: { tone?: StatusTone; children?: ReactNode }) {
+  return (
+    <p role={tone === "danger" ? "alert" : "status"} className={`rounded-lg px-3 py-2 text-sm ${STATUS_TONE[tone]}`}>
+      {children}
+    </p>
+  );
+}
+
+function EmptyStateHost({
+  title,
+  description,
+  icon,
+  children,
+}: {
+  title: string;
+  description?: string;
+  icon?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-6 py-10 text-center">
+      {icon ? <PluginIcon icon={icon} className="h-8 w-8 text-muted-foreground" /> : null}
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      {description ? (
+        <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+/** Appearance: a themed region whose CSS is isolated to it (#439). */
+
+let nextSurfaceScope = 0;
+
+/** A fresh, unique scope id; each surface gets its own attribute value. */
+function nextSurfaceId(): string {
+  nextSurfaceScope += 1;
+  return `plugin-ui-${nextSurfaceScope}`;
+}
+
+function SurfaceHost({
+  css,
+  padding = "none",
+  children,
+}: {
+  css?: string;
+  padding?: keyof typeof PADDING;
+  children?: ReactNode;
+}) {
+  const scope = useRef<string | null>(null);
+  if (scope.current === null) scope.current = nextSurfaceId();
+  const scopeId = scope.current;
+  const scoped = css ? scopePluginCss(css, `[data-plugin-ui="${scopeId}"]`) : "";
+  return (
+    <div data-plugin-ui={scopeId} className={`w-full ${PADDING[padding]}`}>
+      {children}
+      {scoped ? <style>{scoped}</style> : null}
+    </div>
+  );
+}
+
 /** Every table tag's host renderer, built once. */
 export function createPluginUiComponents(): RemoteComponentRendererMap {
   const components: RemoteComponentRendererMap = new Map();
@@ -802,11 +1305,34 @@ export function createPluginUiComponents(): RemoteComponentRendererMap {
     Button: ButtonHost,
     IconButton: IconButtonHost,
     Link: LinkHost,
+    Tabs: TabsHost,
+    Disclosure: DisclosureHost,
+    Collection: CollectionHost,
+    CollectionRow: CollectionRowHost,
+    Table: TableHost,
+    TableRow: TableRowHost,
+    Modal: ModalHost,
+    ConfirmDialog: ConfirmDialogHost,
+    Popover: PopoverHost,
+    Tooltip: TooltipHost,
+    ProgressBar: ProgressBarHost,
+    Status: StatusHost,
+    EmptyState: EmptyStateHost,
+    Surface: SurfaceHost,
   };
   for (const element of PLUGIN_UI_TABLE) {
     const Host = hosts[element.host];
     if (Host === undefined) throw new Error(`The UI kit has no host component for ${element.tag}`);
-    components.set(element.tag, createRemoteComponentRenderer(Host as never));
+    components.set(
+      element.tag,
+      createRemoteComponentRenderer(Host as never, {
+        // The table names each event's React prop; the host must read the same
+        // prop, not Remote DOM's mechanical `on<Eventname>` guess.
+        eventProps: Object.fromEntries(
+          element.events.map((event) => [event.prop, { event: event.event }])
+        ),
+      } as never)
+    );
   }
   return components;
 }

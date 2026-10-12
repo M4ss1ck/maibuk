@@ -53,7 +53,14 @@ export interface PluginUiEvent {
   description?: string;
 }
 
-export type PluginUiCategory = "structure" | "forms" | "actions";
+export type PluginUiCategory =
+  | "structure"
+  | "forms"
+  | "actions"
+  | "organization"
+  | "overlays"
+  | "feedback"
+  | "appearance";
 
 export interface PluginUiElement {
   /** The remote custom element's tag name, e.g. `maibuk-button`. */
@@ -73,8 +80,8 @@ export interface PluginUiElement {
 }
 
 /**
- * The v1 part 1 kit: structure, forms, and actions (#416, #438). Organization,
- * overlays, and feedback are part 2 (#439).
+ * The v1 kit: structure, forms, and actions (#416, #438); organization,
+ * overlays, feedback, and Plugin CSS (#439).
  */
 export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
   // Structure
@@ -469,6 +476,317 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       children: { kind: "node" },
     },
     events: [{ prop: "onPress", event: "press", detail: "none" }],
+    methods: [],
+  },
+
+  // Organization
+  {
+    tag: "maibuk-tabs",
+    component: "Tabs",
+    category: "organization",
+    host: "Tabs",
+    interactive: true,
+    summary: "A tab list and the selected tab's panel.",
+    props: {
+      label: {
+        kind: "string",
+        required: true,
+        maxLength: 512,
+        description: "Accessible name of the tab list.",
+      },
+      items: {
+        kind: "options",
+        required: true,
+        description: "Tab keys and titles, in order.",
+      },
+      selectedKey: {
+        kind: "string",
+        maxLength: 512,
+        description: "The selected tab's key; defaults to the first tab.",
+      },
+      children: { kind: "node", description: "The panel shown for the selected tab." },
+    },
+    events: [
+      {
+        prop: "onChange",
+        event: "change",
+        detail: "string",
+        description: "Fires with the selected tab's key when the selection changes.",
+      },
+    ],
+    methods: [],
+  },
+  {
+    tag: "maibuk-disclosure",
+    component: "Disclosure",
+    category: "organization",
+    host: "Disclosure",
+    interactive: true,
+    summary: "A collapsible section with a heading and a panel.",
+    props: {
+      label: { kind: "string", required: true, maxLength: 512, description: "The heading that toggles it." },
+      isExpanded: { kind: "boolean", description: "Whether the panel is visible; defaults to collapsed." },
+      isDisabled: { kind: "boolean" },
+      children: { kind: "node" },
+    },
+    events: [
+      {
+        prop: "onExpandedChange",
+        event: "expandedchange",
+        detail: "boolean",
+        description: "Fires with the new expanded state.",
+      },
+    ],
+    methods: [],
+  },
+  {
+    tag: "maibuk-collection",
+    component: "Collection",
+    category: "organization",
+    host: "Collection",
+    interactive: true,
+    summary: "A keyboard-navigable list of rows, with optional selection.",
+    props: {
+      label: { kind: "string", required: true, maxLength: 512, description: "Accessible name of the list." },
+      selectionMode: {
+        kind: "enum",
+        values: ["none", "single", "multiple"],
+        description: "Whether rows can be selected; defaults to `none`.",
+      },
+      selectedKeys: { kind: "keys", description: "The selected rows' ids." },
+      children: { kind: "node" },
+    },
+    events: [
+      {
+        prop: "onSelectionChange",
+        event: "selectionchange",
+        detail: "keys",
+        description: "Fires with the selected rows' ids.",
+      },
+    ],
+    methods: [],
+  },
+  {
+    tag: "maibuk-collection-row",
+    component: "CollectionRow",
+    category: "organization",
+    host: "CollectionRow",
+    interactive: true,
+    summary: "One row of a `Collection`, with an optional Item Menu and expanded panel.",
+    props: {
+      id: { kind: "string", required: true, maxLength: 512, description: "Stable row identity." },
+      label: { kind: "string", required: true, maxLength: 512, description: "The row's primary text." },
+      description: { kind: "string", maxLength: 1024 },
+      isExpandable: { kind: "boolean", description: "Shows a toggle that reveals the row's panel." },
+      isExpanded: { kind: "boolean" },
+      isDisabled: { kind: "boolean" },
+      menuItems: {
+        kind: "options",
+        description: "Entries of the row's Item Menu; none hides the ⋯ button.",
+      },
+      children: { kind: "node", description: "The panel shown while the row is expanded." },
+    },
+    events: [
+      { prop: "onExpandedChange", event: "expandedchange", detail: "boolean" },
+      {
+        prop: "onAction",
+        event: "action",
+        detail: "none",
+        description: "Fires when the row is activated and it is not expandable.",
+      },
+      {
+        prop: "onMenuAction",
+        event: "menuaction",
+        detail: "string",
+        description: "Fires with the chosen Item Menu entry's value.",
+      },
+    ],
+    methods: [],
+  },
+  {
+    tag: "maibuk-table",
+    component: "Table",
+    category: "organization",
+    host: "Table",
+    interactive: false,
+    summary: "A read-only table; children are `TableRow` elements.",
+    props: {
+      label: { kind: "string", required: true, maxLength: 512, description: "Accessible name of the table." },
+      columns: {
+        kind: "options",
+        required: true,
+        description: "Column keys and headers, in order.",
+      },
+      children: { kind: "node" },
+    },
+    events: [],
+    methods: [],
+  },
+  {
+    tag: "maibuk-table-row",
+    component: "TableRow",
+    category: "organization",
+    host: "TableRow",
+    interactive: false,
+    summary: "One row of a `Table`; its cells are keyed by column.",
+    props: {
+      cells: {
+        kind: "options",
+        required: true,
+        description: "Cell text keyed by column value, in column order.",
+      },
+    },
+    events: [],
+    methods: [],
+  },
+
+  // Overlays
+  {
+    tag: "maibuk-modal",
+    component: "Modal",
+    category: "overlays",
+    host: "Modal",
+    interactive: true,
+    summary: "A modal dialog that contains focus and returns it to its trigger.",
+    props: {
+      title: { kind: "string", required: true, maxLength: 512 },
+      isOpen: { kind: "boolean", description: "Whether the dialog is open." },
+      children: { kind: "node" },
+    },
+    events: [
+      {
+        prop: "onOpenChange",
+        event: "openchange",
+        detail: "boolean",
+        description: "Fires when the host dismisses or opens the dialog.",
+      },
+    ],
+    methods: [],
+  },
+  {
+    tag: "maibuk-confirm-dialog",
+    component: "ConfirmDialog",
+    category: "overlays",
+    host: "ConfirmDialog",
+    interactive: true,
+    summary: "A confirmation dialog with a confirm and a cancel action.",
+    props: {
+      title: { kind: "string", required: true, maxLength: 512 },
+      description: { kind: "string", maxLength: 1024 },
+      confirmLabel: { kind: "string", maxLength: 512, description: "Defaults to the localized Confirm." },
+      cancelLabel: { kind: "string", maxLength: 512, description: "Defaults to the localized Cancel." },
+      isDestructive: { kind: "boolean", description: "Styles the confirm action as destructive." },
+      isOpen: { kind: "boolean" },
+    },
+    events: [
+      { prop: "onConfirm", event: "confirm", detail: "none" },
+      { prop: "onOpenChange", event: "openchange", detail: "boolean" },
+    ],
+    methods: [],
+  },
+  {
+    tag: "maibuk-popover",
+    component: "Popover",
+    category: "overlays",
+    host: "Popover",
+    interactive: true,
+    summary: "A trigger button that opens a small panel anchored to it.",
+    props: {
+      label: { kind: "string", required: true, maxLength: 512, description: "The trigger's accessible name." },
+      icon: { kind: "string", maxLength: 64, description: "An optional Lucide icon name for the trigger." },
+      isOpen: { kind: "boolean" },
+      children: { kind: "node" },
+    },
+    events: [
+      { prop: "onOpenChange", event: "openchange", detail: "boolean" },
+    ],
+    methods: [],
+  },
+  {
+    tag: "maibuk-tooltip",
+    component: "Tooltip",
+    category: "overlays",
+    host: "Tooltip",
+    interactive: true,
+    summary: "A short hint shown on hover or focus of its child.",
+    props: {
+      content: { kind: "string", required: true, maxLength: 512 },
+      children: { kind: "node" },
+    },
+    events: [],
+    methods: [],
+  },
+
+  // Feedback
+  {
+    tag: "maibuk-progress-bar",
+    component: "ProgressBar",
+    category: "feedback",
+    host: "ProgressBar",
+    interactive: false,
+    summary: "A determinate or indeterminate progress indicator.",
+    props: {
+      label: { kind: "string", required: true, maxLength: 512 },
+      value: { kind: "number", minimum: 0 },
+      maxValue: { kind: "number", minimum: 1 },
+      isIndeterminate: { kind: "boolean" },
+    },
+    events: [],
+    methods: [],
+  },
+  {
+    tag: "maibuk-status",
+    component: "Status",
+    category: "feedback",
+    host: "Status",
+    interactive: false,
+    summary: "An inline status or error message.",
+    props: {
+      tone: {
+        kind: "enum",
+        values: ["info", "success", "warning", "danger"],
+        description: "Defaults to `info`; `danger` is announced immediately.",
+      },
+      children: { kind: "node" },
+    },
+    events: [],
+    methods: [],
+  },
+  {
+    tag: "maibuk-empty-state",
+    component: "EmptyState",
+    category: "feedback",
+    host: "EmptyState",
+    interactive: false,
+    summary: "A centered empty or nothing-here state.",
+    props: {
+      title: { kind: "string", required: true, maxLength: 512 },
+      description: { kind: "string", maxLength: 1024 },
+      icon: { kind: "string", maxLength: 64 },
+      children: { kind: "node", description: "An optional call to action." },
+    },
+    events: [],
+    methods: [],
+  },
+
+  // Appearance
+  {
+    tag: "maibuk-surface",
+    component: "Surface",
+    category: "appearance",
+    host: "Surface",
+    interactive: false,
+    summary: "A themed region whose CSS is isolated to it.",
+    props: {
+      css: {
+        kind: "string",
+        maxLength: 200_000,
+        description: "CSS scoped to this surface; it cannot reach Maibuk or another Plugin.",
+      },
+      padding: { kind: "enum", values: ["none", "sm", "md", "lg"] },
+      children: { kind: "node" },
+    },
+    events: [],
     methods: [],
   },
 ];
