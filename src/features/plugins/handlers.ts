@@ -9,6 +9,12 @@
  */
 
 import { toast } from "@/components/ui/Toast";
+import {
+  getPluginEditorContent,
+  getPluginEditorSelection,
+  revealInFocusedEditor,
+  setPluginEditorHighlights,
+} from "@/features/plugins/editor-host";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
   getPluginBook,
@@ -46,6 +52,11 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "library.notes.get": ({ noteId }) => getPluginNote(noteId),
     "library.canvases.list": ({ bookId }) => listPluginCanvases(bookId),
     "library.canvases.get": ({ canvasId }) => getPluginCanvas(canvasId),
+    "editor.getContent": () => getPluginEditorContent(),
+    "editor.getSelection": () => getPluginEditorSelection(),
+    "editor.reveal": ({ range }) => revealInFocusedEditor(range),
+    "editor.setHighlights": ({ kind, ranges }, { pluginId }) =>
+      setPluginEditorHighlights(pluginId, { kind, ranges }),
     "storage.get": async ({ key }, { pluginId }) => {
       const value = await getPluginStorageValue(pluginId, key);
       return value === undefined ? null : value;

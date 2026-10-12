@@ -1,10 +1,15 @@
 import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { editorProps, mockNavigate, mockLocationState } = vi.hoisted(() => ({
+const { editorProps, mockNavigate, mockLocationState, mockRequestReveal } = vi.hoisted(() => ({
   editorProps: [] as Array<Record<string, unknown>>,
   mockNavigate: vi.fn(),
   mockLocationState: { current: null as Record<string, unknown> | null },
+  mockRequestReveal: vi.fn(),
+}));
+
+vi.mock("@/features/plugins/editor-host", () => ({
+  requestEditorReveal: mockRequestReveal,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -168,6 +173,7 @@ describe("BookEditor reading-position wiring", () => {
   beforeEach(() => {
     editorProps.length = 0;
     mockNavigate.mockClear();
+    mockRequestReveal.mockClear();
     mockLocationState.current = null;
   });
 
@@ -177,6 +183,7 @@ describe("BookEditor reading-position wiring", () => {
     const last = editorProps[editorProps.length - 1];
     expect(last?.restoreKey).toBe("chapter:ch1");
     expect(last?.suppressRestore).toBe(false);
+    expect(last?.pluginEntity).toEqual({ kind: "chapter", id: "ch1" });
   });
 
   it("suppresses restore while a heading deep-link is pending", () => {
@@ -190,5 +197,19 @@ describe("BookEditor reading-position wiring", () => {
     const last = editorProps[editorProps.length - 1];
     expect(last?.restoreKey).toBe("chapter:ch1");
     expect(last?.suppressRestore).toBe(true);
+  });
+
+  it("queues a Plugin reveal carried as navigation state", () => {
+    mockLocationState.current = {
+      openChapterId: "ch1",
+      reveal: { from: 4, to: 7 },
+    };
+
+    render(<BookEditor />);
+
+    expect(mockRequestReveal).toHaveBeenCalledWith(
+      { kind: "chapter", id: "ch1" },
+      { from: 4, to: 7 }
+    );
   });
 });

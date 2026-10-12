@@ -39,6 +39,8 @@ import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { buildDropHtml } from "@/components/editor/file-drop-html";
 import { textDropExtension } from "@/features/markdown/dropped-file";
 import { dictationHub } from "@/features/dictation/hub";
+import { flushPendingEditorReveal, registerPluginEditor } from "@/features/plugins/editor-host";
+import type { PluginEntityTarget } from "@/features/plugins/types";
 import { readDroppedWebFiles } from "@/hooks/useTextFileDrop";
 import { useEditorFileDrop } from "@/components/editor/useEditorFileDrop";
 import { IS_TAURI } from "@/lib/platform";
@@ -125,6 +127,12 @@ interface EditorProps {
   autoFocus?: boolean | "if-unfocused";
   /** Tutorial steps that point at this editor's toolbar and text, if any. */
   tutorialAnchors?: EditorTutorialAnchors;
+  /**
+   * The Chapter or Note this editor edits, so the Plugin editor API can address
+   * it (#441). Only Chapter and Note editors register; other rich-text surfaces
+   * pass nothing.
+   */
+  pluginEntity?: PluginEntityTarget | null;
 }
 
 export function Editor({
@@ -158,6 +166,7 @@ export function Editor({
   autoFocus = false,
   ariaLabel,
   tutorialAnchors,
+  pluginEntity = null,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
@@ -240,6 +249,9 @@ export function Editor({
   // parent handing back what the editor already shows.
   const appliedContentRef = useRef(content);
   const editorInstanceRef = useRef<TiptapEditor | null>(null);
+  // Stable across entity changes, so re-registering (a Note switch) replaces
+  // the same focused-editor entry instead of leaking one.
+  const pluginEditorIdRef = useRef<string | null>(null);
 
   // The coalesced emitter runs from a timer, so it reads the callbacks through
   // refs rather than capturing whichever render scheduled it.
@@ -463,7 +475,25 @@ export function Editor({
     appliedContentRef.current = content;
     // setContentSilently suppresses onUpdate, so tell the parent explicitly.
     onExternalContentRef.current?.(content, editor.storage.characterCount.words());
+    // A reveal queued for this entity is applied against the content just
+    // loaded, not the one it replaced.
+    if (pluginEditorIdRef.current) flushPendingEditorReveal(pluginEditorIdRef.current);
   }, [editor, content, runEmit]);
+
+  // The Plugin editor API addresses the focused Chapter or Note editor. The id
+  // is stable across entity changes; a changed entity re-registers, which drops
+  // the previous editor's highlights.
+  const pluginEntityKind = pluginEntity?.kind ?? null;
+  const pluginEntityId = pluginEntity?.id ?? null;
+  useEffect(() => {
+    if (!editor || pluginEntityKind === null || pluginEntityId === null) return;
+    pluginEditorIdRef.current ??= crypto.randomUUID();
+    return registerPluginEditor({
+      id: pluginEditorIdRef.current,
+      editor,
+      entity: { kind: pluginEntityKind, id: pluginEntityId },
+    });
+  }, [editor, pluginEntityKind, pluginEntityId]);
 
   const textLabel = ariaLabel ?? t("editor.textLabel");
   useEffect(() => {

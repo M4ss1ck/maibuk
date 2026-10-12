@@ -26,6 +26,11 @@ import {
 } from "@/features/sync/change-feed";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import { registerPluginContributions } from "@/features/plugins/contributions";
+import {
+  clearPluginHighlights,
+  onEditorContentChanged,
+  onEditorFocusChanged,
+} from "@/features/plugins/editor-host";
 import { createPluginHandlers } from "@/features/plugins/handlers";
 import { currentPluginLanguage, onPluginLanguageChange } from "@/features/plugins/language";
 import {
@@ -624,6 +629,21 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       entry.runtime?.broker.emit("language.changed", { language });
     }
   });
+  // The focused editor's content and focus changes reach subscribed Plugins the
+  // same way Library changes do; while the Library is unavailable (the
+  // Tutorial) no editor content signal reaches a Plugin.
+  const offEditorContent = onEditorContentChanged((entity) => {
+    if (!isLibraryAvailable()) return;
+    for (const entry of entries.values()) {
+      entry.runtime?.broker.emit("editor.contentChanged", { entity });
+    }
+  });
+  const offEditorFocus = onEditorFocusChanged((entity) => {
+    if (!isLibraryAvailable()) return;
+    for (const entry of entries.values()) {
+      entry.runtime?.broker.emit("editor.focusChanged", { entity });
+    }
+  });
 
   return {
     async launch(): Promise<void> {
@@ -736,6 +756,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     stop(pluginId: string, reason: PluginLifecycleStopReason = "requested"): void {
       const entry = entries.get(pluginId);
       if (!entry) return;
+      // A disabled Plugin loses its editor highlights; other Plugins' stay.
+      clearPluginHighlights(pluginId);
       if (entry.state.status === "stopped") {
         // An explicit stop wins over a pending automatic restart: cancel it
         // and record the author's intent.
@@ -768,6 +790,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       disposed = true;
       offChange();
       offLanguage();
+      offEditorContent();
+      offEditorFocus();
       // A lifecycle stopped mid-launch must not leave loading surfaces behind.
       markScanned();
       scanListeners.clear();

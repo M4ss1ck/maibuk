@@ -1,10 +1,18 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Editor } from "@tiptap/core";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { ToastViewport } from "@/components/ui/Toast";
 import { APP_VERSION } from "@/constants";
 import { PLUGIN_APPROVALS_STORAGE_KEY, savePluginApproval } from "@/features/plugins/approvals";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
+import {
+  EDITOR_CONTENT_EVENT_MS,
+  registerPluginEditor,
+  resetPluginEditorHostForTests,
+  setPluginEditorHighlights,
+} from "@/features/plugins/editor-host";
 import {
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_MISS_LIMIT,
@@ -206,6 +214,7 @@ const harnesses: PluginLifecycle[] = [];
 afterEach(() => {
   // Stop every timer the state machine owns, then let the toasts auto-dismiss
   // so the shared store starts the next test empty.
+  resetPluginEditorHostForTests();
   for (const lifecycle of harnesses.splice(0)) lifecycle.dispose();
   act(() => {
     vi.runAllTimers();
@@ -636,6 +645,10 @@ describe("Plugin lifecycle: stop reasons", () => {
       'the "slow" Plugin starting'
     );
     expect(h.lifecycle.state("slow")).toEqual({ status: "starting", startReason: "launch" });
+    // "starting" is set before the frame exists, and the startup timeout is
+    // armed only when `startPlugin` creates the frame, after real async work the
+    // fake timers do not control. Wait for the frame so the timer exists.
+    await advanceUntil(() => h.framesFor("slow").length === 1, 'the "slow" frame created');
 
     await advance(STARTUP_TIMEOUT_MS);
 
@@ -665,6 +678,13 @@ describe("Plugin lifecycle: persistent restart-once", () => {
     });
 
     await advance(RESTART_DELAY_MS);
+    // The restart's frame is created only after real async work the fake timers
+    // do not control; wait for the new frame and the ready state it leads to.
+    await advanceUntil(
+      () =>
+        h.framesFor("alpha").length === 2 && h.lifecycle.state("alpha")?.status === "ready",
+      "alpha's automatic restart"
+    );
     expect(h.framesFor("alpha")).toHaveLength(2);
     expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "restart" });
 
@@ -823,6 +843,9 @@ describe("Plugin lifecycle: dataVersion gate", () => {
     );
     expect(h.lifecycle.state("alpha")).toEqual({ status: "starting", startReason: "launch" });
     expect(h.framesFor("alpha")[0].requests).toContain("migrateData");
+    // The startup timeout is armed only once the frame exists (runtime.ts);
+    // the migrateData wait above already implies it, and this makes it explicit.
+    await advanceUntil(() => h.framesFor("alpha").length === 1, "alpha's frame created");
 
     await advance(STARTUP_TIMEOUT_MS);
 
@@ -1221,6 +1244,110 @@ describe("Plugin lifecycle: library and language events", () => {
     await emitChange({ entity: "book", id: "b1", origin: "local", kind: "content" });
     await advance(0);
     expect(events).toEqual(["library.availabilityChanged", "library.changed"]);
+  });
+
+  it("forwards focused-editor content and focus changes to a running Plugin", async () => {
+    const h = await createHarness({
+      approved: [
+        makePlugin("alpha", { permissions: { required: ["editor:read"], optional: [] } }),
+      ],
+      granted: ["editor:read"],
+    });
+    await launchAll(h);
+    const port = h.framesFor("alpha")[0].pluginPort;
+    if (!port) throw new Error("alpha has no plugin port");
+
+    const events: { event: string; payload: unknown }[] = [];
+    const original = port.onmessage;
+    port.onmessage = (event) => {
+      const data = event.data as { kind?: string; event?: string; payload?: unknown } | null;
+      if (data && data.kind === "event" && data.event) {
+        events.push({ event: data.event, payload: data.payload });
+        return;
+      }
+      original?.call(port, event);
+    };
+    port.postMessage(JSON.stringify({ kind: "subscribe", id: 1, event: "editor.contentChanged" }));
+    port.postMessage(JSON.stringify({ kind: "subscribe", id: 2, event: "editor.focusChanged" }));
+    await advance(0);
+
+    const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one</p>" });
+    document.body.appendChild(editor.view.dom);
+    editor.view.dom.focus();
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+    await advance(0);
+
+    editor.commands.insertContentAt(4, " two");
+    await advance(EDITOR_CONTENT_EVENT_MS);
+
+    expect(events).toContainEqual({
+      event: "editor.focusChanged",
+      payload: { entity: { kind: "chapter", id: "c1" } },
+    });
+    expect(events).toContainEqual({
+      event: "editor.contentChanged",
+      payload: { entity: { kind: "chapter", id: "c1" } },
+    });
+
+    editor.destroy();
+  });
+
+  it("delivers no editor signal while the Library is unavailable (the Tutorial)", async () => {
+    const h = await createHarness({
+      approved: [
+        makePlugin("alpha", { permissions: { required: ["editor:read"], optional: [] } }),
+      ],
+      granted: ["editor:read"],
+      isLibraryAvailable: () => false,
+    });
+    await launchAll(h);
+    const port = h.framesFor("alpha")[0].pluginPort;
+    if (!port) throw new Error("alpha has no plugin port");
+
+    const events: string[] = [];
+    const original = port.onmessage;
+    port.onmessage = (event) => {
+      const data = event.data as { kind?: string; event?: string } | null;
+      if (data && data.kind === "event" && data.event) {
+        events.push(data.event);
+        return;
+      }
+      original?.call(port, event);
+    };
+    port.postMessage(JSON.stringify({ kind: "subscribe", id: 1, event: "editor.contentChanged" }));
+    port.postMessage(JSON.stringify({ kind: "subscribe", id: 2, event: "editor.focusChanged" }));
+    await advance(0);
+
+    const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one</p>" });
+    document.body.appendChild(editor.view.dom);
+    editor.view.dom.focus();
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+    await advance(0);
+    editor.commands.insertContentAt(4, " two");
+    await advance(EDITOR_CONTENT_EVENT_MS);
+
+    expect(events).toEqual([]);
+    editor.destroy();
+  });
+
+  it("clears a stopped Plugin's editor highlights and leaves other Plugins'", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha"), makePlugin("beta")] });
+    await launchAll(h);
+    const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one two</p>" });
+    document.body.appendChild(editor.view.dom);
+    editor.view.dom.focus();
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+
+    setPluginEditorHighlights("alpha", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    setPluginEditorHighlights("beta", { kind: "warning", ranges: [{ from: 4, to: 7 }] });
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--warning")).toHaveLength(1);
+
+    h.lifecycle.stop("alpha");
+
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(0);
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--warning")).toHaveLength(1);
+    editor.destroy();
   });
 });
 

@@ -708,6 +708,7 @@ export function NoteEditor({
         onExportPdf={handleExportPdf}
         onExportImage={handleExportImage}
         restoreKey={`note:${note.id}`}
+        pluginEntity={{ kind: "note", id: note.id }}
         spellCheckLanguage={normalizeLanguage(note.language)}
         onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
         suppressRestore={suppressRestore}

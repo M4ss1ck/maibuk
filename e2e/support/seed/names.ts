@@ -1,5 +1,9 @@
 // Visible names of seeded content. Kept free of app imports so specs can use
-// them without loading app code into the Playwright runner.
+// them without loading app code into the Playwright runner. The one exception
+// is the long Chapter's size, which must share its single source with the unit
+// test and bench (`src/test/support/long-chapter.ts`); that module imports
+// only a type, so nothing app-level loads at run time.
+import { LONG_CHAPTER_PARAGRAPHS } from "@/test/support/long-chapter";
 
 export const SEED_BOOK = {
   title: "The Lighthouse Keeper",
@@ -71,7 +75,7 @@ export const PERF_MANY_CHAPTERS_BOOK = {
 
 export const PERF_SIZES = {
   /** About 13,000 words: a long Chapter, not a pathological one. */
-  longChapterParagraphs: 300,
+  longChapterParagraphs: LONG_CHAPTER_PARAGRAPHS,
   shortChapters: 20,
   /** 240 Text Nodes and 458 Connections. */
   canvasGrid: { columns: 20, rows: 12 },

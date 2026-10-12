@@ -5,6 +5,8 @@ import { ResizeHandle } from "@/components/ui";
 import { useNoteStore } from "@/features/notes";
 import type { Note, ReorderNoteItem, UpdateNoteInput } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
+import { requestEditorReveal } from "@/features/plugins/editor-host";
+import type { PluginRevealRange } from "@/features/plugins/types";
 import { NotesList, NoteEditor, EmptyNotes } from "@/components/notes";
 import { DictationBar } from "@/components/dictation";
 import { duplicateNoteInput } from "@/components/notes/notes-list-model";
@@ -100,6 +102,16 @@ export function Notes() {
       });
     });
   }, [location.key, currentNote?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A Plugin's `navigation.openEntity(..., reveal)` lands the caret on its spot
+  // once this Note's editor has the content loaded.
+  useEffect(() => {
+    if (!noteId) return;
+    if (currentNote?.id !== noteId) return;
+    const reveal = (location.state as { reveal?: PluginRevealRange } | null)?.reveal;
+    if (!reveal) return;
+    requestEditorReveal({ kind: "note", id: noteId }, reveal);
+  }, [location.key, location.state, noteId, currentNote?.id]);
 
   useShortcuts([
     {
