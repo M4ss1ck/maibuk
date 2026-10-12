@@ -173,6 +173,44 @@ describe("servePluginUi", () => {
     expect(client.request("ui.unmount", { surface: "main#1" })).toBeNull();
   });
 
+  it("bumps the internal openSeq on each delivered open change and still calls the Plugin's handler", async () => {
+    const host = createValidatedHost();
+    const client = createClient();
+    function OverlayPage() {
+      const [opens, setOpens] = useState(0);
+      return (
+        <>
+          <ui.Modal title="Details" isOpen={false} onOpenChange={() => setOpens((count) => count + 1)}>
+            <ui.Text>Modal body</ui.Text>
+          </ui.Modal>
+          <ui.Text>{`opens:${opens}`}</ui.Text>
+        </>
+      );
+    }
+    servePluginUi(client.client, { pages: { main: OverlayPage } });
+    client.request("ui.mount", { surface: "main#1", page: "main", port: host.port });
+
+    await vi.waitFor(() => {
+      expect(element(host.receiver, "maibuk-modal")?.properties.openSeq).toBe(0);
+    });
+
+    const modal = () => element(host.receiver, "maibuk-modal") as RemoteReceiverElement;
+    void (modal().eventListeners.openchange as (open: boolean) => unknown)(false);
+    await vi.waitFor(() => {
+      expect(modal().properties.openSeq).toBe(1);
+      // The Plugin's own handler still ran: the SDK only adds the counter.
+      expect(textOf(host.receiver, "maibuk-text")).toContain("opens:1");
+    });
+
+    void (modal().eventListeners.openchange as (open: boolean) => unknown)(true);
+    await vi.waitFor(() => {
+      expect(modal().properties.openSeq).toBe(2);
+      expect(textOf(host.receiver, "maibuk-text")).toContain("opens:2");
+    });
+
+    expect(host.violations).toEqual([]);
+  });
+
   it("accepts a page whose required prop arrives behind its insert", async () => {
     // The regression: the Worker's `createRemoteComponent` sets props after the
     // element is inserted, so the validator sees the insert without the required

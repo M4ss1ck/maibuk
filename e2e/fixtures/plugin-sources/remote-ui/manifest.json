@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "remote-ui",
   "name": "Remote UI Fixture",
-  "description": "The E2E Remote UI fixture Plugin (issue #446): loads from the Plugin Directory and draws a host-rendered page through the SDK's Worker Remote UI entry, so the spec can prove the host renders the tree, keeps typing host-owned, and stops the Plugin when a declaration leaves the UI kit.",
+  "description": "The E2E Remote UI fixture Plugin (issues #446, #439): loads from the Plugin Directory and draws host-rendered pages through the SDK's Worker Remote UI entry, so the specs can prove the host renders the tree, keeps typing host-owned, keeps the kit keyboard-operable, and stops the Plugin when a declaration leaves the UI kit.",
   "author": "Maibuk",
   "version": "1.0.0",
   "apiVersion": "^0.1",
@@ -21,9 +21,21 @@
         "label": "Open UI fixture",
         "contexts": ["global"],
         "navigates": true
+      },
+      {
+        "id": "openGallery",
+        "label": "Open UI kit gallery",
+        "contexts": ["global"],
+        "navigates": true
       }
     ],
-    "pages": [{ "id": "panel", "title": "UI fixture", "command": "openPanel" }],
-    "sidebarEntries": [{ "page": "panel", "icon": "book-open" }]
+    "pages": [
+      { "id": "panel", "title": "UI fixture", "command": "openPanel" },
+      { "id": "gallery", "title": "UI kit", "command": "openGallery" }
+    ],
+    "sidebarEntries": [
+      { "page": "panel", "icon": "book-open" },
+      { "page": "gallery", "icon": "layout-grid" }
+    ]
   }
 }

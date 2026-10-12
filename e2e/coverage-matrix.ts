@@ -2141,6 +2141,32 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-remote-ui-kit",
+    area: "plugins",
+    workflow:
+      "A Plugin page draws Host-rendered UI part 2: tabs, a selectable and expandable collection with row Item Menus, a read-only table, a progress bar, an inline status, an empty state, a modal, a confirmation dialog, a popover, a tooltip, and Plugin CSS scoped to its own surface; keyboard only; asserts: the control roles and their accessible names, the Plugin's handlers ran, Plugin CSS styles its surface but not Maibuk chrome; persists: no",
+    edges: [
+      "The gallery page renders the organization kit",
+      "Tabs and the collection move and select from the keyboard",
+      "A row Item Menu runs from the keyboard",
+      "The modal closes with Escape and returns focus",
+      "The confirmation dialog cancels with Escape and returns focus",
+      "The confirmation dialog confirms from the keyboard",
+      "The confirmation dialog reopens after Escape",
+      "The confirmation dialog reopens on Escape then Enter pressed back to back",
+      "A tooltip shows on focus",
+      "The popover opens from the keyboard and closes with Escape",
+      "Plugin CSS styles its surface and not Maibuk chrome",
+      "The scoper keeps a hostile corpus fully inside the surface in Chromium",
+    ],
+    terms: ["Plugin", "Host-rendered UI"],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["no-webkit"],
+    status: "accepted",
+  },
+  {
     id: "settings-outline",
     area: "settings",
     workflow:

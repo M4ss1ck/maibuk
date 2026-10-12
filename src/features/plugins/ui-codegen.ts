@@ -59,6 +59,9 @@ function doc(text: string): string {
 function renderElementProps(element: PluginUiElement): string {
   const lines: string[] = [];
   for (const [name, prop] of Object.entries(element.props)) {
+    // Internal props are set by the SDK, never by a Plugin, so they are not part
+    // of the public per-element props.
+    if (prop.internal === true) continue;
     const optional = prop.required ? "" : "?";
     if (prop.description !== undefined) lines.push(`    ${doc(prop.description)}`);
     lines.push(`    ${name}${optional}: ${propType(prop)};`);

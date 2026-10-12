@@ -17,7 +17,7 @@
 
 import { createRemoteElement } from "@remote-dom/core/elements";
 import { createRemoteComponent } from "@remote-dom/react";
-import type { ComponentType } from "react";
+import { useCallback, useState, type ComponentType } from "react";
 import { PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 import type { PluginUiComponents, PluginUiElementProps } from "@/plugin-sdk/ui.generated";
 
@@ -62,24 +62,54 @@ export function installPluginUiElements(): void {
 
 const components = new Map<string, ComponentType<Record<string, unknown>>>();
 
+/**
+ * Wraps an overlay that has an internal `openSeq` prop, so the host can read a
+ * batched Plugin update that nets to no change as an answer: the wrapper owns
+ * the counter in React state (not a ref, because a batched `setState` that nets
+ * to no change lets React bail out before re-rendering the children), increments
+ * it on every delivered `onOpenChange`, and passes it as `openSeq`. A Plugin's
+ * own `openSeq` is overridden. Built once per tag, like the plain components.
+ */
+function withOpenSeq(
+  Remote: ComponentType<Record<string, unknown>>,
+  name: string
+): ComponentType<Record<string, unknown>> {
+  function WithOpenSeq(props: Record<string, unknown>) {
+    const [openSeq, setOpenSeq] = useState(0);
+    const onOpenChange = props.onOpenChange as ((event: unknown) => void) | undefined;
+    const handle = useCallback(
+      (event: unknown) => {
+        setOpenSeq((count) => count + 1);
+        onOpenChange?.(event);
+      },
+      [onOpenChange]
+    );
+    return <Remote {...props} onOpenChange={handle} openSeq={openSeq} />;
+  }
+  WithOpenSeq.displayName = name;
+  return WithOpenSeq;
+}
+
 function buildComponents(): void {
   installPluginUiElements();
   for (const element of runtimeElements()) {
     if (components.has(element.tag)) continue;
+    const row = PLUGIN_UI_TABLE.find((candidate) => candidate.tag === element.tag);
     const Element = customElements.get(element.tag);
-    const component = createRemoteComponent(
+    const remote = createRemoteComponent(
       element.tag as keyof HTMLElementTagNameMap,
       Element as never,
       {
         eventProps: Object.fromEntries(
-          PLUGIN_UI_TABLE.find((row) => row.tag === element.tag)?.events.map((event) => [
-            event.prop,
-            { event: event.event },
-          ]) ?? []
+          row?.events.map((event) => [event.prop, { event: event.event }]) ?? []
         ),
       } as never
-    );
-    components.set(element.tag, component as ComponentType<Record<string, unknown>>);
+    ) as ComponentType<Record<string, unknown>>;
+    const component =
+      row !== undefined && Object.keys(row.props).includes("openSeq")
+        ? withOpenSeq(remote, row.component)
+        : remote;
+    components.set(element.tag, component);
   }
 }
 

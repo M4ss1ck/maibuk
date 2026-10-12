@@ -15,4 +15,9 @@ describe("generated Plugin UI types", () => {
     const path = join(process.cwd(), "src/plugin-sdk/ui.generated.ts");
     expect(readFileSync(path, "utf8")).toBe(renderPluginUiTypes(PLUGIN_UI_TABLE));
   });
+
+  it("omits internal props, such as the SDK's openSeq, from the public types", () => {
+    const output = renderPluginUiTypes(PLUGIN_UI_TABLE);
+    expect(output).not.toContain("openSeq");
+  });
 });

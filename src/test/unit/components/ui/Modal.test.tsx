@@ -181,6 +181,31 @@ describe("Modal", () => {
     });
   });
 
+  describe("role", () => {
+    it("stays a dialog by default", () => {
+      render(
+        <Modal isOpen={true} onClose={() => {}} title="Default role">
+          <p>Content</p>
+        </Modal>
+      );
+      expect(screen.getByRole("dialog", { name: "Default role" })).toBeInTheDocument();
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+
+    it("exposes alertdialog for a confirmation dialog", () => {
+      render(
+        <Modal isOpen={true} onClose={() => {}} title="Delete chapter?" role="alertdialog">
+          <p>This cannot be undone.</p>
+        </Modal>
+      );
+      const alert = screen.getByRole("alertdialog", { name: "Delete chapter?" });
+      expect(alert).toBeInTheDocument();
+      expect(alert).toHaveAttribute("aria-labelledby");
+      expect(alert).toHaveTextContent("This cannot be undone.");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
   describe("close behavior", () => {
     it("calls onClose when close button is clicked", async () => {
       const user = userEvent.setup();

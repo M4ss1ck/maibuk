@@ -25,6 +25,12 @@ export interface RemoteUiHarness {
   violations: PluginUiViolation[];
   /** Renders (or re-renders) the Plugin's tree and waits for the observer to deliver. */
   mount(node: ReactNode): Promise<void>;
+  /**
+   * Stops the Worker: unmounts the Plugin's tree and disconnects its observer,
+   * while the host side stays mounted. The host can no longer receive a
+   * mutation or an echo, which is what "a stopped Worker" means to the host.
+   */
+  stopWorker(): void;
   /** Tears down both roots, the observer, the container, and the receiver. */
   cleanup(): void;
 }
@@ -56,6 +62,13 @@ export function renderRemoteUi(options?: {
         root?.render(node);
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
+    },
+    stopWorker() {
+      act(() => {
+        root?.unmount();
+      });
+      root = null;
+      observer.disconnect();
     },
     cleanup() {
       act(() => {

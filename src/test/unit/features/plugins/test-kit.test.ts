@@ -190,6 +190,48 @@ describe("renderPage", () => {
     }
   });
 
+  it("dismisses an open Modal on Escape after the Worker stops", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+
+      /** A Plugin page whose Modal ignores `onOpenChange`. */
+      function ModalPage() {
+        const [open, setOpen] = useState(false);
+        return createElement(
+          Fragment,
+          null,
+          createElement(ui.Button, { onPress: () => setOpen(true) }, "Open dialog"),
+          createElement(
+            ui.Modal,
+            { title: "Details", isOpen: open, onOpenChange: () => {} },
+            createElement(ui.Text, null, "Modal body")
+          )
+        );
+      }
+
+      servePluginUi(client, { pages: { main: ModalPage } });
+      await host.renderPage("main");
+      const user = userEvent.setup();
+
+      const trigger = await screen.findByRole("button", { name: "Open dialog" });
+      for (let i = 0; i < 10 && document.activeElement !== trigger; i++) await user.tab();
+      expect(trigger).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+
+      // The Worker stops with the dialog open: the host must still dismiss and
+      // return focus, without waiting for an echo over the closed port.
+      host.stopWorker();
+
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(document.activeElement).toBe(trigger);
+    } finally {
+      host.stop();
+    }
+  });
+
   it("rejects rendering a page the Plugin never declared", async () => {
     const host = createTestHost({ manifest: fixtureManifest() });
     try {

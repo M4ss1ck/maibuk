@@ -62,6 +62,8 @@ interface ModalProps {
   restoreFocusTarget?: () => HTMLElement | null;
   /** "top" pins the panel to the top edge on every screen size, like a command bar. */
   placement?: "center" | "top";
+  /** "alertdialog" announces the dialog's urgency; a confirmation dialog uses it. */
+  role?: "dialog" | "alertdialog";
 }
 
 export function Modal({
@@ -78,6 +80,7 @@ export function Modal({
   unstyled = false,
   restoreFocusTarget,
   placement = "center",
+  role = "dialog",
 }: ModalProps) {
   const { t } = useTranslation();
   const sizeClass = { md: "sm:max-w-md", lg: "sm:max-w-2xl", wide: "sm:max-w-5xl" }[size];
@@ -159,6 +162,7 @@ export function Modal({
             }
           >
             <Dialog
+              role={role}
               className={
                 unstyled ? "contents outline-none" : "flex min-h-0 flex-1 flex-col outline-none"
               }

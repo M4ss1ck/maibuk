@@ -174,6 +174,7 @@ export default defineConfig(() => ({
         "src/plugin-sdk/ui-table.ts",
         "src/plugin-sdk/ui.tsx",
         "src/features/plugins/ui-codegen.ts",
+        "src/features/plugins/remote-ui/css-scope.ts",
         "src/features/plugins/remote-ui/echo.ts",
         "src/features/plugins/remote-ui/validate.ts",
         "src/features/plugins/remote-ui/receiver.ts",

@@ -24,6 +24,20 @@ export const PLUGIN_UI_TAGS = [
   "maibuk-button",
   "maibuk-icon-button",
   "maibuk-link",
+  "maibuk-tabs",
+  "maibuk-disclosure",
+  "maibuk-collection",
+  "maibuk-collection-row",
+  "maibuk-table",
+  "maibuk-table-row",
+  "maibuk-modal",
+  "maibuk-confirm-dialog",
+  "maibuk-popover",
+  "maibuk-tooltip",
+  "maibuk-progress-bar",
+  "maibuk-status",
+  "maibuk-empty-state",
+  "maibuk-surface",
 ] as const;
 
 export type PluginUiTag = (typeof PLUGIN_UI_TAGS)[number];
@@ -230,6 +244,144 @@ export interface PluginUiElementProps {
     children?: ReactNode;
     onPress?: () => void;
   };
+  /** A tab list and the selected tab's panel. Keyboard-interactive. */
+  "maibuk-tabs": {
+    /** Accessible name of the tab list. */
+    label: string;
+    /** Tab keys and titles, in order. */
+    items: readonly PluginUiOption[];
+    /** The selected tab's key; defaults to the first tab. */
+    selectedKey?: string;
+    /** The panel shown for the selected tab. */
+    children?: ReactNode;
+    /** Fires with the selected tab's key when the selection changes. */
+    onChange?: (event: { detail: string }) => void;
+  };
+  /** A collapsible section with a heading and a panel. Keyboard-interactive. */
+  "maibuk-disclosure": {
+    /** The heading that toggles it. */
+    label: string;
+    /** Whether the panel is visible; defaults to collapsed. */
+    isExpanded?: boolean;
+    isDisabled?: boolean;
+    children?: ReactNode;
+    /** Fires with the new expanded state. */
+    onExpandedChange?: (event: { detail: boolean }) => void;
+  };
+  /** A keyboard-navigable list of rows, with optional selection. Keyboard-interactive. */
+  "maibuk-collection": {
+    /** Accessible name of the list. */
+    label: string;
+    /** Whether rows can be selected; defaults to `none`. */
+    selectionMode?: "none" | "single" | "multiple";
+    /** The selected rows' ids. */
+    selectedKeys?: readonly string[];
+    children?: ReactNode;
+    /** Fires with the selected rows' ids. */
+    onSelectionChange?: (event: { detail: readonly string[] }) => void;
+  };
+  /** One row of a `Collection`, with an optional Item Menu and expanded panel. Keyboard-interactive. */
+  "maibuk-collection-row": {
+    /** Stable row identity. */
+    id: string;
+    /** The row's primary text. */
+    label: string;
+    description?: string;
+    /** Shows a toggle that reveals the row's panel. */
+    isExpandable?: boolean;
+    isExpanded?: boolean;
+    isDisabled?: boolean;
+    /** Entries of the row's Item Menu; none hides the ⋯ button. */
+    menuItems?: readonly PluginUiOption[];
+    /** The panel shown while the row is expanded. */
+    children?: ReactNode;
+    onExpandedChange?: (event: { detail: boolean }) => void;
+    /** Fires when the row is activated and it is not expandable. */
+    onAction?: () => void;
+    /** Fires with the chosen Item Menu entry's value. */
+    onMenuAction?: (event: { detail: string }) => void;
+  };
+  /** A read-only table; children are `TableRow` elements. */
+  "maibuk-table": {
+    /** Accessible name of the table. */
+    label: string;
+    /** Column keys and headers, in order. */
+    columns: readonly PluginUiOption[];
+    children?: ReactNode;
+  };
+  /** One row of a `Table`; its cells are keyed by column. */
+  "maibuk-table-row": {
+    /** Cell text keyed by column value, in column order. */
+    cells: readonly PluginUiOption[];
+  };
+  /** A modal dialog that contains focus and returns it to its trigger. Keyboard-interactive. */
+  "maibuk-modal": {
+    title: string;
+    /** Whether the dialog is open. */
+    isOpen?: boolean;
+    children?: ReactNode;
+    /** Fires when the host dismisses or opens the dialog. The host closes immediately, even with a stopped Worker. Once the Worker has handled this event, the Plugin's `isOpen` is authoritative again: set it from this handler. A Plugin that ignores this event and keeps `isOpen` true reopens the dialog. */
+    onOpenChange?: (event: { detail: boolean }) => void;
+  };
+  /** A confirmation dialog with a confirm and a cancel action. Keyboard-interactive. */
+  "maibuk-confirm-dialog": {
+    title: string;
+    description?: string;
+    /** Defaults to the localized Confirm. */
+    confirmLabel?: string;
+    /** Defaults to the localized Cancel. */
+    cancelLabel?: string;
+    /** Styles the confirm action as destructive. */
+    isDestructive?: boolean;
+    isOpen?: boolean;
+    onConfirm?: () => void;
+    /** Fires when the host dismisses or opens the dialog. The host closes immediately, even with a stopped Worker. Once the Worker has handled this event, the Plugin's `isOpen` is authoritative again: set it from this handler. A Plugin that ignores this event and keeps `isOpen` true reopens the dialog. */
+    onOpenChange?: (event: { detail: boolean }) => void;
+  };
+  /** A trigger button that opens a small panel anchored to it. Keyboard-interactive. */
+  "maibuk-popover": {
+    /** The trigger's accessible name. */
+    label: string;
+    /** An optional Lucide icon name for the trigger. */
+    icon?: string;
+    isOpen?: boolean;
+    children?: ReactNode;
+    /** Fires when the host dismisses or opens the dialog. The host closes immediately, even with a stopped Worker. Once the Worker has handled this event, the Plugin's `isOpen` is authoritative again: set it from this handler. A Plugin that ignores this event and keeps `isOpen` true reopens the dialog. */
+    onOpenChange?: (event: { detail: boolean }) => void;
+  };
+  /** A short hint shown on hover or focus of its child. Keyboard-interactive. */
+  "maibuk-tooltip": {
+    content: string;
+    children?: ReactNode;
+  };
+  /** A determinate or indeterminate progress indicator. */
+  "maibuk-progress-bar": {
+    label: string;
+    value?: number;
+    maxValue?: number;
+    isIndeterminate?: boolean;
+  };
+  /** An inline status or error message. */
+  "maibuk-status": {
+    /** Defaults to `info`; `danger` is announced immediately. */
+    tone?: "info" | "success" | "warning" | "danger";
+    children?: ReactNode;
+  };
+  /** A centered empty or nothing-here state. */
+  "maibuk-empty-state": {
+    title: string;
+    description?: string;
+    icon?: string;
+    /** An optional call to action. */
+    children?: ReactNode;
+  };
+  /** A themed region whose CSS is isolated to it. */
+  "maibuk-surface": {
+    /** CSS scoped to this surface; it cannot reach Maibuk or another Plugin. */
+    css?: string;
+    padding?: "none" | "sm" | "md" | "lg";
+    children?: ReactNode;
+  };
 }
 
 /** The SDK component name to component type, generated from the table. */
@@ -255,4 +407,18 @@ export interface PluginUiComponents {
   Button: ComponentType<PluginUiElementProps["maibuk-button"]>;
   IconButton: ComponentType<PluginUiElementProps["maibuk-icon-button"]>;
   Link: ComponentType<PluginUiElementProps["maibuk-link"]>;
+  Tabs: ComponentType<PluginUiElementProps["maibuk-tabs"]>;
+  Disclosure: ComponentType<PluginUiElementProps["maibuk-disclosure"]>;
+  Collection: ComponentType<PluginUiElementProps["maibuk-collection"]>;
+  CollectionRow: ComponentType<PluginUiElementProps["maibuk-collection-row"]>;
+  Table: ComponentType<PluginUiElementProps["maibuk-table"]>;
+  TableRow: ComponentType<PluginUiElementProps["maibuk-table-row"]>;
+  Modal: ComponentType<PluginUiElementProps["maibuk-modal"]>;
+  ConfirmDialog: ComponentType<PluginUiElementProps["maibuk-confirm-dialog"]>;
+  Popover: ComponentType<PluginUiElementProps["maibuk-popover"]>;
+  Tooltip: ComponentType<PluginUiElementProps["maibuk-tooltip"]>;
+  ProgressBar: ComponentType<PluginUiElementProps["maibuk-progress-bar"]>;
+  Status: ComponentType<PluginUiElementProps["maibuk-status"]>;
+  EmptyState: ComponentType<PluginUiElementProps["maibuk-empty-state"]>;
+  Surface: ComponentType<PluginUiElementProps["maibuk-surface"]>;
 }

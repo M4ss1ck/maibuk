@@ -78,6 +78,42 @@ describe("the connection validator", () => {
     expect(violations[0]?.code).toBe("invalid-prop");
   });
 
+  it("accepts the internal openSeq count on a modal", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-modal", { properties: { title: "Details", openSeq: 2 } })),
+    ]);
+    expect(violations).toEqual([]);
+    expect((receiver.root.children[0] as RemoteReceiverElement).properties.openSeq).toBe(2);
+  });
+
+  it("refuses a negative openSeq", () => {
+    const { violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-modal", { properties: { title: "Details", openSeq: -1 } })),
+    ]);
+    expect(violations[0]?.code).toBe("invalid-prop");
+    expect(violations[0]?.prop).toBe("openSeq");
+  });
+
+  it("refuses a non-integer openSeq", () => {
+    const { violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-modal", { properties: { title: "Details", openSeq: 1.5 } })),
+    ]);
+    expect(violations[0]?.code).toBe("invalid-prop");
+    expect(violations[0]?.prop).toBe("openSeq");
+  });
+
+  it("refuses a string openSeq", () => {
+    const { violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-modal", { properties: { title: "Details", openSeq: "2" } })),
+    ]);
+    expect(violations[0]?.code).toBe("invalid-prop");
+    expect(violations[0]?.prop).toBe("openSeq");
+  });
+
   it("refuses an image source that is not a data URL", () => {
     const { violations, connection } = setup();
     connection.mutate([

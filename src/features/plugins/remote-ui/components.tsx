@@ -12,7 +12,7 @@
  * a type error, and the coverage gate fails when a table component has no test.
  */
 
-import { useCallback, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FieldError,
@@ -25,6 +25,17 @@ import {
 import { NumberField as AriaNumberField } from "react-aria-components/NumberField";
 import { Radio, RadioGroup as AriaRadioGroup } from "react-aria-components/RadioGroup";
 import { Link as AriaLink } from "react-aria-components/Link";
+import { Tabs as AriaTabs, TabList, Tab, TabPanel } from "react-aria-components/Tabs";
+import {
+  Disclosure as AriaDisclosure,
+  DisclosurePanel,
+} from "react-aria-components/Disclosure";
+import { Button as AriaButton } from "react-aria-components/Button";
+import { Heading as AriaHeading } from "react-aria-components/Heading";
+import { ProgressBar as AriaProgressBar } from "react-aria-components/ProgressBar";
+import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
+import { DialogTrigger, Dialog, Popover as AriaPopover } from "react-aria-components/Popover";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   createRemoteComponentRenderer,
   type RemoteComponentRendererMap,
@@ -32,11 +43,16 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Combobox } from "@/components/ui/Combobox";
+import { ItemActionsMenu } from "@/components/ui/ItemActionsMenu";
+import { Modal } from "@/components/ui/Modal";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
+import { scopePluginCss } from "@/features/plugins/remote-ui/css-scope";
 import { createEchoTracker, type PluginEchoTracker } from "@/features/plugins/remote-ui/echo";
+import { useRestoreFocus } from "@/hooks";
 import { openExternal } from "@/lib/platform";
 import { PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 import type { PluginUiOption } from "@/plugin-sdk/ui.generated";
@@ -585,7 +601,7 @@ function IconButtonHost({ label, icon, variant = "ghost", isDisabled, onPress }:
       aria-label={label}
       disabled={isDisabled}
       onClick={() => onPress?.()}
-      className="px-2"
+      className="px-2 pointer-coarse:min-h-10 pointer-coarse:min-w-10"
     >
       <PluginIcon icon={icon} className="h-4 w-4" />
     </Button>
@@ -777,6 +793,537 @@ function CodeHost({ block, children }: { block?: boolean; children?: ReactNode }
   return <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm text-foreground">{children}</code>;
 }
 
+/** Organization: tabs, disclosure, collections, tables (#439). */
+
+/**
+ * Open state the host mirrors from a Plugin prop, shared by the overlays and
+ * the disclosure. A host-driven close (Escape, an outside press, a row
+ * activation) applies immediately and tells the Plugin; a Plugin-driven change
+ * arrives as the prop on a later render. The mirror is deliberate: it is what
+ * lets the host dismiss an overlay even when the Worker is stopped and never
+ * echoes the change back.
+ *
+ * The overlays carry an internal `openSeq` (the disclosure does not). When the
+ * Worker answers a host dismissal, the SDK bumps `openSeq` even if the Plugin's
+ * batched state nets to no change, so the host sees a newer count and re-syncs
+ * `open` to `isOpen`: the Plugin's `isOpen` is authoritative again, and a
+ * batched false→true reopens the dialog. A stopped Worker never answers, so the
+ * dialog stays closed. The counter speaks for the Plugin only when the Plugin
+ * passes `isOpen`: an uncontrolled overlay (a Popover with no `isOpen`) stays
+ * host-owned, and without an `openSeq` (the disclosure, a row) only a real
+ * `isOpen` change re-syncs, as before.
+ */
+function useMirroredOpen(
+  isOpen: boolean | undefined,
+  onOpenChange?: (open: boolean) => void,
+  openSeq?: number
+): [boolean, (next: boolean) => void] {
+  const [open, setOpen] = useState(isOpen ?? false);
+  const previousIsOpen = useRef(isOpen);
+  const previousOpenSeq = useRef(openSeq);
+  useEffect(() => {
+    const isOpenChanged = isOpen !== previousIsOpen.current;
+    // `openSeq` is the answer channel of a Plugin-controlled overlay: it only
+    // speaks for the Plugin when the Plugin passes `isOpen`. An overlay with no
+    // `isOpen` (an uncontrolled Popover) stays host-owned, so its `openSeq` is
+    // ignored and only a real `isOpen` change (there is none) would re-sync.
+    const openSeqChanged =
+      openSeq !== undefined && isOpen !== undefined && openSeq !== previousOpenSeq.current;
+    if (!isOpenChanged && !openSeqChanged) return;
+    previousIsOpen.current = isOpen;
+    previousOpenSeq.current = openSeq;
+    setOpen(isOpen ?? false);
+  }, [isOpen, openSeq]);
+  const set = useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      // The notification is best-effort: a stopped Worker's event channel throws
+      // or rejects when called, and the host's dismissal must not depend on the
+      // Plugin receiving it.
+      try {
+        void Promise.resolve(onOpenChange?.(next)).catch(() => {});
+      } catch {
+        // The Worker is gone; there is nobody to tell.
+      }
+    },
+    [onOpenChange]
+  );
+  return [open, set];
+}
+
+/** The disclosure and expandable-row chevron; decorative, the row owns the control. */
+function Chevron({ expanded }: { expanded: boolean }) {
+  return expanded ? (
+    <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+  ) : (
+    <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+  );
+}
+
+interface TabsHostProps {
+  label: string;
+  items: readonly PluginUiOption[];
+  selectedKey?: string;
+  children?: ReactNode;
+  onChange?: (key: string) => void;
+}
+
+function TabsHost({ label, items, selectedKey, children, onChange }: TabsHostProps) {
+  const activeKey = selectedKey ?? items[0]?.value ?? "";
+  return (
+    <AriaTabs
+      selectedKey={activeKey}
+      onSelectionChange={(key) => onChange?.(String(key))}
+      className="w-full"
+    >
+      <TabList
+        aria-label={label}
+        className="flex flex-wrap gap-1 border-b border-border pb-px"
+      >
+        {items.map((item) => (
+          <Tab
+            key={item.value}
+            id={item.value}
+            className="-mb-px cursor-pointer rounded-t-lg border-b-2 border-transparent px-3 py-1.5 text-sm text-muted-foreground outline-none transition-colors data-selected:border-primary data-selected:text-foreground data-focus-visible:ring-2 data-focus-visible:ring-primary"
+          >
+            {item.label}
+          </Tab>
+        ))}
+      </TabList>
+      <TabPanel id={activeKey} className="pt-3 outline-none">
+        {children}
+      </TabPanel>
+    </AriaTabs>
+  );
+}
+
+interface DisclosureHostProps {
+  label: string;
+  isExpanded?: boolean;
+  isDisabled?: boolean;
+  children?: ReactNode;
+  onExpandedChange?: (expanded: boolean) => void;
+}
+
+function DisclosureHost({
+  label,
+  isExpanded,
+  isDisabled,
+  children,
+  onExpandedChange,
+}: DisclosureHostProps) {
+  const [expanded, setExpanded] = useMirroredOpen(isExpanded, onExpandedChange);
+  return (
+    <AriaDisclosure
+      isExpanded={expanded}
+      onExpandedChange={setExpanded}
+      isDisabled={isDisabled}
+      className="w-full"
+    >
+      <AriaHeading className="m-0">
+        <AriaButton
+          slot="trigger"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-foreground outline-none transition-colors hover:bg-muted data-focus-visible:ring-2 data-focus-visible:ring-primary"
+        >
+          <Chevron expanded={expanded} />
+          {label}
+        </AriaButton>
+      </AriaHeading>
+      <DisclosurePanel className="px-2 py-1.5 text-sm text-foreground outline-none">
+        {children}
+      </DisclosurePanel>
+    </AriaDisclosure>
+  );
+}
+
+interface CollectionHostProps {
+  label: string;
+  selectionMode?: "none" | "single" | "multiple";
+  selectedKeys?: readonly string[];
+  children?: ReactNode;
+  onSelectionChange?: (keys: readonly string[]) => void;
+}
+
+function CollectionHost({
+  label,
+  selectionMode = "none",
+  selectedKeys,
+  children,
+  onSelectionChange,
+}: CollectionHostProps) {
+  // The host owns the collection: one Tab stop, arrow navigation, stable row
+  // identity by id, and a bounded scroll area. The Remote UI node cap (10,000)
+  // keeps a list the Plugin sends within the host's budget.
+  return (
+    <ListBox
+      aria-label={label}
+      selectionMode={selectionMode}
+      selectedKeys={selectedKeys}
+      onSelectionChange={(keys) => onSelectionChange?.([...keys].map(String))}
+      className="max-h-80 w-full overflow-auto rounded-lg border border-border py-1 outline-none"
+    >
+      {children}
+    </ListBox>
+  );
+}
+
+interface CollectionRowHostProps {
+  id: string;
+  label: string;
+  description?: string;
+  isExpandable?: boolean;
+  isExpanded?: boolean;
+  isDisabled?: boolean;
+  menuItems?: readonly PluginUiOption[];
+  children?: ReactNode;
+  onExpandedChange?: (expanded: boolean) => void;
+  onAction?: () => void;
+  onMenuAction?: (value: string) => void;
+}
+
+function CollectionRowHost({
+  id,
+  label,
+  description,
+  isExpandable,
+  isExpanded,
+  isDisabled,
+  menuItems,
+  children,
+  onExpandedChange,
+  onAction,
+  onMenuAction,
+}: CollectionRowHostProps) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useMirroredOpen(isExpanded, onExpandedChange);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const actions = (menuItems ?? []).map(
+    // command-exempt: a Plugin row action runs the Plugin's own event, not a Maibuk Command (ADR 0019).
+    (item) => ({
+      id: item.value,
+      label: item.label,
+      onAction: () => onMenuAction?.(item.value),
+    })
+  );
+  return (
+    <ListBoxItem
+      id={id}
+      textValue={label}
+      isDisabled={isDisabled}
+      aria-expanded={isExpandable ? expanded : undefined}
+      onAction={() => {
+        if (isExpandable) {
+          setExpanded(!expanded);
+          return;
+        }
+        // A collection is one Tab stop, so its row is the keyboard path to the
+        // row's Item Menu; the ⋯ button stays the pointer path.
+        if (actions.length > 0) {
+          setMenuOpen(true);
+          return;
+        }
+        onAction?.();
+      }}
+      className="flex cursor-pointer flex-col gap-1 px-2 py-1.5 text-sm text-foreground outline-none data-focused:bg-muted data-selected:bg-primary/10 data-disabled:cursor-default data-disabled:opacity-50"
+    >
+      <div className="flex items-center gap-2">
+        {isExpandable ? <Chevron expanded={expanded} /> : null}
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {description ? (
+          <span className="min-w-0 truncate text-sm text-muted-foreground">{description}</span>
+        ) : null}
+        {actions.length > 0 ? (
+          <ItemActionsMenu
+            label={t("common.moreActionsFor", { title: label })}
+            actions={actions}
+            isOpen={menuOpen}
+            onOpenChange={setMenuOpen}
+          />
+        ) : null}
+      </div>
+      {expanded && children ? <div className="pl-7 text-muted-foreground">{children}</div> : null}
+    </ListBoxItem>
+  );
+}
+
+interface TableHostProps {
+  label: string;
+  columns: readonly PluginUiOption[];
+  children?: ReactNode;
+}
+
+function TableHost({ label, columns, children }: TableHostProps) {
+  return (
+    <table className="w-full border-collapse text-sm">
+      <caption className="sr-only">{label}</caption>
+      <thead>
+        <tr className="border-b border-border text-left">
+          {columns.map((column) => (
+            <th key={column.value} scope="col" className="px-2 py-1.5 font-medium text-foreground">
+              {column.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>{children}</tbody>
+    </table>
+  );
+}
+
+function TableRowHost({ cells }: { cells: readonly PluginUiOption[] }) {
+  return (
+    <tr className="border-b border-border last:border-b-0">
+      {cells.map((cell) => (
+        <td key={cell.value} className="px-2 py-1.5 text-foreground">
+          {cell.label}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+/** Overlays: modal, confirmation dialog, popover, tooltip (#439). */
+
+interface ModalHostProps {
+  title: string;
+  isOpen?: boolean;
+  openSeq?: number;
+  children?: ReactNode;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function ModalHost({ title, isOpen, openSeq, children, onOpenChange }: ModalHostProps) {
+  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange, openSeq);
+  // The host closes immediately on Escape or outside press and notifies the
+  // Plugin afterwards; it never waits for the Plugin's echo to close.
+  const close = useCallback(() => setOpen(false), [setOpen]);
+  return (
+    <Modal isOpen={open} onClose={close} title={title}>
+      {children}
+    </Modal>
+  );
+}
+
+interface ConfirmDialogHostProps {
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  isDestructive?: boolean;
+  isOpen?: boolean;
+  openSeq?: number;
+  onConfirm?: () => void;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function ConfirmDialogHost({
+  title,
+  description,
+  confirmLabel,
+  cancelLabel,
+  isDestructive,
+  isOpen,
+  openSeq,
+  onConfirm,
+  onOpenChange,
+}: ConfirmDialogHostProps) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange, openSeq);
+  const close = useCallback(() => setOpen(false), [setOpen]);
+  return (
+    <Modal
+      isOpen={open}
+      onClose={close}
+      title={title}
+      role="alertdialog"
+      footer={
+        <>
+          <Button variant="secondary" onClick={close}>
+            {cancelLabel ?? t("common.cancel")}
+          </Button>
+          <Button
+            variant={isDestructive ? "destructive" : "primary"}
+            onClick={() => {
+              onConfirm?.();
+              close();
+            }}
+          >
+            {confirmLabel ?? t("common.confirm")}
+          </Button>
+        </>
+      }
+    >
+      {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+    </Modal>
+  );
+}
+
+interface PopoverHostProps {
+  label: string;
+  icon?: string;
+  isOpen?: boolean;
+  openSeq?: number;
+  children?: ReactNode;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function PopoverHost({ label, icon, isOpen, openSeq, children, onOpenChange }: PopoverHostProps) {
+  const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange, openSeq);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // A non-modal popover does not return focus by itself when the host dismisses
+  // it; the shared hook restores the trigger, immediately and without a Worker
+  // echo.
+  useRestoreFocus(open, { getTarget: () => triggerRef.current });
+  return (
+    <DialogTrigger isOpen={open} onOpenChange={setOpen}>
+      <AriaButton
+        ref={triggerRef}
+        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none transition-colors hover:bg-muted data-focus-visible:ring-2 data-focus-visible:ring-primary"
+      >
+        {icon ? <PluginIcon icon={icon} className="h-4 w-4" /> : null}
+        {label}
+      </AriaButton>
+      <AriaPopover className="z-50 max-w-xs rounded-lg border border-border bg-card p-3 shadow-lg">
+        <Dialog className="outline-none">{children}</Dialog>
+      </AriaPopover>
+    </DialogTrigger>
+  );
+}
+
+function TooltipHost({ content, children }: { content: string; children?: ReactNode }) {
+  return (
+    <Tooltip content={content}>
+      <span className="inline-flex">{children}</span>
+    </Tooltip>
+  );
+}
+
+/** Feedback: progress, inline status, empty states (#439). */
+
+function ProgressBarHost({
+  label,
+  value,
+  maxValue,
+  isIndeterminate,
+}: {
+  label: string;
+  value?: number;
+  maxValue?: number;
+  isIndeterminate?: boolean;
+}) {
+  return (
+    <AriaProgressBar
+      aria-label={label}
+      value={value}
+      maxValue={maxValue}
+      isIndeterminate={isIndeterminate}
+      className="w-full"
+    >
+      {({ percentage, valueText, isIndeterminate: indeterminate }) => (
+        <>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-foreground">{label}</span>
+            {!indeterminate ? <span className="text-muted-foreground">{valueText}</span> : null}
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full bg-primary ${
+                indeterminate ? "w-2/5 animate-pulse" : "transition-[width]"
+              }`}
+              style={indeterminate ? undefined : { width: `${percentage ?? 0}%` }}
+            />
+          </div>
+        </>
+      )}
+    </AriaProgressBar>
+  );
+}
+
+type StatusTone = "info" | "success" | "warning" | "danger";
+
+const STATUS_TONE: Record<StatusTone, string> = {
+  info: "bg-info-bg text-info-text",
+  success: "bg-feedback-success-bg text-feedback-success-text",
+  warning: "bg-warning-bg text-warning-text",
+  danger: "bg-feedback-error-bg text-feedback-error-text",
+};
+
+function StatusHost({ tone = "info", children }: { tone?: StatusTone; children?: ReactNode }) {
+  return (
+    <p role={tone === "danger" ? "alert" : "status"} className={`rounded-lg px-3 py-2 text-sm ${STATUS_TONE[tone]}`}>
+      {children}
+    </p>
+  );
+}
+
+function EmptyStateHost({
+  title,
+  description,
+  icon,
+  children,
+}: {
+  title: string;
+  description?: string;
+  icon?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-6 py-10 text-center">
+      {icon ? <PluginIcon icon={icon} className="h-8 w-8 text-muted-foreground" /> : null}
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      {description ? (
+        <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+/** Appearance: a themed region whose CSS is isolated to it (#439). */
+
+let nextSurfaceScope = 0;
+
+/** A fresh, unique scope id; each surface gets its own attribute value. */
+function nextSurfaceId(): string {
+  nextSurfaceScope += 1;
+  return `plugin-ui-${nextSurfaceScope}`;
+}
+
+function SurfaceHost({
+  css,
+  padding = "none",
+  children,
+}: {
+  css?: string;
+  padding?: keyof typeof PADDING;
+  children?: ReactNode;
+}) {
+  const scope = useRef<string | null>(null);
+  if (scope.current === null) scope.current = nextSurfaceId();
+  const scopeId = scope.current;
+  const { scoped, drops } = useMemo(() => {
+    if (!css) return { scoped: "", drops: [] as string[] };
+    const reasons: string[] = [];
+    const out = scopePluginCss(css, `[data-plugin-ui="${scopeId}"]`, (reason) => {
+      reasons.push(reason);
+    });
+    return { scoped: out, drops: reasons };
+  }, [css, scopeId]);
+
+  useEffect(() => {
+    if (drops.length > 0) {
+      console.warn("Plugin CSS was partly or wholly dropped from a Surface:", drops);
+    }
+  }, [drops]);
+
+  return (
+    <div data-plugin-ui={scopeId} className={`w-full ${PADDING[padding]}`}>
+      {children}
+      {scoped ? <style>{scoped}</style> : null}
+    </div>
+  );
+}
+
 /** Every table tag's host renderer, built once. */
 export function createPluginUiComponents(): RemoteComponentRendererMap {
   const components: RemoteComponentRendererMap = new Map();
@@ -802,11 +1349,34 @@ export function createPluginUiComponents(): RemoteComponentRendererMap {
     Button: ButtonHost,
     IconButton: IconButtonHost,
     Link: LinkHost,
+    Tabs: TabsHost,
+    Disclosure: DisclosureHost,
+    Collection: CollectionHost,
+    CollectionRow: CollectionRowHost,
+    Table: TableHost,
+    TableRow: TableRowHost,
+    Modal: ModalHost,
+    ConfirmDialog: ConfirmDialogHost,
+    Popover: PopoverHost,
+    Tooltip: TooltipHost,
+    ProgressBar: ProgressBarHost,
+    Status: StatusHost,
+    EmptyState: EmptyStateHost,
+    Surface: SurfaceHost,
   };
   for (const element of PLUGIN_UI_TABLE) {
     const Host = hosts[element.host];
     if (Host === undefined) throw new Error(`The UI kit has no host component for ${element.tag}`);
-    components.set(element.tag, createRemoteComponentRenderer(Host as never));
+    components.set(
+      element.tag,
+      createRemoteComponentRenderer(Host as never, {
+        // The table names each event's React prop; the host must read the same
+        // prop, not Remote DOM's mechanical `on<Eventname>` guess.
+        eventProps: Object.fromEntries(
+          element.events.map((event) => [event.prop, { event: event.event }])
+        ),
+      } as never)
+    );
   }
   return components;
 }
