@@ -12,6 +12,24 @@ import { ThreadMessagePort } from "@quilted/threads";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import { createPluginBroker } from "@/features/plugins/broker";
+
+/**
+ * The host-side `PluginRemoteUi` instances the boundary created, so a test can
+ * observe that the mount was disposed. The wrapper keeps the real receiver.
+ */
+const created = vi.hoisted(() => ({ uis: [] as { disposed: boolean }[] }));
+vi.mock("@/features/plugins/remote-ui/receiver", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/plugins/remote-ui/receiver")>();
+  return {
+    ...actual,
+    createPluginRemoteUi: (options: Parameters<typeof actual.createPluginRemoteUi>[0]) => {
+      const ui = actual.createPluginRemoteUi(options);
+      created.uis.push(ui);
+      return ui;
+    },
+  };
+});
+
 import {
   resetPluginLifecycleForTests,
   setPluginLifecycleInstance,
@@ -47,6 +65,7 @@ afterEach(() => {
     channel.port2.close();
   }
   for (const thread of threads.splice(0)) thread.close();
+  created.uis.length = 0;
   resetPluginLifecycleForTests();
   vi.restoreAllMocks();
 });
@@ -119,7 +138,27 @@ function sends(records: () => RemoteMutationRecord[]) {
   return (mount: PluginUiMountParams) => {
     const thread = new ThreadMessagePort<HostUiImports>(mount.port);
     threads.push(thread);
-    void thread.imports.mutate(records());
+    void thread.imports.mutate(records()).catch(() => {});
+  };
+}
+
+/** One tiny insert-child batch under a fresh id. */
+function tinyInsert(index: number): RemoteMutationRecord[] {
+  return [
+    [0, "~", { id: `n${index}`, type: 1, element: "maibuk-text", children: [] }, 0],
+  ] as unknown as RemoteMutationRecord[];
+}
+
+/** The Worker side of a flooding mount: send `count` tiny batches at once. */
+function floods(count: number) {
+  return (mount: PluginUiMountParams) => {
+    const thread = new ThreadMessagePort<HostUiImports>(mount.port);
+    threads.push(thread);
+    for (let i = 0; i < count; i++) {
+      // A reply still in flight when the mount tears down rejects; the test
+      // only asserts the host's reaction, so ignore the transport's own errors.
+      void thread.imports.mutate(tinyInsert(i)).catch(() => {});
+    }
   };
 }
 
@@ -258,5 +297,37 @@ describe("the Plugin page's Remote UI transport", () => {
     await vi.waitFor(() => expect(run.unmounts).toHaveLength(1));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(run.unmounts).toHaveLength(1);
+  });
+
+  it("tears the mount down without ui.unmount once the Plugin stops", async () => {
+    const run = createRun(sends(() => heading("Gone")));
+    const lifecycle = fakeLifecycle({ runtime: runtimeOf(run.broker), status: "ready" });
+    install(lifecycle);
+    renderBoundary();
+    await screen.findByRole("heading", { name: "Gone" });
+    const ui = created.uis.at(-1);
+
+    // The Plugin stops: its runtime is gone and the broker no longer answers.
+    act(() => {
+      run.broker.stop("requested");
+      lifecycle.setRuntime(null, "stopped");
+    });
+
+    // The boundary tears the mount down (the receiver is disposed) and asks the
+    // stopped Plugin nothing: no ui.unmount crosses the dead channel.
+    await vi.waitFor(() => expect(ui?.disposed).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(run.unmounts).toHaveLength(0);
+  });
+
+  it("stops the Plugin with remote-ui-limit when the mount floods the host", async () => {
+    const run = createRun(floods(121));
+    const lifecycle = fakeLifecycle({ runtime: runtimeOf(run.broker), status: "ready" });
+    install(lifecycle);
+
+    renderBoundary();
+    await vi.waitFor(() =>
+      expect(lifecycle.stop).toHaveBeenCalledWith("sample", "remote-ui-limit")
+    );
   });
 });

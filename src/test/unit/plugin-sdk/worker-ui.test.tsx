@@ -10,6 +10,7 @@
  * DOM polyfill, which replaces the DOM globals with its own.
  */
 import { PLUGIN_UI_BATCH_MS, frameBatch, servePluginUi } from "@/plugin-sdk/worker-ui";
+import { servePluginUi as serveSharedPluginUi } from "@/plugin-sdk/ui-serve";
 import { ui } from "@/plugin-sdk/ui";
 import {
   createValidatedConnection,
@@ -19,6 +20,7 @@ import {
   MUTATION_TYPE_UPDATE_TEXT,
   NODE_TYPE_ELEMENT,
   NODE_TYPE_TEXT,
+  type RemoteConnection,
   type RemoteMutationRecord,
 } from "@remote-dom/core";
 import { BatchingRemoteConnection } from "@remote-dom/core/elements";
@@ -35,6 +37,7 @@ afterEach(() => {
     channel.port1.close();
     channel.port2.close();
   }
+  vi.restoreAllMocks();
 });
 
 /** The real host end: a receiver, and the thread that feeds it. */
@@ -185,6 +188,37 @@ describe("servePluginUi", () => {
       expect(element(host.receiver, "maibuk-text-field")?.properties.label).toBe("Search");
     });
     expect(host.violations).toEqual([]);
+  });
+
+  it("does not touch the closed thread when a batch is scheduled after unmount", async () => {
+    const host = createHost();
+    const client = createClient();
+    let connection!: RemoteConnection;
+    serveSharedPluginUi(client.client, {
+      pages: { main: Page },
+      attach: (next) => {
+        connection = next;
+        return { container: document.createElement("div"), detach: () => {} };
+      },
+    });
+
+    client.request("ui.mount", { surface: "main#1", page: "main", port: host.port });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // Watch every call the Worker's thread makes on its host imports; a flush
+    // after teardown would show up here as one more call.
+    const call = vi.spyOn(ThreadMessagePort.prototype, "call");
+    client.request("ui.unmount", { surface: "main#1" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const callsAtClose = call.mock.calls.length;
+
+    // A stale `frameBatch` timer fires after teardown and flushes one more
+    // batch; the closed mount ignores it instead of touching the closed thread.
+    connection.mutate([[MUTATION_TYPE_UPDATE_TEXT, "node", "late"]]);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    expect(call.mock.calls.length).toBe(callsAtClose);
+    expect(host.receiver.root.children).toHaveLength(0);
   });
 
   it("rejects a mount of an unknown page", () => {

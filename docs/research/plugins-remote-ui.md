@@ -80,7 +80,7 @@ Forge is the closest analog to #389's design, down to the name of the escape hat
 - **AMP `worker-dom`** (3,264 stars): a DOM in a Worker mirrored to the main thread. Last release 0.36.0 on 2025-06-27; nothing but dependency bumps since. It mirrors real HTML, not host components, so it would not give Maibuk its React Aria components.
 - **MCP-UI** (5,190 stars) supported Remote DOM resources, then removed them: "MCP-UI only supports the new MCP Apps from now on" ([PR #185](https://github.com/MCP-UI-Org/mcp-ui/pull/185), 2026-03). The MCP Apps spec (`modelcontextprotocol/ext-apps`, 2,890 stars) renders HTML in iframes. A signal that Remote DOM's ecosystem outside Shopify is thin, not a reason against it for Maibuk, whose requirement is host-drawn accessible UI.
 - **Lynx** (`lynx-family/lynx-stack`, 735 stars): a whole dual-thread app framework, not a library to put inside an existing React DOM app.
-- `GoogleChromeLabs/comlink` (12,800 stars) and `@quilted/threads` are RPC transports, not renderers. Remote DOM already brings `@quilted/threads`.
+- `GoogleChromeLabs/comlink` (12,800 stars) and `@quilted/threads` are RPC transports, not renderers. Remote DOM does not bring `@quilted/threads`; Maibuk declares `@quilted/threads` 4.1.0 itself.
 
 ### 1.6 Maintenance numbers (checked 2026-10-02 with `gh api` and `npm view`)
 

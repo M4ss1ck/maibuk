@@ -83,6 +83,19 @@ describe("openPluginUiMount", () => {
     });
   });
 
+  it("does not become an unhandled rejection when a refused mount is never awaited", async () => {
+    const { broker, client } = harness();
+    client.onHostRequest(async () => {
+      throw new Error("no such page");
+    });
+    // Deliberately never observe `mounted` until after the rejection settles;
+    // vitest fails the run on an unhandled rejection, so this test only passes
+    // when the module attaches its own no-op handler.
+    const mount = openPluginUiMount(broker, "page.refused");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await expect(mount.mounted).rejects.toMatchObject({ message: "no such page" });
+  });
+
   it("sends ui.unmount for the same surface exactly once and closes the port", async () => {
     const { broker, client } = harness();
     const requests: { method: string; params: unknown }[] = [];

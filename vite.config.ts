@@ -180,6 +180,10 @@ export default defineConfig(() => ({
         "src/features/plugins/remote-ui/components.tsx",
         "src/features/plugins/remote-ui/surface.tsx",
         "src/features/plugins/remote-ui/use-plugin-remote-ui.ts",
+        "src/features/plugins/remote-ui/mount.ts",
+        "src/features/plugins/remote-ui/boundary.tsx",
+        "src/plugin-sdk/ui-serve.tsx",
+        "src/plugin-sdk/worker-ui.tsx",
         // Phase 6: Editor extensions
         "src/components/editor/html-schema-validator.ts",
         "src/components/editor/paste-cleanup.ts",

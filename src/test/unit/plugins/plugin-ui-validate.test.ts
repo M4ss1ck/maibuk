@@ -326,6 +326,59 @@ describe("the connection validator", () => {
     expect(violations[0]?.code).toBe("too-many-nodes");
   });
 
+  it("counts only Plugin nodes toward the node cap, not the receiver root", () => {
+    // The receiver root is the host's `~`, so a budget of N accepts N Plugin
+    // nodes: it refuses the (N+1)th, not the Nth.
+    const atBudget = setup({ maxNodes: 3, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
+    atBudget.connection.mutate([
+      insert(element("1", "maibuk-text")),
+      insert(element("2", "maibuk-text"), 1),
+      insert(element("3", "maibuk-text"), 2),
+    ]);
+    expect(atBudget.violations).toEqual([]);
+    expect(atBudget.receiver.root.children).toHaveLength(3);
+
+    const overBudget = setup({ maxNodes: 3, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
+    overBudget.connection.mutate([
+      insert(element("1", "maibuk-text")),
+      insert(element("2", "maibuk-text"), 1),
+      insert(element("3", "maibuk-text"), 2),
+      insert(element("4", "maibuk-text"), 3),
+    ]);
+    expect(overBudget.violations[0]?.code).toBe("too-many-nodes");
+  });
+
+  it("refuses a required prop sent as an explicit undefined", () => {
+    const { violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-text-field", { properties: { label: undefined, value: "x" } })),
+    ]);
+    expect(violations[0]?.code).toBe("invalid-prop");
+    expect(violations[0]?.prop).toBe("label");
+  });
+
+  it("refuses a required prop cleared to undefined in the same batch", () => {
+    const { violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-text-field")),
+      [MUTATION_TYPE_UPDATE_PROPERTY, "1", "label", "Search"],
+      [MUTATION_TYPE_UPDATE_PROPERTY, "1", "label", undefined],
+    ]);
+    expect(violations[0]?.code).toBe("invalid-prop");
+    expect(violations[0]?.prop).toBe("label");
+  });
+
+  it("requires a re-inserted element's props again after a same-batch removal", () => {
+    const { violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-text-field", { properties: { label: "Search" } })),
+      [MUTATION_TYPE_REMOVE_CHILD, ROOT, 0],
+      [MUTATION_TYPE_INSERT_CHILD, ROOT, element("1", "maibuk-text-field"), 0],
+    ]);
+    expect(violations[0]?.code).toBe("invalid-prop");
+    expect(violations[0]?.prop).toBe("label");
+  });
+
   it("stops reporting after the first refusal", () => {
     const { violations, connection } = setup();
     connection.mutate([insert(element("1", "maibuk-evil"))]);

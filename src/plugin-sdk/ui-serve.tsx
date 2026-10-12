@@ -3,7 +3,7 @@
  * answers the host's `ui.mount` and `ui.unmount` requests by rendering one of
  * the Plugin's pages into a container a Remote connection observes, carrying
  * that container's mutations over the mount's transferred MessagePort, batched
- * to at most one flush per frame.
+ * to at most one flush per 16 ms window.
  *
  * This is the entry a host-side test imports (jsdom and the web lane), because
  * it loads no Remote DOM polyfill: it leaves the real DOM and its own
@@ -109,6 +109,11 @@ interface MountedSurface {
   thread: ThreadMessagePort<HostConnectionImports>;
   port: MessagePort;
   detach(): void;
+  /**
+   * Marks the mount closed so a late batch (a `frameBatch` timer that fires
+   * after teardown) never touches the closed thread.
+   */
+  close(): void;
 }
 
 export interface ServePluginUiOptions {
@@ -159,9 +164,21 @@ export function servePluginUi(
     port.start();
 
     const thread = new ThreadMessagePort<HostConnectionImports>(port);
+    // A batch the `frameBatch` timer schedules just before teardown can fire
+    // after the thread and port are closed; the flag makes `mutate`/`call` a
+    // no-op then instead of touching the closed thread.
+    const state = { closed: false };
     const hostConnection: RemoteConnection = {
-      mutate: (records) => void thread.imports.mutate(records).catch(() => {}),
-      call: (id, method, ...args) => thread.imports.call(id, method, ...args),
+      mutate: (records) => {
+        if (state.closed) return;
+        void thread.imports.mutate(records).catch(() => {});
+      },
+      call: (id, method, ...args) => {
+        if (state.closed) {
+          return Promise.reject(new Error(`The Remote UI mount ${surface} is closed`));
+        }
+        return thread.imports.call(id, method, ...args);
+      },
     };
 
     const connection = new BatchingRemoteConnection(hostConnection, { batch: frameBatch() });
@@ -169,7 +186,16 @@ export function servePluginUi(
     const reactRoot = createRoot(container);
     reactRoot.render(<Page />);
 
-    mounted.set(surface, { reactRoot, connection, thread, port, detach });
+    mounted.set(surface, {
+      reactRoot,
+      connection,
+      thread,
+      port,
+      detach,
+      close() {
+        state.closed = true;
+      },
+    });
     return null;
   }
 
@@ -187,6 +213,9 @@ export function servePluginUi(
     // closing the port, or the host would never see the tree leave.
     entry.connection.flush();
     entry.detach();
+    // Close before the thread/port: a batch timer that fires from here on sees
+    // the flag and does not touch the closed thread.
+    entry.close();
     entry.thread.close();
     entry.port.close();
     return null;

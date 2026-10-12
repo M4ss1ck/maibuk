@@ -119,15 +119,24 @@ function buildShadow(root: RemoteReceiverRoot): TreeShadow {
     shadow.children.set(node.id, ids);
   }
   visit(root);
+  // `visit` counts the receiver root, which is the host's `~` and not a Plugin
+  // node, so `maxNodes` means that many Plugin nodes, not one fewer.
+  shadow.nodes -= 1;
   return shadow;
 }
 
-/** Removes a node and its descendants from the shadow, returning nothing. */
-function unindexSubtree(id: string, shadow: TreeShadow): void {
+/**
+ * Removes a node and its descendants from the shadow, and drops each id from
+ * the batch tracking as well: an id removed mid-batch is no longer inserted, so
+ * re-inserting it later in the same batch must carry its required props again.
+ */
+function unindexSubtree(id: string, shadow: TreeShadow, tracking: BatchTracking): void {
   const children = shadow.children.get(id) ?? [];
-  for (const child of children) unindexSubtree(child, shadow);
+  for (const child of children) unindexSubtree(child, shadow, tracking);
   shadow.children.delete(id);
   shadow.tags.delete(id);
+  tracking.inserted.delete(id);
+  tracking.setProps.delete(id);
   shadow.nodes -= 1;
 }
 
@@ -219,8 +228,10 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
           prop: name,
         });
       }
-      for (const name of Object.keys(serialization.properties ?? {})) {
-        rememberProp(tracking, serialization.id, name);
+      // An explicit `undefined` is not a value: a required prop sent as
+      // `undefined` is still missing, so only a real value counts as set.
+      for (const [name, value] of Object.entries(serialization.properties ?? {})) {
+        if (value !== undefined) rememberProp(tracking, serialization.id, name);
       }
       for (const [name, value] of Object.entries(serialization.properties ?? {})) {
         const prop = element.props[name];
@@ -300,7 +311,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
           const childId = children?.[record[2]];
           if (children !== undefined && childId !== undefined) {
             children.splice(record[2], 1);
-            unindexSubtree(childId, shadow);
+            unindexSubtree(childId, shadow, tracking);
           }
           break;
         }
@@ -356,7 +367,13 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
               prop: name,
             });
           }
-          rememberProp(tracking, id, name);
+          // A later `undefined` clears an earlier set: the prop is no longer
+          // present, so a required prop updated to `undefined` is missing.
+          if (value === undefined) {
+            tracking.setProps.get(id)?.delete(name);
+          } else {
+            rememberProp(tracking, id, name);
+          }
           break;
         }
       }

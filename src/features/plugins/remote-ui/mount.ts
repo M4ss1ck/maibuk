@@ -40,6 +40,10 @@ export function openPluginUiMount(
       [channel.port2]
     )
     .then(() => undefined);
+  // `mounted` still rejects for a caller that awaits it. This internal no-op
+  // handler keeps a refused mount whose caller never observes it from becoming
+  // an unhandled rejection.
+  mounted.catch(() => {});
   let closed = false;
   return {
     port: channel.port1,

@@ -490,7 +490,7 @@ export interface PluginUiLimits {
   maxRecordsPerBatch: number;
   /**
    * Most mutation batches accepted in any 1 s window (#401: the SDK sends at
-   * most one per frame; the host allows 2x for message jitter).
+   * most one flush per 16 ms window; the host allows 2x for message jitter).
    */
   maxBatchesPerSecond: number;
 }
