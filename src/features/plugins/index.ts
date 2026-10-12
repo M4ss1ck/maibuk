@@ -89,6 +89,10 @@ export {
 } from "@/features/plugins/approvals";
 export { reviewPluginCopy } from "@/features/plugins/review";
 export {
+  createPluginManagementStore,
+  usePluginManagementStore,
+} from "@/features/plugins/management";
+export {
   PluginDirectoryHashError,
   hashPluginDirectory,
   pluginFileDigests,

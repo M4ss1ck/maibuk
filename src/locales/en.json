@@ -2090,6 +2090,9 @@
     }
   },
   "plugins": {
+    "changedNotice": "{{name}} was disabled because its files changed.",
+    "noticeReview": "Review",
+    "noticeDismiss": "Dismiss",
     "stopped": {
       "startupTimeout": "{{name}} took too long to start and was stopped.",
       "unresponsive": "{{name}} stopped responding and was closed.",

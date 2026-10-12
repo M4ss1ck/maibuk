@@ -25,7 +25,9 @@ import {
   onChange,
 } from "@/features/sync/change-feed";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
+import { getPluginApproval } from "@/features/plugins/approvals";
 import { registerPluginContributions } from "@/features/plugins/contributions";
+import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
 import {
   clearPluginHighlights,
   onEditorContentChanged,
@@ -39,7 +41,8 @@ import {
 } from "@/features/plugins/lifecycle-instance";
 import { scanApprovedPlugins } from "@/features/plugins/launch";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
-import { STARTUP_TIMEOUT_MS, startPlugin } from "@/features/plugins/runtime";
+import { reviewPluginCopy } from "@/features/plugins/review";
+import { STARTUP_TIMEOUT_MS, readPluginManifest, startPlugin } from "@/features/plugins/runtime";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
 import { isTutorialLibraryActive, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
@@ -52,6 +55,7 @@ import type {
   PluginLifecycleState,
   PluginLifecycleStopReason,
   PluginRuntime,
+  PluginReview,
   PluginStartReason,
   PluginStartRefusal,
   PluginStopReason,
@@ -60,6 +64,7 @@ import { toast } from "@/components/ui/Toast";
 import { APP_VERSION } from "@/constants";
 import i18n from "@/i18n";
 import { waitForDatabaseReady } from "@/lib/db";
+import { getPluginDirectory } from "@/lib/platform";
 import { PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 
 /** Heartbeat period; one missed beat makes the Plugin's contributions unusable. */
@@ -422,7 +427,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     entry: Entry,
     reason: PluginStartReason
   ): Promise<PluginActivationResult> {
-    const { pluginId, manifest, folder, approval } = entry.installed;
+    const { pluginId, manifest, folder } = entry.installed;
     if (disposed) return { ok: false, refusal: { code: "not-installed" } };
     if (entry.state.status !== "stopped") {
       // Already starting, ready, or unavailable: nothing to do.
@@ -447,6 +452,40 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     if (compatibility.verdict !== "ok") {
       const refusal: PluginActivationRefusal = { code: "incompatible", compatibility };
       refuseEntry(entry, refusal);
+      return { ok: false, refusal };
+    }
+
+    // The review gate (#442): only the copy the author approved starts. It runs
+    // before any frame, in addition to `startPlugin`'s own pinned-hash check,
+    // and reports the review so a changed copy notifies once. The live record
+    // is read so a re-review (markReviewed) takes effect on the next start.
+    const liveApproval = getPluginApproval(pluginId);
+    let review: PluginReview | null = null;
+    try {
+      const digests = await pluginFileDigests(folder.files);
+      const hash = await hashPluginDirectory(folder.files);
+      review = reviewPluginCopy({
+        approval: liveApproval,
+        digests,
+        hash,
+        manifest,
+      });
+    } catch {
+      // A folder the hash scheme refuses is reported by `startPlugin`'s own
+      // check; the review cannot be computed, so the start falls through.
+      review = null;
+    }
+    if (review !== null && review.status !== "approved") {
+      const refusal: PluginActivationRefusal = {
+        code: "review-required",
+        status: review.status,
+      };
+      if (entry.generation === generation) refuseEntry(entry, refusal);
+      return { ok: false, refusal };
+    }
+    if (liveApproval === null && review === null) {
+      const refusal: PluginActivationRefusal = { code: "review-required", status: "not-approved" };
+      if (entry.generation === generation) refuseEntry(entry, refusal);
       return { ok: false, refusal };
     }
 
@@ -478,8 +517,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     try {
       result = await startPlugin({
         folder,
-        pinnedHash: approval.pinnedHash,
-        granted: approval.granted,
+        pinnedHash: (liveApproval ?? entry.installed.approval).pinnedHash,
+        // Read the live record on every broker call, so revoking an optional
+        // grant refuses the next call without restarting the Plugin (#442).
+        granted: () => getPluginApproval(pluginId)?.granted ?? [],
         handlers,
         createFrame: options.createFrame,
         isLibraryAvailable,
@@ -752,6 +793,71 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       const entry = entries.get(pluginId);
       if (!entry) return { ok: false, refusal: { code: "not-installed" } };
       return startEntry(entry, reason);
+    },
+
+    async install(pluginId: string, reason: PluginStartReason) {
+      if (disposed) return { ok: false, refusal: { code: "not-installed" } };
+      const approval = getPluginApproval(pluginId);
+      if (!approval || !approval.enabled) {
+        return { ok: false, refusal: { code: "not-installed" } };
+      }
+      const directory = options.directory ?? (await getPluginDirectory());
+      const folder = await directory.readFolder(pluginId);
+      if (!folder) return { ok: false, refusal: { code: "not-installed" } };
+      const read = readPluginManifest(folder);
+      if (!read.ok) {
+        return { ok: false, refusal: { code: "manifest-invalid", problems: read.problems } };
+      }
+      const installed: InstalledPlugin = {
+        pluginId,
+        approval,
+        folder,
+        manifest: read.manifest,
+      };
+      let entry = entries.get(pluginId);
+      if (!entry) {
+        entry = createEntry(installed);
+        try {
+          entry.unregisterContributions = registerPluginContributions({
+            manifest: installed.manifest,
+            folder,
+          });
+        } catch (error) {
+          // One Plugin's bad contributions must never leave a half entry.
+          console.error(`Plugin ${pluginId} contributions failed to register`, error);
+          return { ok: false, refusal: { code: "module-refused", problems: [] } };
+        }
+        entries.set(pluginId, entry);
+      } else {
+        // A re-review refreshes what the entry was scanned with, and clears a
+        // stale refusal or limit-stop so a later warm start works.
+        entry.installed = installed;
+        entry.limitStopped = false;
+        if (entry.state.status === "stopped" && entry.state.refusal !== null) {
+          entry.state = { status: "stopped", reason: null, refusal: null };
+        }
+      }
+      // The normal warm-start rules: an on-demand Plugin waits for a surface; a
+      // persistent one starts now.
+      if (installed.manifest.lifecycle === "on-demand" && entry.surfaces.size === 0) {
+        return { ok: true, startReason: reason };
+      }
+      return startEntry(entry, reason);
+    },
+
+    uninstall(pluginId: string): void {
+      const entry = entries.get(pluginId);
+      if (!entry) return;
+      clearPluginHighlights(pluginId);
+      entry.generation += 1;
+      clearTimers(entry);
+      const runtime = entry.runtime;
+      entry.runtime = null;
+      runtime?.stop();
+      entry.unregisterContributions?.();
+      entry.unregisterContributions = null;
+      setState(entry, { status: "stopped", reason: "requested", refusal: null });
+      entries.delete(pluginId);
     },
 
     stop(pluginId: string, reason: PluginLifecycleStopReason = "requested"): void {

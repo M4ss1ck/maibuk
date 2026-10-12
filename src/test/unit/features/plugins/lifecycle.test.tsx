@@ -126,6 +126,8 @@ interface HarnessOptions {
   disabled?: PluginFolder[];
   /** Folders whose approval record is disabled: installed, but off. */
   disabledApprovals?: PluginFolder[];
+  /** Folders whose approval pins a stale hash: installed, but the files changed. */
+  changed?: PluginFolder[];
   /** Stored dataVersion per plugin id. */
   data?: Record<string, number>;
   /** Overrides the dataVersion store per method; unspecified methods keep the in-memory map. */
@@ -152,6 +154,19 @@ async function createHarness(options: HarnessOptions = {}) {
       pinnedHash: await hashPluginDirectory(folder.files),
       granted: options.granted ?? [],
       enabled: false,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
+    });
+  }
+  for (const folder of options.changed ?? []) {
+    folders.set(folder.name, folder);
+    // A pin that does not match the folder's current hash: the copy changed.
+    savePluginApproval({
+      pluginId: folder.name,
+      pinnedHash: "h1:stale",
+      granted: options.granted ?? [],
+      enabled: true,
       approvedVersion: "",
       approvedPermissions: { required: [], optional: [] },
       approvedFiles: {},
@@ -1075,6 +1090,60 @@ describe("Plugin lifecycle: compatibility gate", () => {
     await launchAll(h);
 
     expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
+  });
+});
+
+describe("Plugin lifecycle: review gate", () => {
+  it("never creates a frame for a changed copy and records the review refusal", async () => {
+    const h = await createHarness({ changed: [makePlugin("alpha")] });
+
+    await launchAll(h);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: { code: "review-required", status: "review-required" },
+    });
+  });
+
+  it("starts a changed copy once its current files are approved again", async () => {
+    const folder = makePlugin("alpha");
+    const h = await createHarness({ changed: [folder] });
+    await launchAll(h);
+    expect(h.frameCount()).toBe(0);
+
+    // Re-pin to the folder's current hash: the review is approved now.
+    savePluginApproval({
+      pluginId: "alpha",
+      pinnedHash: await hashPluginDirectory(folder.files),
+      granted: [],
+      enabled: true,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
+    });
+    await h.lifecycle.start("alpha", "enable");
+    await advance(0);
+
+    expect(h.framesFor("alpha")).toHaveLength(1);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "enable" });
+  });
+
+  it("refuses an on-demand copy that changed before any warm start", async () => {
+    const h = await createHarness({
+      changed: [makePlugin("warm-page", { lifecycle: "on-demand" })],
+    });
+    await h.lifecycle.launch();
+    h.lifecycle.surfaceReached("warm-page", "page:report");
+    await advance(0);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.state("warm-page")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: { code: "review-required", status: "review-required" },
+    });
   });
 });
 

@@ -177,6 +177,9 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
 
   const frame = (options.createFrame ?? createPluginFrame)(document, manifest);
   const channel = new MessageChannel();
+  // A provider is read on every broker call, so a revocation applies to the
+  // next call without restarting the Plugin (#442); an array is read once.
+  const granted = options.granted;
   const broker = createPluginBroker({
     pluginId: manifest.id,
     port: channel.port1,
@@ -186,7 +189,7 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
       ...manifest.permissions.required,
       ...manifest.permissions.optional,
     ] as PluginPermissionId[],
-    granted: () => options.granted ?? [],
+    granted: typeof granted === "function" ? granted : () => granted ?? [],
     handlers: options.handlers?.(manifest),
     isLibraryAvailable: options.isLibraryAvailable,
     trackLibraryWork: options.trackLibraryWork,

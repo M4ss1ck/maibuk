@@ -2090,6 +2090,9 @@
     }
   },
   "plugins": {
+    "changedNotice": "Se desactivó {{name}} porque sus archivos cambiaron.",
+    "noticeReview": "Revisar",
+    "noticeDismiss": "Cerrar aviso",
     "stopped": {
       "startupTimeout": "{{name}} tardó demasiado en iniciarse y se detuvo.",
       "unresponsive": "{{name}} dejó de responder y se cerró.",

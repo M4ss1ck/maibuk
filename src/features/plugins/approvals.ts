@@ -85,6 +85,7 @@ function normalizeApproval(record: Record<string, unknown>): PluginApproval {
   const builtIn = readBuiltIn(record.builtIn);
   if (builtIn) approval.builtIn = builtIn;
   if (typeof record.startupError === "string") approval.startupError = record.startupError;
+  if (typeof record.notifiedHash === "string") approval.notifiedHash = record.notifiedHash;
   return approval;
 }
 

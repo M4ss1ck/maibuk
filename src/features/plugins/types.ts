@@ -127,8 +127,12 @@ export interface PluginStartOptions {
   folder: PluginFolder;
   /** The `h1:` value the author pinned when approving the Plugin. */
   pinnedHash: string;
-  /** The Plugin Permissions granted right now; none by default. */
-  granted?: readonly PluginPermissionId[];
+  /**
+   * The Plugin Permissions granted right now; none by default. A provider is
+   * read on every broker call, so revoking an optional grant refuses the next
+   * call without restarting the Plugin (#442).
+   */
+  granted?: readonly PluginPermissionId[] | (() => Iterable<PluginPermissionId>);
   /** Builds the method handlers for this Plugin; a row without one refuses `not-implemented`. */
   handlers?: (manifest: PluginManifest) => PluginApiHandlers;
   /** False while the Library cannot be read or written (the Tutorial Library). */
@@ -190,6 +194,11 @@ export interface PluginApproval {
   builtIn?: PluginApprovalBuiltIn;
   /** The last startup failure, shown until the next successful start clears it. */
   startupError?: string;
+  /**
+   * The `h1:` hash of the last changed-files notification shown, so the same
+   * change never notifies twice (#442).
+   */
+  notifiedHash?: string;
 }
 
 /** What `enablePlugin` returns: the enabled record, or why it refused. */
@@ -224,6 +233,62 @@ export interface PluginReview {
   permissions: PluginPermissionDiff;
   /** True when the installed copy's version is older than the approved one. */
   olderVersion: boolean;
+}
+
+// Management (management.ts)
+
+/** The changed-files notification shown once per Plugin and changed hash (#442). */
+export interface PluginChangedNotification {
+  pluginId: string;
+  /** The Plugin's display name at the time of the change. */
+  name: string;
+  /** The folder's `h1:` hash the copy changed to. */
+  hash: string;
+}
+
+/** One known Plugin as the management store lists it. */
+export interface PluginManagementEntry {
+  pluginId: string;
+  manifest: PluginManifest;
+  /** The approval record, or null for a copy never approved. */
+  approval: PluginApproval | null;
+  review: PluginReview;
+  /** True while the lifecycle has a runtime for it. */
+  running: boolean;
+}
+
+/** The management store's dependencies; injected in tests. */
+export interface PluginManagementOptions {
+  /** Injected by tests; defaults to the platform's Plugin Directory. */
+  directory?: PluginDirectoryAdapter;
+  /** The app's one lifecycle; defaults to `getPluginLifecycle`. */
+  lifecycle?: () => PluginLifecycle | null;
+  /** Shows the non-blocking notification; defaults to a toast. Injected by tests. */
+  notify?: (notification: PluginChangedNotification) => void;
+}
+
+/** The Plugin management store: the orchestrator the Settings UI talks to (#442). */
+export interface PluginManagement {
+  /** Every known Plugin the Plugin Directory holds, by id. */
+  plugins: Record<string, PluginManagementEntry>;
+  /** The changed-files notifications shown now, at most one per Plugin. */
+  notifications: PluginChangedNotification[];
+  /** Re-reads the Plugin Directory and each copy's review state. */
+  refresh(): Promise<void>;
+  /** Approves the current copy with the chosen optional grants and starts it. */
+  approve(pluginId: string, optionalGranted?: readonly PluginPermissionId[]): Promise<void>;
+  /** Revokes one Plugin Permission; a required revoke disables and stops it. */
+  revoke(pluginId: string, permission: PluginPermissionId): Promise<void>;
+  /** Enables the copy when every required Plugin Permission is still granted. */
+  enable(pluginId: string): Promise<void>;
+  /** Disables the Plugin without removing it; it stops if running. */
+  disable(pluginId: string): void;
+  /** Approves the current copy: re-pins its hash, digests, version, and permissions. */
+  markReviewed(pluginId: string): Promise<void>;
+  /** Shows one notification per (Plugin, changed hash); the same hash never repeats. */
+  notifyChanged(pluginId: string, hash: string): void;
+  /** Removes one Plugin's notification. */
+  dismissNotification(pluginId: string): void;
 }
 
 // Launch (launch.ts)
@@ -296,7 +361,12 @@ export type PluginActivationRefusal =
   | PluginDataRefusal
   /** The manifest cannot run on this app's Plugin API or Release (ADR 0022). */
   | { code: "incompatible"; compatibility: PluginCompatibility }
-  | { code: "not-installed" };
+  | { code: "not-installed" }
+  /**
+   * The copy is not the one the author approved (#442): its files changed, or
+   * it was never approved. Only `approved` copies start.
+   */
+  | { code: "review-required"; status: Exclude<PluginReviewStatus, "approved"> };
 
 export type PluginActivationResult =
   | { ok: true; startReason: PluginStartReason }
@@ -366,6 +436,15 @@ export interface PluginLifecycle {
   surfaceLeft(pluginId: string, surface: string): void;
   /** Starts an installed Plugin now (enable, Restart, or a bulk reason). */
   start(pluginId: string, reason: PluginStartReason): Promise<PluginActivationResult>;
+  /**
+   * Registers one Plugin now, after the launch scan: reads its folder, parses
+   * its manifest, registers its contributions, and starts it by the normal
+   * warm-start rules (a persistent Plugin starts; an on-demand one waits for a
+   * surface). Used when a Plugin is approved or enabled mid-session (#442).
+   */
+  install(pluginId: string, reason: PluginStartReason): Promise<PluginActivationResult>;
+  /** Removes one Plugin's entry and contributions: disabling it (#442). */
+  uninstall(pluginId: string): void;
   /** Stops a running Plugin; the broker's `requested` and the lifecycle's `idle` are silent. */
   stop(pluginId: string, reason?: PluginLifecycleStopReason): void;
   /** The Plugin's state, or null for an id the lifecycle has not seen. */
