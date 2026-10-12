@@ -67,6 +67,10 @@ async function launchApproved(overrides: Parameters<typeof pluginFolder>[1] = {}
     pluginId: "sample",
     pinnedHash: await hashPluginDirectory(folder.files),
     granted: [],
+    enabled: true,
+    approvedVersion: "",
+    approvedPermissions: { required: [], optional: [] },
+    approvedFiles: {},
   });
   const lifecycle = createPluginLifecycle({
     directory: {

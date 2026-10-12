@@ -124,6 +124,8 @@ interface HarnessOptions {
   approved?: PluginFolder[];
   /** Folders in the Plugin Directory that are not approved (disabled). */
   disabled?: PluginFolder[];
+  /** Folders whose approval record is disabled: installed, but off. */
+  disabledApprovals?: PluginFolder[];
   /** Stored dataVersion per plugin id. */
   data?: Record<string, number>;
   /** Overrides the dataVersion store per method; unspecified methods keep the in-memory map. */
@@ -143,12 +145,28 @@ interface HarnessOptions {
 async function createHarness(options: HarnessOptions = {}) {
   const folders = new Map<string, PluginFolder>();
   for (const folder of options.disabled ?? []) folders.set(folder.name, folder);
+  for (const folder of options.disabledApprovals ?? []) {
+    folders.set(folder.name, folder);
+    savePluginApproval({
+      pluginId: folder.name,
+      pinnedHash: await hashPluginDirectory(folder.files),
+      granted: options.granted ?? [],
+      enabled: false,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
+    });
+  }
   for (const folder of options.approved ?? []) {
     folders.set(folder.name, folder);
     savePluginApproval({
       pluginId: folder.name,
       pinnedHash: await hashPluginDirectory(folder.files),
       granted: options.granted ?? [],
+      enabled: true,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
     });
   }
 
@@ -260,6 +278,17 @@ describe("Plugin lifecycle: launch", () => {
       reason: null,
       refusal: null,
     });
+  });
+
+  it("never registers or starts a Plugin whose approval is disabled", async () => {
+    const h = await createHarness({ disabledApprovals: [makePlugin("off-one")] });
+
+    await launchAll(h);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.installed()).toEqual([]);
+    expect(h.lifecycle.state("off-one")).toBeNull();
+    expect(h.directory.readFolder).not.toHaveBeenCalled();
   });
 
   it("starts persistent Plugins one at a time in idle time", async () => {

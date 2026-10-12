@@ -25,6 +25,10 @@ savePluginApproval({
   pluginId: "bench",
   pinnedHash: await hashPluginDirectory(folder.files),
   granted: [],
+  enabled: true,
+  approvedVersion: "",
+  approvedPermissions: { required: [], optional: [] },
+  approvedFiles: {},
 });
 
 const directory: PluginDirectoryAdapter = {

@@ -1,5 +1,5 @@
 /**
- * The launch scan: which approved Plugins the Plugin Directory holds, each
+ * The launch scan: which enabled Plugins the Plugin Directory holds, each
  * with its manifest parsed and nothing else. No frame and no Worker is created
  * here; the lifecycle (#436) decides what starts and when, so on-demand
  * Plugins never start at launch. With no approvals this never touches the
@@ -19,7 +19,9 @@ import { getPluginDirectory } from "@/lib/platform";
 export async function scanApprovedPlugins(
   options: PluginScanOptions = {}
 ): Promise<PluginScanResult> {
-  const approvals = listPluginApprovals();
+  // A disabled Plugin stays installed but off: it is never scanned, so it has
+  // no entry and no Worker at launch (#442).
+  const approvals = listPluginApprovals().filter((approval) => approval.enabled);
   if (approvals.length === 0) return { plugins: [], refusals: [] };
 
   const directory = options.directory ?? (await getPluginDirectory());

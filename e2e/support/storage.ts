@@ -94,7 +94,15 @@ export async function prepareDevice(
       : (await readFile(resolve(SEED_DIR, `${library}.sqlite`))).toString("base64");
   const seeds = await Promise.all(plugins.map(readPluginSeed));
   const approvals = serializePluginApprovals(
-    seeds.map((seed) => ({ pluginId: seed.name, pinnedHash: seed.pinnedHash, granted: [] }))
+    seeds.map((seed) => ({
+      pluginId: seed.name,
+      pinnedHash: seed.pinnedHash,
+      granted: [],
+      enabled: true,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
+    }))
   );
 
   await page.route(`**${BLANK_PATH}`, (route) =>

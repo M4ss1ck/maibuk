@@ -659,9 +659,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         }
         for (const plugin of scan.plugins) {
           const entry = createEntry(plugin);
-          // An approved Plugin is enabled (until the install flow lands, #442):
-          // its Commands, pages, Settings rows, toolbar buttons, and Item Menu
-          // entries are discoverable now, before any Worker exists (#437).
+          // Only an enabled Plugin reaches this scan (#442): its Commands,
+          // pages, Settings rows, toolbar buttons, and Item Menu entries are
+          // discoverable now, before any Worker exists (#437). A disabled
+          // Plugin stays installed but is never scanned, so it is off.
           try {
             entry.unregisterContributions = registerPluginContributions({
               manifest: plugin.manifest,

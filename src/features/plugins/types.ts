@@ -158,6 +158,19 @@ export type PluginStartResult =
 
 // Approvals (approvals.ts)
 
+/** A Built-in Plugin's shipped copy, and a modified copy kept on purpose. */
+export interface PluginApprovalBuiltIn {
+  /** The hash of the copy Maibuk ships. */
+  shippedHash: string;
+  /** The shipped hash the author chose to keep their modified copy at. */
+  keptModifiedHash?: string;
+}
+
+/**
+ * The v2 approval record: the pinned copy, its Plugin Permissions, whether the
+ * Plugin is enabled, and what the author reviewed. A v1 record (`granted` only)
+ * migrates on read. Device-local: never synced, never in a Backup.
+ */
 export interface PluginApproval {
   /** The Plugin's folder name in the Plugin Directory. */
   pluginId: string;
@@ -165,6 +178,52 @@ export interface PluginApproval {
   pinnedHash: string;
   /** The Plugin Permissions granted right now. */
   granted: PluginPermissionId[];
+  /** Whether the Plugin starts; a disabled Plugin stays installed but off. */
+  enabled: boolean;
+  /** The manifest `version` the author approved; compared for "Older version". */
+  approvedVersion: string;
+  /** The manifest permissions as declared when this copy was approved. */
+  approvedPermissions: { required: string[]; optional: string[] };
+  /** The per-file lowercase hex SHA-256 the author approved, keyed by path. */
+  approvedFiles: Record<string, string>;
+  /** Present for a Built-in Plugin; absent for a third-party one. */
+  builtIn?: PluginApprovalBuiltIn;
+  /** The last startup failure, shown until the next successful start clears it. */
+  startupError?: string;
+}
+
+/** What `enablePlugin` returns: the enabled record, or why it refused. */
+export type PluginEnableResult =
+  | { ok: true; approval: PluginApproval }
+  | {
+      ok: false;
+      reason: "required-permissions-missing";
+      /** The required Plugin Permissions the record does not grant. */
+      missing: string[];
+      /** The record, unchanged. */
+      approval: PluginApproval;
+    };
+
+// Review (review.ts)
+
+/** Whether a copy needs the author's review before it may start again. */
+export type PluginReviewStatus = "approved" | "review-required" | "not-approved";
+
+/** The per-file diff a re-review shows, by POSIX-relative path. */
+export interface PluginFileDiff {
+  added: string[];
+  removed: string[];
+  changed: string[];
+}
+
+/** The pure review of an installed copy against its approval record. */
+export interface PluginReview {
+  status: PluginReviewStatus;
+  files: PluginFileDiff;
+  /** The permission diff since approval, including `nowRequired`. */
+  permissions: PluginPermissionDiff;
+  /** True when the installed copy's version is older than the approved one. */
+  olderVersion: boolean;
 }
 
 // Launch (launch.ts)

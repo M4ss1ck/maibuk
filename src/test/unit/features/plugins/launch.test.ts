@@ -24,6 +24,10 @@ async function approve(folder: PluginFolder, overrides: Record<string, unknown> 
     pluginId: folder.name,
     pinnedHash: await hashPluginDirectory(folder.files),
     granted: [],
+    enabled: true,
+    approvedVersion: "",
+    approvedPermissions: { required: [], optional: [] },
+    approvedFiles: {},
     ...overrides,
   });
 }
@@ -56,6 +60,18 @@ describe("scanApprovedPlugins()", () => {
       directory: fakeDirectory({ other: pluginFolder({}) }),
     });
     expect(result).toEqual({ plugins: [], refusals: [] });
+  });
+
+  it("scans only enabled approvals, leaving a disabled one installed but off", async () => {
+    const active = pluginFolder({}, { id: "active", name: "active" });
+    const inactive = pluginFolder({}, { id: "inactive", name: "inactive" });
+    await approve(active);
+    await approve(inactive, { enabled: false });
+    const directory = fakeDirectory({ active, inactive });
+    const result = await scanApprovedPlugins({ directory });
+    expect(result.plugins.map((plugin) => plugin.pluginId)).toEqual(["active"]);
+    expect(directory.readFolder).toHaveBeenCalledTimes(1);
+    expect(directory.readFolder).toHaveBeenCalledWith("active");
   });
 
   it("reports a manifest problem as a refusal instead of failing", async () => {

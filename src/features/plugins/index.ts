@@ -77,12 +77,17 @@ export {
 } from "@/features/plugins/broker";
 export {
   PLUGIN_APPROVALS_STORAGE_KEY,
+  approvePluginCopy,
+  disablePlugin,
+  enablePlugin,
   getPluginApproval,
   listPluginApprovals,
   removePluginApproval,
+  revokePermission,
   savePluginApproval,
   serializePluginApprovals,
 } from "@/features/plugins/approvals";
+export { reviewPluginCopy } from "@/features/plugins/review";
 export {
   PluginDirectoryHashError,
   hashPluginDirectory,
