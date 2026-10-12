@@ -19,6 +19,14 @@
  * Plugin through the lifecycle's `stop`; revoking an optional grant leaves it
  * running, and the broker refuses the next call because it reads the live
  * record.
+ *
+ * It also lists every Plugin the app has ever seen, from the known list (#443):
+ * a row stays after the files are deleted, a removed Plugin keeps its row, a
+ * Built-in with no folder becomes available to install, a manifest that
+ * excludes this device is unsupported and never enableable, and two folders
+ * that declare the same id collapse into one entry that names both. A limit or
+ * crash stop shows Stopped with its reason and a `restart` action, and the
+ * filter helpers below group the list for the Settings filters.
  */
 
 import { create } from "zustand";
@@ -35,6 +43,7 @@ import {
 } from "@/features/plugins/approvals";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
+import { listKnownPlugins, saveKnownPlugin } from "@/features/plugins/known";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { planPluginModules } from "@/features/plugins/modules";
 import { reviewPluginCopy } from "@/features/plugins/review";
@@ -42,15 +51,46 @@ import type {
   BuiltInPlugin,
   PluginActivationResult,
   PluginApproval,
+  PluginLifecycleStopReason,
   PluginManagement,
   PluginManagementEntry,
   PluginManagementOptions,
+  PluginManifest,
   PluginNotification,
   PluginPermissionId,
 } from "@/features/plugins/types";
 import { useSettingsStore } from "@/features/settings/store";
 import { getPluginDirectory } from "@/lib/platform";
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
+
+/**
+ * The device platform the Plugin Directory serves, used to decide whether a
+ * manifest's declared `platforms` include this device (the adapter reports
+ * `web`, `desktop`, or `android` from the build).
+ */
+type DevicePlatform = PluginDirectoryAdapter["kind"];
+
+/**
+ * True when a manifest may run on this device. A manifest that omits
+ * `platforms` runs everywhere; otherwise its list must name the device.
+ */
+function isSupported(manifest: PluginManifest, platform: DevicePlatform): boolean {
+  const platforms = manifest.platforms as readonly string[] | undefined;
+  if (platforms === undefined) return true;
+  return platforms.includes(platform);
+}
+
+/**
+ * The stop reason Settings shows as Stopped. `requested` (disable) and `idle`
+ * (an on-demand Plugin with no work) are normal lifecycle events, not a state
+ * the author needs to act on.
+ */
+function stopShownReason(
+  reason: PluginLifecycleStopReason | null
+): PluginLifecycleStopReason | null {
+  if (reason === null || reason === "requested" || reason === "idle") return null;
+  return reason;
+}
 
 /** The notification text for a changed copy or a Built-in update, localized. */
 function defaultNotify(_notification: PluginNotification): void {
@@ -125,25 +165,44 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
     return state !== null && state.status !== "stopped";
   }
 
+  /** The stop Settings shows as Stopped for an installed Plugin, or null. */
+  function stoppedOf(pluginId: string): PluginManagementEntry["stopped"] {
+    const state = getLifecycle()?.state(pluginId) ?? null;
+    if (state === null || state.status !== "stopped") return null;
+    const reason = stopShownReason(state.reason);
+    return reason === null ? null : { reason };
+  }
+
+  /** The device platform the Plugin Directory serves right now. */
+  async function devicePlatform(): Promise<DevicePlatform> {
+    return (options.directory ?? (await getPluginDirectory())).kind;
+  }
+
   /**
-   * One entry for a copy: its review, plus the Built-in state. A Built-in is
-   * "modified" when its installed hash differs from the shipped one, and an
-   * update is available when a modified copy's shipped hash has moved past the
-   * one its record pins.
+   * One entry for a copy: its review, plus every state Settings shows. A
+   * Built-in is "modified" when its installed hash differs from the shipped
+   * one, and an update is available when a modified copy's shipped hash has
+   * moved past the one its record pins.
    */
-  function buildEntry(
-    pluginId: string,
-    copy: CurrentCopy,
-    approval: PluginApproval | null,
-    builtIn: BuiltInPlugin | undefined
-  ): PluginManagementEntry {
+  function buildEntry(input: {
+    pluginId: string;
+    copy: CurrentCopy;
+    approval: PluginApproval | null;
+    builtIn: BuiltInPlugin | undefined;
+    platform: DevicePlatform;
+    installed: boolean;
+    removed: boolean;
+    available: boolean;
+    duplicateFolders: string[];
+  }): PluginManagementEntry {
+    const { pluginId, copy, approval, builtIn, platform, installed } = input;
     const review = reviewPluginCopy({
       approval,
       digests: copy.digests,
       hash: copy.hash,
       manifest: copy.manifest,
     });
-    const modified = builtIn !== undefined && copy.hash !== builtIn.hash;
+    const modified = installed && builtIn !== undefined && copy.hash !== builtIn.hash;
     const updateAvailable =
       builtIn !== undefined &&
       modified &&
@@ -154,11 +213,37 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       manifest: copy.manifest,
       approval,
       review,
-      running: running(pluginId),
+      running: installed ? running(pluginId) : false,
       builtIn: builtIn !== undefined,
       modified,
       updateAvailable,
+      installed,
+      removed: input.removed,
+      available: input.available,
+      unsupported: !isSupported(copy.manifest, platform),
+      duplicateFolders: input.duplicateFolders,
+      stopped: installed ? stoppedOf(pluginId) : null,
     };
+  }
+
+  /** Builds an installed copy's entry, reading the device platform now. */
+  async function installedEntry(
+    pluginId: string,
+    copy: CurrentCopy,
+    approval: PluginApproval | null,
+    builtIn: BuiltInPlugin | undefined
+  ): Promise<PluginManagementEntry> {
+    return buildEntry({
+      pluginId,
+      copy,
+      approval,
+      builtIn,
+      platform: await devicePlatform(),
+      installed: true,
+      removed: false,
+      available: false,
+      duplicateFolders: [],
+    });
   }
 
   /**
@@ -200,28 +285,45 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
     }
 
     /**
-     * Subscribes once to the lifecycle: a start the review gate refused is a
-     * changed copy, reported here so it notifies even before Settings opens.
+     * Subscribes once to the lifecycle. A start the review gate refused is a
+     * changed copy, reported here so it notifies even before Settings opens. A
+     * limit or crash stop sets the entry's Stopped reason; a successful start
+     * clears it.
      */
     function ensureSubscribed(): void {
       if (unsubscribe) return;
       const lifecycle = getLifecycle();
       if (!lifecycle) return;
       unsubscribe = lifecycle.subscribe((change) => {
-        if (change.state.status === "stopped" && change.state.refusal?.code === "review-required") {
+        const state = change.state;
+        const reason = state.status === "stopped" ? stopShownReason(state.reason) : null;
+        set((current) => {
+          const entry = current.plugins[change.pluginId];
+          if (!entry) return {};
+          const running = state.status !== "stopped";
+          const stopped = reason === null ? null : { reason };
+          if (entry.running === running && entry.stopped?.reason === stopped?.reason) return {};
+          return {
+            plugins: {
+              ...current.plugins,
+              [change.pluginId]: { ...entry, running, stopped },
+            },
+          };
+        });
+        if (state.status === "stopped" && state.refusal?.code === "review-required") {
           void reportChanged(change.pluginId);
         }
       });
     }
 
     /** Writes an entry into state from the copy, record, and Built-in info. */
-    function applyApproval(
+    async function applyApproval(
       pluginId: string,
       copy: CurrentCopy,
       approval: PluginApproval,
       builtIn: BuiltInPlugin | undefined
-    ): void {
-      const entry = buildEntry(pluginId, copy, approval, builtIn);
+    ): Promise<void> {
+      const entry = await installedEntry(pluginId, copy, approval, builtIn);
       set((state) => ({ plugins: { ...state.plugins, [pluginId]: entry } }));
     }
 
@@ -241,6 +343,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
               ...entry,
               approval: getPluginApproval(pluginId) ?? entry.approval,
               running: running(pluginId),
+              stopped: stoppedOf(pluginId),
             },
           },
         };
@@ -340,7 +443,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         (permission) => !approval.granted.includes(permission as PluginPermissionId)
       );
       if (missing.length > 0) {
-        const entry = buildEntry(
+        const entry = await installedEntry(
           pluginId,
           { manifest: read.manifest, digests, hash: secondHash },
           approval,
@@ -371,7 +474,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         const result = await lifecycle.install(pluginId, "update");
         await applyStartResult(pluginId, result);
       }
-      const refreshed = buildEntry(
+      const refreshed = await installedEntry(
         pluginId,
         { manifest: read.manifest, digests, hash: secondHash },
         getPluginApproval(pluginId) ?? next,
@@ -417,12 +520,17 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         ensureSubscribed();
         const directory = options.directory ?? (await getPluginDirectory());
         syncWatcher(directory);
+        const platform = directory.kind;
         const names = await directory.listFolders();
         const builtIns = await listBuiltIns();
         const { readPluginManifest } = await loadRuntime();
         const plugins: Record<string, PluginManagementEntry> = {};
         const changed: { pluginId: string; hash: string }[] = [];
         const available: { pluginId: string; name: string; hash: string }[] = [];
+
+        // Group every readable folder by the id its manifest declares, so two
+        // folders that declare the same id become one entry naming both.
+        const copiesById = new Map<string, { name: string; copy: CurrentCopy }[]>();
         for (const name of names) {
           const folder = await directory.readFolder(name);
           if (!folder) continue;
@@ -431,8 +539,6 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           const shipped = builtIns.get(name);
           const read = readPluginManifest(folder, { builtIn: shipped !== undefined });
           if (!read.ok) continue;
-          const manifest = read.manifest;
-          const builtIn = builtIns.get(manifest.id) ?? shipped;
           let digests: Map<string, string>;
           let hash: string;
           try {
@@ -441,29 +547,95 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           } catch {
             continue;
           }
-          let approval = getPluginApproval(manifest.id);
+          const copies = copiesById.get(read.manifest.id) ?? [];
+          copies.push({ name, copy: { manifest: read.manifest, digests, hash } });
+          copiesById.set(read.manifest.id, copies);
+        }
+
+        for (const [pluginId, copies] of copiesById) {
+          const duplicateFolders = copies.length > 1 ? copies.map((entry) => entry.name) : [];
+          const copy = copies[0].copy;
+          const manifest = copy.manifest;
+          const builtIn = builtIns.get(pluginId);
+          let approval = getPluginApproval(pluginId);
           // First sight of a Built-in: an untouched copy is pre-granted and
           // enabled, while a modified copy is recorded against the shipped one
           // so it reads "review-required" (with its file and permission diff)
-          // instead of "never approved". Nothing is granted until review.
-          if (builtIn && approval === null) {
+          // instead of "never approved". Nothing is granted until review, and a
+          // duplicated id is never pre-granted.
+          if (builtIn && approval === null && duplicateFolders.length === 0) {
             approval =
-              hash === builtIn.hash
-                ? approveBuiltInCopy(manifest, hash, digests, builtIn.hash)
+              copy.hash === builtIn.hash
+                ? approveBuiltInCopy(manifest, copy.hash, copy.digests, builtIn.hash)
                 : await modifiedBuiltInCopy(manifest, builtIn);
             savePluginApproval(approval);
           }
-          const entry = buildEntry(manifest.id, { manifest, digests, hash }, approval, builtIn);
-          plugins[manifest.id] = entry;
+          // A copy that is present again is never removed: the known list keeps
+          // the row after the files are gone, and upserts on every read.
+          saveKnownPlugin({
+            pluginId,
+            manifest,
+            builtIn: builtIn !== undefined,
+            removed: false,
+          });
+          const entry = buildEntry({
+            pluginId,
+            copy,
+            approval,
+            builtIn,
+            platform,
+            installed: true,
+            removed: false,
+            available: false,
+            duplicateFolders,
+          });
+          plugins[pluginId] = entry;
           if (builtIn) {
             // A modified Built-in shows its own state; only an update notifies.
             if (entry.updateAvailable) {
-              available.push({ pluginId: manifest.id, name: manifest.name, hash: builtIn.hash });
+              available.push({ pluginId, name: manifest.name, hash: builtIn.hash });
             }
           } else if (entry.review.status === "review-required") {
-            changed.push({ pluginId: manifest.id, hash });
+            changed.push({ pluginId, hash: copy.hash });
           }
         }
+
+        // A known Plugin whose files are gone keeps its row: last-seen manifest,
+        // not installed, not running. A Built-in with a shipped copy that is
+        // absent also becomes available to install.
+        for (const known of listKnownPlugins()) {
+          if (plugins[known.pluginId]) continue;
+          const builtIn = builtIns.get(known.pluginId);
+          plugins[known.pluginId] = buildEntry({
+            pluginId: known.pluginId,
+            copy: { manifest: known.manifest, digests: new Map(), hash: "" },
+            approval: getPluginApproval(known.pluginId),
+            builtIn,
+            platform,
+            installed: false,
+            removed: known.removed,
+            available: builtIn !== undefined && isSupported(known.manifest, platform),
+            duplicateFolders: [],
+          });
+        }
+
+        // A Built-in the app ships whose folder is absent and was never seen: a
+        // row that offers to install it.
+        for (const [id, builtIn] of builtIns) {
+          if (plugins[id]) continue;
+          plugins[id] = buildEntry({
+            pluginId: id,
+            copy: { manifest: builtIn.manifest, digests: new Map(), hash: "" },
+            approval: getPluginApproval(id),
+            builtIn,
+            platform,
+            installed: false,
+            removed: false,
+            available: isSupported(builtIn.manifest, platform),
+            duplicateFolders: [],
+          });
+        }
+
         set({ plugins });
         if (isDevelopmentMode()) {
           // Development mode at launch: a copy that changed while the app was
@@ -471,7 +643,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           // re-pinned and started, a partial one is left alone — instead of a
           // change notification (#442, plan decision 6).
           for (const entry of Object.values(plugins)) {
-            if (entry.review.status === "review-required") {
+            if (entry.installed && entry.review.status === "review-required") {
               await reloadDevelopmentCopy(entry.pluginId);
             }
           }
@@ -504,7 +676,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         // A Built-in keeps its shipped record through a re-approval.
         if (builtIn) approval.builtIn = { shippedHash: builtIn.hash };
         savePluginApproval(approval);
-        applyApproval(pluginId, copy, approval, builtIn);
+        await applyApproval(pluginId, copy, approval, builtIn);
         await start(pluginId);
         return { ok: true };
       },
@@ -534,13 +706,20 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       async enable(pluginId) {
         const entry = get().plugins[pluginId];
         if (!entry?.approval) return;
+        // A Plugin that is not installed, is duplicated by folder, or the
+        // manifest excludes this device can never be enabled (#443).
+        if (!entry.installed || entry.duplicateFolders.length > 0 || entry.unsupported) return;
         const result = enablePlugin(entry.approval, entry.manifest);
         if (!result.ok) return;
         savePluginApproval(result.approval);
         set((state) => ({
           plugins: {
             ...state.plugins,
-            [pluginId]: { ...state.plugins[pluginId], approval: result.approval },
+            [pluginId]: {
+              ...state.plugins[pluginId],
+              approval: result.approval,
+              stopped: null,
+            },
           },
         }));
         await start(pluginId);
@@ -555,9 +734,36 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         set((state) => ({
           plugins: {
             ...state.plugins,
-            [pluginId]: { ...state.plugins[pluginId], approval: next, running: false },
+            [pluginId]: {
+              ...state.plugins[pluginId],
+              approval: next,
+              running: false,
+              stopped: null,
+            },
           },
         }));
+      },
+
+      async restart(pluginId) {
+        const lifecycle = getLifecycle();
+        if (!lifecycle) return;
+        const result = await lifecycle.start(pluginId, "restart");
+        if (!result.ok) return;
+        set((state) => {
+          const entry = state.plugins[pluginId];
+          if (!entry) return {};
+          return {
+            plugins: {
+              ...state.plugins,
+              [pluginId]: {
+                ...entry,
+                approval: getPluginApproval(pluginId) ?? entry.approval,
+                running: running(pluginId),
+                stopped: null,
+              },
+            },
+          };
+        });
       },
 
       async markReviewed(pluginId, optionalGranted) {
@@ -581,7 +787,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         // versus the shipped one, and any update stays offered.
         if (builtIn) next.builtIn = approval.builtIn ?? { shippedHash: builtIn.hash };
         savePluginApproval(next);
-        applyApproval(pluginId, copy, next, builtIn);
+        await applyApproval(pluginId, copy, next, builtIn);
         await start(pluginId);
       },
 
@@ -641,7 +847,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           notifiedBuiltInHash: builtIn.hash,
         };
         savePluginApproval(next);
-        applyApproval(pluginId, copy, next, builtIn);
+        await applyApproval(pluginId, copy, next, builtIn);
         return true;
       },
 
@@ -685,3 +891,73 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
 
 /** The app's one Plugin management store. */
 export const usePluginManagementStore = createPluginManagementStore();
+
+/**
+ * The Settings Plugin filters (#443), mirroring the Books filter: multiple
+ * selections with counts, matching ANY selected category, none selected shows
+ * an empty list. Categories overlap.
+ */
+export type PluginFilterCategory =
+  | "installed"
+  | "available"
+  | "builtIn"
+  | "disabled"
+  | "removed"
+  | "unsupported";
+
+/** The filters in display order. */
+export const PLUGIN_FILTER_CATEGORIES = [
+  "installed",
+  "available",
+  "builtIn",
+  "disabled",
+  "removed",
+  "unsupported",
+] as const satisfies readonly PluginFilterCategory[];
+
+/** Every category an entry belongs to; categories overlap. */
+export function pluginFilterCategories(
+  entry: PluginManagementEntry
+): PluginFilterCategory[] {
+  const categories: PluginFilterCategory[] = [];
+  if (entry.installed) categories.push("installed");
+  if (entry.available) categories.push("available");
+  if (entry.builtIn) categories.push("builtIn");
+  if (entry.installed && entry.approval?.enabled !== true) categories.push("disabled");
+  if (entry.removed) categories.push("removed");
+  if (entry.unsupported) categories.push("unsupported");
+  return categories;
+}
+
+/** How many entries fall in each category. */
+export function countPluginsByCategory(
+  entries: readonly PluginManagementEntry[]
+): Record<PluginFilterCategory, number> {
+  const counts: Record<PluginFilterCategory, number> = {
+    installed: 0,
+    available: 0,
+    builtIn: 0,
+    disabled: 0,
+    removed: 0,
+    unsupported: 0,
+  };
+  for (const entry of entries) {
+    for (const category of pluginFilterCategories(entry)) counts[category] += 1;
+  }
+  return counts;
+}
+
+/**
+ * The entries matching ANY selected category, sorted by name. An empty
+ * selection matches nothing, like the Books filter.
+ */
+export function filterPluginsByCategories(
+  entries: readonly PluginManagementEntry[],
+  selected: readonly PluginFilterCategory[]
+): PluginManagementEntry[] {
+  if (selected.length === 0) return [];
+  const chosen = new Set(selected);
+  return entries
+    .filter((entry) => pluginFilterCategories(entry).some((category) => chosen.has(category)))
+    .sort((a, b) => a.manifest.name.localeCompare(b.manifest.name));
+}

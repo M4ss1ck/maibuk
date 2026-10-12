@@ -324,6 +324,35 @@ export interface PluginManagementEntry {
    * installed or kept: an update is offered (never repeats per shipped hash).
    */
   updateAvailable: boolean;
+  /** True while the Plugin's files are present in the Plugin Directory. */
+  installed: boolean;
+  /**
+   * True when the author explicitly removed the Plugin and it has not come
+   * back. The row stays, offering the retained state (#443).
+   */
+  removed: boolean;
+  /**
+   * True for a Built-in whose shipped copy is in the BuiltInPluginSource, whose
+   * folder is absent, and whose manifest supports this device, so it can be
+   * installed again (#443).
+   */
+  available: boolean;
+  /**
+   * True when the manifest's declared `platforms` exclude this device; the
+   * Plugin is listed and explained but can never be enabled (#443).
+   */
+  unsupported: boolean;
+  /**
+   * The folder names in the Plugin Directory that declare this Plugin's id.
+   * Two or more means neither is enableable, and Settings names them both
+   * (#443).
+   */
+  duplicateFolders: string[];
+  /**
+   * The last limit or crash stop, shown as Stopped with its reason and a
+   * Restart action; null while the Plugin has not been stopped this way (#443).
+   */
+  stopped: { reason: PluginLifecycleStopReason } | null;
 }
 
 /** The management store's dependencies; injected in tests. */
@@ -361,6 +390,8 @@ export interface PluginManagement {
   enable(pluginId: string): Promise<void>;
   /** Disables the Plugin without removing it; it stops if running. */
   disable(pluginId: string): void;
+  /** Restarts a stopped Plugin through the lifecycle, clearing the shown stop reason on success. */
+  restart(pluginId: string): Promise<void>;
   /**
    * Approves the current copy: re-pins its hash, digests, version, and
    * permissions. `optionalGranted` replaces the optional grants kept from the

@@ -6,6 +6,7 @@ import {
 } from "@/features/plugins/approvals";
 import { resetPluginContributionsForTests } from "@/features/plugins/contributions";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
+import { PLUGIN_KNOWN_STORAGE_KEY } from "@/features/plugins/known";
 import { createPluginLifecycle } from "@/features/plugins/lifecycle";
 import { createPluginManagementStore } from "@/features/plugins/management";
 import type {
@@ -36,6 +37,7 @@ afterEach(() => {
   restoreMessageChannel?.();
   restoreMessageChannel = null;
   localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
+  localStorage.removeItem(PLUGIN_KNOWN_STORAGE_KEY);
   resetPluginContributionsForTests();
 });
 

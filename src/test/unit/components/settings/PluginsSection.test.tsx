@@ -65,6 +65,12 @@ function entry(overrides: Partial<PluginManagementEntry> = {}): PluginManagement
     builtIn: false,
     modified: false,
     updateAvailable: false,
+    installed: true,
+    removed: false,
+    available: false,
+    unsupported: false,
+    duplicateFolders: [],
+    stopped: null,
     ...overrides,
   };
 }

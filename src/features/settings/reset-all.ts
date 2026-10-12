@@ -2,7 +2,8 @@
  * Reset settings (#442, plan decision 7): one app-wide action that returns the
  * app to its shipped defaults. It clears the settings store (Development mode
  * included), every Custom Shortcut and custom Voice Command, the toolbar
- * config, every Plugin approval and grant, and saved Plugin credentials.
+ * config, every Plugin approval and grant, the known-Plugin list, and saved
+ * Plugin credentials.
  *
  * It stops every running Plugin first — with no approval left, a third-party
  * Plugin needs approval again and a modified Built-in copy needs review — then
@@ -16,6 +17,7 @@
  */
 
 import { clearPluginApprovals } from "@/features/plugins/approvals";
+import { clearKnownPlugins } from "@/features/plugins/known";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { usePluginManagementStore } from "@/features/plugins/management";
 import { useSettingsStore } from "@/features/settings/store";
@@ -28,6 +30,8 @@ export interface ResetAllSettingsOptions {
   shortcuts?: () => void;
   /** Clears every Plugin approval and grant. */
   approvals?: () => void;
+  /** Clears the known-Plugin list, so no retained row survives the reset. */
+  known?: () => void;
   /** Deletes saved Plugin credentials. */
   clearCredentials?: () => Promise<void>;
   /** Stops every running Plugin. */
@@ -89,6 +93,7 @@ export async function resetAllSettings(options: ResetAllSettingsOptions = {}): P
   const resetShortcuts =
     options.shortcuts ?? (() => useShortcutSettingsStore.getState().resetAllShortcuts());
   const clearApprovals = options.approvals ?? clearPluginApprovals;
+  const clearKnown = options.known ?? clearKnownPlugins;
   const clearCredentials = options.clearCredentials ?? clearPluginCredentials;
   const refreshPlugins =
     options.refreshPlugins ?? (() => usePluginManagementStore.getState().refresh());
@@ -102,6 +107,7 @@ export async function resetAllSettings(options: ResetAllSettingsOptions = {}): P
   resetSettingsStore();
   resetShortcuts();
   clearApprovals();
+  clearKnown();
   await clearCredentials();
   // Re-seed the store: untouched Built-ins get fresh approvals, modified copies
   // stay review-required, and every third-party copy is not-approved again.
