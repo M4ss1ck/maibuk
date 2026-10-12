@@ -2138,8 +2138,7 @@ export const ROWS: MatrixRow[] = [
     routes: ["/plugin/:pluginId/:pageId"],
     fixture: "empty",
     tags: ["no-webkit"],
-    status: "not-accepted",
-    issue: "https://github.com/M4ss1ck/maibuk/issues/446",
+    status: "accepted",
   },
   {
     id: "settings-outline",
