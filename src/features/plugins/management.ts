@@ -27,6 +27,15 @@
  * that declare the same id collapse into one entry that names both. A limit or
  * crash stop shows Stopped with its reason and a `restart` action, and the
  * filter helpers below group the list for the Settings filters.
+ *
+ * The same store performs the management actions (#443): adding a Plugin from a
+ * `.zip` or a picked folder, removing one (optionally deleting its retained
+ * data), reinstalling a removed Built-in from the bundled copy, and reading a
+ * Plugin's stored data size, warning once when it passes 50 MB (#401). Removal
+ * stops the Plugin, deletes its files, approval, and startup error, and keeps
+ * its row; it never touches Custom Shortcuts or Voice Commands. An app update
+ * never silently reinstalls a removed Built-in: the pre-grant path skips a
+ * Plugin whose known record is removed.
  */
 
 import { create } from "zustand";
@@ -38,15 +47,23 @@ import {
   enablePlugin,
   getPluginApproval,
   recordStartupError,
+  removePluginApproval,
   revokePermission,
   savePluginApproval,
 } from "@/features/plugins/approvals";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
-import { listKnownPlugins, saveKnownPlugin } from "@/features/plugins/known";
+import {
+  getKnownPlugin,
+  listKnownPlugins,
+  markPluginDataSizeWarned,
+  markPluginRemoved,
+  saveKnownPlugin,
+} from "@/features/plugins/known";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { planPluginModules } from "@/features/plugins/modules";
 import { reviewPluginCopy } from "@/features/plugins/review";
+import { clearPluginStorage, getPluginDataSize } from "@/features/plugins/storage";
 import type {
   BuiltInPlugin,
   PluginActivationResult,
@@ -69,6 +86,13 @@ import type { PluginDirectoryAdapter } from "@/lib/platform/types";
  * `web`, `desktop`, or `android` from the build).
  */
 type DevicePlatform = PluginDirectoryAdapter["kind"];
+
+/**
+ * A Plugin's stored data at or past this many bytes warns once, naming the
+ * cost to saving and Backups (#401). The figure is the decision's 50 MB; the
+ * warning is persisted on the known record so it shows once ever per Plugin.
+ */
+export const PLUGIN_DATA_SIZE_WARNING_BYTES = 50 * 1024 * 1024;
 
 /**
  * True when a manifest may run on this device. A manifest that omits
@@ -282,6 +306,27 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       const copy = await readCopy(pluginId);
       if (!copy) return;
       get().notifyChanged(pluginId, copy.hash);
+    }
+
+    /**
+     * Warns once per Plugin when its refreshed data size passes 50 MB (#401).
+     * The warning is recorded on the known row before it is shown, so a reload
+     * or a second refresh never repeats it; a Plugin with no known row is
+     * warned but cannot persist, which only happens outside the list.
+     */
+    function warnDataSizeOnce(pluginId: string, size: number): void {
+      if (size < PLUGIN_DATA_SIZE_WARNING_BYTES) return;
+      if (getKnownPlugin(pluginId)?.dataSizeWarned === true) return;
+      markPluginDataSizeWarned(pluginId);
+      const name = get().plugins[pluginId]?.manifest.name ?? pluginId;
+      const notification: PluginNotification = { pluginId, name, hash: "", kind: "size" };
+      set((state) => ({
+        notifications: [
+          ...state.notifications.filter((current) => current.pluginId !== pluginId),
+          notification,
+        ],
+      }));
+      notify(notification);
     }
 
     /**
@@ -515,6 +560,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
     const store: PluginManagement = {
       plugins: {},
       notifications: [],
+      dataSizes: {},
 
       async refresh() {
         ensureSubscribed();
@@ -558,12 +604,18 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           const manifest = copy.manifest;
           const builtIn = builtIns.get(pluginId);
           let approval = getPluginApproval(pluginId);
+          // A Plugin the author explicitly removed is never silently
+          // reinstalled: an app update that restores a Built-in's folder must
+          // not pre-grant it again, so removal survives until the author
+          // reinstalls it (reinstallBuiltIn clears the mark first) (#443).
+          const knownRemoved = getKnownPlugin(pluginId)?.removed === true;
           // First sight of a Built-in: an untouched copy is pre-granted and
           // enabled, while a modified copy is recorded against the shipped one
           // so it reads "review-required" (with its file and permission diff)
-          // instead of "never approved". Nothing is granted until review, and a
-          // duplicated id is never pre-granted.
-          if (builtIn && approval === null && duplicateFolders.length === 0) {
+          // instead of "never approved". Nothing is granted until review, a
+          // duplicated id is never pre-granted, and a removed Built-in stays
+          // off until an explicit reinstall.
+          if (builtIn && approval === null && duplicateFolders.length === 0 && !knownRemoved) {
             approval =
               copy.hash === builtIn.hash
                 ? approveBuiltInCopy(manifest, copy.hash, copy.digests, builtIn.hash)
@@ -653,6 +705,22 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         for (const { pluginId, name, hash } of available) {
           notifyBuiltInUpdate(pluginId, name, hash);
         }
+      },
+
+      async addFromZip() {
+        const directory = options.directory ?? (await getPluginDirectory());
+        // An adapter that cannot install returns null, like a cancelled picker;
+        // one that throws rejects, for the UI to toast.
+        const pluginId = directory.addFromZip ? await directory.addFromZip() : null;
+        await get().refresh();
+        return pluginId;
+      },
+
+      async addFromFolder() {
+        const directory = options.directory ?? (await getPluginDirectory());
+        const pluginId = directory.addFromFolder ? await directory.addFromFolder() : null;
+        await get().refresh();
+        return pluginId;
       },
 
       async approve(pluginId, optionalGranted = []) {
@@ -849,6 +917,72 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         savePluginApproval(next);
         await applyApproval(pluginId, copy, next, builtIn);
         return true;
+      },
+
+      async remove(pluginId, { deleteData: deleteDataOption }) {
+        const entry = get().plugins[pluginId];
+        // Stop the runtime and withdraw the Plugin's contributions first, by
+        // reusing disable (a Plugin with no approval has nothing running).
+        get().disable(pluginId);
+        const directory = options.directory ?? (await getPluginDirectory());
+        if (directory.removeFolder) {
+          // A duplicated id names every folder that declares it; otherwise the
+          // Plugin id is the folder name.
+          const folders =
+            entry && entry.duplicateFolders.length > 0 ? entry.duplicateFolders : [pluginId];
+          for (const folder of folders) await directory.removeFolder(folder);
+        }
+        // The approval (grants and pin) goes; a startup error lives on it, so
+        // clearing it after the removal is a no-op kept for the decided order.
+        // No credentials store exists in `src/features/plugins` yet, so there
+        // is nothing more to delete. Custom Shortcuts and custom Voice Commands
+        // are never touched: they stay, inactive until the Plugin returns.
+        removePluginApproval(pluginId);
+        clearStartupError(pluginId);
+        markPluginRemoved(pluginId);
+        if (deleteDataOption) await clearPluginStorage(pluginId);
+        await get().refresh();
+      },
+
+      async deleteData(pluginId) {
+        // Erase the retained namespace but keep the known row and its Command
+        // preferences; the shown size drops to zero.
+        await clearPluginStorage(pluginId);
+        await get().refreshDataSize(pluginId);
+      },
+
+      async reinstallBuiltIn(pluginId) {
+        const entry = get().plugins[pluginId];
+        if (!entry?.builtIn) return false;
+        const builtIn = (await listBuiltIns()).get(pluginId);
+        if (!builtIn) return false;
+        const directory = options.directory ?? (await getPluginDirectory());
+        if (!directory.replaceFolder) return false;
+        let replaced: boolean;
+        try {
+          replaced = await directory.replaceFolder(pluginId, builtIn.files);
+        } catch {
+          return false;
+        }
+        if (!replaced) return false;
+        // Clear the removal mark before the refresh, so the untouched shipped
+        // copy is pre-granted again by the existing Built-in first-sight path.
+        // No previous approval is restored: removal deleted it, so this is a
+        // fresh pre-grant, and retained Library data stays untouched.
+        const known = getKnownPlugin(pluginId);
+        if (known) saveKnownPlugin({ ...known, removed: false });
+        await get().refresh();
+        return true;
+      },
+
+      async dataSize(pluginId) {
+        return getPluginDataSize(pluginId);
+      },
+
+      async refreshDataSize(pluginId) {
+        const size = await getPluginDataSize(pluginId);
+        set((state) => ({ dataSizes: { ...state.dataSizes, [pluginId]: size } }));
+        warnDataSizeOnce(pluginId, size);
       },
 
       notifyChanged(pluginId, hash) {

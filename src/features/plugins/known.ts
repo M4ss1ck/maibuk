@@ -23,6 +23,12 @@ export interface KnownPlugin {
   builtIn: boolean;
   /** True once the author explicitly removed the Plugin; false when it is back. */
   removed: boolean;
+  /**
+   * True once the 50 MB data-size warning was shown for this Plugin, so it
+   * shows once ever (#401, #443). Absent on a record written before the warning
+   * existed, which reads as "not shown yet".
+   */
+  dataSizeWarned?: boolean;
 }
 
 interface StoredKnown {
@@ -97,6 +103,20 @@ export function markPluginRemoved(pluginId: string): void {
 /** Drops a Plugin's known record entirely (erasing retained state, #443, U3). */
 export function forgetKnown(pluginId: string): void {
   write(read().filter((known) => known.pluginId !== pluginId));
+}
+
+/**
+ * Marks that the 50 MB data-size warning was shown for a Plugin, keeping its
+ * row, so it shows once ever (#401, #443). An id that was never seen is left
+ * alone: there is no record to persist on.
+ */
+export function markPluginDataSizeWarned(pluginId: string): void {
+  const known = getKnownPlugin(pluginId);
+  if (known === null || known.dataSizeWarned === true) return;
+  write([
+    ...read().filter((current) => current.pluginId !== pluginId),
+    { ...known, dataSizeWarned: true },
+  ]);
 }
 
 /** Removes every known record: Reset settings (#443). */

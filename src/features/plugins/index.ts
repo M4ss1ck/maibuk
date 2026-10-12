@@ -101,12 +101,14 @@ export {
   forgetKnown,
   getKnownPlugin,
   listKnownPlugins,
+  markPluginDataSizeWarned,
   markPluginRemoved,
   saveKnownPlugin,
   serializeKnownPlugins,
 } from "@/features/plugins/known";
 export type { KnownPlugin } from "@/features/plugins/known";
 export {
+  PLUGIN_DATA_SIZE_WARNING_BYTES,
   PLUGIN_FILTER_CATEGORIES,
   countPluginsByCategory,
   createPluginManagementStore,
