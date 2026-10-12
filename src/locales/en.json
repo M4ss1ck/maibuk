@@ -2184,6 +2184,8 @@
     "management": {
       "list": "Known Plugins",
       "add": "Add Plugin",
+      "addError": "Could not add the Plugin.",
+      "addFolder": "Add from folder",
       "all": "All statuses",
       "enabled": "Enabled",
       "review": "Review required",
@@ -2216,6 +2218,7 @@
       "approvalText": "This sample requires read access to your Library. Approve this copy and enable it. Cancelling leaves it off.",
       "approve": "Approve this copy and enable",
       "unsupportedText": "Unavailable on this device. This Plugin supports desktop only.",
+      "duplicateText": "Two folders declare this Plugin id: {{folders}}. Remove one of them to enable it.",
       "reinstallText": "Install the bundled copy again. Retained Library data reconnects; revoked access is not silently restored.",
       "manual": "Manually add the Plugin again to use it.",
       "empty": "No Plugins match these filters.",
@@ -2235,6 +2238,7 @@
       "updateText": "Replacing this modified copy discards your edits. Keeping it leaves Update available without repeated prompts.",
       "filters": {
         "label": "Filter by status",
+        "count": "{{count}} statuses",
         "installed": "Installed",
         "available": "Available",
         "builtIn": "Built-in",

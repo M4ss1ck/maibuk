@@ -63,6 +63,11 @@ export function PluginRow({ entry, open, onToggle, onReview, onReplace, platform
   const declared = [...required, ...optional.filter((permission) => !required.includes(permission))];
   const optionalGranted =
     approval?.granted.filter((permission) => optional.includes(permission)) ?? [];
+  // A copy Settings can never enable: its files are gone, two folders claim its
+  // id, or its manifest excludes this device (#443). The control stays visible
+  // but disabled so the row explains itself instead of acting.
+  const enableable = entry.installed && entry.duplicateFolders.length === 0 && !entry.unsupported;
+  const stopped = entry.stopped !== null;
 
   return (
     <Disclosure isExpanded={open} onExpandedChange={onToggle} className="py-2">
@@ -80,6 +85,13 @@ export function PluginRow({ entry, open, onToggle, onReview, onReplace, platform
           {entry.builtIn && <span className={BADGE_CLASS}>{t("plugins.builtInBadge")}</span>}
           {entry.modified && <span className={BADGE_CLASS}>{t("plugins.modified")}</span>}
           {entry.updateAvailable && <span className={BADGE_CLASS}>{t("plugins.available")}</span>}
+          {entry.removed && (
+            <span className={BADGE_CLASS}>{t("plugins.management.filters.removed")}</span>
+          )}
+          {entry.unsupported && (
+            <span className={BADGE_CLASS}>{t("plugins.management.filters.unsupported")}</span>
+          )}
+          {stopped && <span className={BADGE_CLASS}>{t("plugins.management.stopped")}</span>}
           {entry.review.status === "review-required" && (
             <span className={BADGE_CLASS}>{t("plugins.reviewRequired")}</span>
           )}
@@ -96,18 +108,54 @@ export function PluginRow({ entry, open, onToggle, onReview, onReplace, platform
       )}
 
       <DisclosurePanel>
+        {entry.unsupported && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {t("plugins.management.unsupportedText")}
+          </p>
+        )}
+        {entry.duplicateFolders.length > 0 && (
+          <p className="mt-2 text-sm text-destructive">
+            {t("plugins.management.duplicateText", { folders: entry.duplicateFolders.join(", ") })}
+          </p>
+        )}
+        {stopped && (
+          <p className="mt-2 text-sm text-destructive">{t("plugins.management.limit")}</p>
+        )}
+
         <div className="mt-2 flex flex-wrap gap-2">
-          {enabled ? (
-            <Button variant="secondary" onClick={() => store.disable(entry.pluginId)}>
+          {!entry.installed ? null : enabled ? (
+            <Button
+              variant="secondary"
+              className="pointer-coarse:min-h-12"
+              onClick={() => store.disable(entry.pluginId)}
+            >
               {t("plugins.disable")}
             </Button>
           ) : needsApproval ? (
-            <Button onClick={onReview} data-command="settings.reviewPlugin">
+            <Button
+              className="pointer-coarse:min-h-12"
+              onClick={onReview}
+              disabled={!enableable}
+              data-command="settings.reviewPlugin"
+            >
               {t("plugins.reviewEnable")}
             </Button>
           ) : (
-            <Button onClick={() => void store.enable(entry.pluginId)}>
+            <Button
+              className="pointer-coarse:min-h-12"
+              onClick={() => void store.enable(entry.pluginId)}
+              disabled={!enableable}
+            >
               {t("plugins.enable")}
+            </Button>
+          )}
+          {stopped && (
+            <Button
+              variant="secondary"
+              className="pointer-coarse:min-h-12"
+              onClick={() => void store.restart(entry.pluginId)}
+            >
+              {t("plugins.management.restart")}
             </Button>
           )}
         </div>

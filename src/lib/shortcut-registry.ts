@@ -309,6 +309,21 @@ export const COMMANDS = {
     contexts: ["settings"],
     defaults: [],
   },
+  "settings.addPlugin": {
+    labelKey: "plugins.management.commands.addPlugin",
+    contexts: ["settings"],
+    defaults: [],
+  },
+  "settings.openPluginDirectory": {
+    labelKey: "plugins.management.commands.openDirectory",
+    contexts: ["settings"],
+    defaults: [],
+  },
+  "settings.changePluginDirectory": {
+    labelKey: "plugins.management.commands.changeDirectory",
+    contexts: ["settings"],
+    defaults: [],
+  },
   "settings.resetSettings": {
     labelKey: "settings.resetSettings",
     contexts: ["settings"],

@@ -2184,6 +2184,8 @@
     "management": {
       "list": "Plugins conocidos",
       "add": "Añadir Plugin",
+      "addError": "No se pudo añadir el Plugin.",
+      "addFolder": "Añadir desde carpeta",
       "all": "Todos los estados",
       "enabled": "Activado",
       "review": "Revisión necesaria",
@@ -2216,6 +2218,7 @@
       "approvalText": "Este ejemplo requiere acceso de lectura a tu Biblioteca. Aprueba esta copia y actívala. Cancelar la deja desactivada.",
       "approve": "Aprobar esta copia y activar",
       "unsupportedText": "No disponible en este dispositivo. Este Plugin solo admite escritorio.",
+      "duplicateText": "Dos carpetas declaran el id de este Plugin: {{folders}}. Elimina una de ellas para activarlo.",
       "reinstallText": "Instala de nuevo la copia incluida. Se recuperan los datos de Biblioteca conservados; los permisos revocados no se restablecen automáticamente.",
       "manual": "Añade el Plugin manualmente para volver a usarlo.",
       "empty": "Ningún Plugin coincide con estos filtros.",
@@ -2235,6 +2238,7 @@
       "updateText": "Reemplazar esta copia modificada descarta tus cambios. Conservarla mantiene Actualización disponible sin avisos repetidos.",
       "filters": {
         "label": "Filtrar por estado",
+        "count": "{{count}} estados",
         "installed": "Instalado",
         "available": "Disponible",
         "builtIn": "Integrado",
