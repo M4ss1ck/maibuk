@@ -568,6 +568,35 @@ describe("malformed and spoofed messages", () => {
   });
 });
 
+describe("host requests", () => {
+  it("delivers a transferred MessagePort nested in a request's params", async () => {
+    const { broker, port } = setup();
+    const inner = new MessageChannel();
+    channels.push(inner);
+    const delivered = new Promise<MessagePort>((resolve) => {
+      port.onmessage = (event) => {
+        const message = event.data as HostToPluginMessage;
+        if (message.kind !== "request") return;
+        resolve((message.params as { port: MessagePort }).port);
+        port.postMessage(JSON.stringify({ kind: "reply", id: message.id, ok: true, result: null }));
+      };
+    });
+    await expect(broker.request("x", { port: inner.port1 }, [inner.port1])).resolves.toBeNull();
+    const pluginPort = await delivered;
+    const hostEnd = new Promise<string>((resolve) => {
+      inner.port2.onmessage = (event) => resolve(event.data as string);
+    });
+    pluginPort.postMessage("over the transferred port");
+    await expect(hostEnd).resolves.toBe("over the transferred port");
+  });
+
+  it("still settles a request sent without a transfer list", async () => {
+    const { broker, client } = setup();
+    client.onHostRequest(async () => "pong");
+    await expect(broker.request("health.check", {})).resolves.toBe("pong");
+  });
+});
+
 describe("stopping", () => {
   it("rejects calls in flight and every later call with plugin-stopped", async () => {
     let release: () => void = () => {};

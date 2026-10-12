@@ -5,6 +5,8 @@ export { createEchoTracker, ECHO_HISTORY_LIMIT } from "@/features/plugins/remote
 export type { PluginEchoTracker } from "@/features/plugins/remote-ui/echo";
 export { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 export type { PluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
+export { openPluginUiMount } from "@/features/plugins/remote-ui/mount";
+export type { PluginUiMount } from "@/features/plugins/remote-ui/mount";
 export { usePluginRemoteUi } from "@/features/plugins/remote-ui/use-plugin-remote-ui";
 export {
   PluginRemoteUiBoundary,

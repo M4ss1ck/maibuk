@@ -563,8 +563,12 @@ export interface PluginBrokerOptions {
 }
 
 export interface PluginBroker {
-  /** Sends a host to Plugin request; settles on the Plugin's first reply with its id. */
-  request(method: string, params: unknown): Promise<unknown>;
+  /**
+   * Sends a host to Plugin request; settles on the Plugin's first reply with
+   * its id. `transfer` lists the transferables handed to the Plugin with the
+   * message, such as the MessagePort of a Remote UI mount.
+   */
+  request(method: string, params: unknown, transfer?: Transferable[]): Promise<unknown>;
   /**
    * Delivers an event if the Plugin subscribed to it and still holds its
    * Plugin Permission. Returns whether it was sent. Throws when the payload
