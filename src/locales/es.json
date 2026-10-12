@@ -2093,6 +2093,12 @@
     "changedNotice": "Se desactivó {{name}} porque sus archivos cambiaron.",
     "noticeReview": "Revisar",
     "noticeDismiss": "Cerrar aviso",
+    "available": "Actualización disponible",
+    "modified": "Copia integrada modificada",
+    "keep": "Conservar mi copia",
+    "replace": "Reemplazar copia modificada",
+    "replaceTitle": "¿Reemplazar tu Plugin integrado modificado?",
+    "replaceBody": "Hay una actualización de {{name}}. Reemplazar esta copia descarta tus cambios en los archivos instalados. Se conservan los datos de la Biblioteca y las credenciales. Los permisos revocados siguen revocados. Conserva tu copia si prefieres guardar tus cambios en otro lugar primero. Actualización disponible seguirá en Ajustes sin avisos repetidos.",
     "stopped": {
       "startupTimeout": "{{name}} tardó demasiado en iniciarse y se detuvo.",
       "unresponsive": "{{name}} dejó de responder y se cerró.",

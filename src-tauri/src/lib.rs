@@ -61,6 +61,7 @@ pub fn run() {
             backup::forget_backup_directory,
             plugins::list_plugin_folders,
             plugins::read_plugin_folder,
+            plugins::replace_builtin_plugin_folder,
             plugins::pick_plugin_directory,
             plugins::request_plugin_directory,
             plugins::forget_plugin_directory,

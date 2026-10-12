@@ -18,6 +18,7 @@ import { planPluginModules, rewritePluginImports } from "@/features/plugins/modu
 import { createPluginFrame } from "@/features/plugins/sandbox";
 import type {
   ManifestProblem,
+  ManifestValidationOptions,
   PluginBroker,
   PluginFolder,
   PluginManifest,
@@ -48,7 +49,8 @@ type StartupOutcome = { ok: true } | { ok: false; refusal: PluginStartRefusal };
  * #437) before any frame exists.
  */
 export function readPluginManifest(
-  folder: PluginFolder
+  folder: PluginFolder,
+  options: ManifestValidationOptions = {}
 ): { ok: true; manifest: PluginManifest } | { ok: false; problems: ManifestProblem[] } {
   const file = folder.files.find((entry) => entry.path === MANIFEST_FILE);
   if (!file) {
@@ -66,7 +68,7 @@ export function readPluginManifest(
       problems: [{ path: MANIFEST_FILE, message: `${MANIFEST_FILE} is not valid UTF-8` }],
     };
   }
-  return parsePluginManifest(text);
+  return parsePluginManifest(text, options);
 }
 
 async function runStartup(

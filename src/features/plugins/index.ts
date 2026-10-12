@@ -77,6 +77,7 @@ export {
 } from "@/features/plugins/broker";
 export {
   PLUGIN_APPROVALS_STORAGE_KEY,
+  approveBuiltInCopy,
   approvePluginCopy,
   disablePlugin,
   enablePlugin,
@@ -88,6 +89,7 @@ export {
   serializePluginApprovals,
 } from "@/features/plugins/approvals";
 export { reviewPluginCopy } from "@/features/plugins/review";
+export { createBuiltInPluginSource } from "@/features/plugins/builtin";
 export {
   createPluginManagementStore,
   usePluginManagementStore,

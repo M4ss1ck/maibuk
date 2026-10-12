@@ -160,6 +160,29 @@ export type PluginStartResult =
   | { ok: true; plugin: PluginRuntime }
   | { ok: false; refusal: PluginStartRefusal };
 
+// Built-in Plugins (builtin.ts)
+
+/**
+ * One Built-in Plugin the app ships: its manifest and the copy Maibuk bundles.
+ * `files` carries the shipped bytes, so a replace can write them (the store
+ * takes their digests for the review diff); `hash` is the `h1:` value over
+ * exactly those bytes.
+ */
+export interface BuiltInPlugin {
+  /** The Plugin id, which is also its folder name in the Plugin Directory. */
+  id: string;
+  manifest: PluginManifest;
+  /** The `h1:` hash of the shipped copy. */
+  hash: string;
+  /** The shipped copy's files, with the bytes a replace writes. */
+  files: PluginFolderFile[];
+}
+
+/** The Built-in Plugins this platform ships; a production build lists none yet. */
+export interface BuiltInPluginSource {
+  list(): Promise<BuiltInPlugin[]>;
+}
+
 // Approvals (approvals.ts)
 
 /** A Built-in Plugin's shipped copy, and a modified copy kept on purpose. */
@@ -199,6 +222,11 @@ export interface PluginApproval {
    * change never notifies twice (#442).
    */
   notifiedHash?: string;
+  /**
+   * The shipped hash of the last Built-in update prompt shown, so the same
+   * shipped hash never prompts twice (#442). Cleared when the copy is replaced.
+   */
+  notifiedBuiltInHash?: string;
 }
 
 /** What `enablePlugin` returns: the enabled record, or why it refused. */
@@ -237,13 +265,21 @@ export interface PluginReview {
 
 // Management (management.ts)
 
-/** The changed-files notification shown once per Plugin and changed hash (#442). */
-export interface PluginChangedNotification {
+/** One non-blocking notification the store shows, at most one per Plugin (#442). */
+export interface PluginNotification {
   pluginId: string;
   /** The Plugin's display name at the time of the change. */
   name: string;
-  /** The folder's `h1:` hash the copy changed to. */
+  /**
+   * The `h1:` hash the copy changed to, for a changed copy, or the shipped
+   * hash that became available, for a Built-in update.
+   */
   hash: string;
+  /**
+   * `changed`: the copy's files changed and it stays off until reviewed;
+   * `available`: a Built-in update is offered (Keep my copy / Replace).
+   */
+  kind: "changed" | "available";
 }
 
 /** One known Plugin as the management store lists it. */
@@ -255,6 +291,15 @@ export interface PluginManagementEntry {
   review: PluginReview;
   /** True while the lifecycle has a runtime for it. */
   running: boolean;
+  /** True for a Built-in Plugin the app ships. */
+  builtIn: boolean;
+  /** True when a Built-in's installed copy differs from the shipped copy. */
+  modified: boolean;
+  /**
+   * True when a modified Built-in's shipped copy changed since it was
+   * installed or kept: an update is offered (never repeats per shipped hash).
+   */
+  updateAvailable: boolean;
 }
 
 /** The management store's dependencies; injected in tests. */
@@ -263,8 +308,10 @@ export interface PluginManagementOptions {
   directory?: PluginDirectoryAdapter;
   /** The app's one lifecycle; defaults to `getPluginLifecycle`. */
   lifecycle?: () => PluginLifecycle | null;
+  /** The shipped Built-in Plugins; defaults to the production source (`[]`). */
+  builtInSource?: BuiltInPluginSource;
   /** Shows the non-blocking notification; defaults to a toast. Injected by tests. */
-  notify?: (notification: PluginChangedNotification) => void;
+  notify?: (notification: PluginNotification) => void;
 }
 
 /** The Plugin management store: the orchestrator the Settings UI talks to (#442). */
@@ -272,7 +319,7 @@ export interface PluginManagement {
   /** Every known Plugin the Plugin Directory holds, by id. */
   plugins: Record<string, PluginManagementEntry>;
   /** The changed-files notifications shown now, at most one per Plugin. */
-  notifications: PluginChangedNotification[];
+  notifications: PluginNotification[];
   /** Re-reads the Plugin Directory and each copy's review state. */
   refresh(): Promise<void>;
   /** Approves the current copy with the chosen optional grants and starts it. */
@@ -285,6 +332,19 @@ export interface PluginManagement {
   disable(pluginId: string): void;
   /** Approves the current copy: re-pins its hash, digests, version, and permissions. */
   markReviewed(pluginId: string): Promise<void>;
+  /**
+   * Keeps a modified Built-in copy: sets `keptModifiedHash` to the shipped
+   * hash, so that shipped hash never prompts again. Files and grants stay; the
+   * "Update available" state is still reported (#442).
+   */
+  keepMyCopy(pluginId: string): Promise<void>;
+  /**
+   * Replaces a modified Built-in copy with the shipped copy. Requires an
+   * explicit `confirmed` flag (the dialog is a later slice); without it it
+   * refuses. Library data, credentials, and revoked grants stay as they are,
+   * and the author's pin is re-pinned to the shipped copy (#442).
+   */
+  replaceBuiltIn(pluginId: string, confirmed: boolean): Promise<boolean>;
   /** Shows one notification per (Plugin, changed hash); the same hash never repeats. */
   notifyChanged(pluginId: string, hash: string): void;
   /** Removes one Plugin's notification. */

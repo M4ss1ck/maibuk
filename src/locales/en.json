@@ -2093,6 +2093,12 @@
     "changedNotice": "{{name}} was disabled because its files changed.",
     "noticeReview": "Review",
     "noticeDismiss": "Dismiss",
+    "available": "Update available",
+    "modified": "Modified Built-in copy",
+    "keep": "Keep my copy",
+    "replace": "Replace modified copy",
+    "replaceTitle": "Replace your modified Built-in Plugin?",
+    "replaceBody": "An update is available for {{name}}. Replacing this copy discards your edits to its installed files. Library data and credentials stay. Revoked permissions stay revoked. Keep your copy if you want to save your edits elsewhere first. Update available will remain in Settings without repeated prompts.",
     "stopped": {
       "startupTimeout": "{{name}} took too long to start and was stopped.",
       "unresponsive": "{{name}} stopped responding and was closed.",

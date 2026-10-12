@@ -167,6 +167,7 @@ export default defineConfig(() => ({
         "src/features/plugins/launch.ts",
         "src/features/plugins/review.ts",
         "src/features/plugins/management.ts",
+        "src/features/plugins/builtin.ts",
         "src/features/plugins/handlers.ts",
         "src/features/plugins/library.ts",
         "src/features/plugins/navigation.ts",

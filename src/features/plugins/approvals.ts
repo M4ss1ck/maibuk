@@ -86,6 +86,9 @@ function normalizeApproval(record: Record<string, unknown>): PluginApproval {
   if (builtIn) approval.builtIn = builtIn;
   if (typeof record.startupError === "string") approval.startupError = record.startupError;
   if (typeof record.notifiedHash === "string") approval.notifiedHash = record.notifiedHash;
+  if (typeof record.notifiedBuiltInHash === "string") {
+    approval.notifiedBuiltInHash = record.notifiedBuiltInHash;
+  }
   return approval;
 }
 
@@ -154,6 +157,25 @@ export function approvePluginCopy(
       optional: [...manifest.permissions.optional],
     },
     approvedFiles: Object.fromEntries(digests),
+  };
+}
+
+/**
+ * Builds the record for a Built-in Plugin's first sight: an untouched copy is
+ * pre-granted, so every declared Plugin Permission (required and optional) is
+ * granted, the shipped hash is recorded, and the Plugin starts enabled. A
+ * Built-in's grants are listed and revocable like any other Plugin's (#442).
+ */
+export function approveBuiltInCopy(
+  manifest: PluginManifest,
+  hash: string,
+  digests: ReadonlyMap<string, string>,
+  shippedHash: string
+): PluginApproval {
+  const optionalGranted = manifest.permissions.optional as PluginPermissionId[];
+  return {
+    ...approvePluginCopy(manifest, hash, digests, optionalGranted),
+    builtIn: { shippedHash },
   };
 }
 

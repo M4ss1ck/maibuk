@@ -9,9 +9,9 @@ import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { createPluginLifecycle } from "@/features/plugins/lifecycle";
 import { createPluginManagementStore } from "@/features/plugins/management";
 import type {
-  PluginChangedNotification,
   PluginLifecycle,
   PluginManifest,
+  PluginNotification,
   PluginPermissionId,
 } from "@/features/plugins/types";
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
@@ -83,7 +83,7 @@ async function setup(options: SetupOptions = {}) {
     });
   }
 
-  const notified: PluginChangedNotification[] = [];
+  const notified: PluginNotification[] = [];
   const store = createPluginManagementStore({
     directory,
     lifecycle: () => lifecycle,

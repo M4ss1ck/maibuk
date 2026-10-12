@@ -16,11 +16,35 @@ function handleOf(name: string, entry: FakeEntry): unknown {
   return {
     name,
     kind: entry.kind,
-    getDirectoryHandle: async (child: string) => {
+    getDirectoryHandle: async (child: string, options?: { create?: boolean }) => {
       const childEntry = entry.children?.get(child);
-      if (!childEntry || childEntry.kind !== "directory") throw notFound();
-      return handleOf(child, childEntry);
+      if (childEntry && childEntry.kind === "directory") return handleOf(child, childEntry);
+      if (options?.create) {
+        const created: FakeEntry = { kind: "directory", children: new Map() };
+        entry.children?.set(child, created);
+        return handleOf(child, created);
+      }
+      throw notFound();
     },
+    getFileHandle: async (child: string, options?: { create?: boolean }) => {
+      const childEntry = entry.children?.get(child);
+      if (childEntry && childEntry.kind === "file") return handleOf(child, childEntry);
+      if (options?.create) {
+        const created: FakeEntry = { kind: "file", bytes: new Uint8Array() };
+        entry.children?.set(child, created);
+        return handleOf(child, created);
+      }
+      throw notFound();
+    },
+    removeEntry: async (child: string) => {
+      if (!entry.children?.delete(child)) throw notFound();
+    },
+    createWritable: async () => ({
+      write: async (data: Uint8Array | ArrayBuffer) => {
+        entry.bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+      },
+      close: async () => undefined,
+    }),
     values: function* () {
       for (const [child, childEntry] of entry.children ?? []) {
         yield handleOf(child, childEntry);
@@ -28,7 +52,7 @@ function handleOf(name: string, entry: FakeEntry): unknown {
     },
     getFile: async () => {
       const bytes = entry.bytes ?? new Uint8Array();
-      return { arrayBuffer: async () => bytes.buffer.slice(0) };
+      return { arrayBuffer: async () => bytes.slice().buffer };
     },
   };
 }
@@ -90,5 +114,37 @@ describe("createWebPluginDirectory()", () => {
     const adapter = createWebPluginDirectory();
     await expect(adapter.listFolders()).resolves.toEqual([]);
     await expect(adapter.readFolder("tracer")).resolves.toBeNull();
+  });
+
+  it("replaces a folder's files, dropping the ones the new copy does not carry", async () => {
+    const adapter = createWebPluginDirectory(seededRoot());
+    const encoder = new TextEncoder();
+
+    const replaced = await adapter.replaceFolder?.("tracer", [
+      { path: "manifest.json", bytes: encoder.encode("{}") },
+      { path: "extra/new.js", bytes: encoder.encode("export {}") },
+    ]);
+
+    expect(replaced).toBe(true);
+    const folder = await adapter.readFolder("tracer");
+    expect(folder?.files.map((entry) => entry.path)).toEqual(["extra/new.js", "manifest.json"]);
+    expect(new TextDecoder().decode(folder?.files[0].bytes)).toBe("export {}");
+  });
+
+  it("creates the folder when replacing one that is not there yet", async () => {
+    const adapter = createWebPluginDirectory(seededRoot());
+
+    const replaced = await adapter.replaceFolder?.("fresh", [
+      { path: "manifest.json", bytes: new TextEncoder().encode("{}") },
+    ]);
+
+    expect(replaced).toBe(true);
+    const folder = await adapter.readFolder("fresh");
+    expect(folder?.files.map((entry) => entry.path)).toEqual(["manifest.json"]);
+  });
+
+  it("refuses to replace when the browser has no OPFS", async () => {
+    const adapter = createWebPluginDirectory();
+    await expect(adapter.replaceFolder?.("tracer", [])).resolves.toBe(false);
   });
 });
