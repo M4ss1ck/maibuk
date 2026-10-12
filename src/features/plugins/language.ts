@@ -22,12 +22,10 @@ export function currentPluginLanguage(): string {
 
 /** Calls `listener` on every language change; returns the unsubscribe. */
 export function onPluginLanguageChange(listener: (language: string) => void): () => void {
-  const handler = (language: string) => {
-    // One source: forward the event's argument only when it is the selected
-    // identifier; otherwise report the selected one, never an adapted value.
-    const selected = currentPluginLanguage();
+  const handler = () => {
+    // One source: the selected identifier, never an adapted event argument.
     try {
-      listener(language === selected ? language : selected);
+      listener(currentPluginLanguage());
     } catch (error) {
       // One bad listener must never break the language switch for the rest.
       console.error("[plugins] language listener failed:", error);

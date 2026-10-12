@@ -384,6 +384,70 @@ describe("entering the Tutorial Library", () => {
     }
   });
 
+  it("settles a Plugin call accepted after the first settle, right before activating the sample Library", async () => {
+    const { createPluginBroker } = await import("@/features/plugins/broker");
+    const { setPluginStorageValue } = await import("@/features/plugins/storage");
+    const { createPluginClient } = await import("@/plugin-sdk");
+
+    const entryGate = deferred();
+    const handlerGate = deferred();
+    const unregister = registerPendingEditsFlush(async () => {
+      await entryGate.promise;
+    });
+
+    const channel = new MessageChannel();
+    createPluginBroker({
+      pluginId: "late-plugin",
+      port: channel.port1,
+      declared: [],
+      granted: () => [],
+      isLibraryAvailable: () => !tutorial.isTutorialLibraryActive(),
+      trackLibraryWork: librarySwitch.trackAuthorLibraryWork,
+      handlers: {
+        "storage.set": async ({ key, value }, { pluginId }) => {
+          await handlerGate.promise;
+          await setPluginStorageValue(pluginId, key, value);
+          return null;
+        },
+      },
+    });
+    const client = createPluginClient(channel.port2);
+    try {
+      const entering = tutorial.startTutorial(START);
+      // Entry passed the first settle and is now held in flushPendingEdits.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // Accepted after the first settle, while entry is still inside the window.
+      const write = client.storage.set({ key: "late", value: "after-settle" });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      entryGate.resolve();
+      // The second settle must hold entry until the accepted call finishes.
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      expect(tutorial.isTutorialLibraryActive()).toBe(false);
+
+      handlerGate.resolve();
+      await write;
+      await entering;
+      expect(tutorial.isTutorialLibraryActive()).toBe(true);
+
+      const authorRows = await authorDb.current!.select<{ value: string }[]>(
+        `SELECT "value" FROM plugin_storage WHERE plugin_id = ? AND "key" = ?`,
+        ["late-plugin", "late"]
+      );
+      expect(authorRows).toEqual([{ value: JSON.stringify("after-settle") }]);
+      const sampleRows = await (await getDatabase()).select<{ value: string }[]>(
+        `SELECT "value" FROM plugin_storage WHERE plugin_id = ? AND "key" = ?`,
+        ["late-plugin", "late"]
+      );
+      expect(sampleRows).toEqual([]);
+    } finally {
+      unregister();
+      channel.port1.close();
+      channel.port2.close();
+    }
+  });
+
   it("does not start a second run while one is under way", async () => {
     await tutorial.startTutorial(START);
     expect(await tutorial.startTutorial(START)).toBe(false);
