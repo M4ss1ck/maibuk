@@ -1,13 +1,17 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { PluginPermissionDialog } from "@/components/plugins/PluginPermissionDialog";
+import { PluginReviewDialog } from "@/components/plugins/PluginReviewDialog";
 import { PluginSurface } from "@/components/plugins/PluginSurface";
+import { ReplaceBuiltInDialog } from "@/components/plugins/ReplaceBuiltInDialog";
 import { PluginRow } from "@/components/settings/PluginRow";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
+import { Switch } from "@/components/ui";
 import { usePluginManagementStore } from "@/features/plugins/management";
 import type { PluginManagementEntry, PluginPermissionId } from "@/features/plugins/types";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
+import { useSettingsStore } from "@/features/settings/store";
 import {
   currentSettingsPlatform,
   getPluginSettingsOwners,
@@ -18,15 +22,19 @@ import {
 import { useShortcuts } from "@/lib/shortcuts";
 
 /**
- * The Plugins Settings section: one row per known Plugin, from the management
- * store, ordered by name, then any Plugin that only declares Settings rows.
- * A row carries its origin and state badges, its startup error, and — expanded
- * — its Plugin Permissions and the enable/disable action. With no known Plugin
- * it shows its empty state.
+ * The Plugins Settings section: a Development mode switch, then one row per
+ * known Plugin, from the management store, ordered by name, then any Plugin
+ * that only declares Settings rows. A row carries its origin and state badges,
+ * its startup error, and — expanded — its Plugin Permissions, the
+ * enable/disable action, the Built-in Keep my copy / Replace actions, and the
+ * Settings rows the Plugin declares. With no known Plugin it shows its empty
+ * state.
  */
 export function PluginsSection() {
   const { t } = useTranslation();
   const plugins = usePluginManagementStore((state) => state.plugins);
+  const pluginDevelopmentMode = useSettingsStore((state) => state.pluginDevelopmentMode);
+  const setPluginDevelopmentMode = useSettingsStore((state) => state.setPluginDevelopmentMode);
   const owners = useSyncExternalStore(
     onSettingsRowsChange,
     getPluginSettingsOwners,
@@ -34,7 +42,10 @@ export function PluginsSection() {
   );
   const pluginOpen = useSettingsRevealStore((state) => state.pluginOpen);
   const setPluginOpen = useSettingsRevealStore((state) => state.setPluginOpen);
+  const pendingReviewId = useSettingsRevealStore((state) => state.pendingPluginReviewId);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [diffId, setDiffId] = useState<string | null>(null);
+  const [replacingId, setReplacingId] = useState<string | null>(null);
 
   const platform = currentSettingsPlatform();
 
@@ -56,18 +67,58 @@ export function PluginsSection() {
   const reviewable = entries.filter(
     (entry) => entry.review.status !== "approved" || hasMissingRequired(entry)
   );
+  const builtInUpdate = entries.find((entry) => entry.updateAvailable) ?? null;
+
+  /** Opens the review a copy needs: the changed-files diff, or the permission dialog. */
+  const openReviewFor = useCallback((entry: PluginManagementEntry) => {
+    useSettingsRevealStore.getState().setPluginOpen(entry.pluginId, true);
+    if (entry.review.status === "review-required") {
+      setDiffId(entry.pluginId);
+    } else if (entry.review.status !== "approved" || hasMissingRequired(entry)) {
+      setReviewingId(entry.pluginId);
+    }
+  }, []);
+
+  // The changed-files notice's Review action asks for a Plugin's review here,
+  // once the section knows it (the refresh above may still be in flight).
+  useEffect(() => {
+    if (pendingReviewId === null) return;
+    const target = plugins[pendingReviewId];
+    if (!target) return;
+    useSettingsRevealStore.getState().clearPluginReview();
+    openReviewFor(target);
+  }, [pendingReviewId, plugins, openReviewFor]);
+
   useShortcuts([
     {
       id: "settings.reviewPlugin",
       enabled: reviewable.length > 0,
       onTrigger: () => {
         const first = reviewable[0];
-        if (first) setReviewingId(first.pluginId);
+        if (first) openReviewFor(first);
+      },
+    },
+    {
+      id: "settings.keepMyCopy",
+      enabled: builtInUpdate !== null,
+      onTrigger: () => {
+        if (builtInUpdate) {
+          void usePluginManagementStore.getState().keepMyCopy(builtInUpdate.pluginId);
+        }
+      },
+    },
+    {
+      id: "settings.replaceBuiltIn",
+      enabled: builtInUpdate !== null,
+      onTrigger: () => {
+        if (builtInUpdate) setReplacingId(builtInUpdate.pluginId);
       },
     },
   ]);
 
   const reviewing = reviewingId !== null ? (plugins[reviewingId] ?? null) : null;
+  const diffEntry = diffId !== null ? (plugins[diffId] ?? null) : null;
+  const replacing = replacingId !== null ? (plugins[replacingId] ?? null) : null;
 
   return (
     <SettingsSection
@@ -75,6 +126,22 @@ export function PluginsSection() {
       title={t("settings.plugins")}
       description={t("settings.pluginsDescription")}
     >
+      <SettingRow id="pluginDevelopmentMode" className={SETTINGS_ROW_CLASS}>
+        <Switch
+          checked={pluginDevelopmentMode}
+          onChange={(next) => {
+            // The watcher starts or stops with the setting, so the change is
+            // live without a reload (management store, #442).
+            setPluginDevelopmentMode(next);
+            void usePluginManagementStore
+              .getState()
+              .refresh()
+              .catch(() => {});
+          }}
+          label={t("plugins.developmentMode")}
+        />
+      </SettingRow>
+
       {entries.length === 0 && legacyOwners.length === 0 ? (
         <div className={SETTINGS_ROW_CLASS}>
           <div>
@@ -90,7 +157,8 @@ export function PluginsSection() {
               entry={entry}
               open={pluginOpen[entry.pluginId] ?? false}
               onToggle={() => setPluginOpen(entry.pluginId, !(pluginOpen[entry.pluginId] ?? false))}
-              onReview={() => setReviewingId(entry.pluginId)}
+              onReview={() => openReviewFor(entry)}
+              onReplace={() => setReplacingId(entry.pluginId)}
               platform={platform}
             />
           ))}
@@ -151,6 +219,34 @@ export function PluginsSection() {
           }
         }}
       />
+
+      <PluginReviewDialog
+        isOpen={diffEntry !== null}
+        entry={diffEntry}
+        onClose={() => setDiffId(null)}
+        onApprove={(optionalGranted) => {
+          const pluginId = diffId;
+          setDiffId(null);
+          if (pluginId !== null) {
+            void usePluginManagementStore.getState().markReviewed(pluginId, optionalGranted);
+          }
+        }}
+      />
+
+      {replacing !== null && (
+        <ReplaceBuiltInDialog
+          isOpen
+          name={replacing.manifest.name}
+          onClose={() => setReplacingId(null)}
+          onConfirm={() => {
+            const pluginId = replacingId;
+            setReplacingId(null);
+            if (pluginId !== null) {
+              void usePluginManagementStore.getState().replaceBuiltIn(pluginId, true);
+            }
+          }}
+        />
+      )}
     </SettingsSection>
   );
 }

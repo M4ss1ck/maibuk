@@ -4,7 +4,7 @@
  * dialog it opens, and the revoke controls for an approved copy — all driven
  * by keyboard. With zero Plugins the existing empty state stays.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
@@ -14,6 +14,7 @@ import { useModalStore } from "@/components/ui/modal-store";
 import { usePluginManagementStore } from "@/features/plugins/management";
 import { registerPluginSettingsRows } from "@/features/settings/rows";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
+import { useSettingsStore } from "@/features/settings/store";
 import type {
   PluginApproval,
   PluginManagementEntry,
@@ -92,7 +93,7 @@ async function openRow(user: User, name = "Echoes"): Promise<void> {
 beforeEach(() => {
   localStorage.clear();
   useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
-  useSettingsRevealStore.setState({ pluginOpen: {} });
+  useSettingsRevealStore.setState({ pluginOpen: {}, pendingPluginReviewId: null });
   usePluginManagementStore.setState({
     plugins: {},
     notifications: [],
@@ -299,5 +300,144 @@ describe("PluginsSection", () => {
 
     await openRow(user);
     expect(await screen.findByLabelText("Echo threshold")).toBeInTheDocument();
+  });
+
+  it("shows Modified Built-in copy and Update available badges", () => {
+    seed(
+      entry({
+        builtIn: true,
+        modified: true,
+        updateAvailable: true,
+        approval: approval({ builtIn: { shippedHash: "h1:ship" } }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+    expect(screen.getByText("Modified Built-in copy")).toBeInTheDocument();
+    expect(screen.getByText("Update available")).toBeInTheDocument();
+  });
+
+  it("localizes a startup error code on the row", () => {
+    seed(entry({ approval: approval({ startupError: "incompatible" }) }));
+    render(<PluginsSection />);
+    expect(screen.getByText("This Plugin needs a newer version of Maibuk.")).toBeInTheDocument();
+  });
+
+  it("keeps a modified copy by keyboard without re-notifying", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        builtIn: true,
+        modified: true,
+        updateAvailable: true,
+        approval: approval({ builtIn: { shippedHash: "h1:ship" } }),
+        review: review({ status: "approved" }),
+      })
+    );
+    const keepMyCopy = vi.fn(async () => {});
+    usePluginManagementStore.setState({ keepMyCopy });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const keep = screen.getByRole("button", { name: "Keep my copy" });
+    await tabTo(user, keep);
+    await user.keyboard("{Enter}");
+
+    expect(keepMyCopy).toHaveBeenCalledWith("echoes");
+    // The update stays offered, and nothing was notified again.
+    expect(screen.getByText("Update available")).toBeInTheDocument();
+    expect(usePluginManagementStore.getState().notifications).toEqual([]);
+  });
+
+  it("replaces a modified copy only after confirming in the dialog", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        builtIn: true,
+        modified: true,
+        updateAvailable: true,
+        approval: approval({ builtIn: { shippedHash: "h1:ship" } }),
+        review: review({ status: "approved" }),
+      })
+    );
+    const replaceBuiltIn = vi.fn(async () => true);
+    usePluginManagementStore.setState({ replaceBuiltIn });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const openReplace = screen.getByRole("button", { name: "Replace modified copy" });
+    await tabTo(user, openReplace);
+    await user.keyboard("{Enter}");
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toBeInTheDocument();
+
+    // Escape cancels: nothing replaced.
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(replaceBuiltIn).not.toHaveBeenCalled();
+
+    // Reopen and confirm.
+    await tabTo(user, screen.getByRole("button", { name: "Replace modified copy" }));
+    await user.keyboard("{Enter}");
+    const confirm = await screen.findByRole("alertdialog");
+    const confirmButton = within(confirm).getByRole("button", { name: "Replace modified copy" });
+    await tabTo(user, confirmButton);
+    await user.keyboard("{Enter}");
+
+    expect(replaceBuiltIn).toHaveBeenCalledWith("echoes", true);
+  });
+
+  it("reviews a changed copy by keyboard and approves it", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        approval: approval({ enabled: false }),
+        review: review({
+          status: "review-required",
+          files: { added: ["fresh.js"], removed: [], changed: [] },
+        }),
+      })
+    );
+    const markReviewed = vi.fn(async () => {});
+    usePluginManagementStore.setState({ markReviewed });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const reviewButton = screen.getByRole("button", { name: "Review and enable" });
+    await tabTo(user, reviewButton);
+    await user.keyboard("{Enter}");
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("fresh.js")).toBeInTheDocument();
+    const approve = within(dialog).getByRole("button", { name: "Approve this copy and enable" });
+    await tabTo(user, approve);
+    await user.keyboard("{Enter}");
+
+    expect(markReviewed).toHaveBeenCalled();
+  });
+
+  it("opens the review dialog when a notice asks for it", async () => {
+    seed(entry({ review: review({ status: "review-required" }) }));
+    useSettingsRevealStore.setState({ pendingPluginReviewId: "echoes" });
+    render(<PluginsSection />);
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(useSettingsRevealStore.getState().pendingPluginReviewId).toBeNull();
+  });
+
+  it("toggles Development mode by keyboard and refreshes the store", async () => {
+    const user = userEvent.setup();
+    const refresh = vi.fn(async () => {});
+    usePluginManagementStore.setState({ refresh });
+    render(<PluginsSection />);
+    refresh.mockClear();
+
+    const toggle = screen.getByRole("switch", { name: "Development mode" });
+    await tabTo(user, toggle);
+    await user.keyboard(" ");
+
+    expect(useSettingsStore.getState().pluginDevelopmentMode).toBe(true);
+    expect(refresh).toHaveBeenCalled();
   });
 });

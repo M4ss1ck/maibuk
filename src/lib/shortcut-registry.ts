@@ -299,6 +299,16 @@ export const COMMANDS = {
     contexts: ["settings"],
     defaults: [],
   },
+  "settings.keepMyCopy": {
+    labelKey: "plugins.keep",
+    contexts: ["settings"],
+    defaults: [],
+  },
+  "settings.replaceBuiltIn": {
+    labelKey: "plugins.replace",
+    contexts: ["settings"],
+    defaults: [],
+  },
 
   "dictation.toggle": {
     labelKey: "dictation.toggle",

@@ -18,6 +18,13 @@ interface SettingsRevealState {
   /** Which Plugin Settings accordions are open, by owner Plugin id. */
   pluginOpen: Record<string, boolean>;
   setPluginOpen: (pluginId: string, open: boolean) => void;
+  /**
+   * A Plugin whose review dialog Settings should open once it knows the
+   * Plugin: set by the changed-files notice's Review action (#442).
+   */
+  pendingPluginReviewId: string | null;
+  requestPluginReview: (pluginId: string) => void;
+  clearPluginReview: () => void;
 }
 
 /**
@@ -38,4 +45,7 @@ export const useSettingsRevealStore = create<SettingsRevealState>()((set) => ({
   pluginOpen: {},
   setPluginOpen: (pluginId, open) =>
     set((state) => ({ pluginOpen: { ...state.pluginOpen, [pluginId]: open } })),
+  pendingPluginReviewId: null,
+  requestPluginReview: (pluginId) => set({ pendingPluginReviewId: pluginId }),
+  clearPluginReview: () => set({ pendingPluginReviewId: null }),
 }));

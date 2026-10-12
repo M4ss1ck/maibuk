@@ -35,9 +35,6 @@ function labelOf(t: PaletteTranslate, key: string, fallback: string): string {
 export function buildSettingsItems({ t, platform }: BuildSettingsItemsOptions): PaletteItem[] {
   const items: PaletteItem[] = [];
   for (const section of SETTINGS_SECTIONS) {
-    // The Plugins section renders runtime rows from the registry, not its
-    // static (empty) rows; they join below with their literal metadata.
-    if (section.id === PLUGINS_SECTION.id) continue;
     const sectionLabel = labelOf(t, section.labelKey, section.id);
     for (const row of section.rows as readonly SettingsRowDef[]) {
       if (!rowOnPlatform(row, platform)) continue;
@@ -55,6 +52,8 @@ export function buildSettingsItems({ t, platform }: BuildSettingsItemsOptions): 
       });
     }
   }
+  // The Plugins section also renders runtime rows from the registry; they join
+  // with their literal metadata, without running the Plugin.
   const pluginsLabel = labelOf(t, PLUGINS_SECTION.labelKey, PLUGINS_SECTION.id);
   for (const row of getAllPluginSettingsRows()) {
     if (!rowOnPlatform(row, platform)) continue;

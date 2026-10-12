@@ -19,6 +19,8 @@ import {
   fakePluginFrame,
   installMicrotaskMessageChannel,
   pluginFolder,
+  sourceFolder,
+  PLUGIN_MANIFEST,
   type FakePluginFrame,
 } from "@/test/support/plugin-fixtures";
 
@@ -251,5 +253,45 @@ describe("Plugin management: zero Plugins", () => {
 
     expect(store.getState().plugins).toEqual({});
     expect(store.getState().notifications).toEqual([]);
+  });
+});
+
+describe("Plugin management: startup error codes", () => {
+  it("records an incompatible start as its code", async () => {
+    const h = await setup({ manifest: { apiVersion: "^99.0" } });
+    await h.store.getState().refresh();
+
+    await h.store.getState().approve("tracer");
+
+    expect(getPluginApproval("tracer")?.startupError).toBe("incompatible");
+    expect(h.store.getState().plugins.tracer.approval?.startupError).toBe("incompatible");
+  });
+
+  it("records a refused module as its code", async () => {
+    // A valid manifest whose declared entry file is missing: the start refuses
+    // it as `module-refused` and the code is recorded on the row's record.
+    const folder = sourceFolder({
+      "manifest.json": JSON.stringify({ ...PLUGIN_MANIFEST, id: "tracer", name: "tracer" }),
+    });
+    const folders = new Map([[folder.name, folder]]);
+    const directory: PluginDirectoryAdapter = {
+      listFolders: async () => [...folders.keys()],
+      readFolder: async (name) => folders.get(name) ?? null,
+    };
+    const lifecycle = createPluginLifecycle({
+      directory,
+      createFrame: () => fakePluginFrame(),
+      scheduleIdle: (work) => work(),
+      whenLaunchSettled: async () => undefined,
+      dataVersions: { get: async () => null, set: async () => undefined },
+    });
+    lifecycles.push(lifecycle);
+    const store = createPluginManagementStore({ directory, lifecycle: () => lifecycle });
+    await store.getState().refresh();
+
+    await store.getState().approve("tracer");
+
+    expect(getPluginApproval("tracer")?.startupError).toBe("module-refused");
+    expect(store.getState().plugins.tracer.approval?.startupError).toBe("module-refused");
   });
 });

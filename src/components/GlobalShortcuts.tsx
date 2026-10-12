@@ -204,9 +204,10 @@ export function GlobalShortcuts() {
     {
       id: "global.openPluginsSettings",
       onTrigger: () => {
-        if (location.pathname !== "/settings") {
-          navigate("/settings");
-        }
+        // The hash reveals the Plugins section (its heading at the top), the
+        // same way a `#<section id>` link does (#442). Navigating with the hash
+        // also re-focuses when Settings is already the current screen.
+        navigate("/settings#plugins");
       },
     },
     {

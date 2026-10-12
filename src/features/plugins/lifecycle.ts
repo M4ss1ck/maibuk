@@ -25,7 +25,7 @@ import {
   onChange,
 } from "@/features/sync/change-feed";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
-import { getPluginApproval } from "@/features/plugins/approvals";
+import { getPluginApproval, savePluginApproval } from "@/features/plugins/approvals";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { registerPluginContributions } from "@/features/plugins/contributions";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
@@ -44,12 +44,14 @@ import { scanApprovedPlugins } from "@/features/plugins/launch";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { reviewPluginCopy } from "@/features/plugins/review";
 import { STARTUP_TIMEOUT_MS, readPluginManifest, startPlugin } from "@/features/plugins/runtime";
+import { startupErrorValue } from "@/features/plugins/startup-error";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
 import { isTutorialLibraryActive, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
   InstalledPlugin,
   PluginActivationRefusal,
   PluginActivationResult,
+  PluginApproval,
   PluginLifecycle,
   PluginLifecycleChange,
   PluginLifecycleOptions,
@@ -129,6 +131,29 @@ function refusalStopReason(refusal: PluginStartRefusal): PluginLifecycleStopReas
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Records the last startup failure on the approval record, so Settings shows it
+ * until the Plugin starts again (#442). The stored value is the refusal's own
+ * message, or its stable code for a refusal without one; a review state records
+ * nothing.
+ */
+function recordStartupError(pluginId: string, refusal: PluginActivationRefusal): void {
+  const message = startupErrorValue(refusal);
+  if (message === null) return;
+  const approval = getPluginApproval(pluginId);
+  if (!approval || approval.startupError === message) return;
+  savePluginApproval({ ...approval, startupError: message });
+}
+
+/** Clears a stale startup error now that the Plugin started (#442). */
+function clearStartupError(pluginId: string): void {
+  const approval = getPluginApproval(pluginId);
+  if (!approval || approval.startupError === undefined) return;
+  const cleared: PluginApproval = { ...approval };
+  delete cleared.startupError;
+  savePluginApproval(cleared);
 }
 
 /**
@@ -704,6 +729,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         if (disposed) return;
         for (const { pluginId, refusal } of scan.refusals) {
           console.warn(`Plugin ${pluginId} did not load: ${refusal.code}`, refusal);
+          recordStartupError(pluginId, refusal);
         }
         for (const plugin of scan.plugins) {
           const entry = createEntry(plugin);
@@ -742,7 +768,11 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
           const entry = entries.get(plugin.pluginId);
           if (!entry) continue;
           try {
-            await startEntry(entry, "launch");
+            const result = await startEntry(entry, "launch");
+            // A launch failure is a startup error the row shows until the next
+            // successful start clears it (#442, item 5).
+            if (result.ok) clearStartupError(plugin.pluginId);
+            else recordStartupError(plugin.pluginId, result.refusal);
           } catch (error) {
             // One Plugin's failure must never skip the next one.
             console.error(`Plugin ${plugin.pluginId} failed to start`, error);

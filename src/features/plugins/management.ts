@@ -36,10 +36,9 @@ import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/direc
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { planPluginModules } from "@/features/plugins/modules";
 import { reviewPluginCopy } from "@/features/plugins/review";
-import { readPluginManifest } from "@/features/plugins/runtime";
+import { startupErrorValue } from "@/features/plugins/startup-error";
 import type {
   BuiltInPlugin,
-  PluginActivationRefusal,
   PluginActivationResult,
   PluginApproval,
   PluginManagement,
@@ -48,25 +47,27 @@ import type {
   PluginNotification,
   PluginPermissionId,
 } from "@/features/plugins/types";
-import { toast } from "@/components/ui/Toast";
 import { useSettingsStore } from "@/features/settings/store";
-import i18n from "@/i18n";
 import { getPluginDirectory } from "@/lib/platform";
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
 
 /** The notification text for a changed copy or a Built-in update, localized. */
-function defaultNotify(notification: PluginNotification): void {
-  const key =
-    notification.kind === "available" ? "plugins.available" : "plugins.changedNotice";
-  toast.info(i18n.t(key, { name: notification.name }));
+function defaultNotify(_notification: PluginNotification): void {
+  // The app renders the store's `notifications` through its Plugin notice
+  // surface (`PluginChangeNotices`), which carries the Review and Dismiss
+  // actions a toast cannot. Notifying here as well would double-notify.
 }
 
-/** The plain-language message of a startup refusal, or null when it carries none. */
-function refusalMessage(refusal: PluginActivationRefusal): string | null {
-  if ("message" in refusal && typeof refusal.message === "string" && refusal.message.length > 0) {
-    return refusal.message;
-  }
-  return null;
+/**
+ * Loads the runtime module on first use. Its manifest validator (zod) must stay
+ * out of the entry chunk (#437, `entry-chunk.test.ts`): the Settings screen
+ * reaches this module statically, so the validator is read behind `import()`
+ * only when a Plugin folder is actually parsed.
+ */
+let runtimeModule: Promise<typeof import("@/features/plugins/runtime")> | null = null;
+function loadRuntime(): Promise<typeof import("@/features/plugins/runtime")> {
+  runtimeModule ??= import("@/features/plugins/runtime");
+  return runtimeModule;
 }
 
 /** The current folder, manifest, digests, and hash for a Plugin id. */
@@ -99,6 +100,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
     // A Built-in may use the reserved `maibuk-` prefix, so it validates under
     // the Built-in schema; a third-party folder stays under the other one.
     const isBuiltIn = (await listBuiltIns()).has(pluginId);
+    const { readPluginManifest } = await loadRuntime();
     const read = readPluginManifest(folder, { builtIn: isBuiltIn });
     if (!read.ok) return null;
     try {
@@ -230,7 +232,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       const approval = getPluginApproval(pluginId);
       if (!approval) return;
       if (!result.ok) {
-        const message = refusalMessage(result.refusal);
+        const message = startupErrorValue(result.refusal);
         if (message !== null && approval.startupError !== message) {
           savePluginApproval({ ...approval, startupError: message });
         }
@@ -306,6 +308,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       // A half-written generation: the two reads disagree.
       if (firstHash !== secondHash) return;
       const builtIn = (await listBuiltIns()).get(pluginId);
+      const { readPluginManifest } = await loadRuntime();
       const read = readPluginManifest(second, { builtIn: builtIn !== undefined });
       if (!read.ok) return;
       // Every module the entry reaches must be present: a missing entry or a
@@ -398,6 +401,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         syncWatcher(directory);
         const names = await directory.listFolders();
         const builtIns = await listBuiltIns();
+        const { readPluginManifest } = await loadRuntime();
         const plugins: Record<string, PluginManagementEntry> = {};
         const changed: { pluginId: string; hash: string }[] = [];
         const available: { pluginId: string; name: string; hash: string }[] = [];
@@ -507,15 +511,21 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         }));
       },
 
-      async markReviewed(pluginId) {
+      async markReviewed(pluginId, optionalGranted) {
         const copy = await readCopy(pluginId);
         if (!copy) return;
         const approval = getPluginApproval(pluginId);
         if (!approval) return;
-        // Keep the author's revoked optional grants; grant every required one.
-        const keptOptional = approval.granted.filter((permission) =>
-          copy.manifest.permissions.optional.includes(permission)
-        );
+        // Keep the author's revoked optional grants, or use the ones the review
+        // dialog chose; grant every required one either way.
+        const keptOptional: PluginPermissionId[] =
+          optionalGranted === undefined
+            ? approval.granted.filter((permission) =>
+                copy.manifest.permissions.optional.includes(permission)
+              )
+            : (copy.manifest.permissions.optional.filter((permission) =>
+                optionalGranted.includes(permission as PluginPermissionId)
+              ) as PluginPermissionId[]);
         const next = approvePluginCopy(copy.manifest, copy.hash, copy.digests, keptOptional);
         const builtIn = (await listBuiltIns()).get(pluginId);
         // A Built-in keeps its shipped record: the copy is still "modified"

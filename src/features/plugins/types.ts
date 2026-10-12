@@ -339,8 +339,12 @@ export interface PluginManagement {
   enable(pluginId: string): Promise<void>;
   /** Disables the Plugin without removing it; it stops if running. */
   disable(pluginId: string): void;
-  /** Approves the current copy: re-pins its hash, digests, version, and permissions. */
-  markReviewed(pluginId: string): Promise<void>;
+  /**
+   * Approves the current copy: re-pins its hash, digests, version, and
+   * permissions. `optionalGranted` replaces the optional grants kept from the
+   * previous approval; omitted keeps the ones the copy still declares.
+   */
+  markReviewed(pluginId: string, optionalGranted?: readonly PluginPermissionId[]): Promise<void>;
   /**
    * Keeps a modified Built-in copy: sets `keptModifiedHash` to the shipped
    * hash, so that shipped hash never prompts again. Files and grants stay; the

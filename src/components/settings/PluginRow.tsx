@@ -11,7 +11,11 @@
  */
 
 import { useTranslation } from "react-i18next";
-import { pluginPermissionCopy, type PermissionTranslate } from "@/components/plugins/plugin-permission-copy";
+import {
+  pluginPermissionCopy,
+  type PermissionTranslate,
+} from "@/components/plugins/plugin-permission-copy";
+import { pluginStartupErrorText } from "@/components/plugins/plugin-startup-error";
 import { PluginSurface } from "@/components/plugins/PluginSurface";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
@@ -40,12 +44,14 @@ interface PluginRowProps {
   entry: PluginManagementEntry;
   open: boolean;
   onToggle: () => void;
-  /** Opens the permission approval dialog for this Plugin. */
+  /** Opens the permission approval or changed-files review dialog for this Plugin. */
   onReview: () => void;
+  /** Opens the replace-confirmation dialog for a modified Built-in copy. */
+  onReplace: () => void;
   platform: SettingsPlatform;
 }
 
-export function PluginRow({ entry, open, onToggle, onReview, platform }: PluginRowProps) {
+export function PluginRow({ entry, open, onToggle, onReview, onReplace, platform }: PluginRowProps) {
   const { t } = useTranslation();
   const translate = t as unknown as PermissionTranslate;
   const store = usePluginManagementStore.getState();
@@ -78,6 +84,8 @@ export function PluginRow({ entry, open, onToggle, onReview, platform }: PluginR
         </button>
         <div className="flex shrink-0 items-center gap-2">
           {entry.builtIn && <span className={BADGE_CLASS}>{t("plugins.builtInBadge")}</span>}
+          {entry.modified && <span className={BADGE_CLASS}>{t("plugins.modified")}</span>}
+          {entry.updateAvailable && <span className={BADGE_CLASS}>{t("plugins.available")}</span>}
           {entry.review.status === "review-required" && (
             <span className={BADGE_CLASS}>{t("plugins.reviewRequired")}</span>
           )}
@@ -88,7 +96,9 @@ export function PluginRow({ entry, open, onToggle, onReview, platform }: PluginR
       </div>
 
       {approval?.startupError !== undefined && (
-        <p className="mt-1 text-sm text-destructive">{approval.startupError}</p>
+        <p className="mt-1 text-sm text-destructive">
+          {pluginStartupErrorText(approval.startupError, translate)}
+        </p>
       )}
 
       {open && (
@@ -108,6 +118,21 @@ export function PluginRow({ entry, open, onToggle, onReview, platform }: PluginR
               </Button>
             )}
           </div>
+
+          {entry.updateAvailable && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                data-command="settings.keepMyCopy"
+                onClick={() => void store.keepMyCopy(entry.pluginId)}
+              >
+                {t("plugins.keep")}
+              </Button>
+              <Button variant="secondary" data-command="settings.replaceBuiltIn" onClick={onReplace}>
+                {t("plugins.replace")}
+              </Button>
+            </div>
+          )}
 
           {approval !== null && (
             <div className="mt-3">

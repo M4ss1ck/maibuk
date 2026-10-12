@@ -89,6 +89,7 @@ export {
   serializePluginApprovals,
 } from "@/features/plugins/approvals";
 export { reviewPluginCopy } from "@/features/plugins/review";
+export { startupErrorValue } from "@/features/plugins/startup-error";
 export { createBuiltInPluginSource } from "@/features/plugins/builtin";
 export {
   createPluginManagementStore,

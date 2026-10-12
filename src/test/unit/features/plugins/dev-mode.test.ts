@@ -303,6 +303,23 @@ describe("Plugin development mode: startup failure", () => {
     expect(getPluginApproval(ID)?.startupError).toBeUndefined();
     expect(h.store.getState().plugins[ID].approval?.startupError).toBeUndefined();
   });
+
+  it("records an incompatible completed build as its code", async () => {
+    const h = await setup();
+    await h.lifecycle.launch();
+    await h.store.getState().refresh();
+    expect(h.lifecycle.state(ID)?.status).toBe("ready");
+
+    // A completed build whose manifest wants a newer Plugin API: the reload
+    // restarts it, and the incompatible refusal is recorded as its code.
+    h.dir.setFolder(
+      pluginFolder({ "index.js": "export const a = 2;" }, { id: ID, name: ID, apiVersion: "^99.0" })
+    );
+    h.dir.fire(ID);
+    await vi.waitFor(() => expect(getPluginApproval(ID)?.startupError).toBe("incompatible"));
+
+    expect(h.store.getState().plugins[ID].approval?.startupError).toBe("incompatible");
+  });
 });
 
 describe("Plugin development mode: off", () => {
