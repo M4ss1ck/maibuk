@@ -89,6 +89,7 @@ interface SettingsStore extends Settings {
   setAlwaysOnTop: (enabled: boolean) => void;
   setLaunchOnStartup: (enabled: boolean) => void;
   setCloseToTray: (enabled: boolean) => void;
+  setPluginDevelopmentMode: (enabled: boolean) => void;
   setDefaultExportFormat: (format: ExportFormat) => void;
   setBackupRetention: (retention: number) => void;
   setBackupDirectory: (directory: string | null) => void;
@@ -175,6 +176,7 @@ const defaultSettings: Settings = {
   alwaysOnTop: false,
   launchOnStartup: false,
   closeToTray: false,
+  pluginDevelopmentMode: false,
   language: (i18n.language as Language) || "en",
   spellCheckEnabled: true,
   customDictionary: [],
@@ -327,6 +329,7 @@ export const useSettingsStore = create<SettingsStore>()(
         });
       },
       setCloseToTray: (closeToTray) => set({ closeToTray }),
+      setPluginDevelopmentMode: (pluginDevelopmentMode) => set({ pluginDevelopmentMode }),
       setDefaultExportFormat: (defaultExportFormat) => set({ defaultExportFormat }),
       setBackupRetention: (backupRetention) =>
         set({ backupRetention: Math.max(1, Math.floor(backupRetention)) }),

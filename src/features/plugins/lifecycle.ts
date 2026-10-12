@@ -26,6 +26,7 @@ import {
 } from "@/features/sync/change-feed";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import { getPluginApproval } from "@/features/plugins/approvals";
+import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { registerPluginContributions } from "@/features/plugins/contributions";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
 import {
@@ -238,6 +239,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   // the Tutorial waits for it and no call finishes against the sample Library
   // (ADR 0008, #398).
   const trackLibraryWork = options.trackLibraryWork ?? trackAuthorLibraryWork;
+  const builtInSource = options.builtInSource ?? createBuiltInPluginSource();
   const entries = new Map<string, Entry>();
   const listeners = new Set<(change: PluginLifecycleChange) => void>();
   let disposed = false;
@@ -518,6 +520,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       result = await startPlugin({
         folder,
         pinnedHash: (liveApproval ?? entry.installed.approval).pinnedHash,
+        // A Built-in id parses under the Built-in schema in `startPlugin` too.
+        builtIn: entry.installed.builtIn,
         // Read the live record on every broker call, so revoking an optional
         // grant refuses the next call without restarting the Plugin (#442).
         granted: () => getPluginApproval(pluginId)?.granted ?? [],
@@ -693,7 +697,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       try {
         await whenLaunchSettled();
         if (disposed) return;
-        const scan = await scanApprovedPlugins({ directory: options.directory });
+        const scan = await scanApprovedPlugins({
+          directory: options.directory,
+          builtInSource,
+        });
         if (disposed) return;
         for (const { pluginId, refusal } of scan.refusals) {
           console.warn(`Plugin ${pluginId} did not load: ${refusal.code}`, refusal);
@@ -804,7 +811,11 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       const directory = options.directory ?? (await getPluginDirectory());
       const folder = await directory.readFolder(pluginId);
       if (!folder) return { ok: false, refusal: { code: "not-installed" } };
-      const read = readPluginManifest(folder);
+      // A reserved `maibuk-` id the shipped Built-in source lists parses under
+      // the Built-in schema; a third-party folder stays under the other one
+      // (#442), so a Built-in is not refused at start.
+      const builtInIds = new Set((await builtInSource.list()).map((entry) => entry.id));
+      const read = readPluginManifest(folder, { builtIn: builtInIds.has(pluginId) });
       if (!read.ok) {
         return { ok: false, refusal: { code: "manifest-invalid", problems: read.problems } };
       }
@@ -813,6 +824,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         approval,
         folder,
         manifest: read.manifest,
+        builtIn: builtInIds.has(pluginId),
       };
       let entry = entries.get(pluginId);
       if (!entry) {

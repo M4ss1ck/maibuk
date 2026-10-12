@@ -147,4 +147,20 @@ describe("createWebPluginDirectory()", () => {
     const adapter = createWebPluginDirectory();
     await expect(adapter.replaceFolder?.("tracer", [])).resolves.toBe(false);
   });
+
+  it("fires watch once a folder write completes, and stops after unsubscribe", async () => {
+    const adapter = createWebPluginDirectory(seededRoot());
+    const seen: string[] = [];
+    const stop = adapter.watch?.((id) => seen.push(id));
+    const files = [{ path: "manifest.json", bytes: new TextEncoder().encode("{}") }];
+
+    await adapter.replaceFolder?.("tracer", files);
+
+    expect(seen).toEqual(["tracer"]);
+
+    stop?.();
+    await adapter.replaceFolder?.("tracer", files);
+
+    expect(seen).toEqual(["tracer"]);
+  });
 });

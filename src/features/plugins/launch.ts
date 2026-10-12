@@ -7,6 +7,7 @@
  */
 
 import { listPluginApprovals } from "@/features/plugins/approvals";
+import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { readPluginManifest } from "@/features/plugins/runtime";
 import type {
   InstalledPlugin,
@@ -26,6 +27,10 @@ export async function scanApprovedPlugins(
 
   const directory = options.directory ?? (await getPluginDirectory());
   const folders = new Set(await directory.listFolders());
+  // A reserved `maibuk-` id the shipped Built-in source lists parses under the
+  // Built-in schema; a third-party folder stays under the other one (#442).
+  const builtInSource = options.builtInSource ?? createBuiltInPluginSource();
+  const builtInIds = new Set((await builtInSource.list()).map((entry) => entry.id));
   const plugins: InstalledPlugin[] = [];
   const refusals: PluginLaunchRefusal[] = [];
 
@@ -33,7 +38,7 @@ export async function scanApprovedPlugins(
     if (!folders.has(approval.pluginId)) continue;
     const folder = await directory.readFolder(approval.pluginId);
     if (!folder) continue;
-    const manifest = readPluginManifest(folder);
+    const manifest = readPluginManifest(folder, { builtIn: builtInIds.has(approval.pluginId) });
     if (!manifest.ok) {
       refusals.push({
         pluginId: approval.pluginId,
@@ -41,7 +46,13 @@ export async function scanApprovedPlugins(
       });
       continue;
     }
-    plugins.push({ pluginId: approval.pluginId, approval, folder, manifest: manifest.manifest });
+    plugins.push({
+      pluginId: approval.pluginId,
+      approval,
+      folder,
+      manifest: manifest.manifest,
+      builtIn: builtInIds.has(approval.pluginId),
+    });
   }
 
   return { plugins, refusals };

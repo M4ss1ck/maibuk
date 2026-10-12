@@ -166,7 +166,7 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
     return { ok: false, refusal: { code: "hash-mismatch", expected: pinnedHash, actual } };
   }
 
-  const manifestResult = readPluginManifest(folder);
+  const manifestResult = readPluginManifest(folder, { builtIn: options.builtIn });
   if (!manifestResult.ok) {
     return { ok: false, refusal: { code: "manifest-invalid", problems: manifestResult.problems } };
   }

@@ -20,6 +20,19 @@ import type { PluginDirectoryAdapter, PluginFolder, PluginFolderFile } from "@/l
  */
 export const WEB_PLUGIN_DIRECTORY_NAME = "plugins";
 
+/**
+ * The in-process change bus (development mode, #442). OPFS emits no change
+ * events, so every write path here announces the folder it wrote. A watcher
+ * subscribes with `watch`; a write calls {@link notifyWebPluginChanged} once
+ * the write is complete, so the reader never sees a half-written folder.
+ */
+const watchers = new Set<(id: string) => void>();
+
+/** Notifies every web Plugin Directory watcher that `id`'s files changed. */
+export function notifyWebPluginChanged(id: string): void {
+  for (const watcher of [...watchers]) watcher(id);
+}
+
 async function opfsRoot(): Promise<FileSystemDirectoryHandle | null> {
   try {
     return (await navigator.storage.getDirectory()) ?? null;
@@ -101,7 +114,19 @@ export function createWebPluginDirectory(root?: FileSystemDirectoryHandle): Plug
       for (const file of files) {
         await writeFile(folder, file.path, file.bytes);
       }
+      notifyWebPluginChanged(name);
       return true;
+    },
+
+    /**
+     * Subscribes to the in-process change bus. OPFS itself has no change
+     * events, so this is how a completed write reaches development mode (#442).
+     */
+    watch(onChanged: (id: string) => void): () => void {
+      watchers.add(onChanged);
+      return () => {
+        watchers.delete(onChanged);
+      };
     },
   };
 }

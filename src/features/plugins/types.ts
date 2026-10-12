@@ -127,6 +127,8 @@ export interface PluginStartOptions {
   folder: PluginFolder;
   /** The `h1:` value the author pinned when approving the Plugin. */
   pinnedHash: string;
+  /** A Built-in Plugin may use the reserved `maibuk-` prefix (manifest validation). */
+  builtIn?: boolean;
   /**
    * The Plugin Permissions granted right now; none by default. A provider is
    * read on every broker call, so revoking an optional grant refuses the next
@@ -312,6 +314,13 @@ export interface PluginManagementOptions {
   builtInSource?: BuiltInPluginSource;
   /** Shows the non-blocking notification; defaults to a toast. Injected by tests. */
   notify?: (notification: PluginNotification) => void;
+  /**
+   * Reports whether Plugin development mode is on; defaults to the device
+   * setting (`useSettingsStore`). Injected by tests.
+   */
+  isDevelopmentMode?: () => boolean;
+  /** The change debounce before a watched folder is read; defaults to 300 ms. */
+  debounceMs?: number;
 }
 
 /** The Plugin management store: the orchestrator the Settings UI talks to (#442). */
@@ -365,11 +374,18 @@ export interface InstalledPlugin {
   approval: PluginApproval;
   folder: PluginFolder;
   manifest: PluginManifest;
+  /** True for a Built-in Plugin the shipped source lists (reserved `maibuk-` id). */
+  builtIn?: boolean;
 }
 
 export interface PluginScanOptions {
   /** Injected by tests; defaults to the platform's Plugin Directory. */
   directory?: PluginDirectoryAdapter;
+  /**
+   * The shipped Built-in Plugins. A reserved `maibuk-` id it lists parses
+   * under the Built-in schema; defaults to the production source (`[]`).
+   */
+  builtInSource?: BuiltInPluginSource;
 }
 
 export interface PluginScanResult {
@@ -460,6 +476,11 @@ export interface PluginDataVersions {
 export interface PluginLifecycleOptions {
   /** Injected by tests; defaults to the platform's Plugin Directory. */
   directory?: PluginDirectoryAdapter;
+  /**
+   * The shipped Built-in Plugins. A reserved `maibuk-` id it lists parses
+   * under the Built-in schema; defaults to the production source (`[]`).
+   */
+  builtInSource?: BuiltInPluginSource;
   /** Injected by tests: jsdom has no Worker. */
   createFrame?: (document: Document, manifest: PluginManifest) => PluginSandboxFrame;
   /** Builds the method handlers; defaults to the wired API subset. */

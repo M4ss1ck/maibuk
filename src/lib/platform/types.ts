@@ -96,6 +96,13 @@ export interface PluginDirectoryAdapter {
    * Absent on an adapter that cannot write; a Built-in replace then refuses.
    */
   replaceFolder?(name: string, files: readonly PluginFolderFile[]): Promise<boolean>;
+  /**
+   * Watches the Plugin Directory for changes to a Plugin's files (development
+   * mode, #442): calls `onChanged` with the folder id once a write settles.
+   * Returns an unsubscribe that stops watching. Absent on an adapter that
+   * cannot watch; development mode then reloads only on an explicit refresh.
+   */
+  watch?(onChanged: (id: string) => void): () => void;
 }
 
 export type { ModelFiles, RecognizerHost } from "@/features/dictation/types";

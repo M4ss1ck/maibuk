@@ -87,6 +87,7 @@ async function setup(options: SetupOptions = {}) {
   const frames: FakePluginFrame[] = [];
   const lifecycle = createPluginLifecycle({
     directory,
+    builtInSource: source,
     createFrame: () => {
       const frame = fakePluginFrame();
       frames.push(frame);
@@ -295,6 +296,35 @@ describe("Built-in Plugins: reserved maibuk- ids", () => {
       modified: false,
       review: { status: "approved" },
     });
+  });
+
+  it("starts a maibuk- Built-in at launch through the Built-in schema", async () => {
+    const folder = pluginFolder(
+      {},
+      { id: "maibuk-echoes", name: "Echoes", permissions: PERMISSIONS }
+    );
+    const h = await setup({ installed: folder });
+    await h.refresh();
+
+    await h.lifecycle.launch();
+
+    expect(h.lifecycle.state("maibuk-echoes")?.status).toBe("ready");
+    expect(h.frames).toHaveLength(1);
+  });
+
+  it("installs a maibuk- Built-in through the lifecycle after an enable", async () => {
+    const folder = pluginFolder(
+      {},
+      { id: "maibuk-echoes", name: "Echoes", permissions: PERMISSIONS }
+    );
+    const h = await setup({ installed: folder });
+    await h.refresh();
+
+    h.store.getState().disable("maibuk-echoes");
+    await h.store.getState().enable("maibuk-echoes");
+
+    expect(h.lifecycle.state("maibuk-echoes")?.status).toBe("ready");
+    expect(h.frames).toHaveLength(1);
   });
 });
 

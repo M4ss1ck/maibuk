@@ -13,6 +13,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { PluginDirectoryAdapter, PluginFolder } from "@/lib/platform/types";
 
 interface PluginFolderFilePayload {
@@ -82,6 +83,39 @@ export function createTauriPluginDirectory(): PluginDirectoryAdapter {
         console.warn(`The Built-in Plugin folder ${name} could not be replaced`, error);
         return false;
       }
+    },
+
+    /**
+     * Watches the Plugin Directory through Rust (development mode, #442).
+     * Rust owns the folder and emits `plugins://changed` with the folder name
+     * once a debounced burst of writes settles; this listens for it. The
+     * returned unsubscribe stops both the listener and the Rust watcher.
+     */
+    watch(onChanged: (id: string) => void): () => void {
+      void invoke("watch_plugin_directory").catch((error) => {
+        console.warn("The Plugin Directory could not be watched", error);
+      });
+      let unlisten: UnlistenFn | null = null;
+      let stopped = false;
+      void listen<{ id: string }>("plugins://changed", (event) => {
+        const id = event.payload?.id;
+        if (typeof id === "string") onChanged(id);
+      })
+        .then((stop) => {
+          if (stopped) stop();
+          else unlisten = stop;
+        })
+        .catch((error) => {
+          console.warn("The Plugin change listener could not be attached", error);
+        });
+      return () => {
+        stopped = true;
+        unlisten?.();
+        unlisten = null;
+        void invoke("unwatch_plugin_directory").catch(() => {
+          // Nothing watched: a failed unwatch is not worth surfacing.
+        });
+      };
     },
   };
 }

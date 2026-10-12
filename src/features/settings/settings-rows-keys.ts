@@ -14,6 +14,7 @@ export const SETTINGS_KEY_ROWS = {
   alwaysOnTop: "alwaysOnTop",
   launchOnStartup: "launchOnStartup",
   closeToTray: "closeToTray",
+  pluginDevelopmentMode: "internal",
   language: "language",
   spellCheckEnabled: "spellCheck",
   customDictionary: "customDictionary",

@@ -34,10 +34,13 @@ import {
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
+import { planPluginModules } from "@/features/plugins/modules";
 import { reviewPluginCopy } from "@/features/plugins/review";
 import { readPluginManifest } from "@/features/plugins/runtime";
 import type {
   BuiltInPlugin,
+  PluginActivationRefusal,
+  PluginActivationResult,
   PluginApproval,
   PluginManagement,
   PluginManagementEntry,
@@ -46,14 +49,24 @@ import type {
   PluginPermissionId,
 } from "@/features/plugins/types";
 import { toast } from "@/components/ui/Toast";
+import { useSettingsStore } from "@/features/settings/store";
 import i18n from "@/i18n";
 import { getPluginDirectory } from "@/lib/platform";
+import type { PluginDirectoryAdapter } from "@/lib/platform/types";
 
 /** The notification text for a changed copy or a Built-in update, localized. */
 function defaultNotify(notification: PluginNotification): void {
   const key =
     notification.kind === "available" ? "plugins.available" : "plugins.changedNotice";
   toast.info(i18n.t(key, { name: notification.name }));
+}
+
+/** The plain-language message of a startup refusal, or null when it carries none. */
+function refusalMessage(refusal: PluginActivationRefusal): string | null {
+  if ("message" in refusal && typeof refusal.message === "string" && refusal.message.length > 0) {
+    return refusal.message;
+  }
+  return null;
 }
 
 /** The current folder, manifest, digests, and hash for a Plugin id. */
@@ -71,6 +84,9 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
   const getLifecycle = options.lifecycle ?? getPluginLifecycle;
   const notify = options.notify ?? defaultNotify;
   const builtInSource = options.builtInSource ?? createBuiltInPluginSource();
+  const isDevelopmentMode =
+    options.isDevelopmentMode ?? (() => useSettingsStore.getState().pluginDevelopmentMode);
+  const debounceMs = options.debounceMs ?? 300;
   /** The last notified hash per Plugin, so a change notifies once even if two paths race. */
   const notified = new Map<string, string>();
   /** The last notified shipped hash per Built-in, for the same reason. */
@@ -144,6 +160,8 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
 
   return create<PluginManagement>((set, get) => {
     let unsubscribe: (() => void) | null = null;
+    let unwatch: (() => void) | null = null;
+    const changeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
     /** Reports a changed copy the lifecycle refused to start. */
     async function reportChanged(pluginId: string): Promise<void> {
@@ -182,14 +200,163 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
     async function start(pluginId: string): Promise<void> {
       const lifecycle = getLifecycle();
       if (!lifecycle) return;
-      await lifecycle.install(pluginId, "enable");
+      const result = await lifecycle.install(pluginId, "enable");
+      await applyStartResult(pluginId, result);
       set((state) => {
         const entry = state.plugins[pluginId];
         if (!entry) return {};
         return {
-          plugins: { ...state.plugins, [pluginId]: { ...entry, running: running(pluginId) } },
+          plugins: {
+            ...state.plugins,
+            [pluginId]: {
+              ...entry,
+              approval: getPluginApproval(pluginId) ?? entry.approval,
+              running: running(pluginId),
+            },
+          },
         };
       });
+    }
+
+    /**
+     * Records a startup failure on the approval record, or clears a stale one
+     * on a successful start, so Settings shows the last error until the Plugin
+     * runs again (#442).
+     */
+    async function applyStartResult(
+      pluginId: string,
+      result: PluginActivationResult
+    ): Promise<void> {
+      const approval = getPluginApproval(pluginId);
+      if (!approval) return;
+      if (!result.ok) {
+        const message = refusalMessage(result.refusal);
+        if (message !== null && approval.startupError !== message) {
+          savePluginApproval({ ...approval, startupError: message });
+        }
+        return;
+      }
+      if (approval.startupError !== undefined) {
+        const cleared: PluginApproval = { ...approval };
+        delete cleared.startupError;
+        savePluginApproval(cleared);
+      }
+    }
+
+    /** Stops watching the Plugin Directory and drops any pending reload. */
+    function stopWatching(): void {
+      if (unwatch !== null) {
+        unwatch();
+        unwatch = null;
+      }
+      for (const timer of changeTimers.values()) clearTimeout(timer);
+      changeTimers.clear();
+    }
+
+    /** Subscribes or unsubscribes the watch so it matches development mode (#442). */
+    function syncWatcher(directory: PluginDirectoryAdapter): void {
+      if (!isDevelopmentMode()) {
+        stopWatching();
+        return;
+      }
+      if (unwatch !== null || !directory.watch) return;
+      unwatch = directory.watch((pluginId) => scheduleChange(pluginId));
+    }
+
+    /** Debounces a folder change; the last event in a burst is the one read. */
+    function scheduleChange(pluginId: string): void {
+      const existing = changeTimers.get(pluginId);
+      if (existing !== undefined) clearTimeout(existing);
+      changeTimers.set(
+        pluginId,
+        setTimeout(() => {
+          changeTimers.delete(pluginId);
+          void reloadDevelopmentCopy(pluginId);
+        }, debounceMs)
+      );
+    }
+
+    /**
+     * Reloads one Plugin after a watched folder changed in development mode
+     * (#442). It is a completed build only when two reads agree on the hash,
+     * the manifest validates, and every module the entry reaches is present;
+     * anything else keeps the previous running build and re-pins nothing. A
+     * completed build skips file-change review (its hash is re-pinned) but a
+     * new required Plugin Permission the author never granted still blocks.
+     */
+    async function reloadDevelopmentCopy(pluginId: string): Promise<void> {
+      if (!isDevelopmentMode()) return;
+      const approval = getPluginApproval(pluginId);
+      // A disabled or unknown Plugin never reloads on a folder change.
+      if (!approval || !approval.enabled) return;
+      const directory = options.directory ?? (await getPluginDirectory());
+      const first = await directory.readFolder(pluginId);
+      if (!first) return;
+      const second = await directory.readFolder(pluginId);
+      if (!second) return;
+      let firstHash: string;
+      let secondHash: string;
+      try {
+        firstHash = await hashPluginDirectory(first.files);
+        secondHash = await hashPluginDirectory(second.files);
+      } catch {
+        // A folder the hash scheme refuses cannot be loaded.
+        return;
+      }
+      // A half-written generation: the two reads disagree.
+      if (firstHash !== secondHash) return;
+      const builtIn = (await listBuiltIns()).get(pluginId);
+      const read = readPluginManifest(second, { builtIn: builtIn !== undefined });
+      if (!read.ok) return;
+      // Every module the entry reaches must be present: a missing entry or a
+      // missing import is a partial build.
+      const plan = await planPluginModules(second.files, read.manifest.entry);
+      if (!plan.ok) return;
+      const digests = await pluginFileDigests(second.files);
+      // A new required Plugin Permission the author never granted blocks the
+      // reload: review-required, and the previous build keeps running.
+      const missing = read.manifest.permissions.required.filter(
+        (permission) => !approval.granted.includes(permission as PluginPermissionId)
+      );
+      if (missing.length > 0) {
+        const entry = buildEntry(
+          pluginId,
+          { manifest: read.manifest, digests, hash: secondHash },
+          approval,
+          builtIn
+        );
+        set((state) => ({ plugins: { ...state.plugins, [pluginId]: entry } }));
+        return;
+      }
+      // A completed build: re-pin the hash, digests, version, and permissions,
+      // keeping the author's grants and the Plugin's stored data.
+      const next: PluginApproval = {
+        ...approval,
+        pinnedHash: secondHash,
+        approvedVersion: read.manifest.version,
+        approvedPermissions: {
+          required: [...read.manifest.permissions.required],
+          optional: [...read.manifest.permissions.optional],
+        },
+        approvedFiles: Object.fromEntries(digests),
+      };
+      delete next.startupError;
+      savePluginApproval(next);
+      const lifecycle = getLifecycle();
+      if (lifecycle) {
+        // Restart the running build: stop first, then install again, so the
+        // new generation is the one that runs (stored data is untouched).
+        lifecycle.stop(pluginId);
+        const result = await lifecycle.install(pluginId, "update");
+        await applyStartResult(pluginId, result);
+      }
+      const refreshed = buildEntry(
+        pluginId,
+        { manifest: read.manifest, digests, hash: secondHash },
+        getPluginApproval(pluginId) ?? next,
+        builtIn
+      );
+      set((state) => ({ plugins: { ...state.plugins, [pluginId]: refreshed } }));
     }
 
     /**
@@ -228,6 +395,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       async refresh() {
         ensureSubscribed();
         const directory = options.directory ?? (await getPluginDirectory());
+        syncWatcher(directory);
         const names = await directory.listFolders();
         const builtIns = await listBuiltIns();
         const plugins: Record<string, PluginManagementEntry> = {};
