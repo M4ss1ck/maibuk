@@ -333,6 +333,14 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     }
     subscriptions.add(event);
     post({ kind: "result", id, ok: true, result: null });
+    // A replaying event delivers its current value on subscription, so a Plugin
+    // that starts after the change still learns it and no change is missed
+    // between startup and subscription. The subscription is registered and its
+    // reply posted first, so the Plugin's listener exists when this arrives.
+    if (row.replays) {
+      const snapshot = options.eventSnapshot?.(event);
+      if (snapshot !== undefined) post({ kind: "event", event, payload: row.payload.parse(snapshot) });
+    }
   }
 
   function handleReply(message: Record<string, unknown>) {

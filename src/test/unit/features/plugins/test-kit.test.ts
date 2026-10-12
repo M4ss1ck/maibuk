@@ -125,6 +125,236 @@ describe("createTestHost()", () => {
       host.stop();
     }
   });
+
+  it("serves Chapters, Notes, and Canvases, with content on the get", async () => {
+    const host = createTestHost({
+      manifest: {
+        ...fixtureManifest(),
+        permissions: { required: ["library:read"], optional: [] },
+      },
+      permissions: ["library:read"],
+      library: {
+        books: [BOOK],
+        chapters: [
+          {
+            id: "c1",
+            bookId: "b1",
+            title: "One",
+            order: 0,
+            parentId: null,
+            wordCount: 2,
+            updatedAt: 1_000,
+            content: { text: "Hello", html: "<p>Hello</p>" },
+          },
+        ],
+        notes: [
+          { id: "n1", bookId: "b1", title: "Note", tags: ["a"], wordCount: 1, updatedAt: 2_000 },
+        ],
+        canvases: [{ id: "cv1", bookId: null, title: "Board", updatedAt: 3_000 }],
+      },
+    });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.library.chapters.list({ bookId: "b1" })).resolves.toEqual([
+        { id: "c1", bookId: "b1", title: "One", order: 0, parentId: null, wordCount: 2, updatedAt: 1_000 },
+      ]);
+      await expect(client.library.chapters.get({ chapterId: "c1" })).resolves.toMatchObject({
+        id: "c1",
+        content: { text: "Hello", html: "<p>Hello</p>" },
+      });
+      await expect(client.library.notes.list({})).resolves.toEqual([
+        { id: "n1", bookId: "b1", title: "Note", tags: ["a"], wordCount: 1, updatedAt: 2_000 },
+      ]);
+      await expect(client.library.notes.get({ noteId: "n1" })).resolves.toMatchObject({ id: "n1" });
+      await expect(client.library.canvases.list({})).resolves.toEqual([
+        { id: "cv1", bookId: null, title: "Board", updatedAt: 3_000 },
+      ]);
+      await expect(client.library.canvases.get({ canvasId: "cv1" })).resolves.toMatchObject({
+        id: "cv1",
+      });
+      await expect(client.library.canvases.get({ canvasId: "absent" })).resolves.toBeNull();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("reads and writes this Plugin's storage namespace", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.storage.get({ key: "missing" })).resolves.toBeNull();
+      await expect(client.storage.set({ key: "b", value: [1, 2] })).resolves.toBeNull();
+      await expect(client.storage.set({ key: "a", value: { ok: true } })).resolves.toBeNull();
+      await expect(client.storage.get({ key: "b" })).resolves.toEqual([1, 2]);
+      await expect(client.storage.keys({})).resolves.toEqual(["a", "b"]);
+      await client.storage.delete({ key: "b" });
+      await expect(client.storage.keys({})).resolves.toEqual(["a"]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("records navigation.openEntity with its reveal range", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await client.navigation.openEntity({ entity: { kind: "chapter", id: "c1" } });
+      await client.navigation.openEntity({
+        entity: { kind: "book", id: "b1" },
+        reveal: { from: 3, to: 9 },
+      });
+      expect(host.navigations).toEqual([
+        { entity: { kind: "chapter", id: "c1" } },
+        { entity: { kind: "book", id: "b1" }, reveal: { from: 3, to: 9 } },
+      ]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a Library call with library-unavailable while the Tutorial runs", async () => {
+    const host = createTestHost({
+      manifest: {
+        ...fixtureManifest(),
+        permissions: { required: ["library:read"], optional: [] },
+      },
+      permissions: ["library:read"],
+      library: { books: [BOOK] },
+    });
+    try {
+      const client = createPluginClient(host.port);
+      host.setLibraryAvailable(false);
+      await expect(client.library.books.list()).rejects.toMatchObject({
+        code: "library-unavailable",
+      });
+      await expect(client.storage.keys({})).rejects.toMatchObject({ code: "library-unavailable" });
+      host.setLibraryAvailable(true);
+      await expect(client.library.books.list()).resolves.toEqual([BOOK]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a call whose params break the row's schema", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(
+        (client.library.books.get as (params: unknown) => Promise<unknown>)({})
+      ).rejects.toMatchObject({ code: "invalid-params" });
+      await expect(
+        (client.navigation.openEntity as (params: unknown) => Promise<unknown>)({
+          entity: { kind: "planet", id: "x" },
+        })
+      ).rejects.toMatchObject({ code: "invalid-params" });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("rate-limits notifications to one per 5 s", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await client.notifications.show({ variant: "info", message: "one" });
+      await expect(
+        client.notifications.show({ variant: "info", message: "two" })
+      ).rejects.toMatchObject({ code: "rate-limited" });
+      expect(host.notifications).toEqual([{ variant: "info", message: "one" }]);
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+describe("createTestHost() events and language", () => {
+  it("delivers the current language on subscription, and every later change", async () => {
+    const host = createTestHost({ manifest: fixtureManifest(), language: "en" });
+    try {
+      const client = createPluginClient(host.port);
+      const seen: string[] = [];
+      const off = await client.on("language.changed", (payload) => seen.push(payload.language));
+
+      // The current value arrives on subscription, so a Plugin activated after
+      // a change still learns it and no change is missed.
+      await vi.waitFor(() => expect(seen).toEqual(["en"]));
+      host.setLanguage("es");
+      host.setLanguage("en");
+      host.setLanguage("es");
+      await vi.waitFor(() => expect(seen).toEqual(["en", "es", "en", "es"]));
+      await off();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("hands a Plugin activated after a change the new value, not a startup snapshot", async () => {
+    const host = createTestHost({ manifest: fixtureManifest(), language: "en" });
+    try {
+      host.setLanguage("es");
+      const client = createPluginClient(host.port);
+      const seen: string[] = [];
+      await client.on("language.changed", (payload) => seen.push(payload.language));
+
+      await vi.waitFor(() => expect(seen).toEqual(["es"]));
+      await expect(client.language.get({})).resolves.toEqual({ language: "es" });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("does not reject a Plugin that never subscribes to language", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      host.setLanguage("es");
+      await expect(client.language.get({})).resolves.toEqual({ language: "es" });
+      expect(host.broker.stopped).toBe(false);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("delivers library.changed per entity and in bulk, and availability ungated", async () => {
+    const host = createTestHost({
+      manifest: {
+        ...fixtureManifest(),
+        permissions: { required: ["library:read"], optional: [] },
+      },
+      permissions: ["library:read"],
+    });
+    try {
+      const client = createPluginClient(host.port);
+      const changes: unknown[] = [];
+      const availability: boolean[] = [];
+      await client.on("library.changed", (payload) => changes.push(payload));
+      await client.on("library.availabilityChanged", (payload) => availability.push(payload.available));
+
+      expect(
+        host.broker.emit("library.changed", {
+          entity: "book",
+          id: "b1",
+          origin: "local",
+          kind: "content",
+        })
+      ).toBe(true);
+      expect(host.broker.emit("library.changed", { scope: "all", reason: "restore" })).toBe(true);
+      expect(host.broker.emit("library.availabilityChanged", { available: false })).toBe(true);
+
+      await vi.waitFor(() => {
+        expect(changes).toEqual([
+          { entity: "book", id: "b1", origin: "local", kind: "content" },
+          { scope: "all", reason: "restore" },
+        ]);
+        expect(availability).toEqual([false]);
+      });
+
+      host.stopWorker();
+      expect(host.broker.emit("library.availabilityChanged", { available: true })).toBe(false);
+    } finally {
+      host.stop();
+    }
+  });
 });
 
 describe("renderPage", () => {

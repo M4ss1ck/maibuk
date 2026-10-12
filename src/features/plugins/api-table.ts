@@ -24,6 +24,7 @@ export const PLUGIN_API_NAMESPACES = [
   "library",
   "editor",
   "navigation",
+  "language",
   "secrets",
   "network",
   "clipboard",
@@ -219,6 +220,7 @@ export const PLUGIN_API_TABLE = [
     ]),
     permission: "editor:read",
     effect: "read",
+    requiresLibrary: true,
   }),
   defineApiRow({
     id: "editor.getSelection",
@@ -230,6 +232,7 @@ export const PLUGIN_API_TABLE = [
     ]),
     permission: "editor:read",
     effect: "read",
+    requiresLibrary: true,
   }),
   defineApiRow({
     id: "editor.reveal",
@@ -238,6 +241,7 @@ export const PLUGIN_API_TABLE = [
     output: applied,
     permission: "editor:read",
     effect: "read",
+    requiresLibrary: true,
   }),
   defineApiRow({
     id: "editor.setHighlights",
@@ -250,6 +254,7 @@ export const PLUGIN_API_TABLE = [
     output: applied,
     permission: "editor:decorate",
     effect: "write",
+    requiresLibrary: true,
   }),
   defineApiRow({
     id: "editor.insert",
@@ -258,6 +263,7 @@ export const PLUGIN_API_TABLE = [
     output: applied,
     permission: "editor:write",
     effect: "write",
+    requiresLibrary: true,
   }),
   defineApiRow({
     id: "editor.replace",
@@ -266,6 +272,7 @@ export const PLUGIN_API_TABLE = [
     output: applied,
     permission: "editor:write",
     effect: "write",
+    requiresLibrary: true,
   }),
   defineApiRow({
     id: "navigation.openEntity",
@@ -274,6 +281,14 @@ export const PLUGIN_API_TABLE = [
     output: ok,
     permission: null,
     effect: "write",
+  }),
+  defineApiRow({
+    id: "language.get",
+    description: "Reads the language Maibuk runs in. No permission is required.",
+    input: none,
+    output: z.strictObject({ language: z.string() }),
+    permission: null,
+    effect: "read",
   }),
   defineApiRow({
     id: "secrets.set",
@@ -418,6 +433,14 @@ export const PLUGIN_API_EVENTS = [
     description: "The Library became available or unavailable (the Tutorial makes it unavailable).",
     payload: z.strictObject({ available: z.boolean() }),
     permission: null,
+  }),
+  defineApiEvent({
+    id: "language.changed",
+    description:
+      "Maibuk's language changed. The current value is delivered on subscription, so a Plugin that starts after a change never misses it.",
+    payload: z.strictObject({ language: z.string() }),
+    permission: null,
+    replays: true,
   }),
   defineApiEvent({
     id: "editor.contentChanged",

@@ -224,7 +224,7 @@ describe("typed errors", () => {
     expect(error.message).toContain("bookId");
   });
 
-  it("refuses Library methods with library-unavailable while the Library is closed", async () => {
+  it("refuses Library and editor methods with library-unavailable while the Library is closed", async () => {
     let open = false;
     const { client } = setup({
       declared: ["library:read", "editor:read"],
@@ -232,9 +232,10 @@ describe("typed errors", () => {
     });
     expect((await refusal(client.library.books.list())).code).toBe("library-unavailable");
     expect((await refusal(client.storage.keys())).code).toBe("library-unavailable");
-    await expect(client.editor.getContent()).resolves.toEqual({ status: "no-target" });
+    expect((await refusal(client.editor.getContent())).code).toBe("library-unavailable");
     open = true;
     await expect(client.library.books.list()).resolves.toEqual([BOOK]);
+    await expect(client.editor.getContent()).resolves.toEqual({ status: "no-target" });
   });
 
   it("hides a handler's own failure behind internal-error", async () => {
@@ -689,6 +690,33 @@ describe("events", () => {
       });
     });
     await expect(payload).resolves.toEqual({ available: false });
+  });
+
+  it("replays a replaying event's current value on subscription, then delivers changes", async () => {
+    const { broker, client } = setup({
+      eventSnapshot: (event) => (event === "language.changed" ? { language: "en" } : undefined),
+    });
+    const seen: string[] = [];
+    const first = new Promise<void>((resolve) => {
+      void client.on("language.changed", (payload) => {
+        seen.push(payload.language);
+        resolve();
+      });
+    });
+    await first;
+    expect(seen).toEqual(["en"]);
+
+    broker.emit("language.changed", { language: "es" });
+    await nextEvent(() => {});
+    expect(seen).toEqual(["en", "es"]);
+  });
+
+  it("does not replay an event without a snapshot", async () => {
+    const { client } = setup();
+    const seen: unknown[] = [];
+    await client.on("library.availabilityChanged", (payload) => seen.push(payload));
+    await nextEvent(() => {});
+    expect(seen).toEqual([]);
   });
 
   it("refuses an unknown event with unknown-method", async () => {

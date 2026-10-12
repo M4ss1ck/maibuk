@@ -141,4 +141,25 @@ export type {
   PluginTarget,
 } from "@/features/plugins/contributions";
 export { createPluginHandlers } from "@/features/plugins/handlers";
+export {
+  getPluginBook,
+  getPluginCanvas,
+  getPluginChapter,
+  getPluginNote,
+  htmlToPlainText,
+  listPluginBooks,
+  listPluginCanvases,
+  listPluginChapters,
+  listPluginNotes,
+  sanitizePluginHtml,
+} from "@/features/plugins/library";
+export {
+  openPluginEntity,
+  resolvePluginEntityRoute,
+  setPluginNavigator,
+} from "@/features/plugins/navigation";
+export {
+  currentPluginLanguage,
+  onPluginLanguageChange,
+} from "@/features/plugins/language";
 export type * from "@/features/plugins/types";
