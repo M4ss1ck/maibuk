@@ -185,8 +185,9 @@ test.describe("Host-rendered Plugin UI kit @wf:plugins-remote-ui-kit @no-webkit"
     await expect(header).toBeVisible({ timeout: 15_000 });
     await expect(header).toHaveCSS("text-transform", "uppercase");
 
-    // The page's own heading is not inside the surface, so the Plugin's `th`
-    // rule cannot reach it and the app's headings keep their casing.
+    // The page's own heading is not inside the surface, so the Plugin's
+    // `:is(th, caption)` rule cannot reach it and the app's headings keep their
+    // casing.
     const chromeHeading = page.getByRole("heading", { name: PAGE_TITLE, level: 1 });
     await expect(chromeHeading).toHaveCSS("text-transform", "none");
   });

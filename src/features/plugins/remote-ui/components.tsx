@@ -12,7 +12,7 @@
  * a type error, and the coverage gate fails when a table component has no test.
  */
 
-import { useCallback, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FieldError,
@@ -1282,7 +1282,21 @@ function SurfaceHost({
   const scope = useRef<string | null>(null);
   if (scope.current === null) scope.current = nextSurfaceId();
   const scopeId = scope.current;
-  const scoped = css ? scopePluginCss(css, `[data-plugin-ui="${scopeId}"]`) : "";
+  const { scoped, drops } = useMemo(() => {
+    if (!css) return { scoped: "", drops: [] as string[] };
+    const reasons: string[] = [];
+    const out = scopePluginCss(css, `[data-plugin-ui="${scopeId}"]`, (reason) => {
+      reasons.push(reason);
+    });
+    return { scoped: out, drops: reasons };
+  }, [css, scopeId]);
+
+  useEffect(() => {
+    if (drops.length > 0) {
+      console.warn("Plugin CSS was partly or wholly dropped from a Surface:", drops);
+    }
+  }, [drops]);
+
   return (
     <div data-plugin-ui={scopeId} className={`w-full ${PADDING[padding]}`}>
       {children}

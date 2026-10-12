@@ -55,8 +55,7 @@ function Panel() {
  * classes; the host rewrites each one under the surface.
  */
 const GALLERY_CSS = `
-th { text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em }
-caption { letter-spacing: 0.08em; text-transform: uppercase }
+:is(th, caption) { text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em }
 `;
 
 function Gallery() {

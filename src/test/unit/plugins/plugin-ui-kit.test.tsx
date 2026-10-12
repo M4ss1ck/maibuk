@@ -7,7 +7,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import { installPointerEvent } from "@/test/support/pointer-events";
 import { ui } from "@/plugin-sdk/ui";
@@ -689,6 +689,32 @@ describe("the Remote UI kit, part 2", () => {
       expect(getComputedStyle(escapeText).color).not.toBe("rgb(1, 2, 3)");
       for (const style of document.querySelectorAll("style")) {
         expect(style.textContent ?? "").not.toContain("body{display:none}");
+      }
+    });
+
+    it("warns once when Plugin CSS was partly dropped, and not for clean CSS", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        harness = renderRemoteUi();
+        await harness.mount(
+          <>
+            {/* An @import is dropped, so the dirty surface warns. */}
+            <ui.Surface css="@import url(x); p { color: rgb(7, 8, 9) }">
+              <ui.Text>Warned surface</ui.Text>
+            </ui.Surface>
+            {/* A clean stylesheet drops nothing, so it stays silent. */}
+            <ui.Surface css="p { color: rgb(1, 2, 3) }">
+              <ui.Text>Clean surface</ui.Text>
+            </ui.Surface>
+          </>
+        );
+
+        const dropped = warn.mock.calls.filter((call) =>
+          String(call[0]).startsWith("Plugin CSS was partly or wholly dropped")
+        );
+        expect(dropped).toHaveLength(1);
+      } finally {
+        warn.mockRestore();
       }
     });
   });

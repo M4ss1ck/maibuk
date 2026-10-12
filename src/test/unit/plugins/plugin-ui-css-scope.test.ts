@@ -7,8 +7,12 @@
 // nested rule syntax), so a Plugin can never style Maibuk chrome or another
 // Plugin.
 
-import { describe, expect, it } from "vitest";
-import { scopePluginCss } from "@/features/plugins/remote-ui/css-scope";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  everySelectorScoped,
+  scopePluginCss,
+  splitSelectorList,
+} from "@/features/plugins/remote-ui/css-scope";
 
 const SCOPE = '[data-plugin-ui="plugin-ui-1"]';
 
@@ -211,5 +215,151 @@ describe("scopePluginCss", () => {
       expect(scopePluginCss('.a{b:"x}', SCOPE)).toBe("");
       expect(scopePluginCss(".a{b:c/*x", SCOPE)).toBe("");
     });
+  });
+});
+
+describe("splitSelectorList (#484)", () => {
+  it("splits a plain selector list on its top-level commas", () => {
+    expect(splitSelectorList("a, b")).toHaveLength(2);
+    expect(splitSelectorList("a, b")).toEqual(["a", " b"]);
+  });
+
+  it("keeps a comma inside a functional pseudo-class in one selector", () => {
+    expect(splitSelectorList(":is(.a, .b) .c")).toHaveLength(1);
+  });
+
+  it("splits after a functional pseudo-class but not inside it", () => {
+    expect(splitSelectorList(".x:not(.a, .b), .y")).toHaveLength(2);
+    expect(splitSelectorList(".x:not(.a, .b), .y")).toEqual([".x:not(.a, .b)", " .y"]);
+  });
+
+  it("keeps a comma inside an attribute value in one selector", () => {
+    expect(splitSelectorList('[title="a,b"]')).toHaveLength(1);
+  });
+
+  it("splits an attribute selector from the next one", () => {
+    expect(splitSelectorList("[title='a,b'], p")).toHaveLength(2);
+  });
+
+  it("treats an escaped comma as a literal, not a separator", () => {
+    expect(splitSelectorList(".a\\,b")).toHaveLength(1);
+  });
+
+  it("tracks nested functional pseudo-classes", () => {
+    expect(splitSelectorList(":is(:not(.a, .b), .c), d")).toHaveLength(2);
+  });
+
+  it("does not let an escaped quote inside a string end the string", () => {
+    expect(splitSelectorList('[data-x="\\"",]')).toHaveLength(1);
+  });
+});
+
+describe("everySelectorScoped (#484)", () => {
+  const S = '[data-plugin-ui="s1"]';
+
+  it("passes a list selector whose commas sit inside :is()", () => {
+    expect(everySelectorScoped([{ selectorText: `${S} :is(.a, body)` }], S)).toBe(true);
+  });
+
+  it("passes every part of a scoped list selector", () => {
+    expect(
+      everySelectorScoped([{ selectorText: `${S} .x:not(.a, .b), ${S} .y` }], S)
+    ).toBe(true);
+  });
+
+  it("recurses into a grouping rule's nested style rules", () => {
+    const grouping = { cssRules: [{ selectorText: `${S} p` }] };
+    expect(everySelectorScoped([grouping], S)).toBe(true);
+  });
+
+  it("fails a selector that cannot be a surface descendant", () => {
+    expect(everySelectorScoped([{ selectorText: "body" }], S)).toBe(false);
+  });
+
+  it("fails when one part of a list is not scoped", () => {
+    expect(everySelectorScoped([{ selectorText: `${S} .a, .b` }], S)).toBe(false);
+  });
+
+  it("fails a grouping rule holding an unscoped selector", () => {
+    const grouping = { cssRules: [{ selectorText: "body" }] };
+    expect(everySelectorScoped([grouping], S)).toBe(false);
+  });
+});
+
+describe("scopePluginCss layer 2 with a browser-like CSSStyleSheet (#484)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // A stand-in for Chromium's parser: `replaceSync` stores the scoped text and
+  // `cssRules` exposes each rule's selector, the way the engine would.
+  class SplitStyleSheet {
+    cssRules: { selectorText?: string }[] = [];
+    replaceSync(text: string): void {
+      this.cssRules = text
+        .split("}")
+        .map((chunk) => chunk.split("{")[0]?.trim() ?? "")
+        .filter((selector) => selector !== "")
+        .map((selector) => ({ selectorText: selector }));
+    }
+  }
+
+  it("keeps a :not() list selector instead of dropping the sheet", () => {
+    vi.stubGlobal("CSSStyleSheet", SplitStyleSheet);
+    const kept = scopePluginCss(".x:not(.a, .b){color:red}", '[data-plugin-ui="s1"]');
+    expect(kept).toBe('[data-plugin-ui="s1"] .x:not(.a, .b){color:red}');
+  });
+
+  it("keeps an :is() list selector instead of dropping the sheet", () => {
+    vi.stubGlobal("CSSStyleSheet", SplitStyleSheet);
+    const kept = scopePluginCss(":is(h1, h2){font-weight:600}", '[data-plugin-ui="s1"]');
+    expect(kept).toBe('[data-plugin-ui="s1"] :is(h1, h2){font-weight:600}');
+  });
+
+  it("returns an empty string when layer 2 reports an unscoped selector", () => {
+    vi.stubGlobal(
+      "CSSStyleSheet",
+      class {
+        cssRules = [{ selectorText: "body" }];
+        replaceSync(): void {}
+      }
+    );
+    expect(scopePluginCss(".x:not(.a, .b){color:red}", '[data-plugin-ui="s1"]')).toBe("");
+  });
+});
+
+describe("scopePluginCss onDrop reasons (#484)", () => {
+  it("reports a removed at-rule and keeps the safe rule", () => {
+    const reasons: string[] = [];
+    const out = scopePluginCss("@import url(x); .a{b:c}", SCOPE, (reason) => reasons.push(reason));
+    expect(out).toBe(`${SCOPE} .a{b:c}`);
+    expect(reasons.some((reason) => reason.includes("@import"))).toBe(true);
+  });
+
+  it("reports a dropped unsafe selector", () => {
+    const reasons: string[] = [];
+    expect(scopePluginCss("~ .x{c:d}", SCOPE, (reason) => reasons.push(reason))).toBe("");
+    expect(reasons.some((reason) => reason.includes("~ .x"))).toBe(true);
+  });
+
+  it("reports the whole sheet dropped by layer 1", () => {
+    const reasons: string[] = [];
+    expect(
+      scopePluginCss('.a{b:"x\n} body{display:none} .z{c:"}', SCOPE, (reason) => reasons.push(reason))
+    ).toBe("");
+    expect(reasons).toHaveLength(1);
+    expect(reasons[0]).toContain("line break");
+  });
+
+  it("reports a removed nested rule", () => {
+    const reasons: string[] = [];
+    expect(scopePluginCss(".a{.b{c:d}}", SCOPE, (reason) => reasons.push(reason))).toBe("");
+    expect(reasons.some((reason) => reason.includes("nested"))).toBe(true);
+  });
+
+  it("reports nothing for a rule it scopes cleanly", () => {
+    const reasons: string[] = [];
+    expect(scopePluginCss(".a{b:c}", SCOPE, (reason) => reasons.push(reason))).toBe(`${SCOPE} .a{b:c}`);
+    expect(reasons).toEqual([]);
   });
 });

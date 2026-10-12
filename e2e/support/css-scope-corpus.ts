@@ -67,11 +67,65 @@ export function checkCssScopeCorpus(page: Page): Promise<CssScopeCorpusResult> {
   return page.evaluate<CssScopeCorpusResult, { outputs: CorpusOutput[]; scope: string }>(
     ({ outputs, scope }) => {
       const leaks: string[] = [];
+      // Minimal top-level splitter; mirrors splitSelectorList in
+      // src/features/plugins/remote-ui/css-scope.ts (page.evaluate cannot import it).
+      const splitTopLevel = (text: string): string[] => {
+        const parts: string[] = [];
+        let current = "";
+        let depth = 0;
+        let quote: string | null = null;
+        for (let i = 0; i < text.length; i += 1) {
+          const char = text[i];
+          if (quote !== null) {
+            current += char;
+            if (char === "\\") {
+              if (i + 1 < text.length) {
+                current += text[i + 1];
+                i += 1;
+              }
+            } else if (char === quote) {
+              quote = null;
+            }
+            continue;
+          }
+          if (char === "\\") {
+            current += char;
+            if (i + 1 < text.length) {
+              current += text[i + 1];
+              i += 1;
+            }
+            continue;
+          }
+          if (char === '"' || char === "'") {
+            quote = char;
+            current += char;
+            continue;
+          }
+          if (char === "(" || char === "[") {
+            depth += 1;
+            current += char;
+            continue;
+          }
+          if (char === ")" || char === "]") {
+            if (depth > 0) depth -= 1;
+            current += char;
+            continue;
+          }
+          if (char === "," && depth === 0) {
+            parts.push(current);
+            current = "";
+            continue;
+          }
+          current += char;
+        }
+        parts.push(current);
+        return parts;
+      };
       const walk = (rules: CSSRuleList, name: string): void => {
         for (const rule of Array.from(rules)) {
           const style = rule as CSSStyleRule;
           if (typeof style.selectorText === "string") {
-            for (const part of style.selectorText.split(",")) {
+            for (const part of splitTopLevel(style.selectorText)) {
               if (!part.trim().startsWith(scope)) {
                 leaks.push(`${name}: ${style.selectorText}`);
               }
