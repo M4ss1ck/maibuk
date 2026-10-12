@@ -198,10 +198,19 @@ export function registerPluginContributions(source: PluginContributionsSource): 
       // plus every locale's label.
       const localizedCommands = (contributes.commands ?? []).filter(onPlatform);
       const defaultLanguageCommands = (manifest.contributes?.commands ?? []).filter(onPlatform);
-      const pages = (contributes.pages ?? []).filter(onPlatform);
+      const commandById = new Map(localizedCommands.map((command) => [command.id, command]));
+      // A page or toolbar button is registered only while the Command it
+      // points at survived the same platform filter. Otherwise the surface
+      // would reach the shell naming a Command the shared registry never got,
+      // and reading its label or Shortcut would throw (#482).
+      const pages = (contributes.pages ?? []).filter(
+        (page) => onPlatform(page) && commandById.has(page.command)
+      );
       const sidebarEntries = (contributes.sidebarEntries ?? []).filter(onPlatform);
       const settingsRows = (contributes.settingsRows ?? []).filter(onPlatform);
-      const toolbarButtons = (contributes.toolbarButtons ?? []).filter(onPlatform);
+      const toolbarButtons = (contributes.toolbarButtons ?? []).filter(
+        (button) => onPlatform(button) && commandById.has(button.command)
+      );
       const itemMenuEntries = (contributes.itemMenuEntries ?? []).filter(onPlatform);
 
       // Every registry below replaces its entries by Plugin id on re-register,
@@ -267,7 +276,6 @@ export function registerPluginContributions(source: PluginContributionsSource): 
         );
       }
 
-      const commandById = new Map(localizedCommands.map((command) => [command.id, command]));
       const pageDefs: PluginPageDef[] = pages.map((page) => ({
         pluginId: manifest.id,
         displayName: localized.name,

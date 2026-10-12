@@ -9,7 +9,7 @@ import {
   resetPluginContributionsForTests,
 } from "@/features/plugins/contributions";
 import { readPluginManifest } from "@/features/plugins/runtime";
-import { pluginFolder } from "@/test/support/plugin-fixtures";
+import { platformMismatchManifest, pluginFolder } from "@/test/support/plugin-fixtures";
 
 const cleanups: Array<() => void> = [];
 
@@ -52,6 +52,16 @@ function registerSample(): void {
   cleanups.push(registerPluginContributions({ manifest: parsed.manifest, folder }));
 }
 
+/** The #482 repro, registered without the validator (which now refuses it). */
+function registerRepro(): void {
+  cleanups.push(
+    registerPluginContributions({
+      manifest: platformMismatchManifest(),
+      folder: { name: "probe", files: [] },
+    })
+  );
+}
+
 afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
   resetPluginContributionsForTests();
@@ -91,5 +101,28 @@ describe("Plugin sidebar entry via keyboard", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Sample report" })).toBeInTheDocument();
     });
+  });
+
+  // #482: a sidebar entry whose page Command the platform filter dropped used
+  // to reach the shell, where its Shortcut hint read a Command that is not in
+  // the registry and crashed every route under Layout.
+  it("renders every route when a contribution's Command was filtered out", () => {
+    registerRepro();
+
+    expect(() =>
+      render(
+        <MemoryRouter initialEntries={["/"]}>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<div>Home</div>} />
+              <Route path="plugin/:pluginId/:pageId" element={<PluginPage />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      )
+    ).not.toThrow();
+
+    const nav = screen.getByRole("listbox", { name: "Primary navigation" });
+    expect(within(nav).queryByRole("option", { name: /Page/ })).toBeNull();
   });
 });

@@ -12,8 +12,10 @@ import { readPluginManifest } from "@/features/plugins/runtime";
 import type { PluginFolder, PluginManifest } from "@/features/plugins/types";
 import { getPluginSettingsOwners, getPluginSettingsRows } from "@/features/settings/rows";
 import { registeredToolbarButtons } from "@/features/settings/toolbar-config";
+import { pluginCommandId } from "@/features/plugins/commands";
+import { getLiveShortcuts } from "@/lib/command-keys";
 import { commandLabel, getCommand, isCommandId, isPluginCommandDef } from "@/lib/shortcut-registry";
-import { pluginFolder } from "@/test/support/plugin-fixtures";
+import { platformMismatchManifest, pluginFolder } from "@/test/support/plugin-fixtures";
 import i18n from "@/i18n";
 
 const cleanups: Array<() => void> = [];
@@ -59,6 +61,16 @@ function sampleFolder(overrides: Partial<PluginManifest> = {}): PluginFolder {
       ...overrides,
     }
   );
+}
+
+/**
+ * The #482 repro, built straight into a `PluginManifest` so it skips the
+ * validator (which now refuses it): the Plugin runs on desktop and android,
+ * but both Commands are android-only, while the page, sidebar entry, toolbar
+ * button, and Item Menu entry reference them from every platform.
+ */
+function reproSource(): { manifest: PluginManifest; folder: PluginFolder } {
+  return { manifest: platformMismatchManifest(), folder: { name: "probe", files: [] } };
 }
 
 describe("registerPluginContributions", () => {
@@ -125,7 +137,7 @@ describe("registerPluginContributions", () => {
         ],
         pages: [{ id: "report", title: "Report", command: "open" }],
         settingsRows: [{ id: "threshold", label: "Threshold" }],
-        itemMenuEntries: [{ command: "report" }],
+        itemMenuEntries: [{ command: "report", platforms: ["android"] }],
       },
     });
     cleanups.push(registerPluginContributions(sourceOf(folder)));
@@ -133,6 +145,42 @@ describe("registerPluginContributions", () => {
     expect(isCommandId("plugin.sample.report")).toBe(false);
     expect(isCommandId("plugin.sample.open")).toBe(true);
     expect(getPluginItemMenuEntries("chapter")).toEqual([]);
+  });
+
+  // The validator refuses a manifest whose contribution outruns its Command's
+  // platforms, but registration is defense in depth: a manifest that reached
+  // this far (a validator bypass) must never point a surface at a Command the
+  // shared registry filtered out, or the shell crashes reading its label.
+  it("drops a toolbar button, page, and sidebar entry whose Command the platform filter removed", () => {
+    cleanups.push(registerPluginContributions(reproSource()));
+
+    expect(isCommandId("plugin.probe.run")).toBe(false);
+    expect(isCommandId("plugin.probe.open")).toBe(false);
+    expect(registeredToolbarButtons()).toEqual([]);
+    expect(getPluginPages()).toEqual([]);
+    expect(getPluginSidebarEntries()).toEqual([]);
+    expect(getPluginItemMenuEntries("chapter")).toEqual([]);
+  });
+
+  it("never points a registered surface at a Command the registry does not hold", () => {
+    cleanups.push(registerPluginContributions(reproSource()));
+    const translate = (key: string) => key;
+
+    // The invariant the crash violated: what is registered resolves.
+    for (const button of registeredToolbarButtons()) {
+      if (button.command === undefined) continue;
+      const id = pluginCommandId(button.pluginId, button.command);
+      expect(isCommandId(id)).toBe(true);
+      expect(() => commandLabel(id, translate, "en")).not.toThrow();
+    }
+    for (const page of getPluginPages()) {
+      expect(isCommandId(page.commandId)).toBe(true);
+      expect(() => commandLabel(page.commandId, translate, "en")).not.toThrow();
+    }
+    for (const entry of getPluginSidebarEntries()) {
+      expect(isCommandId(entry.commandId)).toBe(true);
+      expect(() => getLiveShortcuts(entry.commandId)).not.toThrow();
+    }
   });
 
   it("orders owners Maibuk first, then by display name, then id", () => {

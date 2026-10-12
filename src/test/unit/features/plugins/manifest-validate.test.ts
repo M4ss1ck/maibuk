@@ -419,6 +419,82 @@ describe("validateManifestValue: platforms, lifecycle, language, dataVersion, cu
   });
 });
 
+describe("validateManifestValue: a contribution runs only where its reference does", () => {
+  const repro = (m: Mutable): void => {
+    m.platforms = ["desktop", "android"];
+    delete m.commandRenames;
+    delete m.rowRenames;
+    delete m.buttonRenames;
+    m.contributes = {
+      commands: [
+        {
+          id: "run",
+          label: "Run",
+          contexts: ["global"],
+          targets: ["chapter"],
+          platforms: ["android"],
+        },
+        {
+          id: "open",
+          label: "Open",
+          contexts: ["global"],
+          navigates: true,
+          platforms: ["android"],
+        },
+      ],
+      pages: [{ id: "pg", title: "Page", command: "open" }],
+      sidebarEntries: [{ page: "pg", icon: "book-open" }],
+      toolbarButtons: [{ id: "b", command: "run", icon: "book-open" }],
+      itemMenuEntries: [{ command: "run" }],
+    };
+  };
+
+  it("refuses a page, toolbar button, and Item Menu entry whose Command runs elsewhere", () => {
+    const problems = problemsFor(repro);
+
+    expectProblem(problems, "contributes.pages[0].command", /"desktop"/u);
+    expectProblem(problems, "contributes.toolbarButtons[0].command", /"desktop"/u);
+    expectProblem(problems, "contributes.itemMenuEntries[0].command", /"desktop"/u);
+  });
+
+  it("refuses a sidebar entry whose platforms outrun its page's", () => {
+    const problems = problemsFor((m) => {
+      m.platforms = ["desktop", "android"];
+      m.contributes = {
+        commands: [
+          {
+            id: "open",
+            label: "Open",
+            contexts: ["global"],
+            navigates: true,
+            platforms: ["desktop", "android"],
+          },
+        ],
+        pages: [{ id: "pg", title: "Page", command: "open", platforms: ["android"] }],
+        sidebarEntries: [{ page: "pg", icon: "book-open", platforms: ["desktop"] }],
+      };
+    });
+
+    expectProblem(problems, "contributes.sidebarEntries[0].page", /page runs on/u);
+    expectProblem(problems, "contributes.sidebarEntries[0].page", /"desktop"/u);
+  });
+
+  it("accepts a contribution whose platforms are a subset of its Command's", () => {
+    const result = validateManifestValue(
+      baseManifestWith((m) => {
+        m.platforms = ["desktop", "android"];
+        m.contributes.commands[0].platforms = ["android"];
+        m.contributes.pages[0].platforms = ["android"];
+        m.contributes.sidebarEntries[0].platforms = ["android"];
+        m.contributes.toolbarButtons[0].platforms = ["android"];
+        m.contributes.itemMenuEntries[0].platforms = ["android"];
+      })
+    );
+
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+  });
+});
+
 describe("validateManifestValue: permissions", () => {
   it("accepts every exact permission string", () => {
     for (const permission of [

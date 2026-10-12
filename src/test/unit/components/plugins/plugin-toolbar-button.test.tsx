@@ -8,7 +8,7 @@ import {
 } from "@/features/plugins/contributions";
 import { readPluginManifest } from "@/features/plugins/runtime";
 import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
-import { pluginFolder } from "@/test/support/plugin-fixtures";
+import { platformMismatchManifest, pluginFolder } from "@/test/support/plugin-fixtures";
 
 const cleanups: Array<() => void> = [];
 
@@ -60,6 +60,16 @@ function registerSample(): void {
   const parsed = readPluginManifest(folder);
   if (!parsed.ok) throw new Error("fixture manifest is invalid");
   cleanups.push(registerPluginContributions({ manifest: parsed.manifest, folder }));
+}
+
+/** The #482 repro, registered without the validator (which now refuses it). */
+function registerRepro(): void {
+  cleanups.push(
+    registerPluginContributions({
+      manifest: platformMismatchManifest(),
+      folder: { name: "probe", files: [] },
+    })
+  );
 }
 
 afterEach(() => {
@@ -115,5 +125,19 @@ describe("PluginToolbarButton with targets (#395)", () => {
     await user.keyboard("{Enter}");
 
     expect(brokerRequest).not.toHaveBeenCalled();
+  });
+});
+
+// #482: a toolbar button whose Command the platform filter dropped used to
+// reach the editor toolbar, where reading its Command's label threw and
+// crashed the toolbar.
+describe("PluginToolbarButton with a filtered Command (#482)", () => {
+  it("renders nothing instead of reading a Command the registry does not hold", () => {
+    registerRepro();
+
+    expect(() =>
+      render(<PluginToolbarButton id="plugin.probe.b" iconSize="md" />)
+    ).not.toThrow();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

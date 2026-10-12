@@ -34,6 +34,45 @@ export const PLUGIN_MANIFEST: PluginManifest = {
   permissions: { required: [], optional: [] },
 };
 
+/**
+ * The #482 repro, valid to the Zod schema but refused by the full validator:
+ * the Plugin runs on desktop and android, but both Commands are android-only
+ * while the page, sidebar entry, toolbar button, and Item Menu entry that
+ * reference them run on every platform. Registration must never point a
+ * surface at a Command the platform filter removed; used to prove that
+ * defense, bypassing the validator on purpose.
+ */
+export function platformMismatchManifest(): PluginManifest {
+  return {
+    ...PLUGIN_MANIFEST,
+    id: "probe",
+    name: "Probe",
+    platforms: ["desktop", "android"],
+    contributes: {
+      commands: [
+        {
+          id: "run",
+          label: "Run",
+          contexts: ["global"],
+          targets: ["chapter"],
+          platforms: ["android"],
+        },
+        {
+          id: "open",
+          label: "Open",
+          contexts: ["global"],
+          navigates: true,
+          platforms: ["android"],
+        },
+      ],
+      pages: [{ id: "pg", title: "Page", command: "open" }],
+      sidebarEntries: [{ page: "pg", icon: "book-open" }],
+      toolbarButtons: [{ id: "b", command: "run", icon: "book-open" }],
+      itemMenuEntries: [{ command: "run" }],
+    },
+  };
+}
+
 /** Every file under `dir`, keyed by its POSIX-relative path. */
 export function readFolderFiles(dir: string): PluginFolderFile[] {
   return readdirSync(dir, { recursive: true, withFileTypes: true })
