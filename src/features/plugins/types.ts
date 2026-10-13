@@ -180,7 +180,7 @@ export interface BuiltInPlugin {
   files: PluginFolderFile[];
 }
 
-/** The Built-in Plugins this platform ships; a production build lists none yet. */
+/** The Built-in Plugins this platform ships, read from the built-in source. */
 export interface BuiltInPluginSource {
   list(): Promise<BuiltInPlugin[]>;
 }

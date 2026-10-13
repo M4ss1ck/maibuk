@@ -1,13 +1,20 @@
 /**
- * The Built-in Plugins the app ships (#442, plan decision 5). A Built-in takes
- * the same path as any other Plugin (ADR 0019): the same loader, sandbox,
- * manifest, Plugin Permissions, and public API. The only difference is that it
- * ships pre-granted, and those grants are still listed and revocable.
+ * The Built-in Plugins the app ships (#442, #444). A Built-in takes the same
+ * path as any other Plugin (ADR 0019): the same loader, sandbox, manifest,
+ * Plugin Permissions, and public API. The only difference is that it ships
+ * pre-granted, and those grants are still listed and revocable.
  *
  * The store reads this source on every refresh to pre-grant an untouched
- * Built-in, to spot a modified copy, and to offer a shipped update. No
- * Built-in ships yet, so the production source lists none and the app runs
- * with zero Built-ins; a test injects its own source to exercise the paths.
+ * Built-in, to spot a modified copy, and to offer a shipped update. A release
+ * build ships `plugins/index.json` beside the app (the list
+ * `scripts/build-builtin-plugins.ts` writes); this source fetches it relative
+ * to the app base once per session and maps each entry to the copy Maibuk
+ * bundles. On the web it also reads each shipped file's bytes, so a replace can
+ * write them; on Tauri it lists no files, because Rust copies the shipped
+ * folder from the bundled resources (ADR 0020). The list is best-effort: a
+ * missing, malformed, or unreadable index leaves it empty, and a single entry
+ * that does not fit is dropped, so the app always runs with whatever shipped —
+ * even with none.
  *
  * The E2E lane needs a Built-in to prove the Keep my copy / Update available
  * rows, and to prove a Reinstall or Replace writes the shipped copy, and it
@@ -21,6 +28,7 @@
  * into a real install.
  */
 
+import { IS_WEB } from "@/lib/platform/target";
 import type {
   BuiltInPlugin,
   BuiltInPluginSource,
@@ -103,15 +111,145 @@ function readE2EBuiltIns(): BuiltInPlugin[] {
 }
 
 /**
- * The production Built-in source: no Built-in Plugin ships yet. The array is
- * empty, so a refresh has nothing to pre-grant and the Plugin Directory is
- * read exactly as before. The E2E lane's seed is the only thing that ever makes
- * this list non-empty (see the module comment).
+ * The shipped list's path under the app base, the file the build writes.
  */
-export function createBuiltInPluginSource(): BuiltInPluginSource {
+const BUILT_IN_INDEX_PATH = "plugins/index.json";
+
+/** One entry in the shipped `index.json`: identity, manifest, hash, file paths. */
+interface BuiltInIndexEntry {
+  id: string;
+  manifest: unknown;
+  hash: string;
+  files: string[];
+}
+
+function isIndexEntry(value: unknown): value is BuiltInIndexEntry {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.id === "string" &&
+    record.id !== "" &&
+    typeof record.hash === "string" &&
+    typeof record.manifest === "object" &&
+    record.manifest !== null &&
+    Array.isArray(record.files) &&
+    record.files.every((path) => typeof path === "string")
+  );
+}
+
+/** The app-base URL of one shipped path, so a sub-path base is respected. */
+function builtInUrl(path: string): string {
+  return `${import.meta.env.BASE_URL}${path}`;
+}
+
+/** One shipped file's bytes; a throw the caller turns into a dropped entry. */
+async function fetchShippedBytes(fetchImpl: typeof fetch, url: string): Promise<Uint8Array> {
+  const response = await fetchImpl(url);
+  if (!response.ok) throw new Error(`GET ${url} -> ${response.status}`);
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+/**
+ * One index entry as a Built-in Plugin, or null when it does not fit (a shape
+ * the index should never ship, an invalid manifest, or — on the web — a shipped
+ * file this install cannot read). Dropping one entry leaves the rest intact.
+ */
+async function readIndexEntry(
+  entry: BuiltInIndexEntry,
+  fetchImpl: typeof fetch
+): Promise<BuiltInPlugin | null> {
+  // Loaded here, not at module scope: the entry chunk must stay free of the
+  // manifest validator (entry-chunk.test.ts, #437).
+  const { validateManifestValue } = await import("@/features/plugins/manifest-validate");
+  const validation = validateManifestValue(entry.manifest, { builtIn: true });
+  if (!validation.ok) {
+    console.warn(`Built-in Plugin ${entry.id} ships an invalid manifest; skipping it`);
+    return null;
+  }
+  const manifest: PluginManifest = validation.manifest;
+  if (!IS_WEB) {
+    // Rust copies the shipped folder from the bundled resources (ADR 0020), so
+    // the bytes never cross the IPC boundary and the source lists none.
+    return { id: entry.id, manifest, hash: entry.hash, files: [] };
+  }
+  try {
+    const files: PluginFolderFile[] = [];
+    for (const path of entry.files) {
+      files.push({
+        path,
+        bytes: await fetchShippedBytes(fetchImpl, builtInUrl(`plugins/${entry.id}/${path}`)),
+      });
+    }
+    return { id: entry.id, manifest, hash: entry.hash, files };
+  } catch (error) {
+    console.warn(`Built-in Plugin ${entry.id} could not be read; skipping it`, error);
+    return null;
+  }
+}
+
+/**
+ * The shipped list read once: `index.json` parsed, then every entry validated
+ * and (on the web) its bytes read. A missing, HTML, or malformed index yields
+ * an empty list; an entry that does not fit is dropped. Never throws.
+ */
+async function loadBuiltInPlugins(fetchImpl: typeof fetch): Promise<BuiltInPlugin[]> {
+  let parsed: unknown;
+  try {
+    const response = await fetchImpl(builtInUrl(BUILT_IN_INDEX_PATH));
+    if (!response.ok) {
+      console.warn(`No Built-in Plugins index (${response.status}); shipping none`);
+      return [];
+    }
+    parsed = await response.json();
+  } catch (error) {
+    // A dev server answers an unknown path with HTML, and a read-only or
+    // missing file rejects: either way the app runs with no Built-ins.
+    console.warn("No Built-in Plugins index; shipping none", error);
+    return [];
+  }
+  const list =
+    typeof parsed === "object" && parsed !== null
+      ? (parsed as { plugins?: unknown }).plugins
+      : undefined;
+  if (!Array.isArray(list)) {
+    console.warn("Built-in Plugins index carries no plugin list; shipping none");
+    return [];
+  }
+  const read = await Promise.all(
+    list.map((entry) =>
+      isIndexEntry(entry) ? readIndexEntry(entry, fetchImpl) : Promise.resolve(null)
+    )
+  );
+  return read.filter((plugin): plugin is BuiltInPlugin => plugin !== null);
+}
+
+/**
+ * The shipped list, loaded once per session: every default source the app wires
+ * shares this promise, so however often a refresh lists Built-ins the index is
+ * fetched exactly once. A test injects its own `fetch` and gets its own source.
+ */
+let shippedBuiltIns: Promise<BuiltInPlugin[]> | null = null;
+
+function shippedBuiltInsOnce(fetchImpl: typeof fetch): Promise<BuiltInPlugin[]> {
+  shippedBuiltIns ??= loadBuiltInPlugins(fetchImpl);
+  return shippedBuiltIns;
+}
+
+/**
+ * The production Built-in source: the shipped Built-ins this platform installs
+ * from, read from `plugins/index.json` once per session (see the module
+ * comment). `fetchImpl` is injectable for tests; the app call sites pass
+ * nothing.
+ */
+export function createBuiltInPluginSource(
+  fetchImpl: typeof fetch = globalThis.fetch
+): BuiltInPluginSource {
   return {
     async list(): Promise<BuiltInPlugin[]> {
-      return readE2EBuiltIns();
+      // The E2E lane's device-local seed, compiled in only there; every shipped
+      // build takes the fetch path below.
+      if (import.meta.env.VITE_E2E_BUILTIN_SEED === "1") return readE2EBuiltIns();
+      return shippedBuiltInsOnce(fetchImpl);
     },
   };
 }

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && tsx scripts/build-builtin-plugins.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -28,7 +28,7 @@
     "build:windows": "tauri build --target x86_64-pc-windows-gnu",
     "build:android": "bash scripts/build-android-release.sh",
     "dev:web": "VITE_BUILD_TARGET=web vite",
-    "build:web": "node scripts/fetch-dictation-runtime.mjs --web && VITE_BUILD_TARGET=web tsc && VITE_BUILD_TARGET=web vite build",
+    "build:web": "node scripts/fetch-dictation-runtime.mjs --web && VITE_BUILD_TARGET=web tsc && VITE_BUILD_TARGET=web vite build && VITE_BUILD_TARGET=web tsx scripts/build-builtin-plugins.ts --target web",
     "preview:web": "VITE_BUILD_TARGET=web vite preview",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",

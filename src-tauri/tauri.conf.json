@@ -25,6 +25,9 @@
       "icons/icon.ico"
     ],
     "category": "Productivity",
+    "resources": {
+      "../dist/plugins/": "plugins/"
+    },
     "shortDescription": "A writing app for authors",
     "longDescription": "Maibuk is a cross-platform writing application designed for authors. Create books, manage chapters, design covers, and export to EPUB and PDF.",
     "linux": {
