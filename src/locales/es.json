@@ -2172,6 +2172,11 @@
       "outOfMemory": "{{name}} usó demasiada memoria y se detuvo.",
       "crashed": "{{name}} se detuvo inesperadamente."
     },
+    "conformance": {
+      "running": "Ejecutando las comprobaciones de conformidad del Plugin…",
+      "done": "Las comprobaciones de conformidad del Plugin terminaron.",
+      "error": "Las comprobaciones de conformidad del Plugin no pudieron ejecutarse."
+    },
     "page": {
       "notFoundTitle": "Página del Plugin",
       "notFoundDescription": "El Plugin de esta página no está instalado.",
