@@ -1,0 +1,17 @@
+{
+  "manifestVersion": 1,
+  "id": "desktop-only",
+  "name": "Desktop-only Built-in",
+  "description": "A Built-in Plugin fixture whose platforms exclude the web target.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["desktop"],
+  "lifecycle": "on-demand",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": [],
+    "optional": []
+  }
+}

@@ -11,11 +11,13 @@ pub mod hash;
 pub mod watch;
 
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use base64::Engine;
-use serde::Serialize;
-use tauri::{AppHandle, Manager, Runtime};
+use serde::{Deserialize, Serialize};
+#[cfg(not(target_os = "android"))]
+use tauri::Manager;
+use tauri::{AppHandle, Runtime};
 
 /// One file in a Plugin folder: its POSIX-relative path and its exact bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -169,7 +171,11 @@ pub async fn read_plugin_folder<R: Runtime>(
 /// (`<resource>/plugins/<id>/`). A pure function of the root so the resolve and
 /// refuse rules are testable without an app: the id must pass the same safe
 /// folder-name check the Plugin Directory uses, and a shipped folder must be
-/// there and be a folder (never a symlink to one).
+/// there and be a folder (never a symlink to one). This is the desktop path;
+/// Android's `resource_dir()` is an `asset://` URI that `std::fs` cannot read,
+/// so Android stages the shipped copy from the embedded frontend assets instead
+/// (`stage_from_assets`).
+#[cfg_attr(target_os = "android", allow(dead_code))]
 pub fn resolve_builtin_plugin_folder(resource_root: &Path, name: &str) -> Result<PathBuf, String> {
     if !directory::is_safe_folder_name(name) {
         return Err(format!("PLUGIN_FOLDER_INVALID_NAME: {name}"));
@@ -181,9 +187,74 @@ pub fn resolve_builtin_plugin_folder(resource_root: &Path, name: &str) -> Result
     }
 }
 
+/// One entry in the embedded `plugins/index.json`: the id and the POSIX-relative
+/// paths of its shipped files (the manifest and hash are not needed to stage).
+#[derive(Deserialize)]
+struct ShippedIndexEntry {
+    id: String,
+    files: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct ShippedIndex {
+    plugins: Vec<ShippedIndexEntry>,
+}
+
+/// Whether `path` is a safe POSIX-relative path inside a Plugin folder: not
+/// empty, no backslash, colon, or newline, and every component a normal name, so
+/// `..`, an absolute path, and a drive prefix are refused. The same rules the
+/// archive and the Plugin Directory apply before a file is written.
+fn is_safe_relative_path(path: &str) -> bool {
+    !path.is_empty()
+        && !path.contains(['\\', ':', '\n'])
+        && Path::new(path)
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+}
+
+/// Stages a Built-in's shipped copy into `staging` from a lookup over the app's
+/// embedded frontend assets (`dist/plugins/`, the `frontendDist`): reads
+/// `plugins/index.json`, finds the entry whose id is `name`, then writes each
+/// file it lists from `plugins/<id>/<path>`. A pure function of the lookup, so
+/// Android's asset path is provable with an in-memory map. An unsafe `name`
+/// (PLUGIN_FOLDER_INVALID_NAME), an id the index does not carry, a listed file
+/// that is missing, and a listed path that would leave the folder are refused.
+/// Returns the staged id; `stage_and_finish` installs it only when every file
+/// was written, so a failure leaves the installed copy as it was.
+fn stage_from_assets(
+    lookup: impl Fn(&str) -> Option<Vec<u8>>,
+    name: &str,
+    staging: &Path,
+) -> Result<String, String> {
+    if !directory::is_safe_folder_name(name) {
+        return Err(format!("PLUGIN_FOLDER_INVALID_NAME: {name}"));
+    }
+    let missing = || format!("PLUGIN_BUILT_IN_MISSING: {name}");
+    let index_bytes = lookup("plugins/index.json").ok_or_else(missing)?;
+    let index: ShippedIndex = serde_json::from_slice(&index_bytes).map_err(|_| missing())?;
+    let entry = index
+        .plugins
+        .into_iter()
+        .find(|entry| entry.id == name)
+        .ok_or_else(missing)?;
+    for path in &entry.files {
+        if !is_safe_relative_path(path) {
+            return Err(format!("PLUGIN_BUILT_IN_UNSAFE_PATH: {name}/{path}"));
+        }
+        let bytes = lookup(&format!("plugins/{name}/{path}")).ok_or_else(missing)?;
+        let target = staging.join(path);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&target, bytes).map_err(|e| e.to_string())?;
+    }
+    Ok(name.to_string())
+}
+
 /// Replaces the installed copy of `name` under `root` with the shipped folder,
 /// through a staging folder: the copy is read and hashed before it moves onto
 /// the installed copy, so a failed copy leaves the installed copy as it was.
+#[cfg_attr(target_os = "android", allow(dead_code))]
 fn replace_from_folder(
     root: &Path,
     name: &str,
@@ -197,18 +268,34 @@ fn replace_from_folder(
 
 /// Replace a Built-in Plugin's installed folder with the copy Maibuk ships, so
 /// the author's modified files are discarded in favour of the shipped ones. The
-/// shipped copy is resolved from the app's bundled resources in Rust: no bytes
-/// cross the IPC boundary, so the webview cannot choose what a Built-in runs
-/// (ADR 0020). An id with no bundled copy is refused.
+/// shipped copy is read in Rust: no bytes cross the IPC boundary, so the webview
+/// cannot choose what a Built-in runs (ADR 0020). On desktop the copy lives in
+/// the bundled resources (`<resource>/plugins/<id>/`); on Android the resource
+/// root is an `asset://` URI, so the copy is staged from the app's embedded
+/// frontend assets (`stage_from_assets`). An id with no bundled copy is refused.
 #[tauri::command]
 pub fn replace_builtin_plugin_folder<R: Runtime>(
     app: AppHandle<R>,
     name: String,
 ) -> Result<InstalledPlugin, String> {
-    let resource_root = app.path().resource_dir().map_err(|e| e.to_string())?;
-    let shipped = resolve_builtin_plugin_folder(&resource_root, &name)?;
     let root = directory::ensure(&app)?;
-    replace_from_folder(&root, &name, shipped)
+    #[cfg(target_os = "android")]
+    {
+        let resolver = app.asset_resolver();
+        return stage_and_finish(&root, move |staging| {
+            stage_from_assets(
+                |path| resolver.get(path.to_string()).map(|asset| asset.bytes),
+                &name,
+                staging,
+            )
+        });
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let resource_root = app.path().resource_dir().map_err(|e| e.to_string())?;
+        let shipped = resolve_builtin_plugin_folder(&resource_root, &name)?;
+        replace_from_folder(&root, &name, shipped)
+    }
 }
 
 /// Open the native folder picker and approve the folder the author picks.
@@ -644,5 +731,148 @@ mod tests {
         assert_eq!(Some(installed.hash), folder.hash);
         std::fs::remove_dir_all(&root).unwrap();
         std::fs::remove_dir_all(&resources).unwrap();
+    }
+
+    /// The launch sync installs a Built-in whose folder is not there yet (#444):
+    /// `replace_from_folder` must create the installed copy, not only replace
+    /// one, and leave no staging folder behind.
+    #[test]
+    fn installs_a_bundled_built_in_folder_when_none_is_installed() {
+        let resources = temp_dir("builtin-install-shipped");
+        let shipped = resources.join("plugins").join("tracer");
+        std::fs::create_dir_all(&shipped).unwrap();
+        std::fs::write(shipped.join("manifest.json"), r#"{"id":"tracer"}"#).unwrap();
+        std::fs::write(shipped.join("index.js"), "export {}").unwrap();
+
+        let root = temp_dir("builtin-install-root");
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(!root.join("tracer").exists());
+
+        let resolved = resolve_builtin_plugin_folder(&resources, "tracer").unwrap();
+        let installed = replace_from_folder(&root, "tracer", resolved).unwrap();
+
+        assert_eq!(installed.id, "tracer");
+        assert!(root.join("tracer/index.js").exists());
+        let folder = directory::read_folder(&root, "tracer").unwrap().unwrap();
+        assert_eq!(Some(installed.hash), folder.hash);
+        let leftovers: Vec<_> = std::fs::read_dir(&root)
+            .unwrap()
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().contains("staging"))
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+        std::fs::remove_dir_all(&root).unwrap();
+        std::fs::remove_dir_all(&resources).unwrap();
+    }
+
+    /// The embedded assets Android stages from, keyed by path.
+    fn asset_map(files: &[(&str, &[u8])]) -> std::collections::HashMap<String, Vec<u8>> {
+        files
+            .iter()
+            .map(|(path, bytes)| (path.to_string(), bytes.to_vec()))
+            .collect()
+    }
+
+    /// The Android path: the shipped copy is staged from the app's embedded
+    /// frontend assets (`plugins/index.json` plus each listed file), not from a
+    /// resource folder `std::fs` could read.
+    #[test]
+    fn stages_a_built_in_from_the_embedded_assets() {
+        let index =
+            br#"{"plugins":[{"id":"tracer","files":["manifest.json","index.js","assets/note.txt"]}]}"#;
+        let files = asset_map(&[
+            ("plugins/index.json", index),
+            ("plugins/tracer/manifest.json", br#"{"id":"tracer"}"#),
+            ("plugins/tracer/index.js", b"export {}"),
+            ("plugins/tracer/assets/note.txt", b"note"),
+        ]);
+        let staging = temp_dir("assets-stage");
+
+        let id = stage_from_assets(|path| files.get(path).cloned(), "tracer", &staging).unwrap();
+
+        assert_eq!(id, "tracer");
+        assert_eq!(
+            std::fs::read_to_string(staging.join("index.js")).unwrap(),
+            "export {}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(staging.join("assets/note.txt")).unwrap(),
+            "note"
+        );
+        assert!(staging.join("manifest.json").exists());
+        std::fs::remove_dir_all(&staging).unwrap();
+    }
+
+    /// An id the shipped index does not carry is refused with
+    /// PLUGIN_BUILT_IN_MISSING, and an unsafe id (never a folder name the Plugin
+    /// Directory would accept) with PLUGIN_FOLDER_INVALID_NAME.
+    #[test]
+    fn refuses_a_built_in_the_shipped_index_does_not_list() {
+        let files = asset_map(&[("plugins/index.json", br#"{"plugins":[]}"#)]);
+        let staging = temp_dir("assets-missing-id");
+
+        let error =
+            stage_from_assets(|path| files.get(path).cloned(), "tracer", &staging).unwrap_err();
+        assert!(error.contains("PLUGIN_BUILT_IN_MISSING"), "{error}");
+
+        for name in ["..", "a/b", ".hidden"] {
+            let error = stage_from_assets(|_| None, name, &staging).unwrap_err();
+            assert!(error.contains("PLUGIN_FOLDER_INVALID_NAME"), "{name}: {error}");
+        }
+        std::fs::remove_dir_all(&staging).unwrap();
+    }
+
+    /// A listed file the assets do not carry refuses the whole stage, so
+    /// `stage_and_finish` installs nothing and leaves the installed copy as it
+    /// was.
+    #[test]
+    fn a_missing_shipped_file_installs_nothing_and_keeps_the_copy() {
+        let index = br#"{"plugins":[{"id":"tracer","files":["manifest.json","index.js"]}]}"#;
+        let files = asset_map(&[
+            ("plugins/index.json", index),
+            ("plugins/tracer/manifest.json", br#"{"id":"tracer"}"#),
+            // index.js is absent.
+        ]);
+        let root = temp_dir("assets-missing-file");
+        std::fs::create_dir_all(root.join("tracer")).unwrap();
+        std::fs::write(root.join("tracer/index.js"), "old").unwrap();
+
+        let result = stage_and_finish(&root, |staging| {
+            stage_from_assets(|path| files.get(path).cloned(), "tracer", staging)
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            std::fs::read_to_string(root.join("tracer/index.js")).unwrap(),
+            "old",
+            "a refused stage leaves the installed copy untouched"
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A listed path that would leave the folder is refused before anything is
+    /// written.
+    #[test]
+    fn refuses_a_shipped_path_that_leaves_the_folder() {
+        for path in ["../evil.txt", "/etc/passwd", "a/../../evil.txt", "a\\b.txt"] {
+            let index = serde_json::json!({
+                "plugins": [{ "id": "tracer", "files": ["manifest.json", path] }]
+            })
+            .to_string();
+            let files = asset_map(&[
+                ("plugins/index.json", index.as_bytes()),
+                ("plugins/tracer/manifest.json", br#"{"id":"tracer"}"#),
+            ]);
+            let parent = temp_dir("assets-traversal");
+            let staging = parent.join("stage");
+            std::fs::create_dir_all(&staging).unwrap();
+
+            let error =
+                stage_from_assets(|key| files.get(key).cloned(), "tracer", &staging).unwrap_err();
+
+            assert!(error.contains("PLUGIN_BUILT_IN_UNSAFE_PATH"), "{path}: {error}");
+            assert!(!parent.join("evil.txt").exists());
+            std::fs::remove_dir_all(&parent).unwrap();
+        }
     }
 }

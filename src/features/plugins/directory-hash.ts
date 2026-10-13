@@ -38,7 +38,7 @@ export class PluginDirectoryHashError extends Error {
 }
 
 // Byte order over UTF-8, matching Go's `sort.Strings` on paths.
-function compareUtf8(left: string, right: string): number {
+export function compareUtf8(left: string, right: string): number {
   const a = encoder.encode(left);
   const b = encoder.encode(right);
   const length = Math.min(a.length, b.length);

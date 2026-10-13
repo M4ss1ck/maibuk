@@ -1,0 +1,1 @@
+A Plugin asset, copied verbatim into the built folder.

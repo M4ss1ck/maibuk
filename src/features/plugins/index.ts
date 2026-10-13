@@ -127,7 +127,8 @@ export {
   readPluginManifest,
   startPlugin,
 } from "@/features/plugins/runtime";
-export { scanApprovedPlugins } from "@/features/plugins/launch";
+export { scanApprovedPlugins, syncBuiltInPlugins } from "@/features/plugins/launch";
+export type { BuiltInSyncOptions, BuiltInSyncResult } from "@/features/plugins/launch";
 export {
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_MISS_LIMIT,

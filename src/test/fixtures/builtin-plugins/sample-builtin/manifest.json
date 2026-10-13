@@ -1,0 +1,17 @@
+{
+  "manifestVersion": 1,
+  "id": "sample-builtin",
+  "name": "Sample Built-in",
+  "description": "A Built-in Plugin fixture for the build pipeline test.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web", "desktop", "android"],
+  "lifecycle": "on-demand",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": [],
+    "optional": []
+  }
+}

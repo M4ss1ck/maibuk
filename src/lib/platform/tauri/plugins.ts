@@ -81,10 +81,11 @@ export function createTauriPluginDirectory(): PluginDirectoryAdapter {
 
     /**
      * Replaces the installed Built-in copy with the one Maibuk ships. Rust
-     * resolves the shipped copy from the app's bundled resources itself
-     * (`plugins/<id>/`), so `files` is ignored here: no bytes cross IPC and the
-     * webview cannot choose what a Built-in runs (ADR 0020). An id with no
-     * bundled copy is refused.
+     * reads the shipped copy itself: on desktop from the app's bundled
+     * resources (`plugins/<id>/`), on Android from the app's embedded frontend
+     * assets (the resource root is an `asset://` URI `std::fs` cannot read), so
+     * `files` is ignored here: no bytes cross IPC and the webview cannot choose
+     * what a Built-in runs (ADR 0020). An id with no bundled copy is refused.
      */
     async replaceFolder(name: string): Promise<boolean> {
       try {

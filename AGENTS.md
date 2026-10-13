@@ -49,6 +49,7 @@ Each line is a completion requirement. The rule in full is in `CODING_STANDARDS.
 | Unit/Integration tests      | `src/test/unit/` and `src/test/integration/`                   |
 | Platform adapter            | `src/lib/platform/tauri/` and `src/lib/platform/web/`          |
 | Page component              | `src/pages/`                                                   |
+| Built-in Plugin source      | `plugins/<id>/` (`manifest.json` + entry; `plugins/README.md`) |
 | Translation keys            | `src/locales/en.json` and `src/locales/es.json`                |
 
 ## Commands

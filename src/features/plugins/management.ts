@@ -97,8 +97,9 @@ export const PLUGIN_DATA_SIZE_WARNING_BYTES = 50 * 1024 * 1024;
 /**
  * True when a manifest may run on this device. A manifest that omits
  * `platforms` runs everywhere; otherwise its list must name the device.
+ * Shared with the launch sync (#444), so both read the same platform rule.
  */
-function isSupported(manifest: PluginManifest, platform: DevicePlatform): boolean {
+export function isSupported(manifest: PluginManifest, platform: DevicePlatform): boolean {
   const platforms = manifest.platforms as readonly string[] | undefined;
   if (platforms === undefined) return true;
   return platforms.includes(platform);
@@ -136,10 +137,36 @@ function loadRuntime(): Promise<typeof import("@/features/plugins/runtime")> {
 }
 
 /** The current folder, manifest, digests, and hash for a Plugin id. */
-interface CurrentCopy {
+export interface CurrentCopy {
   manifest: PluginManagementEntry["manifest"];
   digests: Map<string, string>;
   hash: string;
+}
+
+/**
+ * The record after a Built-in's installed copy was replaced with the shipped
+ * one: re-pinned to the new copy and its shipped hash, keeping the author's
+ * Plugin Permissions, so a revoked grant stays revoked and no update is offered
+ * for the shipped hash now installed. Shared by `replaceBuiltIn` and the launch
+ * sync (#444), so both leave exactly the same state.
+ */
+export function repinnedBuiltInApproval(
+  approval: PluginApproval,
+  copy: CurrentCopy,
+  builtIn: BuiltInPlugin
+): PluginApproval {
+  return {
+    ...approval,
+    pinnedHash: copy.hash,
+    approvedVersion: copy.manifest.version,
+    approvedPermissions: {
+      required: [...copy.manifest.permissions.required],
+      optional: [...copy.manifest.permissions.optional],
+    },
+    approvedFiles: Object.fromEntries(copy.digests),
+    builtIn: { shippedHash: builtIn.hash },
+    notifiedBuiltInHash: builtIn.hash,
+  };
 }
 
 /**
@@ -907,18 +934,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         // Re-pin the shipped copy; keep the author's grants, so a revoked
         // Permission stays revoked. The record now knows this shipped hash, so
         // no update is offered for it.
-        const next: PluginApproval = {
-          ...approval,
-          pinnedHash: copy.hash,
-          approvedVersion: copy.manifest.version,
-          approvedPermissions: {
-            required: [...copy.manifest.permissions.required],
-            optional: [...copy.manifest.permissions.optional],
-          },
-          approvedFiles: Object.fromEntries(copy.digests),
-          builtIn: { shippedHash: builtIn.hash },
-          notifiedBuiltInHash: builtIn.hash,
-        };
+        const next = repinnedBuiltInApproval(approval, copy, builtIn);
         savePluginApproval(next);
         await applyApproval(pluginId, copy, next, builtIn);
         return true;
