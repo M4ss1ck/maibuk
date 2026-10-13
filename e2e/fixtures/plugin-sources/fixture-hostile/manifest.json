@@ -28,6 +28,12 @@
         "contexts": ["global"],
         "navigates": true
       },
+      {
+        "id": "uiFlood",
+        "label": "Hostile UI flood",
+        "contexts": ["global"],
+        "navigates": true
+      },
       { "id": "escapeFetch", "label": "Hostile fetch", "contexts": ["global"] },
       { "id": "escapeXhr", "label": "Hostile XHR", "contexts": ["global"] },
       { "id": "escapeWebSocket", "label": "Hostile WebSocket", "contexts": ["global"] },
@@ -52,7 +58,8 @@
     ],
     "pages": [
       { "id": "panel", "title": "Hostile fixture", "command": "openPanel" },
-      { "id": "violation", "title": "Hostile UI violation", "command": "uiViolation" }
+      { "id": "violation", "title": "Hostile UI violation", "command": "uiViolation" },
+      { "id": "flood", "title": "Hostile UI flood", "command": "uiFlood" }
     ]
   }
 }

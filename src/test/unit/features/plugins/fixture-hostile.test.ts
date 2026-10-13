@@ -60,9 +60,10 @@ describe("fixture-hostile Plugin source", () => {
     for (const id of ESCAPE_COMMANDS) {
       expect(ids.has(id), `missing Command ${id}`).toBe(true);
     }
-    // The page opener and the Remote UI violation Command.
+    // The page opener and the Remote UI violation and flood Commands.
     expect(ids.has("openPanel")).toBe(true);
     expect(ids.has("uiViolation")).toBe(true);
+    expect(ids.has("uiFlood")).toBe(true);
   });
 
   it("asks only for library:read, so a write and a revoked read are both refused", () => {
@@ -77,8 +78,8 @@ describe("fixture-hostile Plugin source", () => {
     expect([...required, ...optional]).not.toContain("library:write");
   });
 
-  it("declares the readiness page and the Remote UI violation page", () => {
+  it("declares the readiness page and the Remote UI violation and flood pages", () => {
     const pages = readManifest().contributes?.pages ?? [];
-    expect(pages.map((page) => page.id).sort()).toEqual(["panel", "violation"]);
+    expect(pages.map((page) => page.id).sort()).toEqual(["flood", "panel", "violation"]);
   });
 });

