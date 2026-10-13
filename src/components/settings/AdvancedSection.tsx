@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings";
 import { Button, Modal } from "@/components/ui";
+import { toast } from "@/components/ui/Toast";
 import { ChevronDownIcon } from "@/components/icons";
 import { exportDatabase, importDatabase, resetDatabase } from "@/lib/db";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
@@ -143,6 +144,7 @@ export function AdvancedSection() {
       setResetSettingsModalOpen(false);
     } catch (error) {
       console.error("Failed to reset settings:", error);
+      toast.error(t("settings.resetSettingsFailed"));
     } finally {
       setIsResettingSettings(false);
     }

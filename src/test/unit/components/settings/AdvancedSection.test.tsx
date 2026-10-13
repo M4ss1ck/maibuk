@@ -27,10 +27,12 @@ vi.mock("@/features/sync/pending-edits", () => ({
 }));
 
 const { AdvancedSection } = await import("@/components/settings/AdvancedSection");
+const { ToastViewport } = await import("@/components/ui/Toast");
 const { useModalStore } = await import("@/components/ui/modal-store");
 const { PLUGIN_APPROVALS_STORAGE_KEY, listPluginApprovals, savePluginApproval } = await import(
   "@/features/plugins/approvals"
 );
+const { registerPluginSecretStore } = await import("@/features/plugins/secret-store");
 const { usePluginManagementStore } = await import("@/features/plugins/management");
 const { useSettingsRevealStore } = await import("@/features/settings/settings-reveal-store");
 const { useSettingsStore } = await import("@/features/settings/store");
@@ -84,6 +86,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  registerPluginSecretStore(null);
   localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
   await i18n.changeLanguage("en");
 });
@@ -131,5 +134,36 @@ describe("AdvancedSection Reset settings", () => {
     // The Library is never reset by Reset settings.
     expect(resetDatabase).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  });
+
+  it("shows an error toast when deleting credentials fails, after resetting everything else", async () => {
+    registerPluginSecretStore({
+      clearAll: async () => {
+        throw new Error("keychain locked");
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <>
+        <AdvancedSection />
+        <ToastViewport />
+      </>
+    );
+
+    await openResetSettingsDialog(user);
+    const confirm = within(screen.getByRole("alertdialog")).getByRole("button", {
+      name: "Reset settings and delete credentials",
+    });
+    await tabTo(user, confirm);
+    await user.keyboard("{Enter}");
+
+    // The UI reports the failure…
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(/could not be deleted/i);
+    // …and every other step still ran.
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(useSettingsStore.getState().appFontSize).toBe(16);
+    expect(useShortcutSettingsStore.getState().shortcuts.custom).toEqual({});
+    expect(listPluginApprovals()).toHaveLength(0);
   });
 });

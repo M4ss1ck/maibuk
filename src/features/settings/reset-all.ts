@@ -20,6 +20,7 @@ import { clearPluginApprovals } from "@/features/plugins/approvals";
 import { clearKnownPlugins } from "@/features/plugins/known";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { usePluginManagementStore } from "@/features/plugins/management";
+import { getPluginSecretStore } from "@/features/plugins/secret-store";
 import { useSettingsStore } from "@/features/settings/store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 
@@ -43,13 +44,13 @@ export interface ResetAllSettingsOptions {
 }
 
 /**
- * Deletes every saved Plugin credential. Nothing implements it yet: no Plugin
- * credential store exists (ADR 0023 keeps secrets in the OS keychain, and the
- * `secrets.*` API rows have no handler), so this is a documented no-op. Wire
- * the keychain delete here when that store lands.
+ * Deletes every saved Plugin credential through the registered secret store.
+ * The keychain-backed store lands in #453 and registers itself; until then no
+ * store is registered, so there is nothing to delete. A keychain failure rejects
+ * so Reset settings reports it, but every other reset step still runs.
  */
 async function clearPluginCredentials(): Promise<void> {
-  // No Plugin credential store exists yet.
+  await getPluginSecretStore()?.clearAll();
 }
 
 /** Stops every Plugin the lifecycle holds: none is approved after the reset. */
@@ -82,7 +83,7 @@ async function restartRunningBuiltIns(ids: readonly string[]): Promise<void> {
   for (const id of ids) {
     const entry = entries[id];
     if (!entry?.builtIn || entry.modified || entry.review.status !== "approved") continue;
-    await lifecycle.install(id, "update");
+    await lifecycle.install(id, "settingsReset");
   }
 }
 
@@ -108,11 +109,22 @@ export async function resetAllSettings(options: ResetAllSettingsOptions = {}): P
   resetShortcuts();
   clearApprovals();
   clearKnown();
-  await clearCredentials();
+  // Deleting credentials can fail (a locked keychain, a platform error). Every
+  // other step still runs so the reset is not left half-applied; the failure is
+  // reported once the rest is done, so the UI can tell the author.
+  let credentialsError: unknown;
+  let credentialsFailed = false;
+  try {
+    await clearCredentials();
+  } catch (error) {
+    credentialsFailed = true;
+    credentialsError = error;
+  }
   // Re-seed the store: untouched Built-ins get fresh approvals, modified copies
   // stay review-required, and every third-party copy is not-approved again.
   await refreshPlugins();
   // An untouched Built-in that was running keeps working; a changed or
   // third-party copy waits for review.
   await restartBuiltIns(running);
+  if (credentialsFailed) throw credentialsError;
 }
