@@ -133,6 +133,43 @@ export const PLUGIN_READY_MESSAGE = { kind: "maibuk:plugin-ready" } as const;
 /** The prelude's report when importing the entry module failed. */
 export const PLUGIN_ERROR_MESSAGE = { kind: "maibuk:plugin-error" } as const;
 
+/**
+ * Why the host activated a Plugin, delivered to the Worker on the init message
+ * (#400, #445). The first seven are the manifest decision's; `warmStart` and
+ * `restart` come from the performance decision (#401). A raw-wire Plugin reads
+ * it from the init event's `data.startReason`; the SDK exposes it as
+ * `PluginClient.activation`.
+ */
+export type PluginStartReason =
+  | "enable"
+  | "launch"
+  | "update"
+  | "restore"
+  | "resetLibrary"
+  | "databaseLoad"
+  | "settingsReset"
+  | "warmStart"
+  | "restart";
+
+/**
+ * The init message's shape: `PLUGIN_INIT_MESSAGE` is its kind, and the host
+ * fills `startReason`. It stays optional so a test or an older host that omits
+ * it still starts a Plugin.
+ */
+export interface PluginInitMessage {
+  kind: typeof PLUGIN_INIT_MESSAGE.kind;
+  startReason?: PluginStartReason;
+}
+
+/** True for the init message's shape, so the SDK and a raw-wire Plugin share one check. */
+export function isPluginInitMessage(value: unknown): value is PluginInitMessage {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === PLUGIN_INIT_MESSAGE.kind
+  );
+}
+
 /** Requests sent and not yet answered, by id. */
 export type PendingReplies = Map<
   number,

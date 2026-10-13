@@ -13,8 +13,9 @@ import type {
   PluginFolderFile,
   PluginManifest,
   PluginSandboxFrame,
+  PluginStartReason,
 } from "@/features/plugins/types";
-import { PLUGIN_READY_MESSAGE } from "@/plugin-sdk/protocol";
+import { PLUGIN_INIT_MESSAGE, PLUGIN_READY_MESSAGE } from "@/plugin-sdk/protocol";
 
 const encoder = new TextEncoder();
 
@@ -116,13 +117,25 @@ export function installMicrotaskMessageChannel(): () => void {
   const original = globalThis.MessageChannel;
 
   class FakeMessagePort {
-    onmessage: ((event: MessageEvent) => void) | null = null;
     peer: FakeMessagePort | null = null;
+    private handler: ((event: MessageEvent) => void) | null = null;
+    private queued: unknown[] = [];
+    get onmessage(): ((event: MessageEvent) => void) | null {
+      return this.handler;
+    }
+    set onmessage(handler: ((event: MessageEvent) => void) | null) {
+      this.handler = handler;
+      if (handler === null) return;
+      // A message that arrived before the handler was set waits, like a real
+      // port: the host posts the init message before the Plugin attaches.
+      for (const data of this.queued.splice(0)) handler({ data } as MessageEvent);
+    }
     postMessage(data: unknown): void {
       const peer = this.peer;
       if (!peer) return;
       queueMicrotask(() => {
-        peer.onmessage?.({ data } as MessageEvent);
+        if (peer.handler) peer.handler({ data } as MessageEvent);
+        else peer.queued.push(data);
       });
     }
     close(): void {
@@ -149,6 +162,8 @@ export interface FakePluginFrame extends PluginSandboxFrame {
   sources: Map<string, string>;
   entryUrl: string | null;
   pluginPort: MessagePort | null;
+  /** The start reason from the init message the fake Plugin received on its port, or null. */
+  receivedStartReason: PluginStartReason | null;
   /** Host-to-plugin requests the fake saw, in order. */
   requests: string[];
   healthAnswer: "pong" | "refuse";
@@ -184,6 +199,7 @@ export function fakePluginFrame(options: { ready?: boolean; fail?: string } = {}
     sources: new Map(),
     entryUrl: null,
     pluginPort: null,
+    receivedStartReason: null,
     requests: [],
     healthAnswer: "pong",
     holdAnswers: false,
@@ -217,7 +233,13 @@ export function fakePluginFrame(options: { ready?: boolean; fail?: string } = {}
           ok?: boolean;
           result?: unknown;
           error?: unknown;
+          startReason?: PluginStartReason;
         };
+        if (message.kind === PLUGIN_INIT_MESSAGE.kind) {
+          // The host's activation announcement over the port (#445).
+          frame.receivedStartReason = message.startReason ?? null;
+          return;
+        }
         if (message.kind === "request") {
           frame.requests.push(message.method ?? "");
           if (frame.holdAnswers) {

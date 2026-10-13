@@ -539,6 +539,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         pinnedHash: (liveApproval ?? entry.installed.approval).pinnedHash,
         // A Built-in id parses under the Built-in schema in `startPlugin` too.
         builtIn: entry.installed.builtIn,
+        // Why this activation happened; delivered to the Worker on the init
+        // message so a Plugin learns a Restore or a Reset from a plain launch
+        // (#400, #445).
+        startReason: reason,
         // Read the live record on every broker call, so revoking an optional
         // grant refuses the next call without restarting the Plugin (#442).
         granted: () => getPluginApproval(pluginId)?.granted ?? [],

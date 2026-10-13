@@ -21,8 +21,10 @@ import {
   PluginApiError,
   type PluginApiErrorData,
   type PluginMessagePort,
+  type PluginStartReason,
   type PendingReplies,
   type PluginStreamListener,
+  isPluginInitMessage,
   messageTooLarge,
   utf8ByteLength,
 } from "@/plugin-sdk/protocol";
@@ -33,9 +35,20 @@ export * from "@/plugin-sdk/ui";
 
 export type HostRequestHandler = (method: string, params: unknown) => unknown;
 
+/** Why the host activated this Plugin, as the host announced it (#400, #445). */
+export interface PluginActivation {
+  readonly startReason: PluginStartReason;
+}
+
 export type PluginClient = PluginApi & {
   /** True once the host stopped this Plugin; every call then rejects `plugin-stopped`. */
   readonly stopped: boolean;
+  /**
+   * The activation context the host announced on the port as the init message,
+   * or null before it arrives (#445). The host posts it before any other host
+   * message, so a Plugin that reads it at startup always sees its reason.
+   */
+  readonly activation: PluginActivation | null;
   /** Answers the host's requests to this Plugin (health checks, migrateData, Command runs). */
   onHostRequest(handler: HostRequestHandler): void;
   /**
@@ -56,6 +69,7 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
   let nextId = 1;
   let stopReason: string | null = null;
   let hostRequestHandler: HostRequestHandler | null = null;
+  let activationContext: PluginActivation | null = null;
   const pending: PendingReplies = new Map();
   const streams = new Map<number, PluginStreamListener<unknown>>();
   const listeners = new Map<string, Set<(payload: unknown) => void>>();
@@ -150,34 +164,44 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
   }
 
   port.onmessage = (event: MessageEvent) => {
-    const message = event.data as HostToPluginMessage;
+    const message: unknown = event.data;
     if (typeof message !== "object" || message === null) return;
-    switch (message.kind) {
+    if (isPluginInitMessage(message)) {
+      if (message.startReason !== undefined) {
+        activationContext = { startReason: message.startReason };
+      }
+      return;
+    }
+    const hostMessage = message as HostToPluginMessage;
+    switch (hostMessage.kind) {
       case "result": {
-        const entry = pending.get(message.id);
+        const entry = pending.get(hostMessage.id);
         if (!entry) return;
-        pending.delete(message.id);
-        if (message.ok) entry.resolve(message.result);
-        else entry.reject(new PluginApiError(message.error));
+        pending.delete(hostMessage.id);
+        if (hostMessage.ok) entry.resolve(hostMessage.result);
+        else entry.reject(new PluginApiError(hostMessage.error));
         return;
       }
       case "chunk":
-        streams.get(message.id)?.onChunk(message.chunk);
+        streams.get(hostMessage.id)?.onChunk(hostMessage.chunk);
         return;
       case "end":
-        endStream(message.id, message.error ? new PluginApiError(message.error) : undefined);
+        endStream(
+          hostMessage.id,
+          hostMessage.error ? new PluginApiError(hostMessage.error) : undefined
+        );
         return;
       case "event":
-        for (const listener of listeners.get(message.event) ?? []) listener(message.payload);
+        for (const listener of listeners.get(hostMessage.event) ?? []) listener(hostMessage.payload);
         return;
       case "request":
-        void answer(message.id, message.method, message.params);
+        void answer(hostMessage.id, hostMessage.method, hostMessage.params);
         return;
       case "stopped": {
-        stopReason = message.reason;
-        for (const { reject } of pending.values()) reject(stoppedError(message.reason));
+        stopReason = hostMessage.reason;
+        for (const { reject } of pending.values()) reject(stoppedError(hostMessage.reason));
         pending.clear();
-        for (const id of [...streams.keys()]) endStream(id, stoppedError(message.reason));
+        for (const id of [...streams.keys()]) endStream(id, stoppedError(hostMessage.reason));
         listeners.clear();
         hostSubscriptions.clear();
         return;
@@ -188,6 +212,9 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
   const client: Record<string, unknown> = {
     get stopped() {
       return stopReason !== null;
+    },
+    get activation() {
+      return activationContext;
     },
     onHostRequest(handler: HostRequestHandler) {
       hostRequestHandler = handler;

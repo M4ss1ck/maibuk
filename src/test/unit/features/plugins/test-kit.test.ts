@@ -506,6 +506,32 @@ describe("renderPage", () => {
   });
 });
 
+describe("createTestHost() activation", () => {
+  it("hands a Plugin the activation startReason the host started it with", async () => {
+    const host = createTestHost({ manifest: fixtureManifest(), startReason: "restore" });
+    try {
+      const client = createPluginClient(host.port);
+      await vi.waitFor(() => {
+        expect(client.activation).toEqual({ startReason: "restore" });
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("defaults a Plugin's activation startReason to enable", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await vi.waitFor(() => {
+        expect(client.activation).toEqual({ startReason: "enable" });
+      });
+    } finally {
+      host.stop();
+    }
+  });
+});
+
 describe("the tracer fixture and the protocol", () => {
   it("signals readiness with the protocol's ready kind", () => {
     const source = readFileSync(join(FIXTURE_DIR, "index.js"), "utf8");

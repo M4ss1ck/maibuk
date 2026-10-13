@@ -28,6 +28,22 @@ plugins/<id>/
 The list starts empty; issue #451 adds `maibuk-echoes`. Fixture Plugins under
 `e2e/` or `src/test/` are never bundled; the build only reads this list.
 
+## Activation
+
+The host announces why a Plugin was activated on the Plugin's own MessagePort,
+as the first message it posts: `{ kind: "maibuk:plugin-init", startReason }`.
+`startReason` is one of `enable`, `launch`, `update`, `restore`, `resetLibrary`,
+`databaseLoad`, `settingsReset`, `warmStart`, or `restart`, so a Plugin can tell
+a Restore or a Reset from a plain launch. A raw-wire Plugin reads
+`event.data.startReason` from that message; a Plugin on `@/plugin-sdk` reads
+`client.activation?.startReason`. The field is optional, so a Plugin that
+ignores the message keeps working.
+
+```ts
+const client = createPluginClient(port);
+client.activation?.startReason; // "restore" after a Restore
+```
+
 ## Adding a Built-in
 
 1. Create `plugins/<id>/` with `manifest.json` and an `index.ts` or `index.tsx`.

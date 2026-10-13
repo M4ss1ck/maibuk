@@ -29,7 +29,7 @@ import type {
   PluginStartRefusal,
   PluginStartResult,
 } from "@/features/plugins/types";
-import { PLUGIN_READY_MESSAGE } from "@/plugin-sdk/protocol";
+import { PLUGIN_INIT_MESSAGE, PLUGIN_READY_MESSAGE } from "@/plugin-sdk/protocol";
 import { createPluginBroker } from "@/features/plugins/broker";
 
 /** The folder's manifest file name (ADR 0020). */
@@ -209,6 +209,17 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
     broker.stop("requested");
     frame.stop();
   };
+
+  // Announce the activation on the Plugin's port as the init message, before
+  // any other host message (the health check), so a Plugin reads the reason it
+  // was started for — a Restore or a Reset apart from a plain launch (#400,
+  // #445). A raw-wire Plugin ignores the message; the SDK exposes it as
+  // `client.activation`.
+  channel.port1.postMessage(
+    options.startReason === undefined
+      ? { kind: PLUGIN_INIT_MESSAGE.kind }
+      : { kind: PLUGIN_INIT_MESSAGE.kind, startReason: options.startReason }
+  );
 
   let outcome: StartupOutcome | "timeout";
   try {

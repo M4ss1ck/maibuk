@@ -1101,6 +1101,23 @@ describe("Plugin lifecycle: compatibility gate", () => {
   });
 });
 
+describe("Plugin lifecycle: activation start reason", () => {
+  it("announces the activation's start reason to the Worker it creates", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    expect(h.framesFor("alpha")[0].receivedStartReason).toBe("launch");
+
+    h.lifecycle.stop("alpha");
+    await advance(0);
+    const result = await h.lifecycle.start("alpha", "restore");
+    await advance(0);
+
+    expect(result).toEqual({ ok: true, startReason: "restore" });
+    expect(h.framesFor("alpha")).toHaveLength(2);
+    expect(h.framesFor("alpha")[1].receivedStartReason).toBe("restore");
+  });
+});
+
 describe("Plugin lifecycle: review gate", () => {
   it("never creates a frame for a changed copy and records the review refusal", async () => {
     const h = await createHarness({ changed: [makePlugin("alpha")] });

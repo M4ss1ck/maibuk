@@ -9,7 +9,7 @@ import type { pluginManifestSchema } from "@/features/plugins/manifest-schema";
 import type { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-validate";
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
-import type { PluginMessagePort } from "@/plugin-sdk/protocol";
+import type { PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
 
 // Identity (ids.ts)
 
@@ -127,6 +127,12 @@ export interface PluginStartOptions {
   folder: PluginFolder;
   /** The `h1:` value the author pinned when approving the Plugin. */
   pinnedHash: string;
+  /**
+   * Why this activation happened (#400, #445); the host announces it on the
+   * Plugin's port as the init message. Omitted when a test starts a Plugin
+   * directly.
+   */
+  startReason?: PluginStartReason;
   /** A Built-in Plugin may use the reserved `maibuk-` prefix (manifest validation). */
   builtIn?: boolean;
   /**
@@ -518,19 +524,13 @@ export interface PluginScanResult {
 // Lifecycle (lifecycle.ts)
 
 /**
- * Why a Plugin was activated. The first seven are the manifest decision's
- * (#400); `warmStart` and `restart` are the performance decision's (#401).
+ * Why a Plugin was activated: the manifest decision's reasons (#400) plus
+ * `warmStart` and `restart` from the performance decision (#401). It lives in
+ * the Plugin SDK (`src/plugin-sdk/protocol.ts`) because the host hands it to
+ * the Worker on the init message; it is re-exported here so feature code keeps
+ * one import.
  */
-export type PluginStartReason =
-  | "enable"
-  | "launch"
-  | "update"
-  | "restore"
-  | "resetLibrary"
-  | "databaseLoad"
-  | "settingsReset"
-  | "warmStart"
-  | "restart";
+export type { PluginStartReason };
 
 /**
  * Why a Plugin stopped. `requested` and `throttled` are the broker's own
@@ -701,6 +701,11 @@ export interface TestHostOptions {
   language?: string;
   /** UI-string overrides `renderPage` applies to the manifest before rendering. */
   locale?: PluginLocale;
+  /**
+   * Why this activation happened (#400, #445); the host delivers it to the
+   * Plugin. Defaults to `enable`.
+   */
+  startReason?: PluginStartReason;
 }
 
 /**
@@ -721,6 +726,8 @@ export interface TestHost {
   port: MessagePort;
   /** The real broker over the in-process channel. */
   broker: PluginBroker;
+  /** The activation start reason the host delivers to the Plugin. */
+  startReason: PluginStartReason;
   /** The manifest, with any `locale` overrides already applied. */
   manifest: PluginManifest;
   /** Every `notifications.show` the Plugin asked for, in order. */
