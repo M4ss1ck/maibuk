@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { PluginConfirmDialog } from "@/components/plugins/PluginConfirmDialog";
 import { PluginPermissionDialog } from "@/components/plugins/PluginPermissionDialog";
@@ -82,6 +82,9 @@ export function PluginsSection() {
   // explains itself instead of offering a Plugin that can never run, matching
   // the row's disabled enable control (#443).
   const hostRunsPlugins = pluginsRunOn(platform);
+  // The explanation paragraph below the actions is the disabled Add Plugin
+  // button's accessible description, so a screen reader hears why it is off.
+  const directoryDescriptionId = useId();
   const canAddFromFolder =
     isDesktop || (platform === "web" && directory?.supportsFolderPicker === true);
   const translate = asPluginTranslate(t);
@@ -340,6 +343,7 @@ export function PluginsSection() {
               className="pointer-coarse:min-h-12"
               data-command="settings.addPlugin"
               disabled={!hostRunsPlugins}
+              aria-describedby={hostRunsPlugins ? undefined : directoryDescriptionId}
               onClick={() => void addPlugin()}
             >
               {t("plugins.management.add")}
@@ -374,7 +378,7 @@ export function PluginsSection() {
               </Button>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p id={directoryDescriptionId} className="text-sm text-muted-foreground">
             {platform === "desktop"
               ? t("plugins.management.directoryDesktop")
               : platform === "android"

@@ -788,6 +788,11 @@ describe("Plugin management (#443)", () => {
         "Plugins are not available on Android in this version. Maibuk does not run Plugins here yet, so there is nothing to add or change."
       )
     ).toBeInTheDocument();
+    // The disabled action is tied to that explanation, so a screen reader hears
+    // why it is off, not just that it is.
+    expect(addButton).toHaveAccessibleDescription(
+      "Plugins are not available on Android in this version. Maibuk does not run Plugins here yet, so there is nothing to add or change."
+    );
 
     // Its Command is not bound either, so the keyboard cannot reach it.
     await waitFor(() =>

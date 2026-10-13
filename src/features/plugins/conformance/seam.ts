@@ -24,6 +24,7 @@ import { ThreadMessagePort } from "@quilted/threads";
 import { savePluginApproval } from "@/features/plugins/approvals";
 import { loadFixtureHostile } from "@/features/plugins/conformance/fixture";
 import { conformanceDirectoryKind } from "@/features/plugins/conformance/host-bypass";
+import { waitForReasonWithinGrace } from "@/features/plugins/conformance/oom-grace";
 import {
   type CommandObservation,
   type ConformanceEngine,
@@ -34,7 +35,7 @@ import {
   type StopObservation,
   T8_ALLOCATION_CAP_MB,
 } from "@/features/plugins/conformance/types";
-import { createPluginLifecycle } from "@/features/plugins/lifecycle";
+import { createPluginLifecycle, HEARTBEAT_INTERVAL_MS } from "@/features/plugins/lifecycle";
 import { openPluginUiMount } from "@/features/plugins/remote-ui/mount";
 import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
@@ -67,6 +68,13 @@ const TERMINAL_BUDGET_MS = 20_000;
 const YIELDING_ALLOCATION_COMMAND = "escapeAllocateYielding";
 /** T8's time budget: no stop and the cap not reached by then is `unmeasured`. */
 const OOM_BUDGET_MS = 120_000;
+/**
+ * How long T8 waits after the yielding allocation's request settles for the
+ * lifecycle to record its stop reason (two heartbeat intervals). The Worker's
+ * memory death rejects the request a moment before the lifecycle's worker-error
+ * path sets the reason, so settling alone is not proof the Plugin survived.
+ */
+const OOM_SETTLE_GRACE_MS = 2 * HEARTBEAT_INTERVAL_MS;
 /**
  * The storage key the yielding fixture writes its running total to (MB). The
  * fixture duplicates the string (it cannot import this module); both copies
@@ -298,6 +306,17 @@ export async function createRuntimeSeam(
     throw new Error("the Plugin did not stop within the budget");
   }
 
+  /**
+   * The stop reason the lifecycle has recorded so far, or null while it has
+   * none. T8 polls this: the reason can arrive a beat after the Worker's death.
+   */
+  function readStopReason(): string | null {
+    if (stopReason !== null) return stopReason;
+    const state = lifecycle.state(FIXTURE_HOSTILE_ID);
+    if (state?.status === "stopped") return state.reason ?? "unknown";
+    return null;
+  }
+
   async function runCommand(command: string): Promise<CommandObservation> {
     const page = PAGE_BY_COMMAND[command];
     if (page !== undefined) return runPageCommand(command, page);
@@ -315,13 +334,12 @@ export async function createRuntimeSeam(
     // `reports`; yielding once keeps that ordering from being an assumption.
     await sleep(0);
     const report = reports.find((message) => message.includes(`hostile ${command}`)) ?? "";
-    const leaked = (await leaks()) > 0;
     if (stopReason !== null) {
-      return { outcome: { kind: "stopped", reason: stopReason, detail: report }, leaked };
+      return { outcome: { kind: "stopped", reason: stopReason, detail: report } };
     }
-    if (/ignored/.test(report)) return { outcome: { kind: "ignored", detail: report }, leaked };
-    if (/refused/.test(report)) return { outcome: { kind: "refused", detail: report }, leaked };
-    return { outcome: { kind: "escaped", detail: report || "no refusal was reported" }, leaked };
+    if (/ignored/.test(report)) return { outcome: { kind: "ignored", detail: report } };
+    if (/refused/.test(report)) return { outcome: { kind: "refused", detail: report } };
+    return { outcome: { kind: "escaped", detail: report || "no refusal was reported" } };
   }
 
   /**
@@ -366,20 +384,17 @@ export async function createRuntimeSeam(
       thread.close();
       created.dispose();
     }
-    const leaked = (await leaks()) > 0;
 
     if (violation !== null) {
       lifecycle.stop(FIXTURE_HOSTILE_ID, "remote-ui-limit");
       const reason = await waitForStop(TERMINAL_BUDGET_MS);
       return {
         outcome: { kind: "stopped", reason, detail: "the host refused the declared interface" },
-        leaked,
       };
     }
     if (!accepted) {
       return {
         outcome: { kind: "escaped", detail: "the Plugin did not accept the mount" },
-        leaked,
       };
     }
     if (command === "openPanel") {
@@ -387,17 +402,14 @@ export async function createRuntimeSeam(
       if (state?.status === "ready" || state?.status === "unavailable") {
         return {
           outcome: { kind: "mounted", detail: "the panel mounted and the Plugin stayed ready" },
-          leaked,
         };
       }
       return {
         outcome: { kind: "escaped", detail: "the panel page did not leave the Plugin ready" },
-        leaked,
       };
     }
     return {
       outcome: { kind: "escaped", detail: "the host accepted an interface it should refuse" },
-      leaked,
     };
   }
 
@@ -433,12 +445,21 @@ export async function createRuntimeSeam(
       );
     const deadline = Date.now() + OOM_BUDGET_MS;
     while (Date.now() < deadline) {
-      if (stopReason !== null) return { stopped: true, reason: stopReason, allocatedMb };
-      const state = lifecycle.state(FIXTURE_HOSTILE_ID);
-      if (state?.status === "stopped") {
-        return { stopped: true, reason: state.reason ?? "unknown", allocatedMb };
+      const reason = readStopReason();
+      if (reason !== null) return { stopped: true, reason, allocatedMb };
+      if (settled) {
+        // The request settling only means the Worker stopped answering: the
+        // lifecycle records its reason just after. Wait a bounded grace for it
+        // before reporting the honest "no stop".
+        const lateReason = await waitForReasonWithinGrace({
+          readReason: readStopReason,
+          graceMs: OOM_SETTLE_GRACE_MS,
+          now: () => Date.now(),
+          sleep,
+        });
+        if (lateReason !== null) return { stopped: true, reason: lateReason, allocatedMb };
+        return { stopped: false, reason: "none", allocatedMb };
       }
-      if (settled) return { stopped: false, reason: "none", allocatedMb };
       if (allocatedMb >= T8_ALLOCATION_CAP_MB) break;
       await sleep(150);
     }
@@ -509,6 +530,7 @@ export async function createRuntimeSeam(
     probeAllocate: () => terminal("escapeAllocate"),
     probeOom,
     heartbeat,
+    leaks,
     dispose() {
       offChange();
       lifecycle.dispose();

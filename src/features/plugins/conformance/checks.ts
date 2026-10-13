@@ -10,7 +10,8 @@
  *     omitted rather than failed.
  *   - Each fixture Command passes on its declared safe outcome (see
  *     `commands.ts`) and only when the collector logged no request from the
- *     Plugin.
+ *     Plugin during that Command. The collector's count is cumulative, so the
+ *     runner reads it around each Command and judges the delta.
  *   - T7 passes only when the busy loop was stopped as `unresponsive`.
  *   - The tight-loop allocation (`escape-allocate`) passes whenever the Plugin
  *     stopped with any reason and the host answered; it is the exhaustiveness
@@ -152,9 +153,10 @@ function commandPasses(observation: CommandObservation, escapeCommand: Conforman
 function escapeCheck(
   id: string,
   escapeCommand: ConformanceEscape,
-  observation: CommandObservation
+  observation: CommandObservation,
+  leaked: boolean
 ): ConformanceCheck {
-  if (observation.leaked) {
+  if (leaked) {
     return fail(
       id,
       `${describeOutcome(observation)}; the collector logged a request from the Plugin`
@@ -208,9 +210,15 @@ export async function runConformanceChecks(
   for (const escapeCommand of CONFORMANCE_ESCAPES) {
     const id = escapeCheckId(escapeCommand);
     await record(
-      await measure(id, async () =>
-        escapeCheck(id, escapeCommand, await seam.runCommand(escapeCommand.command))
-      )
+      await measure(id, async () => {
+        // The collector's count is cumulative, so attribute a leak to the check
+        // that caused it: read the count around the Command and judge the delta,
+        // never the running total (D4).
+        const before = await seam.leaks();
+        const observation = await seam.runCommand(escapeCommand.command);
+        const after = await seam.leaks();
+        return escapeCheck(id, escapeCommand, observation, after > before);
+      })
     );
   }
 

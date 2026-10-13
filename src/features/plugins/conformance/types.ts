@@ -55,11 +55,14 @@ export type CommandOutcome =
   | { kind: "mounted"; detail: string }
   | { kind: "escaped"; detail: string };
 
-/** An escape's outcome plus whether the collector saw a request the Plugin made. */
+/**
+ * What one escape Command produced. Whether the collector logged a request
+ * originating in the Plugin is measured per check by the runner (D4), not here:
+ * the collector's count is cumulative, so the seam reports only the outcome and
+ * `leaks()` is read around each check.
+ */
 export interface CommandObservation {
   outcome: CommandOutcome;
-  /** True when the collector logged a request originating in the Plugin. */
-  leaked: boolean;
 }
 
 /** A T2 IPC probe's result: `reached` means Tauri IPC answered from the sandbox. */
@@ -74,18 +77,18 @@ export interface StopObservation {
 }
 
 /**
- * What T8's yielding allocation observed (D4): whether the Plugin stopped at
- * all, the stop reason when it did, and the MB the fixture reported allocating
- * before it died. `stopped: false` is the honest "no stop within the budget"
- * outcome — the Worker neither reached its memory limit nor was stopped.
- */
-/**
  * T8's allocation cap (MB). A Worker that reaches it unstopped, with the host
  * still answering, has shown the engine sets no per-Worker memory limit below
  * the cap; the lane stops there rather than take the test machine to its limit.
  */
 export const T8_ALLOCATION_CAP_MB = 4_096;
 
+/**
+ * What T8's yielding allocation observed (D4): whether the Plugin stopped at
+ * all, the stop reason when it did, and the MB the fixture reported allocating
+ * before it died. `stopped: false` is the honest "no stop within the budget"
+ * outcome — the Worker neither reached its memory limit nor was stopped.
+ */
 export interface OomObservation {
   stopped: boolean;
   /** The lifecycle's stop reason, or `"none"` when it never stopped. */
@@ -116,6 +119,12 @@ export interface ConformanceSeam {
   probeOom(): Promise<OomObservation>;
   /** A host heartbeat posted after T8; false when the renderer no longer answers. */
   heartbeat(): Promise<boolean>;
+  /**
+   * The collector's cumulative count of requests the Plugin made. The runner
+   * reads it before and after each escape check and fails on the delta, so one
+   * leak cannot fail every later check (D4).
+   */
+  leaks(): Promise<number>;
   /** Releases the lifecycle and every listener the seam owns. */
   dispose?(): void;
 }

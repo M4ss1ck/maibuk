@@ -94,4 +94,29 @@ describe("createReporter", () => {
     await expect(reporter.heartbeat()).resolves.toBe(true);
     expect(calls[0]?.url).toBe("http://127.0.0.1:8787/heartbeat");
   });
+
+  it("returns the collector's request count from /leaks", async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (url: string | URL | Request) => {
+      calls.push(String(url));
+      return { json: async () => ({ count: 3 }) };
+    }) as unknown as typeof fetch;
+    const reporter = createReporter(CONFORMANCE_COLLECTOR_BASE_URL, fetchImpl);
+    await expect(reporter.leaks()).resolves.toBe(3);
+    expect(calls[0]).toBe("http://127.0.0.1:8787/leaks");
+  });
+
+  it("returns 0 from leaks when the collector cannot answer", async () => {
+    const fetchImpl = (async () => {
+      throw new Error("connect ECONNREFUSED 127.0.0.1:8787");
+    }) as unknown as typeof fetch;
+    const reporter = createReporter(CONFORMANCE_COLLECTOR_BASE_URL, fetchImpl);
+    await expect(reporter.leaks()).resolves.toBe(0);
+  });
+
+  it("returns 0 from leaks when the reply carries no count", async () => {
+    const fetchImpl = (async () => ({ json: async () => ({}) })) as unknown as typeof fetch;
+    const reporter = createReporter(CONFORMANCE_COLLECTOR_BASE_URL, fetchImpl);
+    await expect(reporter.leaks()).resolves.toBe(0);
+  });
 });

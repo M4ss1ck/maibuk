@@ -49,8 +49,8 @@ function safeOutcome(escapeCommand: ConformanceEscape): CommandOutcome {
 function observationFor(command: string): CommandObservation {
   const escapeCommand = CONFORMANCE_ESCAPES.find((candidate) => candidate.command === command);
   return escapeCommand
-    ? { outcome: safeOutcome(escapeCommand), leaked: false }
-    : { outcome: { kind: "escaped", detail: "unknown command" }, leaked: false };
+    ? { outcome: safeOutcome(escapeCommand) }
+    : { outcome: { kind: "escaped", detail: "unknown command" } };
 }
 
 /** The seam the runner sees, with every check passing unless overridden. */
@@ -65,6 +65,7 @@ function makeSeam(overrides: Partial<ConformanceSeam> = {}): ConformanceSeam {
     probeAllocate: async () => ({ reason: "unresponsive" }),
     probeOom: async () => ({ stopped: true, reason: "out-of-memory", allocatedMb: 2_048 }),
     heartbeat: async () => true,
+    leaks: async () => 0,
     ...overrides,
   };
 }
@@ -75,11 +76,20 @@ function byId(checks: ConformanceCheck[], id: string): ConformanceCheck {
   return check;
 }
 
-/** Overrides one Command's outcome in an otherwise safe seam. */
+/**
+ * Overrides one Command's outcome in an otherwise safe seam. `leaked` makes the
+ * collector's cumulative count grow while that Command runs, the way a real
+ * escape does.
+ */
 function withOutcome(command: string, outcome: CommandOutcome, leaked = false): ConformanceSeam {
+  let count = 0;
   return makeSeam({
-    runCommand: async (called) =>
-      called === command ? { outcome, leaked } : observationFor(called),
+    leaks: async () => count,
+    runCommand: async (called) => {
+      if (called !== command) return observationFor(called);
+      if (leaked) count += 1;
+      return { outcome };
+    },
   });
 }
 
@@ -155,6 +165,27 @@ describe("runConformanceChecks fixture Commands", () => {
       })
     );
     expect(byId(checks, REFUSAL_ESCAPE_ID).status).toBe("fail");
+  });
+
+  it("fails only the check whose Command leaked, not every later one", async () => {
+    // The collector's count is cumulative: a leak during the first refusal
+    // escape must not fail the second one too (#447 review fix).
+    const refusals = CONFORMANCE_ESCAPES.filter((candidate) => candidate.safe === "refused");
+    const leaking = refusals[0];
+    const later = refusals[1];
+    if (!leaking || !later) throw new Error("need two refusal escapes");
+    let count = 0;
+    const checks = await runConformanceChecks(
+      makeSeam({
+        leaks: async () => count,
+        runCommand: async (command) => {
+          if (command === leaking.command) count += 1;
+          return observationFor(command);
+        },
+      })
+    );
+    expect(byId(checks, escapeCheckId(leaking)).status).toBe("fail");
+    expect(byId(checks, escapeCheckId(later)).status).toBe("pass");
   });
 
   it("marks an escape unmeasured when its setup throws", async () => {
