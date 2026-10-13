@@ -367,6 +367,25 @@ export function clearPluginHighlights(pluginId: string): void {
   }
 }
 
+/**
+ * Invalidates outstanding editor work at a Library boundary (the Tutorial,
+ * ADR 0008). Every Plugin's highlights are dropped from every open editor,
+ * reveals queued for an editor that has not mounted yet are cancelled, and a
+ * coalesced content event that has not fired yet is dropped, so work accepted
+ * against the Library that is going away can never surface on its replacement.
+ */
+export function invalidatePluginEditorWork(): void {
+  const clearAll = { type: "clearAll" } satisfies HighlightMeta;
+  for (const entry of editors.values()) {
+    if (entry.contentTimer !== null) {
+      clearTimeout(entry.contentTimer);
+      entry.contentTimer = null;
+    }
+    entry.editor.view.dispatch(entry.editor.state.tr.setMeta(entry.key, clearAll));
+  }
+  pendingReveals.clear();
+}
+
 /** Runs after a focused editor's content changes (coalesced per burst). */
 export function onEditorContentChanged(
   listener: (entity: PluginEntityTarget) => void

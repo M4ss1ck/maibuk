@@ -461,6 +461,8 @@ export interface PluginApiEvents {
   /** The Library became available or unavailable (the Tutorial makes it unavailable). */
   "library.availabilityChanged": {
     available: boolean;
+    /** Why availability changed; the Tutorial is the only reason today. */
+    reason?: "tutorial";
   };
   /** Maibuk's language changed. The current value is delivered on subscription, so a Plugin that starts after a change never misses it. */
   "language.changed": {

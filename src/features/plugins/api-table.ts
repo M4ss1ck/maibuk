@@ -432,7 +432,13 @@ export const PLUGIN_API_EVENTS = [
   defineApiEvent({
     id: "library.availabilityChanged",
     description: "The Library became available or unavailable (the Tutorial makes it unavailable).",
-    payload: z.strictObject({ available: z.boolean() }),
+    payload: z.strictObject({
+      available: z.boolean(),
+      reason: z
+        .literal("tutorial")
+        .optional()
+        .describe("Why availability changed; the Tutorial is the only reason today."),
+    }),
     permission: null,
   }),
   defineApiEvent({

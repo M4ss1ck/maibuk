@@ -31,6 +31,7 @@ import { registerPluginContributions } from "@/features/plugins/contributions";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
 import {
   clearPluginHighlights,
+  invalidatePluginEditorWork,
   onEditorContentChanged,
   onEditorFocusChanged,
 } from "@/features/plugins/editor-host";
@@ -665,13 +666,22 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   // no event is delivered to a Plugin that is not running; each subscription
   // dies with its broker. While the Library is unavailable (the Tutorial) no
   // content signal reaches a Plugin — its rows refuse — but the availability
-  // signal itself still does, so a Plugin can stop calling.
+  // signal itself still does, so a Plugin can stop calling. At that boundary
+  // every Plugin's editor work is invalidated first (ADR 0008, #398): a
+  // highlight or a reveal accepted against the Library that is going away can
+  // never surface on its replacement, and no event is queued for the exit.
   const offChange = onChange((signal) => {
+    if (isLibraryAvailability(signal)) {
+      invalidatePluginEditorWork();
+    }
     for (const entry of entries.values()) {
       const broker = entry.runtime?.broker;
       if (!broker) continue;
       if (isLibraryAvailability(signal)) {
-        broker.emit("library.availabilityChanged", { available: signal.available });
+        broker.emit("library.availabilityChanged", {
+          available: signal.available,
+          ...(signal.reason !== undefined ? { reason: signal.reason } : {}),
+        });
       } else if (isLibraryAvailable()) {
         if (isEntityChange(signal)) {
           broker.emit("library.changed", {

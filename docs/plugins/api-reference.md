@@ -908,6 +908,8 @@ Payload:
 ```ts
 {
   available: boolean;
+  /** Why availability changed; the Tutorial is the only reason today. */
+  reason?: "tutorial";
 }
 ```
 
