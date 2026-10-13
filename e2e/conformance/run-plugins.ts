@@ -37,6 +37,12 @@ import {
   mergePlatformRun,
   stackFromCargoLock,
 } from "@/test/support/plugin-conformance/report";
+import {
+  FIRST_CONTACT_TIMEOUT_MS,
+  type WaitOutcome,
+  lastLogLines,
+  waitOutcome,
+} from "@/test/support/plugin-conformance/wait";
 import { CARGO_LOCK_PATH, checkConformanceGate } from "../../scripts/plugin-conformance-gate.mjs";
 import { PrerequisiteMissing, claimTestInstall, connectDevice } from "../frames/android";
 import { buildPluginFixtures } from "../support/plugin-fixtures-build";
@@ -138,6 +144,21 @@ interface PlatformResult {
   stack: ConformanceStack;
 }
 
+/** The log file a platform's app writes into the run directory. */
+function appLogPath(platform: ConformanceEngineName, runDir: RunDir): string {
+  return resolve(runDir.dir, platform === "linux" ? "linux.log" : "logcat-android.txt");
+}
+
+/** Prints the tail of the app's captured output so a stalled run is diagnosable. */
+function printAppLogTail(platform: ConformanceEngineName, runDir: RunDir): void {
+  const path = appLogPath(platform, runDir);
+  if (!existsSync(path)) return;
+  const tail = lastLogLines(readFileSync(path, "utf8"), 20);
+  if (tail === "") return;
+  console.warn(`[conformance] ${platform}: last app log lines (${path}):`);
+  for (const line of tail.split("\n")) console.warn(`[conformance]   ${line}`);
+}
+
 async function measurePlatform(
   platform: ConformanceEngineName,
   options: PluginConformanceOptions,
@@ -149,23 +170,44 @@ async function measurePlatform(
   const started = await startPlatform(platform, options, runDir);
   console.log(`[conformance] ${platform}: launched; waiting for /done`);
 
-  const deadline = Date.now() + options.timeoutMinutes * 60_000;
-  let died = false;
-  while (Date.now() < deadline) {
-    if (collector.state().done) break;
-    if (!(await started.app.isAlive())) {
-      died = true;
-      break;
-    }
+  const launchedAt = Date.now();
+  const deadlineMs = options.timeoutMinutes * 60_000;
+  let stop: WaitOutcome = { kind: "continue" };
+  for (;;) {
+    const state = collector.state();
+    stop = waitOutcome({
+      elapsedMs: Date.now() - launchedAt,
+      deadlineMs,
+      firstContactMs: FIRST_CONTACT_TIMEOUT_MS,
+      done: state.done,
+      alive: await started.app.isAlive(),
+      requests: state.requests,
+    });
+    if (stop.kind !== "continue") break;
     await sleep(POLL_MS);
   }
-  if (!collector.state().done && !died) {
+
+  // Print why the wait ended, then the app's own output, before stopping it.
+  if (stop.kind === "first-contact-timeout") {
+    console.warn(
+      `[conformance] ${platform}: app never contacted the collector within ${FIRST_CONTACT_TIMEOUT_MS / 1000} s`
+    );
+  } else if (stop.kind === "deadline") {
     console.warn(`[conformance] ${platform}: no /done within ${options.timeoutMinutes} min`);
+  } else if (stop.kind === "process-died") {
+    console.warn(`[conformance] ${platform}: the app process exited before /done`);
   }
+  if (stop.kind !== "done") printAppLogTail(platform, runDir);
+
   await started.app.stop();
 
   const state = collector.state();
-  const outcome = finalizeRun(state, { processDied: died });
+  const outcome = finalizeRun(state, { processDied: stop.kind === "process-died" });
+  if (stop.kind === "first-contact-timeout") {
+    // Replaces finalizeRun's "no checks arrived": the app produced no request at
+    // all, which is a different failure from a run that started and went quiet.
+    outcome.note = "app never contacted the collector";
+  }
   const engine = state.engine ?? fallbackEngine(platform);
   const ranAt = new Date().toISOString();
   return {

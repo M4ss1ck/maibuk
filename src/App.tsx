@@ -1,4 +1,4 @@
-import { lazy, useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { FullPageScreen } from "@/components/FullPageScreen";
@@ -50,6 +50,12 @@ import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
  * conformance build (`VITE_PLUGIN_CONFORMANCE=1`) registers the route and
  * redirects `/` to it.
  *
+ * The `/` redirect is a render-time guard, not a `<Route path="/">`: the home
+ * branch (`<Route path="/" element={<Layout/>}>` with its index) outranks a
+ * sibling flat `/` route, so a redirect route there never runs and the app
+ * renders Home instead of the probe. `ConformancePage` is lazy, so its route
+ * element sits behind a `Suspense` boundary.
+ *
  * The path is a variable on purpose. The route exists only in the flag build,
  * so it must stay out of the always-bundled route registries — `ROUTE_CONTEXTS`
  * and the E2E coverage matrix enumerate literal `path="..."` in App.tsx — and
@@ -95,6 +101,11 @@ function App() {
     );
   }
 
+  // The conformance build lands on the probe route; see CONFORMANCE_ENABLED.
+  if (CONFORMANCE_ENABLED && pathname === "/") {
+    return <Navigate to={CONFORMANCE_ROUTE} replace />;
+  }
+
   return (
     <>
       <DeepLinkHandler />
@@ -109,10 +120,14 @@ function App() {
         <TutorialBoundary>
           <Routes>
             {CONFORMANCE_ENABLED && ConformancePage !== null && (
-              <>
-                <Route path={CONFORMANCE_ROUTE} element={<ConformancePage />} />
-                <Route path="/" element={<Navigate to={CONFORMANCE_ROUTE} replace />} />
-              </>
+              <Route
+                path={CONFORMANCE_ROUTE}
+                element={
+                  <Suspense fallback={null}>
+                    <ConformancePage />
+                  </Suspense>
+                }
+              />
             )}
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />

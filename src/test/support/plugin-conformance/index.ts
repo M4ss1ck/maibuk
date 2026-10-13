@@ -7,3 +7,4 @@ export * from "@/test/support/plugin-conformance/args";
 export * from "@/test/support/plugin-conformance/collector-state";
 export * from "@/test/support/plugin-conformance/csp";
 export * from "@/test/support/plugin-conformance/report";
+export * from "@/test/support/plugin-conformance/wait";

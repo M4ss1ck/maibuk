@@ -103,6 +103,22 @@ describe("the conformance route is absent from a shipped build", () => {
     // And no static import sneaks the module into the entry chunk.
     expect(app).not.toMatch(/\bimport\s+[^;]*?from\s+["']@\/features\/plugins\/conformance["']/);
   });
+
+  it("redirects `/` at render time, not as a route the home branch outranks", () => {
+    const app = readFileSync(resolve(SRC_ROOT, "App.tsx"), "utf8");
+    // The redirect must run before the home `<Route path="/">`; a sibling flat
+    // `/` route loses the ranking to the Layout branch and never renders, which
+    // is exactly the regression that made the lane measure nothing.
+    expect(app).toMatch(
+      /if \(CONFORMANCE_ENABLED && pathname === "\/"\) \{\s*return <Navigate to=\{CONFORMANCE_ROUTE\} replace \/>;/
+    );
+    expect(app).not.toContain('path="/" element={<Navigate');
+  });
+
+  it("wraps the lazy conformance route in a Suspense boundary", () => {
+    const app = readFileSync(resolve(SRC_ROOT, "App.tsx"), "utf8");
+    expect(app).toMatch(/<Suspense fallback=\{null\}>\s*<ConformancePage \/>/);
+  });
 });
 
 describe("the conformance status copy", () => {
