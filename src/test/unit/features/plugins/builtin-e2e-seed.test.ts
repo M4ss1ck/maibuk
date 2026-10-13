@@ -41,4 +41,33 @@ describe("Built-in source E2E seed", () => {
       ["third-party", "h1:seeded", []],
     ]);
   });
+
+  it("decodes the shipped bytes a Reinstall writes when the seed carries files", async () => {
+    vi.stubEnv("VITE_E2E_BUILTIN_SEED", "1");
+    localStorage.setItem(
+      E2E_BUILTIN_PLUGINS_STORAGE_KEY,
+      JSON.stringify({
+        plugins: [
+          {
+            id: "built-in",
+            hash: "h1:seeded",
+            manifest: { id: "built-in", permissions: { required: [], optional: [] } },
+            files: [
+              { path: "manifest.json", base64: btoa('{"id":"built-in"}') },
+              { path: "index.js", base64: btoa("export const a = 1;") },
+            ],
+          },
+        ],
+      })
+    );
+
+    const listed = await createBuiltInPluginSource().list();
+
+    expect(
+      listed[0].files.map((file) => [file.path, new TextDecoder().decode(file.bytes)])
+    ).toEqual([
+      ["manifest.json", '{"id":"built-in"}'],
+      ["index.js", "export const a = 1;"],
+    ]);
+  });
 });

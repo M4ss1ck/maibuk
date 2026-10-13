@@ -942,6 +942,11 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         markPluginRemoved(pluginId);
         if (deleteDataOption) await clearPluginStorage(pluginId);
         await get().refresh();
+        // Refresh the shown data size after the removal: `refresh()` rebuilds the
+        // entries but the row's size effect does not re-run (its deps are
+        // unchanged), so a removal that erased the data would still show the old
+        // size and offer Delete data (#443).
+        await get().refreshDataSize(pluginId);
       },
 
       async deleteData(pluginId) {

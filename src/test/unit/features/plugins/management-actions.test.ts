@@ -296,6 +296,25 @@ describe("Plugin management actions: remove", () => {
     expect(clearPluginStorage).toHaveBeenCalledWith("tracer");
   });
 
+  it("refreshes the shown data size after erasing it, so the row offers no Delete data", async () => {
+    const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
+    const dir = makeDirectory("web", [folder]);
+    await approveFolder(folder);
+    const store = makeStore(dir.adapter);
+    await store.getState().refresh();
+    vi.mocked(getPluginDataSize).mockResolvedValue(4096);
+    await store.getState().refreshDataSize("tracer");
+    expect(store.getState().dataSizes.tracer).toBe(4096);
+
+    // The erase zeroes the size; the store must read it again for the row,
+    // which does not re-run its size effect when the entry's id is unchanged.
+    vi.mocked(getPluginDataSize).mockResolvedValue(0);
+    await store.getState().remove("tracer", { deleteData: true });
+
+    expect(clearPluginStorage).toHaveBeenCalledWith("tracer");
+    expect(store.getState().dataSizes.tracer).toBe(0);
+  });
+
   it("removes every folder when two folders declare the same id", async () => {
     const dir = makeDirectory("web", [
       folderNamed("tracer-a", "tracer"),

@@ -8,6 +8,7 @@ import { createChapterRow, updateChapterRow } from "@/features/chapters/write";
 import { createNoteRow, updateNoteRow } from "@/features/notes/write";
 import { createCanvasRow, updateCanvasDocRow } from "@/features/canvas/write";
 import { CURRENT_CANVAS_SCHEMA_VERSION, type CanvasDoc } from "@/features/canvas/types";
+import { setPluginStorageValue } from "@/features/plugins/storage";
 import { backupsPresent } from "./backups-present";
 import {
   SEED_BOOK,
@@ -213,6 +214,14 @@ export async function canvasWithNodes(): Promise<void> {
   );
 }
 
+// A Library whose Plugin namespace holds retained data for the tracer Plugin,
+// so a removed row still shows its Library data size and offers Delete data
+// (#443).
+async function pluginData(): Promise<void> {
+  await setPluginStorageValue("tracer", "notes", { note: "kept ".repeat(500) });
+  await setPluginStorageValue("tracer", "scratch", { text: "x".repeat(1024) });
+}
+
 export const SEED_LIBRARIES = {
   empty: async () => {},
   oneBookThreeChapters,
@@ -223,6 +232,7 @@ export const SEED_LIBRARIES = {
   checkpointHistory,
   backupsPresent,
   metricsHistory,
+  pluginData,
   ...PERF_SEED_LIBRARIES,
 } satisfies Record<string, () => Promise<void>>;
 
