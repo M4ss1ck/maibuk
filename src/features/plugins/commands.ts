@@ -37,6 +37,13 @@ export interface PluginItemTarget {
   id: string;
 }
 
+/**
+ * A Plugin Command's runnable binding. A screen binding that also declares an
+ * item Context carries `deferToOtherSource`, so a focused item row's binding for
+ * the same Command runs it instead (#446).
+ */
+export type PluginCommandBinding = RunnableBinding & { deferToOtherSource?: boolean };
+
 export type PluginCommandOutcome = "ran" | "unavailable" | "cancelled" | "refused";
 
 /** The full id of one of a Plugin's declared Commands. */
@@ -110,7 +117,9 @@ function isItemOnlyContext(contexts: readonly string[]): boolean {
  * is installed); a target Command that declares a screen Context is enabled
  * when its Plugin is ready and the context-target resolver finds the item the
  * author is in, and runs against that item; every other Command is enabled
- * once its Plugin is ready.
+ * once its Plugin is ready. When such a Command also declares an item Context,
+ * its screen binding yields to the focused item row's binding for the same
+ * Command, so one key press runs it once against the row's item (#446).
  *
  * `readContext` is read at run time, so a Command that loses its item before
  * it fires does nothing: the resolver returns null and no `command.run` goes
@@ -123,8 +132,8 @@ export function pluginCommandBindings(
   lifecycle: PluginLifecycle,
   navigate: (route: string) => void,
   readContext: () => PluginItemContext = () => EMPTY_PLUGIN_ITEM_CONTEXT
-): RunnableBinding[] {
-  const bindings: RunnableBinding[] = [];
+): PluginCommandBinding[] {
+  const bindings: PluginCommandBinding[] = [];
   for (const installed of lifecycle.installed()) {
     const ready = lifecycle.state(installed.pluginId)?.status === "ready";
     for (const command of getPluginCommands(installed.pluginId)) {
@@ -136,9 +145,17 @@ export function pluginCommandBindings(
       const targets = command.targets;
       const hasTargets = (targets?.length ?? 0) > 0;
       if (hasTargets && !isItemOnlyContext(command.contexts)) {
+        // The same Command may also be bound by its focused item row
+        // (`useItemCommands`). The row is the more specific Context and what the
+        // author pointed at, so the screen binding yields to it for that key
+        // press; with no such row it is the one that runs, #446.
+        const hasItemContext = command.contexts.some((context) =>
+          ITEM_COMMAND_CONTEXTS.has(context)
+        );
         bindings.push({
           id: command.id,
           enabled: ready && resolvePluginTarget(targets, readContext()) !== null,
+          deferToOtherSource: hasItemContext,
           onTrigger: () => {
             const target = resolvePluginTarget(targets, readContext());
             if (target === null) return;

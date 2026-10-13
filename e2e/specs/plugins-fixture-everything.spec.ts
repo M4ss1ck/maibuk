@@ -362,6 +362,54 @@ test.describe("fixture-everything target Command, four ways @wf:plugins-contribu
     await expectStampedChapterA(page);
   });
 
+  test("runs once from its Shortcut while Chapter A's row is focused", async ({ page }) => {
+    await openChapterA(page);
+    // Leave the editor for the Chapter list and focus Chapter A's row: the app
+    // shell's screen binding and the row's binding both match `stamp`, so one
+    // key press must still yield exactly one result (#446).
+    const pane = page.getByRole("complementary", { name: "Chapter list" });
+    for (let i = 0; i < 3; i++) {
+      if (await isFocusWithin(pane)) break;
+      await page.keyboard.press("Escape");
+    }
+    const grid = page.getByRole("grid", { name: "Chapters" });
+    const rowA = grid.getByRole("row", { name: CHAPTER_A });
+    await tabTo(page, grid.getByRole("row", { selected: true }));
+    await pressUntilFocused(page, "ArrowUp", rowA);
+    await expect(rowA).toBeFocused();
+
+    await page.keyboard.press("ControlOrMeta+Alt+e");
+
+    await expect(stampedToast(page)).toHaveCount(1);
+    await expectStampedChapterA(page);
+  });
+
+  test("runs on the focused Chapter row, not the open Chapter, when both bindings match", async ({
+    page,
+  }) => {
+    await openChapterA(page);
+    // Leave the editor for the Chapter list and focus Chapter B's row while
+    // Chapter A stays open in the editor. The focused row is the more specific
+    // target, so one key press runs `stamp` once, on B, never on A (#446).
+    const pane = page.getByRole("complementary", { name: "Chapter list" });
+    for (let i = 0; i < 3; i++) {
+      if (await isFocusWithin(pane)) break;
+      await page.keyboard.press("Escape");
+    }
+    const grid = page.getByRole("grid", { name: "Chapters" });
+    const rowB = grid.getByRole("row", { name: CHAPTER_B });
+    await tabTo(page, grid.getByRole("row", { selected: true }));
+    await pressUntilFocused(page, "ArrowDown", rowB, { max: 10 });
+    await expect(rowB).toBeFocused();
+
+    await page.keyboard.press("ControlOrMeta+Alt+e");
+
+    const toast = stampedToast(page);
+    await expect(toast).toHaveCount(1);
+    await expect(toast).toContainText(CHAPTER_B, { timeout: 5_000 });
+    await expect(toast).not.toContainText(CHAPTER_A);
+  });
+
   test("runs from the Command Palette by keyboard and names the open Chapter A", async ({
     page,
   }) => {

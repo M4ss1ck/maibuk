@@ -98,6 +98,37 @@ function registerSample(): void {
   cleanups.push(registerPluginContributions({ manifest: parsed.manifest, folder }));
 }
 
+/**
+ * The four-ways fixture: one target Command that declares both a screen Context
+ * (`global`) and an item Context (`chapterItem`). Both the app shell's screen
+ * binding and the focused row's binding match it (#446).
+ */
+function registerFourWays(): void {
+  const folder = pluginFolder(
+    {},
+    {
+      id: "sample",
+      name: "Sample",
+      platforms: ["desktop"],
+      contributes: {
+        commands: [
+          {
+            id: "stamp",
+            label: "Stamp",
+            contexts: ["global", "chapterItem"],
+            targets: ["chapter"],
+            defaults: [["Mod+Alt+e"]],
+          },
+        ],
+        itemMenuEntries: [{ command: "stamp" }],
+      },
+    }
+  );
+  const parsed = readPluginManifest(folder);
+  if (!parsed.ok) throw new Error(`fixture manifest is invalid: ${JSON.stringify(parsed.problems)}`);
+  cleanups.push(registerPluginContributions({ manifest: parsed.manifest, folder }));
+}
+
 function buildNote(): Note {
   return {
     id: "note-1",
@@ -146,6 +177,40 @@ function renderChapterList(): void {
   );
 }
 
+/**
+ * The Book editor with Chapter A open in it and both Chapter rows rendered, so
+ * a test can focus either row. The app shell's screen binding and a row's
+ * `useItemCommands` binding both match the same target Command.
+ */
+function renderBookEditor(): void {
+  const chapterA = buildChapter({ id: "ch-1", title: "First" });
+  const chapterB = buildChapter({ id: "ch-2", title: "Second" });
+  useChapterStore.setState({ chapters: [chapterA, chapterB], currentChapter: chapterA });
+  render(
+    <MemoryRouter initialEntries={["/book/book-1"]}>
+      <Routes>
+        <Route
+          path="/book/:bookId"
+          element={
+            <>
+              <PluginCommands />
+              <ChapterList
+                chapters={[chapterA, chapterB]}
+                currentChapterId="ch-1"
+                onSelectChapter={vi.fn()}
+                onCreateChapter={vi.fn()}
+                onUpdateChapter={vi.fn()}
+                onDeleteChapter={vi.fn()}
+                onReorderChapters={vi.fn()}
+              />
+            </>
+          }
+        />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
 function renderNoteRow(): void {
   const note = buildNote();
   render(
@@ -167,7 +232,7 @@ afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
   resetPluginContributionsForTests();
   useNoteStore.setState({ notes: [] });
-  useChapterStore.setState({ chapters: [] });
+  useChapterStore.setState({ chapters: [], currentChapter: null });
   lifecycleStatus = "ready";
   brokerRequest = vi.fn(async () => null);
 });
@@ -237,6 +302,47 @@ describe("a target Command's Shortcut on its focused row", () => {
     await user.keyboard(pressChapterCommand);
 
     expect(brokerRequest).not.toHaveBeenCalled();
+    outside.remove();
+  });
+
+  it("runs a target Command once on its focused row, which wins over the screen binding", async () => {
+    registerFourWays();
+    const user = userEvent.setup();
+    renderBookEditor();
+
+    // Chapter A is open in the editor; Chapter B's row has focus. The row is the
+    // more specific Context, so the Command runs on B, once (#446).
+    const rowB = screen.getByRole("row", { name: "Second" });
+    rowB.focus();
+    expect(rowB).toHaveFocus();
+    await user.keyboard("{Control>}{Alt>}e{/Alt}{/Control}");
+
+    expect(brokerRequest).toHaveBeenCalledTimes(1);
+    expect(brokerRequest).toHaveBeenCalledWith("command.run", {
+      id: "stamp",
+      target: { kind: "chapter", id: "ch-2" },
+    });
+  });
+
+  it("runs a target Command once on the open Chapter when no item row has focus", async () => {
+    registerFourWays();
+    const user = userEvent.setup();
+    renderBookEditor();
+
+    // No row is focused: the app shell's screen binding is the only match and
+    // runs against the Chapter open in the editor.
+    const outside = document.createElement("button");
+    outside.type = "button";
+    outside.textContent = "Outside";
+    document.body.append(outside);
+    outside.focus();
+    await user.keyboard("{Control>}{Alt>}e{/Alt}{/Control}");
+
+    expect(brokerRequest).toHaveBeenCalledTimes(1);
+    expect(brokerRequest).toHaveBeenCalledWith("command.run", {
+      id: "stamp",
+      target: { kind: "chapter", id: "ch-1" },
+    });
     outside.remove();
   });
 });

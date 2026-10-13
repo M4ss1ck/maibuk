@@ -31,14 +31,7 @@ import type {
   PluginFolderFile,
   PluginManifest,
 } from "@/features/plugins/types";
-import { buildPlugin, type BuildPluginOptions } from "./build-plugin";
-
-// The shared Vite build, re-exported here so both the Built-in build and the
-// E2E fixture build name one routine. It lives in `build-plugin.ts` because
-// that module imports no `@/` code, so the E2E global setup can load it through
-// Playwright's ESM loader (this file's manifest imports pull in bare JSON).
-export { buildPlugin };
-export type { BuildPluginOptions };
+import { buildPlugin } from "./build-plugin";
 
 /** The repo root, from this script's own location (`scripts/`). */
 const REPO_ROOT = resolve(import.meta.dirname, "..");

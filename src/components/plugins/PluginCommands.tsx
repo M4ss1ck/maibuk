@@ -51,8 +51,11 @@ function pluginsOfActiveContexts(active: ReadonlySet<string>): string[] {
  * with no Plugins, binds nothing.
  *
  * Only the Commands whose Contexts are active here are bound, so a Plugin page
- * context stays on its page and a target Command stays disabled here — its
- * item's focused row binds it through `useItemCommands`.
+ * context stays on its page. A target Command that declares a screen Context is
+ * bound here and runs against the item the resolver finds the author in; one
+ * whose Contexts are all item Contexts keeps its focused row's binding through
+ * `useItemCommands` instead. One key press runs the Command once even when both
+ * bindings match it (#446).
  */
 export function PluginCommands() {
   const navigate = useNavigate();

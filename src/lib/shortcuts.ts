@@ -19,6 +19,13 @@ export type ShortcutBinding = {
   preventDefault?: boolean;
   allowInInput?: boolean;
   enabled?: boolean;
+  /**
+   * An app-shell screen binding whose Command also has an item Context defers
+   * to another mounted binding of the same Command (the focused item row's
+   * `useItemCommands` binding): the focused item is the more specific Context
+   * and is what the author pointed at, so it runs the Command instead (#446).
+   */
+  deferToOtherSource?: boolean;
 };
 
 type UseShortcutsOptions = {
@@ -33,6 +40,31 @@ function isTutorialShortcut(binding: ShortcutBinding): boolean {
 }
 
 type Candidate = { binding: ShortcutBinding; steps: readonly Step[] };
+
+// One key press runs a Command once. An app-shell screen binding and an item
+// row's binding can both declare the same Command (a target Command with a
+// screen Context and an item Context, #446); each `useShortcuts` instance has
+// its own `handled` set, so without a shared marker both would run it and send
+// two requests. Keyed by the event, so entries live only as long as the event.
+const handledCommandIds = new WeakMap<KeyboardEvent, Set<CommandId>>();
+
+/** One mounted `useShortcuts` instance's live bindings, in mount order. */
+type MountedShortcutSource = { getBindings: () => readonly ShortcutBinding[] };
+const mountedSources: MountedShortcutSource[] = [];
+
+/**
+ * Whether a binding other than `self` is mounted now for this Command. A screen
+ * binding that declares `deferToOtherSource` lets such a binding (a focused
+ * item row's) run the Command instead, so one key press runs it once with the
+ * more specific target (#446).
+ */
+function anotherSourceBinds(id: CommandId, self: MountedShortcutSource): boolean {
+  return mountedSources.some(
+    (source) =>
+      source !== self &&
+      source.getBindings().some((binding) => binding.id === id && binding.enabled !== false)
+  );
+}
 
 export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcutsOptions = {}) {
   const shortcutsRef = useRef(shortcuts);
@@ -53,15 +85,27 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
     optionsEnabledRef.current = options.enabled;
   }, [shortcuts, tutorialRunning, options.enabled]);
 
+  // This instance's live bindings, read by another source's deferral check.
+  const sourceRef = useRef<MountedShortcutSource | null>(null);
+  if (sourceRef.current === null) {
+    sourceRef.current = {
+      getBindings: () => (optionsEnabledRef.current === false ? [] : shortcutsRef.current),
+    };
+  }
+
   // One source per hook instance, registered in mount order; later prop
   // changes never reorder. The getter reads the live bindings at run time.
-  useEffect(
-    () =>
-      registerCommandSource(() =>
-        optionsEnabledRef.current === false ? [] : shortcutsRef.current
-      ),
-    []
-  );
+  useEffect(() => {
+    const source = sourceRef.current;
+    if (source === null) return;
+    mountedSources.push(source);
+    const unregister = registerCommandSource(source.getBindings);
+    return () => {
+      unregister();
+      const index = mountedSources.indexOf(source);
+      if (index >= 0) mountedSources.splice(index, 1);
+    };
+  }, []);
 
   useEffect(() => {
     if (options.enabled === false) return;
@@ -73,6 +117,18 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
     const handled = new WeakSet<KeyboardEvent>();
 
     const trigger = (binding: ShortcutBinding, event: KeyboardEvent) => {
+      // A screen binding whose Command also has an item Context yields to the
+      // focused item row's binding for the same Command: it is the more specific
+      // Context and what the author pointed at. The row's own listener marks the
+      // id, so the Command still runs exactly once (#446).
+      const self = sourceRef.current;
+      if (binding.deferToOtherSource && self !== null && anotherSourceBinds(binding.id, self)) {
+        return;
+      }
+      const alreadyRun = handledCommandIds.get(event);
+      if (alreadyRun?.has(binding.id)) return;
+      if (alreadyRun) alreadyRun.add(binding.id);
+      else handledCommandIds.set(event, new Set([binding.id]));
       handled.add(event);
       if (binding.preventDefault !== false) event.preventDefault();
       binding.onTrigger(event);
