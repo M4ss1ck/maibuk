@@ -285,6 +285,9 @@ export default defineConfig(() => ({
         "src/components/editor/SelectionToolbar.tsx",
         "src/components/editor/extensions/SelectionKept.ts",
         "scripts/symbols-data/transform.ts",
+        // Built-in Plugin build lane (issue #444): the pure build, target, and
+        // bundle-size logic.
+        "scripts/build-builtin-plugins.ts",
         // Frame-rate lane (issue #372): the pure Frame Report, budget, and parsers.
         "src/test/support/frames/frame-report.ts",
         "src/test/support/frames/attribution.ts",

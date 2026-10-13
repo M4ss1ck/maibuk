@@ -185,6 +185,24 @@ export interface BuiltInPluginSource {
   list(): Promise<BuiltInPlugin[]>;
 }
 
+/**
+ * One Built-in in the shipped `index.json` the build writes (script writer) and
+ * the app reads: its manifest, shipped hash, and file paths.
+ */
+export interface BuiltInPluginIndexEntry {
+  id: string;
+  manifest: PluginManifest;
+  /** The `h1:` directory hash over the built folder, as the app pins it. */
+  hash: string;
+  /** The built folder's POSIX-relative paths, sorted. */
+  files: string[];
+}
+
+/** The shipped list the app installs from (`<outRoot>/index.json`). */
+export interface BuiltInPluginIndex {
+  plugins: BuiltInPluginIndexEntry[];
+}
+
 // Approvals (approvals.ts)
 
 /** A Built-in Plugin's shipped copy, and a modified copy kept on purpose. */

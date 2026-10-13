@@ -17,39 +17,29 @@
  *   tsx scripts/build-builtin-plugins.ts [--target web|desktop|android]
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { cp, mkdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { pathToFileURL } from "node:url";
 import { build } from "vite";
-import { hashPluginDirectory } from "@/features/plugins/directory-hash";
+import { compareUtf8, hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { PLUGIN_PLATFORMS } from "@/features/plugins/manifest-schema";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
-import type { PluginFolderFile, PluginManifest } from "@/features/plugins/types";
+import type {
+  BuiltInPluginIndex,
+  BuiltInPluginIndexEntry,
+  PluginFolderFile,
+  PluginManifest,
+} from "@/features/plugins/types";
 
 /** The repo root, from this script's own location (`scripts/`). */
-export const REPO_ROOT = resolve(import.meta.dirname, "..");
+const REPO_ROOT = resolve(import.meta.dirname, "..");
 
 /** A target a Built-in can be built for, matching the manifest's `platforms`. */
 export type PluginTarget = (typeof PLUGIN_PLATFORMS)[number];
 
 /** The gzip budget for one built entry: the SDK plus the Plugin (issue #444). */
 export const BUNDLE_SIZE_LIMIT_BYTES = 150 * 1024;
-
-/** One Built-in in `index.json`: its manifest, shipped hash, and file paths. */
-export interface BuiltInPluginIndexEntry {
-  id: string;
-  manifest: PluginManifest;
-  /** The `h1:` directory hash over the built folder, as the app pins it. */
-  hash: string;
-  /** The built folder's POSIX-relative paths, sorted. */
-  files: string[];
-}
-
-/** The shipped list the app installs from (`<outRoot>/index.json`). */
-export interface BuiltInPluginIndex {
-  plugins: BuiltInPluginIndexEntry[];
-}
 
 export interface BuildBuiltInPluginsOptions {
   /** The folder holding `plugins/<id>/` sources. */
@@ -69,19 +59,6 @@ export interface BundleSizeResult {
   bytes: number;
   limitBytes: number;
   ok: boolean;
-}
-
-const encoder = new TextEncoder();
-
-// Byte order over UTF-8, matching the order `directory-hash.ts` sorts by.
-function comparePaths(left: string, right: string): number {
-  const a = encoder.encode(left);
-  const b = encoder.encode(right);
-  const length = Math.min(a.length, b.length);
-  for (let i = 0; i < length; i++) {
-    if (a[i] !== b[i]) return a[i] - b[i];
-  }
-  return a.length - b.length;
 }
 
 /** Every file under `dir`, keyed by its POSIX-relative path. */
@@ -139,13 +116,18 @@ async function buildPlugin(sourceDir: string, outDir: string, manifest: PluginMa
 
 /**
  * Builds every Plugin id into `<outRoot>/<id>/` and writes `<outRoot>/index.json`.
- * A Plugin whose manifest excludes the target is skipped. `outRoot` is created
- * and `index.json` is written even when nothing ships.
+ * A Plugin whose manifest excludes the target is skipped. `outRoot` is emptied
+ * first, so an id excluded for this target (or dropped from the list) never
+ * survives from a previous run of another target. `index.json` is written even
+ * when nothing ships.
  */
 export async function buildBuiltInPlugins(
   options: BuildBuiltInPluginsOptions
 ): Promise<BuiltInPluginIndex> {
   const { sourceRoot, ids, outRoot, target } = options;
+  // A stale folder from a previous target's run would otherwise ship an id this
+  // target excludes, so the output folder starts empty every time.
+  await rm(outRoot, { recursive: true, force: true });
   await mkdir(outRoot, { recursive: true });
 
   const plugins: BuiltInPluginIndexEntry[] = [];
@@ -159,7 +141,7 @@ export async function buildBuiltInPlugins(
           (problem) => `${problem.path === "" ? "<manifest>" : problem.path}: ${problem.message}`
         )
         .join("; ");
-      throw new Error(`${id}/manifest.json is not a valid Plugin manifest — ${problems}`);
+      throw new Error(`${id}/manifest.json is not a valid Plugin manifest: ${problems}`);
     }
     const manifest = validation.manifest;
 
@@ -187,7 +169,7 @@ export async function buildBuiltInPlugins(
       id,
       manifest,
       hash,
-      files: files.map((file) => file.path).sort(comparePaths),
+      files: files.map((file) => file.path).sort(compareUtf8),
     });
   }
 
@@ -223,7 +205,8 @@ export function defaultTarget(env: Record<string, string | undefined> = process.
   return "desktop";
 }
 
-function parseTargetArg(argv: readonly string[]): PluginTarget | undefined {
+/** The target a build ships for from the argv, or `undefined` when absent. */
+export function parseTargetArg(argv: readonly string[]): PluginTarget | undefined {
   const flag = argv.findIndex((arg) => arg === "--target" || arg.startsWith("--target="));
   if (flag === -1) return undefined;
   const value = argv[flag].startsWith("--target=")
@@ -260,7 +243,7 @@ async function main(): Promise<void> {
       console.log(`  ${size.id}: ${kb} KB gzip`);
     } else {
       console.error(
-        `  ${size.id}: ${kb} KB gzip — over the ${BUNDLE_SIZE_LIMIT_BYTES / 1024} KB budget`
+        `  ${size.id}: ${kb} KB gzip, over the ${BUNDLE_SIZE_LIMIT_BYTES / 1024} KB budget`
       );
       overBudget = true;
     }

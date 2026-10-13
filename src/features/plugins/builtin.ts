@@ -13,7 +13,7 @@
  * write them; on Tauri it lists no files, because Rust copies the shipped
  * folder from the bundled resources (ADR 0020). The list is best-effort: a
  * missing, malformed, or unreadable index leaves it empty, and a single entry
- * that does not fit is dropped, so the app always runs with whatever shipped —
+ * that does not fit is dropped, so the app always runs with whatever shipped,
  * even with none.
  *
  * The E2E lane needs a Built-in to prove the Keep my copy / Update available
@@ -31,6 +31,7 @@
 import { IS_WEB } from "@/lib/platform/target";
 import type {
   BuiltInPlugin,
+  BuiltInPluginIndexEntry,
   BuiltInPluginSource,
   PluginFolderFile,
   PluginManifest,
@@ -115,15 +116,7 @@ function readE2EBuiltIns(): BuiltInPlugin[] {
  */
 const BUILT_IN_INDEX_PATH = "plugins/index.json";
 
-/** One entry in the shipped `index.json`: identity, manifest, hash, file paths. */
-interface BuiltInIndexEntry {
-  id: string;
-  manifest: unknown;
-  hash: string;
-  files: string[];
-}
-
-function isIndexEntry(value: unknown): value is BuiltInIndexEntry {
+function isIndexEntry(value: unknown): value is BuiltInPluginIndexEntry {
   if (typeof value !== "object" || value === null) return false;
   const record = value as Record<string, unknown>;
   return (
@@ -151,11 +144,11 @@ async function fetchShippedBytes(fetchImpl: typeof fetch, url: string): Promise<
 
 /**
  * One index entry as a Built-in Plugin, or null when it does not fit (a shape
- * the index should never ship, an invalid manifest, or — on the web — a shipped
+ * the index should never ship, an invalid manifest, or (on the web) a shipped
  * file this install cannot read). Dropping one entry leaves the rest intact.
  */
 async function readIndexEntry(
-  entry: BuiltInIndexEntry,
+  entry: BuiltInPluginIndexEntry,
   fetchImpl: typeof fetch
 ): Promise<BuiltInPlugin | null> {
   // Loaded here, not at module scope: the entry chunk must stay free of the

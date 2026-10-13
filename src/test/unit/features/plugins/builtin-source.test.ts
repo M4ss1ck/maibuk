@@ -1,7 +1,7 @@
 // The production Built-in Plugin source (`src/features/plugins/builtin.ts`,
 // issue #444): it fetches the shipped `plugins/index.json` the build writes,
 // maps each entry to a Built-in, reads the shipped bytes on the web, and stays
-// empty — never throwing — when anything is missing or malformed. The Tauri
+// empty (never throwing) when anything is missing or malformed. The Tauri
 // path lists no files: Rust copies from the bundled resources (ADR 0020).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

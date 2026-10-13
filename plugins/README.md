@@ -16,7 +16,7 @@ plugins/<id>/
   index.ts          the entry, or index.tsx when it draws host-rendered UI
   assets/           optional; copied verbatim into the built folder
   locales/          optional; copied verbatim (the manifest's locale files)
-  *.test.ts         the Plugin's own tests — never built, never shipped
+  *.test.ts         the Plugin's own tests, never built, never shipped
 ```
 
 `plugins/builtins.json` lists the ids to build and ship, in order:
@@ -26,7 +26,7 @@ plugins/<id>/
 ```
 
 The list starts empty; issue #451 adds `maibuk-echoes`. Fixture Plugins under
-`e2e/` or `src/test/` are never bundled — the build only reads this list.
+`e2e/` or `src/test/` are never bundled; the build only reads this list.
 
 ## Adding a Built-in
 

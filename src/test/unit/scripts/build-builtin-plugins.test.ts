@@ -9,7 +9,12 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
-import { buildBuiltInPlugins, checkBundleSize } from "../../../../scripts/build-builtin-plugins";
+import {
+  buildBuiltInPlugins,
+  checkBundleSize,
+  defaultTarget,
+  parseTargetArg,
+} from "../../../../scripts/build-builtin-plugins";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../..");
 const FIXTURE_ROOT = resolve(REPO_ROOT, "src/test/fixtures/builtin-plugins");
@@ -70,6 +75,34 @@ describe("buildBuiltInPlugins()", () => {
     expect(readdirSync(outRoot)).toEqual(["index.json"]);
   });
 
+  // Issue #444: an id a previous target shipped must not survive into this
+  // target's output, or a Release build would install a Built-in it excludes.
+  it("empties outRoot so an id excluded for this target does not survive a previous run", async () => {
+    const outRoot = tempOutRoot();
+    await buildBuiltInPlugins({
+      sourceRoot: FIXTURE_ROOT,
+      ids: ["sample-builtin", "desktop-only"],
+      outRoot,
+      target: "desktop",
+    });
+    expect(readdirSync(outRoot).sort()).toEqual([
+      "desktop-only",
+      "index.json",
+      "sample-builtin",
+    ]);
+
+    const index = await buildBuiltInPlugins({
+      sourceRoot: FIXTURE_ROOT,
+      ids: ["sample-builtin", "desktop-only"],
+      outRoot,
+      target: "web",
+    });
+
+    expect(index.plugins.map((plugin) => plugin.id)).toEqual(["sample-builtin"]);
+    expect(readdirSync(outRoot).sort()).toEqual(["index.json", "sample-builtin"]);
+    expect(() => readdirSync(join(outRoot, "desktop-only"))).toThrow();
+  });
+
   it("writes an index with zero plugins for the empty shipped list, without fixtures", async () => {
     const outRoot = tempOutRoot();
     const shipped = JSON.parse(readFileSync(join(REPO_ROOT, "plugins/builtins.json"), "utf8")) as {
@@ -112,5 +145,42 @@ describe("checkBundleSize()", () => {
     expect(tight.ok).toBe(false);
     expect(tight.bytes).toBeGreaterThan(10);
     expect(tight.limitBytes).toBe(10);
+  });
+});
+
+describe("defaultTarget()", () => {
+  it("reads Tauri's platform, mapping every desktop platform to desktop", () => {
+    expect(defaultTarget({ TAURI_ENV_PLATFORM: "android" })).toBe("android");
+    for (const platform of ["linux", "windows", "darwin"]) {
+      expect(defaultTarget({ TAURI_ENV_PLATFORM: platform })).toBe("desktop");
+    }
+  });
+
+  it("reads VITE_BUILD_TARGET=web when Tauri is absent", () => {
+    expect(defaultTarget({ VITE_BUILD_TARGET: "web" })).toBe("web");
+  });
+
+  it("defaults to desktop when neither environment variable is set", () => {
+    expect(defaultTarget({})).toBe("desktop");
+    // An empty Tauri platform falls through, like an absent one.
+    expect(defaultTarget({ TAURI_ENV_PLATFORM: "" })).toBe("desktop");
+  });
+});
+
+describe("parseTargetArg()", () => {
+  it("reads the target from --target and --target=", () => {
+    expect(parseTargetArg(["--target", "web"])).toBe("web");
+    expect(parseTargetArg(["--target=android"])).toBe("android");
+    expect(parseTargetArg(["--other", "x", "--target", "desktop"])).toBe("desktop");
+  });
+
+  it("returns undefined when no --target is present", () => {
+    expect(parseTargetArg([])).toBeUndefined();
+    expect(parseTargetArg(["build"])).toBeUndefined();
+  });
+
+  it("throws for a target outside the manifest platforms", () => {
+    expect(() => parseTargetArg(["--target", "ios"])).toThrow(/--target must be one of/);
+    expect(() => parseTargetArg(["--target=ios"])).toThrow(/--target must be one of/);
   });
 });

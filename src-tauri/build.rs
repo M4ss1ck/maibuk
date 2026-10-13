@@ -6,8 +6,8 @@ use std::path::PathBuf;
 /// `tauri.conf.json` maps `../dist/plugins/` into the bundle as `plugins/`
 /// (issue #444), where `resolve_builtin_plugin_folder` reads
 /// `<resource>/plugins/<id>/`. Tauri validates those resource paths during the
-/// build, so `cargo check`/`cargo test` and `pnpm dev` on a clean checkout — no
-/// `dist/` yet — would otherwise fail. Create the folder with the empty shipped
+/// build, so `cargo check`/`cargo test` and `pnpm dev` on a clean checkout (no
+/// `dist/` yet) would otherwise fail. Create the folder with the empty shipped
 /// list the app tolerates; the real build
 /// (`scripts/build-builtin-plugins.ts`, run by `pnpm build` after Vite) writes
 /// over it, and an existing `index.json` from that build is never touched.

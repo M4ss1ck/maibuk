@@ -1,7 +1,7 @@
 /**
  * The launch sync of the shipped Built-in Plugins (#444): before the
  * management store first classifies Plugins, the app copies each Built-in whose
- * manifest supports this device into the Plugin Directory — a missing copy is
+ * manifest supports this device into the Plugin Directory: a missing copy is
  * installed, an untouched copy is replaced on an app update, an edited copy is
  * left for the store's Modified + Update available, and a Built-in the author
  * removed is never reinstalled. One Built-in's failure never stops the rest.
