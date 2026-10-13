@@ -645,4 +645,36 @@ mod tests {
         std::fs::remove_dir_all(&root).unwrap();
         std::fs::remove_dir_all(&resources).unwrap();
     }
+
+    /// The launch sync installs a Built-in whose folder is not there yet (#444):
+    /// `replace_from_folder` must create the installed copy, not only replace
+    /// one, and leave no staging folder behind.
+    #[test]
+    fn installs_a_bundled_built_in_folder_when_none_is_installed() {
+        let resources = temp_dir("builtin-install-shipped");
+        let shipped = resources.join("plugins").join("tracer");
+        std::fs::create_dir_all(&shipped).unwrap();
+        std::fs::write(shipped.join("manifest.json"), r#"{"id":"tracer"}"#).unwrap();
+        std::fs::write(shipped.join("index.js"), "export {}").unwrap();
+
+        let root = temp_dir("builtin-install-root");
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(!root.join("tracer").exists());
+
+        let resolved = resolve_builtin_plugin_folder(&resources, "tracer").unwrap();
+        let installed = replace_from_folder(&root, "tracer", resolved).unwrap();
+
+        assert_eq!(installed.id, "tracer");
+        assert!(root.join("tracer/index.js").exists());
+        let folder = directory::read_folder(&root, "tracer").unwrap().unwrap();
+        assert_eq!(Some(installed.hash), folder.hash);
+        let leftovers: Vec<_> = std::fs::read_dir(&root)
+            .unwrap()
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().contains("staging"))
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+        std::fs::remove_dir_all(&root).unwrap();
+        std::fs::remove_dir_all(&resources).unwrap();
+    }
 }

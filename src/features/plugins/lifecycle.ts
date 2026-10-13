@@ -40,7 +40,7 @@ import {
   getPluginLifecycle,
   setPluginLifecycleInstance,
 } from "@/features/plugins/lifecycle-instance";
-import { scanApprovedPlugins } from "@/features/plugins/launch";
+import { scanApprovedPlugins, syncBuiltInPlugins } from "@/features/plugins/launch";
 import { usePluginManagementStore } from "@/features/plugins/management";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { reviewPluginCopy } from "@/features/plugins/review";
@@ -712,6 +712,16 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       if (launched || disposed) return;
       launched = true;
       try {
+        // Copy the shipped Built-in Plugins into the Plugin Directory before
+        // the scan and before the management store first classifies Plugins:
+        // a missing copy is installed and an untouched copy is replaced on an
+        // app update, so it is never mis-shown as Modified (#444). It never
+        // throws, so a failure leaves the launch working with whatever is
+        // installed.
+        await syncBuiltInPlugins({
+          directory: options.directory,
+          builtInSource,
+        });
         await whenLaunchSettled();
         if (disposed) return;
         const scan = await scanApprovedPlugins({
