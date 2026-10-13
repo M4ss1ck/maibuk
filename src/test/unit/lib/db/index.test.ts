@@ -301,6 +301,51 @@ describe("src/lib/db/index.ts", () => {
       expect(deletesFrom(mockDb.execute)).toEqual([]);
       expect(signals).toEqual([]);
     });
+
+    it("prepares the replacement before clearing and cancels it when the Reset fails", async () => {
+      const { onBeforeBulkReplace, onBulkReplaceCancelled } = await import(
+        "@/features/sync/change-feed"
+      );
+      const { resetDatabase } = await import("@/lib/db");
+      const order: string[] = [];
+      const offPrepared = onBeforeBulkReplace((reason) => {
+        order.push(`prepare:${reason}`);
+      });
+      const offCancelled = onBulkReplaceCancelled((reason) => {
+        order.push(`cancel:${reason}`);
+      });
+      mockDb.executeAtomic.mockRejectedValueOnce(new Error("disk full"));
+
+      try {
+        await expect(resetDatabase()).rejects.toThrow("disk full");
+      } finally {
+        offPrepared();
+        offCancelled();
+      }
+
+      // The stop ran before the clear; a failed clear restarts via cancel.
+      expect(order).toEqual(["prepare:resetLibrary", "cancel:resetLibrary"]);
+    });
+
+    it("prepares the replacement before the Reset clears", async () => {
+      const { onBeforeBulkReplace } = await import("@/features/sync/change-feed");
+      const { resetDatabase } = await import("@/lib/db");
+      const order: string[] = [];
+      const off = onBeforeBulkReplace((reason) => {
+        order.push(`prepare:${reason}`);
+      });
+      mockDb.executeAtomic.mockImplementation(async () => {
+        order.push("clear");
+      });
+
+      try {
+        await resetDatabase();
+      } finally {
+        off();
+      }
+
+      expect(order).toEqual(["prepare:resetLibrary", "clear"]);
+    });
   });
 
   describe("importDatabase()", () => {
@@ -401,6 +446,52 @@ describe("src/lib/db/index.ts", () => {
       }
 
       expect(signals).toEqual([]);
+    });
+
+    it("prepares the replacement before the load merges rows", async () => {
+      const { onBeforeBulkReplace } = await import("@/features/sync/change-feed");
+      const { importDatabase } = await import("@/lib/db");
+      const order: string[] = [];
+      const off = onBeforeBulkReplace((reason) => {
+        order.push(`prepare:${reason}`);
+      });
+      mockDb.executeAtomic.mockImplementation(async () => {
+        order.push("load");
+      });
+
+      try {
+        await importDatabase(`INSERT INTO books (id) VALUES ('1');`);
+      } finally {
+        off();
+      }
+
+      expect(order).toEqual(["prepare:databaseLoad", "load"]);
+    });
+
+    it("cancels the prepared replacement when the load fails", async () => {
+      const { onBeforeBulkReplace, onBulkReplaceCancelled } = await import(
+        "@/features/sync/change-feed"
+      );
+      const { importDatabase } = await import("@/lib/db");
+      const order: string[] = [];
+      const offPrepared = onBeforeBulkReplace((reason) => {
+        order.push(`prepare:${reason}`);
+      });
+      const offCancelled = onBulkReplaceCancelled((reason) => {
+        order.push(`cancel:${reason}`);
+      });
+      mockDb.executeAtomic.mockRejectedValueOnce(new Error("disk full"));
+
+      try {
+        await expect(importDatabase(`INSERT INTO books (id) VALUES ('1');`)).rejects.toThrow(
+          "disk full"
+        );
+      } finally {
+        offPrepared();
+        offCancelled();
+      }
+
+      expect(order).toEqual(["prepare:databaseLoad", "cancel:databaseLoad"]);
     });
   });
 });

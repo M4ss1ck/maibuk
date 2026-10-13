@@ -716,6 +716,69 @@ describe("BackupService", () => {
       expect(signals).toEqual([]);
     });
 
+    it("stops Plugins before replacing the data", async () => {
+      const { onBeforeBulkReplace, resetChangeFeedForTests } = await import(
+        "@/features/sync/change-feed"
+      );
+      resetChangeFeedForTests();
+      const order: string[] = [];
+      const off = onBeforeBulkReplace((reason) => {
+        order.push(`prepare:${reason}`);
+      });
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
+      mockDb.executeAtomic.mockImplementation(async () => {
+        order.push("replace");
+      });
+
+      try {
+        await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
+      } finally {
+        off();
+      }
+
+      expect(order).toEqual(["prepare:restore", "replace"]);
+    });
+
+    it("cancels the prepared replacement when the Restore fails", async () => {
+      const { onBeforeBulkReplace, onBulkReplaceCancelled, resetChangeFeedForTests } =
+        await import("@/features/sync/change-feed");
+      resetChangeFeedForTests();
+      const order: string[] = [];
+      const offPrepared = onBeforeBulkReplace((reason) => {
+        order.push(`prepare:${reason}`);
+      });
+      const offCancelled = onBulkReplaceCancelled((reason) => {
+        order.push(`cancel:${reason}`);
+      });
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
+      mockDb.executeAtomic.mockRejectedValueOnce(
+        new AtomicStatementError(7, "UNIQUE constraint failed", 8)
+      );
+
+      try {
+        await expect(
+          service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")
+        ).rejects.toThrow("RESTORE_FAILED");
+      } finally {
+        offPrepared();
+        offCancelled();
+      }
+
+      expect(order).toEqual(["prepare:restore", "cancel:restore"]);
+    });
+
     it("still announces the completed Restore once when a view reload fails", async () => {
       const { onChange, resetChangeFeedForTests } = await import("@/features/sync/change-feed");
       resetChangeFeedForTests();

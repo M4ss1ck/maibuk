@@ -22,7 +22,7 @@ import { dumpHasDataAsync } from "@/features/sync/sync-codec";
 import { createAsyncQueue } from "@/lib/async-queue";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
-import { emitChange } from "@/features/sync/change-feed";
+import { emitChange, cancelBulkReplace, prepareBulkReplace } from "@/features/sync/change-feed";
 import { AtomicStatementError } from "@/lib/db/atomic";
 
 // Serializes expensive backup work (create/restore) and concurrent
@@ -359,9 +359,18 @@ export class BackupService {
     };
     const db = await getDatabase();
 
+    // Running Plugins stop before their data is replaced, so no Worker holds a
+    // cached value or an in-flight call against the Library being replaced;
+    // they restart against the restored state on the completion signal below
+    // (#398).
+    await prepareBulkReplace("restore");
+
     try {
       await replaceRestoreData(db, statements, scope);
     } catch (error) {
+      // The replacement never committed and no completion signal will follow;
+      // restart the Plugins that stopped so the app is not left with none.
+      await cancelBulkReplace("restore");
       const detail = error instanceof Error ? error.message : String(error);
       console.error("Restore data replacement failed:", detail);
       throw new Error(`RESTORE_FAILED: ${detail}`);

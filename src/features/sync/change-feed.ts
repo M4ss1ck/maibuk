@@ -104,6 +104,78 @@ export function onChange(listener: ChangeListener): () => void {
   };
 }
 
+/**
+ * A handler that runs before (or on the abandonment of) a bulk Library
+ * replacement: Backup Restore, Reset Library, or a Database File load. It
+ * receives the replacement's reason so it can react per operation.
+ */
+export type BeforeBulkReplaceHandler = (reason: BulkReason) => void | Promise<void>;
+
+const beforeBulkReplaceHandlers = new Set<BeforeBulkReplaceHandler>();
+const bulkReplaceCancelledHandlers = new Set<BeforeBulkReplaceHandler>();
+
+/**
+ * Register work to run before a bulk Library replacement. The write path
+ * awaits `prepareBulkReplace` before it replaces data, so a handler can stop
+ * consumers (running Plugins) ahead of the replacement and remember to restart
+ * them once the completion `BulkSignal` lands. A failing handler is reported
+ * and skipped: it never blocks the replacement. Returns an unsubscribe
+ * function.
+ */
+export function onBeforeBulkReplace(handler: BeforeBulkReplaceHandler): () => void {
+  beforeBulkReplaceHandlers.add(handler);
+  return () => {
+    beforeBulkReplaceHandlers.delete(handler);
+  };
+}
+
+/**
+ * Register work to run when a bulk replacement is abandoned after
+ * `prepareBulkReplace` and before its completion `BulkSignal` (a Restore, a
+ * Reset, or a load that failed). It lets a handler that stopped consumers
+ * restart them anyway, under a plain restart. Returns an unsubscribe function.
+ */
+export function onBulkReplaceCancelled(handler: BeforeBulkReplaceHandler): () => void {
+  bulkReplaceCancelledHandlers.add(handler);
+  return () => {
+    bulkReplaceCancelledHandlers.delete(handler);
+  };
+}
+
+/**
+ * Announce a bulk Library replacement, in subscription order, awaiting every
+ * handler before returning. The write path calls it before replacing data, so
+ * by the time the replacement begins every handler has settled. A throwing
+ * handler is reported and skipped: it never blocks the replacement or the
+ * remaining handlers. Never rejects.
+ */
+export async function prepareBulkReplace(reason: BulkReason): Promise<void> {
+  for (const handler of [...beforeBulkReplaceHandlers]) {
+    try {
+      await handler(reason);
+    } catch (error) {
+      console.error("[change-feed] before-bulk-replace handler failed:", error);
+    }
+  }
+}
+
+/**
+ * Announce that a prepared bulk replacement was abandoned before its
+ * completion signal, awaiting every cancel handler like `prepareBulkReplace`.
+ * Never rejects.
+ */
+export async function cancelBulkReplace(reason: BulkReason): Promise<void> {
+  for (const handler of [...bulkReplaceCancelledHandlers]) {
+    try {
+      await handler(reason);
+    } catch (error) {
+      console.error("[change-feed] bulk-replace-cancelled handler failed:", error);
+    }
+  }
+}
+
 export function resetChangeFeedForTests(): void {
   listeners.clear();
+  beforeBulkReplaceHandlers.clear();
+  bulkReplaceCancelledHandlers.clear();
 }

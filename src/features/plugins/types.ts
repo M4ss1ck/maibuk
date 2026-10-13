@@ -611,6 +611,8 @@ export interface PluginLifecycleOptions {
   isLibraryAvailable?: () => boolean;
   /** Registers `requiresLibrary` handler work so the Tutorial switch settles it (ADR 0008, #398). */
   trackLibraryWork?: <T>(work: Promise<T>) => Promise<T>;
+  /** Waits for accepted `requiresLibrary` handler work before a bulk Library replacement (ADR 0008, #398); defaults to the Tutorial switch's settle. */
+  settleLibraryWork?: () => Promise<void>;
   /** The dataVersion gate's storage; defaults to the Plugin storage rows. */
   dataVersions?: PluginDataVersions;
   /**

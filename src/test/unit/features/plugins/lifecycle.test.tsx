@@ -28,7 +28,7 @@ import {
   resetPluginLifecycleForTests,
 } from "@/features/plugins/lifecycle";
 import { STARTUP_TIMEOUT_MS } from "@/features/plugins/runtime";
-import { emitChange } from "@/features/sync/change-feed";
+import { cancelBulkReplace, emitChange, prepareBulkReplace } from "@/features/sync/change-feed";
 import type {
   BuiltInPluginSource,
   PluginApiHandlers,
@@ -1769,6 +1769,159 @@ describe("Plugin lifecycle: Tutorial entry/exit boundary", () => {
 
     editor.destroy();
     later.destroy();
+  });
+});
+
+describe("Plugin lifecycle: bulk Library replacement", () => {
+  it("stops a running persistent Plugin before a Restore and restarts it with the Restore reason", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
+
+    await prepareBulkReplace("restore");
+
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: "requested",
+      refusal: null,
+    });
+    expect(h.lifecycle.runtime("alpha")).toBeNull();
+
+    await emitChange({ scope: "all", reason: "restore" });
+    await advanceUntil(() => h.lifecycle.state("alpha")?.status === "ready", "alpha restart");
+
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "restore" });
+    expect(h.framesFor("alpha")[1].receivedStartReason).toBe("restore");
+  });
+
+  it("stops and restarts a running Built-in with no exemption", async () => {
+    const manifest: PluginManifest = { ...PLUGIN_MANIFEST, id: "maibuk-echoes", name: "Echoes" };
+    const folder = pluginFolder({}, manifest);
+    const builtInSource: BuiltInPluginSource = {
+      async list() {
+        return [
+          {
+            id: manifest.id,
+            manifest,
+            hash: await hashPluginDirectory(folder.files),
+            files: folder.files,
+          },
+        ];
+      },
+    };
+    const h = await createHarness({ approved: [folder], builtInSource });
+    await launchAll(h);
+    expect(h.lifecycle.state("maibuk-echoes")).toEqual({ status: "ready", startReason: "launch" });
+
+    await prepareBulkReplace("restore");
+    expect(h.lifecycle.state("maibuk-echoes")).toEqual({
+      status: "stopped",
+      reason: "requested",
+      refusal: null,
+    });
+
+    await emitChange({ scope: "all", reason: "restore" });
+    await advanceUntil(
+      () => h.lifecycle.state("maibuk-echoes")?.status === "ready",
+      "Built-in restart"
+    );
+
+    expect(h.lifecycle.state("maibuk-echoes")).toEqual({ status: "ready", startReason: "restore" });
+    expect(h.framesFor("maibuk-echoes")[1].receivedStartReason).toBe("restore");
+  });
+
+  it("stops before a Reset Library and restarts under the Reset reason", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+
+    await prepareBulkReplace("resetLibrary");
+    expect(h.lifecycle.state("alpha")?.status).toBe("stopped");
+
+    await emitChange({ scope: "all", reason: "resetLibrary" });
+    await advanceUntil(() => h.lifecycle.state("alpha")?.status === "ready", "alpha restart");
+
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "resetLibrary" });
+  });
+
+  it("stops before a Database File load and restarts under the load reason", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+
+    await prepareBulkReplace("databaseLoad");
+    expect(h.lifecycle.state("alpha")?.status).toBe("stopped");
+
+    await emitChange({ scope: "all", reason: "databaseLoad" });
+    await advanceUntil(() => h.lifecycle.state("alpha")?.status === "ready", "alpha restart");
+
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "databaseLoad" });
+  });
+
+  it("does not start a Plugin that was not running before the replacement", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha"), makePlugin("warm-page", { lifecycle: "on-demand" })],
+    });
+    await launchAll(h);
+    expect(h.framesFor("warm-page")).toHaveLength(0);
+
+    await prepareBulkReplace("restore");
+    await emitChange({ scope: "all", reason: "restore" });
+    await advanceUntil(() => h.lifecycle.state("alpha")?.status === "ready", "alpha restart");
+
+    expect(h.framesFor("warm-page")).toHaveLength(0);
+    expect(h.lifecycle.state("warm-page")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: null,
+    });
+  });
+
+  it("waits for an accepted Plugin storage write to settle before the replacement", async () => {
+    let resolveWrite!: () => void;
+    const writeGate = new Promise<void>((resolve) => {
+      resolveWrite = resolve;
+    });
+    const handler = vi.fn(async () => {
+      await writeGate;
+      return null;
+    });
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      handlers: () => ({ "storage.set": handler }),
+    });
+    await launchAll(h);
+
+    // A `requiresLibrary` call the broker accepted, still in flight.
+    const call = h.framesFor("alpha")[0].call("storage.set", { key: "k", value: 1 });
+    call.catch(() => undefined);
+    await advance(0);
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    let prepared = false;
+    const preparing = prepareBulkReplace("restore").then(() => {
+      prepared = true;
+    });
+    await advance(0);
+    // The Plugin stopped, but its accepted write has not settled, so the
+    // replacement must not proceed yet.
+    expect(h.lifecycle.state("alpha")?.status).toBe("stopped");
+    expect(prepared).toBe(false);
+
+    resolveWrite();
+    await preparing;
+    expect(prepared).toBe(true);
+  });
+
+  it("restarts the stopped Plugins with a plain restart when the replacement is abandoned", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+
+    await prepareBulkReplace("restore");
+    expect(h.lifecycle.state("alpha")?.status).toBe("stopped");
+
+    await cancelBulkReplace("restore");
+    await advanceUntil(() => h.lifecycle.state("alpha")?.status === "ready", "alpha restart");
+
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "restart" });
   });
 });
 

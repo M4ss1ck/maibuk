@@ -6,7 +6,7 @@ import { compactLibrary } from "@/lib/db/compact";
 import { isTransactionControl } from "@/lib/db/atomic";
 import { parseSqlStatements } from "@/lib/db/sql-parser";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
-import { emitChange } from "@/features/sync/change-feed";
+import { emitChange, cancelBulkReplace, prepareBulkReplace } from "@/features/sync/change-feed";
 import { PLUGIN_DATA_VERSIONS_TABLE, PLUGIN_STORAGE_TABLE } from "@/features/plugins/tables";
 
 let db: DatabaseAdapter | null = null;
@@ -461,8 +461,20 @@ export const RESET_LIBRARY_TABLES = [
 export async function resetDatabase(): Promise<void> {
   const database = await getDatabase();
 
-  // One transaction: a failure clears nothing.
-  await database.executeAtomic(RESET_LIBRARY_TABLES.map((table) => `DELETE FROM ${table}`));
+  // Running Plugins stop before the Library is cleared, so no Worker holds a
+  // cached value against the emptied Library; they restart under the Reset
+  // completion signal below (#398).
+  await prepareBulkReplace("resetLibrary");
+
+  try {
+    // One transaction: a failure clears nothing.
+    await database.executeAtomic(RESET_LIBRARY_TABLES.map((table) => `DELETE FROM ${table}`));
+  } catch (error) {
+    // Nothing was cleared and no completion signal will follow; restart the
+    // Plugins that stopped so the app is not left with none.
+    await cancelBulkReplace("resetLibrary");
+    throw error;
+  }
 
   // The Library is empty and available; only a completed Reset announces it.
   await emitChange({ scope: "all", reason: "resetLibrary" });
@@ -504,7 +516,20 @@ export async function importDatabase(sqlContent: string): Promise<void> {
     // The load is already one transaction; a dump's own BEGIN/COMMIT would split it.
     .filter((s) => !isTransactionControl(s))
     .map((s) => normaliseToUpsert(s));
-  await database.executeAtomic(statements);
+
+  // Running Plugins stop before the merged rows land, so a cached value cannot
+  // overwrite the imported state; they restart under the completion signal
+  // below (#398).
+  await prepareBulkReplace("databaseLoad");
+
+  try {
+    await database.executeAtomic(statements);
+  } catch (error) {
+    // Nothing was merged and no completion signal will follow; restart the
+    // Plugins that stopped so the app is not left with none.
+    await cancelBulkReplace("databaseLoad");
+    throw error;
+  }
 
   // The merged rows persisted; only a completed load announces it.
   await emitChange({ scope: "all", reason: "databaseLoad" });
