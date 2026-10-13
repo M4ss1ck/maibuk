@@ -1,6 +1,8 @@
 /src/main/java/com/massick/maibuk/generated
 /src/main/jniLibs/**/*.so
-/src/main/assets/tauri.conf.json
+# Generated on every build: the copied tauri.conf.json and the built web assets
+# (dist + the shipped plugins/index.json).
+/src/main/assets/
 /tauri.build.gradle.kts
 /proguard-tauri.pro
 /tauri.properties

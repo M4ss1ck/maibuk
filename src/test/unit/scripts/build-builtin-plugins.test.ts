@@ -75,6 +75,22 @@ describe("buildBuiltInPlugins()", () => {
     expect(readdirSync(outRoot)).toEqual(["index.json"]);
   });
 
+  it("ships no Built-in for the android target, whatever a manifest declares (#447)", async () => {
+    const outRoot = tempOutRoot();
+    // sample-builtin declares android in its platforms, so only the host rule
+    // can exclude it from the Android build.
+    const index = await buildBuiltInPlugins({
+      sourceRoot: FIXTURE_ROOT,
+      ids: ["sample-builtin"],
+      outRoot,
+      target: "android",
+    });
+
+    expect(index.plugins).toEqual([]);
+    expect(readdirSync(outRoot)).toEqual(["index.json"]);
+    expect(() => readdirSync(join(outRoot, "sample-builtin"))).toThrow();
+  });
+
   // Issue #444: an id a previous target shipped must not survive into this
   // target's output, or a Release build would install a Built-in it excludes.
   it("empties outRoot so an id excluded for this target does not survive a previous run", async () => {

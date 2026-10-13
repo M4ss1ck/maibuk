@@ -441,6 +441,69 @@ on the branch and paste both tables into the PR. `--raw` keeps each run's raw
 trace, framestats, or probe dump under `.bench/frames-raw/<source>/`: the
 input a parser fixture is refreshed from.
 
+## Plugin conformance lane
+
+`pnpm conformance:plugins` measures the real Plugin sandbox on the native
+engines (issue #447). It builds the app with the test-only flag
+`VITE_PLUGIN_CONFORMANCE=1`, whose route drives the *real* runtime, sandbox,
+Worker, broker, and lifecycle against the `fixture-hostile` Plugin and posts
+every check to a local collector. It proves T2 (no Tauri IPC from the sandboxed
+frame or the Worker), T7 (the busy loop is stopped as unresponsive), T8 (the
+yielding allocation stops the Worker with a memory reason while the host
+renderer survives), and every escape (the Plugin gets a typed refusal, a stop,
+or an ignored forged reply, and the collector logs no request from it). It sits
+beside the other periodic lanes (`bench:frames`, `bench:palette`): run it before
+a release and whenever Tauri or wry moves, never in CI.
+
+It needs a display and WebKitGTK (`libwebkit2gtk-4.1-dev`, `pkg-config
+webkit2gtk-4.1`) for the Linux half, and one adb device (or `ANDROID_SERIAL`)
+for the Android half. The Android half only measures a test install: the device
+must hold no author Library, and the lane claims the install as its own through
+the frame-rate lane's `claimTestInstall` (a fresh install gets a Library from a
+launch first). To reset a throwaway test emulator, `adb -s <serial> shell pm
+clear com.massick.maibuk`.
+
+```bash
+pnpm conformance:plugins --platform linux --record    # Linux (WebKitGTK)
+pnpm conformance:plugins --platform android --record  # the adb device (System WebView)
+pnpm conformance:plugins --platform all               # every available platform
+pnpm conformance:plugins --platform linux --skip-build --out .bench
+pnpm conformance:plugins --help
+```
+
+Flags: `--platform linux|android|all` (default `all`, skipping an unavailable
+one), `--record` (merge each measured run into the committed results),
+`--skip-build` (reuse the last build), `--out <dir>` (default `.bench`), and
+`--timeout <minutes>` (default 10).
+
+Exit codes: 0 every check passed, 1 a check failed, 2 it could not measure (no
+display, no device, a build failure, a timeout before any result, or an
+`unmeasured` check). It never runs in CI.
+
+**Reports and logs.** Each platform's run is written to
+`.bench/plugins-conformance-<platform>.json` (`--out`), and the app's own output
+(Linux stderr, Android logcat) to `e2e/.output/conformance/<started>/`. With
+`--record`, a *measured* run (exit 0 or 1) merges into
+`docs/research/plugins-conformance.results.json`; an exit-2 run never does, and
+a failure while the host is supported still records, keeping exit 1, so the file
+shows it. An Android run records `exit: 1`, `support: "unsupported-in-v1"`, and
+`followUp: "#492"` (see below).
+
+**Version gate.** The recorded results pin the Tauri and wry versions read from
+`src-tauri/Cargo.lock` (`scripts/plugin-conformance-gate.mjs`, run by its vitest
+gate). A bump to either version fails the gate until a fresh `pnpm
+conformance:plugins --record` refreshes the file: a result is only valid on the
+engine it was measured on, so rerun on any Tauri or wry bump.
+
+**Android is unsupported in v1 (#447, #492).** On the Android emulator the T8
+allocation grew the WebView renderer until lowmemorykiller killed it, and
+Chromium then killed the whole app, so the product runs no Plugin on Android
+(`src/features/plugins/host-platform.ts`). The lane still *measures* Android —
+its seam bypasses the host rule (`src/features/plugins/conformance/host-bypass.ts`)
+so a rerun can prove #492's hard memory cap once it exists — and the T8 run
+records the renderer death. Android runs are recorded as unsupported-in-v1 with
+the #492 follow-up rather than dropped.
+
 ## Output
 
 Everything generated lands in `e2e/.output/` (gitignored): the web build,

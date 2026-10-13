@@ -20,3 +20,7 @@ Decided in [Plugin sandbox runtime on every Maibuk platform](https://github.com/
 - A Plugin declares a `persistent` or `on-demand` lifecycle. A Plugin is ready when its setup finishes and it answers the first health check, and only then are its Commands usable. There is no invocation queue or replay. An on-demand Plugin starts as soon as one of its surfaces becomes reachable (context warm start).
 - Broker limits protect Maibuk only: startup time, heartbeat, call rate, Remote UI size, and message size. A tripped limit stops the Plugin with a reason the author can read.
 - No Plugin can call Maibuk's Commands (`runCommand` is not in v1). Plugins contribute Commands, and Maibuk runs them.
+
+## Amendment: Android runs no Plugin in v1 (2026-10-13)
+
+The conformance:plugins T8 run on the Android emulator showed a Plugin allocating in yielding chunks growing the WebView renderer to 1.8 GB; lowmemorykiller killed it, and Chromium's `aw_browser_terminator` then killed the whole app (logcat in #492). A Plugin can therefore take down the Android app, so v1 does not run Plugins on Android: no Plugin — Built-in or added — is listed as runnable, enabled, started, or contributes Commands or panels there (#447). The manifest schema still accepts `"android"` in `platforms`, ignored in v1, so a published manifest stays valid and forward compatible. This is the QuickJS trigger named under Considered Options: Android support waits for a hard Worker memory cap (#492).

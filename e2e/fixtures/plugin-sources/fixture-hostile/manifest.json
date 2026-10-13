@@ -54,6 +54,7 @@
       { "id": "escapeAfterRevoke", "label": "Hostile after revoke", "contexts": ["global"] },
       { "id": "escapeBusyLoop", "label": "Hostile busy loop", "contexts": ["global"] },
       { "id": "escapeAllocate", "label": "Hostile allocation", "contexts": ["global"] },
+      { "id": "escapeAllocateYielding", "label": "Hostile yielding allocation", "contexts": ["global"] },
       { "id": "escapeFlood", "label": "Hostile message flood", "contexts": ["global"] }
     ],
     "pages": [

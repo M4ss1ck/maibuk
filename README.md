@@ -110,6 +110,13 @@ Turn **Dictation** off in Settings → Dictation to stop the session, hide the b
 and disable its toggle and cycle Commands. This choice stays on this device.
 Downloaded models remain available to manage while Dictation is off.
 
+### Plugins
+
+Plugins are available in the desktop app and in compatible web browsers.
+**Android is unsupported in this version**: a Plugin could grow until the system
+killed the app, so v1 runs no Plugin — Built-in or added — on Android until a
+hard memory cap exists.
+
 ## Tech Stack
 
 - **Frontend**: React + TypeScript + Vite

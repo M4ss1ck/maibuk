@@ -60,6 +60,7 @@ import {
   markPluginRemoved,
   saveKnownPlugin,
 } from "@/features/plugins/known";
+import { pluginsRunOn } from "@/features/plugins/host-platform";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { planPluginModules } from "@/features/plugins/modules";
 import { reviewPluginCopy } from "@/features/plugins/review";
@@ -95,11 +96,25 @@ type DevicePlatform = PluginDirectoryAdapter["kind"];
 export const PLUGIN_DATA_SIZE_WARNING_BYTES = 50 * 1024 * 1024;
 
 /**
- * True when a manifest may run on this device. A manifest that omits
- * `platforms` runs everywhere; otherwise its list must name the device.
- * Shared with the launch sync (#444), so both read the same platform rule.
+ * The platforms the host runs no Plugin on, re-exported next to
+ * {@link isSupported} so the whole platform rule reads in one place. The source
+ * of truth is `host-platform.ts`, a leaf the Built-in build script also imports
+ * (#447).
+ */
+export {
+  PLUGIN_HOST_UNSUPPORTED_PLATFORMS,
+  pluginsRunOn,
+} from "@/features/plugins/host-platform";
+
+/**
+ * True when a manifest may run on this device. The host runs no Plugin on a
+ * platform it does not support (Android in v1, #447, T8); otherwise a manifest
+ * that omits `platforms` runs everywhere, and a manifest that declares them
+ * must name the device. Shared with the launch sync (#444) and the launch scan
+ * (#436), so all read the same platform rule.
  */
 export function isSupported(manifest: PluginManifest, platform: DevicePlatform): boolean {
+  if (!pluginsRunOn(platform)) return false;
   const platforms = manifest.platforms as readonly string[] | undefined;
   if (platforms === undefined) return true;
   return platforms.includes(platform);

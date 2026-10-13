@@ -43,6 +43,7 @@
     "conformance:dictation": "node scripts/dictation-conformance/web.mjs && cd src-tauri && cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture && python3 ../scripts/dictation-conformance/report.py",
     "record:dictation-phrases": "tsx scripts/dictation-phrases/record.ts",
     "conformance:dictation:phrases": "cd src-tauri && cargo test --release dictation::runner::tests::phrase_transcripts -- --ignored --nocapture && cd .. && tsx scripts/dictation-phrases/score.ts",
+    "conformance:plugins": "tsx e2e/conformance/run-plugins.ts",
     "bench:dictation": "vitest bench --run src/test/bench/dictation-interpreter.bench.ts --outputJson .bench/dictation.json && node scripts/dictation-bench-budget.mjs .bench/dictation.json",
     "bench:palette": "vitest bench --run src/test/bench/command-palette.bench.ts --outputJson .bench/palette.json && node scripts/palette-bench-budget.mjs .bench/palette.json",
     "bench:plugin-start": "vitest bench --run src/test/bench/plugin-start.bench.ts --outputJson .bench/plugin-start.json && node scripts/plugin-start-bench-budget.mjs .bench/plugin-start.json",

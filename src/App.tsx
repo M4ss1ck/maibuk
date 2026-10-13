@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { FullPageScreen } from "@/components/FullPageScreen";
 import { Home } from "@/pages/Home";
@@ -42,6 +42,32 @@ import { installAndroidLifecycleHandler } from "@/lib/window/androidLifecycle";
 import { installWindowCloseHandler } from "@/lib/window/closeHandler";
 import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
 
+/**
+ * The test-only Plugin conformance route (#447, D3). `VITE_PLUGIN_CONFORMANCE`
+ * is read inline so Rollup replaces it statically: in a normal build it folds
+ * to false, the whole guarded block below is dropped, and the lazy import is
+ * never emitted, so no conformance code reaches a shipped bundle. Only the
+ * conformance build (`VITE_PLUGIN_CONFORMANCE=1`) registers the route and
+ * redirects `/` to it.
+ *
+ * The `/` redirect is a render-time guard, not a `<Route path="/">`: the home
+ * branch (`<Route path="/" element={<Layout/>}>` with its index) outranks a
+ * sibling flat `/` route, so a redirect route there never runs and the app
+ * renders Home instead of the probe. `ConformancePage` is lazy, so its route
+ * element sits behind a `Suspense` boundary.
+ *
+ * The path is a variable on purpose. The route exists only in the flag build,
+ * so it must stay out of the always-bundled route registries — `ROUTE_CONTEXTS`
+ * and the E2E coverage matrix enumerate literal `path="..."` in App.tsx — and
+ * out of every shipped chunk, including the `__conformance` string. A dropped
+ * constant carries no bundle bytes; a literal in `ROUTE_CONTEXTS` would.
+ */
+const CONFORMANCE_ENABLED = import.meta.env.VITE_PLUGIN_CONFORMANCE === "1";
+const CONFORMANCE_ROUTE = "/__conformance/plugins";
+const ConformancePage = CONFORMANCE_ENABLED
+  ? lazy(() => import("@/features/plugins/conformance"))
+  : null;
+
 function App() {
   const { pathname } = useLocation();
   const embedMode = isEmbedPath(pathname);
@@ -75,6 +101,11 @@ function App() {
     );
   }
 
+  // The conformance build lands on the probe route; see CONFORMANCE_ENABLED.
+  if (CONFORMANCE_ENABLED && pathname === "/") {
+    return <Navigate to={CONFORMANCE_ROUTE} replace />;
+  }
+
   return (
     <>
       <DeepLinkHandler />
@@ -88,6 +119,16 @@ function App() {
         <CommandPalette />
         <TutorialBoundary>
           <Routes>
+            {CONFORMANCE_ENABLED && ConformancePage !== null && (
+              <Route
+                path={CONFORMANCE_ROUTE}
+                element={
+                  <Suspense fallback={null}>
+                    <ConformancePage />
+                  </Suspense>
+                }
+              />
+            )}
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />
               <Route path="notes" element={<NotesGallery />} />

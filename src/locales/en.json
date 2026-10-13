@@ -2172,6 +2172,11 @@
       "outOfMemory": "{{name}} used too much memory and was stopped.",
       "crashed": "{{name}} stopped unexpectedly."
     },
+    "conformance": {
+      "running": "Running Plugin conformance checks…",
+      "done": "Plugin conformance checks finished.",
+      "error": "Plugin conformance checks could not run."
+    },
     "page": {
       "notFoundTitle": "Plugin page",
       "notFoundDescription": "This page's Plugin is not installed.",
@@ -2217,7 +2222,7 @@
       "manual": "Manually add the Plugin again to use it.",
       "empty": "No Plugins match these filters.",
       "directoryDesktop": "Plugin Directory: Documents/Maibuk/Plugins",
-      "directoryAndroid": "Plugins are stored privately by Maibuk. Add a zip file; the directory cannot be changed.",
+      "directoryAndroid": "Plugins are not available on Android in this version. Maibuk does not run Plugins here yet, so there is nothing to add or change.",
       "directoryWeb": "Plugins are stored in this browser. Add a zip file; supported browsers can also use a folder.",
       "open": "Open Plugin Directory",
       "change": "Change Plugin Directory",

@@ -296,6 +296,28 @@ export default defineConfig(() => ({
         "src/test/support/frames/cli.ts",
         "src/test/support/frames/scenarios.ts",
         "src/test/support/frames/sources/*.ts",
+        // Plugin conformance lane (issue #447): the host platform rule, the
+        // check runner and its per-check leak attribution, the collector
+        // client, and the lane's pure parts (the version gate and the
+        // collector/report helpers). `seam.ts` and `ConformancePage.tsx` are
+        // deliberately absent: only the native lane exercises them (the real
+        // sandbox, Worker, broker, and lifecycle), and no Vitest test reaches
+        // them. `fixture.ts`, `run.ts`, and `index.ts` are on that same
+        // native-only path.
+        "src/features/plugins/host-platform.ts",
+        "src/features/plugins/conformance/checks.ts",
+        "src/features/plugins/conformance/commands.ts",
+        "src/features/plugins/conformance/host-bypass.ts",
+        "src/features/plugins/conformance/oom-grace.ts",
+        "src/features/plugins/conformance/reporter.ts",
+        "src/features/plugins/conformance/types.ts",
+        "src/test/support/plugin-conformance/android-target.ts",
+        "src/test/support/plugin-conformance/args.ts",
+        "src/test/support/plugin-conformance/collector-state.ts",
+        "src/test/support/plugin-conformance/csp.ts",
+        "src/test/support/plugin-conformance/report.ts",
+        "src/test/support/plugin-conformance/wait.ts",
+        "scripts/plugin-conformance-gate.mjs",
         // Deep-link / strict link-uri
         "src/features/links/link-uri.ts",
         "src/features/links/navigate.ts",
