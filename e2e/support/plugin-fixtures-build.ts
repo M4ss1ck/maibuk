@@ -36,6 +36,7 @@ interface FixturePlugin {
 /** The source-built fixture Plugins, by folder name in the Plugin Directory. */
 const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
   { source: "remote-ui", manifest: "manifest.json", output: "remote-ui" },
+  { source: "fixture-hostile", manifest: "manifest.json", output: "fixture-hostile" },
   { source: "fixture-everything", manifest: "manifest.json", output: "fixture-everything" },
   {
     source: "fixture-everything",

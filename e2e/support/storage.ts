@@ -37,13 +37,14 @@ export type TutorialProgressSeed = "dismissed" | "clean";
 /**
  * A fixture Plugin the seed can write into the web Plugin Directory (OPFS). The
  * `tracer` and `approvals` folders are committed and used as-is; `remote-ui`,
- * `fixture-everything`, and `fixture-everything-on-demand` are built from source
- * at global setup.
+ * `fixture-hostile`, `fixture-everything`, and `fixture-everything-on-demand`
+ * are built from source at global setup.
  */
 export type PluginSeed =
   | "tracer"
   | "remote-ui"
   | "approvals"
+  | "fixture-hostile"
   | "fixture-everything"
   | "fixture-everything-on-demand";
 
@@ -107,6 +108,7 @@ const PLUGIN_BUILD_DIR = resolve(REPO_ROOT, "e2e/.output/plugins");
 /** The fixture Plugins that live under `.output/plugins`, not the committed fixtures. */
 const BUILT_PLUGIN_SEEDS: ReadonlySet<PluginSeed> = new Set([
   "remote-ui",
+  "fixture-hostile",
   "fixture-everything",
   "fixture-everything-on-demand",
 ]);
