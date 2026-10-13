@@ -131,12 +131,18 @@ async function waitForPluginReady(page: Page): Promise<void> {
 
 /**
  * Opens the seeded Book and leaves the deliberately chosen Chapter A open: the
- * Book opens its last Chapter (B), then the chapter list opens Chapter A.
+ * Book opens its last Chapter (B), then the chapter list opens Chapter A. It
+ * leaves the Plugin page by keyboard, never a reload, so the readiness the gate
+ * established survives to the action the caller then drives (#446).
  */
 async function openChapterA(page: Page): Promise<void> {
+  // Wait for the Plugin to be ready, then leave its page the way the sidebar
+  // does, rather than with `page.goto`: a reload restarts the Plugin, and a
+  // targeted Command stays disabled until it is ready again, so a key press or
+  // palette Enter taken while it restarts would silently do nothing (#446).
   await waitForPluginReady(page);
-  await page.goto("/");
-  await expect(navOption(page, "Everything fixture")).toBeVisible({ timeout: 15_000 });
+  await tabTo(page, navOption(page, "Books"));
+  await page.keyboard.press("Enter");
 
   const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
   await expect(card).toHaveCount(1);
@@ -249,12 +255,14 @@ test.describe("fixture-everything contributions @wf:plugins-contributions @no-we
   test("the target Command is listed and runs from the palette on the open Chapter", async ({
     page,
   }) => {
-    // Wait for the Plugin to be ready before opening the palette: the palette
-    // reads its Command states once, when it opens, so a Plugin still starting
-    // would leave `stamp` disabled and Enter would do nothing (#446).
+    // Wait for the Plugin to be ready. Then leave its page by keyboard, the way
+    // the sidebar does, rather than with `page.goto`: a full reload restarts the
+    // Plugin, and the palette reads every Command's state once, when it opens, so
+    // a snapshot taken while the restarted Plugin is still starting would list
+    // `stamp` disabled and Enter would silently do nothing (#446).
     await waitForPluginReady(page);
-    await page.goto("/");
-    await expect(navOption(page, "Everything fixture")).toBeVisible({ timeout: 15_000 });
+    await tabTo(page, navOption(page, "Books"));
+    await page.keyboard.press("Enter");
     // Open the seeded Book: its last Chapter opens in the editor, the item
     // `stamp` declares as its target, so the palette offers it here.
     const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
