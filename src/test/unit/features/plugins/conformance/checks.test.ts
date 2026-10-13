@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ESCAPE_ALLOCATE_CHECK_ID,
   RENDERER_DIED_DETAIL,
   T2_FRAME_CHECK_ID,
   T2_WORKER_CHECK_ID,
   T7_CHECK_ID,
+  T8_ALLOCATION_CAP_MB,
   T8_CHECK_ID,
   fixtureCommandCheckIds,
   runConformanceChecks,
@@ -60,7 +62,8 @@ function makeSeam(overrides: Partial<ConformanceSeam> = {}): ConformanceSeam {
     probeFrameIpc: async () => ({ reached: false, detail: "no __TAURI_INTERNALS__" }),
     probeWorkerIpc: async () => ({ reached: false, detail: "no __TAURI_INTERNALS__" }),
     probeHang: async () => ({ reason: "unresponsive" }),
-    probeOom: async () => ({ reason: "out-of-memory" }),
+    probeAllocate: async () => ({ reason: "unresponsive" }),
+    probeOom: async () => ({ stopped: true, reason: "out-of-memory", allocatedMb: 2_048 }),
     heartbeat: async () => true,
     ...overrides,
   };
@@ -193,7 +196,11 @@ describe("runConformanceChecks fixture Commands", () => {
     expect(byId(safe, id).status).toBe("pass");
 
     const wrongStop = await runConformanceChecks(
-      withOutcome(ui.command, { kind: "stopped", reason: "crashed", detail: "stopped unexpectedly" })
+      withOutcome(ui.command, {
+        kind: "stopped",
+        reason: "crashed",
+        detail: "stopped unexpectedly",
+      })
     );
     expect(byId(wrongStop, id).status).toBe("fail");
   });
@@ -228,15 +235,109 @@ describe("runConformanceChecks terminal probes", () => {
     expect(check.detail).toContain("expected unresponsive");
   });
 
-  it("passes T8 when the Plugin ran out of memory and the host answered", async () => {
+  it("passes escape-allocate when the tight loop stopped the Plugin with any reason and the host answered", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({ probeAllocate: async () => ({ reason: "unresponsive" }) })
+    );
+    const check = byId(checks, ESCAPE_ALLOCATE_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(check.detail).toContain("unresponsive");
+  });
+
+  it("fails escape-allocate with renderer-died when the host heartbeat is missing", async () => {
+    const checks = await runConformanceChecks(makeSeam({ heartbeat: async () => false }));
+    const check = byId(checks, ESCAPE_ALLOCATE_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toBe(RENDERER_DIED_DETAIL);
+  });
+
+  it("passes T8 when the yielding allocation stopped the Plugin with a memory reason and the host answered", async () => {
     const checks = await runConformanceChecks(makeSeam());
-    expect(byId(checks, T8_CHECK_ID).status).toBe("pass");
+    const check = byId(checks, T8_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(check.detail).toContain("out-of-memory");
+    expect(check.detail).toContain("2048");
+  });
+
+  it("passes T8 for a crash too, and names the MB reached", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({ probeOom: async () => ({ stopped: true, reason: "crashed", allocatedMb: 1_536 }) })
+    );
+    const check = byId(checks, T8_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(check.detail).toContain("crashed");
+    expect(check.detail).toContain("1536");
+  });
+
+  it("marks T8 unmeasured — never pass or fail — when it stopped as unresponsive first", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeOom: async () => ({ stopped: true, reason: "unresponsive", allocatedMb: 640 }),
+      })
+    );
+    const check = byId(checks, T8_CHECK_ID);
+    expect(check.status).toBe("unmeasured");
+    expect(check.detail).toContain("stopped as unresponsive before reaching the memory limit");
+    expect(check.detail).toContain("640");
+  });
+
+  it("passes T8 when the Worker reached the allocation cap unstopped and the host answered", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeOom: async () => ({
+          stopped: false,
+          reason: "none",
+          allocatedMb: T8_ALLOCATION_CAP_MB,
+        }),
+      })
+    );
+    const check = byId(checks, T8_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(check.detail).toContain("no engine memory limit");
+    expect(check.detail).toContain(String(T8_ALLOCATION_CAP_MB));
+  });
+
+  it("fails T8 at the allocation cap when the host stopped answering", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeOom: async () => ({
+          stopped: false,
+          reason: "none",
+          allocatedMb: T8_ALLOCATION_CAP_MB,
+        }),
+        heartbeat: async () => false,
+      })
+    );
+    expect(byId(checks, T8_CHECK_ID)).toMatchObject({
+      status: "fail",
+      detail: RENDERER_DIED_DETAIL,
+    });
+  });
+
+  it("marks T8 unmeasured when the time budget ran out below the cap, naming the MB allocated", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({ probeOom: async () => ({ stopped: false, reason: "none", allocatedMb: 1_024 }) })
+    );
+    const check = byId(checks, T8_CHECK_ID);
+    expect(check.status).toBe("unmeasured");
+    expect(check.detail).toContain("1024");
+  });
+
+  it("fails T8 when the Plugin stopped for a reason that is not a memory death", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeOom: async () => ({ stopped: true, reason: "startup-timeout", allocatedMb: 128 }),
+      })
+    );
+    const check = byId(checks, T8_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toContain("startup-timeout");
   });
 
   it("fails T8 with renderer-died when the host heartbeat is missing", async () => {
     const checks = await runConformanceChecks(
       makeSeam({
-        probeOom: async () => ({ reason: "out-of-memory" }),
+        probeOom: async () => ({ stopped: true, reason: "out-of-memory", allocatedMb: 2_048 }),
         heartbeat: async () => false,
       })
     );

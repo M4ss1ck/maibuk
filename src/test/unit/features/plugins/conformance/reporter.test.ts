@@ -60,7 +60,10 @@ describe("createReporter", () => {
     ]);
     expect(calls[0]?.body).toEqual(PASS);
     expect(calls[1]?.body).toEqual(FAIL);
-    expect(calls[2]?.body).toMatchObject({ engine: { name: "tauri-webkitgtk" }, checks: [PASS, FAIL] });
+    expect(calls[2]?.body).toMatchObject({
+      engine: { name: "tauri-webkitgtk" },
+      checks: [PASS, FAIL],
+    });
     expect(calls[3]?.body).toBeUndefined();
   });
 
@@ -71,7 +74,9 @@ describe("createReporter", () => {
     const reporter = createReporter(CONFORMANCE_COLLECTOR_BASE_URL, fetchImpl);
 
     await expect(reporter.progress(PASS)).resolves.toBeUndefined();
-    await expect(reporter.result({ engine: { name: "web", version: "v1", userAgent: "UA" }, checks: [] })).resolves.toBeUndefined();
+    await expect(
+      reporter.result({ engine: { name: "web", version: "v1", userAgent: "UA" }, checks: [] })
+    ).resolves.toBeUndefined();
     await expect(reporter.done()).resolves.toBeUndefined();
   });
 

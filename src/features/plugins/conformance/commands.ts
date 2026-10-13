@@ -18,9 +18,9 @@
  *     stays healthy (the E2E's rule);
  *   - the rest report a typed refusal, or are stopped with a reason.
  *
- * `escapeBusyLoop` and `escapeAllocate` are terminal: `checks.ts` maps them to
- * `T7-hang` and `T8-oom`, which run as their own probes, not through
- * `runCommand`.
+ * `escapeBusyLoop`, `escapeAllocateYielding`, and `escapeAllocate` are terminal:
+ * `checks.ts` maps them to `T7-hang`, `T8-oom`, and `escape-allocate`, which run
+ * as their own probes, not through `runCommand`.
  */
 
 /** The safe outcome a fixture Command must show for its check to pass. */
@@ -38,8 +38,8 @@ export interface ConformanceEscape {
 
 /**
  * Every non-terminal fixture-hostile Command, in the order the manifest lists
- * them. The two terminal ones (`escapeBusyLoop`, `escapeAllocate`) live in
- * `checks.ts` beside their probes.
+ * them. The terminal ones (`escapeBusyLoop`, `escapeAllocateYielding`,
+ * `escapeAllocate`) live in `checks.ts` beside their probes.
  */
 export const CONFORMANCE_ESCAPES: readonly ConformanceEscape[] = [
   { command: "openPanel", name: "openPanel", safe: "mounted" },

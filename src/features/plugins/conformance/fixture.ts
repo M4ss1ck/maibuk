@@ -28,10 +28,11 @@ import type { PluginFolder, PluginFolderFile } from "@/features/plugins/types";
 export const FIXTURE_HOSTILE_ID = "fixture-hostile";
 
 /** The built fixture's files, inlined as raw text at build time (see above). */
-const RAW_FIXTURE_FILES = import.meta.glob(
-  "../../../../e2e/.output/plugins/fixture-hostile/**/*",
-  { eager: true, query: "?raw", import: "default" }
-) as Record<string, string>;
+const RAW_FIXTURE_FILES = import.meta.glob("../../../../e2e/.output/plugins/fixture-hostile/**/*", {
+  eager: true,
+  query: "?raw",
+  import: "default",
+}) as Record<string, string>;
 
 /** The Plugin-folder path from one glob key (`.../fixture-hostile/index.js`). */
 function pluginPath(globKey: string): string {

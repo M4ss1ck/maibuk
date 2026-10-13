@@ -22,14 +22,17 @@ import type { RemoteMutationRecord } from "@remote-dom/core";
 import { ThreadMessagePort } from "@quilted/threads";
 
 import { APP_VERSION } from "@/constants";
-import { savePluginApproval } from "@/features/plugins/approvals";import { loadFixtureHostile } from "@/features/plugins/conformance/fixture";
-import type {
-  CommandObservation,
-  ConformanceEngine,
-  ConformancePlatform,
-  ConformanceSeam,
-  IpcObservation,
-  StopObservation,
+import { savePluginApproval } from "@/features/plugins/approvals";
+import { loadFixtureHostile } from "@/features/plugins/conformance/fixture";
+import {
+  type CommandObservation,
+  type ConformanceEngine,
+  type ConformancePlatform,
+  type ConformanceSeam,
+  type IpcObservation,
+  type OomObservation,
+  type StopObservation,
+  T8_ALLOCATION_CAP_MB,
 } from "@/features/plugins/conformance/types";
 import { createPluginLifecycle } from "@/features/plugins/lifecycle";
 import { openPluginUiMount } from "@/features/plugins/remote-ui/mount";
@@ -55,6 +58,21 @@ const FIXTURE_HOSTILE_ID = "fixture-hostile";
 const PAGE_SETTLE_MS = 4_000;
 /** How long a terminal command (T7/T8) may take to stop the Plugin. */
 const TERMINAL_BUDGET_MS = 20_000;
+
+/**
+ * The fixture Command T8 runs: allocation in chunks with a yield between them,
+ * so the Worker answers the heartbeat and reaches its own memory limit (the
+ * fixture's `escapeAllocateYielding`).
+ */
+const YIELDING_ALLOCATION_COMMAND = "escapeAllocateYielding";
+/** T8's time budget: no stop and the cap not reached by then is `unmeasured`. */
+const OOM_BUDGET_MS = 120_000;
+/**
+ * The storage key the yielding fixture writes its running total to (MB). The
+ * fixture duplicates the string (it cannot import this module); both copies
+ * carry this comment so a change lands in both.
+ */
+const ALLOCATION_KEY = "hostile.allocationMb";
 
 /** The page each UI Command mounts (the fixture's `contributes.pages`). */
 const PAGE_BY_COMMAND: Readonly<Record<string, string>> = {
@@ -161,6 +179,8 @@ export async function createRuntimeSeam(
   const reports: string[] = [];
   let stopReason: string | null = null;
   let launched = false;
+  /** The MB the yielding allocation last reported (T8's detail reads it). */
+  let allocatedMb = 0;
 
   const { folder, pinnedHash } = await loadFixtureHostile();
   const read = readPluginManifest(folder);
@@ -198,7 +218,8 @@ export async function createRuntimeSeam(
 
   // The fixture reports escapes through `notifications.show`; capturing it here
   // is how the host reads a refusal. The storage handlers are stubbed so the
-  // flood and oversized Commands never reach the Library database.
+  // flood and oversized Commands never reach the Library database; the
+  // yielding allocation's progress writes record the MB reached (T8).
   const handlers: PluginApiHandlers = {
     "notifications.show": ({ message }) => {
       reports.push(message);
@@ -206,7 +227,10 @@ export async function createRuntimeSeam(
     },
     "storage.keys": () => [],
     "storage.get": () => null,
-    "storage.set": () => null,
+    "storage.set": ({ key, value }) => {
+      if (key === ALLOCATION_KEY && typeof value === "number") allocatedMb = value;
+      return null;
+    },
     "storage.delete": () => null,
   };
 
@@ -352,7 +376,10 @@ export async function createRuntimeSeam(
       };
     }
     if (!accepted) {
-      return { outcome: { kind: "escaped", detail: "the Plugin did not accept the mount" }, leaked };
+      return {
+        outcome: { kind: "escaped", detail: "the Plugin did not accept the mount" },
+        leaked,
+      };
     }
     if (command === "openPanel") {
       const state = lifecycle.state(FIXTURE_HOSTILE_ID);
@@ -376,11 +403,46 @@ export async function createRuntimeSeam(
   async function terminal(command: string): Promise<StopObservation> {
     const runtime = await ensureReady();
     stopReason = null;
-    void runtime.broker
-      .request(PLUGIN_COMMAND_RUN_REQUEST, { id: command })
-      .catch(() => undefined);
+    void runtime.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: command }).catch(() => undefined);
     const reason = await waitForStop(TERMINAL_BUDGET_MS);
     return { reason };
+  }
+
+  /**
+   * T8's yielding allocation. It resolves when the lifecycle stops the Plugin
+   * (with the reason it recorded), or when the Plugin outran `OOM_BUDGET_MS` or
+   * `T8_ALLOCATION_CAP_MB` without a stop — the honest `stopped: false` the
+   * check reports as `unmeasured`, with the MB the fixture last reported. On
+   * giving up it stops the Plugin so the run can continue.
+   */
+  async function probeOom(): Promise<OomObservation> {
+    const runtime = await ensureReady();
+    stopReason = null;
+    allocatedMb = 0;
+    let settled = false;
+    void runtime.broker
+      .request(PLUGIN_COMMAND_RUN_REQUEST, { id: YIELDING_ALLOCATION_COMMAND })
+      .then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        }
+      );
+    const deadline = Date.now() + OOM_BUDGET_MS;
+    while (Date.now() < deadline) {
+      if (stopReason !== null) return { stopped: true, reason: stopReason, allocatedMb };
+      const state = lifecycle.state(FIXTURE_HOSTILE_ID);
+      if (state?.status === "stopped") {
+        return { stopped: true, reason: state.reason ?? "unknown", allocatedMb };
+      }
+      if (settled) return { stopped: false, reason: "none", allocatedMb };
+      if (allocatedMb >= T8_ALLOCATION_CAP_MB) break;
+      await sleep(150);
+    }
+    lifecycle.stop(FIXTURE_HOSTILE_ID, "requested");
+    return { stopped: false, reason: "none", allocatedMb };
   }
 
   async function probeFrameIpc(): Promise<IpcObservation> {
@@ -443,7 +505,8 @@ export async function createRuntimeSeam(
     probeFrameIpc,
     probeWorkerIpc,
     probeHang: () => terminal("escapeBusyLoop"),
-    probeOom: () => terminal("escapeAllocate"),
+    probeAllocate: () => terminal("escapeAllocate"),
+    probeOom,
     heartbeat,
     dispose() {
       offChange();

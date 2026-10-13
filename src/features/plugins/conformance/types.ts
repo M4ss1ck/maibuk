@@ -68,9 +68,30 @@ export interface IpcObservation {
   detail: string;
 }
 
-/** The stop a terminal probe (T7, T8) observed. */
+/** The stop a terminal probe that always ends in a stop (T7, and the tight allocation) observed. */
 export interface StopObservation {
   reason: string;
+}
+
+/**
+ * What T8's yielding allocation observed (D4): whether the Plugin stopped at
+ * all, the stop reason when it did, and the MB the fixture reported allocating
+ * before it died. `stopped: false` is the honest "no stop within the budget"
+ * outcome — the Worker neither reached its memory limit nor was stopped.
+ */
+/**
+ * T8's allocation cap (MB). A Worker that reaches it unstopped, with the host
+ * still answering, has shown the engine sets no per-Worker memory limit below
+ * the cap; the lane stops there rather than take the test machine to its limit.
+ */
+export const T8_ALLOCATION_CAP_MB = 4_096;
+
+export interface OomObservation {
+  stopped: boolean;
+  /** The lifecycle's stop reason, or `"none"` when it never stopped. */
+  reason: string;
+  /** The MB the fixture reported allocating before the stop (0 when none). */
+  allocatedMb: number;
 }
 
 /**
@@ -89,8 +110,10 @@ export interface ConformanceSeam {
   probeWorkerIpc(): Promise<IpcObservation>;
   /** T7: the busy loop, resolved once the host stopped the Plugin. */
   probeHang(): Promise<StopObservation>;
-  /** T8: allocate-until-killed, resolved once the host stopped the Plugin. */
-  probeOom(): Promise<StopObservation>;
+  /** The tight-loop allocation: resolved once the host stopped the Plugin (any reason passes). */
+  probeAllocate(): Promise<StopObservation>;
+  /** T8: the yielding allocation, resolved once the Plugin stopped or the budget ran out. */
+  probeOom(): Promise<OomObservation>;
   /** A host heartbeat posted after T8; false when the renderer no longer answers. */
   heartbeat(): Promise<boolean>;
   /** Releases the lifecycle and every listener the seam owns. */

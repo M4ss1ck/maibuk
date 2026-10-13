@@ -8,7 +8,10 @@
 // or "hostile <id> ignored"); a spec runs the Command from the Command Palette
 // and asserts that text, plus zero leaked requests on the Node side. The
 // terminal ones (a busy loop, an allocation until killed) cannot report: the
-// host stops the Plugin with a reason instead.
+// host stops the Plugin with a reason instead. The yielding allocation is the
+// one exception: it keeps answering the host heartbeat between chunks while it
+// writes its running total to storage, so the conformance route can name the MB
+// reached before the Worker died (see ALLOCATION_KEY below).
 //
 // The Worker entry installs the Remote DOM polyfill, so it stays first among
 // the SDK imports, exactly as the other fixture Plugins do.
@@ -35,6 +38,20 @@ const LEAK_SOCKET_URL = `${LEAK_ORIGIN.replace(/^http/, "ws")}/socket`;
 
 /** How long an event-based escape waits before it calls the block a silent refusal. */
 const BLOCKED_AFTER_MS = 3_000;
+
+/**
+ * The storage key the yielding allocation writes its running total to (MB). The
+ * conformance route reads the same key (`src/features/plugins/conformance/
+ * seam.ts`) so T8's detail can name the MB the Worker reached before it died.
+ * The fixture cannot import that module, so the string is duplicated and both
+ * copies carry this comment.
+ */
+const ALLOCATION_KEY = "hostile.allocationMb";
+
+/** The MB one yielding allocation step retains. */
+const ALLOCATION_STEP_MB = 32;
+/** The pause between yielding steps: long enough to answer the host heartbeat. */
+const ALLOCATION_STEP_MS = 500;
 
 const BLOCKED = Symbol("blocked");
 
@@ -265,6 +282,25 @@ const ESCAPES: Record<string, (runtime: HostileRuntime) => Promise<string> | str
         if (performance.now() < 0) break;
       }
     }),
+
+  // The memory escape the conformance lane's T8 asks: allocate in chunks and
+  // yield between them, so the Worker keeps answering `health.check` and the
+  // lifecycle never stops it as `unresponsive`. It reaches the engine's own
+  // memory limit instead. Each step writes the running total to storage (no
+  // per-method rate limit), fire-and-forget, so the host can still name the MB
+  // reached before the Worker died.
+  escapeAllocateYielding: async (runtime) => {
+    const retained: Uint8Array[] = [];
+    for (;;) {
+      const chunk = new Uint8Array(ALLOCATION_STEP_MB * 1024 * 1024);
+      chunk.fill(1);
+      retained.push(chunk);
+      void runtime.client.storage
+        .set({ key: ALLOCATION_KEY, value: retained.length * ALLOCATION_STEP_MB })
+        .catch(() => {});
+      await sleep(ALLOCATION_STEP_MS);
+    }
+  },
 
   escapeFlood: async (runtime) => {
     const calls: Promise<RawResult>[] = [];
