@@ -425,6 +425,7 @@ test.describe("fixture-everything target Command, four ways @wf:plugins-contribu
     const dialog = await openPalette(page);
     const option = await paletteItem(page, dialog, STAMP);
     await expect(option).toBeVisible();
+    await capture(page, "plugins-target-palette");
     await page.keyboard.press("Enter");
     await expectStampedChapterA(page);
   });
@@ -471,6 +472,7 @@ test.describe("fixture-everything target Command, four ways @wf:plugins-contribu
     const button = toolbar.getByRole("button", { name: STAMP, exact: true });
     await expect(button).toBeVisible();
     await pressUntilFocused(page, "ArrowRight", button, { max: 100 });
+    await capture(page, "plugins-target-toolbar");
     await page.keyboard.press("Enter");
     await expectStampedChapterA(page);
   });
