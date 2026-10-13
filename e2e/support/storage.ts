@@ -113,7 +113,7 @@ const BUILT_PLUGIN_SEEDS: ReadonlySet<PluginSeed> = new Set([
 
 const BLANK_PATH = "/__e2e__/blank";
 
-interface PluginSeedData {
+export interface PluginSeedData {
   name: PluginSeed;
   files: { path: string; base64: string }[];
   /** The fixture's committed pin; the app must compute the same h1: from OPFS. */
@@ -188,8 +188,15 @@ function manifestOf(seed: PluginSeedData): PluginManifest {
  * Builds one approval record from the seed's defaults and the folder's own
  * bytes, then applies the spec's overrides. The per-file snapshot defaults to
  * the folder's digests, so a stale `pinnedHash` alone reads as "files changed".
+ *
+ * Exported so the seed-record test (`src/test/unit/e2e-plugin-seed.test.ts`)
+ * proves the record a spec seeds is exactly the one the approval flow writes
+ * (`approvePluginCopy`). The default grant list is empty, so a spec that wants
+ * the UI-written record for a Plugin with required Plugin Permissions states
+ * them (`granted`), like `plugins: ["fixture-everything"]` with
+ * `pluginApprovals: [{ pluginId, granted: [...required] }]`.
  */
-async function buildApproval(seed: PluginSeedData, overrides: PluginApprovalSeed): Promise<PluginApproval> {
+export async function buildApproval(seed: PluginSeedData, overrides: PluginApprovalSeed): Promise<PluginApproval> {
   const files = seedFolderFiles(seed);
   const manifest = manifestOf(seed);
   const digests = Object.fromEntries(await pluginFileDigests(files));
