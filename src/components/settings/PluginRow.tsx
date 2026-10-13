@@ -183,9 +183,11 @@ export function PluginRow({
           {entry.review.status === "review-required" && (
             <span className={BADGE_CLASS}>{t("plugins.reviewRequired")}</span>
           )}
-          <span className={BADGE_CLASS}>
-            {enabled ? t("plugins.status.enabled") : t("plugins.status.off")}
-          </span>
+          {entry.installed && (
+            <span className={BADGE_CLASS}>
+              {enabled ? t("plugins.status.enabled") : t("plugins.status.off")}
+            </span>
+          )}
         </div>
       </div>
 

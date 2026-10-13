@@ -992,6 +992,16 @@ describe("Plugin management (#443)", () => {
     expect(screen.queryByRole("button", { name: "Reinstall" })).toBeNull();
   });
 
+  it("shows the Removed badge and no status badge on a removed row", () => {
+    seed(entry({ installed: false, removed: true }));
+    render(<PluginsSection />);
+
+    expect(screen.getByText("Removed")).toBeInTheDocument();
+    // A row whose files are gone has no enable state to report.
+    expect(screen.queryByText("Off")).toBeNull();
+    expect(screen.queryByText("Enabled")).toBeNull();
+  });
+
   it("shows the expanded-row facts for an installed approved copy", async () => {
     const user = userEvent.setup();
     seed(
