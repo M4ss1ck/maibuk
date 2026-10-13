@@ -177,8 +177,9 @@ test.describe("fixture-everything contributions @wf:plugins-contributions @no-we
     await expect(navOption(page, "Everything fixture")).toBeVisible({ timeout: 15_000 });
 
     // A navigating Command is available whenever the Plugin is installed, and a
-    // global Command once it is ready (the target Command `stamp` waits for an
-    // Item Menu target, so the palette never lists it, #395).
+    // global Command once it is ready. The target Command `stamp` has no target
+    // on the Book list, so it is not runnable here; the test below runs it with
+    // a Chapter open (#446).
     const dialog = await openPalette(page);
     await paletteItem(page, dialog, "Open fixture page");
     await page.keyboard.press("Escape");
@@ -186,6 +187,32 @@ test.describe("fixture-everything contributions @wf:plugins-contributions @no-we
 
     const reopened = await openPalette(page);
     await paletteItem(page, reopened, "English only");
+  });
+
+  test("the target Command is listed and runs from the palette on the open Chapter", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(navOption(page, "Everything fixture")).toBeVisible({ timeout: 15_000 });
+    // Open the seeded Book: its last Chapter opens in the editor, the item
+    // `stamp` declares as its target, so the palette offers it here.
+    const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
+    await expect(card).toHaveCount(1);
+    await page.keyboard.press("1");
+    await expect(card).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
+
+    const dialog = await openPalette(page);
+    const option = await paletteItem(page, dialog, "Stamp");
+    await expect(option).toBeVisible();
+    await page.keyboard.press("Enter");
+
+    // The host captured the open Chapter as the target: the Plugin reads it
+    // back through the Library API and names it in its notification.
+    await expect(page.getByRole("status").filter({ hasText: /Fixture stamped .+/ })).toBeVisible({
+      timeout: 5_000,
+    });
   });
 
   test("the Settings row the Plugin declares renders", async ({ page }) => {

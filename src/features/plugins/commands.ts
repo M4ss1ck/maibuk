@@ -21,6 +21,11 @@ import {
   pluginPageRoute,
   type PluginTarget,
 } from "@/features/plugins/contributions-registry";
+import {
+  EMPTY_PLUGIN_ITEM_CONTEXT,
+  resolvePluginTarget,
+  type PluginItemContext,
+} from "@/features/plugins/target-context";
 import type { PluginLifecycle } from "@/features/plugins/types";
 import type { RunnableBinding } from "@/lib/command-runner";
 import { PLUGIN_COMMAND_PREFIX, type CommandId } from "@/lib/shortcut-registry";
@@ -85,15 +90,39 @@ export async function runPluginCommand(
   return "ran";
 }
 
+const ITEM_COMMAND_CONTEXTS = new Set<string>(["chapterItem", "noteItem", "canvasNode"]);
+
+/**
+ * The Contexts whose Plugin Commands already run from their focused item:
+ * `useItemCommands` binds them while the row has focus (`ChapterList`,
+ * `NoteListItem`, `CanvasNodeMenu`). A Command whose Contexts are all of these
+ * keeps its item-only binding, so the screen binding does not also run it —
+ * that would run the same Command twice, once with the focused row's target
+ * and once with the editor's current item, and could redirect it (#397).
+ */
+function isItemOnlyContext(contexts: readonly string[]): boolean {
+  return contexts.length > 0 && contexts.every((context) => ITEM_COMMAND_CONTEXTS.has(context));
+}
+
 /**
  * One binding per registered Command of every installed Plugin: a page's
  * navigating Command navigates (host behavior, available whenever the Plugin
- * is installed); every other Command is enabled only once its Plugin is ready
- * and, when it needs a target, only through an Item Menu binding.
+ * is installed); a target Command that declares a screen Context is enabled
+ * when its Plugin is ready and the context-target resolver finds the item the
+ * author is in, and runs against that item; every other Command is enabled
+ * once its Plugin is ready.
+ *
+ * `readContext` is read at run time, so a Command that loses its item before
+ * it fires does nothing: the resolver returns null and no `command.run` goes
+ * out. The target is captured once, at invocation, and is the target the
+ * Plugin receives even if focus moves while the request is in flight (the
+ * #397 contract). The Item Menu path is unchanged: it supplies its own
+ * captured target and live re-check.
  */
 export function pluginCommandBindings(
   lifecycle: PluginLifecycle,
-  navigate: (route: string) => void
+  navigate: (route: string) => void,
+  readContext: () => PluginItemContext = () => EMPTY_PLUGIN_ITEM_CONTEXT
 ): RunnableBinding[] {
   const bindings: RunnableBinding[] = [];
   for (const installed of lifecycle.installed()) {
@@ -104,7 +133,20 @@ export function pluginCommandBindings(
         bindings.push({ id: command.id, enabled: true, onTrigger: () => navigate(route) });
         continue;
       }
-      const hasTargets = (command.targets?.length ?? 0) > 0;
+      const targets = command.targets;
+      const hasTargets = (targets?.length ?? 0) > 0;
+      if (hasTargets && !isItemOnlyContext(command.contexts)) {
+        bindings.push({
+          id: command.id,
+          enabled: ready && resolvePluginTarget(targets, readContext()) !== null,
+          onTrigger: () => {
+            const target = resolvePluginTarget(targets, readContext());
+            if (target === null) return;
+            void runPluginCommand(lifecycle, installed.pluginId, command.localId, { target });
+          },
+        });
+        continue;
+      }
       bindings.push({
         id: command.id,
         enabled: ready && !hasTargets,

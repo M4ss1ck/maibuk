@@ -165,6 +165,12 @@ export type {
   PluginCommandOutcome,
   PluginItemTarget,
 } from "@/features/plugins/commands";
+export {
+  EMPTY_PLUGIN_ITEM_CONTEXT,
+  pluginItemContextForPath,
+  resolvePluginTarget,
+} from "@/features/plugins/target-context";
+export type { PluginItemContext } from "@/features/plugins/target-context";
 export type {
   PluginCommandDef,
   PluginContributionsSource,

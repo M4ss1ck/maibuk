@@ -4,6 +4,7 @@ import { pluginCommandBindings } from "@/features/plugins/commands";
 import { setPluginNavigator } from "@/features/plugins/navigation";
 import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 import { useInstalledPluginLifecycle, usePluginLifecycleRevision } from "@/hooks/usePluginSurface";
+import { usePluginItemContext } from "@/hooks/usePluginItemContext";
 import { useShortcuts } from "@/lib/shortcuts";
 import type { PluginLifecycle } from "@/features/plugins/types";
 import {
@@ -59,14 +60,19 @@ export function PluginCommands() {
   const lifecycle = useInstalledPluginLifecycle();
   const revision = useCommandRegistryRevision();
   const lifecycleRevision = usePluginLifecycleRevision(lifecycle);
+  const itemContext = usePluginItemContext();
+  // The bindings are rebuilt when the context changes (so enablement tracks the
+  // open Chapter); the getter reads the latest one at trigger time.
+  const itemContextRef = useRef(itemContext);
+  itemContextRef.current = itemContext;
 
   const bindings = useMemo(() => {
     if (!lifecycle) return [];
     const active = activeRouteContexts(pathname);
-    return pluginCommandBindings(lifecycle, (route) => navigate(route)).filter((binding) =>
-      getCommand(binding.id).contexts.some((context) => active.has(context))
+    return pluginCommandBindings(lifecycle, (route) => navigate(route), () => itemContextRef.current).filter(
+      (binding) => getCommand(binding.id).contexts.some((context) => active.has(context))
     );
-  }, [lifecycle, pathname, navigate, revision, lifecycleRevision]);
+  }, [lifecycle, pathname, navigate, revision, lifecycleRevision, itemContext]);
 
   useShortcuts(bindings);
 

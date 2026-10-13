@@ -18,6 +18,10 @@ import type {
 } from "@/features/plugins/types";
 import { registerCommandSource, runCommand } from "@/lib/command-runner";
 import type { PluginCommandId } from "@/lib/shortcut-registry";
+import {
+  EMPTY_PLUGIN_ITEM_CONTEXT,
+  type PluginItemContext,
+} from "@/features/plugins/target-context";
 import { pluginFolder } from "@/test/support/plugin-fixtures";
 
 const source = pluginFolder(
@@ -34,6 +38,8 @@ const source = pluginFolder(
         // keys are live only on that page.
         { id: "digest", label: "Digest", contexts: ["report"], defaults: [["Mod+Alt+j"]] },
         { id: "tag", label: "Tag chapter", contexts: ["chapterItem"], targets: ["chapter"] },
+        // A target Command that declares a screen Context: the four-ways fixture.
+        { id: "stamp", label: "Stamp", contexts: ["global", "chapterItem"], targets: ["chapter"] },
       ],
       pages: [{ id: "report", title: "Report", command: "open" }],
       itemMenuEntries: [{ command: "tag" }],
@@ -136,6 +142,105 @@ describe("pluginCommandBindings", () => {
     // A target Command is never runnable without an Item Menu target to supply.
     const tag = bindings.find((binding) => binding.id === "plugin.sample.tag");
     expect(tag?.enabled).toBe(false);
+  });
+
+  it("enables a targeted Command when a Chapter is open and runs it with that target", () => {
+    const request = vi.fn(async () => null);
+    const runtime = { broker: { request }, stop: vi.fn() } as unknown as PluginRuntime;
+    const lifecycle = stubLifecycle({ status: "ready", startReason: "launch" }, runtime);
+    const context: PluginItemContext = { ...EMPTY_PLUGIN_ITEM_CONTEXT, chapter: "A" };
+
+    const bindings = pluginCommandBindings(lifecycle, vi.fn(), () => context);
+    const stamp = bindings.find((binding) => binding.id === "plugin.sample.stamp");
+    expect(stamp?.enabled).toBe(true);
+    stamp?.onTrigger();
+    expect(request).toHaveBeenCalledWith("command.run", {
+      id: "stamp",
+      target: { kind: "chapter", id: "A" },
+    });
+  });
+
+  it("keeps a targeted Command disabled, and never runs it, with no context", () => {
+    const request = vi.fn(async () => null);
+    const runtime = { broker: { request }, stop: vi.fn() } as unknown as PluginRuntime;
+    const lifecycle = stubLifecycle({ status: "ready", startReason: "launch" }, runtime);
+
+    const bindings = pluginCommandBindings(lifecycle, vi.fn(), () => EMPTY_PLUGIN_ITEM_CONTEXT);
+    const stamp = bindings.find((binding) => binding.id === "plugin.sample.stamp");
+    expect(stamp?.enabled).toBe(false);
+    stamp?.onTrigger?.();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("keeps an item-menu-only Command item-scoped (its focused row binds it)", () => {
+    const runtime = {
+      broker: { request: vi.fn(async () => null) },
+      stop: vi.fn(),
+    } as unknown as PluginRuntime;
+    const lifecycle = stubLifecycle({ status: "ready", startReason: "launch" }, runtime);
+    const context: PluginItemContext = { ...EMPTY_PLUGIN_ITEM_CONTEXT, chapter: "A" };
+
+    const tag = pluginCommandBindings(lifecycle, vi.fn(), () => context).find(
+      (binding) => binding.id === "plugin.sample.tag"
+    );
+    expect(tag?.enabled).toBe(false);
+  });
+
+  it("captures the target at trigger time and never redirects it when the context changes", async () => {
+    let release: () => void = () => {};
+    const request = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        })
+    );
+    const runtime = { broker: { request }, stop: vi.fn() } as unknown as PluginRuntime;
+    const lifecycle = stubLifecycle({ status: "ready", startReason: "launch" }, runtime);
+    let context: PluginItemContext = { ...EMPTY_PLUGIN_ITEM_CONTEXT, chapter: "A" };
+
+    const stamp = pluginCommandBindings(lifecycle, vi.fn(), () => context).find(
+      (binding) => binding.id === "plugin.sample.stamp"
+    );
+    stamp?.onTrigger();
+    // Focus (and the resolver's context) moves to another Chapter while the
+    // request is in flight.
+    context = { ...EMPTY_PLUGIN_ITEM_CONTEXT, chapter: "B" };
+    release();
+    await Promise.resolve();
+
+    expect(request).toHaveBeenCalledWith("command.run", {
+      id: "stamp",
+      target: { kind: "chapter", id: "A" },
+    });
+  });
+
+  it("does not run when the target vanished before the trigger", () => {
+    const request = vi.fn(async () => null);
+    const runtime = { broker: { request }, stop: vi.fn() } as unknown as PluginRuntime;
+    const lifecycle = stubLifecycle({ status: "ready", startReason: "launch" }, runtime);
+    let context: PluginItemContext = { ...EMPTY_PLUGIN_ITEM_CONTEXT, chapter: "A" };
+
+    const stamp = pluginCommandBindings(lifecycle, vi.fn(), () => context).find(
+      (binding) => binding.id === "plugin.sample.stamp"
+    );
+    // The Chapter is deleted before the Command fires: the resolver (reading
+    // the store live) finds nothing, so nothing is sent.
+    context = EMPTY_PLUGIN_ITEM_CONTEXT;
+    stamp?.onTrigger();
+
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("does not run a targeted Command while the Plugin is not ready, even with a context", () => {
+    const request = vi.fn(async () => null);
+    const lifecycle = stubLifecycle({ status: "stopped", reason: null, refusal: null }, null);
+    const context: PluginItemContext = { ...EMPTY_PLUGIN_ITEM_CONTEXT, chapter: "A" };
+
+    const bindings = pluginCommandBindings(lifecycle, vi.fn(), () => context);
+    const stamp = bindings.find((binding) => binding.id === "plugin.sample.stamp");
+    expect(stamp?.enabled).toBe(false);
+    stamp?.onTrigger();
+    expect(request).not.toHaveBeenCalled();
   });
 
   it("runs through the shared runner the keyboard, palette, and voice all call", async () => {

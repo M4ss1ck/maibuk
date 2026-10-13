@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { PluginToolbarButton } from "@/components/plugins/PluginToolbarButton";
 import {
   registerPluginContributions,
@@ -8,6 +9,8 @@ import {
 } from "@/features/plugins/contributions";
 import { readPluginManifest } from "@/features/plugins/runtime";
 import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
+import type { Chapter } from "@/features/chapters/types";
+import { useChapterStore } from "@/features/chapters/store";
 import { platformMismatchManifest, pluginFolder } from "@/test/support/plugin-fixtures";
 
 const cleanups: Array<() => void> = [];
@@ -72,21 +75,36 @@ function registerRepro(): void {
   );
 }
 
+/** The button lives in the editor toolbar, so it always renders under the router. */
+function renderButton(id: string, path = "/book/b1"): void {
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <PluginToolbarButton id={id as never} iconSize="md" />
+    </MemoryRouter>
+  );
+}
+
+/** A Chapter open in the editor is the item the author is in. */
+function seedOpenChapter(id: string): void {
+  useChapterStore.setState({ currentChapter: { id } as unknown as Chapter });
+}
+
 afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
   resetPluginContributionsForTests();
+  useChapterStore.setState({ currentChapter: null });
   lifecycleStatus = "ready";
   brokerRequest = vi.fn(async () => null);
 });
 
-describe("PluginToolbarButton with targets (#395)", () => {
-  it("stays visible but disabled when its Command needs a target", () => {
+describe("PluginToolbarButton with targets (#395, #446)", () => {
+  it("stays visible but disabled when its Command needs a target and none is in context", () => {
     registerSample();
 
-    render(<PluginToolbarButton id="plugin.sample.targetButton" iconSize="md" />);
+    renderButton("plugin.sample.targetButton");
     // Visible for discovery (#395: editor buttons remain visible), but unavailable:
-    // an Item Menu supplies its item as the target, and with no suitable target
-    // the Command is unavailable rather than guessed.
+    // an Item Menu supplies its item as the target, and with no suitable item in
+    // context the Command is unavailable rather than guessed.
     const button = screen.getByRole("button", { name: "Targeted" });
     expect(button).toBeInTheDocument();
     expect(button).toBeDisabled();
@@ -95,7 +113,7 @@ describe("PluginToolbarButton with targets (#395)", () => {
   it("enables a targetless Command once its Plugin is ready", () => {
     registerSample();
 
-    render(<PluginToolbarButton id="plugin.sample.plainButton" iconSize="md" />);
+    renderButton("plugin.sample.plainButton");
     expect(screen.getByRole("button", { name: "Plain" })).toBeEnabled();
   });
 
@@ -104,7 +122,7 @@ describe("PluginToolbarButton with targets (#395)", () => {
     lifecycleStatus = "ready";
     const user = userEvent.setup();
 
-    render(<PluginToolbarButton id="plugin.sample.plainButton" iconSize="md" />);
+    renderButton("plugin.sample.plainButton");
     const button = screen.getByRole("button", { name: "Plain" });
     button.focus();
     expect(button).toHaveFocus();
@@ -118,13 +136,38 @@ describe("PluginToolbarButton with targets (#395)", () => {
     lifecycleStatus = "stopped";
     const user = userEvent.setup();
 
-    render(<PluginToolbarButton id="plugin.sample.plainButton" iconSize="md" />);
+    renderButton("plugin.sample.plainButton");
     const button = screen.getByRole("button", { name: "Plain" });
     expect(button).toBeDisabled();
     button.focus();
     await user.keyboard("{Enter}");
 
     expect(brokerRequest).not.toHaveBeenCalled();
+  });
+
+  it("enables a targeted Command with a Chapter open and runs it on that target from the keyboard", async () => {
+    registerSample();
+    seedOpenChapter("ch-1");
+    const user = userEvent.setup();
+
+    renderButton("plugin.sample.targetButton");
+    const button = screen.getByRole("button", { name: "Targeted" });
+    expect(button).toBeEnabled();
+    button.focus();
+    expect(button).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(brokerRequest).toHaveBeenCalledWith("command.run", {
+      id: "targeted",
+      target: { kind: "chapter", id: "ch-1" },
+    });
+  });
+
+  it("keeps a targeted Command disabled with no Chapter open", () => {
+    registerSample();
+
+    renderButton("plugin.sample.targetButton");
+    expect(screen.getByRole("button", { name: "Targeted" })).toBeDisabled();
   });
 });
 
@@ -135,9 +178,7 @@ describe("PluginToolbarButton with a filtered Command (#482)", () => {
   it("renders nothing instead of reading a Command the registry does not hold", () => {
     registerRepro();
 
-    expect(() =>
-      render(<PluginToolbarButton id="plugin.probe.b" iconSize="md" />)
-    ).not.toThrow();
+    expect(() => renderButton("plugin.probe.b")).not.toThrow();
     expect(screen.queryByRole("button")).toBeNull();
   });
 });

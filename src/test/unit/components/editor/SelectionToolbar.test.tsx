@@ -1,4 +1,5 @@
 import { act, render } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SelectionToolbar } from "@/components/editor/SelectionToolbar";
 import {
@@ -107,7 +108,10 @@ describe("SelectionToolbar", () => {
     useSettingsStore.setState({ toolbarConfig: { start: [...config.start, retained], end: [] } });
     const { editor, listeners } = makeEditor();
     const { container } = render(
-      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />
+      // Plugin toolbar buttons read the active route.
+      <MemoryRouter>
+        <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />
+      </MemoryRouter>
     );
     act(() => listeners.get("selectionUpdate")?.());
     expect(container.querySelector(".selection-toolbar-enter")).toBeNull();

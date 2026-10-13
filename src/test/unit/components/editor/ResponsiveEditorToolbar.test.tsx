@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ResponsiveEditorToolbar } from "@/components/editor/toolbar/ResponsiveEditorToolbar";
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
@@ -75,13 +76,17 @@ beforeEach(() => {
 
 function renderToolbar(onExitToolbar?: () => void, fixedUtilities = <div>fixed</div>) {
   return render(
-    <ResponsiveEditorToolbar
-      editor={makeToolbarEditor()}
-      callbacks={callbacks}
-      fixedUtilities={fixedUtilities}
-      utilityCluster={<div>utils</div>}
-      onExitToolbar={onExitToolbar}
-    />
+    // Plugin toolbar buttons read the active route; the toolbar always lives
+    // under the app router.
+    <MemoryRouter>
+      <ResponsiveEditorToolbar
+        editor={makeToolbarEditor()}
+        callbacks={callbacks}
+        fixedUtilities={fixedUtilities}
+        utilityCluster={<div>utils</div>}
+        onExitToolbar={onExitToolbar}
+      />
+    </MemoryRouter>
   );
 }
 
