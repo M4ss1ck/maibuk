@@ -1,6 +1,6 @@
 {
   "schema": "maibuk-plugin-conformance/1",
-  "recordedAt": "2026-10-13T23:05:35.435Z",
+  "recordedAt": "2026-10-13T23:09:42.951Z",
   "stack": {
     "tauri": "2.9.5",
     "wry": "0.53.5",
@@ -155,7 +155,7 @@
       ]
     },
     "android": {
-      "ranAt": "2026-10-13T22:21:46.082Z",
+      "ranAt": "2026-10-13T23:09:42.949Z",
       "engine": {
         "name": "android-webview",
         "version": "113.0.5672.136",
