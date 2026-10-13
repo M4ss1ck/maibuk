@@ -40,6 +40,12 @@ export interface BuildPluginOptions {
   outDir: string;
   /** Minify the built entry; the Built-in build does, the E2E fixtures keep it readable. */
   minify?: boolean;
+  /**
+   * Extra Vite `define` constants, merged over the defaults. The E2E fixture
+   * build injects the recorder origin (`__REQUEST_LOG_ORIGIN__`) this way; the
+   * Built-in build passes none.
+   */
+  define?: Record<string, string>;
 }
 
 /** The manifest fields `buildPlugin` reads; the caller validates the rest. */
@@ -55,7 +61,7 @@ interface BuildPluginManifest {
  * code-split, so the host module loader can read it.
  */
 export async function buildPlugin(options: BuildPluginOptions): Promise<void> {
-  const { sourceDir, manifestPath, outDir, minify = true } = options;
+  const { sourceDir, manifestPath, outDir, minify = true, define = {} } = options;
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as BuildPluginManifest;
   if (typeof manifest.entry !== "string" || manifest.entry === "") {
     throw new Error(`${manifestPath} declares no entry`);
@@ -66,7 +72,7 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<void> {
     // No `public/` copy: the folder must hold only what the manifest declares,
     // or the app would hash assets the Plugin never lists.
     publicDir: false,
-    define: { "process.env.NODE_ENV": JSON.stringify("production") },
+    define: { "process.env.NODE_ENV": JSON.stringify("production"), ...define },
     resolve: { alias: [{ find: "@", replacement: join(REPO_ROOT, "src") }] },
     // A Plugin bundle is React/JSX; esbuild's automatic runtime resolves
     // `react/jsx-runtime`. `jsxDev` is pinned off: this Node entry never sets

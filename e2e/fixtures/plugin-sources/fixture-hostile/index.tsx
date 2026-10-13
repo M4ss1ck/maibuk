@@ -22,9 +22,16 @@ import {
   type PluginClient,
 } from "@/plugin-sdk";
 
-/** The host every network escape targets; the hermetic E2E network only aborts it. */
-const LEAK_HOST = "hostile.invalid";
-const LEAK_URL = `https://${LEAK_HOST}/escape`;
+// The recorder origin the E2E build injects (Vite `define`
+// `__REQUEST_LOG_ORIGIN__`, `e2e/support/plugin-fixtures-build.ts`); the global
+// setup starts the recorder on a free port, so every escape targets this run's
+// server and the lane's pass rule is that its request log stays empty. Declared
+// so the fixture type-checks; the constant is replaced at build time.
+declare const __REQUEST_LOG_ORIGIN__: string;
+
+const LEAK_ORIGIN = __REQUEST_LOG_ORIGIN__;
+const LEAK_URL = `${LEAK_ORIGIN}/escape`;
+const LEAK_SOCKET_URL = `${LEAK_ORIGIN.replace(/^http/, "ws")}/socket`;
 
 /** How long an event-based escape waits before it calls the block a silent refusal. */
 const BLOCKED_AFTER_MS = 3_000;
@@ -111,7 +118,7 @@ const ESCAPES: Record<string, (runtime: HostileRuntime) => Promise<string> | str
   escapeWebSocket: () =>
     settle(
       new Promise<void>((resolve, reject) => {
-        const socket = new WebSocket(`wss://${LEAK_HOST}/socket`);
+        const socket = new WebSocket(LEAK_SOCKET_URL);
         socket.onopen = () => {
           socket.close();
           resolve();

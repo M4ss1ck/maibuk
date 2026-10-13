@@ -445,7 +445,10 @@ input a parser fixture is refreshed from.
 
 Everything generated lands in `e2e/.output/` (gitignored): the web build,
 seeds, `test-results/` (screenshot on failure, trace kept for the first failure
-of a test), and the HTML report.
+of a test), and the HTML report. The `@sandbox` lane's Node-side pass rule —
+"the local server logged zero requests" — reads `request-log-<port>.jsonl`, the
+per-run log of the recording server `support/request-log.ts` starts on a free
+port at global setup (harmless in the Sync lane, which never targets it).
 
 ```bash
 pnpm exec playwright show-report e2e/.output/report

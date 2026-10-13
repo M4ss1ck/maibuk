@@ -1,8 +1,11 @@
 // The fixture-hostile Plugin (issue #446): one Command per escape attempt, run
 // from the Command Palette by keyboard. Every escape must fail safely — the
 // Plugin reports a typed refusal, or the host stops it with a reason — and no
-// request may leave the sandbox (asserted Node-side from the request log, never
-// with `evaluate`). Tagged @sandbox so the lane runs on Chromium and Firefox.
+// request or WebSocket may leave the sandbox. That last half is asserted
+// Node-side: the escape targets the recording server the E2E global setup
+// starts (`e2e/support/request-log.ts`), and `loggedRequests()` — read with
+// Node fs, never `evaluate` — must stay empty. Tagged @sandbox so the lane runs
+// on Chromium and Firefox.
 //
 // @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
 // Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md). The
@@ -11,12 +14,11 @@
 
 import type { Locator, Page } from "@playwright/test";
 import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { loggedRequests } from "../support/request-log";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
 const PLUGIN_ID = "fixture-hostile";
-/** The host every network escape targets; the hermetic network only aborts it. */
-const LEAK_HOST = "hostile.invalid";
 
 /** The non-terminal escapes: each reports a typed refusal from its own Command. */
 const REFUSALS: { label: string; report: string }[] = [
@@ -47,21 +49,23 @@ const REFUSALS: { label: string; report: string }[] = [
 const status = (page: Page) => page.getByRole("status");
 
 /**
- * Records every request or WebSocket that reaches the network layer for the
- * leak host. The hermetic network aborts it either way; a CSP-blocked escape
- * never reaches this layer at all, so the log stays empty. This is the
- * Node-side half of the pass criterion.
+ * The Node-side half of the pass rule: the recording server logged nothing.
+ * The escape targets it (its origin is 127.0.0.1, the one origin the hermetic
+ * network lets through), so an escape that reaches the network is recorded
+ * here. Read from Node, never `page.evaluate`.
  */
-async function trackLeaks(page: Page): Promise<() => string[]> {
-  const leaked: string[] = [];
-  await page.route(/hostile\.invalid/, (route) => {
-    leaked.push(route.request().url());
-    return route.abort();
-  });
-  page.on("websocket", (socket) => {
-    if (socket.url().includes(LEAK_HOST)) leaked.push(socket.url());
-  });
-  return () => leaked;
+const leakCount = async (): Promise<number> => (await loggedRequests()).length;
+
+/**
+ * Asserts the log gained nothing while the Command ran. The file runs serial
+ * and no other spec targets the recorder, so the count is the whole log; the
+ * per-Command marker the parallel case would need is absent from the fixture's
+ * URLs.
+ */
+async function expectNoLeak(before: number): Promise<void> {
+  const after = await loggedRequests();
+  expect(after.length, "a request or WebSocket left the sandbox").toBe(before);
+  expect(after, "the request log must stay empty").toEqual([]);
 }
 
 /**
@@ -117,6 +121,11 @@ async function expandPluginRow(page: Page): Promise<Locator> {
 }
 
 test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit", () => {
+  // The leak assertion reads one shared log, so the tests in this file run one
+  // at a time: a concurrent test's recorder traffic would otherwise look like
+  // this test's leak.
+  test.describe.configure({ mode: "serial" });
+
   test.use({
     plugins: [PLUGIN_ID],
     pluginApprovals: [{ pluginId: PLUGIN_ID, granted: ["library:read"] }],
@@ -124,17 +133,18 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit",
 
   for (const attempt of REFUSALS) {
     test(`${attempt.label} fails safely with a typed refusal`, async ({ page }) => {
-      const leaked = await trackLeaks(page);
+      const before = await leakCount();
       await waitForReady(page);
       await runCommand(page, attempt.label);
       await expect(status(page).filter({ hasText: attempt.report })).toBeVisible({
         timeout: 15_000,
       });
-      expect(leaked()).toEqual([]);
+      await expectNoLeak(before);
     });
   }
 
   test("Hostile spoofed reply is ignored and the Plugin stays ready", async ({ page }) => {
+    const before = await leakCount();
     await waitForReady(page);
     await runCommand(page, "Hostile spoofed reply");
     await expect(
@@ -145,25 +155,31 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit",
     await expect(
       status(page).filter({ hasText: "hostile escapeUnknownMethod refused: unknown-method" })
     ).toBeVisible({ timeout: 15_000 });
+    await expectNoLeak(before);
   });
 
   test("Hostile message flood is refused as rate-limited", async ({ page }) => {
+    const before = await leakCount();
     await waitForReady(page);
     await runCommand(page, "Hostile message flood");
     await expect(
       status(page).filter({ hasText: "hostile escapeFlood refused: rate-limited" })
     ).toBeVisible({ timeout: 20_000 });
+    await expectNoLeak(before);
   });
 
   test("Hostile busy loop stops the Plugin as unresponsive", async ({ page }) => {
+    const before = await leakCount();
     await waitForReady(page);
     await runCommand(page, "Hostile busy loop");
     await expect(
       status(page).filter({ hasText: "stopped responding and was closed." })
     ).toBeVisible({ timeout: 20_000 });
+    await expectNoLeak(before);
   });
 
   test("Hostile allocation stops the Plugin with a memory reason", async ({ page }) => {
+    const before = await leakCount();
     await waitForReady(page);
     await runCommand(page, "Hostile allocation");
     // The Worker dies of memory pressure: the host reports out-of-memory, or,
@@ -173,25 +189,31 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit",
         hasText: /used too much memory and was stopped|stopped unexpectedly|stopped responding/,
       })
     ).toBeVisible({ timeout: 30_000 });
+    await expectNoLeak(before);
   });
 
   test("Hostile UI violation stops the Plugin with remote-ui-limit", async ({ page }) => {
+    const before = await leakCount();
     await waitForReady(page);
     await runCommand(page, "Hostile UI violation");
     await expect(
       status(page).filter({ hasText: "declared an interface Maibuk could not accept" })
     ).toBeVisible({ timeout: 15_000 });
+    await expectNoLeak(before);
   });
 
   test("Hostile UI flood stops the Plugin with remote-ui-limit", async ({ page }) => {
+    const before = await leakCount();
     await waitForReady(page);
     await runCommand(page, "Hostile UI flood");
     await expect(
       status(page).filter({ hasText: "declared an interface Maibuk could not accept" })
     ).toBeVisible({ timeout: 15_000 });
+    await expectNoLeak(before);
   });
 
   test("Hostile after revoke is refused once library:read is revoked", async ({ page }) => {
+    const before = await leakCount();
     await waitForReady(page);
     // Revoke the optional grant in Settings; the Plugin stays enabled.
     await openPluginsSection(page);
@@ -211,5 +233,6 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit",
     await expect(
       status(page).filter({ hasText: "hostile escapeAfterRevoke refused: permission-denied" })
     ).toBeVisible({ timeout: 15_000 });
+    await expectNoLeak(before);
   });
 });

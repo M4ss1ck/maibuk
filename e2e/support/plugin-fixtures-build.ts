@@ -46,12 +46,15 @@ const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
 ];
 
 /** Builds every source-built fixture Plugin the seed can read from `.output`. */
-export async function buildPluginFixtures(): Promise<void> {
+export async function buildPluginFixtures(requestLog: { origin: string }): Promise<void> {
   await mkdir(PLUGIN_BUILD_DIR, { recursive: true });
-  await Promise.all(FIXTURE_PLUGINS.map(buildFixturePlugin));
+  await Promise.all(FIXTURE_PLUGINS.map((fixture) => buildFixturePlugin(fixture, requestLog)));
 }
 
-function buildFixturePlugin(fixture: FixturePlugin): Promise<void> {
+function buildFixturePlugin(
+  fixture: FixturePlugin,
+  requestLog: { origin: string }
+): Promise<void> {
   const sourceDir = resolve(PLUGIN_SOURCES_DIR, fixture.source);
   return buildPlugin({
     sourceDir,
@@ -59,5 +62,11 @@ function buildFixturePlugin(fixture: FixturePlugin): Promise<void> {
     outDir: resolve(PLUGIN_BUILD_DIR, fixture.output),
     // The fixtures keep the bundle readable, as the lane always has.
     minify: false,
+    // Only the hostile fixture reaches the network: it gets the recorder's
+    // origin, which the global setup bound on a free port this run.
+    define:
+      fixture.source === "fixture-hostile"
+        ? { __REQUEST_LOG_ORIGIN__: JSON.stringify(requestLog.origin) }
+        : undefined,
   }).then(() => undefined);
 }
