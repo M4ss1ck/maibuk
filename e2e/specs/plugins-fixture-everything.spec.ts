@@ -12,7 +12,7 @@
 
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { isFocusWithin, expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { seedSettings } from "../support/storage";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
@@ -96,6 +96,63 @@ async function selectPaletteItem(
   await expect
     .poll(async () => (await searchbox.getAttribute("aria-activedescendant")) ?? "")
     .toContain(key);
+}
+
+// The four-ways target Command (issue #446): the Book has two Chapters, so the
+// Book opens its last (Chapter B) and the spec deliberately opens Chapter A.
+const CHAPTER_A = SEED_CHAPTERS[0].title;
+const CHAPTER_B = SEED_CHAPTERS[1].title;
+const STAMP = "Stamp";
+
+/** The `stamp` notification, whose text names the Chapter the host acted on. */
+const stampedToast = (page: Page) =>
+  page.getByRole("status").filter({ hasText: /Fixture stamped/ });
+
+/** Asserts the stamp result named Chapter A and never Chapter B. */
+async function expectStampedChapterA(page: Page): Promise<void> {
+  const toast = stampedToast(page);
+  await expect(toast).toContainText(CHAPTER_A, { timeout: 5_000 });
+  await expect(toast).not.toContainText(CHAPTER_B);
+}
+
+/**
+ * Waits until the Plugin's targeted Commands are enabled. Its page renders its
+ * Remote UI only once its Worker is ready, and a targeted Command stays disabled
+ * until its Plugin is ready, so reaching the page gates the four ways (the
+ * sandbox frame alone appears before the readiness handshake).
+ */
+async function waitForPluginReady(page: Page): Promise<void> {
+  // Reaching the Plugin page records it as the last path; a fresh "/" would be
+  // redirected back to it. Seed `lastPath` null so the return to Home sticks.
+  await seedSettings(page, { lastPath: null });
+  await page.goto("/plugin/fixture-everything/panel");
+  await expect(page.getByText("Deterministic content")).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Opens the seeded Book and leaves the deliberately chosen Chapter A open: the
+ * Book opens its last Chapter (B), then the chapter list opens Chapter A.
+ */
+async function openChapterA(page: Page): Promise<void> {
+  await waitForPluginReady(page);
+  await page.goto("/");
+  await expect(navOption(page, "Everything fixture")).toBeVisible({ timeout: 15_000 });
+
+  const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
+  await expect(card).toHaveCount(1);
+  await page.keyboard.press("1");
+  await expect(card).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  const grid = page.getByRole("grid", { name: "Chapters" });
+  const rowA = grid.getByRole("row", { name: CHAPTER_A });
+  await expect(rowA).toBeVisible();
+  await tabTo(page, grid.getByRole("row", { selected: true }));
+  await pressUntilFocused(page, "ArrowUp", rowA);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("textbox", { name: `Text of ${CHAPTER_A}` })).toBeVisible();
 }
 
 test.describe("fixture-everything approval @wf:plugins-contributions @no-webkit", () => {
@@ -192,6 +249,10 @@ test.describe("fixture-everything contributions @wf:plugins-contributions @no-we
   test("the target Command is listed and runs from the palette on the open Chapter", async ({
     page,
   }) => {
+    // Wait for the Plugin to be ready before opening the palette: the palette
+    // reads its Command states once, when it opens, so a Plugin still starting
+    // would leave `stamp` disabled and Enter would do nothing (#446).
+    await waitForPluginReady(page);
     await page.goto("/");
     await expect(navOption(page, "Everything fixture")).toBeVisible({ timeout: 15_000 });
     // Open the seeded Book: its last Chapter opens in the editor, the item
@@ -202,6 +263,8 @@ test.describe("fixture-everything contributions @wf:plugins-contributions @no-we
     await expect(card).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
+    // Wait for the Chapter to be current, so the target resolver finds it.
+    await expect(page.getByRole("textbox", { name: `Text of ${SEED_CHAPTERS[2].title}` })).toBeVisible();
 
     const dialog = await openPalette(page);
     const option = await paletteItem(page, dialog, "Stamp");
@@ -281,6 +344,79 @@ test.describe("fixture-everything contributions @wf:plugins-contributions @no-we
     // The English-only Command keeps its manifest label in Spanish.
     const reopened = await openPalette(page, "Paleta de comandos");
     await paletteItem(page, reopened, "English only");
+  });
+});
+
+test.describe("fixture-everything target Command, four ways @wf:plugins-contributions @no-webkit @sandbox", () => {
+  test.use({
+    library: "oneBookTwoChapters",
+    plugins: ["fixture-everything"],
+    pluginApprovals: [
+      { pluginId: "fixture-everything", granted: [...REQUIRED_PERMISSIONS] },
+    ],
+  });
+
+  test("runs from its Shortcut and names the open Chapter A", async ({ page }) => {
+    await openChapterA(page);
+    await page.keyboard.press("ControlOrMeta+Alt+e");
+    await expectStampedChapterA(page);
+  });
+
+  test("runs from the Command Palette by keyboard and names the open Chapter A", async ({
+    page,
+  }) => {
+    await openChapterA(page);
+    const dialog = await openPalette(page);
+    const option = await paletteItem(page, dialog, STAMP);
+    await expect(option).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expectStampedChapterA(page);
+  });
+
+  test("runs from Chapter A's Item Menu by keyboard and names it", async ({ page }) => {
+    await openChapterA(page);
+    // Leave the editor for the Chapter list; the open Chapter A is the selected
+    // row, so its Item Menu carries Chapter A as the target.
+    const pane = page.getByRole("complementary", { name: "Chapter list" });
+    for (let i = 0; i < 3; i++) {
+      if (await isFocusWithin(pane)) break;
+      await page.keyboard.press("Escape");
+    }
+    const grid = page.getByRole("grid", { name: "Chapters" });
+    const rowA = grid.getByRole("row", { name: CHAPTER_A });
+    await tabTo(page, grid.getByRole("row", { selected: true }));
+    await pressUntilFocused(page, "ArrowUp", rowA);
+    await expect(rowA).toBeFocused();
+
+    await page.keyboard.press("Shift+F10");
+    const menu = page.getByRole("menu", { name: `More actions for ${CHAPTER_A}` });
+    await expect(menu).toBeVisible();
+    await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: STAMP }), {
+      max: 15,
+    });
+    await page.keyboard.press("Enter");
+    await expectStampedChapterA(page);
+  });
+
+  test("runs from the editor toolbar button and names the open Chapter A", async ({ page }) => {
+    await seedSettings(page, { toolbarExpanded: true });
+    await openChapterA(page);
+    // Leave the editor for the Chapter list, then Tab until inside the toolbar.
+    const chapterList = page.getByRole("complementary", { name: "Chapter list" });
+    const toolbar = page.getByRole("toolbar", { name: "Toolbar" });
+    for (let i = 0; i < 2 && !(await isFocusWithin(chapterList)); i++) {
+      await page.keyboard.press("Escape");
+    }
+    await expectFocusWithin(chapterList);
+    for (let i = 0; i < 40; i++) {
+      if (await isFocusWithin(toolbar)) break;
+      await page.keyboard.press("Tab");
+    }
+    const button = toolbar.getByRole("button", { name: STAMP, exact: true });
+    await expect(button).toBeVisible();
+    await pressUntilFocused(page, "ArrowRight", button, { max: 100 });
+    await page.keyboard.press("Enter");
+    await expectStampedChapterA(page);
   });
 });
 

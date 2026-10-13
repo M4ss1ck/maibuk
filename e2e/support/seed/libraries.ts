@@ -40,6 +40,25 @@ async function oneBookThreeChapters(): Promise<void> {
   await updateBookRow(book.id, { status: "in-progress" }, "local");
 }
 
+// A Book with exactly two Chapters (issue #446). The target-Command specs open
+// Chapter A while Chapter B is the Book's last, so a result that names B proves
+// the host acted on a chapter other than the one the author is in.
+async function oneBookTwoChapters(): Promise<void> {
+  const book = await createBookRow({ ...SEED_BOOK }, "local");
+  let words = 0;
+  for (const chapter of [SEED_CHAPTERS[0], SEED_CHAPTERS[1]]) {
+    const created = await createChapterRow({ bookId: book.id, title: chapter.title }, "local");
+    const saved = await updateChapterRow(
+      created.id,
+      { content: `<p>${chapter.text}</p>` },
+      "local"
+    );
+    words += saved?.wordCount ?? 0;
+  }
+  await updateBookWordCountRow(book.id, words);
+  await updateBookRow(book.id, { status: "in-progress" }, "local");
+}
+
 async function bookShelf(): Promise<void> {
   await oneBookThreeChapters();
   for (const { title, authorName, status } of SHELF_BOOKS) {
@@ -225,6 +244,7 @@ async function pluginData(): Promise<void> {
 export const SEED_LIBRARIES = {
   empty: async () => {},
   oneBookThreeChapters,
+  oneBookTwoChapters,
   bookShelf,
   notesWithLinksAndTags,
   paletteLibrary,
