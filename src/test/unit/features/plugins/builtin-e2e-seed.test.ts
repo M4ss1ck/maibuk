@@ -71,3 +71,15 @@ describe("Built-in source E2E seed", () => {
     ]);
   });
 });
+
+// The E2E seeder cannot import `builtin.ts` (its platform import reads
+// `import.meta.env`, which the Playwright runner lacks), so it repeats the key.
+describe("E2E Built-in seed key", () => {
+  it("matches the key the E2E seeder writes", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile("e2e/support/storage.ts", "utf8");
+    expect(source).toContain(
+      `const E2E_BUILTIN_PLUGINS_STORAGE_KEY = "${E2E_BUILTIN_PLUGINS_STORAGE_KEY}";`
+    );
+  });
+});

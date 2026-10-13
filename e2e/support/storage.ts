@@ -12,13 +12,21 @@ import {
   PLUGIN_APPROVALS_STORAGE_KEY,
   serializePluginApprovals,
 } from "@/features/plugins/approvals";
-import { E2E_BUILTIN_PLUGINS_STORAGE_KEY } from "@/features/plugins/builtin";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
 import type { PluginApproval, PluginFolderFile, PluginManifest } from "@/features/plugins/types";
 import { PASTE_CLEANUP_PRESETS, type PasteCleanupPreset } from "@/features/settings/types";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
 import type { SeedName } from "./seed/libraries";
 import { REPO_ROOT, SEED_DIR } from "./seed/seeds";
+
+/**
+ * The localStorage key `src/features/plugins/builtin.ts` reads (it exports the
+ * same string as `E2E_BUILTIN_PLUGINS_STORAGE_KEY`). Kept as a literal here
+ * because that module imports app code that reads `import.meta.env`, which the
+ * Playwright runner does not define: importing it at module load aborts every
+ * spec (the seeds avoid it the same way; see `e2e/support/seed/backups-present.ts`).
+ */
+const E2E_BUILTIN_PLUGINS_STORAGE_KEY = "maibuk-e2e-built-in-plugins";
 
 /** `empty` is a fresh device: no Library in IndexedDB at all. */
 export type LibrarySeed = SeedName | "empty";
