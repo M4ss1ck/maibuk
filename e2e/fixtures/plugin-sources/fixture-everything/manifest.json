@@ -1,0 +1,58 @@
+{
+  "manifestVersion": 1,
+  "id": "fixture-everything",
+  "name": "Fixture Everything",
+  "description": "The E2E fixture-everything Plugin (issue #446): one Plugin that declares every contribution point and every Plugin Permission, with a deterministic target Command, so the E2E lane can prove the host's surfaces and the broker's permission checks against one fixture.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web"],
+  "lifecycle": "persistent",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": [
+      "library:read",
+      "library:write",
+      "editor:read",
+      "editor:decorate",
+      "secrets",
+      "network:fixture.invalid"
+    ],
+    "optional": ["editor:write", "clipboard", "process"]
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "openPage",
+        "label": "Open fixture page",
+        "contexts": ["global"],
+        "navigates": true
+      },
+      {
+        "id": "stamp",
+        "label": "Stamp",
+        "contexts": ["global", "chapterItem"],
+        "targets": ["book", "chapter"],
+        "defaults": [["Mod+Alt+e"]]
+      },
+      {
+        "id": "englishOnly",
+        "label": "English only",
+        "contexts": ["global"],
+        "voice": { "phrases": { "es": ["sellar todo"] } }
+      }
+    ],
+    "pages": [{ "id": "panel", "title": "Everything fixture", "command": "openPage" }],
+    "sidebarEntries": [{ "page": "panel", "icon": "book-open" }],
+    "settingsRows": [
+      {
+        "id": "about",
+        "label": "Fixture row",
+        "description": "A deterministic Settings row."
+      }
+    ],
+    "toolbarButtons": [{ "id": "stampButton", "command": "stamp", "icon": "stamp" }],
+    "itemMenuEntries": [{ "command": "stamp" }]
+  }
+}

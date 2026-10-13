@@ -1,0 +1,9 @@
+{
+  "name": "Fixture completo",
+  "description": "El Plugin fixture-everything de E2E (issue #446): un solo Plugin que declara todos los puntos de contribución y todos los Plugin Permissions, con un Comando objetivo determinista, para que la lane de E2E pueda probar las superficies del host y las comprobaciones de permisos del broker.",
+  "commands.openPage.label": "Abrir la página del fixture",
+  "commands.stamp.label": "Sellar",
+  "pages.panel.title": "Fixture completo",
+  "settingsRows.about.label": "Fila del fixture",
+  "settingsRows.about.description": "Una fila de ajustes determinista."
+}

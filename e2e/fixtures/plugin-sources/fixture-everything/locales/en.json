@@ -1,0 +1,10 @@
+{
+  "name": "Fixture Everything",
+  "description": "The E2E fixture-everything Plugin (issue #446): one Plugin that declares every contribution point and every Plugin Permission, with a deterministic target Command, so the E2E lane can prove the host's surfaces and the broker's permission checks against one fixture.",
+  "commands.openPage.label": "Open fixture page",
+  "commands.stamp.label": "Stamp",
+  "commands.englishOnly.label": "English only",
+  "pages.panel.title": "Everything fixture",
+  "settingsRows.about.label": "Fixture row",
+  "settingsRows.about.description": "A deterministic Settings row."
+}
