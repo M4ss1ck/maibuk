@@ -10,6 +10,12 @@ interface ImportMetaEnv {
    * other value (including unset) leaves the route out of the bundle.
    */
   readonly VITE_PLUGIN_CONFORMANCE?: string;
+  /**
+   * "1" only in the production `bench:plugins` build (#448): it turns on the
+   * User Timing marks behind `benchMarksEnabled()` (`plugin.start:<id>`,
+   * `app.gallery.first-render`), which a normal production build leaves out.
+   */
+  readonly VITE_PLUGIN_BENCH?: string;
   readonly TAURI_ENV_PLATFORM: "linux" | "windows" | "macos" | "android" | "ios" | undefined;
 }
 
