@@ -302,7 +302,7 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
     test("offers Update available and Keep my copy, which never prompts again", async ({ page }) => {
       await openPluginsSection(page);
       // The Built-in is modified and an update is offered, with one notice.
-      await expect(page.getByText("Modified Built-in copy", { exact: true })).toBeVisible();
+      await expect(page.getByText("Modified", { exact: true })).toBeVisible();
       await expect(page.getByText("Update available", { exact: true })).toBeVisible();
       await expect(updateNotice(page)).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText("Built-in", { exact: true })).toBeVisible();

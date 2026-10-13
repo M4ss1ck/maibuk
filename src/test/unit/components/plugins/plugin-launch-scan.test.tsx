@@ -22,6 +22,7 @@ import { PluginPage } from "@/pages/PluginPage";
 import { pluginFolder } from "@/test/support/plugin-fixtures";
 
 const directory: PluginDirectoryAdapter = {
+  kind: "web",
   listFolders: async () => [],
   readFolder: async () => null,
 };
@@ -29,6 +30,7 @@ const directory: PluginDirectoryAdapter = {
 const appDirectory = async (
   folder: Awaited<ReturnType<typeof pluginFolder>>
 ): Promise<PluginDirectoryAdapter> => ({
+  kind: "web",
   listFolders: async () => ["sample"],
   readFolder: async () => folder,
 });

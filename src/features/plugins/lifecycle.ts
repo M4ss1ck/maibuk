@@ -45,6 +45,7 @@ import { usePluginManagementStore } from "@/features/plugins/management";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { reviewPluginCopy } from "@/features/plugins/review";
 import { STARTUP_TIMEOUT_MS, readPluginManifest, startPlugin } from "@/features/plugins/runtime";
+import { pluginStopMessageKey } from "@/features/plugins/stop-messages";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
 import { isTutorialLibraryActive, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
@@ -81,26 +82,18 @@ export const RESTART_DELAY_MS = 1_000;
 
 /**
  * The stop toast per reason, in the current language. `requested` and `idle`
- * are normal lifecycle events and stay silent.
+ * are normal lifecycle events and stay silent. The reason-to-key map lives in
+ * the leaf `stop-messages.ts` so Settings can reuse it without this module's
+ * heavy graph; it is re-exported here for the existing callers.
  */
-export const PLUGIN_STOP_MESSAGE_KEYS = {
-  "startup-timeout": "plugins.stopped.startupTimeout",
-  unresponsive: "plugins.stopped.unresponsive",
-  throttled: "plugins.stopped.throttled",
-  "remote-ui-limit": "plugins.stopped.remoteUiLimit",
-  "out-of-memory": "plugins.stopped.outOfMemory",
-  crashed: "plugins.stopped.crashed",
-} as const;
-
-type PluginToastedStopReason = keyof typeof PLUGIN_STOP_MESSAGE_KEYS;
+export { PLUGIN_STOP_MESSAGE_KEYS } from "@/features/plugins/stop-messages";
 
 export function pluginStoppedMessage(
   name: string,
   reason: PluginLifecycleStopReason
 ): string | null {
-  if (!(reason in PLUGIN_STOP_MESSAGE_KEYS)) return null;
-  const key = PLUGIN_STOP_MESSAGE_KEYS[reason as PluginToastedStopReason];
-  return i18n.t(key, { name });
+  const key = pluginStopMessageKey(reason);
+  return key === null ? null : i18n.t(key, { name });
 }
 
 /** True for every reason a limit or a crash can produce; `requested` and `idle` are not limits. */

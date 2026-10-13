@@ -96,9 +96,25 @@ export { reviewPluginCopy } from "@/features/plugins/review";
 export { startupErrorValue } from "@/features/plugins/startup-error";
 export { createBuiltInPluginSource } from "@/features/plugins/builtin";
 export {
+  PLUGIN_KNOWN_STORAGE_KEY,
+  clearKnownPlugins,
+  getKnownPlugin,
+  listKnownPlugins,
+  markPluginDataSizeWarned,
+  markPluginRemoved,
+  saveKnownPlugin,
+} from "@/features/plugins/known";
+export type { KnownPlugin } from "@/features/plugins/known";
+export {
+  PLUGIN_DATA_SIZE_WARNING_BYTES,
+  PLUGIN_FILTER_CATEGORIES,
+  countPluginsByCategory,
   createPluginManagementStore,
+  filterPluginsByCategories,
+  pluginFilterCategories,
   usePluginManagementStore,
 } from "@/features/plugins/management";
+export type { PluginFilterCategory } from "@/features/plugins/management";
 export {
   PluginDirectoryHashError,
   hashPluginDirectory,

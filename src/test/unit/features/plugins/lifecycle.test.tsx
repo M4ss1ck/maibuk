@@ -191,6 +191,7 @@ async function createHarness(options: HarnessOptions = {}) {
     listFolders: ReturnType<typeof vi.fn>;
     readFolder: ReturnType<typeof vi.fn>;
   } = {
+    kind: "web",
     listFolders: vi.fn(async () => [...folders.keys()]),
     readFolder: vi.fn(async (name: string) => folders.get(name) ?? null),
   };
@@ -1252,6 +1253,7 @@ describe("Plugin lifecycle: stop toasts", () => {
 describe("installPluginLifecycle()", () => {
   it("installs one lifecycle and resets it for tests", async () => {
     const directory: PluginDirectoryAdapter = {
+      kind: "web",
       listFolders: async () => [],
       readFolder: async () => null,
     };
@@ -1267,6 +1269,7 @@ describe("installPluginLifecycle()", () => {
 
   it("returns a new, non-disposed lifecycle after a reset", async () => {
     const directory: PluginDirectoryAdapter = {
+      kind: "web",
       listFolders: async () => [],
       readFolder: async () => null,
     };

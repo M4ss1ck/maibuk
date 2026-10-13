@@ -66,8 +66,11 @@ pub fn run() {
             plugins::request_plugin_directory,
             plugins::forget_plugin_directory,
             plugins::add_plugin_from_zip,
+            plugins::remove_plugin_folder,
             #[cfg(desktop)]
             plugins::add_plugin_from_folder,
+            #[cfg(desktop)]
+            plugins::open_plugin_directory,
             #[cfg(desktop)]
             plugins::watch_plugin_directory,
             #[cfg(desktop)]

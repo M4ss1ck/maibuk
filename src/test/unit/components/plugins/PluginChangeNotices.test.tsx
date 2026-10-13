@@ -96,4 +96,27 @@ describe("PluginChangeNotices", () => {
     await waitFor(() => expect(usePluginManagementStore.getState().notifications).toEqual([]));
     expect(screen.queryByRole("status")).toBeNull();
   });
+
+  it("shows the 50 MB size warning, with no update copy, and dismisses it", async () => {
+    const user = userEvent.setup();
+    usePluginManagementStore.setState({
+      notifications: [{ pluginId: "echoes", name: "Echoes", hash: "", kind: "size" }],
+    });
+    renderNotices();
+
+    expect(
+      screen.getByText(
+        "Plugin data exceeds 50 MB. Large data can slow Library saving on web and enlarge Backups."
+      )
+    ).toBeInTheDocument();
+    // The size warning is not an update offer: no Review action and no update copy.
+    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
+    expect(screen.queryByText(/Update available/)).toBeNull();
+
+    const dismiss = screen.getByRole("button", { name: "Dismiss" });
+    await tabTo(user, dismiss);
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(usePluginManagementStore.getState().notifications).toEqual([]));
+  });
 });

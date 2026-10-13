@@ -32,6 +32,7 @@ savePluginApproval({
 });
 
 const directory: PluginDirectoryAdapter = {
+  kind: "web",
   listFolders: async () => ["bench"],
   readFolder: async (name) => (name === "bench" ? folder : null),
 };

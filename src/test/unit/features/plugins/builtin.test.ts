@@ -74,6 +74,7 @@ async function setup(options: SetupOptions = {}) {
   let shippedCopy = await shippedOf(shipped);
   const folders = new Map<string, PluginFolder>([[name, shipped]]);
   const directory: PluginDirectoryAdapter = {
+    kind: "web",
     listFolders: async () => [...folders.keys()],
     readFolder: async (folderName) => folders.get(folderName) ?? null,
     replaceFolder: async (folderName, files) => {

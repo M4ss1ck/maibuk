@@ -301,9 +301,10 @@ export interface PluginNotification {
   hash: string;
   /**
    * `changed`: the copy's files changed and it stays off until reviewed;
-   * `available`: a Built-in update is offered (Keep my copy / Replace).
+   * `available`: a Built-in update is offered (Keep my copy / Replace);
+   * `size`: the Plugin's stored data passed the 50 MB warning (#401, #443).
    */
-  kind: "changed" | "available";
+  kind: "changed" | "available" | "size";
 }
 
 /** One known Plugin as the management store lists it. */
@@ -324,6 +325,35 @@ export interface PluginManagementEntry {
    * installed or kept: an update is offered (never repeats per shipped hash).
    */
   updateAvailable: boolean;
+  /** True while the Plugin's files are present in the Plugin Directory. */
+  installed: boolean;
+  /**
+   * True when the author explicitly removed the Plugin and it has not come
+   * back. The row stays, offering the retained state (#443).
+   */
+  removed: boolean;
+  /**
+   * True for a Built-in whose shipped copy is in the BuiltInPluginSource, whose
+   * folder is absent, and whose manifest supports this device, so it can be
+   * installed again (#443).
+   */
+  available: boolean;
+  /**
+   * True when the manifest's declared `platforms` exclude this device; the
+   * Plugin is listed and explained but can never be enabled (#443).
+   */
+  unsupported: boolean;
+  /**
+   * The folder names in the Plugin Directory that declare this Plugin's id.
+   * Two or more means neither is enableable, and Settings names them both
+   * (#443).
+   */
+  duplicateFolders: string[];
+  /**
+   * The last limit or crash stop, shown as Stopped with its reason and a
+   * Restart action; null while the Plugin has not been stopped this way (#443).
+   */
+  stopped: { reason: PluginLifecycleStopReason } | null;
 }
 
 /** The management store's dependencies; injected in tests. */
@@ -351,8 +381,25 @@ export interface PluginManagement {
   plugins: Record<string, PluginManagementEntry>;
   /** The changed-files notifications shown now, at most one per Plugin. */
   notifications: PluginNotification[];
+  /** Each Plugin's stored data size in bytes, as `refreshDataSize` last read it. */
+  dataSizes: Record<string, number>;
   /** Re-reads the Plugin Directory and each copy's review state. */
   refresh(): Promise<void>;
+  /**
+   * Installs the Plugin a `.zip` the author picks carries, then refreshes.
+   * Resolves the installed Plugin id (the folder name), or null when the
+   * picker is cancelled or the adapter cannot install. An id whose known
+   * record was removed comes back installed and still removed until the
+   * author approves the new copy, so the #442 approval flow runs again and an
+   * app update never silently reinstalls it. An adapter error rejects, for the
+   * UI to toast (#443).
+   */
+  addFromZip(): Promise<string | null>;
+  /**
+   * Installs a Plugin from a folder the author picks (where the adapter offers
+   * one), then refreshes, exactly like `addFromZip` (#443).
+   */
+  addFromFolder(): Promise<string | null>;
   /** Approves the current copy with the chosen optional grants and starts it. */
   approve(pluginId: string, optionalGranted?: readonly PluginPermissionId[]): Promise<PluginApproveResult>;
   /** Revokes one Plugin Permission; a required revoke disables and stops it. */
@@ -361,6 +408,8 @@ export interface PluginManagement {
   enable(pluginId: string): Promise<void>;
   /** Disables the Plugin without removing it; it stops if running. */
   disable(pluginId: string): void;
+  /** Restarts a stopped Plugin through the lifecycle, clearing the shown stop reason on success. */
+  restart(pluginId: string): Promise<void>;
   /**
    * Approves the current copy: re-pins its hash, digests, version, and
    * permissions. `optionalGranted` replaces the optional grants kept from the
@@ -380,6 +429,35 @@ export interface PluginManagement {
    * and the author's pin is re-pinned to the shipped copy (#442).
    */
   replaceBuiltIn(pluginId: string, confirmed: boolean): Promise<boolean>;
+  /**
+   * Removes a Plugin: stops it, deletes its folder(s), its approval, and its
+   * startup error, marks its row removed, and — when `deleteData` — clears its
+   * stored data. A Built-in's or third-party Plugin's files go; Library data
+   * stays unless `deleteData`; Custom Shortcuts and Voice Commands are never
+   * touched. The known row stays, `removed` true and not installed (#443).
+   */
+  remove(pluginId: string, options: { deleteData: boolean }): Promise<void>;
+  /**
+   * Deletes a removed Plugin's retained data, keeping its known row and
+   * Command preferences, and refreshes the shown data size (#443).
+   */
+  deleteData(pluginId: string): Promise<void>;
+  /**
+   * Reinstalls a Built-in from the bundled copy: writes the shipped files,
+   * clears the removed mark, and refreshes, so the untouched copy is
+   * pre-granted again through the existing Built-in path. It never restores a
+   * previous approval. Returns false for a third-party Plugin or a replace the
+   * adapter refuses (#443).
+   */
+  reinstallBuiltIn(pluginId: string): Promise<boolean>;
+  /** The Plugin's stored data size in bytes (#443). */
+  dataSize(pluginId: string): Promise<number>;
+  /**
+   * Re-reads a Plugin's stored data size into `dataSizes` and, the first time
+   * it passes 50 MB, shows one notification and records the warning on the
+   * known row so it never repeats (#401, #443).
+   */
+  refreshDataSize(pluginId: string): Promise<void>;
   /** Shows one notification per (Plugin, changed hash); the same hash never repeats. */
   notifyChanged(pluginId: string, hash: string): void;
   /** Removes one Plugin's notification. */

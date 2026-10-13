@@ -77,8 +77,13 @@ export interface PluginApprovalSeed {
  */
 export interface BuiltInPluginSeed {
   id: PluginSeed;
-  /** The shipped copy's `h1:` hash the source reports. */
-  hash: string;
+  /**
+   * The shipped copy's `h1:` hash the source reports. Defaults to the seeded
+   * folder's own hash, so a spec that wants the untouched shipped copy (an
+   * install, a remove, then a Reinstall that restores it) omits it; a spec that
+   * wants a newer or older shipped copy states a different one.
+   */
+  hash?: string;
 }
 
 const PLUGIN_FIXTURES_DIR = resolve(REPO_ROOT, "e2e/fixtures/plugins");
@@ -262,7 +267,14 @@ export async function prepareDevice(
     if (seed === undefined) {
       throw new Error(`built-in "${entry.id}" names no seeded Plugin folder`);
     }
-    return { id: entry.id, manifest: manifestOf(seed), hash: entry.hash };
+    return {
+      id: entry.id,
+      manifest: manifestOf(seed),
+      hash: entry.hash ?? seed.pinnedHash,
+      // The shipped bytes a Reinstall or a Replace writes; the seeded folder's
+      // own bytes, so the written copy hashes to `hash` above.
+      files: seed.files,
+    };
   });
 
   await page.route(`**${BLANK_PATH}`, (route) =>

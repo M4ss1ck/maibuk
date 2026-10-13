@@ -2180,6 +2180,72 @@
     "ui": {
       "couldNotDisplay": "No se pudo mostrar la interfaz de este Plugin.",
       "removeValue": "Quitar {{value}}"
+    },
+    "management": {
+      "add": "Añadir Plugin",
+      "addHelp": "Instala un Plugin desde un archivo .zip, o abre y cambia la carpeta de Plugins.",
+      "addError": "No se pudo añadir el Plugin.",
+      "addFolder": "Añadir desde carpeta",
+      "all": "Todos los estados",
+      "modified": "Modificado",
+      "stopped": "Detenido",
+      "custom": "Interfaz personalizada: Maibuk no ha verificado su accesibilidad",
+      "remove": "Eliminar",
+      "reinstall": "Reinstalar",
+      "delete": "Eliminar datos",
+      "restart": "Reiniciar",
+      "cancel": "Cancelar",
+      "confirm": "Confirmar",
+      "data": "Datos de Biblioteca",
+      "files": "Archivos",
+      "credentials": "Credenciales guardadas",
+      "approval": "Copia aprobada",
+      "preferences": "Atajos personalizados y Comandos de voz",
+      "kept": "Conservados",
+      "none": "Ninguno",
+      "yes": "Presentes",
+      "no": "Ausentes",
+      "removeTitleNamed": "¿Eliminar {{name}}?",
+      "removeText": "Se eliminarán los archivos, las aprobaciones y las credenciales guardadas. Los Atajos personalizados y los Comandos de voz se conservan.",
+      "thirdWarning": "Maibuk no puede recuperar este Plugin de terceros. Para volver a usarlo, debes añadir sus archivos manualmente.",
+      "deleteAlso": "Eliminar también los datos de este Plugin",
+      "deleteText": "¿Eliminar los datos de Biblioteca conservados de este Plugin? No se puede deshacer aquí. La fila del Plugin y las preferencias de Comandos se conservan.",
+      "unsupportedText": "No disponible en este dispositivo. Este Plugin solo admite escritorio.",
+      "duplicateText": "Dos carpetas declaran el id de este Plugin: {{folders}}. Elimina una de ellas para activarlo.",
+      "reinstallText": "Instala de nuevo la copia incluida. Se recuperan los datos de Biblioteca conservados; los permisos revocados no se restablecen automáticamente.",
+      "manual": "Añade el Plugin manualmente para volver a usarlo.",
+      "empty": "Ningún Plugin coincide con estos filtros.",
+      "directoryDesktop": "Carpeta de Plugins: Documents/Maibuk/Plugins",
+      "directoryAndroid": "Maibuk guarda los Plugins de forma privada. Añade un archivo zip; no se puede cambiar la carpeta.",
+      "directoryWeb": "Los Plugins se guardan en este navegador. Añade un zip; los navegadores compatibles también pueden usar una carpeta.",
+      "open": "Abrir carpeta de Plugins",
+      "change": "Cambiar carpeta de Plugins",
+      "sizeWarning": "Los datos del Plugin superan 50 MB. Pueden ralentizar el guardado web y aumentar las Copias de seguridad.",
+      "filters": {
+        "label": "Filtrar por estado",
+        "help": "Muestra los Plugins por estado; una fila permanece si coincide con algún estado seleccionado.",
+        "count": "{{count}} estados",
+        "installed": "Instalado",
+        "available": "Disponible",
+        "builtIn": "Integrado",
+        "disabled": "Desactivado",
+        "removed": "Eliminado",
+        "unsupported": "No compatible"
+      },
+      "commands": {
+        "addPlugin": "Añadir Plugin",
+        "openDirectory": "Abrir carpeta de Plugins",
+        "changeDirectory": "Cambiar carpeta de Plugins",
+        "removePlugin": "Eliminar Plugin",
+        "reinstallBuiltIn": "Reinstalar Plugin",
+        "deletePluginData": "Eliminar datos del Plugin",
+        "restartPlugin": "Reiniciar Plugin"
+      },
+      "units": {
+        "b": "{{value}} B",
+        "kb": "{{value}} KB",
+        "mb": "{{value}} MB"
+      }
     }
   }
 }

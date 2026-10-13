@@ -14,6 +14,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { IS_ANDROID } from "@/lib/platform";
 import type { PluginDirectoryAdapter, PluginFolder } from "@/lib/platform/types";
 
 interface PluginFolderFilePayload {
@@ -29,6 +30,12 @@ interface PluginFolderPayload {
   files: PluginFolderFilePayload[];
 }
 
+/** An installed Plugin as Rust returns it: its folder name (the Plugin id) and hash. */
+interface InstalledPluginPayload {
+  id: string;
+  hash: string;
+}
+
 function decodeBase64(encoded: string): Uint8Array {
   const binary = atob(encoded);
   const bytes = new Uint8Array(binary.length);
@@ -39,7 +46,11 @@ function decodeBase64(encoded: string): Uint8Array {
 }
 
 export function createTauriPluginDirectory(): PluginDirectoryAdapter {
-  return {
+  const adapter: PluginDirectoryAdapter = {
+    // Android keeps the fixed app-private directory and installs from a `.zip`;
+    // desktop can also pick a folder, open the directory, and change it.
+    kind: IS_ANDROID ? "android" : "desktop",
+
     async listFolders(): Promise<string[]> {
       try {
         return await invoke<string[]>("list_plugin_folders");
@@ -86,6 +97,31 @@ export function createTauriPluginDirectory(): PluginDirectoryAdapter {
     },
 
     /**
+     * Installs the Plugin a `.zip` carries. Rust opens the native file picker,
+     * reads and validates the archive, and writes the folder, so no archive
+     * byte crosses IPC (ADR 0020). Resolves the installed folder name (the
+     * Plugin id), or null when the picker is cancelled; an invalid archive
+     * rejects with Rust's message.
+     */
+    async addFromZip(): Promise<string | null> {
+      const installed = await invoke<InstalledPluginPayload | null>("add_plugin_from_zip");
+      return installed?.id ?? null;
+    },
+
+    /**
+     * Deletes a Plugin folder and every file in it through Rust. `true` when it
+     * was there and is now gone, `false` when it was already absent.
+     */
+    async removeFolder(name: string): Promise<boolean> {
+      try {
+        return await invoke<boolean>("remove_plugin_folder", { id: name });
+      } catch (error) {
+        console.warn(`The Plugin folder ${name} could not be removed`, error);
+        return false;
+      }
+    },
+
+    /**
      * Watches the Plugin Directory through Rust (development mode, #442).
      * Rust owns the folder and emits `plugins://changed` with the folder name
      * once a debounced burst of writes settles; this listens for it. The
@@ -118,4 +154,36 @@ export function createTauriPluginDirectory(): PluginDirectoryAdapter {
       };
     },
   };
+
+  if (!IS_ANDROID) {
+    /**
+     * Installs a Plugin from a folder the author picks. Desktop only: Android
+     * has no author-picked folder that only Maibuk can read, so it installs
+     * from a `.zip`. Resolves the installed folder name, or null when the
+     * picker is cancelled.
+     */
+    adapter.addFromFolder = async (): Promise<string | null> => {
+      const installed = await invoke<InstalledPluginPayload | null>("add_plugin_from_folder");
+      return installed?.id ?? null;
+    };
+
+    /** Opens the Plugin Directory in the system file manager. Desktop only. */
+    adapter.openDirectory = async (): Promise<void> => {
+      await invoke("open_plugin_directory");
+    };
+
+    /**
+     * Runs the native folder picker and switches the Plugin Directory to the
+     * folder the author picks (ADR 0010: the picker is the native UI a script
+     * cannot fake, and the Rust command records the approval itself). `true`
+     * when the directory changed, `false` when the picker was cancelled.
+     * Desktop only.
+     */
+    adapter.changeDirectory = async (): Promise<boolean> => {
+      const picked = await invoke<string | null>("pick_plugin_directory", { defaultPath: null });
+      return picked !== null;
+    };
+  }
+
+  return adapter;
 }

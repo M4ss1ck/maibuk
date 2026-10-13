@@ -9,5 +9,15 @@ export const PLUGINS_SECTION = {
       labelKey: "plugins.developmentMode",
       descriptionKey: "plugins.developmentModeHelp",
     },
+    {
+      id: "pluginsAdd",
+      labelKey: "plugins.management.add",
+      descriptionKey: "plugins.management.addHelp",
+    },
+    {
+      id: "pluginsFilter",
+      labelKey: "plugins.management.filters.label",
+      descriptionKey: "plugins.management.filters.help",
+    },
   ],
 } as const satisfies SettingsSectionDef;

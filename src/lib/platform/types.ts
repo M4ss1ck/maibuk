@@ -83,6 +83,13 @@ export interface BackupAdapter {
 }
 
 export interface PluginDirectoryAdapter {
+  /**
+   * Which platform this adapter serves. The Tauri adapter reports `desktop` or
+   * `android` from the build's platform; the web adapter reports `web`. The
+   * Settings Plugins section reads it to offer "Open Plugin Directory", a
+   * directory change, and a folder picker only where they exist.
+   */
+  readonly kind: "desktop" | "android" | "web";
   /** Folder names in the Plugin Directory; [] when there is none. */
   listFolders(): Promise<string[]>;
   /** A folder's files with the bytes they were hashed from; null when the folder is gone. */
@@ -103,6 +110,47 @@ export interface PluginDirectoryAdapter {
    * cannot watch; development mode then reloads only on an explicit refresh.
    */
   watch?(onChanged: (id: string) => void): () => void;
+  /**
+   * Installs the Plugin a `.zip` carries. The author picks the file; this
+   * resolves the installed folder name (the Plugin id), or `null` when the
+   * picker is cancelled. It refuses any archive that is not one Plugin: no
+   * manifest, several manifests, an invalid id, a path that leaves the folder,
+   * an entry that is not regular, or files over the archive caps. The Tauri
+   * adapter has Rust install it, so no archive byte crosses IPC (ADR 0020);
+   * the web adapter unzips it into OPFS. Absent on an adapter that cannot
+   * install.
+   */
+  addFromZip?(): Promise<string | null>;
+  /**
+   * Installs a Plugin from a folder the author picks. Desktop only: Android
+   * installs from a `.zip` and the web folds this into `supportsFolderPicker`.
+   * Resolves the installed folder name, or `null` when the picker is
+   * cancelled.
+   */
+  addFromFolder?(): Promise<string | null>;
+  /**
+   * Deletes a Plugin folder and every file in it. `true` when it was there and
+   * is now gone, `false` when it was already absent. A name that is not a
+   * single safe folder name is refused. Absent on an adapter that cannot
+   * write.
+   */
+  removeFolder?(name: string): Promise<boolean>;
+  /** Opens the Plugin Directory in the system file manager. Desktop only. */
+  openDirectory?(): Promise<void>;
+  /**
+   * Runs the native folder picker and switches the Plugin Directory when the
+   * author picks one (ADR 0010: the picker is the only way a folder enters
+   * reach, and Rust records the approval itself). `true` when the directory
+   * changed, `false` when the picker was cancelled. Desktop only.
+   */
+  changeDirectory?(): Promise<boolean>;
+  /**
+   * Whether `addFromFolder` can open a folder picker. Present on the web, where
+   * it is `true` only when the browser exposes `window.showDirectoryPicker`,
+   * and `addFromFolder` is present exactly when it is. Absent where there is
+   * no such choice.
+   */
+  supportsFolderPicker?: boolean;
 }
 
 export type { ModelFiles, RecognizerHost } from "@/features/dictation/types";

@@ -409,6 +409,37 @@ pub fn read_folder(root: &Path, name: &str) -> Result<Option<ReadFolder>, ReadEr
     }))
 }
 
+/// Removes a Plugin folder and every file in it. `Ok(true)` when it was there
+/// and is now gone, `Ok(false)` when it was already absent. The name must be a
+/// single safe folder name, and the folder must resolve under `root` (a
+/// symlink that leaves the root is refused) so a removal can never reach
+/// outside the Plugin Directory.
+pub fn remove_folder(root: &Path, name: &str) -> Result<bool, ReadError> {
+    if !is_safe_folder_name(name) {
+        return Err(ReadError::InvalidName(name.to_string()));
+    }
+    let folder = root.join(name);
+    let metadata = match std::fs::symlink_metadata(&folder) {
+        Ok(metadata) => metadata,
+        Err(_) => return Ok(false),
+    };
+    if metadata.file_type().is_symlink() {
+        return Err(ReadError::Symlink(folder.to_string_lossy().into_owned()));
+    }
+    if !metadata.is_dir() {
+        return Ok(false);
+    }
+    if let (Ok(canonical_root), Ok(canonical)) =
+        (std::fs::canonicalize(root), std::fs::canonicalize(&folder))
+    {
+        if !canonical.starts_with(&canonical_root) {
+            return Err(ReadError::Symlink(folder.to_string_lossy().into_owned()));
+        }
+    }
+    std::fs::remove_dir_all(&folder).map_err(|e| ReadError::Io(e.to_string()))?;
+    Ok(true)
+}
+
 /// Copies a Plugin folder, using the same walk and rules as a read. The
 /// caller writes into a staging folder and replaces the installed copy only
 /// when the copy succeeded (Built-in installs, #444).
@@ -733,6 +764,46 @@ mod tests {
                 ReadError::Symlink(_)
             ));
         }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn removes_a_plugin_folder_and_every_file_in_it() {
+        let dir = temp_dir("remove");
+        let folder = plugin_folder(
+            &dir,
+            "tracer",
+            &[("manifest.json", "{}"), ("lib/util.js", "export {}")],
+        );
+
+        assert!(remove_folder(&dir, "tracer").unwrap());
+
+        assert!(!folder.exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn removing_an_absent_folder_reports_false() {
+        let dir = temp_dir("remove-absent");
+
+        assert!(!remove_folder(&dir, "absent").unwrap());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_to_remove_names_that_are_not_a_single_safe_folder_name() {
+        let dir = temp_dir("remove-names");
+        plugin_folder(&dir, "tracer", &[("manifest.json", "{}")]);
+
+        for name in ["../x", "a/b", "..", ""] {
+            let error = remove_folder(&dir, name).unwrap_err();
+            assert!(
+                matches!(error, ReadError::InvalidName(_)),
+                "{name:?}: {error:?}"
+            );
+        }
+        // The refused names never touched the folder beside them.
+        assert!(dir.join("tracer").exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -347,6 +347,31 @@ pub async fn add_plugin_from_folder<R: Runtime>(
     Ok(Some(install_folder(&source, &root)?))
 }
 
+/// Removes a Plugin folder and every file in it. Resolves to `true` when the
+/// folder was there and is now gone, `false` when it was already absent. The
+/// id is the folder name; a name that is not a single safe folder name is
+/// refused, and the folder must resolve under the current Plugin Directory.
+#[tauri::command]
+pub fn remove_plugin_folder<R: Runtime>(app: AppHandle<R>, id: String) -> Result<bool, String> {
+    let root = directory::plugin_directory(&app)?;
+    directory::remove_folder(&root, &id).map_err(|e| e.to_string())
+}
+
+/// Open the Plugin Directory in the system file manager, creating it first when
+/// it is missing. Desktop only: mobile file managers have no folder view for
+/// the app-private directory. The Rust-side opener is not reachable from the
+/// webview, so no capability change is needed.
+#[cfg(desktop)]
+#[tauri::command]
+pub fn open_plugin_directory<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+
+    let root = directory::ensure(&app)?;
+    app.opener()
+        .open_path(root.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 /// Watch the Plugin Directory and emit `plugins://changed` with the folder
 /// name when a Plugin's files change. Desktop only; Android has no hot reload
 /// in v1.

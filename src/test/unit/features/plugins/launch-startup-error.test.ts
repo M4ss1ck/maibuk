@@ -54,6 +54,7 @@ async function seedApproved(folder: PluginFolder): Promise<void> {
 function makeLifecycle(folder: PluginFolder, fail: boolean): PluginLifecycle {
   const folders = new Map([[folder.name, folder]]);
   const directory: PluginDirectoryAdapter = {
+    kind: "web",
     listFolders: async () => [...folders.keys()],
     readFolder: async (name) => folders.get(name) ?? null,
   };
