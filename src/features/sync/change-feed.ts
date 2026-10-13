@@ -143,20 +143,33 @@ export function onBulkReplaceCancelled(handler: BeforeBulkReplaceHandler): () =>
 }
 
 /**
- * Announce a bulk Library replacement, in subscription order, awaiting every
- * handler before returning. The write path calls it before replacing data, so
- * by the time the replacement begins every handler has settled. A throwing
- * handler is reported and skipped: it never blocks the replacement or the
- * remaining handlers. Never rejects.
+ * Runs every handler in one seam, in subscription order, awaiting each before
+ * the next. A throwing handler is reported under `label` and skipped: it never
+ * blocks the remaining handlers. The two seams (`prepareBulkReplace` and
+ * `cancelBulkReplace`) differ only in their handler set and their log label.
+ * Never rejects.
  */
-export async function prepareBulkReplace(reason: BulkReason): Promise<void> {
-  for (const handler of [...beforeBulkReplaceHandlers]) {
+async function runBulkReplaceHandlers(
+  handlers: Set<BeforeBulkReplaceHandler>,
+  reason: BulkReason,
+  label: string
+): Promise<void> {
+  for (const handler of [...handlers]) {
     try {
       await handler(reason);
     } catch (error) {
-      console.error("[change-feed] before-bulk-replace handler failed:", error);
+      console.error(`[change-feed] ${label} handler failed:`, error);
     }
   }
+}
+
+/**
+ * Announce a bulk Library replacement, in subscription order, awaiting every
+ * handler before returning. The write path calls it before replacing data, so
+ * by the time the replacement begins every handler has settled. Never rejects.
+ */
+export async function prepareBulkReplace(reason: BulkReason): Promise<void> {
+  await runBulkReplaceHandlers(beforeBulkReplaceHandlers, reason, "before-bulk-replace");
 }
 
 /**
@@ -165,13 +178,7 @@ export async function prepareBulkReplace(reason: BulkReason): Promise<void> {
  * Never rejects.
  */
 export async function cancelBulkReplace(reason: BulkReason): Promise<void> {
-  for (const handler of [...bulkReplaceCancelledHandlers]) {
-    try {
-      await handler(reason);
-    } catch (error) {
-      console.error("[change-feed] bulk-replace-cancelled handler failed:", error);
-    }
-  }
+  await runBulkReplaceHandlers(bulkReplaceCancelledHandlers, reason, "bulk-replace-cancelled");
 }
 
 export function resetChangeFeedForTests(): void {

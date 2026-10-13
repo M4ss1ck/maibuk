@@ -2101,7 +2101,7 @@ export const ROWS: MatrixRow[] = [
     id: "plugins-tutorial-boundary",
     area: "plugins",
     workflow:
-      "A running persistent Plugin crosses the Tutorial boundary from Settings → Tutorial → Start from the beginning: its Worker stays alive, reports the Library became unavailable (reason: tutorial) while the Tutorial runs, and reports it available again after Esc skips the run; asserts: the fixture's run report naming its startReason, the unavailable and available reports, and no second run report; persists: no",
+      "A running persistent Plugin crosses the Tutorial boundary from Settings → Tutorial → Start from the beginning: its Worker stays alive, reports the Library became unavailable naming the reason (library available: false (tutorial)) while the Tutorial runs, and reports it available again naming the reason (library available: true (tutorial)) after Esc skips the run; asserts: the fixture's run report naming its startReason, the unavailable and available reports each naming the tutorial reason, and no second run report; persists: no",
     edges: [],
     terms: ["Plugin", "Tutorial", "Library"],
     shortcuts: [],

@@ -22,10 +22,10 @@ const startedWith = (page: Page, reason: string) =>
   page.getByRole("status").filter({ hasText: `started: ${reason}` });
 /** The Worker's report that the Library became unavailable (the Tutorial). */
 const unavailable = (page: Page) =>
-  page.getByRole("status").filter({ hasText: "library available: false" });
-/** The Worker's report that the Library became available again. */
+  page.getByRole("status").filter({ hasText: "library available: false (tutorial)" });
+/** The Worker's report that the Library became available again (the Tutorial). */
 const available = (page: Page) =>
-  page.getByRole("status").filter({ hasText: "library available: true" });
+  page.getByRole("status").filter({ hasText: "library available: true (tutorial)" });
 
 const daily = (page: Page) => page.getByRole("row").filter({ hasText: "Daily" });
 const manual = (page: Page) => page.getByRole("row").filter({ hasText: "Manual" });

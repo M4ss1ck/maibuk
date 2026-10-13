@@ -711,6 +711,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       // toasts nothing and grants no automatic restart. Built-ins have no
       // exemption.
       stopEntry(entry, "requested");
+      // A stop drops the Plugin's editor highlights, exactly as an explicit
+      // stop does, so a mark accepted against the Library that is going away
+      // never surfaces on its replacement.
+      clearPluginHighlights(entry.installed.pluginId);
       pluginIds.push(entry.installed.pluginId);
     }
     pendingBulkReplace = { reason, pluginIds };

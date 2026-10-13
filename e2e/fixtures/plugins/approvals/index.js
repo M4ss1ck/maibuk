@@ -91,8 +91,11 @@ export function setup(port) {
     }
     if (message.kind === "event") {
       if (message.event === "library.availabilityChanged") {
-        const available = message.payload && message.payload.available;
-        report(`library available: ${available === true}`);
+        const payload = message.payload || {};
+        // The event's reason is reported when the host sends one, so a spec
+        // can assert the Tutorial boundary's reason on both sides (#445).
+        const reason = typeof payload.reason === "string" ? ` (${payload.reason})` : "";
+        report(`library available: ${payload.available === true}${reason}`);
       }
       return;
     }

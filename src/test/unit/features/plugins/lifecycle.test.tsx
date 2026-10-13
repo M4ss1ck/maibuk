@@ -1794,6 +1794,30 @@ describe("Plugin lifecycle: bulk Library replacement", () => {
     expect(h.framesFor("alpha")[1].receivedStartReason).toBe("restore");
   });
 
+  it("clears a running Plugin's editor highlights before the replacement", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
+
+    const editor = new Editor({
+      extensions: createRichTextExtensions(),
+      content: "<p>one two</p>",
+    });
+    document.body.appendChild(editor.view.dom);
+    editor.view.dom.focus();
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+    setPluginEditorHighlights("alpha", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
+
+    // A stop for the replacement drops the highlight like any other stop, so a
+    // mark accepted against the Library that is going away never surfaces.
+    await prepareBulkReplace("restore");
+
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(0);
+
+    editor.destroy();
+  });
+
   it("stops and restarts a running Built-in with no exemption", async () => {
     const manifest: PluginManifest = { ...PLUGIN_MANIFEST, id: "maibuk-echoes", name: "Echoes" };
     const folder = pluginFolder({}, manifest);
