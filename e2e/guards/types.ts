@@ -33,6 +33,7 @@ export type RowTag =
   | "no-webkit"
   | "mac-platform"
   | "touch"
+  | "sandbox"
   | "clock"
   | "download"
   | "filechooser"

@@ -36,10 +36,17 @@ export type TutorialProgressSeed = "dismissed" | "clean";
 
 /**
  * A fixture Plugin the seed can write into the web Plugin Directory (OPFS). The
- * `tracer` and `approvals` folders are committed and used as-is; `remote-ui` is
- * built from source at global setup.
+ * `tracer` and `approvals` folders are committed and used as-is; `remote-ui`,
+ * `fixture-hostile`, `fixture-everything`, and `fixture-everything-on-demand`
+ * are built from source at global setup.
  */
-export type PluginSeed = "tracer" | "remote-ui" | "approvals";
+export type PluginSeed =
+  | "tracer"
+  | "remote-ui"
+  | "approvals"
+  | "fixture-hostile"
+  | "fixture-everything"
+  | "fixture-everything-on-demand";
 
 /** A seeded folder with files overridden (path -> UTF-8 text), never committed. */
 export interface PluginSeedOverride {
@@ -98,9 +105,17 @@ const PLUGIN_FIXTURES_DIR = resolve(REPO_ROOT, "e2e/fixtures/plugins");
 /** The source-built fixture Plugins `buildPluginFixtures` leaves at global setup. */
 const PLUGIN_BUILD_DIR = resolve(REPO_ROOT, "e2e/.output/plugins");
 
+/** The fixture Plugins that live under `.output/plugins`, not the committed fixtures. */
+const BUILT_PLUGIN_SEEDS: ReadonlySet<PluginSeed> = new Set([
+  "remote-ui",
+  "fixture-hostile",
+  "fixture-everything",
+  "fixture-everything-on-demand",
+]);
+
 const BLANK_PATH = "/__e2e__/blank";
 
-interface PluginSeedData {
+export interface PluginSeedData {
   name: PluginSeed;
   files: { path: string; base64: string }[];
   /** The fixture's committed pin; the app must compute the same h1: from OPFS. */
@@ -115,12 +130,12 @@ async function readPluginSeed(
   // `tracer` is committed and used as-is, pinned by its committed
   // `tracer.expected.json`. `approvals` is committed without a pinned file:
   // its folder hash is computed here, so a single fixture serves approved,
-  // changed, and Built-in seeds. `remote-ui` is built from source at global
-  // setup, so its pin is computed from the built bytes the app will hash.
-  const dir =
-    name === "remote-ui"
-      ? await builtPluginSeed(name)
-      : { dir: resolve(PLUGIN_FIXTURES_DIR, name) };
+  // changed, and Built-in seeds. The built fixtures are built from source at
+  // global setup, so their pin is computed from the built bytes the app will
+  // hash.
+  const dir = BUILT_PLUGIN_SEEDS.has(name)
+    ? await builtPluginSeed(name)
+    : { dir: resolve(PLUGIN_FIXTURES_DIR, name) };
   let files = readFolderFiles(dir.dir);
   if (overrides !== undefined) {
     files = files.filter((file) => !(file.path in overrides));
@@ -175,8 +190,15 @@ function manifestOf(seed: PluginSeedData): PluginManifest {
  * Builds one approval record from the seed's defaults and the folder's own
  * bytes, then applies the spec's overrides. The per-file snapshot defaults to
  * the folder's digests, so a stale `pinnedHash` alone reads as "files changed".
+ *
+ * Exported so the seed-record test (`src/test/unit/e2e-plugin-seed.test.ts`)
+ * proves the record a spec seeds is exactly the one the approval flow writes
+ * (`approvePluginCopy`). The default grant list is empty, so a spec that wants
+ * the UI-written record for a Plugin with required Plugin Permissions states
+ * them (`granted`), like `plugins: ["fixture-everything"]` with
+ * `pluginApprovals: [{ pluginId, granted: [...required] }]`.
  */
-async function buildApproval(seed: PluginSeedData, overrides: PluginApprovalSeed): Promise<PluginApproval> {
+export async function buildApproval(seed: PluginSeedData, overrides: PluginApprovalSeed): Promise<PluginApproval> {
   const files = seedFolderFiles(seed);
   const manifest = manifestOf(seed);
   const digests = Object.fromEntries(await pluginFileDigests(files));

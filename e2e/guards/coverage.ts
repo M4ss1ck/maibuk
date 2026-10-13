@@ -42,6 +42,12 @@ export interface GuardInput {
   glossaryMd: string;
   shortcutRegistrySource: string;
   appRoutesSource: string;
+  /**
+   * Full ids of every Built-in Plugin Command (`plugin.<pluginId>.<localId>`),
+   * read from the manifests `plugins/builtins.json` lists. They are Commands
+   * like any other: each needs a matrix row and an `@sc:` tag, or an exclusion.
+   */
+  builtInPluginCommandIds: string[];
   /** Every `e2e/specs/**` file. */
   specs: SourceFile[];
   /** Every other `.ts`/`.mjs` file under `e2e/` (support, config, runner). */
@@ -97,6 +103,26 @@ function parseCommandEntries(source: string): { id: string; body: string }[] {
 /** Keys of the `COMMANDS` object literal in src/lib/shortcut-registry.ts. */
 export function parseShortcutIds(source: string): string[] {
   return parseCommandEntries(source).map((entry) => entry.id);
+}
+
+/**
+ * Full ids of a Built-in Plugin's Commands from its manifest source, derived
+ * as `plugin.<pluginId>.<localId>` (src/lib/shortcut-registry.ts
+ * `registerPluginCommands`). A manifest with no `contributes.commands` yields
+ * none. Malformed JSON throws, so the guard fails rather than skip a Plugin.
+ */
+export function parsePluginCommandIds(pluginId: string, manifestSource: string): string[] {
+  let manifest: { contributes?: { commands?: unknown } };
+  try {
+    manifest = JSON.parse(manifestSource) as typeof manifest;
+  } catch {
+    throw new Error(`plugin ${pluginId}: manifest is not valid JSON`);
+  }
+  const commands = Array.isArray(manifest.contributes?.commands) ? manifest.contributes.commands : [];
+  return commands
+    .map((command) => (command as { id?: unknown } | null)?.id)
+    .filter((id): id is string => typeof id === "string")
+    .map((id) => `plugin.${pluginId}.${id}`);
 }
 
 /**
@@ -342,7 +368,10 @@ export function checkCoverage(input: GuardInput): Problem[] {
   const termNames = new Set(glossaryTerms.map((t) => t.term));
   const sections = new Set(parseGlossarySections(input.glossaryMd));
   const shortcutIds = parseShortcutIds(input.shortcutRegistrySource);
-  const shortcutSet = new Set(shortcutIds);
+  // A Built-in Plugin Command is a Command like any other: it is accepted as an
+  // `@sc:` id and it must be covered by a matrix row or an exclusion.
+  const shippedCommandIds = [...shortcutIds, ...input.builtInPluginCommandIds];
+  const shortcutSet = new Set(shippedCommandIds);
   const keyless = new Set(parseKeylessCommandIds(input.shortcutRegistrySource));
   const routes = parseAppRoutes(input.appRoutesSource);
   const routeSet = new Set(routes);
@@ -532,7 +561,7 @@ export function checkCoverage(input: GuardInput): Problem[] {
     );
   }
   const rowShortcuts = new Set(input.rows.flatMap((r) => r.shortcuts));
-  for (const id of shortcutIds) {
+  for (const id of shippedCommandIds) {
     if (keyless.has(id) || excluded.shortcut.has(id) || rowShortcuts.has(id)) continue;
     add("shortcut-uncovered", `shortcut ${id} has no matrix row and no exclusion`);
   }

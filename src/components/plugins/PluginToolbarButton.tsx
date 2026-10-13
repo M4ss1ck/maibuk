@@ -1,8 +1,10 @@
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ToolbarButton } from "@/components/editor/ToolbarButton";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
 import { pluginCommandId, runPluginCommand } from "@/features/plugins/commands";
 import { currentUILanguage, getPluginCommand } from "@/features/plugins/contributions-registry";
+import { resolvePluginTarget } from "@/features/plugins/target-context";
 import { registeredToolbarButtons } from "@/features/settings/toolbar-config";
 import type { PluginToolbarButtonId } from "@/features/settings/toolbar-config";
 import {
@@ -10,6 +12,7 @@ import {
   usePluginLifecycleRevision,
   usePluginSurface,
 } from "@/hooks/usePluginSurface";
+import { usePluginItemContext } from "@/hooks/usePluginItemContext";
 import { useToolbarRegistryRevision } from "@/hooks/useToolbarRegistryRevision";
 import { commandLabel } from "@/lib/shortcut-registry";
 
@@ -19,10 +22,10 @@ import { commandLabel } from "@/lib/shortcut-registry";
  * tooltip. It is disabled until its Plugin is ready, and mounted means its
  * Plugin's toolbar surface is reachable (#401).
  *
- * A Command with `targets` has no target in the toolbar: an Item Menu supplies
- * its item as the target, and with no suitable target the Command is
- * unavailable rather than guessed. The button stays visible for discovery and
- * is disabled (#395).
+ * A Command with `targets` acts on the item the author is in (a Chapter in the
+ * editor, an open Note or Canvas), resolved from the same stores the Item Menu
+ * path uses (#446). It stays visible for discovery and is disabled when no
+ * declared kind is in context, rather than acting on a guessed target (#395).
  */
 export function PluginToolbarButton({
   id,
@@ -37,21 +40,39 @@ export function PluginToolbarButton({
   usePluginLifecycleRevision(lifecycle);
   const button = registeredToolbarButtons().find((candidate) => candidate.id === id);
   usePluginSurface(button?.pluginId, `toolbar:${id}`);
+  const itemContext = usePluginItemContext();
+  const itemContextRef = useRef(itemContext);
+  itemContextRef.current = itemContext;
 
   if (button === undefined || button.command === undefined) return null;
   const commandId = pluginCommandId(button.pluginId, button.command);
   const label = commandLabel(commandId, t, currentUILanguage());
   const ready = lifecycle?.state(button.pluginId)?.status === "ready";
-  const hasTargets = (getPluginCommand(button.pluginId, button.command)?.targets?.length ?? 0) > 0;
+  const targets = getPluginCommand(button.pluginId, button.command)?.targets;
+  const hasTargets = (targets?.length ?? 0) > 0;
+  const target = hasTargets && targets !== undefined ? resolvePluginTarget(targets, itemContext) : null;
   const icon = iconSize === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
 
   return (
     <ToolbarButton
       label={label}
       shortcut={commandId}
-      disabled={!ready || hasTargets}
+      disabled={!ready || (hasTargets && target === null)}
       onClick={() => {
-        if (lifecycle) void runPluginCommand(lifecycle, button.pluginId, button.command as string);
+        if (!lifecycle) return;
+        // Captured now, at invocation: a target that vanished since the last
+        // render never runs, and the one captured is never redirected later.
+        const live =
+          hasTargets && targets !== undefined
+            ? resolvePluginTarget(targets, itemContextRef.current)
+            : null;
+        if (hasTargets && live === null) return;
+        void runPluginCommand(
+          lifecycle,
+          button.pluginId,
+          button.command as string,
+          live !== null ? { target: live } : {}
+        );
       }}
     >
       <PluginIcon icon={button.icon} className={icon} />

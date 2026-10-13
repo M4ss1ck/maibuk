@@ -1,10 +1,11 @@
 /**
  * Builds the Built-in Plugins into installable folders plus the shipped
- * `index.json` (issue #444). Each Plugin builds with Vite the same way the E2E
- * fixture Plugins do (`e2e/support/plugin-fixtures-build.ts`): one self-contained
- * ESM file with nothing left external and no code splitting, so the host module
- * loader can read it. The SDK from `@/plugin-sdk` bundles in; the built entry is
- * the Plugin plus the SDK together.
+ * `index.json` (issue #444). Each Plugin builds with Vite through `buildPlugin`,
+ * the same routine the E2E fixture Plugins call
+ * (`e2e/support/plugin-fixtures-build.ts`): one self-contained ESM file with
+ * nothing left external and no code splitting, so the host module loader can
+ * read it. The SDK from `@/plugin-sdk` bundles in; the built entry is the Plugin
+ * plus the SDK together.
  *
  * The output is `<outRoot>/<id>/` (manifest, entry, copied assets and locales)
  * and `<outRoot>/index.json`, which the app installs from. Fixture Plugins are
@@ -16,12 +17,11 @@
  *
  *   tsx scripts/build-builtin-plugins.ts [--target web|desktop|android]
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { readdirSync, readFileSync } from "node:fs";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { pathToFileURL } from "node:url";
-import { build } from "vite";
 import { compareUtf8, hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { PLUGIN_PLATFORMS } from "@/features/plugins/manifest-schema";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
@@ -31,6 +31,7 @@ import type {
   PluginFolderFile,
   PluginManifest,
 } from "@/features/plugins/types";
+import { buildPlugin } from "./build-plugin";
 
 /** The repo root, from this script's own location (`scripts/`). */
 const REPO_ROOT = resolve(import.meta.dirname, "..");
@@ -71,47 +72,19 @@ function readFolderFiles(dir: string): PluginFolderFile[] {
     });
 }
 
-/** The Plugin entry source, `index.tsx` preferred over `index.ts`. */
-function resolveEntry(sourceDir: string): string {
-  for (const name of ["index.tsx", "index.ts"]) {
-    const candidate = join(sourceDir, name);
-    if (existsSync(candidate)) return candidate;
+/** Reads and validates one manifest file, throwing every problem at once. */
+function validateManifestFile(manifestPath: string, builtIn: boolean): PluginManifest {
+  const manifestText = readFileSync(manifestPath, "utf8");
+  const validation = parsePluginManifest(manifestText, { builtIn });
+  if (!validation.ok) {
+    const problems = validation.problems
+      .map(
+        (problem) => `${problem.path === "" ? "<manifest>" : problem.path}: ${problem.message}`
+      )
+      .join("; ");
+    throw new Error(`${manifestPath} is not a valid Plugin manifest: ${problems}`);
   }
-  throw new Error(`no entry (index.ts or index.tsx) in ${sourceDir}`);
-}
-
-/** Builds one Plugin source into `<outRoot>/<id>/` as one self-contained ESM file. */
-async function buildPlugin(sourceDir: string, outDir: string, manifest: PluginManifest) {
-  await build({
-    configFile: false,
-    logLevel: "warn",
-    // No `public/` copy: the folder must hold only what the manifest declares,
-    // or the app would hash assets the Plugin never lists.
-    publicDir: false,
-    define: { "process.env.NODE_ENV": JSON.stringify("production") },
-    resolve: { alias: [{ find: "@", replacement: join(REPO_ROOT, "src") }] },
-    // A Plugin bundle is React/JSX; esbuild's automatic runtime resolves
-    // `react/jsx-runtime`. `jsxDev` is pinned off for the same reason as the E2E
-    // fixtures: this Node entry never sets `NODE_ENV`, so the transform would
-    // otherwise emit `jsxDEV`, which React's production runtime ships as
-    // `undefined`.
-    esbuild: { jsx: "automatic", jsxDev: false },
-    build: {
-      outDir,
-      emptyOutDir: true,
-      minify: true,
-      // One self-contained ESM file named exactly what the manifest declares.
-      lib: {
-        entry: resolveEntry(sourceDir),
-        formats: ["es"],
-        fileName: () => manifest.entry,
-      },
-      rollupOptions: {
-        external: [],
-        output: { inlineDynamicImports: true },
-      },
-    },
-  });
+  return validation.manifest;
 }
 
 /**
@@ -133,17 +106,8 @@ export async function buildBuiltInPlugins(
   const plugins: BuiltInPluginIndexEntry[] = [];
   for (const id of ids) {
     const sourceDir = join(sourceRoot, id);
-    const manifestText = readFileSync(join(sourceDir, "manifest.json"), "utf8");
-    const validation = parsePluginManifest(manifestText, { builtIn: true });
-    if (!validation.ok) {
-      const problems = validation.problems
-        .map(
-          (problem) => `${problem.path === "" ? "<manifest>" : problem.path}: ${problem.message}`
-        )
-        .join("; ");
-      throw new Error(`${id}/manifest.json is not a valid Plugin manifest: ${problems}`);
-    }
-    const manifest = validation.manifest;
+    const manifestPath = join(sourceDir, "manifest.json");
+    const manifest = validateManifestFile(manifestPath, true);
 
     if (!manifest.platforms.includes(target)) {
       console.log(`omitted ${id}: platforms exclude ${target}`);
@@ -151,17 +115,7 @@ export async function buildBuiltInPlugins(
     }
 
     const outDir = join(outRoot, id);
-    await buildPlugin(sourceDir, outDir, manifest);
-    if (!existsSync(join(outDir, manifest.entry))) {
-      throw new Error(
-        `built ${id} but ${manifest.entry} is missing; the manifest entry must match`
-      );
-    }
-    await cp(join(sourceDir, "manifest.json"), join(outDir, "manifest.json"));
-    for (const folder of ["assets", "locales"]) {
-      const from = join(sourceDir, folder);
-      if (existsSync(from)) await cp(from, join(outDir, folder), { recursive: true });
-    }
+    await buildPlugin({ sourceDir, manifestPath, outDir });
 
     const files = readFolderFiles(outDir);
     const hash = await hashPluginDirectory(files);

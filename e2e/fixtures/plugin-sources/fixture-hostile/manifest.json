@@ -1,0 +1,65 @@
+{
+  "manifestVersion": 1,
+  "id": "fixture-hostile",
+  "name": "Fixture Hostile",
+  "description": "The E2E fixture-hostile Plugin (issue #446): one Command per escape attempt, so the @sandbox lane can prove the sandbox, the CSP, the broker, and the Remote UI validator refuse every escape safely on the real engines. It is never shipped in a product bundle.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web"],
+  "lifecycle": "persistent",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": [],
+    "optional": ["library:read"]
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "openPanel",
+        "label": "Open hostile fixture",
+        "contexts": ["global"],
+        "navigates": true
+      },
+      {
+        "id": "uiViolation",
+        "label": "Hostile UI violation",
+        "contexts": ["global"],
+        "navigates": true
+      },
+      {
+        "id": "uiFlood",
+        "label": "Hostile UI flood",
+        "contexts": ["global"],
+        "navigates": true
+      },
+      { "id": "escapeFetch", "label": "Hostile fetch", "contexts": ["global"] },
+      { "id": "escapeXhr", "label": "Hostile XHR", "contexts": ["global"] },
+      { "id": "escapeWebSocket", "label": "Hostile WebSocket", "contexts": ["global"] },
+      { "id": "escapeEventSource", "label": "Hostile EventSource", "contexts": ["global"] },
+      { "id": "escapeSendBeacon", "label": "Hostile sendBeacon", "contexts": ["global"] },
+      { "id": "escapeImportScripts", "label": "Hostile importScripts", "contexts": ["global"] },
+      { "id": "escapeDynamicImport", "label": "Hostile dynamic import", "contexts": ["global"] },
+      { "id": "escapeEval", "label": "Hostile eval", "contexts": ["global"] },
+      { "id": "escapeDataWorker", "label": "Hostile data Worker", "contexts": ["global"] },
+      { "id": "escapeIndexedDb", "label": "Hostile IndexedDB", "contexts": ["global"] },
+      { "id": "escapeCaches", "label": "Hostile caches", "contexts": ["global"] },
+      { "id": "escapeLocalStorage", "label": "Hostile localStorage", "contexts": ["global"] },
+      { "id": "escapeTauriIpc", "label": "Hostile Tauri IPC", "contexts": ["global"] },
+      { "id": "escapeOversized", "label": "Hostile oversized payload", "contexts": ["global"] },
+      { "id": "escapeUnknownMethod", "label": "Hostile unknown method", "contexts": ["global"] },
+      { "id": "escapeSpoofedReply", "label": "Hostile spoofed reply", "contexts": ["global"] },
+      { "id": "escapeWrite", "label": "Hostile write", "contexts": ["global"] },
+      { "id": "escapeAfterRevoke", "label": "Hostile after revoke", "contexts": ["global"] },
+      { "id": "escapeBusyLoop", "label": "Hostile busy loop", "contexts": ["global"] },
+      { "id": "escapeAllocate", "label": "Hostile allocation", "contexts": ["global"] },
+      { "id": "escapeFlood", "label": "Hostile message flood", "contexts": ["global"] }
+    ],
+    "pages": [
+      { "id": "panel", "title": "Hostile fixture", "command": "openPanel" },
+      { "id": "violation", "title": "Hostile UI violation", "command": "uiViolation" },
+      { "id": "flood", "title": "Hostile UI flood", "command": "uiFlood" }
+    ]
+  }
+}

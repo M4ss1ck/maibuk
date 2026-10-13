@@ -21,11 +21,11 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "behavior",
-    items: ["Plugin tracer on Playwright WebKit"],
+    items: ["Plugin tracer on Playwright WebKit", "fixture Plugins on Playwright WebKit"],
     reason:
-      "The pinned Playwright 1.62.1 WebKit build has no OPFS (navigator.storage is undefined; microsoft/playwright#18235, fixed by the WebKit r2339 roll in a later Playwright), so the web Plugin Directory cannot be seeded there. The row is tagged @no-webkit and runs on chromium and firefox; the sandbox itself is engine-verified on WebKit by the T1 probe (docs/research/plugins-engine-verification.md), and the prelude/bootstrap wire harness (e2e/specs/plugins-sandbox.spec.ts) runs on WebKit because it needs no OPFS",
+      "The pinned Playwright 1.62.1 WebKit build has no OPFS (navigator.storage is undefined; microsoft/playwright#18235, fixed by the WebKit r2339 roll in a later Playwright), so the web Plugin Directory cannot be seeded there. The rows are tagged @no-webkit and run on chromium and firefox; the sandbox itself is engine-verified on WebKit by the T1 probe (docs/research/plugins-engine-verification.md), and the prelude/bootstrap wire harness (e2e/specs/plugins-sandbox.spec.ts) runs on WebKit because it needs no OPFS",
     owner:
-      "Playwright version bump (https://github.com/M4ss1ck/maibuk/issues/479); the row returns to WebKit with it",
+      "Playwright version bump (https://github.com/M4ss1ck/maibuk/issues/479); the rows return to WebKit with it",
   },
   {
     kind: "shortcut",
@@ -2221,6 +2221,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-sandbox",
+    area: "plugins",
+    workflow:
+      "The Plugin sandbox refuses an escape and the host shows a typed refusal or stop reason, proven by the @sandbox lane on Chromium, WebKit, and Firefox: the fixed host prelude boots a Plugin exactly once whichever way it registers its message handler, and the frame bootstrap forwards only the first ready (and error) message, so a Plugin's own posts are not a side channel to the host window; asserts: the boot count and the forwarded-message counts; persists: no",
+    edges: [],
+    terms: ["Plugin"],
+    shortcuts: [],
+    routes: ["/"],
+    fixture: "empty",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-contributions",
     area: "plugins",
     workflow:
@@ -2234,9 +2247,13 @@ export const ROWS: MatrixRow[] = [
       "A target Command runs from its Shortcut while the Chapter row has focus",
       "A Note list Item Menu entry runs with its item as the target",
       "An editor toolbar button runs its Command from the keyboard",
+      "A targeted Command runs four ways on one open Chapter: its Shortcut, the Command Palette, the Chapter Item Menu, and the editor toolbar, each naming that Chapter",
+      "A Plugin Command runs from its Voice Command by its label",
       "Touch opens the Plugin page from the navigation menu",
       "Touch runs the Chapter Item Menu entry with its item",
       "Touch runs the editor toolbar button",
+      "Touch long-presses a Chapter to open its Item Menu and runs the Plugin's targeted Command",
+      "Touch opens the fixture Plugin page from the sidebar and it renders its content",
     ],
     terms: ["Plugin", "Item Menu"],
     shortcuts: [],

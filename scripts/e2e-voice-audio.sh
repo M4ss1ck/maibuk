@@ -48,6 +48,12 @@ PHRASES=(
   "record-make-italic|en_US-lessac-medium|Make italic.|70|30"
   "record-make-it-heavy|en_US-lessac-medium|Make it heavy.|70|30"
   "record-letra-gruesa|es_ES-davefx-medium|Letra gruesa.|70|30"
+  # A Plugin Command's label (issue #446): the fixture-everything Plugin's
+  # `openPage` Command answers to its label "Open fixture page", so this clip
+  # drives a contributed Voice Command end to end
+  # (specs/voice-plugins-fixture.spec.ts). Short padding like dark-theme.wav:
+  # the phrase loops, so dictation catches it once it is listening.
+  "fixture-open-page|en_US-lessac-medium|Open fixture page."
 )
 
 # Compound phrases for the navigation hand-off spec (issue #320): a Voice
