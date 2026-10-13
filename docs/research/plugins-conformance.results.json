@@ -1,19 +1,21 @@
 {
   "schema": "maibuk-plugin-conformance/1",
-  "recordedAt": "2026-10-13T21:43:26.630Z",
+  "recordedAt": "2026-10-13T22:21:46.083Z",
   "stack": {
     "tauri": "2.9.5",
     "wry": "0.53.5",
-    "webkitgtk": "2.52.6"
+    "webkitgtk": "2.52.6",
+    "androidWebView": "113.0.5672.136"
   },
   "platforms": {
     "linux": {
-      "ranAt": "2026-10-13T21:43:26.628Z",
+      "ranAt": "2026-10-13T22:18:04.853Z",
       "engine": {
         "name": "tauri-webkitgtk",
-        "version": "v0.11.0",
+        "version": "2.52.6",
         "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15"
       },
+      "exit": 0,
       "checks": [
         {
           "id": "T2-frame-ipc",
@@ -149,6 +151,150 @@
           "id": "T8-oom",
           "status": "pass",
           "detail": "no engine memory limit by 4096 MB; the Worker kept running and the host answered"
+        }
+      ]
+    },
+    "android": {
+      "ranAt": "2026-10-13T22:21:46.082Z",
+      "engine": {
+        "name": "android-webview",
+        "version": "113.0.5672.136",
+        "userAgent": "unknown"
+      },
+      "device": "sdk_gphone64_x86_64 (x86_64, Android 14)",
+      "exit": 1,
+      "support": "unsupported-in-v1",
+      "followUp": "#492",
+      "checks": [
+        {
+          "id": "T2-worker-ipc",
+          "status": "pass",
+          "detail": "hostile escapeTauriIpc refused: TypeError"
+        },
+        {
+          "id": "escape-openPanel",
+          "status": "pass",
+          "detail": "the panel mounted and the Plugin stayed ready"
+        },
+        {
+          "id": "escape-uiViolation",
+          "status": "pass",
+          "detail": "stopped with remote-ui-limit"
+        },
+        {
+          "id": "escape-uiFlood",
+          "status": "pass",
+          "detail": "stopped with remote-ui-limit"
+        },
+        {
+          "id": "escape-fetch",
+          "status": "pass",
+          "detail": "hostile escapeFetch refused: TypeError"
+        },
+        {
+          "id": "escape-xhr",
+          "status": "pass",
+          "detail": "hostile escapeXhr refused: NetworkError"
+        },
+        {
+          "id": "escape-webSocket",
+          "status": "pass",
+          "detail": "hostile escapeWebSocket refused: SecurityError"
+        },
+        {
+          "id": "escape-eventSource",
+          "status": "pass",
+          "detail": "hostile escapeEventSource refused: NetworkError"
+        },
+        {
+          "id": "escape-sendBeacon",
+          "status": "pass",
+          "detail": "hostile escapeSendBeacon refused: TypeError"
+        },
+        {
+          "id": "escape-importScripts",
+          "status": "pass",
+          "detail": "hostile escapeImportScripts refused: NetworkError"
+        },
+        {
+          "id": "escape-dynamicImport",
+          "status": "pass",
+          "detail": "hostile escapeDynamicImport refused: EvalError"
+        },
+        {
+          "id": "escape-eval",
+          "status": "pass",
+          "detail": "hostile escapeEval refused: EvalError"
+        },
+        {
+          "id": "escape-dataWorker",
+          "status": "pass",
+          "detail": "hostile escapeDataWorker refused: SecurityError"
+        },
+        {
+          "id": "escape-indexedDb",
+          "status": "pass",
+          "detail": "hostile escapeIndexedDb refused: SecurityError"
+        },
+        {
+          "id": "escape-caches",
+          "status": "pass",
+          "detail": "hostile escapeCaches refused: ReferenceError"
+        },
+        {
+          "id": "escape-localStorage",
+          "status": "pass",
+          "detail": "hostile escapeLocalStorage refused: ReferenceError"
+        },
+        {
+          "id": "escape-tauriIpc",
+          "status": "pass",
+          "detail": "hostile escapeTauriIpc refused: TypeError"
+        },
+        {
+          "id": "escape-oversized",
+          "status": "pass",
+          "detail": "hostile escapeOversized refused: message-too-large"
+        },
+        {
+          "id": "escape-unknownMethod",
+          "status": "pass",
+          "detail": "hostile escapeUnknownMethod refused: unknown-method"
+        },
+        {
+          "id": "escape-spoofedReply",
+          "status": "pass",
+          "detail": "hostile escapeSpoofedReply ignored"
+        },
+        {
+          "id": "escape-write",
+          "status": "pass",
+          "detail": "hostile escapeWrite refused: permission-denied"
+        },
+        {
+          "id": "escape-afterRevoke",
+          "status": "pass",
+          "detail": "hostile escapeAfterRevoke refused: permission-denied"
+        },
+        {
+          "id": "escape-flood",
+          "status": "pass",
+          "detail": "hostile escapeFlood refused: rate-limited"
+        },
+        {
+          "id": "T7-hang",
+          "status": "pass",
+          "detail": "stopped with unresponsive"
+        },
+        {
+          "id": "escape-allocate",
+          "status": "pass",
+          "detail": "stopped with unresponsive and the host answered"
+        },
+        {
+          "id": "T8-oom",
+          "status": "fail",
+          "detail": "renderer-died"
         }
       ]
     }

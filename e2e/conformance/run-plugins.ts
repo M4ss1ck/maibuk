@@ -33,8 +33,10 @@ import {
   canRecord,
   finalizeRun,
   formatConformanceTable,
+  isHostUnsupportedLanePlatform,
   laneExitCode,
   mergePlatformRun,
+  mergeRunEngine,
   stackFromCargoLock,
 } from "@/test/support/plugin-conformance/report";
 import {
@@ -127,15 +129,6 @@ async function startPlatform(
   };
 }
 
-/** The fallback engine for a run that produced no `/result`. */
-function fallbackEngine(platform: ConformanceEngineName): ConformanceEngine {
-  return {
-    name: platform === "linux" ? "tauri-webkitgtk" : "android-webview",
-    version: "unknown",
-    userAgent: "unknown",
-  };
-}
-
 interface PlatformResult {
   platform: ConformanceEngineName;
   outcome: PlatformOutcome;
@@ -209,14 +202,31 @@ async function measurePlatform(
     // all, which is a different failure from a run that started and went quiet.
     outcome.note = "app never contacted the collector";
   }
-  const engine = state.engine ?? fallbackEngine(platform);
+  // The engine records the engine's own version — WebKitGTK on Linux, System
+  // WebView `versionName` on Android — never the app version (#447 D1). The name
+  // and userAgent come from the run that reported them (the first `/progress` or
+  // `/result` that carried one), so an Android run that died before `/result`
+  // still records the WebView it ran in.
+  const engine = mergeRunEngine({
+    run: state.engine,
+    platform,
+    version: started.stackExtra.webkitgtk ?? started.stackExtra.androidWebView,
+    userAgent: state.userAgent,
+  });
   const ranAt = new Date().toISOString();
   return {
     platform,
     outcome,
     leaks: state.leaks,
     engine,
-    run: buildPlatformRun({ engine, checks: outcome.checks, ranAt, device: started.device }),
+    run: buildPlatformRun({
+      platform,
+      engine,
+      checks: outcome.checks,
+      ranAt,
+      exit: outcome.exitCode,
+      device: started.device,
+    }),
     stack: stackFromCargoLock(cargoLockText, started.stackExtra),
   };
 }
@@ -299,10 +309,15 @@ async function main(): Promise<void> {
         if (canRecord(result.outcome)) {
           results = mergePlatformRun(results, platform, result.run, result.stack, new Date().toISOString());
           writeFileSync(resultsPath, `${JSON.stringify(results, null, 2)}\n`);
-          console.log(`[conformance] recorded ${platform} into ${CONFORMANCE_RESULTS_PATH}`);
+          const unsupported = isHostUnsupportedLanePlatform(platform)
+            ? " (unsupported-in-v1, follow-up #492)"
+            : "";
+          console.log(
+            `[conformance] recorded ${platform} (exit ${result.outcome.exitCode})${unsupported} into ${CONFORMANCE_RESULTS_PATH}`
+          );
         } else {
           console.warn(
-            `[conformance] ${platform} did not pass every check; not recorded (exit ${result.outcome.exitCode})`
+            `[conformance] ${platform} could not be measured; not recorded (exit ${result.outcome.exitCode})`
           );
         }
       }

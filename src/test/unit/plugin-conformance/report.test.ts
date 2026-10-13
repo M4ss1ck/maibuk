@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { CARGO_LOCK_PATH } from "../../../../scripts/plugin-conformance-gate.mjs";
 import {
   CONFORMANCE_RESULTS_SCHEMA,
+  CONFORMANCE_UNSUPPORTED_FOLLOW_UP,
   type ConformanceStack,
   type PlatformOutcome,
   buildPlatformRun,
@@ -13,8 +14,10 @@ import {
   exitCodeForChecks,
   finalizeRun,
   formatConformanceTable,
+  isHostUnsupportedLanePlatform,
   laneExitCode,
   mergePlatformRun,
+  mergeRunEngine,
   stackFromCargoLock,
 } from "@/test/support/plugin-conformance/report";
 import {
@@ -119,10 +122,17 @@ describe("canRecord()", () => {
     exitCode,
     note: "",
   });
-  it("records only a platform whose checks all passed", () => {
+  it("records a MEASURED platform, pass or fail, but never an exit-2 run", () => {
     expect(canRecord(outcome(0))).toBe(true);
-    expect(canRecord(outcome(1))).toBe(false);
+    expect(canRecord(outcome(1))).toBe(true);
     expect(canRecord(outcome(2))).toBe(false);
+  });
+});
+
+describe("isHostUnsupportedLanePlatform()", () => {
+  it("is true for Android (the v1 rule) and false for Linux", () => {
+    expect(isHostUnsupportedLanePlatform("android")).toBe(true);
+    expect(isHostUnsupportedLanePlatform("linux")).toBe(false);
   });
 });
 
@@ -152,26 +162,89 @@ describe("stackFromCargoLock()", () => {
 });
 
 describe("buildPlatformRun()", () => {
-  it("carries the engine, checks, time and device", () => {
+  it("carries the engine, checks, time, device and exit code", () => {
     expect(
-      buildPlatformRun({ engine: ENGINE, checks: [T7], ranAt: "2026-10-13T00:00:00.000Z", device: "pixel" })
+      buildPlatformRun({
+        platform: "linux",
+        engine: ENGINE,
+        checks: [T7],
+        ranAt: "2026-10-13T00:00:00.000Z",
+        device: "pixel",
+        exit: 0,
+      })
     ).toEqual({
       ranAt: "2026-10-13T00:00:00.000Z",
       engine: ENGINE,
       device: "pixel",
+      exit: 0,
       checks: [T7],
     });
   });
 
   it("omits the device when there is none", () => {
-    const run = buildPlatformRun({ engine: ENGINE, checks: [T7], ranAt: "t" });
+    const run = buildPlatformRun({ platform: "linux", engine: ENGINE, checks: [T7], ranAt: "t", exit: 1 });
     expect("device" in run).toBe(false);
+  });
+
+  it("marks an Android run unsupported-in-v1 with the #492 follow-up, keeping its exit", () => {
+    const run = buildPlatformRun({ platform: "android", engine: ENGINE, checks: [T7], ranAt: "t", exit: 1 });
+    expect(run).toMatchObject({
+      exit: 1,
+      support: "unsupported-in-v1",
+      followUp: CONFORMANCE_UNSUPPORTED_FOLLOW_UP,
+    });
+    expect(run.followUp).toBe("#492");
+  });
+
+  it("leaves a host-supported run without a support marker", () => {
+    const run = buildPlatformRun({ platform: "linux", engine: ENGINE, checks: [T7], ranAt: "t", exit: 0 });
+    expect("support" in run).toBe(false);
+    expect("followUp" in run).toBe(false);
+  });
+});
+
+describe("mergeRunEngine()", () => {
+  const run = { name: "tauri-webkitgtk", version: "v0.11.0", userAgent: "UA" };
+
+  it("takes the measured engine version over the run's own app version", () => {
+    expect(mergeRunEngine({ run, platform: "linux", version: "2.52.6" })).toEqual({
+      name: "tauri-webkitgtk",
+      version: "2.52.6",
+      userAgent: "UA",
+    });
+  });
+
+  it("uses the Android WebView version and the Android fallback name", () => {
+    expect(
+      mergeRunEngine({ run: null, platform: "android", version: "113.0.5672.136", userAgent: null })
+    ).toEqual({ name: "android-webview", version: "113.0.5672.136", userAgent: "unknown" });
+  });
+
+  it("keeps the userAgent from the first request that carried it", () => {
+    expect(mergeRunEngine({ run: null, platform: "android", userAgent: "UA-progress" }).userAgent).toBe(
+      "UA-progress"
+    );
+  });
+
+  it("falls back to the run's version and unknown when nothing was measured", () => {
+    expect(mergeRunEngine({ run, platform: "linux" })).toEqual(run);
+    expect(mergeRunEngine({ run: null, platform: "linux" })).toEqual({
+      name: "tauri-webkitgtk",
+      version: "unknown",
+      userAgent: "unknown",
+    });
   });
 });
 
 describe("mergePlatformRun()", () => {
   const stack: ConformanceStack = { tauri: "2.9.5", wry: "0.53.5", webkitgtk: "2.52.6" };
-  const run = buildPlatformRun({ engine: ENGINE, checks: [T7], ranAt: "2026-10-13T00:00:00.000Z" });
+  const run = buildPlatformRun({
+    platform: "linux",
+    engine: ENGINE,
+    checks: [T7],
+    ranAt: "2026-10-13T00:00:00.000Z",
+    exit: 0,
+  });
 
   it("creates the file from nothing with the schema id", () => {
     const file = mergePlatformRun(null, "linux", run, stack, "now");

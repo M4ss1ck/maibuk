@@ -21,9 +21,9 @@
 import type { RemoteMutationRecord } from "@remote-dom/core";
 import { ThreadMessagePort } from "@quilted/threads";
 
-import { APP_VERSION } from "@/constants";
 import { savePluginApproval } from "@/features/plugins/approvals";
 import { loadFixtureHostile } from "@/features/plugins/conformance/fixture";
+import { conformanceDirectoryKind } from "@/features/plugins/conformance/host-bypass";
 import {
   type CommandObservation,
   type ConformanceEngine,
@@ -149,13 +149,6 @@ function readPlatform(): ConformancePlatform {
   return "web";
 }
 
-/** The Plugin Directory kind the platform adapter reports. */
-function directoryKind(): "desktop" | "android" | "web" {
-  if (IS_ANDROID) return "android";
-  if (IS_DESKTOP) return "desktop";
-  return "web";
-}
-
 function readEngine(platform: ConformancePlatform): ConformanceEngine {
   const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
   const name =
@@ -166,7 +159,11 @@ function readEngine(platform: ConformancePlatform): ConformanceEngine {
           ? "tauri-webkitgtk"
           : "tauri-chromium"
         : "web";
-  return { name, version: APP_VERSION, userAgent };
+  // The engine's version is unknowable from inside its own WebView; the lane
+  // merges the measured one (WebKitGTK / System WebView) into the recorded run
+  // (`mergeRunEngine`, D1). Reporting the app version here would be the #447
+  // bug, so it stays `"unknown"` until the runner fills it in.
+  return { name, version: "unknown", userAgent };
 }
 
 export async function createRuntimeSeam(
@@ -206,10 +203,14 @@ export async function createRuntimeSeam(
     approvedFiles: {},
   });
 
-  // The in-memory Plugin Directory: the shape the lifecycle suite uses.
+  // The in-memory Plugin Directory: the shape the lifecycle suite uses. Its
+  // kind comes from the conformance bypass (host-bypass.ts), not the device, so
+  // the real lifecycle scans the fixture on Android too — where the v1 host rule
+  // otherwise runs no Plugin (#447, #492). The seam still reports the true
+  // platform to every check.
   const folders = new Map<string, PluginFolder>([[FIXTURE_HOSTILE_ID, folder]]);
   const directory: PluginDirectoryAdapter = {
-    kind: directoryKind(),
+    kind: conformanceDirectoryKind(platform),
     listFolders: async () => [FIXTURE_HOSTILE_ID],
     readFolder: async (name: string) => folders.get(name) ?? null,
   };

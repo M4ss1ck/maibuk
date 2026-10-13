@@ -32,6 +32,13 @@ export interface CollectorRequest {
 /** What the collector has seen since the run began. */
 export interface CollectorState {
   engine: ConformanceEngine | null;
+  /**
+   * The userAgent the first `/progress` or `/result` body carried, or null while
+   * none has. The route reports the engine on `/result`; keeping it here too
+   * means the lane records the WebView it ran in even when the app dies before
+   * `/result` (#447 D1).
+   */
+  userAgent: string | null;
   /** Every `/progress` check, in arrival order. */
   progress: ConformanceCheck[];
   /** The whole `/result`, once it arrived. */
@@ -73,6 +80,7 @@ export const CONFORMANCE_COLLECTOR_CONTRACT: readonly CollectorContractEntry[] =
 export function initialCollectorState(): CollectorState {
   return {
     engine: null,
+    userAgent: null,
     progress: [],
     result: null,
     done: false,
@@ -115,6 +123,23 @@ function isResult(value: unknown): value is ConformanceResult {
 }
 
 /**
+ * The userAgent a `/progress` or `/result` body carries, or null: `engine.
+ * userAgent` on a result, or a top-level `userAgent` on either. The route sends
+ * the engine on `/result`; the top-level form keeps the collector open to a
+ * progress line carrying it too (#447 D1).
+ */
+function userAgentOf(value: unknown): string | null {
+  if (typeof value !== "object" || value === null) return null;
+  const engine = (value as { engine?: unknown }).engine;
+  if (typeof engine === "object" && engine !== null) {
+    const fromEngine = (engine as { userAgent?: unknown }).userAgent;
+    if (typeof fromEngine === "string" && fromEngine !== "") return fromEngine;
+  }
+  const direct = (value as { userAgent?: unknown }).userAgent;
+  return typeof direct === "string" && direct !== "" ? direct : null;
+}
+
+/**
  * Folds one request into the state and returns the reply the collector sends.
  * The state is a fresh object; the caller swaps it in.
  */
@@ -127,6 +152,7 @@ export function applyCollectorRequest(
     ...state,
     requests: state.requests + 1,
     leaks: leak ? state.leaks + 1 : state.leaks,
+    userAgent: state.userAgent ?? userAgentOf(request.body),
   };
 
   const { method, path } = request;

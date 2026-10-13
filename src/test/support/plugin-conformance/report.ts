@@ -2,8 +2,17 @@
 // file, the exit-code mapping, and the table (#447, D1/D5). Pure, so every rule
 // — what makes a platform pass, what may be recorded, what the lane exits with —
 // is tested without a build or a device.
+//
+// D1 recording rule: a MEASURED run (exit 0 or 1) is recorded; an exit-2 run is
+// never. A run on a host-unsupported platform (v1 Android) records exit 1 with
+// `support: "unsupported-in-v1"` and `followUp: "#492"`, and the engine records
+// the engine's own version (`mergeRunEngine`), never the app version.
 
 import { RENDERER_DIED_DETAIL, T7_CHECK_ID, T8_CHECK_ID } from "@/features/plugins/conformance/checks";
+import {
+  PLUGIN_HOST_UNSUPPORTED_PLATFORMS,
+  type PluginHostPlatform,
+} from "@/features/plugins/host-platform";
 import type {
   ConformanceCheck,
   ConformanceEngine,
@@ -20,6 +29,27 @@ export const CONFORMANCE_RESULTS_PATH = "docs/research/plugins-conformance.resul
 /** The engines the lane measures and the results file keys platforms by. */
 export type ConformancePlatformName = "linux" | "android";
 
+/** The host platform each lane platform measures (the lane's own naming). */
+const HOST_PLATFORM_BY_LANE: Record<ConformancePlatformName, PluginHostPlatform> = {
+  linux: "desktop",
+  android: "android",
+};
+
+/** The `support` marker a run on a host-unsupported platform records (#447, D1). */
+export const CONFORMANCE_UNSUPPORTED_SUPPORT = "unsupported-in-v1" as const;
+
+/** The issue that lifts the marker, when present (#492). */
+export const CONFORMANCE_UNSUPPORTED_FOLLOW_UP = "#492";
+
+/**
+ * True when the host runs no Plugin on the platform a lane platform measures
+ * (`PLUGIN_HOST_UNSUPPORTED_PLATFORMS`, v1 Android, #447): the run is recorded
+ * with `support: "unsupported-in-v1"` and its follow-up, #492.
+ */
+export function isHostUnsupportedLanePlatform(platform: ConformancePlatformName): boolean {
+  return PLUGIN_HOST_UNSUPPORTED_PLATFORMS.includes(HOST_PLATFORM_BY_LANE[platform]);
+}
+
 /** The Tauri/wry versions the results pin, plus the WebView the run saw (D1). */
 export interface ConformanceStack {
   tauri: string | null;
@@ -35,6 +65,12 @@ export interface PlatformRun {
   ranAt: string;
   engine: ConformanceEngine;
   device?: string;
+  /** The lane exit code this run recorded (0 or 1; only a measured run records). */
+  exit: ExitCode;
+  /** `"unsupported-in-v1"` when the host runs no Plugin on this platform (#447, #492). */
+  support?: "unsupported-in-v1";
+  /** The issue that lifts `support`, when present. */
+  followUp?: string;
   checks: ConformanceCheck[];
 }
 
@@ -119,11 +155,16 @@ export function finalizeRun(
 }
 
 /**
- * Whether a platform may be recorded (D1): only when every check passed. An
- * `unmeasured` check exits 2 and blocks the record, exactly like a fail.
+ * Whether a platform may be recorded (D1): a MEASURED run — exit 0 or 1 — is
+ * recorded; an exit-2 run (no check arrived, any `unmeasured`, a build or device
+ * the lane could not reach) is never recorded, because the lane could not tell.
+ * The gate is about versions, not pass/fail: a genuine failure while the host is
+ * supported still records, keeping exit 1, so the file shows it. An Android run
+ * records exit 1 with `support: "unsupported-in-v1"` because the host runs no
+ * Plugin there (#447, #492).
  */
 export function canRecord(outcome: PlatformOutcome): boolean {
-  return outcome.exitCode === 0;
+  return outcome.exitCode === 0 || outcome.exitCode === 1;
 }
 
 /** The stack versions from `Cargo.lock`, plus whatever a platform measured. */
@@ -135,17 +176,53 @@ export function stackFromCargoLock(
   return { tauri, wry, ...extra };
 }
 
-/** The run a platform writes to `.bench/` and, on a pass, merges in. */
+/** The engine name a platform falls back to when no `/result` arrived (D1). */
+export function defaultEngineName(platform: ConformancePlatformName): string {
+  return platform === "linux" ? "tauri-webkitgtk" : "android-webview";
+}
+
+/**
+ * The engine the recorded run carries: **the engine version, never the app
+ * version** (#447 D1 follow-up). The measured WebKitGTK version (Linux,
+ * `pkg-config`) or System WebView `versionName` (Android) wins; the engine name
+ * comes from the run that reported it or the platform's fallback, and the
+ * userAgent comes from the first `/progress` or `/result` that carried one (a
+ * run that died before either records `"unknown"`).
+ */
+export function mergeRunEngine(input: {
+  run: ConformanceEngine | null;
+  platform: ConformancePlatformName;
+  /** The measured engine version: `stack.webkitgtk` or `stack.androidWebView`. */
+  version?: string;
+  /** The userAgent the collector saw first, from any request that carried one. */
+  userAgent?: string | null;
+}): ConformanceEngine {
+  return {
+    name: input.run?.name ?? defaultEngineName(input.platform),
+    version: input.version ?? input.run?.version ?? "unknown",
+    userAgent: input.userAgent ?? input.run?.userAgent ?? "unknown",
+  };
+}
+
+/** The run a platform writes to `.bench/` and, on a measured run, merges in. */
 export function buildPlatformRun(input: {
+  platform: ConformancePlatformName;
   engine: ConformanceEngine;
   checks: ConformanceCheck[];
   ranAt: string;
+  /** The lane exit code the run settled on (0 or 1). */
+  exit: ExitCode;
   device?: string;
 }): PlatformRun {
+  const unsupported = isHostUnsupportedLanePlatform(input.platform);
   return {
     ranAt: input.ranAt,
     engine: input.engine,
     ...(input.device === undefined ? {} : { device: input.device }),
+    exit: input.exit,
+    ...(unsupported
+      ? { support: CONFORMANCE_UNSUPPORTED_SUPPORT, followUp: CONFORMANCE_UNSUPPORTED_FOLLOW_UP }
+      : {}),
     checks: input.checks,
   };
 }

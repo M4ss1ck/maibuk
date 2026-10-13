@@ -19,14 +19,13 @@ const scriptDir = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url))
 const repoRoot = join(scriptDir, "..");
 
 /**
- * The committed results the gate pins the Cargo.lock against. It currently points
- * at the #407 research file; switching the lane to its own committed results
- * (docs/research/plugins-conformance.results.json, #447 D1) is a one-line change
- * to this constant.
+ * The committed results the gate pins the Cargo.lock against (#447 D1): the
+ * lane's own `docs/research/plugins-conformance.results.json`. A Tauri or wry
+ * bump cannot merge without a fresh `pnpm conformance:plugins` that refreshes it.
  */
 export const GATE_RESULTS_PATH = join(
   repoRoot,
-  "docs/research/plugins-engine-verification.results.json"
+  "docs/research/plugins-conformance.results.json"
 );
 
 /** The lockfile whose gated package versions the gate checks. */

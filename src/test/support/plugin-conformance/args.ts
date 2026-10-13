@@ -9,7 +9,7 @@ export type PluginConformancePlatform = "linux" | "android" | "all";
 export interface PluginConformanceOptions {
   /** Which engine to measure; `all` tries every available one. */
   platform: PluginConformancePlatform;
-  /** Merge each platform that passed every check into the committed results. */
+  /** Merge each measured platform run (exit 0 or 1) into the committed results. */
   record: boolean;
   /** Reuse the last build instead of rebuilding. */
   skipBuild: boolean;
@@ -23,7 +23,7 @@ export interface PluginConformanceOptions {
 
 export const PLUGIN_CONFORMANCE_USAGE = `usage: pnpm conformance:plugins [options]
   --platform <linux|android|all>  which engine to measure (default: all available)
-  --record                        merge a platform that passed every check into
+  --record                        merge a measured platform run (exit 0 or 1) into
                                   docs/research/plugins-conformance.results.json
   --skip-build                    reuse the last build instead of rebuilding
   --out <dir>                     where each platform's JSON is written (default .bench)

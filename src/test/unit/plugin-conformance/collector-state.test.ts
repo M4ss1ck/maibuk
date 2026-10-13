@@ -66,6 +66,19 @@ describe("applyCollectorRequest()", () => {
     const state = fold([{ method: "POST", path: "/result", body: result }]);
     expect(state.result).toEqual(result);
     expect(state.engine).toEqual(result.engine);
+    expect(state.userAgent).toBe("UA");
+  });
+
+  it("keeps the userAgent from the first /progress or /result that carries it", () => {
+    const state = fold([
+      { method: "POST", path: "/progress", body: { ...PASS, userAgent: "UA-first" } },
+      {
+        method: "POST",
+        path: "/result",
+        body: { engine: { name: "w", version: "1", userAgent: "UA-later" }, checks: [PASS] },
+      },
+    ]);
+    expect(state.userAgent).toBe("UA-first");
   });
 
   it("ignores a progress or result body that is not the contract shape", () => {
