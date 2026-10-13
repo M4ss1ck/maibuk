@@ -775,6 +775,26 @@ describe("Plugin management (#443)", () => {
     ).toBeUndefined();
   });
 
+  it("disables Add Plugin on Android and explains why (#447)", async () => {
+    platformState.kind = "android";
+    render(<PluginsSection />);
+
+    // The action stays visible but disabled, like the row's enable control, so
+    // the section explains itself instead of offering a Plugin that cannot run.
+    const addButton = screen.getByRole("button", { name: "Add Plugin" });
+    expect(addButton).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Plugins are not available on Android in this version. Maibuk does not run Plugins here yet, so there is nothing to add or change."
+      )
+    ).toBeInTheDocument();
+
+    // Its Command is not bound either, so the keyboard cannot reach it.
+    await waitFor(() =>
+      expect(useBoundShortcutStore.getState().counts["settings.addPlugin"]).toBeUndefined()
+    );
+  });
+
   it("shows each Stopped reason's own copy", async () => {
     const user = userEvent.setup();
     seed(

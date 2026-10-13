@@ -21,6 +21,7 @@
 
 import i18n from "@/i18n";
 import { PLUGIN_PREFIX } from "@/features/plugins/ids";
+import { pluginsRunOn } from "@/features/plugins/host-platform";
 import { MANIFEST_LANGUAGES } from "@/features/plugins/manifest-constants";
 import { applyPluginLocale, parsePluginLocale } from "@/features/plugins/manifest-validate";
 import {
@@ -181,7 +182,13 @@ export function registerPluginContributions(source: PluginContributionsSource): 
     const next: Array<() => void> = [];
     try {
       const platform = currentSettingsPlatform();
-      if (!(manifest.platforms as readonly SettingsPlatform[]).includes(platform)) {
+      // The host runs no Plugin on a platform it does not support (Android in
+      // v1, #447): such a Plugin contributes no Command, page, Settings row,
+      // toolbar button, or Item Menu entry, whatever its manifest declares.
+      if (
+        !pluginsRunOn(platform) ||
+        !(manifest.platforms as readonly SettingsPlatform[]).includes(platform)
+      ) {
         unregisters = [];
         return;
       }

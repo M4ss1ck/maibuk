@@ -2222,7 +2222,7 @@
       "manual": "Añade el Plugin manualmente para volver a usarlo.",
       "empty": "Ningún Plugin coincide con estos filtros.",
       "directoryDesktop": "Carpeta de Plugins: Documents/Maibuk/Plugins",
-      "directoryAndroid": "Maibuk guarda los Plugins de forma privada. Añade un archivo zip; no se puede cambiar la carpeta.",
+      "directoryAndroid": "Los Plugins no están disponibles en Android en esta versión. Maibuk todavía no ejecuta Plugins aquí, así que no hay nada que añadir ni cambiar.",
       "directoryWeb": "Los Plugins se guardan en este navegador. Añade un zip; los navegadores compatibles también pueden usar una carpeta.",
       "open": "Abrir carpeta de Plugins",
       "change": "Cambiar carpeta de Plugins",

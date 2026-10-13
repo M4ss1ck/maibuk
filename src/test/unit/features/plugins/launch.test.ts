@@ -115,6 +115,25 @@ describe("scanApprovedPlugins()", () => {
     expect(result.refusals).toHaveLength(1);
     expect(result.refusals[0].refusal.code).toBe("manifest-invalid");
   });
+
+  it("scans nothing on android, whatever the author approved (#447)", async () => {
+    const folder = pluginFolder(
+      {},
+      { lifecycle: "on-demand", platforms: ["web", "desktop", "android"] }
+    );
+    await approve(folder);
+    const listFolders = vi.fn(async () => [folder.name]);
+    const readFolder = vi.fn(async () => folder);
+
+    const result = await scanApprovedPlugins({
+      directory: { kind: "android", listFolders, readFolder },
+    });
+
+    // No Plugin is scanned, so no contribution registers and no Worker starts.
+    expect(result).toEqual({ plugins: [], refusals: [] });
+    expect(listFolders).not.toHaveBeenCalled();
+    expect(readFolder).not.toHaveBeenCalled();
+  });
 });
 
 /** The shipped Built-in entry the source reports for a folder. */

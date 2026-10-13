@@ -19,6 +19,7 @@ import {
   countPluginsByCategory,
   createPluginManagementStore,
   filterPluginsByCategories,
+  isSupported,
   pluginFilterCategories,
 } from "@/features/plugins/management";
 import {
@@ -262,6 +263,54 @@ describe("Plugin management state: availability and support", () => {
     expect(Object.keys(store.getState().plugins)).toEqual(["tracer"]);
     const entry = store.getState().plugins.tracer;
     expect([...entry.duplicateFolders].sort()).toEqual(["tracer-a", "tracer-b"]);
+
+    await store.getState().enable("tracer");
+    expect(getPluginApproval("tracer")?.enabled).toBe(false);
+  });
+});
+
+describe("Plugin management state: host platform support (#447)", () => {
+  it("supports no manifest on android, whatever platforms it declares", () => {
+    const everywhere: PluginManifest = {
+      ...PLUGIN_MANIFEST,
+      platforms: ["web", "desktop", "android"],
+    };
+    const androidOnly: PluginManifest = { ...PLUGIN_MANIFEST, platforms: ["android"] };
+    // A manifest that omits `platforms` runs everywhere except a host-unsupported platform.
+    const omitted = { ...PLUGIN_MANIFEST, platforms: undefined } as unknown as PluginManifest;
+
+    expect(isSupported(everywhere, "android")).toBe(false);
+    expect(isSupported(androidOnly, "android")).toBe(false);
+    expect(isSupported(omitted, "android")).toBe(false);
+  });
+
+  it("leaves the desktop and web rules unchanged", () => {
+    const everywhere: PluginManifest = {
+      ...PLUGIN_MANIFEST,
+      platforms: ["web", "desktop", "android"],
+    };
+    const desktopOnly: PluginManifest = { ...PLUGIN_MANIFEST, platforms: ["desktop"] };
+    const omitted = { ...PLUGIN_MANIFEST, platforms: undefined } as unknown as PluginManifest;
+
+    expect(isSupported(everywhere, "desktop")).toBe(true);
+    expect(isSupported(everywhere, "web")).toBe(true);
+    expect(isSupported(desktopOnly, "desktop")).toBe(true);
+    expect(isSupported(desktopOnly, "web")).toBe(false);
+    expect(isSupported(omitted, "desktop")).toBe(true);
+  });
+
+  it("marks every Plugin unsupported on android and refuses to enable it", async () => {
+    const dir = makeDirectory("android", [
+      folderNamed("tracer", "tracer", { platforms: ["web", "desktop", "android"] }),
+    ]);
+    await saveApproval("tracer", false);
+    const store = makeStore(dir.adapter);
+
+    await store.getState().refresh();
+
+    // A Plugin that declares android everywhere is still unsupported: the host
+    // runs no Plugin on android, so it is never listed as runnable or enabled.
+    expect(store.getState().plugins.tracer.unsupported).toBe(true);
 
     await store.getState().enable("tracer");
     expect(getPluginApproval("tracer")?.enabled).toBe(false);

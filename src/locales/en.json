@@ -2222,7 +2222,7 @@
       "manual": "Manually add the Plugin again to use it.",
       "empty": "No Plugins match these filters.",
       "directoryDesktop": "Plugin Directory: Documents/Maibuk/Plugins",
-      "directoryAndroid": "Plugins are stored privately by Maibuk. Add a zip file; the directory cannot be changed.",
+      "directoryAndroid": "Plugins are not available on Android in this version. Maibuk does not run Plugins here yet, so there is nothing to add or change.",
       "directoryWeb": "Plugins are stored in this browser. Add a zip file; supported browsers can also use a folder.",
       "open": "Open Plugin Directory",
       "change": "Change Plugin Directory",

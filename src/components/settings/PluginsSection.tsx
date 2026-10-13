@@ -19,6 +19,7 @@ import {
   type PluginFilterCategory,
   countPluginsByCategory,
   filterPluginsByCategories,
+  pluginsRunOn,
   usePluginManagementStore,
 } from "@/features/plugins/management";
 import type { PluginManagementEntry } from "@/features/plugins/types";
@@ -76,6 +77,11 @@ export function PluginsSection() {
 
   const platform = currentSettingsPlatform();
   const isDesktop = platform === "desktop";
+  // The host runs no Plugin on a platform it does not support (Android in v1,
+  // #447): the Add Plugin action stays visible but disabled so the section
+  // explains itself instead of offering a Plugin that can never run, matching
+  // the row's disabled enable control (#443).
+  const hostRunsPlugins = pluginsRunOn(platform);
   const canAddFromFolder =
     isDesktop || (platform === "web" && directory?.supportsFolderPicker === true);
   const translate = asPluginTranslate(t);
@@ -229,6 +235,7 @@ export function PluginsSection() {
   useShortcuts([
     {
       id: "settings.addPlugin",
+      enabled: hostRunsPlugins,
       onTrigger: () => void addPlugin(),
     },
     {
@@ -332,6 +339,7 @@ export function PluginsSection() {
             <Button
               className="pointer-coarse:min-h-12"
               data-command="settings.addPlugin"
+              disabled={!hostRunsPlugins}
               onClick={() => void addPlugin()}
             >
               {t("plugins.management.add")}

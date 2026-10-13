@@ -39,6 +39,7 @@ import {
   onEditorFocusChanged,
 } from "@/features/plugins/editor-host";
 import { createPluginHandlers } from "@/features/plugins/handlers";
+import { pluginsRunOn } from "@/features/plugins/host-platform";
 import { currentPluginLanguage, onPluginLanguageChange } from "@/features/plugins/language";
 import {
   getPluginLifecycle,
@@ -922,6 +923,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         return { ok: false, refusal: { code: "not-installed" } };
       }
       const directory = options.directory ?? (await getPluginDirectory());
+      // The host runs no Plugin on a platform it does not support (Android in
+      // v1, #447): an explicit enable can never start a Worker there.
+      if (!pluginsRunOn(directory.kind)) return { ok: false, refusal: { code: "not-installed" } };
       const folder = await directory.readFolder(pluginId);
       if (!folder) return { ok: false, refusal: { code: "not-installed" } };
       // A reserved `maibuk-` id the shipped Built-in source lists parses under

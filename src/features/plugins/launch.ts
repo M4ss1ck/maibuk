@@ -19,6 +19,7 @@ import {
 } from "@/features/plugins/approvals";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
+import { pluginsRunOn } from "@/features/plugins/host-platform";
 import { getKnownPlugin } from "@/features/plugins/known";
 import {
   isSupported,
@@ -46,6 +47,10 @@ export async function scanApprovedPlugins(
   if (approvals.length === 0) return { plugins: [], refusals: [] };
 
   const directory = options.directory ?? (await getPluginDirectory());
+  // The host runs no Plugin on a platform it does not support (Android in v1,
+  // #447): nothing is scanned there, so no contribution registers and no Worker
+  // is ever queued, whatever the author approved.
+  if (!pluginsRunOn(directory.kind)) return { plugins: [], refusals: [] };
   const folders = new Set(await directory.listFolders());
   // A reserved `maibuk-` id the shipped Built-in source lists parses under the
   // Built-in schema; a third-party folder stays under the other one (#442).
