@@ -192,27 +192,6 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit",
     await expectNoLeak(before);
   });
 
-  test("Hostile yielding allocation stops the Plugin with a reason and the host survives", async ({
-    page,
-  }) => {
-    const before = await leakCount();
-    await waitForReady(page);
-    // This allocation yields between chunks, so the heartbeat is answered and
-    // the Worker reaches its own memory limit rather than the busy-loop stop.
-    await runCommand(page, "Hostile yielding allocation");
-    await expect(
-      status(page).filter({
-        hasText: /used too much memory and was stopped|stopped unexpectedly|stopped responding/,
-      })
-    ).toBeVisible({ timeout: 90_000 });
-    await expectNoLeak(before);
-    // The host renderer outlived the Worker: it still opens the Command Palette.
-    await page.keyboard.press("F1");
-    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeHidden();
-  });
-
   test("Hostile UI violation stops the Plugin with remote-ui-limit", async ({ page }) => {
     const before = await leakCount();
     await waitForReady(page);

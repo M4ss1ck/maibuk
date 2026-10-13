@@ -288,7 +288,9 @@ const ESCAPES: Record<string, (runtime: HostileRuntime) => Promise<string> | str
   // lifecycle never stops it as `unresponsive`. It reaches the engine's own
   // memory limit instead. Each step writes the running total to storage (no
   // per-method rate limit), fire-and-forget, so the host can still name the MB
-  // reached before the Worker died.
+  // reached before the Worker died. Only `pnpm conformance:plugins` runs it: no
+  // browser engine stops it within an E2E timeout (Chromium and Firefox keep
+  // allocating past 2 GB), so a Playwright spec would only exhaust host memory.
   escapeAllocateYielding: async (runtime) => {
     const retained: Uint8Array[] = [];
     for (;;) {
