@@ -14,6 +14,7 @@ import {
   type AndroidDevice,
   PrerequisiteMissing,
 } from "../frames/android";
+import { tauriAndroidTarget } from "@/test/support/plugin-conformance";
 import { CONFORMANCE_COLLECTOR_PORT } from "./collector";
 import type { RunningApp, RunDir } from "./types";
 
@@ -56,9 +57,15 @@ export async function assertOneAdbDevice(): Promise<string> {
   return serial;
 }
 
-/** Builds the debug APK with `VITE_PLUGIN_CONFORMANCE=1`. */
-export function buildAndroidApp(options: { root: string }): void {
-  execFileSync("pnpm", ["tauri", "android", "build", "--debug", "--apk", "true"], {
+/** The device's Tauri build target, from its primary ABI (null: build every target). */
+export async function deviceAndroidTarget(serial: string): Promise<string | null> {
+  return tauriAndroidTarget(await adb(serial, ["shell", "getprop", "ro.product.cpu.abi"]));
+}
+
+/** Builds the debug APK with `VITE_PLUGIN_CONFORMANCE=1`, for one target when known. */
+export function buildAndroidApp(options: { root: string; target: string | null }): void {
+  const target = options.target ? ["--target", options.target] : [];
+  execFileSync("pnpm", ["tauri", "android", "build", "--debug", "--apk", "true", ...target], {
     cwd: options.root,
     stdio: "inherit",
     env: { ...process.env, VITE_PLUGIN_CONFORMANCE: "1" },

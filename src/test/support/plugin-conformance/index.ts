@@ -3,6 +3,7 @@
 // build's CSP override. `e2e/conformance/` imports these; the runner stays a thin
 // shell of process and socket work so every rule is unit-tested.
 
+export * from "@/test/support/plugin-conformance/android-target";
 export * from "@/test/support/plugin-conformance/args";
 export * from "@/test/support/plugin-conformance/collector-state";
 export * from "@/test/support/plugin-conformance/csp";
