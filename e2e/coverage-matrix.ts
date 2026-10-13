@@ -2178,7 +2178,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "empty",
-    tags: ["no-webkit"],
+    tags: ["no-webkit", "touch"],
     status: "accepted",
   },
   {

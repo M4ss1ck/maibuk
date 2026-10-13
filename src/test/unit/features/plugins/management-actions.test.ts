@@ -232,7 +232,7 @@ describe("Plugin management actions: adding", () => {
     await expect(store.getState().addFromZip()).rejects.toThrow("the .zip could not be read");
   });
 
-  it("re-adding a removed id clears removed and does not restore the approval", async () => {
+  it("re-adding a removed id stays removed and installed until approved", async () => {
     const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
     saveKnownPlugin({
       pluginId: "tracer",
@@ -251,7 +251,14 @@ describe("Plugin management actions: adding", () => {
 
     await store.getState().addFromZip();
 
-    expect(getKnownPlugin("tracer")?.removed).toBe(false);
+    // The files are back and the row lists as installed, but it keeps the
+    // removal mark (and so the Removed filter and the approval gate) until the
+    // author approves the new copy (#443).
+    const entry = store.getState().plugins.tracer;
+    expect(entry.installed).toBe(true);
+    expect(entry.removed).toBe(true);
+    expect(entry.review.status).toBe("not-approved");
+    expect(getKnownPlugin("tracer")?.removed).toBe(true);
     // Removal deleted the approval; re-adding never brings it back.
     expect(getPluginApproval("tracer")).toBeNull();
   });
@@ -449,6 +456,50 @@ describe("Plugin management actions: app updates respect removal", () => {
     await store.getState().refresh();
 
     expect(getPluginApproval(ID)).toMatchObject({ enabled: true });
+  });
+
+  it("stays removed across repeated refreshes until reinstalled or approved", async () => {
+    const shipped = builtInFolder();
+    const built = await shippedOf(shipped);
+    const source: BuiltInPluginSource = { list: async () => [built] };
+    const dir = makeDirectory("web", [shipped]);
+    saveKnownPlugin({
+      pluginId: ID,
+      manifest: built.manifest,
+      builtIn: true,
+      removed: true,
+    });
+    const store = makeStore(dir.adapter, { builtInSource: source });
+
+    // An app update leaves the shipped folder present; the first refresh must
+    // not clear the removal, or the next one would pre-grant and enable it.
+    await store.getState().refresh();
+    await store.getState().refresh();
+
+    expect(getPluginApproval(ID)).toBeNull();
+    expect(store.getState().plugins[ID].review.status).toBe("not-approved");
+    expect(store.getState().plugins[ID].removed).toBe(true);
+  });
+
+  it("clears the removed mark once an approval exists", async () => {
+    const shipped = builtInFolder();
+    const built = await shippedOf(shipped);
+    const source: BuiltInPluginSource = { list: async () => [built] };
+    const dir = makeDirectory("web", [shipped]);
+    saveKnownPlugin({
+      pluginId: ID,
+      manifest: built.manifest,
+      builtIn: true,
+      removed: true,
+    });
+    // The author manually added it again and approved the copy.
+    await approveFolder({ name: ID, files: shipped.files });
+    const store = makeStore(dir.adapter, { builtInSource: source });
+
+    await store.getState().refresh();
+
+    expect(getKnownPlugin(ID)?.removed).toBe(false);
+    expect(store.getState().plugins[ID].removed).toBe(false);
   });
 });
 

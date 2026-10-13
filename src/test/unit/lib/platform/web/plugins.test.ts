@@ -183,6 +183,29 @@ function zip(files: Record<string, string>): Uint8Array {
   return zipSync(data);
 }
 
+const MAX_FILE_BYTES = 64 * 1024 * 1024;
+
+/** The byte offset of every central-directory file header in a `.zip`. */
+function centralDirectoryOffsets(data: Uint8Array): number[] {
+  const offsets: number[] = [];
+  for (let index = 0; index + 4 <= data.length; index++) {
+    if (
+      data[index] === 0x50 &&
+      data[index + 1] === 0x4b &&
+      data[index + 2] === 0x01 &&
+      data[index + 3] === 0x02
+    ) {
+      offsets.push(index);
+    }
+  }
+  return offsets;
+}
+
+/** Forges one central-directory entry's declared uncompressed size. */
+function setDeclaredUncompressedSize(data: Uint8Array, offset: number, size: number): void {
+  new DataView(data.buffer, data.byteOffset + offset + 24, 4).setUint32(0, size, true);
+}
+
 describe("createWebPluginDirectory(): install and remove (#443)", () => {
   afterEach(() => {
     delete (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker;
@@ -250,6 +273,32 @@ describe("createWebPluginDirectory(): install and remove (#443)", () => {
     const adapter = createWebPluginDirectory(seededRoot());
 
     await expect(adapter.addFromZip?.()).rejects.toThrow(/too many/i);
+  });
+
+  it("refuses a zip whose declared uncompressed size exceeds the per-file cap", async () => {
+    const data = zip({ "manifest.json": '{"id":"tracer"}', "big.bin": "x" });
+    // Forge the first central-directory entry's uncompressed size past the
+    // 64 MB per-file cap; the filter must reject before inflating it.
+    const [first] = centralDirectoryOffsets(data);
+    setDeclaredUncompressedSize(data, first, MAX_FILE_BYTES + 1);
+    mockOpenWithData.mockResolvedValue({ name: "bomb.zip", data });
+    const adapter = createWebPluginDirectory(seededRoot());
+
+    await expect(adapter.addFromZip?.()).rejects.toThrow(/too large/i);
+  });
+
+  it("refuses a zip whose declared total exceeds the total cap", async () => {
+    const files: Record<string, string> = { "manifest.json": '{"id":"tracer"}' };
+    for (let index = 0; index < 5; index++) files[`f${index}.bin`] = "x";
+    const data = zip(files);
+    // Each entry is under the per-file cap; together they pass the total cap.
+    for (const offset of centralDirectoryOffsets(data)) {
+      setDeclaredUncompressedSize(data, offset, 60 * 1024 * 1024);
+    }
+    mockOpenWithData.mockResolvedValue({ name: "bomb.zip", data });
+    const adapter = createWebPluginDirectory(seededRoot());
+
+    await expect(adapter.addFromZip?.()).rejects.toThrow(/too large/i);
   });
 
   it("refuses a manifest without a usable id", async () => {

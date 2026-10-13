@@ -98,13 +98,11 @@ export { createBuiltInPluginSource } from "@/features/plugins/builtin";
 export {
   PLUGIN_KNOWN_STORAGE_KEY,
   clearKnownPlugins,
-  forgetKnown,
   getKnownPlugin,
   listKnownPlugins,
   markPluginDataSizeWarned,
   markPluginRemoved,
   saveKnownPlugin,
-  serializeKnownPlugins,
 } from "@/features/plugins/known";
 export type { KnownPlugin } from "@/features/plugins/known";
 export {

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
+import { PluginConfirmDialog } from "@/components/plugins/PluginConfirmDialog";
 import { PluginPermissionDialog } from "@/components/plugins/PluginPermissionDialog";
+import { PluginRemoveDialog } from "@/components/plugins/PluginRemoveDialog";
 import { PluginReviewDialog } from "@/components/plugins/PluginReviewDialog";
 import { PluginSurface } from "@/components/plugins/PluginSurface";
 import { ReplaceBuiltInDialog } from "@/components/plugins/ReplaceBuiltInDialog";
 import { PluginRow } from "@/components/settings/PluginRow";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
+import { asPluginTranslate } from "@/components/settings/plugin-translate";
 import { Button, Switch } from "@/components/ui";
 import { MultiSelectFilter } from "@/components/ui/MultiSelectFilter";
 import { toast } from "@/components/ui/Toast";
@@ -60,6 +63,10 @@ export function PluginsSection() {
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [diffId, setDiffId] = useState<string | null>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [deletingDataId, setDeletingDataId] = useState<string | null>(null);
+  const [reinstallingId, setReinstallingId] = useState<string | null>(null);
+  const dataSizes = usePluginManagementStore((state) => state.dataSizes);
   // The Plugin Directory adapter, read the way the store reads it, so the
   // header can offer the desktop actions and the folder picker only where the
   // platform actually exposes them (#443). Filter selections are session state:
@@ -71,7 +78,7 @@ export function PluginsSection() {
   const isDesktop = platform === "desktop";
   const canAddFromFolder =
     isDesktop || (platform === "web" && directory?.supportsFolderPicker === true);
-  const translate = t as unknown as (key: string, options?: Record<string, unknown>) => string;
+  const translate = asPluginTranslate(t);
 
   // The section is the one reader of the Plugin Directory the author reaches:
   // refresh on mount so a copy that changed elsewhere shows its state here.
@@ -119,6 +126,15 @@ export function PluginsSection() {
     (entry) => entry.review.status !== "approved" || hasMissingRequired(entry)
   );
   const builtInUpdate = entries.find((entry) => entry.updateAvailable) ?? null;
+  // The single target each destructive Command acts on, matching the button it
+  // stands for: the first row that shows that button (#443).
+  const removable = entries.find((entry) => entry.installed) ?? null;
+  const reinstallable = entries.find((entry) => !entry.installed && entry.builtIn) ?? null;
+  const restartable = entries.find((entry) => entry.stopped !== null) ?? null;
+  const deletable =
+    entries.find(
+      (entry) => !entry.installed && entry.removed && (dataSizes[entry.pluginId] ?? 0) > 0
+    ) ?? null;
 
   /** Opens the review a copy needs: the changed-files diff, or the permission dialog. */
   const openReviewFor = useCallback((entry: PluginManagementEntry) => {
@@ -249,11 +265,44 @@ export function PluginsSection() {
         if (builtInUpdate) setReplacingId(builtInUpdate.pluginId);
       },
     },
+    {
+      id: "settings.removePlugin",
+      enabled: removable !== null,
+      onTrigger: () => {
+        if (removable) setRemovingId(removable.pluginId);
+      },
+    },
+    {
+      id: "settings.reinstallBuiltIn",
+      enabled: reinstallable !== null,
+      onTrigger: () => {
+        if (reinstallable) setReinstallingId(reinstallable.pluginId);
+      },
+    },
+    {
+      id: "settings.deletePluginData",
+      enabled: deletable !== null,
+      onTrigger: () => {
+        if (deletable) setDeletingDataId(deletable.pluginId);
+      },
+    },
+    {
+      id: "settings.restartPlugin",
+      enabled: restartable !== null,
+      onTrigger: () => {
+        if (restartable) {
+          void usePluginManagementStore.getState().restart(restartable.pluginId);
+        }
+      },
+    },
   ]);
 
   const reviewing = reviewingId !== null ? (plugins[reviewingId] ?? null) : null;
   const diffEntry = diffId !== null ? (plugins[diffId] ?? null) : null;
   const replacing = replacingId !== null ? (plugins[replacingId] ?? null) : null;
+  const removing = removingId !== null ? (plugins[removingId] ?? null) : null;
+  const deletingData = deletingDataId !== null ? (plugins[deletingDataId] ?? null) : null;
+  const reinstalling = reinstallingId !== null ? (plugins[reinstallingId] ?? null) : null;
 
   return (
     <SettingsSection
@@ -359,6 +408,9 @@ export function PluginsSection() {
               onToggle={() => setPluginOpen(entry.pluginId, !(pluginOpen[entry.pluginId] ?? false))}
               onReview={() => openReviewFor(entry)}
               onReplace={() => setReplacingId(entry.pluginId)}
+              onRemove={() => setRemovingId(entry.pluginId)}
+              onReinstall={() => setReinstallingId(entry.pluginId)}
+              onDeleteData={() => setDeletingDataId(entry.pluginId)}
               platform={platform}
             />
           ))}
@@ -443,6 +495,56 @@ export function PluginsSection() {
             setReplacingId(null);
             if (pluginId !== null) {
               void usePluginManagementStore.getState().replaceBuiltIn(pluginId, true);
+            }
+          }}
+        />
+      )}
+
+      {removing !== null && (
+        <PluginRemoveDialog
+          isOpen
+          name={removing.manifest.name}
+          builtIn={removing.builtIn}
+          onClose={() => setRemovingId(null)}
+          onConfirm={(deleteData) => {
+            const pluginId = removingId;
+            setRemovingId(null);
+            if (pluginId !== null) {
+              void usePluginManagementStore.getState().remove(pluginId, { deleteData });
+            }
+          }}
+        />
+      )}
+
+      {deletingData !== null && (
+        <PluginConfirmDialog
+          isOpen
+          title={t("plugins.management.delete")}
+          text={t("plugins.management.deleteText")}
+          confirmLabel={t("plugins.management.delete")}
+          onClose={() => setDeletingDataId(null)}
+          onConfirm={() => {
+            const pluginId = deletingDataId;
+            setDeletingDataId(null);
+            if (pluginId !== null) {
+              void usePluginManagementStore.getState().deleteData(pluginId);
+            }
+          }}
+        />
+      )}
+
+      {reinstalling !== null && (
+        <PluginConfirmDialog
+          isOpen
+          title={t("plugins.management.reinstall")}
+          text={t("plugins.management.reinstallText")}
+          confirmLabel={t("plugins.management.reinstall")}
+          onClose={() => setReinstallingId(null)}
+          onConfirm={() => {
+            const pluginId = reinstallingId;
+            setReinstallingId(null);
+            if (pluginId !== null) {
+              void usePluginManagementStore.getState().reinstallBuiltIn(pluginId);
             }
           }}
         />

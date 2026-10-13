@@ -622,13 +622,18 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
                 : await modifiedBuiltInCopy(manifest, builtIn);
             savePluginApproval(approval);
           }
-          // A copy that is present again is never removed: the known list keeps
-          // the row after the files are gone, and upserts on every read.
+          // A removed copy that is present again keeps its removed mark while
+          // no approval exists, so the next refresh cannot pre-grant it: an app
+          // update that restores a Built-in's folder must not silently
+          // reinstall it. Only `reinstallBuiltIn` (which clears the mark first)
+          // or approving through the approval flow (manual add + approve,
+          // which leaves an approval behind) clears it (#443).
+          const stillRemoved = knownRemoved && approval === null;
           saveKnownPlugin({
             pluginId,
             manifest,
             builtIn: builtIn !== undefined,
-            removed: false,
+            removed: stillRemoved,
           });
           const entry = buildEntry({
             pluginId,
@@ -637,7 +642,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
             builtIn,
             platform,
             installed: true,
-            removed: false,
+            removed: stillRemoved,
             available: false,
             duplicateFolders,
           });

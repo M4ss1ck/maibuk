@@ -2182,23 +2182,17 @@
       "removeValue": "Remove {{value}}"
     },
     "management": {
-      "list": "Known Plugins",
       "add": "Add Plugin",
       "addHelp": "Install a Plugin from a .zip file, or open and change the Plugin Directory.",
       "addError": "Could not add the Plugin.",
       "addFolder": "Add from folder",
       "all": "All statuses",
-      "enabled": "Enabled",
-      "review": "Review required",
       "modified": "Modified",
-      "update": "Update available",
       "stopped": "Stopped",
       "custom": "Custom UI: accessibility not verified by Maibuk",
       "remove": "Remove",
       "reinstall": "Reinstall",
       "delete": "Delete data",
-      "enable": "Review and enable",
-      "disable": "Disable",
       "restart": "Restart",
       "cancel": "Cancel",
       "confirm": "Confirm",
@@ -2216,8 +2210,6 @@
       "thirdWarning": "Maibuk cannot recover this third-party Plugin. To use it again, you must manually add its files.",
       "deleteAlso": "Also delete this Plugin’s data",
       "deleteText": "Delete this Plugin’s retained Library data? This cannot be undone here. The Plugin row and Command preferences stay.",
-      "approvalText": "This sample requires read access to your Library. Approve this copy and enable it. Cancelling leaves it off.",
-      "approve": "Approve this copy and enable",
       "unsupportedText": "Unavailable on this device. This Plugin supports desktop only.",
       "duplicateText": "Two folders declare this Plugin id: {{folders}}. Remove one of them to enable it.",
       "reinstallText": "Install the bundled copy again. Retained Library data reconnects; revoked access is not silently restored.",
@@ -2228,15 +2220,7 @@
       "directoryWeb": "Plugins are stored in this browser. Add a zip file; supported browsers can also use a folder.",
       "open": "Open Plugin Directory",
       "change": "Change Plugin Directory",
-      "folder": "Choose folder (supported browsers)",
-      "reload": "Reload Plugins",
-      "addText": "Choose a sample zip to simulate manually adding a Plugin. Existing retained data and Command preferences reconnect by Plugin id.",
-      "done": "Action completed.",
-      "limit": "Stopped because it exceeded the runtime limit.",
       "sizeWarning": "Plugin data exceeds 50 MB. Large data can slow Library saving on web and enlarge Backups.",
-      "keep": "Keep my copy",
-      "replace": "Replace with bundled copy",
-      "updateText": "Replacing this modified copy discards your edits. Keeping it leaves Update available without repeated prompts.",
       "filters": {
         "label": "Filter by status",
         "help": "Show Plugins by status; a row stays when it matches any selected status.",
@@ -2251,7 +2235,16 @@
       "commands": {
         "addPlugin": "Add Plugin",
         "openDirectory": "Open Plugin Directory",
-        "changeDirectory": "Change Plugin Directory"
+        "changeDirectory": "Change Plugin Directory",
+        "removePlugin": "Remove Plugin",
+        "reinstallBuiltIn": "Reinstall Plugin",
+        "deletePluginData": "Delete Plugin data",
+        "restartPlugin": "Restart Plugin"
+      },
+      "units": {
+        "b": "{{value}} B",
+        "kb": "{{value}} KB",
+        "mb": "{{value}} MB"
       }
     }
   }

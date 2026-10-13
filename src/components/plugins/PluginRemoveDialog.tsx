@@ -3,15 +3,15 @@
  * its approvals and grants, and its saved credentials; its Library data stays
  * unless the author ticks "Also delete this Plugin's data", and its Custom
  * Shortcuts and Voice Commands always stay. A third-party Plugin warns that
- * Maibuk cannot recover its files. The dialog is an alert dialog: Escape and
- * Cancel close it without removing; only Confirm calls `remove`.
+ * Maibuk cannot recover its files. It composes the shared
+ * {@link PluginConfirmDialog} alert dialog: Escape and Cancel close it without
+ * removing; only Confirm calls `remove`.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
-import { Modal } from "@/components/ui/Modal";
+import { PluginConfirmDialog } from "@/components/plugins/PluginConfirmDialog";
 
 interface PluginRemoveDialogProps {
   isOpen: boolean;
@@ -35,38 +35,28 @@ export function PluginRemoveDialog({
   // A fresh dialog starts unchecked; the whole component unmounts on close, so
   // the choice never carries into the next removal.
   const [deleteData, setDeleteData] = useState(false);
+  const checkboxId = useId();
 
   if (!isOpen) return null;
 
   return (
-    <Modal
+    <PluginConfirmDialog
       isOpen={isOpen}
-      onClose={onClose}
       title={t("plugins.management.removeTitleNamed", { name })}
-      role="alertdialog"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("plugins.management.cancel")}
-          </Button>
-          <Button variant="destructive" onClick={() => onConfirm(deleteData)}>
-            {t("plugins.management.confirm")}
-          </Button>
-        </>
-      }
+      text={t("plugins.management.removeText")}
+      confirmLabel={t("plugins.management.confirm")}
+      onClose={onClose}
+      onConfirm={() => onConfirm(deleteData)}
     >
-      <p className="text-sm text-muted-foreground">{t("plugins.management.removeText")}</p>
       {!builtIn && (
         <p className="mt-2 text-sm text-destructive">{t("plugins.management.thirdWarning")}</p>
       )}
       <div className="mt-3 flex items-center gap-2">
-        <Checkbox
-          checked={deleteData}
-          onChange={setDeleteData}
-          label={t("plugins.management.deleteAlso")}
-        />
-        <span className="text-sm">{t("plugins.management.deleteAlso")}</span>
+        <Checkbox id={checkboxId} checked={deleteData} onChange={setDeleteData} label={t("plugins.management.deleteAlso")} />
+        <label htmlFor={checkboxId} className="text-sm">
+          {t("plugins.management.deleteAlso")}
+        </label>
       </div>
-    </Modal>
+    </PluginConfirmDialog>
   );
 }

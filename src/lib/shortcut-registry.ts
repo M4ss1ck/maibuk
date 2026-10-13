@@ -309,6 +309,26 @@ export const COMMANDS = {
     contexts: ["settings"],
     defaults: [],
   },
+  "settings.removePlugin": {
+    labelKey: "plugins.management.commands.removePlugin",
+    contexts: ["settings"],
+    defaults: [],
+  },
+  "settings.reinstallBuiltIn": {
+    labelKey: "plugins.management.commands.reinstallBuiltIn",
+    contexts: ["settings"],
+    defaults: [],
+  },
+  "settings.deletePluginData": {
+    labelKey: "plugins.management.commands.deletePluginData",
+    contexts: ["settings"],
+    defaults: [],
+  },
+  "settings.restartPlugin": {
+    labelKey: "plugins.management.commands.restartPlugin",
+    contexts: ["settings"],
+    defaults: [],
+  },
   "settings.addPlugin": {
     labelKey: "plugins.management.commands.addPlugin",
     contexts: ["settings"],

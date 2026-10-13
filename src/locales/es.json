@@ -2182,23 +2182,17 @@
       "removeValue": "Quitar {{value}}"
     },
     "management": {
-      "list": "Plugins conocidos",
       "add": "Añadir Plugin",
       "addHelp": "Instala un Plugin desde un archivo .zip, o abre y cambia la carpeta de Plugins.",
       "addError": "No se pudo añadir el Plugin.",
       "addFolder": "Añadir desde carpeta",
       "all": "Todos los estados",
-      "enabled": "Activado",
-      "review": "Revisión necesaria",
       "modified": "Modificado",
-      "update": "Actualización disponible",
       "stopped": "Detenido",
       "custom": "Interfaz personalizada: Maibuk no ha verificado su accesibilidad",
       "remove": "Eliminar",
       "reinstall": "Reinstalar",
       "delete": "Eliminar datos",
-      "enable": "Revisar y activar",
-      "disable": "Desactivar",
       "restart": "Reiniciar",
       "cancel": "Cancelar",
       "confirm": "Confirmar",
@@ -2216,8 +2210,6 @@
       "thirdWarning": "Maibuk no puede recuperar este Plugin de terceros. Para volver a usarlo, debes añadir sus archivos manualmente.",
       "deleteAlso": "Eliminar también los datos de este Plugin",
       "deleteText": "¿Eliminar los datos de Biblioteca conservados de este Plugin? No se puede deshacer aquí. La fila del Plugin y las preferencias de Comandos se conservan.",
-      "approvalText": "Este ejemplo requiere acceso de lectura a tu Biblioteca. Aprueba esta copia y actívala. Cancelar la deja desactivada.",
-      "approve": "Aprobar esta copia y activar",
       "unsupportedText": "No disponible en este dispositivo. Este Plugin solo admite escritorio.",
       "duplicateText": "Dos carpetas declaran el id de este Plugin: {{folders}}. Elimina una de ellas para activarlo.",
       "reinstallText": "Instala de nuevo la copia incluida. Se recuperan los datos de Biblioteca conservados; los permisos revocados no se restablecen automáticamente.",
@@ -2228,15 +2220,7 @@
       "directoryWeb": "Los Plugins se guardan en este navegador. Añade un zip; los navegadores compatibles también pueden usar una carpeta.",
       "open": "Abrir carpeta de Plugins",
       "change": "Cambiar carpeta de Plugins",
-      "folder": "Elegir carpeta (navegadores compatibles)",
-      "reload": "Recargar Plugins",
-      "addText": "Elige un zip de ejemplo para simular la instalación manual. Los datos y preferencias de Comandos conservados se recuperan por el id del Plugin.",
-      "done": "Acción completada.",
-      "limit": "Detenido por superar el límite de ejecución.",
       "sizeWarning": "Los datos del Plugin superan 50 MB. Pueden ralentizar el guardado web y aumentar las Copias de seguridad.",
-      "keep": "Conservar mi copia",
-      "replace": "Reemplazar con la copia incluida",
-      "updateText": "Reemplazar esta copia modificada descarta tus cambios. Conservarla mantiene Actualización disponible sin avisos repetidos.",
       "filters": {
         "label": "Filtrar por estado",
         "help": "Muestra los Plugins por estado; una fila permanece si coincide con algún estado seleccionado.",
@@ -2251,7 +2235,16 @@
       "commands": {
         "addPlugin": "Añadir Plugin",
         "openDirectory": "Abrir carpeta de Plugins",
-        "changeDirectory": "Cambiar carpeta de Plugins"
+        "changeDirectory": "Cambiar carpeta de Plugins",
+        "removePlugin": "Eliminar Plugin",
+        "reinstallBuiltIn": "Reinstalar Plugin",
+        "deletePluginData": "Eliminar datos del Plugin",
+        "restartPlugin": "Reiniciar Plugin"
+      },
+      "units": {
+        "b": "{{value}} B",
+        "kb": "{{value}} KB",
+        "mb": "{{value}} MB"
       }
     }
   }

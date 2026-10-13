@@ -71,8 +71,8 @@ function write(plugins: KnownPlugin[]): void {
   localStorage.setItem(PLUGIN_KNOWN_STORAGE_KEY, serializeKnownPlugins(plugins));
 }
 
-/** Serializes the payload both the app and a test seed write. */
-export function serializeKnownPlugins(plugins: readonly KnownPlugin[]): string {
+/** Serializes the stored payload this module reads back. */
+function serializeKnownPlugins(plugins: readonly KnownPlugin[]): string {
   return JSON.stringify({ version: 1, plugins } satisfies StoredKnown);
 }
 
@@ -98,11 +98,6 @@ export function markPluginRemoved(pluginId: string): void {
   const known = getKnownPlugin(pluginId);
   if (known === null || known.removed) return;
   write([...read().filter((current) => current.pluginId !== pluginId), { ...known, removed: true }]);
-}
-
-/** Drops a Plugin's known record entirely (erasing retained state, #443, U3). */
-export function forgetKnown(pluginId: string): void {
-  write(read().filter((known) => known.pluginId !== pluginId));
 }
 
 /**

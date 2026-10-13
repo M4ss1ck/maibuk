@@ -12,7 +12,7 @@ import "@/i18n";
 import { PluginsSection } from "@/components/settings/PluginsSection";
 import { toast } from "@/components/ui/Toast";
 import { useModalStore } from "@/components/ui/modal-store";
-import { PLUGIN_FILTER_CATEGORIES, usePluginManagementStore } from "@/features/plugins/management";
+import { PLUGIN_FILTER_CATEGORIES, PLUGIN_DATA_SIZE_WARNING_BYTES, usePluginManagementStore } from "@/features/plugins/management";
 import { registerPluginSettingsRows } from "@/features/settings/rows";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 import { useSettingsStore } from "@/features/settings/store";
@@ -24,6 +24,7 @@ import type {
   PluginReview,
 } from "@/features/plugins/types";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
+import { runCommand } from "@/lib/command-runner";
 import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -385,7 +386,7 @@ describe("PluginsSection", () => {
     expect(await screen.findByLabelText("Echo threshold")).toBeInTheDocument();
   });
 
-  it("shows Modified Built-in copy and Update available badges", () => {
+  it("shows Modified and Update available badges", () => {
     seed(
       entry({
         builtIn: true,
@@ -396,7 +397,7 @@ describe("PluginsSection", () => {
       })
     );
     render(<PluginsSection />);
-    expect(screen.getByText("Modified Built-in copy")).toBeInTheDocument();
+    expect(screen.getByText("Modified")).toBeInTheDocument();
     expect(screen.getByText("Update available")).toBeInTheDocument();
   });
 
@@ -989,5 +990,136 @@ describe("Plugin management (#443)", () => {
 
     await openRow(user);
     expect(screen.queryByRole("button", { name: "Reinstall" })).toBeNull();
+  });
+
+  it("shows the expanded-row facts for an installed approved copy", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        approval: approval({ granted: ["secrets"], enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    expect(screen.getByText("Files")).toBeInTheDocument();
+    expect(screen.getByText("Saved credentials")).toBeInTheDocument();
+    expect(screen.getByText("Approved copy")).toBeInTheDocument();
+    expect(screen.getByText("Custom Shortcuts and Voice Commands")).toBeInTheDocument();
+    expect(screen.getByText("Retained")).toBeInTheDocument();
+    // Files, saved credentials (the secrets grant), and the approved copy.
+    expect(screen.getAllByText("Present")).toHaveLength(3);
+  });
+
+  it("shows the absent facts and the manual-recovery line for a removed third-party row", async () => {
+    const user = userEvent.setup();
+    seed(entry({ installed: false, removed: true }));
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    expect(screen.getByText("Absent")).toBeInTheDocument();
+    // Saved credentials and the approved copy are both gone after removal.
+    expect(screen.getAllByText("None")).toHaveLength(2);
+    expect(screen.getByText("Retained")).toBeInTheDocument();
+    expect(
+      screen.getByText("Manually add the Plugin again to use it.")
+    ).toBeInTheDocument();
+  });
+
+  it("shows the 50 MB size warning inline in the expanded row", async () => {
+    const user = userEvent.setup();
+    seed(entry({ approval: approval({ enabled: true }), review: review({ status: "approved" }) }));
+    usePluginManagementStore.setState({
+      dataSizes: { echoes: PLUGIN_DATA_SIZE_WARNING_BYTES },
+    });
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    expect(
+      screen.getByText(
+        "Plugin data exceeds 50 MB. Large data can slow Library saving on web and enlarge Backups."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("binds each per-Plugin Command to its first eligible row", async () => {
+    seed(
+      entry({
+        pluginId: "alpha",
+        manifest: manifest({ id: "alpha", name: "Alpha" }),
+        approval: approval({ enabled: true }),
+        review: review({ status: "approved" }),
+      }),
+      entry({
+        pluginId: "beta",
+        manifest: manifest({ id: "beta", name: "Beta" }),
+        builtIn: true,
+        installed: false,
+        removed: true,
+        available: true,
+      }),
+      entry({
+        pluginId: "gamma",
+        manifest: manifest({ id: "gamma", name: "Gamma" }),
+        installed: false,
+        removed: true,
+        stopped: { reason: "crashed" },
+      })
+    );
+    usePluginManagementStore.setState({ dataSizes: { gamma: 4096 } });
+    render(<PluginsSection />);
+
+    await waitFor(() =>
+      expect(
+        useBoundShortcutStore.getState().counts["settings.removePlugin"]
+      ).toBeGreaterThan(0)
+    );
+    expect(
+      useBoundShortcutStore.getState().counts["settings.reinstallBuiltIn"]
+    ).toBeGreaterThan(0);
+    expect(
+      useBoundShortcutStore.getState().counts["settings.deletePluginData"]
+    ).toBeGreaterThan(0);
+    expect(
+      useBoundShortcutStore.getState().counts["settings.restartPlugin"]
+    ).toBeGreaterThan(0);
+  });
+
+  it("opens the Remove dialog when its Command runs", async () => {
+    seed(entry({ approval: approval({ enabled: true }), review: review({ status: "approved" }) }));
+    const remove = vi.fn(async () => {});
+    usePluginManagementStore.setState({ remove });
+    render(<PluginsSection />);
+
+    await waitFor(() =>
+      expect(
+        useBoundShortcutStore.getState().counts["settings.removePlugin"]
+      ).toBeGreaterThan(0)
+    );
+    await expect(runCommand("settings.removePlugin", { source: "palette" })).resolves.toBe("ran");
+    expect(await screen.findByRole("alertdialog", { name: "Remove Echoes?" })).toBeInTheDocument();
+  });
+
+  it("toggles the data-deletion checkbox by clicking its visible text", async () => {
+    const user = userEvent.setup();
+    seed(entry({ approval: approval({ enabled: true }), review: review({ status: "approved" }) }));
+    usePluginManagementStore.setState({ remove: vi.fn(async () => {}) });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Remove Echoes?" });
+    const checkbox = within(dialog).getByRole("checkbox", {
+      name: "Also delete this Plugin’s data",
+    });
+    expect(checkbox).not.toBeChecked();
+
+    await user.click(within(dialog).getByText("Also delete this Plugin’s data"));
+
+    expect(checkbox).toBeChecked();
   });
 });

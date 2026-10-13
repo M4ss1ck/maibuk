@@ -389,9 +389,10 @@ export interface PluginManagement {
    * Installs the Plugin a `.zip` the author picks carries, then refreshes.
    * Resolves the installed Plugin id (the folder name), or null when the
    * picker is cancelled or the adapter cannot install. An id whose known
-   * record was removed comes back with `removed` cleared and no approval, so
-   * the #442 approval flow runs again. An adapter error rejects, for the UI to
-   * toast (#443).
+   * record was removed comes back installed and still removed until the
+   * author approves the new copy, so the #442 approval flow runs again and an
+   * app update never silently reinstalls it. An adapter error rejects, for the
+   * UI to toast (#443).
    */
   addFromZip(): Promise<string | null>;
   /**

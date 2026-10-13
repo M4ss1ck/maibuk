@@ -338,12 +338,42 @@ export function createWebPluginDirectory(root?: FileSystemDirectoryHandle): Plug
       });
       if (!picked) return null;
       if (picked.data.length > MAX_TOTAL_BYTES) throw new Error("The Plugin .zip is too large");
-      let entries: RawEntry[];
+      // Bound the declared uncompressed sizes before fflate materializes any
+      // entry: a small archive that inflates past the caps would hang or crash
+      // the webview. The filter sees each entry's originalSize from the central
+      // directory, which deflate cannot exceed, so rejection here is the same
+      // bound Rust applies before buffering. The post-inflate checks in
+      // `preparePlugin` stay as the second line of defence.
+      let declaredTotal = 0;
+      let declaredCount = 0;
+      let violation: string | null = null;
+      let unzipped: ReturnType<typeof unzipSync>;
       try {
-        entries = Object.entries(unzipSync(picked.data)).map(([path, bytes]) => ({ path, bytes }));
+        unzipped = unzipSync(picked.data, {
+          filter: (file) => {
+            if (violation !== null) return false;
+            if (file.originalSize > MAX_FILE_BYTES) {
+              violation = "A Plugin file is too large";
+              return false;
+            }
+            declaredCount += 1;
+            if (declaredCount > MAX_ENTRIES) {
+              violation = "The Plugin has too many files";
+              return false;
+            }
+            declaredTotal += file.originalSize;
+            if (declaredTotal > MAX_TOTAL_BYTES) {
+              violation = "The Plugin is too large";
+              return false;
+            }
+            return true;
+          },
+        });
       } catch {
         throw new Error("The Plugin .zip could not be read");
       }
+      if (violation !== null) throw new Error(violation);
+      const entries: RawEntry[] = Object.entries(unzipped).map(([path, bytes]) => ({ path, bytes }));
       const { id, files } = preparePlugin(entries);
       await installPluginFolder(base, id, files);
       return id;
