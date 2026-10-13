@@ -77,6 +77,16 @@ describe("startPlugin()", () => {
     expect(frame.stopped).toBe(true);
   });
 
+  it("announces the activation's start reason on the Worker's port as the init message", async () => {
+    const frame = fakePluginFrame();
+    const result = await start(pluginFolder({}), {
+      createFrame: () => frame,
+      startReason: "restore",
+    });
+    expect(result.ok).toBe(true);
+    expect(frame.receivedStartReason).toBe("restore");
+  });
+
   it("rewrites imports to the frame's module URLs, dependencies first", async () => {
     const folder = pluginFolder({
       "index.js": 'import { a } from "./lib/util.js";\nexport const b = a;',

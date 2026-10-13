@@ -2,6 +2,7 @@ import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { buildPlainTextMap, pmToPlainOffset } from "@/components/editor/plain-text-offsets";
 import { ToastViewport } from "@/components/ui/Toast";
 import { APP_VERSION } from "@/constants";
 import { PLUGIN_APPROVALS_STORAGE_KEY, savePluginApproval } from "@/features/plugins/approvals";
@@ -10,6 +11,7 @@ import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import {
   EDITOR_CONTENT_EVENT_MS,
   registerPluginEditor,
+  requestEditorReveal,
   resetPluginEditorHostForTests,
   setPluginEditorHighlights,
 } from "@/features/plugins/editor-host";
@@ -26,8 +28,9 @@ import {
   resetPluginLifecycleForTests,
 } from "@/features/plugins/lifecycle";
 import { STARTUP_TIMEOUT_MS } from "@/features/plugins/runtime";
-import { emitChange } from "@/features/sync/change-feed";
+import { cancelBulkReplace, emitChange, prepareBulkReplace } from "@/features/sync/change-feed";
 import type {
+  BuiltInPluginSource,
   PluginApiHandlers,
   PluginDataVersions,
   PluginFolder,
@@ -44,6 +47,7 @@ import {
 } from "@/features/tutorial/library-switch";
 import i18n from "@/i18n";
 import {
+  PLUGIN_MANIFEST,
   fakePluginFrame,
   installMicrotaskMessageChannel,
   pluginFolder,
@@ -142,6 +146,8 @@ interface HarnessOptions {
   isLibraryAvailable?: () => boolean;
   /** Plugin Permissions granted at approval; defaults to none. */
   granted?: PluginPermissionId[];
+  /** Overrides the shipped Built-in source; unspecified ships none. */
+  builtInSource?: BuiltInPluginSource;
 }
 
 async function createHarness(options: HarnessOptions = {}) {
@@ -207,6 +213,7 @@ async function createHarness(options: HarnessOptions = {}) {
     handlers: options.handlers,
     scheduleIdle: (work) => setTimeout(work, 0),
     isLibraryAvailable: options.isLibraryAvailable,
+    builtInSource: options.builtInSource,
     whenLaunchSettled: options.whenLaunchSettled ?? (async () => undefined),
     dataVersions: {
       get: options.dataVersions?.get ?? (async (pluginId) => dataVersions.get(pluginId) ?? null),
@@ -1094,6 +1101,23 @@ describe("Plugin lifecycle: compatibility gate", () => {
   });
 });
 
+describe("Plugin lifecycle: activation start reason", () => {
+  it("announces the activation's start reason to the Worker it creates", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    expect(h.framesFor("alpha")[0].receivedStartReason).toBe("launch");
+
+    h.lifecycle.stop("alpha");
+    await advance(0);
+    const result = await h.lifecycle.start("alpha", "restore");
+    await advance(0);
+
+    expect(result).toEqual({ ok: true, startReason: "restore" });
+    expect(h.framesFor("alpha")).toHaveLength(2);
+    expect(h.framesFor("alpha")[1].receivedStartReason).toBe("restore");
+  });
+});
+
 describe("Plugin lifecycle: review gate", () => {
   it("never creates a frame for a changed copy and records the review refusal", async () => {
     const h = await createHarness({ changed: [makePlugin("alpha")] });
@@ -1336,7 +1360,7 @@ describe("Plugin lifecycle: library and language events", () => {
 
     expect(events).toContainEqual({
       event: "library.availabilityChanged",
-      payload: { available: false },
+      payload: { available: false, reason: "tutorial" },
     });
     // The language subscription replays the current value, then the change.
     expect(
@@ -1492,6 +1516,436 @@ describe("Plugin lifecycle: library and language events", () => {
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(0);
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--warning")).toHaveLength(1);
     editor.destroy();
+  });
+});
+
+describe("Plugin lifecycle: Tutorial entry/exit boundary", () => {
+  let available: boolean;
+
+  /** A pending value the test releases to let an in-flight handler finish. */
+  function deferred(): { promise: Promise<void>; resolve: () => void } {
+    let resolve!: () => void;
+    const promise = new Promise<void>((next) => {
+      resolve = next;
+    });
+    return { promise, resolve };
+  }
+
+  /**
+   * Intercepts the fake frame's port so the events the host posts are recorded,
+   * then forwards everything else to the Plugin on the other end of the port.
+   */
+  function captureEvents(h: Harness, pluginId: string) {
+    const port = h.framesFor(pluginId)[0].pluginPort;
+    if (!port) throw new Error(`${pluginId} has no plugin port`);
+    const events: { event: string; payload: unknown }[] = [];
+    const original = port.onmessage;
+    port.onmessage = (event) => {
+      const data = event.data as { kind?: string; event?: string; payload?: unknown } | null;
+      if (data && data.kind === "event" && data.event) {
+        events.push({ event: data.event, payload: data.payload });
+        return;
+      }
+      original?.call(port, event);
+    };
+    return { port, events };
+  }
+
+  // Subscription ids well above any frame.call id, so the fake frame never
+  // mistakes a subscription's reply for a settled call.
+  function subscribe(port: NonNullable<FakePluginFrame["pluginPort"]>, event: string, id: number) {
+    port.postMessage(JSON.stringify({ kind: "subscribe", id, event }));
+  }
+
+  beforeEach(() => {
+    available = true;
+  });
+
+  it("carries the signal's reason on the availability payload at entry", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      isLibraryAvailable: () => available,
+    });
+    await launchAll(h);
+    const { port, events } = captureEvents(h, "alpha");
+    subscribe(port, "library.availabilityChanged", 1_001);
+    await advance(0);
+
+    available = false;
+    await emitChange({ available: false, reason: "tutorial" });
+
+    expect(events).toContainEqual({
+      event: "library.availabilityChanged",
+      payload: { available: false, reason: "tutorial" },
+    });
+  });
+
+  it("refuses a Library call still in flight when the Tutorial starts, so the late result never crosses", async () => {
+    const gate = deferred();
+    const handler = vi.fn(async () => {
+      await gate.promise;
+      return "late";
+    });
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      isLibraryAvailable: () => available,
+      handlers: () => ({ "storage.get": handler }),
+    });
+    await launchAll(h);
+    const frame = h.framesFor("alpha")[0];
+
+    const call = frame.call("storage.get", { key: "k" });
+    await advance(0);
+    // The broker accepted the call and its handler is now in flight.
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    // The Tutorial starts while the call is still running.
+    available = false;
+    await emitChange({ available: false, reason: "tutorial" });
+    gate.resolve();
+
+    await expect(call).rejects.toMatchObject({ code: "library-unavailable" });
+  });
+
+  it("refuses a call made during the Tutorial and never replays it after exit", async () => {
+    const handler = vi.fn(async () => "value");
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      isLibraryAvailable: () => available,
+      handlers: () => ({ "storage.get": handler }),
+    });
+    await launchAll(h);
+    const frame = h.framesFor("alpha")[0];
+
+    available = false;
+    await emitChange({ available: false, reason: "tutorial" });
+    await expect(frame.call("storage.get", { key: "k" })).rejects.toMatchObject({
+      code: "library-unavailable",
+    });
+    expect(handler).not.toHaveBeenCalled();
+
+    // Leaving the Tutorial must not re-run a refused call.
+    available = true;
+    await emitChange({ available: true, reason: "tutorial" });
+    await advance(0);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("suspends Library change events during the Tutorial and never replays them after exit", async () => {
+    const h = await createHarness({
+      approved: [
+        makePlugin("alpha", { permissions: { required: ["library:read"], optional: [] } }),
+      ],
+      granted: ["library:read"],
+      isLibraryAvailable: () => available,
+    });
+    await launchAll(h);
+    const { port, events } = captureEvents(h, "alpha");
+    subscribe(port, "library.changed", 1_001);
+    subscribe(port, "library.availabilityChanged", 1_002);
+    await advance(0);
+    const changes = () => events.filter((entry) => entry.event === "library.changed");
+
+    available = false;
+    await emitChange({ available: false, reason: "tutorial" });
+    await emitChange({ entity: "book", id: "tutorial-b1", origin: "local", kind: "content" });
+    await emitChange({ scope: "all", reason: "restore" });
+    await advance(0);
+    // No change made during the Tutorial reaches the Plugin.
+    expect(changes()).toEqual([]);
+
+    available = true;
+    await emitChange({ available: true, reason: "tutorial" });
+    await advance(0);
+    // Nothing was queued and replayed on exit.
+    expect(changes()).toEqual([]);
+    // The exit announces availability with the same reason.
+    expect(events).toContainEqual({
+      event: "library.availabilityChanged",
+      payload: { available: true, reason: "tutorial" },
+    });
+
+    // A change made after exit flows again.
+    await emitChange({ entity: "book", id: "b1", origin: "local", kind: "content" });
+    await advance(0);
+    expect(changes()).toEqual([
+      {
+        event: "library.changed",
+        payload: { entity: "book", id: "b1", origin: "local", kind: "content" },
+      },
+    ]);
+  });
+
+  it("refuses a Built-in Plugin call during the Tutorial with no exemption", async () => {
+    const manifest: PluginManifest = { ...PLUGIN_MANIFEST, id: "maibuk-echoes", name: "Echoes" };
+    const folder = pluginFolder({}, manifest);
+    const builtInSource: BuiltInPluginSource = {
+      async list() {
+        return [
+          {
+            id: manifest.id,
+            manifest,
+            hash: await hashPluginDirectory(folder.files),
+            files: folder.files,
+          },
+        ];
+      },
+    };
+    const handler = vi.fn(async () => "value");
+    const h = await createHarness({
+      approved: [folder],
+      builtInSource,
+      isLibraryAvailable: () => available,
+      handlers: () => ({ "storage.get": handler }),
+    });
+    await launchAll(h);
+
+    const installed = h.lifecycle.installed().find((plugin) => plugin.pluginId === "maibuk-echoes");
+    expect(installed?.builtIn).toBe(true);
+    const runtime = h.lifecycle.runtime("maibuk-echoes");
+
+    available = false;
+    await emitChange({ available: false, reason: "tutorial" });
+    await expect(h.framesFor("maibuk-echoes")[0].call("storage.get", { key: "k" })).rejects.toMatchObject(
+      { code: "library-unavailable" }
+    );
+    expect(handler).not.toHaveBeenCalled();
+    // The Built-in stays alive on the same runtime, refused like any other.
+    expect(runtime?.broker.stopped).toBe(false);
+    expect(h.lifecycle.runtime("maibuk-echoes")).toBe(runtime);
+  });
+
+  it("keeps the Worker alive across Tutorial entry and exit", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      isLibraryAvailable: () => available,
+    });
+    await launchAll(h);
+    const frame = h.framesFor("alpha")[0];
+    const runtime = h.lifecycle.runtime("alpha");
+
+    available = false;
+    await emitChange({ available: false, reason: "tutorial" });
+    available = true;
+    await emitChange({ available: true, reason: "tutorial" });
+    await advance(0);
+
+    expect(frame.stopped).toBe(false);
+    expect(h.lifecycle.runtime("alpha")).toBe(runtime);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
+  });
+
+  it("clears Plugin editor highlights and pending editor work when the Tutorial starts", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      isLibraryAvailable: () => available,
+    });
+    await launchAll(h);
+
+    const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one two</p>" });
+    document.body.appendChild(editor.view.dom);
+    editor.view.dom.focus();
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+    setPluginEditorHighlights("alpha", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
+
+    // A reveal queued for an editor that has not mounted yet.
+    requestEditorReveal({ kind: "chapter", id: "c9" }, { from: 4, to: 7 });
+
+    available = false;
+    await emitChange({ available: false, reason: "tutorial" });
+
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(0);
+
+    // The queued reveal was dropped: opening that editor later places no caret.
+    const later = new Editor({
+      extensions: createRichTextExtensions(),
+      content: "<p>one two three</p>",
+    });
+    document.body.appendChild(later.view.dom);
+    registerPluginEditor({ id: "e2", editor: later, entity: { kind: "chapter", id: "c9" } });
+    const map = buildPlainTextMap(later.state.doc);
+    expect(pmToPlainOffset(map, later.state.selection.from)).toBe(0);
+
+    editor.destroy();
+    later.destroy();
+  });
+});
+
+describe("Plugin lifecycle: bulk Library replacement", () => {
+  it("stops a running persistent Plugin before a Restore and restarts it with the Restore reason", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
+
+    await prepareBulkReplace("restore");
+
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: "requested",
+      refusal: null,
+    });
+    expect(h.lifecycle.runtime("alpha")).toBeNull();
+
+    await emitChange({ scope: "all", reason: "restore" });
+    await advanceUntil(() => h.lifecycle.state("alpha")?.status === "ready", "alpha restart");
+
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "restore" });
+    expect(h.framesFor("alpha")[1].receivedStartReason).toBe("restore");
+  });
+
+  it("clears a running Plugin's editor highlights before the replacement", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
+
+    const editor = new Editor({
+      extensions: createRichTextExtensions(),
+      content: "<p>one two</p>",
+    });
+    document.body.appendChild(editor.view.dom);
+    editor.view.dom.focus();
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+    setPluginEditorHighlights("alpha", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
+
+    // A stop for the replacement drops the highlight like any other stop, so a
+    // mark accepted against the Library that is going away never surfaces.
+    await prepareBulkReplace("restore");
+
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(0);
+
+    editor.destroy();
+  });
+
+  it("stops and restarts a running Built-in with no exemption", async () => {
+    const manifest: PluginManifest = { ...PLUGIN_MANIFEST, id: "maibuk-echoes", name: "Echoes" };
+    const folder = pluginFolder({}, manifest);
+    const builtInSource: BuiltInPluginSource = {
+      async list() {
+        return [
+          {
+            id: manifest.id,
+            manifest,
+            hash: await hashPluginDirectory(folder.files),
+            files: folder.files,
+          },
+        ];
+      },
+    };
+    const h = await createHarness({ approved: [folder], builtInSource });
+    await launchAll(h);
+    expect(h.lifecycle.state("maibuk-echoes")).toEqual({ status: "ready", startReason: "launch" });
+
+    await prepareBulkReplace("restore");
+    expect(h.lifecycle.state("maibuk-echoes")).toEqual({
+      status: "stopped",
+      reason: "requested",
+      refusal: null,
+    });
+
+    await emitChange({ scope: "all", reason: "restore" });
+    await advanceUntil(
+      () => h.lifecycle.state("maibuk-echoes")?.status === "ready",
+      "Built-in restart"
+    );
+
+    expect(h.lifecycle.state("maibuk-echoes")).toEqual({ status: "ready", startReason: "restore" });
+    expect(h.framesFor("maibuk-echoes")[1].receivedStartReason).toBe("restore");
+  });
+
+  it("stops before a Reset Library and restarts under the Reset reason", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+
+    await prepareBulkReplace("resetLibrary");
+    expect(h.lifecycle.state("alpha")?.status).toBe("stopped");
+
+    await emitChange({ scope: "all", reason: "resetLibrary" });
+    await advanceUntil(() => h.lifecycle.state("alpha")?.status === "ready", "alpha restart");
+
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "resetLibrary" });
+  });
+
+  it("stops before a Database File load and restarts under the load reason", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+
+    await prepareBulkReplace("databaseLoad");
+    expect(h.lifecycle.state("alpha")?.status).toBe("stopped");
+
+    await emitChange({ scope: "all", reason: "databaseLoad" });
+    await advanceUntil(() => h.lifecycle.state("alpha")?.status === "ready", "alpha restart");
+
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "databaseLoad" });
+  });
+
+  it("does not start a Plugin that was not running before the replacement", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha"), makePlugin("warm-page", { lifecycle: "on-demand" })],
+    });
+    await launchAll(h);
+    expect(h.framesFor("warm-page")).toHaveLength(0);
+
+    await prepareBulkReplace("restore");
+    await emitChange({ scope: "all", reason: "restore" });
+    await advanceUntil(() => h.lifecycle.state("alpha")?.status === "ready", "alpha restart");
+
+    expect(h.framesFor("warm-page")).toHaveLength(0);
+    expect(h.lifecycle.state("warm-page")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: null,
+    });
+  });
+
+  it("waits for an accepted Plugin storage write to settle before the replacement", async () => {
+    let resolveWrite!: () => void;
+    const writeGate = new Promise<void>((resolve) => {
+      resolveWrite = resolve;
+    });
+    const handler = vi.fn(async () => {
+      await writeGate;
+      return null;
+    });
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      handlers: () => ({ "storage.set": handler }),
+    });
+    await launchAll(h);
+
+    // A `requiresLibrary` call the broker accepted, still in flight.
+    const call = h.framesFor("alpha")[0].call("storage.set", { key: "k", value: 1 });
+    call.catch(() => undefined);
+    await advance(0);
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    let prepared = false;
+    const preparing = prepareBulkReplace("restore").then(() => {
+      prepared = true;
+    });
+    await advance(0);
+    // The Plugin stopped, but its accepted write has not settled, so the
+    // replacement must not proceed yet.
+    expect(h.lifecycle.state("alpha")?.status).toBe("stopped");
+    expect(prepared).toBe(false);
+
+    resolveWrite();
+    await preparing;
+    expect(prepared).toBe(true);
+  });
+
+  it("restarts the stopped Plugins with a plain restart when the replacement is abandoned", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+
+    await prepareBulkReplace("restore");
+    expect(h.lifecycle.state("alpha")?.status).toBe("stopped");
+
+    await cancelBulkReplace("restore");
+    await advanceUntil(() => h.lifecycle.state("alpha")?.status === "ready", "alpha restart");
+
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "restart" });
   });
 });
 

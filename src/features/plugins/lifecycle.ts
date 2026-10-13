@@ -22,7 +22,10 @@ import {
   isBulkSignal,
   isEntityChange,
   isLibraryAvailability,
+  onBeforeBulkReplace,
+  onBulkReplaceCancelled,
   onChange,
+  type BulkReason,
 } from "@/features/sync/change-feed";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import { clearStartupError, getPluginApproval, recordStartupError } from "@/features/plugins/approvals";
@@ -31,6 +34,7 @@ import { registerPluginContributions } from "@/features/plugins/contributions";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
 import {
   clearPluginHighlights,
+  invalidatePluginEditorWork,
   onEditorContentChanged,
   onEditorFocusChanged,
 } from "@/features/plugins/editor-host";
@@ -47,7 +51,7 @@ import { reviewPluginCopy } from "@/features/plugins/review";
 import { STARTUP_TIMEOUT_MS, readPluginManifest, startPlugin } from "@/features/plugins/runtime";
 import { pluginStopMessageKey } from "@/features/plugins/stop-messages";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
-import { isTutorialLibraryActive, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
+import { isTutorialLibraryActive, settleAuthorLibraryWork, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
   InstalledPlugin,
   PluginActivationRefusal,
@@ -240,6 +244,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   // the Tutorial waits for it and no call finishes against the sample Library
   // (ADR 0008, #398).
   const trackLibraryWork = options.trackLibraryWork ?? trackAuthorLibraryWork;
+  // Accepted Library/storage work registered through `trackLibraryWork` is
+  // awaited here before a bulk Library replacement, so a write that began in
+  // one Library can never finish in the replaced one (#398).
+  const settleLibraryWork = options.settleLibraryWork ?? settleAuthorLibraryWork;
   const builtInSource = options.builtInSource ?? createBuiltInPluginSource();
   const entries = new Map<string, Entry>();
   const listeners = new Set<(change: PluginLifecycleChange) => void>();
@@ -249,6 +257,12 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   // registries (a Plugin page) stay in loading copy until it settles.
   let scanned = false;
   const scanListeners = new Set<() => void>();
+  // The Plugins a prepared bulk Library replacement (Restore, Reset Library,
+  // Database File load) stopped, with the operation's reason. The matching
+  // completion signal restarts them under that reason; an abandoned
+  // replacement restarts them under a plain restart. See the seam
+  // registration below.
+  let pendingBulkReplace: { reason: BulkReason; pluginIds: string[] } | null = null;
 
   function markScanned(): void {
     if (scanned) return;
@@ -538,6 +552,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         pinnedHash: (liveApproval ?? entry.installed.approval).pinnedHash,
         // A Built-in id parses under the Built-in schema in `startPlugin` too.
         builtIn: entry.installed.builtIn,
+        // Why this activation happened; delivered to the Worker on the init
+        // message so a Plugin learns a Restore or a Reset from a plain launch
+        // (#400, #445).
+        startReason: reason,
         // Read the live record on every broker call, so revoking an optional
         // grant refuses the next call without restarting the Plugin (#442).
         granted: () => getPluginApproval(pluginId)?.granted ?? [],
@@ -660,18 +678,81 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     return new Promise((resolve) => scheduleIdle(resolve));
   }
 
+  /**
+   * Restarts the Plugins a prepared bulk replacement stopped, under
+   * `startReason`, then forgets them. A Plugin the replacement left uninstalled
+   * is skipped. Restart goes through normal activation, so the dataVersion gate
+   * runs against the replaced state.
+   */
+  function restartAfterBulkReplace(startReason: PluginStartReason): void {
+    const pending = pendingBulkReplace;
+    pendingBulkReplace = null;
+    if (pending === null) return;
+    for (const pluginId of pending.pluginIds) {
+      const entry = entries.get(pluginId);
+      if (!entry || disposed) continue;
+      void startEntry(entry, startReason);
+    }
+  }
+
+  // A bulk Library replacement stops every running or starting Plugin before
+  // the data is replaced, so no Worker holds a cached value or an in-flight
+  // call against the Library that is going away (decision #398). It then waits
+  // for any Library/storage write a Plugin had already been accepted to settle,
+  // so that write cannot land on the replaced Library. The ids and the reason
+  // wait for the completion signal, which restarts them under that reason; an
+  // abandoned replacement restarts them under a plain restart.
+  const offBeforeBulkReplace = onBeforeBulkReplace(async (reason) => {
+    const pluginIds: string[] = [];
+    for (const entry of entries.values()) {
+      const status = entry.state.status;
+      if (status !== "ready" && status !== "unavailable" && status !== "starting") continue;
+      // The stop reason is `requested`: it is a normal lifecycle event, so it
+      // toasts nothing and grants no automatic restart. Built-ins have no
+      // exemption.
+      stopEntry(entry, "requested");
+      // A stop drops the Plugin's editor highlights, exactly as an explicit
+      // stop does, so a mark accepted against the Library that is going away
+      // never surfaces on its replacement.
+      clearPluginHighlights(entry.installed.pluginId);
+      pluginIds.push(entry.installed.pluginId);
+    }
+    pendingBulkReplace = { reason, pluginIds };
+    // `settleAuthorLibraryWork` never rejects, so this handler stays
+    // non-throwing and never blocks the replacement.
+    await settleLibraryWork();
+  });
+  const offBulkReplaceCancelled = onBulkReplaceCancelled(() => {
+    restartAfterBulkReplace("restart");
+  });
+
   // Every running Plugin hears the Library's own signals (#430) and the app
   // language. Only a ready runtime has a broker, and a stopped one is gone, so
   // no event is delivered to a Plugin that is not running; each subscription
   // dies with its broker. While the Library is unavailable (the Tutorial) no
   // content signal reaches a Plugin — its rows refuse — but the availability
-  // signal itself still does, so a Plugin can stop calling.
+  // signal itself still does, so a Plugin can stop calling. At that boundary
+  // every Plugin's editor work is invalidated first (ADR 0008, #398): a
+  // highlight or a reveal accepted against the Library that is going away can
+  // never surface on its replacement, and no event is queued for the exit.
   const offChange = onChange((signal) => {
+    if (isLibraryAvailability(signal)) {
+      invalidatePluginEditorWork();
+    }
+    // A completed bulk replacement restarts the Plugins it stopped. The
+    // restart starts now (asynchronously), so the just-restarted Worker is not
+    // the one that receives this bulk event: a stopped Plugin gets no replay.
+    if (isBulkSignal(signal) && pendingBulkReplace?.reason === signal.reason) {
+      restartAfterBulkReplace(signal.reason);
+    }
     for (const entry of entries.values()) {
       const broker = entry.runtime?.broker;
       if (!broker) continue;
       if (isLibraryAvailability(signal)) {
-        broker.emit("library.availabilityChanged", { available: signal.available });
+        broker.emit("library.availabilityChanged", {
+          available: signal.available,
+          ...(signal.reason !== undefined ? { reason: signal.reason } : {}),
+        });
       } else if (isLibraryAvailable()) {
         if (isEntityChange(signal)) {
           broker.emit("library.changed", {
@@ -941,9 +1022,12 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       if (disposed) return;
       disposed = true;
       offChange();
+      offBeforeBulkReplace();
+      offBulkReplaceCancelled();
       offLanguage();
       offEditorContent();
       offEditorFocus();
+      pendingBulkReplace = null;
       // A lifecycle stopped mid-launch must not leave loading surfaces behind.
       markScanned();
       scanListeners.clear();

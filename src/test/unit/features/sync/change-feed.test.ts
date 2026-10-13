@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  cancelBulkReplace,
   emitChange,
   isBulkSignal,
   isEntityChange,
   isLibraryAvailability,
+  onBeforeBulkReplace,
+  onBulkReplaceCancelled,
   onChange,
+  prepareBulkReplace,
   resetChangeFeedForTests,
   STORE_VIEW,
   type Change,
@@ -191,5 +195,87 @@ describe("change feed", () => {
     expect(isEntityChange(availability)).toBe(false);
     expect(isBulkSignal(availability)).toBe(false);
     expect(isLibraryAvailability(availability)).toBe(true);
+  });
+});
+
+describe("before-bulk-replace seam", () => {
+  it("awaits every handler in subscription order before prepareBulkReplace resolves", async () => {
+    const order: string[] = [];
+    const offA = onBeforeBulkReplace(async (reason) => {
+      await Promise.resolve();
+      order.push(`a:${reason}`);
+    });
+    const offB = onBeforeBulkReplace((reason) => {
+      order.push(`b:${reason}`);
+    });
+    try {
+      await prepareBulkReplace("restore");
+    } finally {
+      offA();
+      offB();
+    }
+
+    expect(order).toEqual(["a:restore", "b:restore"]);
+  });
+
+  it("isolates a failing handler: others still run and prepare never rejects", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const survivor = vi.fn();
+    const offThrowing = onBeforeBulkReplace(() => {
+      throw new Error("sync throw");
+    });
+    const offRejecting = onBeforeBulkReplace(() => Promise.reject(new Error("async throw")));
+    const offSurvivor = onBeforeBulkReplace(survivor);
+    try {
+      await expect(prepareBulkReplace("resetLibrary")).resolves.toBeUndefined();
+
+      expect(survivor).toHaveBeenCalledTimes(1);
+      expect(survivor).toHaveBeenCalledWith("resetLibrary");
+      expect(error).toHaveBeenCalled();
+    } finally {
+      offThrowing();
+      offRejecting();
+      offSurvivor();
+      error.mockRestore();
+    }
+  });
+
+  it("stops calling a handler after it unsubscribes", async () => {
+    const handler = vi.fn();
+    const off = onBeforeBulkReplace(handler);
+    off();
+
+    await prepareBulkReplace("databaseLoad");
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("routes an abandoned replacement to the cancel handlers", async () => {
+    const prepared = vi.fn();
+    const cancelled = vi.fn();
+    const offPrepared = onBeforeBulkReplace(prepared);
+    const offCancelled = onBulkReplaceCancelled(cancelled);
+    try {
+      await prepareBulkReplace("restore");
+      await cancelBulkReplace("restore");
+    } finally {
+      offPrepared();
+      offCancelled();
+    }
+
+    expect(prepared).toHaveBeenCalledWith("restore");
+    expect(prepared).toHaveBeenCalledTimes(1);
+    expect(cancelled).toHaveBeenCalledWith("restore");
+    expect(cancelled).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops calling a cancel handler after it unsubscribes", async () => {
+    const handler = vi.fn();
+    const off = onBulkReplaceCancelled(handler);
+    off();
+
+    await cancelBulkReplace("databaseLoad");
+
+    expect(handler).not.toHaveBeenCalled();
   });
 });

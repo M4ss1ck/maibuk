@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BackupAdapter, BackupEntry, DatabaseAdapter } from "@/lib/platform/types";
 import { parseTriggerFromFilename } from "@/features/backup/utils";
+import { isBulkSignal, onBeforeBulkReplace, onChange } from "@/features/sync/change-feed";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
 // Real sql.js database and the real SQL exporter: the only stand-ins are the
@@ -120,6 +121,18 @@ async function pluginValues(
     key: row.key,
     value: JSON.parse(row.value) as unknown,
   }));
+}
+
+async function pluginValue(
+  db: DatabaseAdapter,
+  pluginId: string,
+  key: string
+): Promise<unknown | null> {
+  const rows = await db.select<{ value: string }[]>(
+    `SELECT "value" FROM plugin_storage WHERE plugin_id = ? AND "key" = ?`,
+    [pluginId, key]
+  );
+  return rows.length > 0 ? (JSON.parse(rows[0].value) as unknown) : null;
 }
 
 async function pluginDataVersions(db: DatabaseAdapter): Promise<Record<string, number>> {
@@ -331,5 +344,45 @@ describe("Backup restore and Plugin storage", () => {
     expect(await pluginValues(db)).toEqual([]);
     expect(await pluginDataVersions(db)).toEqual({});
     expect(await bookTitles(db)).toEqual([]);
+  });
+
+  it("stops Plugins before replacing data and restarts them against the restored state", async () => {
+    const order: string[] = [];
+    let preparedValue: unknown = "unset";
+    let restartedValue: unknown = "unset";
+
+    // A Backup carries the value; the device diverged from it after the Backup.
+    await putPluginValue(db, "echoes", "cached", { from: "backup" });
+    const filename = await service.createBackup("manual");
+    await db.execute(
+      `UPDATE plugin_storage SET "value" = ? WHERE plugin_id = 'echoes' AND "key" = 'cached'`,
+      [JSON.stringify({ from: "device" })]
+    );
+
+    // A running Plugin's stop hook reads Plugin storage at call time: it must
+    // see the pre-restore Library, proving it ran before the replacement.
+    const offBefore = onBeforeBulkReplace(async (reason) => {
+      order.push(`prepare:${reason}`);
+      preparedValue = await pluginValue(db, "echoes", "cached");
+    });
+    // The completion signal is where the lifecycle restarts the stopped Plugin;
+    // a handler there reads the restored Plugin storage.
+    const offChange = onChange(async (signal) => {
+      if (isBulkSignal(signal) && signal.reason === "restore") {
+        order.push("restart");
+        restartedValue = await pluginValue(db, "echoes", "cached");
+      }
+    });
+
+    try {
+      await service.restoreBackup(filename);
+    } finally {
+      offBefore();
+      offChange();
+    }
+
+    expect(order).toEqual(["prepare:restore", "restart"]);
+    expect(preparedValue).toEqual({ from: "device" });
+    expect(restartedValue).toEqual({ from: "backup" });
   });
 });

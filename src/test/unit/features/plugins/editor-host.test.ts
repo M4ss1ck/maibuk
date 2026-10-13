@@ -13,6 +13,7 @@ import {
   flushPendingEditorReveal,
   getPluginEditorContent,
   getPluginEditorSelection,
+  invalidatePluginEditorWork,
   onEditorContentChanged,
   onEditorFocusChanged,
   registerPluginEditor,
@@ -499,6 +500,51 @@ describe("editor events", () => {
 
     editor.view.dom.blur();
     vi.advanceTimersByTime(0);
+    expect(seen).not.toHaveBeenCalled();
+    off();
+  });
+});
+
+describe("invalidating editor work at a Library boundary", () => {
+  it("clears every Plugin's highlights from an open editor", () => {
+    const editor = mountEditor("<p>one two three four</p>");
+    editor.view.dom.focus();
+    register(editor, { kind: "chapter", id: "c1" });
+
+    setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    setPluginEditorHighlights("b", { kind: "warning", ranges: [{ from: 4, to: 7 }] });
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight")).toHaveLength(2);
+
+    invalidatePluginEditorWork();
+
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight")).toHaveLength(0);
+  });
+
+  it("drops a reveal queued for an editor that has not mounted yet", () => {
+    requestEditorReveal({ kind: "chapter", id: "c9" }, { from: 4, to: 7 });
+
+    invalidatePluginEditorWork();
+
+    const editor = mountEditor("<p>one two three</p>");
+    editor.view.dom.focus();
+    register(editor, { kind: "chapter", id: "c9" });
+
+    const map = buildPlainTextMap(editor.state.doc);
+    expect(pmToPlainOffset(map, editor.state.selection.from)).toBe(0);
+  });
+
+  it("cancels a content-changed event already queued for delivery", () => {
+    vi.useFakeTimers();
+    const editor = mountEditor("<p>one</p>");
+    editor.view.dom.focus();
+    register(editor);
+    const seen = vi.fn();
+    const off = onEditorContentChanged(seen);
+
+    editor.commands.insertContentAt(4, " two");
+    invalidatePluginEditorWork();
+    vi.advanceTimersByTime(EDITOR_CONTENT_EVENT_MS);
+
     expect(seen).not.toHaveBeenCalled();
     off();
   });

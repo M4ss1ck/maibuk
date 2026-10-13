@@ -843,6 +843,7 @@
     "resetTitle": "¿Reiniciar todos los ajustes?",
     "resetBody": "Todos los ajustes personalizados, Atajos personalizados, Comandos de voz personalizados, preferencias de activación, permisos y aprobaciones vuelven a sus valores predeterminados. Se borran las credenciales guardadas. Se conservan los archivos de Plugins y los datos de la Biblioteca. Los Plugins de terceros requieren aprobación de nuevo. Los integrados sin modificar vuelven a sus valores originales; las copias modificadas aún requieren revisión.",
     "reset": "Reiniciar ajustes y borrar credenciales",
+    "resetSettingsFailed": "Se reiniciaron los ajustes, pero no se pudieron borrar las credenciales guardadas. Inténtalo de nuevo.",
     "metrics": {
       "title": "Métricas",
       "description": "Elige qué patrones locales de escritura registra Maibuk en este dispositivo.",

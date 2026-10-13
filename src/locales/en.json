@@ -843,6 +843,7 @@
     "resetTitle": "Reset all settings?",
     "resetBody": "All custom settings, Custom Shortcuts, custom Voice Commands, enabled preferences, permissions and approvals return to defaults. Saved credentials are deleted. Installed Plugin files and Library data stay. Third-party Plugins need approval again. Untouched Built-in Plugins return to shipped defaults; modified copies still require review.",
     "reset": "Reset settings and delete credentials",
+    "resetSettingsFailed": "Settings were reset, but saved credentials could not be deleted. Try again.",
     "metrics": {
       "title": "Metrics",
       "description": "Choose which local writing patterns Maibuk records on this device.",

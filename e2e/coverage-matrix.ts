@@ -2098,6 +2098,32 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-tutorial-boundary",
+    area: "plugins",
+    workflow:
+      "A running persistent Plugin crosses the Tutorial boundary from Settings → Tutorial → Start from the beginning: its Worker stays alive, reports the Library became unavailable naming the reason (library available: false (tutorial)) while the Tutorial runs, and reports it available again naming the reason (library available: true (tutorial)) after Esc skips the run; asserts: the fixture's run report naming its startReason, the unavailable and available reports each naming the tutorial reason, and no second run report; persists: no",
+    edges: [],
+    terms: ["Plugin", "Tutorial", "Library"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: ["no-webkit"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-restore-indication",
+    area: "plugins",
+    workflow:
+      "A running persistent Plugin is stopped before a Restore and restarted against the restored Library with startReason restore; asserts: the fixture's run report names the restore activation; persists: yes",
+    edges: [],
+    terms: ["Plugin", "Restore", "Library"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "backupsPresent",
+    tags: ["no-webkit"],
+    status: "accepted",
+  },
+  {
     id: "plugin-management-empty",
     area: "plugins",
     workflow:

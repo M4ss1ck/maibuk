@@ -14,6 +14,7 @@ import {
 } from "@/features/plugins/approvals";
 import { resetPluginContributionsForTests } from "@/features/plugins/contributions";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
+import { getKnownPlugin, saveKnownPlugin } from "@/features/plugins/known";
 import {
   resetPluginLifecycleForTests,
   setPluginLifecycleInstance,
@@ -22,19 +23,34 @@ import {
   createPluginManagementStore,
   usePluginManagementStore,
 } from "@/features/plugins/management";
+import { registerPluginSecretStore, type PluginSecretStore } from "@/features/plugins/secret-store";
+import { getPluginStorageValue, setPluginStorageValue } from "@/features/plugins/storage";
+import { createTestHost } from "@/features/plugins/test-kit";
 import type {
   BuiltInPlugin,
   BuiltInPluginSource,
   PluginFolder,
   PluginLifecycle,
   PluginManifest,
+  PluginStartReason,
 } from "@/features/plugins/types";
 import { voiceEligibleCommands } from "@/features/dictation/voice-commands";
 import { resetAllSettings } from "@/features/settings/reset-all";
 import { useSettingsStore } from "@/features/settings/store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
+import { normalizeShortcuts } from "@/lib/shortcut-resolve";
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
-import { pluginFolder } from "@/test/support/plugin-fixtures";
+import { createPluginClient } from "@/plugin-sdk";
+import { createTestDatabase } from "@/test/support/db-test-context";
+import { PLUGIN_MANIFEST, pluginFolder } from "@/test/support/plugin-fixtures";
+
+// The real storage module reads the database; only the handle is a stand-in, so
+// the Reset settings test can prove Plugin Library data survives the reset.
+const mockGetDatabase = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/db", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/db")>()),
+  getDatabase: mockGetDatabase,
+}));
 
 const TRACER = "tracer";
 const ECHOES = "echoes";
@@ -57,6 +73,7 @@ interface Harness {
   store: ReturnType<typeof createPluginManagementStore>;
   uninstalled: string[];
   installedAgain: string[];
+  installReasons: Array<{ pluginId: string; reason: PluginStartReason }>;
   replaceCalls: { value: number };
   echoesShippedHash: string;
 }
@@ -104,13 +121,15 @@ async function setup(): Promise<Harness> {
   const installed = [{ pluginId: TRACER } as never, { pluginId: GUIDE } as never];
   const uninstalled: string[] = [];
   const installedAgain: string[] = [];
+  const installReasons: Array<{ pluginId: string; reason: PluginStartReason }> = [];
   const lifecycle = {
     installed: () => installed,
     uninstall: (pluginId: string) => {
       uninstalled.push(pluginId);
     },
-    install: async (pluginId: string) => {
+    install: async (pluginId: string, reason: PluginStartReason) => {
       installedAgain.push(pluginId);
+      installReasons.push({ pluginId, reason });
       return { ok: true };
     },
     state: () => ({ status: "ready" }),
@@ -140,6 +159,7 @@ async function setup(): Promise<Harness> {
     store,
     uninstalled,
     installedAgain,
+    installReasons,
     replaceCalls,
     echoesShippedHash: echoesShippedBuiltIn.hash,
   };
@@ -156,6 +176,7 @@ beforeEach(() => {
 afterEach(() => {
   resetPluginLifecycleForTests();
   resetPluginContributionsForTests();
+  registerPluginSecretStore(null);
   usePluginManagementStore.setState({ plugins: {}, notifications: [] });
   localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
   useSettingsStore.setState({ appFontSize: 16, pluginDevelopmentMode: false });
@@ -216,5 +237,188 @@ describe("resetAllSettings", () => {
 
     // The Plugin Directory was only read, never written.
     expect(harness.replaceCalls.value).toBe(0);
+  });
+
+  it("deletes every saved Plugin credential through the registered keyring", async () => {
+    const secrets = new Map<string, string>([
+      [TRACER, "tracer-token"],
+      [GUIDE, "guide-token"],
+    ]);
+    const keyring: PluginSecretStore = {
+      clearAll: async () => {
+        secrets.clear();
+      },
+    };
+    registerPluginSecretStore(keyring);
+    expect(secrets.size).toBe(2);
+
+    await resetAllSettings({
+      stopPlugins: () => {},
+      refreshPlugins: async () => {},
+      restartBuiltIns: async () => {},
+    });
+
+    // The keyring the app registered is empty after the reset.
+    expect(secrets.size).toBe(0);
+  });
+
+  it("erases every user-modified Plugin category while Plugin Library data stays", async () => {
+    mockGetDatabase.mockResolvedValue(await createTestDatabase());
+
+    // Grants, the integrity approval (pinned hash), and the enabled preference
+    // all live on the approval record.
+    savePluginApproval({
+      pluginId: TRACER,
+      pinnedHash: "h1:approved",
+      granted: ["library:read"],
+      enabled: false,
+      approvedVersion: "1.0.0",
+      approvedPermissions: { required: ["library:read"], optional: [] },
+      approvedFiles: {},
+    });
+    saveKnownPlugin({
+      pluginId: TRACER,
+      manifest: PLUGIN_MANIFEST,
+      builtIn: false,
+      removed: false,
+    });
+    // A Plugin Custom Shortcut and a Plugin Voice Command.
+    useShortcutSettingsStore.setState({
+      shortcuts: normalizeShortcuts({
+        version: 2,
+        custom: { "plugin.tracer.report": [["Mod+Alt+t"]] },
+        voice: { "plugin.tracer.report": { en: ["show tracer report"] } },
+        singleKeyEnabled: false,
+      }),
+    });
+    // A saved secret.
+    const secrets = new Map<string, string>([[TRACER, "tracer-token"]]);
+    registerPluginSecretStore({
+      clearAll: async () => {
+        secrets.clear();
+      },
+    });
+    // Plugin Library data is not a setting.
+    await setPluginStorageValue(TRACER, "report", { kept: true });
+
+    await resetAllSettings({
+      // Only the Plugin lifecycle bits are stand-ins; every category store and
+      // the keyring are the real ones.
+      stopPlugins: () => {},
+      refreshPlugins: async () => {},
+      restartBuiltIns: async () => {},
+    });
+
+    expect(getPluginApproval(TRACER)).toBeNull();
+    expect(getKnownPlugin(TRACER)).toBeNull();
+    expect(useShortcutSettingsStore.getState().shortcuts.custom).toEqual({});
+    expect(useShortcutSettingsStore.getState().shortcuts.voice).toEqual({});
+    expect(secrets.size).toBe(0);
+    // Plugin Library data survives the reset.
+    await expect(getPluginStorageValue(TRACER, "report")).resolves.toEqual({ kept: true });
+  });
+
+  it("still runs every other step when deleting credentials fails, then rejects", async () => {
+    const failure = new Error("keychain locked");
+    const clearCredentials = vi.fn(async () => {
+      throw failure;
+    });
+    const settings = vi.fn();
+    const shortcuts = vi.fn();
+    const approvals = vi.fn();
+    const known = vi.fn();
+    const stopPlugins = vi.fn();
+    const refreshPlugins = vi.fn(async () => {});
+    const restartBuiltIns = vi.fn(async () => {});
+
+    await expect(
+      resetAllSettings({
+        clearCredentials,
+        settings,
+        shortcuts,
+        approvals,
+        known,
+        stopPlugins,
+        refreshPlugins,
+        restartBuiltIns,
+      })
+    ).rejects.toBe(failure);
+
+    expect(stopPlugins).toHaveBeenCalledTimes(1);
+    expect(settings).toHaveBeenCalledTimes(1);
+    expect(shortcuts).toHaveBeenCalledTimes(1);
+    expect(approvals).toHaveBeenCalledTimes(1);
+    expect(known).toHaveBeenCalledTimes(1);
+    expect(refreshPlugins).toHaveBeenCalledTimes(1);
+    expect(restartBuiltIns).toHaveBeenCalledTimes(1);
+  });
+
+  it("restarts a running Built-in with the settingsReset reason while the third-party Plugin needs approval again", async () => {
+    const harness = await setup();
+    await harness.store.getState().refresh();
+
+    await resetAllSettings({
+      refreshPlugins: async () => {
+        await harness.store.getState().refresh();
+        usePluginManagementStore.setState({ plugins: harness.store.getState().plugins });
+      },
+    });
+
+    // The untouched Built-in that was running restarts with the reset reason.
+    expect(harness.installReasons).toEqual([{ pluginId: GUIDE, reason: "settingsReset" }]);
+    // The third-party Plugin is not restarted and needs approval again.
+    expect(harness.installedAgain).toEqual([GUIDE]);
+    expect(getPluginApproval(TRACER)).toBeNull();
+  });
+
+  it("refuses a running Plugin's permission-gated call once the reset erases its grant", async () => {
+    // The lifecycle feeds the broker `granted: () => getPluginApproval(id)?.granted`
+    // (lifecycle.ts:561), re-read on every call.
+    savePluginApproval({
+      pluginId: PLUGIN_MANIFEST.id,
+      pinnedHash: "h1:granted",
+      granted: ["library:read"],
+      enabled: true,
+      approvedVersion: "1.0.0",
+      approvedPermissions: { required: ["library:read"], optional: [] },
+      approvedFiles: {},
+    });
+    const book = {
+      id: "b1",
+      title: "Dune",
+      subtitle: null,
+      authorName: "Frank",
+      language: "en",
+      wordCount: 10,
+      updatedAt: 0,
+    };
+    const host = createTestHost({
+      manifest: {
+        ...PLUGIN_MANIFEST,
+        permissions: { required: ["library:read"], optional: [] },
+      },
+      permissions: ["library:read"],
+      library: { books: [book] },
+    });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.library.books.list()).resolves.toEqual([book]);
+
+      await resetAllSettings({
+        stopPlugins: () => {},
+        refreshPlugins: async () => {},
+        restartBuiltIns: async () => {},
+      });
+
+      // The reset erased the grant; the broker re-reads it and refuses the call.
+      const remaining = getPluginApproval(PLUGIN_MANIFEST.id)?.granted ?? [];
+      expect(remaining).toEqual([]);
+      host.setGranted(remaining);
+      await expect(client.library.books.list()).rejects.toMatchObject({
+        code: "permission-denied",
+      });
+    } finally {
+      host.stop();
+    }
   });
 });

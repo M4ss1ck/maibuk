@@ -24,6 +24,7 @@ import { openPluginUiMount, type PluginUiMount } from "@/features/plugins/remote
 import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import { PluginRemoteUiSurface } from "@/features/plugins/remote-ui/surface";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
+import { PLUGIN_INIT_MESSAGE } from "@/plugin-sdk/protocol";
 import type {
   PluginApiHandlers,
   PluginPermissionId,
@@ -55,6 +56,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const storage = new Map<string, unknown>();
   let language = options.language ?? "en";
   let libraryAvailable = true;
+  const startReason = options.startReason ?? "enable";
   const declared = [
     ...options.manifest.permissions.required,
     ...options.manifest.permissions.optional,
@@ -122,6 +124,11 @@ export function createTestHost(options: TestHostOptions): TestHost {
     eventSnapshot: (event) => (event === "language.changed" ? { language } : undefined),
   });
 
+  // Deliver the activation's start reason over the Plugin's own port, the way
+  // the Worker receives it on the init message in production; the SDK reads it
+  // and exposes it as `client.activation` (#445).
+  channel.port1.postMessage({ kind: PLUGIN_INIT_MESSAGE.kind, startReason });
+
   /** Every page `renderPage` opened and has not unmounted yet. */
   const openPages = new Set<TestPage>();
   /** The live mount behind each open page, so `stopWorker` can sever it. */
@@ -186,6 +193,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
     notifications,
     navigations,
     locale: options.locale ?? null,
+    startReason,
     get language() {
       return language;
     },
