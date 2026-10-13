@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { EXCLUSIONS, ROWS } from "../coverage-matrix";
-import type { GuardInput, SourceFile } from "./coverage";
+import { type GuardInput, parsePluginCommandIds, type SourceFile } from "./coverage";
 
 /** Everything checkCoverage needs except allowPlanned. */
 export type GuardInputs = Omit<GuardInput, "allowPlanned">;
@@ -39,12 +39,20 @@ export function collectGuardInputs(root: string): GuardInputs {
       rel.includes("node_modules")
   );
 
+  // Built-in Plugin Commands, from the manifests `plugins/builtins.json` lists
+  // (fixture Plugins under e2e/ are never shipped, so they stay out).
+  const builtInIds = JSON.parse(read("plugins/builtins.json")) as { plugins: string[] };
+  const builtInPluginCommandIds = builtInIds.plugins.flatMap((id) =>
+    parsePluginCommandIds(id, read(`plugins/${id}/manifest.json`))
+  );
+
   return {
     rows: ROWS,
     exclusions: EXCLUSIONS,
     glossaryMd: read("GLOSSARY.md"),
     shortcutRegistrySource: read("src/lib/shortcut-registry.ts"),
     appRoutesSource: read("src/App.tsx"),
+    builtInPluginCommandIds,
     specs,
     otherE2eFiles,
   };

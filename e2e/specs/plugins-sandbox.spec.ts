@@ -8,7 +8,7 @@
 import { runBootstrapForwarding, runPreludeShape } from "../support/plugins-sandbox";
 import { expect, test } from "../support/test";
 
-test.describe("Plugin sandbox Worker prelude @sandbox", () => {
+test.describe("Plugin sandbox Worker prelude @wf:plugins-sandbox @sandbox", () => {
   test("boots a Plugin that uses self.onmessage exactly once", async ({ page }) => {
     await page.goto("/");
     const run = await runPreludeShape(page, "onmessage");
@@ -22,7 +22,7 @@ test.describe("Plugin sandbox Worker prelude @sandbox", () => {
   });
 });
 
-test.describe("Plugin sandbox bootstrap @sandbox", () => {
+test.describe("Plugin sandbox bootstrap @wf:plugins-sandbox @sandbox", () => {
   test("forwards only the first ready and never a Plugin's own posts", async ({ page }) => {
     await page.goto("/");
     const run = await runBootstrapForwarding(page);

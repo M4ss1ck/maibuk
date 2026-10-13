@@ -54,6 +54,7 @@ pnpm test:e2e specs/books-create.spec.ts          # one file
 pnpm test:e2e specs/books.spec.ts -g "Esc cancels"  # one test by title
 pnpm test:e2e --grep @wf:books-create             # one matrix workflow
 pnpm test:e2e --grep @sc:editor.bold              # one shortcut id
+pnpm test:e2e --grep @sandbox                     # the Plugin sandbox lane: chromium, webkit, firefox
 pnpm test:e2e --repeat-each=3                     # the acceptance run
 pnpm test:e2e --headed                            # watch the browser
 pnpm test:e2e --debug                             # Playwright Inspector
@@ -126,6 +127,12 @@ follows the host OS while TipTap's Mod follows the reported platform.
 `(pointer: coarse)` matches and `hover:` never applies, so a control revealed only on hover stays hidden
 there. It is Chromium only: the long-press and swipe helpers send touch points
 over CDP. Desktop projects never run `@touch` tests.
+
+`firefox` is limited to the `@sandbox` group, so `pnpm test:e2e --grep @sandbox`
+runs the Plugin sandbox lane on Chromium, WebKit, and Firefox. A change to the
+Plugin sandbox, broker, or remote UI renderer runs that lane locally and says so
+in the PR (`CODING_STANDARDS.md`, E2E). Seeded fixture specs stay `@no-webkit`
+until the Playwright bump ([#479](https://github.com/M4ss1ck/maibuk/issues/479)).
 
 All projects use en-US and UTC; the desktop ones use a 1280x800 viewport. Workers default to CPU
 cores / 2, retries are 0, and a test times out after 30 s.

@@ -2221,6 +2221,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-sandbox",
+    area: "plugins",
+    workflow:
+      "The Plugin sandbox refuses an escape and the host shows a typed refusal or stop reason, proven by the @sandbox lane on Chromium, WebKit, and Firefox: the fixed host prelude boots a Plugin exactly once whichever way it registers its message handler, and the frame bootstrap forwards only the first ready (and error) message, so a Plugin's own posts are not a side channel to the host window; asserts: the boot count and the forwarded-message counts; persists: no",
+    edges: [],
+    terms: ["Plugin"],
+    shortcuts: [],
+    routes: ["/"],
+    fixture: "empty",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-contributions",
     area: "plugins",
     workflow:

@@ -10,6 +10,7 @@ import {
   type GuardInput,
   parseAppRoutes,
   parseKeylessCommandIds,
+  parsePluginCommandIds,
   parseShortcutIds,
   type ProblemCode,
   sourceViews,
@@ -88,6 +89,7 @@ function input(overrides: Partial<GuardInput> = {}): GuardInput {
     glossaryMd: GLOSSARY,
     shortcutRegistrySource: REGISTRY,
     appRoutesSource: APP,
+    builtInPluginCommandIds: [],
     specs: [{ path: "e2e/specs/books.spec.ts", source: GOOD_SPEC }],
     otherE2eFiles: [],
     allowPlanned: false,
@@ -131,6 +133,20 @@ describe("parsers", () => {
 
   it("reads App.tsx routes as absolute patterns, index as /", () => {
     assert.deepEqual(parseAppRoutes(APP), ["/", "/book/:bookId"]);
+  });
+
+  it("derives Built-in Plugin Command ids as plugin.<pluginId>.<localId>", () => {
+    const manifest = `{ "id": "alpha", "contributes": { "commands": [
+      { "id": "doThing" }, { "id": "openPage" }
+    ] } }`;
+    assert.deepEqual(parsePluginCommandIds("alpha", manifest), [
+      "plugin.alpha.doThing",
+      "plugin.alpha.openPage",
+    ]);
+  });
+
+  it("derives no ids from a manifest that declares no commands", () => {
+    assert.deepEqual(parsePluginCommandIds("alpha", `{ "id": "alpha" }`), []);
   });
 
   it("keeps tags in strings but blanks strings and comments for API scans", () => {
@@ -475,6 +491,55 @@ test("taps without the tag", async ({ page }) => {
     assert.deepEqual(codes(specWith("test.describe.configure({ retries: 2 });")), [
       "keyboard-contract",
     ]);
+  });
+
+  describe("Built-in Plugin Commands", () => {
+    const PLUGIN = "plugin.alpha.doThing";
+    const withPlugin = () => ({
+      builtInPluginCommandIds: [PLUGIN],
+      rows: [row({ shortcuts: ["home.newBook", "editor.save", PLUGIN] })],
+    });
+
+    it("accepts an @sc: tag naming a Built-in Plugin Command", () => {
+      const spec = GOOD_SPEC.replace("@sc:editor.save", `@sc:editor.save @sc:${PLUGIN}`);
+      assert.deepEqual(
+        codes({
+          ...withPlugin(),
+          specs: [{ path: "e2e/specs/b.spec.ts", source: spec }],
+        }),
+        []
+      );
+    });
+
+    it("rejects an @sc: tag naming a Plugin Command that is not built in", () => {
+      const spec = GOOD_SPEC.replace("@sc:editor.save", "@sc:editor.save @sc:plugin.ghost.doThing");
+      assert.ok(
+        codes({ specs: [{ path: "e2e/specs/b.spec.ts", source: spec }] }).includes(
+          "unknown-shortcut"
+        )
+      );
+    });
+
+    it("rejects a Built-in Plugin Command with no matrix row and no exclusion", () => {
+      assert.deepEqual(codes({ builtInPluginCommandIds: [PLUGIN] }), ["shortcut-uncovered"]);
+    });
+
+    it("accepts an excluded Built-in Plugin Command", () => {
+      assert.deepEqual(
+        codes({
+          builtInPluginCommandIds: [PLUGIN],
+          exclusions: [
+            { kind: "context-section", section: "Sync", reason: "r", owner: "o" },
+            { kind: "shortcut", items: [PLUGIN], reason: "r", owner: "o" },
+          ],
+        }),
+        []
+      );
+    });
+
+    it("rejects a row listing a Built-in Plugin Command no spec tags", () => {
+      assert.deepEqual(codes(withPlugin()), ["row-shortcut-untagged"]);
+    });
   });
 
   it("rejects storage access outside the support helpers", () => {
