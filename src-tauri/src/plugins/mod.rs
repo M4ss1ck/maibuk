@@ -189,12 +189,14 @@ pub fn resolve_builtin_plugin_folder(resource_root: &Path, name: &str) -> Result
 
 /// One entry in the embedded `plugins/index.json`: the id and the POSIX-relative
 /// paths of its shipped files (the manifest and hash are not needed to stage).
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 #[derive(Deserialize)]
 struct ShippedIndexEntry {
     id: String,
     files: Vec<String>,
 }
 
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 #[derive(Deserialize)]
 struct ShippedIndex {
     plugins: Vec<ShippedIndexEntry>,
@@ -204,6 +206,7 @@ struct ShippedIndex {
 /// empty, no backslash, colon, or newline, and every component a normal name, so
 /// `..`, an absolute path, and a drive prefix are refused. The same rules the
 /// archive and the Plugin Directory apply before a file is written.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 fn is_safe_relative_path(path: &str) -> bool {
     !path.is_empty()
         && !path.contains(['\\', ':', '\n'])
@@ -221,6 +224,7 @@ fn is_safe_relative_path(path: &str) -> bool {
 /// that is missing, and a listed path that would leave the folder are refused.
 /// Returns the staged id; `stage_and_finish` installs it only when every file
 /// was written, so a failure leaves the installed copy as it was.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
 fn stage_from_assets(
     lookup: impl Fn(&str) -> Option<Vec<u8>>,
     name: &str,
