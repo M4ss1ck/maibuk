@@ -12,7 +12,7 @@ import { type Browser, chromium, type Page, test, webkit } from "@playwright/tes
 import type { FrameBenchScenarioResult } from "@/test/support/frames/bench-report";
 import { FrameReportRefused } from "@/test/support/frames/frame-report";
 import { frameProbeScript } from "@/test/support/frames/probe";
-import { type FrameSource, scenariosFor } from "@/test/support/frames/scenarios";
+import { type FrameScenario, type FrameSource, scenariosFor } from "@/test/support/frames/scenarios";
 import { SEED_DIR } from "../support/seed/seeds";
 import { resetDeviceAndOpen, prepareDevice } from "../support/storage";
 import { makeHermetic } from "../support/test";
@@ -80,7 +80,11 @@ test.afterAll(async () => {
   await launched?.close();
 });
 
-async function webPage(browser: Browser, seed: string, baseURL: string): Promise<ScenarioPage> {
+async function webPage(
+  browser: Browser,
+  scenario: FrameScenario,
+  baseURL: string
+): Promise<ScenarioPage> {
   const context = await browser.newContext({
     baseURL,
     locale: "en-US",
@@ -89,7 +93,17 @@ async function webPage(browser: Browser, seed: string, baseURL: string): Promise
   });
   await makeHermetic(context);
   const page = await context.newPage();
-  await prepareDevice(page, { library: seed as never, tutorial: "dismissed" });
+  await prepareDevice(page, {
+    library: scenario.seed as never,
+    tutorial: "dismissed",
+    // A scenario that seeds a Plugin skips the probe and android sources, where
+    // the OPFS Plugin Directory does not exist (scenarios.ts `skip`).
+    plugins: (scenario.plugins ?? []).map((plugin) => plugin.id) as never,
+    pluginApprovals: (scenario.plugins ?? []).map((plugin) => ({
+      pluginId: plugin.id,
+      granted: [...plugin.granted],
+    })),
+  });
   await page.addInitScript({ content: frameProbeScript() });
   return {
     page,
@@ -141,7 +155,7 @@ for (const scenario of scenariosFor(source, only)) {
       target =
         source === "android"
           ? await androidPage(scenario.seed)
-          : await webPage(await webBrowser(), scenario.seed, baseURL!);
+          : await webPage(await webBrowser(), scenario, baseURL!);
       const driver = FRAME_DRIVERS[scenario.id];
       const collector = collectorFor();
       await driver.prepare(target.ctx);

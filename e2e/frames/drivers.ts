@@ -77,19 +77,39 @@ async function dragBy(
 const editorText = (page: Page) =>
   page.getByRole("textbox", { name: `Text of ${PERF_BOOK.longChapter}` });
 
-/** Opens a seeded Book from the Books gallery; the editor opens its last Chapter. */
-async function openBook(
-  { page, open }: FrameDriverContext,
+/**
+ * The measured typing burst: 120 characters, the pace of a fast typist. The
+ * `typing`, `plugin-remote-ui`, and `typing-with-highlights` scenarios type the
+ * same text so their keystroke-to-next-frame numbers compare.
+ */
+const TYPING_BURST =
+  " Rain struck the glass in long grey sheets while the lamp turned and the keeper wrote on.";
+const TYPING_TEXT = (TYPING_BURST + TYPING_BURST).slice(0, 120);
+/** The sentence the typing scenarios type before measuring, deep in the Chapter. */
+const TYPING_WARMUP = " The keeper wrote by lamplight.";
+
+/** Opens the seeded Book already focused in the Books gallery, without a reload. */
+async function openBookInGallery(
+  { page }: FrameDriverContext,
   title: string,
   text: Locator
 ): Promise<void> {
-  await open("/");
   const card = page.getByRole("grid", { name: "Books" }).getByRole("row", { name: title });
   await expect(card).toBeVisible();
   await page.keyboard.press("1");
   await expect(card).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(text).toBeFocused({ timeout: 30_000 });
+}
+
+/** Opens a seeded Book from the Books gallery; the editor opens its last Chapter. */
+async function openBook(
+  ctx: FrameDriverContext,
+  title: string,
+  text: Locator
+): Promise<void> {
+  await ctx.open("/");
+  await openBookInGallery(ctx, title, text);
 }
 
 /** Opens the perf Book; the editor opens its last Chapter. */
@@ -104,14 +124,11 @@ const typing: FrameDriver = {
     await page.keyboard.press("ControlOrMeta+End");
     for (let i = 0; i < 12; i++) await page.keyboard.press("PageUp");
     await page.keyboard.press("End");
-    await page.keyboard.type(" The keeper wrote by lamplight.", { delay: 60 });
+    await page.keyboard.type(TYPING_WARMUP, { delay: 60 });
     await sleep(500);
   },
   async measure({ page }) {
-    const burst =
-      " Rain struck the glass in long grey sheets while the lamp turned and the keeper wrote on.";
-    const text = (burst + burst).slice(0, 120);
-    await page.keyboard.type(text, { delay: 1000 / 12 });
+    await page.keyboard.type(TYPING_TEXT, { delay: 1000 / 12 });
     await sleep(300);
   },
 };
@@ -461,6 +478,96 @@ const paneSlide: FrameDriver = {
   },
 };
 
+/** The fixture-bench echo page's route (its only page). */
+const BENCH_ECHO_PATH = "/plugin/fixture-bench/echo";
+const echoInput = (page: Page) => page.getByRole("textbox", { name: "Echo input" });
+const benchTableRowCount = (page: Page) =>
+  page.getByRole("table", { name: "Bench rows" }).locator("tbody tr");
+const pluginHighlight = (page: Page) => page.locator(".plugin-highlight");
+
+const navOption = (page: Page, name: string) =>
+  page
+    .getByRole("listbox", { name: "Primary navigation" })
+    .getByRole("option", { name: new RegExp(`^${name}`) });
+
+/**
+ * Opens the fixture-bench echo page and waits for its Worker's Remote UI tree
+ * (the echo field and the full 1,000-row table). CSS row count, not a role
+ * query: the table is a plain `<table>` with no scroll container of its own.
+ */
+async function openBenchEcho(page: Page): Promise<void> {
+  await page.goto(BENCH_ECHO_PATH);
+  await expect(echoInput(page)).toBeVisible({ timeout: 30_000 });
+  await expect(benchTableRowCount(page)).toHaveCount(1000, { timeout: 30_000 });
+}
+
+/** Wheel ticks of 100 px that cross the whole echo page, from the table's height. */
+async function tableWheelTicks(page: Page): Promise<number> {
+  const distance = await page.evaluate(() => {
+    let node: HTMLElement | null = document.querySelector("table");
+    while (node !== null) {
+      const scrollable = node.scrollHeight - node.clientHeight;
+      if (scrollable > 8) return scrollable;
+      node = node.parentElement;
+    }
+    return 0;
+  });
+  return Math.max(1, Math.ceil(distance / 100));
+}
+
+const pluginRemoteUi: FrameDriver = {
+  async prepare({ page }) {
+    await openBenchEcho(page);
+    // Warm-up: focus the field, a short scroll down and back, a short sentence.
+    await echoInput(page).focus();
+    const at = await viewportPoint(page, 0.5, 0.5);
+    await page.mouse.move(at.x, at.y);
+    await wheelTicks(page, 0, 100, 5);
+    await wheelTicks(page, 0, -100, 5);
+    await page.keyboard.type(" The bench warms up.", { delay: 60 });
+    await sleep(300);
+  },
+  async measure({ page }) {
+    await echoInput(page).focus();
+    const at = await viewportPoint(page, 0.5, 0.5);
+    await page.mouse.move(at.x, at.y);
+    // The table's whole height in 100 px ticks, top to bottom, then back up.
+    const ticks = await tableWheelTicks(page);
+    await wheelTicks(page, 0, 100, ticks);
+    await wheelTicks(page, 0, -100, ticks);
+    // The wheel gesture never moved focus from Echo input.
+    await page.keyboard.type(TYPING_TEXT, { delay: 1000 / 12 });
+    await sleep(300);
+  },
+};
+
+const typingWithHighlights: FrameDriver = {
+  async prepare(ctx) {
+    const { page } = ctx;
+    // Start the Plugin's Worker before the Chapter editor focuses: it paints
+    // highlights only in response to focus and content changes, never replayed.
+    await openBenchEcho(page);
+    // Leave the echo page by keyboard, not a reload, so the Worker keeps running.
+    await tabTo(page, navOption(page, "Books"));
+    await page.keyboard.press("Enter");
+    await openBookInGallery(ctx, PERF_BOOK.title, editorText(page));
+    // The host renders each highlight as a `plugin-highlight` span.
+    await expect(pluginHighlight(page).first()).toBeVisible({ timeout: 15_000 });
+    // Deep in the Chapter, like `typing`.
+    await page.keyboard.press("ControlOrMeta+End");
+    for (let i = 0; i < 12; i++) await page.keyboard.press("PageUp");
+    await page.keyboard.press("End");
+    await page.keyboard.type(TYPING_WARMUP, { delay: 60 });
+    await sleep(500);
+  },
+  async measure({ page }) {
+    // Typing changes the Chapter content; the Plugin re-sends highlights 300 ms
+    // after the last edit, so the burst maps highlights on every keystroke.
+    await page.keyboard.type(TYPING_TEXT, { delay: 1000 / 12 });
+    await sleep(300);
+  },
+};
+
 export const FRAME_DRIVERS: Record<string, FrameDriver> = {
   typing,
   scroll,
@@ -482,4 +589,6 @@ export const FRAME_DRIVERS: Record<string, FrameDriver> = {
     manyChaptersText
   ),
   "pane-slide": paneSlide,
+  "plugin-remote-ui": pluginRemoteUi,
+  "typing-with-highlights": typingWithHighlights,
 };

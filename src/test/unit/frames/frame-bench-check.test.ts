@@ -75,6 +75,12 @@ describe("the frozen frame budget", () => {
   it("judges typing keystroke to next frame within one refresh interval", () => {
     expect(budgetFor("typing")).toMatchObject({ inputP95Intervals: 1 });
   });
+
+  it("judges each Plugin scenario's keystroke to next frame like typing", () => {
+    for (const id of ["plugin-remote-ui", "typing-with-highlights"]) {
+      expect(budgetFor(id), id).toMatchObject({ inputP95Intervals: 1, minInputs: 60 });
+    }
+  });
 });
 
 describe("checkFrameBench()", () => {
