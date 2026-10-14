@@ -3,7 +3,8 @@
  * `notifications.show` renders a toast naming the Plugin; the Library reads
  * serve Books, Chapters, Notes, and Canvas metadata; `storage.*` reads and
  * writes the Plugin's own Library namespace; `navigation.openEntity` opens an
- * entity through the app shell; `language.get` reads the app language. The
+ * entity through the app shell; `navigation.openPage` opens a Plugin page;
+ * `language.get` reads the app language. The
  * broker already enforces each row's Plugin Permission, input schema, Library
  * availability, and rate limit, so a handler only does its work.
  */
@@ -26,7 +27,7 @@ import {
   listPluginChapters,
   listPluginNotes,
 } from "@/features/plugins/library";
-import { openPluginEntity } from "@/features/plugins/navigation";
+import { openPluginEntity, openPluginPage } from "@/features/plugins/navigation";
 import {
   deletePluginStorageValue,
   getPluginStorageValue,
@@ -71,6 +72,8 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     },
     "storage.keys": (_params, context) => listPluginStorageKeys(context.pluginId),
     "navigation.openEntity": ({ entity, reveal }) => openPluginEntity(entity, reveal).then(() => null),
+    "navigation.openPage": ({ pageId, pluginId }, context) =>
+      openPluginPage(pluginId ?? context.pluginId, pageId),
     "language.get": async () => ({ language: currentPluginLanguage() }),
   };
 }

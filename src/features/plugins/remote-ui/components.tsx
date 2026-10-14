@@ -52,7 +52,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
 import { scopePluginCss } from "@/features/plugins/remote-ui/css-scope";
 import { createEchoTracker, type PluginEchoTracker } from "@/features/plugins/remote-ui/echo";
-import { useRestoreFocus } from "@/hooks";
+import { useItemContextMenu, useRestoreFocus } from "@/hooks";
 import { openExternal } from "@/lib/platform";
 import { PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 import type { PluginUiOption } from "@/plugin-sdk/ui.generated";
@@ -90,6 +90,18 @@ function parseNumber(text: string): number | undefined {
   if (text.trim() === "") return undefined;
   const value = Number(text);
   return Number.isFinite(value) ? value : undefined;
+}
+
+/** The number clamped into a field's optional min/max bounds. */
+function clampNumber(
+  value: number,
+  minValue: number | undefined,
+  maxValue: number | undefined
+): number {
+  let clamped = value;
+  if (minValue !== undefined && clamped < minValue) clamped = minValue;
+  if (maxValue !== undefined && clamped > maxValue) clamped = maxValue;
+  return clamped;
 }
 
 interface TextFieldHostProps {
@@ -238,19 +250,45 @@ function NumberFieldHost({
   onInput,
   onChange,
 }: NumberFieldHostProps) {
-  const { local, send } = useHostValue(value === undefined ? undefined : String(value), (next) => {
-    const parsed = parseNumber(next);
-    if (parsed !== undefined) onInput?.(parsed);
-  });
+  // React Aria owns the field's text; the host feeds it only the committed
+  // number, so typing never snaps. Feeding the typed value back through the
+  // controlled `value` made React Aria clamp mid-keystroke (typing 120 into a
+  // 10-200 field landed on 200); instead the input shows exactly what is typed
+  // and only blur, Enter, or stepping parse and clamp it (#450).
+  const [committed, setCommitted] = useState<number | undefined>(value);
+  // The in-flight echo rule, as for the text fields: a value the host did not
+  // report is a programmatic reset, while an echo of a reported value is
+  // dropped so a burst of keystrokes is never rolled back.
+  const tracker = useRef<PluginEchoTracker | null>(null);
+  tracker.current ??= createEchoTracker();
+  // The number the host last reported, so a repeated commit is not sent twice
+  // and an echo of it is not read as a reset.
+  const reported = useRef<number | undefined>(value);
+  useEffect(() => {
+    if (value === undefined) return;
+    if (!tracker.current?.shouldApply(String(value))) return;
+    reported.current = value;
+    setCommitted(value);
+  }, [value]);
+  const report = useCallback(
+    (next: number | undefined) => {
+      if (next === undefined) return;
+      tracker.current?.sent(String(next));
+      if (reported.current === next) return;
+      reported.current = next;
+      setCommitted(next);
+      onChange?.(next);
+    },
+    [onChange]
+  );
   return (
     <AriaNumberField
-      value={parseNumber(local)}
-      // RAC's `onChange` fires on commit (blur, Enter, stepping) and is NaN when
-      // the field is empty; only a real number is reported. Live typing is read
-      // from the input's own `onInput` below, so the Plugin sees each keystroke
-      // the way it does from a text field.
+      // A controlled committed number: stable while typing, updated on commit
+      // and on a programmatic reset. React Aria reports the parsed, min/max-
+      // clamped number through `onChange` on commit (blur, Enter, stepping).
+      value={committed}
       onChange={(next) => {
-        if (Number.isFinite(next)) onChange?.(next);
+        if (Number.isFinite(next)) report(clampNumber(next, minValue, maxValue));
       }}
       minValue={minValue}
       maxValue={maxValue}
@@ -263,7 +301,14 @@ function NumberFieldHost({
       <AriaLabel className="block text-sm font-medium mb-1.5">{label}</AriaLabel>
       <AriaInput
         className={INPUT_CLASS}
-        onInput={(event) => send(event.currentTarget.value)}
+        // Live typing is reported to the Plugin the way a text field reports
+        // each keystroke, without ever changing the controlled committed value.
+        onInput={(event) => {
+          const parsed = parseNumber(event.currentTarget.value);
+          if (parsed === undefined) return;
+          tracker.current?.sent(String(parsed));
+          onInput?.(parsed);
+        }}
       />
       {description && (
         <AriaText slot="description" className="mt-1 block text-sm text-muted-foreground">
@@ -1005,8 +1050,20 @@ function CollectionRowHost({
       onAction: () => onMenuAction?.(item.value),
     })
   );
+  // An expandable row gives Enter to its expansion, and a listbox item's ⋯
+  // button is not a Tab stop, so the row's Item Menu also opens on the same
+  // context-menu gesture Maibuk's own lists use (Shift+F10, the Context Menu
+  // key, a right click, a touch long-press) while the row has focus.
+  const { itemProps, setOwnerRef } = useItemContextMenu({
+    onOpen: () => setMenuOpen(true),
+    isDisabled: actions.length === 0,
+  });
   return (
     <ListBoxItem
+      // Key by the remote `id`: React Aria refuses to mutate an item's id in place, so a new id remounts the row.
+      key={id}
+      ref={setOwnerRef}
+      {...itemProps}
       id={id}
       textValue={label}
       isDisabled={isDisabled}

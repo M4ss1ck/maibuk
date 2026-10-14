@@ -54,6 +54,16 @@ const EVERYTHING_PERMISSIONS = [
 const BENCH_PERMISSIONS = ["editor:read", "editor:decorate"];
 
 /**
+ * The Echoes Built-in Plugin (#450), measured here before #451 lists it in
+ * `plugins/builtins.json` (the ground rules keep that file untouched until
+ * then). It is on-demand, so the start-to-ready scenario measures it exactly
+ * like the fixture: seed its folder, open its page, read `plugin.start:<id>`.
+ */
+const ECHOES_PLUGIN = "maibuk-echoes";
+/** Echoes' required Plugin Permissions, in manifest order. */
+const ECHOES_PERMISSIONS = ["library:read", "editor:read", "editor:decorate"];
+
+/**
  * fixture-everything's `stamp` default Shortcut, read from its built manifest
  * (`Mod` is Playwright's `ControlOrMeta`, the host's Mod key). The Command's
  * first visible effect is the notification its Worker shows; the text is the
@@ -126,7 +136,8 @@ function pluginSurface(id: string): { pageId: string; title: string } {
 /**
  * The on-demand ids the shipped Built-ins declare, read at run time
  * (`plugins/builtins.json`, empty today). Unit 4b extends this to seed them as
- * Built-ins; with none, only the on-demand fixture is measured.
+ * Built-ins; with none, only the on-demand fixture and Echoes (`ECHOES_PLUGIN`,
+ * measured explicitly until #451 lists it) are measured.
  */
 function onDemandBuiltinIds(): string[] {
   const path = resolve(REPO_ROOT, "plugins/builtins.json");
@@ -393,10 +404,17 @@ test.describe("launch: three persistent", () => {
 });
 
 test.describe("startToReady: on-demand Plugins", () => {
-  test.use({ library: "empty", plugins: [ON_DEMAND_FIXTURE] });
+  test.use({
+    library: "empty",
+    plugins: [ON_DEMAND_FIXTURE, ECHOES_PLUGIN],
+    pluginApprovals: [{ pluginId: ECHOES_PLUGIN, granted: ECHOES_PERMISSIONS }],
+    builtInPlugins: [{ id: ECHOES_PLUGIN }],
+  });
   test("startToReady", async ({ page }) => {
     await seedSettings(page, { lastPath: null });
-    const ids = [ON_DEMAND_FIXTURE, ...onDemandBuiltinIds()];
+    const ids = [ON_DEMAND_FIXTURE, ECHOES_PLUGIN, ...onDemandBuiltinIds()].filter(
+      (id, index, all) => all.indexOf(id) === index
+    );
     const result: Record<string, number[]> = {};
     for (const id of ids) result[id] = await measureStart(page, id);
     write("startToReady", result);

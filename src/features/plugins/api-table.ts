@@ -284,6 +284,18 @@ export const PLUGIN_API_TABLE = [
     requiresLibrary: true,
   }),
   defineApiRow({
+    id: "navigation.openPage",
+    description: "Opens a Plugin page by its page id, in this Plugin or another installed one.",
+    input: z.strictObject({ pageId: id, pluginId: id.optional() }),
+    output: z.union([
+      z.strictObject({ status: z.literal("opened") }),
+      z.strictObject({ status: z.literal("not-found") }),
+    ]),
+    permission: null,
+    effect: "write",
+    requiresLibrary: false,
+  }),
+  defineApiRow({
     id: "language.get",
     description: "Reads the language Maibuk runs in. No permission is required.",
     input: none,

@@ -216,6 +216,40 @@ describe("the Remote UI kit, part 2", () => {
       expect(actions).toEqual(["rename"]);
     });
 
+    it("opens an expandable row's Item Menu with Shift+F10 while the row has focus @ui-kbd:maibuk-collection-row", async () => {
+      harness = renderRemoteUi();
+      const actions: string[] = [];
+      function Plugin() {
+        const [expanded, setExpanded] = useState(false);
+        return (
+          <ui.Collection label="Echoes" selectionMode="none">
+            <ui.CollectionRow
+              id="harbor"
+              label="harbor"
+              isExpandable
+              isExpanded={expanded}
+              onExpandedChange={(event) => setExpanded(event.detail)}
+              menuItems={[{ value: "ignore", label: "Ignore this word" }]}
+              onMenuAction={(event) => actions.push(event.detail)}
+            >
+              <ui.Text>harbor was calm</ui.Text>
+            </ui.CollectionRow>
+          </ui.Collection>
+        );
+      }
+      await harness.mount(<Plugin />);
+
+      // Enter expands an expandable row, so its Item Menu needs the context-menu
+      // gesture (Shift+F10) that Maibuk's other lists use.
+      await userEvent.tab();
+      await userEvent.keyboard("{Shift>}{F10}{/Shift}");
+      await screen.findByRole("menu");
+      await userEvent.keyboard("{ArrowDown}");
+      await userEvent.keyboard("{Enter}");
+
+      expect(actions).toEqual(["ignore"]);
+    });
+
     it("gives the kit IconButton a coarse-pointer target", async () => {
       harness = renderRemoteUi();
       await harness.mount(<ui.IconButton label="Mark favourite" icon="star" />);
@@ -248,6 +282,84 @@ describe("the Remote UI kit, part 2", () => {
       });
 
       expect(document.activeElement).toHaveAttribute("data-key", "two");
+    });
+
+    it("replaces the rows when the Plugin sends rows with new ids", async () => {
+      harness = renderRemoteUi();
+      let setRows: (rows: string[]) => void = () => {};
+      function Plugin() {
+        const [rows, set] = useState(["dark", "night"]);
+        setRows = set;
+        return (
+          <ui.Collection label="Echoes" selectionMode="none">
+            {/* Key by the Plugin's own position so the host reuses the remote node and only its id changes. */}
+            {rows.map((id, index) => (
+              <ui.CollectionRow key={index} id={id} label={id} />
+            ))}
+          </ui.Collection>
+        );
+      }
+      await harness.mount(<Plugin />);
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(["dark", "night"]);
+
+      await act(async () => {
+        setRows(["p1", "p2", "p3"]);
+      });
+
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(["p1", "p2", "p3"]);
+    });
+
+    it("keeps focus in the listbox when the focused row is removed (Ignore this word)", async () => {
+      harness = renderRemoteUi();
+      let setRows: (rows: string[]) => void = () => {};
+      function Plugin() {
+        const [rows, set] = useState(["dark", "night", "gloom"]);
+        setRows = set;
+        return (
+          <ui.Collection label="Echoes" selectionMode="none">
+            {/* The report keys a row by its own id, so ignoring one leaves the other ids untouched. */}
+            {rows.map((id) => (
+              <ui.CollectionRow key={id} id={id} label={id} />
+            ))}
+          </ui.Collection>
+        );
+      }
+      await harness.mount(<Plugin />);
+      await userEvent.tab();
+      await userEvent.keyboard("{ArrowDown}");
+      expect(document.activeElement).toHaveTextContent("night");
+
+      // The report removes the ignored row only; it never remounts the list.
+      await act(async () => {
+        setRows(["dark", "gloom"]);
+      });
+
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(["dark", "gloom"]);
+      expect(screen.getByRole("listbox").contains(document.activeElement)).toBe(true);
+    });
+
+    it("keeps both rows when the Plugin replaces them with a reordered list", async () => {
+      harness = renderRemoteUi();
+      let setRows: (rows: string[]) => void = () => {};
+      function Plugin() {
+        const [rows, set] = useState(["dark", "night"]);
+        setRows = set;
+        return (
+          <ui.Collection label="Echoes" selectionMode="none">
+            {/* Key by the Plugin's own position so the host reuses the remote node and only its id changes. */}
+            {rows.map((id, index) => (
+              <ui.CollectionRow key={index} id={id} label={id} />
+            ))}
+          </ui.Collection>
+        );
+      }
+      await harness.mount(<Plugin />);
+
+      await act(async () => {
+        setRows(["night", "dark"]);
+      });
+
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(["night", "dark"]);
     });
 
     it("renders a read-only table @ui:maibuk-table @ui:maibuk-table-row", async () => {

@@ -33,6 +33,19 @@ function Panel() {
   );
 }
 
+/**
+ * The `about` Settings row's live body: one deterministic control the spec can
+ * assert the host mounted it (its declaration's label alone would render even
+ * when the body never mounted).
+ */
+function AboutRow() {
+  return (
+    <ui.View direction="column" gap="sm">
+      <ui.Switch label="Fixture switch" isSelected={false} onChange={() => {}} />
+    </ui.View>
+  );
+}
+
 /** The item a target Command was invoked on, as the host captured it. */
 interface CommandTarget {
   kind: string;
@@ -94,6 +107,7 @@ if (
     const client = createPluginClient(port);
     servePluginUi(client, {
       pages: { panel: Panel },
+      settingsRows: { about: AboutRow },
       onHostRequest: (method, params) => {
         if (method === "health.check") return "pong";
         if (method === PLUGIN_COMMAND_RUN_REQUEST) return runCommand(client, params);

@@ -24,7 +24,7 @@ import { openPluginUiMount, type PluginUiMount } from "@/features/plugins/remote
 import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import { PluginRemoteUiSurface } from "@/features/plugins/remote-ui/surface";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
-import { PLUGIN_INIT_MESSAGE } from "@/plugin-sdk/protocol";
+import { PLUGIN_INIT_MESSAGE, type PluginUiMountKind } from "@/plugin-sdk/protocol";
 import type {
   PluginApiHandlers,
   PluginPermissionId,
@@ -33,6 +33,7 @@ import type {
   TestNavigation,
   TestNotification,
   TestPage,
+  TestPageNavigation,
 } from "@/features/plugins/types";
 
 /**
@@ -49,11 +50,12 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const channel = new MessageChannel();
   const notifications: TestNotification[] = [];
   const navigations: TestNavigation[] = [];
+  const pageNavigations: TestPageNavigation[] = [];
   const books = [...(options.library?.books ?? [])];
   const chapters = [...(options.library?.chapters ?? [])];
   const notes = [...(options.library?.notes ?? [])];
   const canvases = [...(options.library?.canvases ?? [])];
-  const storage = new Map<string, unknown>();
+  const storage = options.storage ?? new Map<string, unknown>();
   let language = options.language ?? "en";
   let libraryAvailable = true;
   const startReason = options.startReason ?? "enable";
@@ -111,6 +113,10 @@ export function createTestHost(options: TestHostOptions): TestHost {
       navigations.push(reveal === undefined ? { entity } : { entity, reveal });
       return null;
     },
+    "navigation.openPage": ({ pageId, pluginId }) => {
+      pageNavigations.push({ pluginId: pluginId ?? options.manifest.id, pageId });
+      return { status: "opened" };
+    },
     "language.get": () => ({ language }),
   };
 
@@ -134,10 +140,10 @@ export function createTestHost(options: TestHostOptions): TestHost {
   /** The live mount behind each open page, so `stopWorker` can sever it. */
   const openMounts = new Map<TestPage, { mount: PluginUiMount; thread: { close(): void } }>();
 
-  function renderPage(page: string): Promise<TestPage> {
+  function renderSurface(name: string, kind: PluginUiMountKind): Promise<TestPage> {
     const violations: PluginUiViolation[] = [];
     const ui = createPluginRemoteUi({ onViolation: (violation) => violations.push(violation) });
-    const mount = openPluginUiMount(broker, page);
+    const mount = openPluginUiMount(broker, name, kind);
     // The thread listens through `addEventListener`, which a MessagePort only
     // dispatches after `start()`.
     mount.port.start();
@@ -192,6 +198,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
     manifest: applyPluginLocale(options.manifest, options.locale ?? {}),
     notifications,
     navigations,
+    pageNavigations,
     locale: options.locale ?? null,
     startReason,
     get language() {
@@ -207,7 +214,12 @@ export function createTestHost(options: TestHostOptions): TestHost {
     setLibraryAvailable(available) {
       libraryAvailable = available;
     },
-    renderPage,
+    renderPage(page: string) {
+      return renderSurface(page, "page");
+    },
+    renderSettingsRow(rowId: string) {
+      return renderSurface(rowId, "settingsRow");
+    },
     stopWorker() {
       broker.stop("requested");
       // Sever every mount so no mutation or echo can arrive, but leave the

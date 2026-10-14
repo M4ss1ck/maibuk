@@ -241,10 +241,36 @@ async function pluginData(): Promise<void> {
   await setPluginStorageValue("tracer", "scratch", { text: "x".repeat(1024) });
 }
 
+// A small Book whose two Chapters hold echoes: a repeated word and phrase, and
+// a word ("keeper") that repeats just past a narrow nearby window so the
+// Settings window is observable. The Echoes report (issue #450) is proven
+// against it.
+async function echoesBook(): Promise<void> {
+  const book = await createBookRow({ ...SEED_BOOK }, "local");
+  let words = 0;
+  const contents = [
+    "The harbor was calm. The harbor was empty. The harbor was quiet. The keeper arrived at dawn and waited. We left the harbor late with the keeper. Into the dark night we go. Into the dark night we go. Into the dark night we go.",
+    "The lamp burns bright. The lamp burns bright. Into the dark night we go. Into the dark night we go. Into the dark night we go.",
+  ];
+  const titles = ["Arrival", "The Lamp"];
+  for (let index = 0; index < contents.length; index++) {
+    const created = await createChapterRow({ bookId: book.id, title: titles[index] }, "local");
+    const saved = await updateChapterRow(
+      created.id,
+      { content: `<p>${contents[index]}</p>` },
+      "local"
+    );
+    words += saved?.wordCount ?? 0;
+  }
+  await updateBookWordCountRow(book.id, words);
+  await updateBookRow(book.id, { status: "in-progress" }, "local");
+}
+
 export const SEED_LIBRARIES = {
   empty: async () => {},
   oneBookThreeChapters,
   oneBookTwoChapters,
+  echoesBook,
   bookShelf,
   notesWithLinksAndTags,
   paletteLibrary,

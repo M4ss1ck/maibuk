@@ -65,7 +65,7 @@ export function PluginPage() {
 
   return (
     <div className="h-full overflow-y-auto px-4 py-6 sm:px-6">
-      <h1 data-route-heading className="text-xl font-semibold tracking-tight">
+      <h1 data-route-heading className="text-xl font-semibold tracking-tight mb-6">
         {title}
       </h1>
       {page === undefined ? (

@@ -688,6 +688,12 @@ export interface TestNavigation {
   reveal?: PluginRevealRange;
 }
 
+/** One `navigation.openPage` a Plugin asked for, in order. */
+export interface TestPageNavigation {
+  pluginId: string;
+  pageId: string;
+}
+
 export interface TestNotification {
   variant: string;
   message: string;
@@ -701,6 +707,11 @@ export interface TestHostOptions {
   library?: TestLibrary;
   /** The app language the host serves; defaults to `en`. */
   language?: string;
+  /**
+   * The storage the `storage.*` handlers serve, `Map<key, value>`. Share one
+   * Map across two hosts to simulate a reload over the same device storage.
+   */
+  storage?: Map<string, unknown>;
   /** UI-string overrides `renderPage` applies to the manifest before rendering. */
   locale?: PluginLocale;
   /**
@@ -736,6 +747,8 @@ export interface TestHost {
   notifications: TestNotification[];
   /** Every `navigation.openEntity` the Plugin asked for, in order. */
   navigations: TestNavigation[];
+  /** Every `navigation.openPage` the Plugin asked for, in order. */
+  pageNavigations: TestPageNavigation[];
   /** The app language the host serves right now. */
   language: string;
   /** The UI-string overrides this host carries, before they are applied. */
@@ -753,6 +766,12 @@ export interface TestHost {
    * `stop()` too.
    */
   renderPage(page: string): Promise<TestPage>;
+  /**
+   * Renders one Settings row body the Plugin serves, the way the host mounts it
+   * inside Settings, and resolves once the Plugin accepts it. Rejects when the
+   * Plugin serves no body for that row. Unmounted by `stop()` too.
+   */
+  renderSettingsRow(rowId: string): Promise<TestPage>;
   /**
    * Stops the Worker: stops the broker and severs every open Remote UI mount,
    * while leaving the host renderer mounted. This is what a stopped Worker
@@ -1022,6 +1041,9 @@ export interface PluginHighlightSet {
 export type PluginEditorContentResult = PluginApiOutput<"editor.getContent">;
 export type PluginEditorSelectionResult = PluginApiOutput<"editor.getSelection">;
 export type PluginEditorApplied = PluginApiOutput<"editor.reveal">;
+
+/** What `navigation.openPage` reports: the page was opened, or it does not exist. */
+export type PluginPageOpenResult = PluginApiOutput<"navigation.openPage">;
 
 // Broker (broker.ts)
 

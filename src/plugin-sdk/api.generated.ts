@@ -23,6 +23,7 @@ export const PLUGIN_API_METHODS = [
   "editor.insert",
   "editor.replace",
   "navigation.openEntity",
+  "navigation.openPage",
   "language.get",
   "secrets.set",
   "secrets.delete",
@@ -340,6 +341,18 @@ export interface PluginApiMethods {
     };
     output: null;
   };
+  /** Opens a Plugin page by its page id, in this Plugin or another installed one. */
+  "navigation.openPage": {
+    input: {
+      pageId: string;
+      pluginId?: string;
+    };
+    output: {
+      status: "opened";
+    } | {
+      status: "not-found";
+    };
+  };
   /** Reads the language Maibuk runs in. No permission is required. */
   "language.get": {
     input: Record<string, never>;
@@ -534,6 +547,8 @@ export interface PluginApi {
   navigation: {
     /** Opens a Book, Chapter, Note, or Canvas, optionally revealing a range. */
     openEntity(params: PluginApiMethods["navigation.openEntity"]["input"]): Promise<PluginApiMethods["navigation.openEntity"]["output"]>;
+    /** Opens a Plugin page by its page id, in this Plugin or another installed one. */
+    openPage(params: PluginApiMethods["navigation.openPage"]["input"]): Promise<PluginApiMethods["navigation.openPage"]["output"]>;
   };
   language: {
     /** Reads the language Maibuk runs in. No permission is required. */

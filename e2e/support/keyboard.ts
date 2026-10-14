@@ -93,3 +93,22 @@ export async function expectTabContained(page: Page, dialog: Locator): Promise<v
 export async function selectedText(page: Page): Promise<string> {
   return page.evaluate(() => document.getSelection()?.toString() ?? "");
 }
+
+/**
+ * The text from the caret on to the end of its node in the focused editor, or
+ * the selected text when a range is selected. A Plugin reveal lands a collapsed
+ * caret on the echoed word, which `selectedText` would report as empty.
+ */
+export async function caretText(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const selection = document.getSelection();
+    if (selection === null || selection.rangeCount === 0) return "";
+    if (!selection.isCollapsed) return selection.toString();
+    const node = selection.anchorNode;
+    const text =
+      node !== null && node.nodeType === Node.TEXT_NODE
+        ? (node as Text).data
+        : (node?.textContent ?? "");
+    return text.slice(selection.anchorOffset);
+  });
+}

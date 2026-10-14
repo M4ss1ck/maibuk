@@ -17,6 +17,7 @@ import {
 import { PluginRemoteUiSurface } from "@/features/plugins/remote-ui/surface";
 import { usePluginRemoteUi } from "@/features/plugins/remote-ui/use-plugin-remote-ui";
 import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
+import type { PluginUiMountKind } from "@/plugin-sdk/protocol";
 
 /**
  * Stops a Plugin whose remote UI was refused, with `remote-ui-limit` (#436):
@@ -48,14 +49,16 @@ function runKey(runtime: PluginRuntime): number {
 function PluginRemoteUiRun({
   runtime,
   pageId,
+  kind,
   onStop,
 }: {
   runtime: PluginRuntime;
   pageId: string;
+  kind: PluginUiMountKind;
   onStop: () => void;
 }) {
   const { t } = useTranslation();
-  const { ui, failed } = usePluginRemoteUi(runtime, pageId, onStop);
+  const { ui, failed } = usePluginRemoteUi(runtime, pageId, onStop, kind);
   if (failed) {
     return (
       <p role="alert" className="text-sm text-muted-foreground">
@@ -69,9 +72,12 @@ function PluginRemoteUiRun({
 export function PluginRemoteUiBoundary({
   pluginId,
   pageId,
+  kind = "page",
 }: {
   pluginId: string;
   pageId: string;
+  /** The registry to mount from: a page (default) or a Settings row body. */
+  kind?: PluginUiMountKind;
 }) {
   const lifecycle = useInstalledPluginLifecycle();
   // Re-render when the Plugin's state changes (start, ready, stop).
@@ -88,5 +94,7 @@ export function PluginRemoteUiBoundary({
   // A mount before `ready` could reach a Plugin that has not installed its
   // handler yet; only a running or heartbeat-degraded Plugin renders.
   if (runtime === null || (status !== "ready" && status !== "unavailable")) return null;
-  return <PluginRemoteUiRun key={runKey(runtime)} runtime={runtime} pageId={pageId} onStop={stop} />;
+  return (
+    <PluginRemoteUiRun key={runKey(runtime)} runtime={runtime} pageId={pageId} kind={kind} onStop={stop} />
+  );
 }

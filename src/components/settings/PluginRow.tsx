@@ -23,6 +23,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Button as AriaButton, Disclosure, DisclosurePanel } from "react-aria-components";
 import { PluginPermissionList } from "@/components/plugins/PluginPermissionList";
+import { PluginSettingsRowBody } from "@/components/plugins/PluginSettingsRowBody";
 import {
   pluginStartupErrorText,
   type StartupErrorTranslate,
@@ -374,16 +375,7 @@ export function PluginRow({
         <PluginSurface pluginId={entry.pluginId} surface="settings" />
         {rows.map((row) => (
           <SettingRow key={row.id} id={row.id} className={SETTINGS_ROW_CLASS}>
-            {/* Placeholder field until the remote-UI host renders the row's
-                live controls (#437). A field needs no Command; it exists so
-                search and reveal already focus a row. */}
-            <input
-              type="text"
-              aria-label={row.label}
-              placeholder={row.label}
-              defaultValue=""
-              className="w-full max-w-xs rounded border border-border bg-background px-2 py-1 text-sm"
-            />
+            <PluginSettingsRowBody pluginId={entry.pluginId} rowId={row.localId} />
           </SettingRow>
         ))}
       </DisclosurePanel>

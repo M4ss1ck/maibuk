@@ -212,6 +212,33 @@ describe("createTestHost()", () => {
     }
   });
 
+  it("opens a Plugin page with no Plugin Permissions, its own or another installed Plugin's", async () => {
+    const host = createTestHost({
+      manifest: {
+        ...fixtureManifest(),
+        permissions: { required: ["library:read"], optional: [] },
+      },
+      permissions: [],
+    });
+    try {
+      const client = createPluginClient(host.port);
+      // No pluginId: the calling Plugin's own page.
+      await expect(client.navigation.openPage({ pageId: "report" })).resolves.toEqual({
+        status: "opened",
+      });
+      // Another installed Plugin's page is reachable by naming it.
+      await expect(
+        client.navigation.openPage({ pageId: "panel", pluginId: "other" })
+      ).resolves.toEqual({ status: "opened" });
+      expect(host.pageNavigations).toEqual([
+        { pluginId: "tracer", pageId: "report" },
+        { pluginId: "other", pageId: "panel" },
+      ]);
+    } finally {
+      host.stop();
+    }
+  });
+
   it("refuses navigation.openEntity with library-unavailable while the Tutorial runs", async () => {
     // Decision #398: the Tutorial refuses Library access, and navigation reads
     // the Library to resolve a route and drives the router out of the run.
@@ -488,6 +515,51 @@ describe("renderPage", () => {
       servePluginUi(client, { pages: {} });
 
       await expect(host.renderPage("missing")).rejects.toThrow("Unknown page missing");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("renders a Settings row body through the real host renderer, by keyboard alone", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+
+      /** A Settings row body the Plugin serves under the row's Plugin-local id. */
+      function RowBody() {
+        const [on, setOn] = useState(false);
+        return createElement(ui.Switch, {
+          label: "Threshold",
+          isSelected: on,
+          onChange: (event: { detail: boolean }) => setOn(event.detail),
+        });
+      }
+
+      servePluginUi(client, { pages: {}, settingsRows: { threshold: RowBody } });
+      const row = await host.renderSettingsRow("threshold");
+      const user = userEvent.setup();
+
+      const control = await screen.findByRole("switch", { name: "Threshold" });
+      for (let i = 0; i < 10 && document.activeElement !== control; i++) await user.tab();
+      expect(control).toHaveFocus();
+      await user.keyboard(" ");
+      expect(control).toBeChecked();
+
+      row.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("rejects a Settings row the Plugin never declared", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      servePluginUi(client, { pages: {}, settingsRows: {} });
+
+      await expect(host.renderSettingsRow("missing")).rejects.toThrow(
+        "Unknown Settings row missing"
+      );
     } finally {
       host.stop();
     }

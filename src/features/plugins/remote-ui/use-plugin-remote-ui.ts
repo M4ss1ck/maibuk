@@ -16,11 +16,13 @@ import { openPluginUiMount } from "@/features/plugins/remote-ui/mount";
 import { createPluginRemoteUi, type PluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { PluginRuntime } from "@/features/plugins/types";
+import type { PluginUiMountKind } from "@/plugin-sdk/protocol";
 
 export function usePluginRemoteUi(
   runtime: Pick<PluginRuntime, "broker">,
   pageId: string,
-  onViolation: (violation: PluginUiViolation) => void
+  onViolation: (violation: PluginUiViolation) => void,
+  kind: PluginUiMountKind = "page"
 ): { ui: PluginRemoteUi | null; failed: boolean } {
   const handler = useRef(onViolation);
   handler.current = onViolation;
@@ -30,7 +32,7 @@ export function usePluginRemoteUi(
   useEffect(() => {
     let cancelled = false;
     const created = createPluginRemoteUi({ onViolation: (violation) => handler.current(violation) });
-    const mount = openPluginUiMount(runtime.broker, pageId);
+    const mount = openPluginUiMount(runtime.broker, pageId, kind);
     // The thread listens through `addEventListener`, which a MessagePort only
     // dispatches after `start()`.
     mount.port.start();
@@ -55,7 +57,7 @@ export function usePluginRemoteUi(
       setUi(null);
       setFailed(false);
     };
-  }, [runtime, pageId]);
+  }, [runtime, pageId, kind]);
 
   return { ui, failed };
 }

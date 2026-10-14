@@ -1,8 +1,9 @@
 /**
- * Opens one Remote UI mount for a Plugin page (#438). The host creates a fresh
- * MessageChannel, sends a `ui.mount` request carrying one end of it, and hands
- * the Plugin the page to render over that port; `unmount()` asks the Plugin to
- * tear the mount down and closes the host's end.
+ * Opens one Remote UI mount for a Plugin page or Settings row body (#438,
+ * #450). The host creates a fresh MessageChannel, sends a `ui.mount` request
+ * carrying one end of it, and hands the Plugin the registry and name to render
+ * over that port; `unmount()` asks the Plugin to tear the mount down and closes
+ * the host's end.
  *
  * This module stays free of React, React Aria, and the host component map, so
  * it can live in the lazily loaded Plugin page chunk.
@@ -12,6 +13,7 @@ import type { PluginBroker } from "@/features/plugins/types";
 import {
   PLUGIN_UI_MOUNT_REQUEST,
   PLUGIN_UI_UNMOUNT_REQUEST,
+  type PluginUiMountKind,
 } from "@/plugin-sdk/protocol";
 
 export interface PluginUiMount {
@@ -29,14 +31,15 @@ let nextSurface = 0;
 
 export function openPluginUiMount(
   broker: Pick<PluginBroker, "request" | "stopped">,
-  page: string
+  page: string,
+  kind: PluginUiMountKind = "page"
 ): PluginUiMount {
   const channel = new MessageChannel();
-  const surface = `${page}#${++nextSurface}`;
+  const surface = `${kind}:${page}#${++nextSurface}`;
   const mounted = broker
     .request(
       PLUGIN_UI_MOUNT_REQUEST,
-      { surface, page, port: channel.port2 },
+      { surface, kind, page, port: channel.port2 },
       [channel.port2]
     )
     .then(() => undefined);

@@ -194,6 +194,7 @@ export {
 } from "@/features/plugins/library";
 export {
   openPluginEntity,
+  openPluginPage,
   resolvePluginEntityRoute,
   setPluginNavigator,
 } from "@/features/plugins/navigation";

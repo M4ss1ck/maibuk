@@ -1,8 +1,9 @@
 /**
  * The Maibuk Plugin SDK's Worker-side Remote UI entry (ADR 0021, #438): it
  * answers the host's `ui.mount` and `ui.unmount` requests by rendering one of
- * the Plugin's pages into a Remote DOM root. Mutations of that root travel over
- * the mount's transferred MessagePort, batched to at most one flush per 16 ms window.
+ * the Plugin's pages, or one Settings row body, into a Remote DOM root.
+ * Mutations of that root travel over the mount's transferred MessagePort,
+ * batched to at most one flush per 16 ms window.
  *
  * This file is imported ONLY by a Plugin's Worker bundle. The host never imports
  * it (`src/features/plugins/` does not), and `src/plugin-sdk/index.ts` and

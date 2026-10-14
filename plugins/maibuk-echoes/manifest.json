@@ -13,5 +13,31 @@
   "permissions": {
     "required": ["library:read", "editor:read", "editor:decorate"],
     "optional": []
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "openEchoes",
+        "label": "Open Echoes",
+        "contexts": ["global"],
+        "navigates": true
+      },
+      {
+        "id": "findEchoes",
+        "label": "Find echoes",
+        "contexts": ["chapterItem"],
+        "targets": ["chapter"]
+      }
+    ],
+    "pages": [{ "id": "report", "title": "Echoes", "command": "openEchoes" }],
+    "sidebarEntries": [{ "page": "report", "icon": "waves" }],
+    "settingsRows": [
+      {
+        "id": "detection",
+        "label": "Echo detection",
+        "description": "Choose which echoes to look for and how close they count."
+      }
+    ],
+    "itemMenuEntries": [{ "command": "findEchoes" }]
   }
 }

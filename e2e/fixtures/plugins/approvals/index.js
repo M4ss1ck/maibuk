@@ -17,6 +17,36 @@
 // `setup` is exported so the Vitest test kit can drive the same bytes in
 // process.
 
+// The Settings row's live body, over the raw wire (#450). The host mounts the
+// declared row the way it mounts a page, and the Plugin answers the mount and
+// sends the Remote DOM records that draw a switch. This fixture has no build
+// step, so the protocol constants and the one record batch are written by hand:
+// the records travel as a `@quilted/threads` call of the host's exported
+// `mutate` (an array `[MESSAGE_CALL, id, "mutate", [records]]`), and the
+// element's required `label` is set by an update-property record, checked at
+// the end of the batch. Records follow Remote DOM's tuple layout.
+const MESSAGE_CALL = 1;
+const MUTATION_TYPE_INSERT_CHILD = 0;
+const MUTATION_TYPE_UPDATE_PROPERTY = 3;
+const NODE_TYPE_ELEMENT = 1;
+/** Remote DOM's fixed root id. */
+const ROOT_ID = "~";
+
+function drawKeptRow(mountPort) {
+  mountPort.start();
+  const records = [
+    [
+      MUTATION_TYPE_INSERT_CHILD,
+      ROOT_ID,
+      { id: "kept-1", type: NODE_TYPE_ELEMENT, element: "maibuk-switch", properties: {}, children: [] },
+      0,
+    ],
+    [MUTATION_TYPE_UPDATE_PROPERTY, "kept-1", "label", "Approvals kept data"],
+    [MUTATION_TYPE_UPDATE_PROPERTY, "kept-1", "isSelected", false],
+  ];
+  mountPort.postMessage([MESSAGE_CALL, "kept-row", "mutate", [records]]);
+}
+
 export function setup(port) {
   let nextId = 1;
   let reported = false;
@@ -122,6 +152,18 @@ export function setup(port) {
       const params = message.params || {};
       port.postMessage(JSON.stringify({ kind: "reply", id: message.id, ok: true, result: null }));
       void run(params.id);
+      return;
+    }
+    if (message.method === "ui.mount") {
+      // The host mounts the declared Settings row (#450): accept it, then draw
+      // the row's own control over the transferred port.
+      const params = message.params || {};
+      port.postMessage(JSON.stringify({ kind: "reply", id: message.id, ok: true, result: null }));
+      if (params.port) drawKeptRow(params.port);
+      return;
+    }
+    if (message.method === "ui.unmount") {
+      port.postMessage(JSON.stringify({ kind: "reply", id: message.id, ok: true, result: null }));
       return;
     }
     port.postMessage(

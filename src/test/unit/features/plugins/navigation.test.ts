@@ -1,14 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  registerPluginContributions,
+  resetPluginContributionsForTests,
+} from "@/features/plugins/contributions";
+import { readPluginManifest } from "@/features/plugins/runtime";
 import type { DatabaseAdapter } from "@/lib/platform/types";
+import { pluginFolder } from "@/test/support/plugin-fixtures";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
 
 vi.mock("@/lib/db", () => ({ getDatabase: mockGetDatabase }));
 
-const { openPluginEntity, resolvePluginEntityRoute, setPluginNavigator } = await import(
-  "@/features/plugins/navigation"
-);
+const { openPluginEntity, openPluginPage, resolvePluginEntityRoute, setPluginNavigator } =
+  await import("@/features/plugins/navigation");
 
 describe("Plugin entity navigation", () => {
   let testDb: DatabaseAdapter;
@@ -73,5 +78,77 @@ describe("Plugin entity navigation", () => {
     }
     // No navigator: never throws.
     await expect(openPluginEntity({ kind: "book", id: "b1" })).resolves.toBeUndefined();
+  });
+});
+
+describe("Plugin page navigation", () => {
+  const cleanups: Array<() => void> = [];
+
+  afterEach(() => {
+    while (cleanups.length > 0) cleanups.pop()?.();
+    resetPluginContributionsForTests();
+  });
+
+  /** Registers one installed Plugin that declares a single page. */
+  function installPlugin(id: string, pageId: string): void {
+    const folder = pluginFolder(
+      {},
+      {
+        id,
+        name: id,
+        platforms: ["desktop"],
+        contributes: {
+          commands: [{ id: "open", label: "Open", contexts: ["global"], navigates: true }],
+          pages: [{ id: pageId, title: pageId, command: "open" }],
+        },
+      }
+    );
+    const parsed = readPluginManifest(folder);
+    if (!parsed.ok)
+      throw new Error(`fixture manifest is invalid: ${JSON.stringify(parsed.problems)}`);
+    cleanups.push(registerPluginContributions({ manifest: parsed.manifest, folder }));
+  }
+
+  it("opens the caller's own page through the registered navigator", async () => {
+    installPlugin("tracer", "report");
+    const navigate = vi.fn();
+    const unregister = setPluginNavigator(navigate);
+    try {
+      await expect(openPluginPage("tracer", "report")).resolves.toEqual({ status: "opened" });
+      expect(navigate).toHaveBeenCalledWith("/plugin/tracer/report");
+    } finally {
+      unregister();
+    }
+  });
+
+  it("opens another installed Plugin's page", async () => {
+    installPlugin("tracer", "report");
+    installPlugin("other", "panel");
+    const navigate = vi.fn();
+    const unregister = setPluginNavigator(navigate);
+    try {
+      await expect(openPluginPage("other", "panel")).resolves.toEqual({ status: "opened" });
+      expect(navigate).toHaveBeenCalledWith("/plugin/other/panel");
+    } finally {
+      unregister();
+    }
+  });
+
+  it("reports not-found for an unknown Plugin and for an unknown page, without navigating", async () => {
+    installPlugin("tracer", "report");
+    const navigate = vi.fn();
+    const unregister = setPluginNavigator(navigate);
+    try {
+      await expect(openPluginPage("ghost", "report")).resolves.toEqual({ status: "not-found" });
+      await expect(openPluginPage("tracer", "ghost")).resolves.toEqual({ status: "not-found" });
+      expect(navigate).not.toHaveBeenCalled();
+    } finally {
+      unregister();
+    }
+  });
+
+  it("is a no-op with no registered navigator, still reporting the page as opened", async () => {
+    installPlugin("tracer", "report");
+    await expect(openPluginPage("tracer", "report")).resolves.toEqual({ status: "opened" });
   });
 });
