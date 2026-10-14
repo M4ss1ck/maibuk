@@ -1,4 +1,4 @@
-import { type Analyzer, type Token, createAnalyzer, tokenize } from "./language";
+import { type Analyzer, type Token, breaksBetween, createAnalyzer, tokenize } from "./language";
 
 export type EchoKind = "nearby" | "overused" | "phrase";
 
@@ -39,6 +39,11 @@ export const DEFAULT_ECHO_SETTINGS: EchoSettings = {
 const MIN_WORD_LETTERS = 4;
 const OVERUSED_MIN_COUNT = 5;
 const OVERUSED_RATE_PER_THOUSAND = 3;
+
+/** Repeated phrase: n-grams of these lengths, longest first so containment lands on the longer one. */
+const PHRASE_LENGTHS: readonly number[] = [5, 4, 3];
+const PHRASE_CHAPTER_MIN_COUNT = 2;
+const PHRASE_BOOK_MIN_COUNT = 3;
 
 /** Folded forms and match keys of the Ignore list; a token is ignored when either matches. */
 interface IgnoreIndex {
@@ -151,11 +156,140 @@ function overusedEchoes(
   return sortByFirstOccurrence(echoes);
 }
 
-function phraseEchoes(): Echo[] {
-  // TODO(maibuk-echoes): Repeated phrase detection lands in the follow-up task.
-  // It is 3-5 token n-grams inside one Chapter, cut by breaksBetween(), with
-  // containment against longer phrases; see docs/plans/449-find-echoes.md.
-  return [];
+/** The folded words of each Ignore list entry, joined by one space — the phrase match key. */
+function buildPhraseIgnoreKeys(entries: readonly string[]): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const entry of entries) {
+    const tokens = tokenize(entry);
+    if (tokens.length === 0) continue;
+    keys.add(tokens.map((token) => token.folded).join(" "));
+  }
+  return keys;
+}
+
+/** For each token index, the last index of its run: the last token before a sentence break. */
+function runEndsFor(text: string, tokens: readonly Token[]): Int32Array {
+  const ends = new Int32Array(tokens.length);
+  if (tokens.length === 0) return ends;
+  ends[tokens.length - 1] = tokens.length - 1;
+  for (let index = tokens.length - 2; index >= 0; index--) {
+    ends[index] = breaksBetween(text, tokens[index], tokens[index + 1]) ? index : ends[index + 1];
+  }
+  return ends;
+}
+
+interface PhraseOccurrence {
+  chapter: number;
+  start: number; // token index of the first word in the Chapter
+  end: number; // token index of the last word, inclusive
+  occurrence: EchoOccurrence;
+}
+
+/** One entry per phrase key: its occurrences of length `n`, in document order. */
+function phraseOccurrencesByKey(
+  chapters: readonly Token[][],
+  runEnds: readonly Int32Array[],
+  n: number,
+  analyzer: Analyzer,
+  ignored: ReadonlySet<string>
+): Map<string, PhraseOccurrence[]> {
+  const byKey = new Map<string, PhraseOccurrence[]>();
+  for (let chapter = 0; chapter < chapters.length; chapter++) {
+    const tokens = chapters[chapter];
+    const ends = runEnds[chapter];
+    for (let start = 0; start + n <= tokens.length; start++) {
+      const end = start + n - 1;
+      if (ends[start] < end) continue; // a sentence break falls inside the run
+      let allStopWords = true;
+      for (let index = start; index <= end; index++) {
+        if (!analyzer.isStopWord(tokens[index].folded)) {
+          allStopWords = false;
+          break;
+        }
+      }
+      if (allStopWords) continue;
+      const key = tokenKey(tokens, start, end);
+      if (ignored.has(key)) continue;
+      const occurrence: PhraseOccurrence = {
+        chapter,
+        start,
+        end,
+        occurrence: { chapter, from: tokens[start].from, to: tokens[end].to },
+      };
+      const group = byKey.get(key);
+      if (group === undefined) byKey.set(key, [occurrence]);
+      else group.push(occurrence);
+    }
+  }
+  return byKey;
+}
+
+/** The folded words `start..end` joined by one space (the phrase key, no stemming). */
+function tokenKey(tokens: readonly Token[], start: number, end: number): string {
+  let key = tokens[start].folded;
+  for (let index = start + 1; index <= end; index++) key += ` ${tokens[index].folded}`;
+  return key;
+}
+
+/** Greedy left to right: a run that overlaps the last kept one of the same phrase counts once. */
+function withoutOverlaps(group: readonly PhraseOccurrence[]): PhraseOccurrence[] {
+  const kept: PhraseOccurrence[] = [];
+  let lastChapter = -1;
+  let lastEnd = -1;
+  for (const entry of group) {
+    if (entry.chapter === lastChapter && entry.start <= lastEnd) continue;
+    kept.push(entry);
+    lastChapter = entry.chapter;
+    lastEnd = entry.end;
+  }
+  return kept;
+}
+
+/**
+ * A phrase per folded run of three to five words that returns often enough. A
+ * phrase inside a longer flagged one is dropped, so only the longer one is
+ * reported; see docs/plans/449-find-echoes.md.
+ */
+function phraseEchoes(
+  texts: readonly string[],
+  chapters: readonly Token[][],
+  analyzer: Analyzer,
+  ignored: ReadonlySet<string>,
+  threshold: number
+): Echo[] {
+  const runEnds = chapters.map((tokens, chapter) => runEndsFor(texts[chapter], tokens));
+  // Per Chapter, the furthest token covered by a flagged longer phrase.
+  const coverEnd = chapters.map((tokens) => new Int32Array(tokens.length).fill(-1));
+  const echoes: Echo[] = [];
+  for (const n of PHRASE_LENGTHS) {
+    const byKey = phraseOccurrencesByKey(chapters, runEnds, n, analyzer, ignored);
+    const flagged: PhraseOccurrence[] = [];
+    for (const [key, group] of byKey) {
+      // Drop covered runs before overlaps, so a covered run never hides a free one.
+      const survivors = withoutOverlaps(
+        group.filter((entry) => coverEnd[entry.chapter][entry.start] < entry.end)
+      );
+      if (survivors.length < threshold) continue;
+      const occurrences: EchoOccurrence[] = [];
+      for (const entry of survivors) {
+        occurrences.push(entry.occurrence);
+        flagged.push(entry);
+      }
+      echoes.push({ kind: "phrase", normalized: key, occurrences });
+    }
+    for (const entry of flagged) {
+      const row = coverEnd[entry.chapter];
+      if (row[entry.start] < entry.end) row[entry.start] = entry.end;
+    }
+    // Fold each row into a prefix max, so a lookup answers "a flagged longer
+    // phrase starting at or before here reaches this far".
+    for (const row of coverEnd) {
+      for (let index = 1; index < row.length; index++) {
+        if (row[index] < row[index - 1]) row[index] = row[index - 1];
+      }
+    }
+  }
+  return sortByFirstOccurrence(echoes);
 }
 
 function compareOccurrences(a: EchoOccurrence, b: EchoOccurrence): number {
@@ -184,14 +318,25 @@ export function findEchoes(
   settings: EchoSettings
 ): Echo[] {
   const analyzer = createAnalyzer(language, { stemming: settings.stemming });
-  const chapters = (typeof text === "string" ? [text] : text).map((chapter) => tokenize(chapter));
+  const chapterTexts = typeof text === "string" ? [text] : text;
+  const chapters = chapterTexts.map((chapter) => tokenize(chapter));
   const ignore = buildIgnoreIndex(settings.ignore, analyzer);
   const window = clampWindow(settings.nearbyWindow);
+  const phraseThreshold =
+    typeof text === "string" ? PHRASE_CHAPTER_MIN_COUNT : PHRASE_BOOK_MIN_COUNT;
 
   // concat, not push(...): a Book can yield more Echoes than a call accepts arguments.
   return [
     settings.nearby ? nearbyEchoes(chapters, analyzer, ignore, window) : [],
     settings.overused ? overusedEchoes(chapters, analyzer, ignore) : [],
-    settings.phrases ? phraseEchoes() : [],
+    settings.phrases
+      ? phraseEchoes(
+          chapterTexts,
+          chapters,
+          analyzer,
+          buildPhraseIgnoreKeys(settings.ignore),
+          phraseThreshold
+        )
+      : [],
   ].flat();
 }

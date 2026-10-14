@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAnalyzer, tokenize } from "./language";
+import { type Token, createAnalyzer, tokenize } from "./language";
 import * as en from "./fixtures/en";
 import * as es from "./fixtures/es";
 import {
@@ -18,6 +18,11 @@ interface Fixtures {
   caseFolding: string;
   shortAndStopWords: string;
   limitedSupport: string;
+  phraseTwice: string;
+  phraseOnce: string;
+  phraseStopWords: string;
+  phraseContainment: string;
+  phraseOverlap: string;
 }
 
 interface Subject {
@@ -26,6 +31,8 @@ interface Subject {
   second: string;
   stemWord: string;
   stopWord: string;
+  /** The three words the phrase fixtures turn on. */
+  phraseWords: readonly [string, string, string];
   fixtures: Fixtures;
 }
 
@@ -36,6 +43,7 @@ const SUBJECTS: Subject[] = [
     second: "river",
     stemWord: "walk",
     stopWord: "they",
+    phraseWords: ["the", "old", "lighthouse"],
     fixtures: en,
   },
   {
@@ -44,6 +52,7 @@ const SUBJECTS: Subject[] = [
     second: "ventana",
     stemWord: "puerta",
     stopWord: "esta",
+    phraseWords: ["la", "casa", "vieja"],
     fixtures: es,
   },
 ];
@@ -95,12 +104,28 @@ function overusedText(anchor: string, anchorCount: number, totalWords: number): 
 
 /** Nearby and Overused both fire here: each anchor chains and clears the rate. */
 function mixedText(subject: Subject): string {
+  // One filler pool split in two, so no filler n-gram repeats and no phrase forms.
+  const fillers = fillerWords(30);
   return [
     ...repeat(subject.anchor, 5),
-    ...fillerWords(20),
+    ...fillers.slice(0, 20),
     ...repeat(subject.second, 5),
-    ...fillerWords(10),
+    ...fillers.slice(20),
   ].join(" ");
+}
+
+/** Nearby, Overused, and a Repeated phrase all fire here, so their order can be read. */
+function everyKindText(subject: Subject): string {
+  return `${mixedText(subject)} ${subject.fixtures.phraseTwice}`;
+}
+
+/** The folded words of a phrase, joined by one space — the phrase match key. */
+function tokenKey(tokens: readonly Token[]): string {
+  return tokens.map((token) => token.folded).join(" ");
+}
+
+function phraseKey(phrase: string): string {
+  return tokenKey(tokenize(phrase));
 }
 
 describe("DEFAULT_ECHO_SETTINGS", () => {
@@ -302,6 +327,145 @@ for (const subject of SUBJECTS) {
         ignore: ["unrelatedword"],
       });
       expect(echoes.filter((echo) => echo.kind === "nearby")).toHaveLength(1);
+    });
+  });
+
+  describe(`findEchoes() Repeated phrase — ${language}`, () => {
+    const phraseOnly = settings({ nearby: false, overused: false });
+    const phrase = subject.phraseWords.join(" ");
+    const phraseNormalized = phraseKey(phrase);
+
+    /** The three words with a break in the middle of every run, so none stays whole. */
+    function splitByBreak(separator: string): string {
+      const [first, second, third] = subject.phraseWords;
+      return `${first} ${second}${separator} ${third} ${first} ${second}${separator} ${third}`;
+    }
+
+    it("flags a three-word phrase twice in one Chapter", () => {
+      const echo = findEcho(
+        findEchoes(subject.fixtures.phraseTwice, language, phraseOnly),
+        "phrase",
+        phraseNormalized
+      );
+      expect(echo?.occurrences).toHaveLength(2);
+    });
+
+    it("never flags a three-word phrase that appears once", () => {
+      expect(findEchoes(subject.fixtures.phraseOnce, language, phraseOnly)).toEqual([]);
+    });
+
+    it("does not flag a phrase twice across a Book, but does at three", () => {
+      const twice = findEchoes(
+        [subject.fixtures.phraseOnce, subject.fixtures.phraseOnce],
+        language,
+        phraseOnly
+      );
+      expect(findEcho(twice, "phrase", phraseNormalized)).toBeUndefined();
+
+      const thrice = findEchoes(
+        [subject.fixtures.phraseTwice, subject.fixtures.phraseOnce],
+        language,
+        phraseOnly
+      );
+      const echo = findEcho(thrice, "phrase", phraseNormalized);
+      expect(echo?.occurrences).toHaveLength(3);
+      expect(echo?.occurrences.map((occurrence) => occurrence.chapter)).toEqual([0, 0, 1]);
+    });
+
+    it("never lets a phrase cross a sentence break", () => {
+      for (const separator of [". ", "\n", "—", '"']) {
+        expect(findEchoes(splitByBreak(separator), language, phraseOnly)).toEqual([]);
+      }
+    });
+
+    it("never lets a phrase cross two Chapters", () => {
+      const [first, second, third] = subject.phraseWords;
+      // Joined end to end the phrase would return three times; split across
+      // Chapters, no single Chapter holds it, so nothing is flagged.
+      const book = [
+        `${first} ${second}`,
+        `${third} ${first} ${second}`,
+        `${third} ${first} ${second}`,
+        third,
+      ];
+      expect(findEchoes(book, language, phraseOnly)).toEqual([]);
+    });
+
+    it("never flags a phrase made only of stop words, however often it returns", () => {
+      expect(findEchoes(subject.fixtures.phraseStopWords, language, phraseOnly)).toEqual([]);
+    });
+
+    it("reports a phrase inside a longer one as the longer one", () => {
+      const text = subject.fixtures.phraseContainment;
+      const tokens = tokenize(text);
+      const longKey = tokenKey(tokens.slice(0, 5));
+      const innerKey = tokenKey(tokens.slice(0, 3));
+      const echoes = findEchoes(text, language, phraseOnly);
+
+      const long = findEcho(echoes, "phrase", longKey);
+      const inner = findEcho(echoes, "phrase", innerKey);
+      expect(long?.occurrences).toHaveLength(2);
+      expect(inner?.occurrences).toHaveLength(2);
+      const longEnd = Math.max(...(long?.occurrences ?? []).map((occurrence) => occurrence.to));
+      for (const occurrence of inner?.occurrences ?? []) {
+        expect(occurrence.from).toBeGreaterThan(longEnd);
+      }
+      const contained = [
+        tokens.slice(1, 4),
+        tokens.slice(2, 5),
+        tokens.slice(0, 4),
+        tokens.slice(1, 5),
+      ];
+      for (const phraseTokens of contained) {
+        expect(findEcho(echoes, "phrase", tokenKey(phraseTokens))).toBeUndefined();
+      }
+    });
+
+    it("counts overlapping runs of one phrase once", () => {
+      expect(findEchoes(subject.fixtures.phraseOverlap, language, phraseOnly)).toEqual([]);
+    });
+
+    it("ignores a multi-word phrase on the Ignore list", () => {
+      const echoes = findEchoes(subject.fixtures.phraseTwice, language, {
+        ...phraseOnly,
+        ignore: [`  ${phrase.toUpperCase()}  `],
+      });
+      expect(echoes).toEqual([]);
+    });
+
+    it("suppresses phrases when phrases is false", () => {
+      const echoes = findEchoes(subject.fixtures.phraseTwice, language, {
+        ...phraseOnly,
+        phrases: false,
+      });
+      expect(echoes).toEqual([]);
+    });
+
+    it("lists Nearby, then Overused, then phrases, each by first occurrence", () => {
+      const echoes = findEchoes(everyKindText(subject), language, DEFAULT_ECHO_SETTINGS);
+      const rank: Record<Echo["kind"], number> = { nearby: 0, overused: 1, phrase: 2 };
+      const order = echoes.map((echo) => [
+        rank[echo.kind],
+        echo.occurrences[0].chapter,
+        echo.occurrences[0].from,
+      ]);
+      expect(order).toEqual(
+        [...order].sort(
+          (left, right) => left[0] - right[0] || left[1] - right[1] || left[2] - right[2]
+        )
+      );
+      expect(echoes.some((echo) => echo.kind === "phrase")).toBe(true);
+    });
+
+    it("slices every phrase occurrence back to its normalized form", () => {
+      const text = subject.fixtures.phraseContainment;
+      const echoes = findEchoes(text, language, phraseOnly);
+      expect(echoes.length).toBeGreaterThan(0);
+      for (const echo of echoes) {
+        for (const occurrence of echo.occurrences) {
+          expect(phraseKey(text.slice(occurrence.from, occurrence.to))).toBe(echo.normalized);
+        }
+      }
     });
   });
 
