@@ -246,7 +246,7 @@ export const PLUGIN_API_TABLE = [
   defineApiRow({
     id: "editor.setHighlights",
     description:
-      "Replaces this Plugin's whole set of highlights in the focused editor. Never changes text.",
+      "Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text.",
     input: z.strictObject({
       kind: z.enum(["info", "warning", "repetition"]),
       ranges: z.array(z.strictObject({ ...range.shape, label: z.string().max(200).optional() })),

@@ -9,10 +9,11 @@
  * reveal, and highlights all address that one editor, in the plain-text offsets
  * the Library reads share (#396).
  *
- * Highlights live in a per-editor ProseMirror plugin, keyed by Plugin id, so
- * each Plugin replaces only its own set, several coexist, and disabling one
- * removes only its own. They are view-only decorations: they never enter the
- * document, so they never become saved formatting. The plugin state holds the
+ * Highlights live in a per-editor ProseMirror plugin, keyed by Plugin id and
+ * kind, so each Plugin replaces only its own set of one kind, several kinds
+ * coexist, and disabling one Plugin removes only its own kinds. They are
+ * view-only decorations: they never enter the document, so they never become
+ * saved formatting. The plugin state holds the
  * built DecorationSet and maps it through local edits, so a keystroke never
  * rebuilds the decorations; the Plugin re-highlights on editor.contentChanged.
  *
@@ -37,6 +38,7 @@ import type {
   PluginEditorContentResult,
   PluginEditorSelectionResult,
   PluginEntityTarget,
+  PluginHighlightKind,
   PluginHighlightSet,
   PluginRevealRange,
 } from "@/features/plugins/types";
@@ -65,8 +67,19 @@ type HighlightMeta =
   | { type: "clearAll" };
 
 interface HighlightsState {
-  sets: Map<string, PluginHighlightSet>;
+  /** One Plugin's highlight set of one kind, keyed by `pluginId` + kind. */
+  sets: Map<string, PluginHighlightEntry>;
   decorations: DecorationSet;
+}
+
+interface PluginHighlightEntry {
+  pluginId: string;
+  set: PluginHighlightSet;
+}
+
+/** The one key per (Plugin id, kind) the host keys a highlight set by. */
+function highlightSetKey(pluginId: string, kind: PluginHighlightKind): string {
+  return `${pluginId}\u0000${kind}`;
 }
 
 interface EditorEntry {
@@ -155,12 +168,12 @@ function notifyContentChanged(entry: EditorEntry): void {
 /** Builds every Plugin's decorations against one document walk. */
 function buildHighlightDecorations(
   doc: ProseMirrorNode,
-  sets: Map<string, PluginHighlightSet>
+  sets: Map<string, PluginHighlightEntry>
 ): DecorationSet {
   if (sets.size === 0) return DecorationSet.empty;
   const map = buildPlainTextMap(doc);
   const decorations: Decoration[] = [];
-  for (const [pluginId, set] of sets) {
+  for (const { pluginId, set } of sets.values()) {
     for (const range of set.ranges) {
       const pm = plainRangeToPmRange(map, range.from, range.to);
       if (pm === null) continue;
@@ -207,8 +220,19 @@ function createHighlightsPlugin(entryId: string): {
           return { sets: new Map(), decorations: DecorationSet.empty };
         }
         const sets = new Map(mapped.sets);
-        if (meta.type === "clear") sets.delete(meta.pluginId);
-        else sets.set(meta.pluginId, meta.set);
+        if (meta.type === "clear") {
+          for (const [key, entry] of sets) {
+            if (entry.pluginId === meta.pluginId) sets.delete(key);
+          }
+        } else if (meta.set.ranges.length === 0) {
+          // An empty set is the host's way to clear exactly one kind.
+          sets.delete(highlightSetKey(meta.pluginId, meta.set.kind));
+        } else {
+          sets.set(highlightSetKey(meta.pluginId, meta.set.kind), {
+            pluginId: meta.pluginId,
+            set: meta.set,
+          });
+        }
         // One document walk per set or clear, never per transaction.
         return { sets, decorations: buildHighlightDecorations(tr.doc, sets) };
       },
@@ -339,7 +363,7 @@ export function revealInFocusedEditor(range: PluginRevealRange): PluginEditorApp
   return { status: "applied" };
 }
 
-/** Replaces one Plugin's whole highlight set in the focused editor. */
+/** Replaces one Plugin's highlight set for one kind in the focused editor. */
 export function setPluginEditorHighlights(
   pluginId: string,
   input: PluginApiInput<"editor.setHighlights">
@@ -356,15 +380,22 @@ export function setPluginEditorHighlights(
   return { status: "applied" };
 }
 
-/** Removes one Plugin's highlights from every open editor (disabling it). */
+/** Removes every kind of one Plugin's highlights from every open editor (disabling it). */
 export function clearPluginHighlights(pluginId: string): void {
   for (const entry of editors.values()) {
     const sets = entry.key.getState(entry.editor.state)?.sets;
-    if (!sets?.has(pluginId)) continue;
+    if (!sets || !hasPluginSet(sets, pluginId)) continue;
     entry.editor.view.dispatch(
       entry.editor.state.tr.setMeta(entry.key, { type: "clear", pluginId } satisfies HighlightMeta)
     );
   }
+}
+
+function hasPluginSet(sets: Map<string, PluginHighlightEntry>, pluginId: string): boolean {
+  for (const entry of sets.values()) {
+    if (entry.pluginId === pluginId) return true;
+  }
+  return false;
 }
 
 /**

@@ -461,7 +461,7 @@ Output:
 
 ### `editor.setHighlights`
 
-Replaces this Plugin's whole set of highlights in the focused editor. Never changes text.
+Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text.
 
 - Plugin Permission: `editor:decorate`
 - Effect: write

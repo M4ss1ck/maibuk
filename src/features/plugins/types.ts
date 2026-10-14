@@ -1032,7 +1032,7 @@ export type PluginHighlightKind = PluginApiInput<"editor.setHighlights">["kind"]
 /** One highlight range in plain-text offsets, with an optional accessible label. */
 export type PluginHighlightRange = PluginApiInput<"editor.setHighlights">["ranges"][number];
 
-/** One Plugin's whole highlight set for one editor. */
+/** One Plugin's highlight set of one kind for one editor. */
 export interface PluginHighlightSet {
   kind: PluginHighlightKind;
   ranges: readonly PluginHighlightRange[];

@@ -273,7 +273,7 @@ export interface PluginApiMethods {
       status: "no-target";
     };
   };
-  /** Replaces this Plugin's whole set of highlights in the focused editor. Never changes text. */
+  /** Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text. */
   "editor.setHighlights": {
     input: {
       kind: "info" | "warning" | "repetition";
@@ -537,7 +537,7 @@ export interface PluginApi {
     getSelection(params?: PluginApiMethods["editor.getSelection"]["input"]): Promise<PluginApiMethods["editor.getSelection"]["output"]>;
     /** Scrolls the focused editor to a range and places the caret there. */
     reveal(params: PluginApiMethods["editor.reveal"]["input"]): Promise<PluginApiMethods["editor.reveal"]["output"]>;
-    /** Replaces this Plugin's whole set of highlights in the focused editor. Never changes text. */
+    /** Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text. */
     setHighlights(params: PluginApiMethods["editor.setHighlights"]["input"]): Promise<PluginApiMethods["editor.setHighlights"]["output"]>;
     /** Inserts text or an HTML fragment at the caret as one undoable step. */
     insert(params: PluginApiMethods["editor.insert"]["input"]): Promise<PluginApiMethods["editor.insert"]["output"]>;
