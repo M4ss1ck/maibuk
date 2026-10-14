@@ -531,8 +531,9 @@ milliseconds:
   `max(5% of the baseline median, 20 ms)`.
 - **start-to-ready**, per on-demand Built-in Plugin: the p95 of the
   `plugin.start:<id>` measure, from opening a surface to the Plugin ready, at or
-  under 150 ms. It runs on `fixture-everything-on-demand` plus every on-demand
-  id in `plugins/builtins.json` (none today, so only the fixture).
+  under 150 ms. On Chromium it runs on `fixture-everything-on-demand`, on the
+  Echoes Built-in (measured explicitly until [#451](https://github.com/M4ss1ck/maibuk/issues/451) lists it in `plugins/builtins.json`), and on every on-demand
+  id in `plugins/builtins.json` (none today).
 - **Command to effect**: a Plugin Command's Shortcut press to its first visible
   effect, p95 at or under 100 ms.
 - **Remote UI echo**: one keystroke's echo committed to the DOM with a
