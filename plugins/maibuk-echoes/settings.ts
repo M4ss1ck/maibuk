@@ -1,0 +1,112 @@
+/**
+ * Echoes' detection settings (#450, unit 2): the one typed, validated shape the
+ * Settings row reads and writes in the Plugin's own storage, and the mapper the
+ * report and editor units reuse to call `findEchoes`.
+ *
+ * A stored value is never trusted: anything missing or malformed falls back to
+ * the default field by field, the nearby window is clamped to the range
+ * detection accepts, and the ignore list is trimmed to non-empty, unique words.
+ * Read and write are best-effort; a refused storage call leaves the row usable.
+ *
+ * Imports only `@/plugin-sdk` (the storage API type) and this Plugin's files.
+ */
+
+import type { PluginClient } from "@/plugin-sdk";
+import {
+  DEFAULT_ECHO_SETTINGS,
+  type EchoSettings,
+  NEARBY_WINDOW_MAX,
+  NEARBY_WINDOW_MIN,
+} from "./find-echoes";
+
+/** The one storage key Echoes' detection settings live under. */
+export const ECHOES_SETTINGS_KEY = "settings";
+
+/** The SDK storage surface the settings module needs. */
+export type EchoesStorage = Pick<PluginClient, "storage">;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function booleanOr(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+/** The window detection accepts, rounded; anything unparseable keeps the default. */
+export function clampNearbyWindow(value: unknown): number {
+  if (typeof value !== "number" && (typeof value !== "string" || value.trim() === "")) {
+    return DEFAULT_ECHO_SETTINGS.nearbyWindow;
+  }
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_ECHO_SETTINGS.nearbyWindow;
+  const rounded = Math.round(numeric);
+  if (rounded < NEARBY_WINDOW_MIN) return NEARBY_WINDOW_MIN;
+  if (rounded > NEARBY_WINDOW_MAX) return NEARBY_WINDOW_MAX;
+  return rounded;
+}
+
+/** The ignore list as one entry per word: trimmed, non-empty, unique, first spelling kept. */
+function normalizeIgnore(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const words: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const trimmed = entry.trim();
+    const key = trimmed.toLowerCase();
+    if (trimmed === "" || seen.has(key)) continue;
+    seen.add(key);
+    words.push(trimmed);
+  }
+  return words;
+}
+
+/** Validates anything read back into settings, defaulting field by field. */
+export function parseEchoesSettings(value: unknown): EchoSettings {
+  const record = isRecord(value) ? value : {};
+  return {
+    nearby: booleanOr(record.nearby, DEFAULT_ECHO_SETTINGS.nearby),
+    overused: booleanOr(record.overused, DEFAULT_ECHO_SETTINGS.overused),
+    phrases: booleanOr(record.phrases, DEFAULT_ECHO_SETTINGS.phrases),
+    stemming: booleanOr(record.stemming, DEFAULT_ECHO_SETTINGS.stemming),
+    nearbyWindow: clampNearbyWindow(record.nearbyWindow),
+    ignore: normalizeIgnore(record.ignore),
+  };
+}
+
+/** The `findEchoes` options these settings stand for, normalized. */
+export function toFindEchoesOptions(settings: EchoSettings): EchoSettings {
+  return {
+    nearby: settings.nearby,
+    overused: settings.overused,
+    phrases: settings.phrases,
+    stemming: settings.stemming,
+    nearbyWindow: clampNearbyWindow(settings.nearbyWindow),
+    ignore: normalizeIgnore(settings.ignore),
+  };
+}
+
+/** Reads the settings, falling back to the defaults when the key is unset or the read fails. */
+export async function readEchoesSettings(client: EchoesStorage): Promise<EchoSettings> {
+  try {
+    return parseEchoesSettings(await client.storage.get({ key: ECHOES_SETTINGS_KEY }));
+  } catch {
+    return parseEchoesSettings(undefined);
+  }
+}
+
+/** Stores the settings under the one key; a refused write is ignored. */
+export async function writeEchoesSettings(
+  client: EchoesStorage,
+  settings: EchoSettings
+): Promise<void> {
+  try {
+    await client.storage.set({
+      key: ECHOES_SETTINGS_KEY,
+      value: toFindEchoesOptions(settings),
+    });
+  } catch {
+    // Storage is best-effort: a refused write must not break the Settings row.
+  }
+}

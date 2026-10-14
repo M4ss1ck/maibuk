@@ -520,6 +520,51 @@ describe("renderPage", () => {
     }
   });
 
+  it("renders a Settings row body through the real host renderer, by keyboard alone", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+
+      /** A Settings row body the Plugin serves under the row's Plugin-local id. */
+      function RowBody() {
+        const [on, setOn] = useState(false);
+        return createElement(ui.Switch, {
+          label: "Threshold",
+          isSelected: on,
+          onChange: (event: { detail: boolean }) => setOn(event.detail),
+        });
+      }
+
+      servePluginUi(client, { pages: {}, settingsRows: { threshold: RowBody } });
+      const row = await host.renderSettingsRow("threshold");
+      const user = userEvent.setup();
+
+      const control = await screen.findByRole("switch", { name: "Threshold" });
+      for (let i = 0; i < 10 && document.activeElement !== control; i++) await user.tab();
+      expect(control).toHaveFocus();
+      await user.keyboard(" ");
+      expect(control).toBeChecked();
+
+      row.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("rejects a Settings row the Plugin never declared", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      servePluginUi(client, { pages: {}, settingsRows: {} });
+
+      await expect(host.renderSettingsRow("missing")).rejects.toThrow(
+        "Unknown Settings row missing"
+      );
+    } finally {
+      host.stop();
+    }
+  });
+
   it("applies the locale override to the manifest it carries", () => {
     const host = createTestHost({
       manifest: fixtureManifest(),

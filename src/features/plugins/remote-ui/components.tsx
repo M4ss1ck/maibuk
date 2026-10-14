@@ -92,6 +92,18 @@ function parseNumber(text: string): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
+/** The number clamped into a field's optional min/max bounds. */
+function clampNumber(
+  value: number,
+  minValue: number | undefined,
+  maxValue: number | undefined
+): number {
+  let clamped = value;
+  if (minValue !== undefined && clamped < minValue) clamped = minValue;
+  if (maxValue !== undefined && clamped > maxValue) clamped = maxValue;
+  return clamped;
+}
+
 interface TextFieldHostProps {
   label: string;
   type?: "text" | "password" | "search";
@@ -242,15 +254,34 @@ function NumberFieldHost({
     const parsed = parseNumber(next);
     if (parsed !== undefined) onInput?.(parsed);
   });
+  // The value the Plugin hears on commit is the parsed, min/max-clamped number.
+  // React Aria owns stepping and reports the snapped value through its own
+  // `onChange`; Enter and blur commit `local` directly, because feeding the
+  // typed text back as the controlled `value` makes React Aria's own commit a
+  // no-op (the controlled value already equals the snapped one). The ref keeps a
+  // later blur from repeating the value a step already reported.
+  const lastCommitted = useRef<number | null>(null);
+  const commit = useCallback(
+    (next: number) => {
+      const clamped = clampNumber(next, minValue, maxValue);
+      if (lastCommitted.current === clamped) return;
+      lastCommitted.current = clamped;
+      onChange?.(clamped);
+    },
+    [minValue, maxValue, onChange]
+  );
+  const commitLocal = useCallback(() => {
+    const parsed = parseNumber(local);
+    if (parsed !== undefined) commit(parsed);
+  }, [local, commit]);
   return (
     <AriaNumberField
       value={parseNumber(local)}
-      // RAC's `onChange` fires on commit (blur, Enter, stepping) and is NaN when
-      // the field is empty; only a real number is reported. Live typing is read
-      // from the input's own `onInput` below, so the Plugin sees each keystroke
-      // the way it does from a text field.
+      // RAC's `onChange` fires on commit (blur, Enter, stepping); only a real
+      // number is reported. Live typing is read from the input's own `onInput`
+      // below, so the Plugin sees each keystroke the way it does from a text field.
       onChange={(next) => {
-        if (Number.isFinite(next)) onChange?.(next);
+        if (Number.isFinite(next)) commit(next);
       }}
       minValue={minValue}
       maxValue={maxValue}
@@ -264,6 +295,10 @@ function NumberFieldHost({
       <AriaInput
         className={INPUT_CLASS}
         onInput={(event) => send(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") commitLocal();
+        }}
+        onBlur={commitLocal}
       />
       {description && (
         <AriaText slot="description" className="mt-1 block text-sm text-muted-foreground">

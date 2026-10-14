@@ -95,14 +95,26 @@ export const PLUGIN_COMMAND_RUN_REQUEST = "command.run";
 /**
  * The host request a Plugin answers to mount one Remote UI surface. `params` is
  * `PluginUiMountParams`: `surface` is the host-chosen id of this one mount,
- * `page` is the Plugin-local page id from the manifest, and `port` is a fresh
- * MessagePort transferred with the request. The Plugin renders that page over
- * it, and the host closes its own end on unmount.
+ * `kind` is the registry it renders from (`page`, the default, or
+ * `settingsRow`), `page` is the Plugin-local page id — or the Settings row's
+ * Plugin-local id when `kind` is `settingsRow` — and `port` is a fresh
+ * MessagePort transferred with the request. The Plugin renders that surface
+ * over it, and the host closes its own end on unmount.
  */
 export const PLUGIN_UI_MOUNT_REQUEST = "ui.mount";
 
+/**
+ * Which registry a mount draws from. A page id and a Settings row id share one
+ * namespace inside a Plugin, so the kind keeps them apart: `detection` as a
+ * page is a different surface from `detection` as a Settings row.
+ */
+export type PluginUiMountKind = "page" | "settingsRow";
+
 export interface PluginUiMountParams {
   surface: string;
+  /** The registry to render from; omitted means `page`. */
+  kind?: PluginUiMountKind;
+  /** A page id, or a Settings row's Plugin-local id when `kind` is `settingsRow`. */
   page: string;
   port: MessagePort;
 }

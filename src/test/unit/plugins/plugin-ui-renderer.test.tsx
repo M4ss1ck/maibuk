@@ -201,6 +201,50 @@ describe("the Remote UI renderer", () => {
       expect(seen.every((value) => Number.isFinite(value))).toBe(true);
     });
 
+    it("reports the committed, clamped number on blur @ui-kbd:maibuk-number-field", async () => {
+      const inputs: number[] = [];
+      const commits: number[] = [];
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.NumberField
+          label="Count"
+          value={50}
+          minValue={10}
+          maxValue={200}
+          onInput={(event) => inputs.push(event.detail)}
+          onChange={(event) => commits.push(event.detail)}
+        />
+      );
+      const field = screen.getByRole("textbox", { name: "Count" });
+      await userEvent.tab();
+      expect(field).toHaveFocus();
+      // Type an out-of-range value, then leave the field: the commit is clamped.
+      await userEvent.keyboard("{Control>}a{/Control}500");
+      await userEvent.tab();
+
+      expect(inputs.length).toBeGreaterThan(0);
+      expect(commits.at(-1)).toBe(200);
+    });
+
+    it("fires onChange with the parsed number on Enter @ui-kbd:maibuk-number-field", async () => {
+      const commits: number[] = [];
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.NumberField
+          label="Count"
+          value={50}
+          onInput={() => {}}
+          onChange={(event) => commits.push(event.detail)}
+        />
+      );
+      const field = screen.getByRole("textbox", { name: "Count" });
+      await userEvent.tab();
+      expect(field).toHaveFocus();
+      await userEvent.keyboard("{Control>}a{/Control}120{Enter}");
+
+      expect(commits.at(-1)).toBe(120);
+    });
+
     it("links a text field's description and error @ui:maibuk-text-field", async () => {
       harness = renderRemoteUi();
       await harness.mount(

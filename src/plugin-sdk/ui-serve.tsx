@@ -1,9 +1,9 @@
 /**
  * The Maibuk Plugin SDK's polyfill-free Remote UI entry (ADR 0021, #438): it
  * answers the host's `ui.mount` and `ui.unmount` requests by rendering one of
- * the Plugin's pages into a container a Remote connection observes, carrying
- * that container's mutations over the mount's transferred MessagePort, batched
- * to at most one flush per 16 ms window.
+ * the Plugin's pages, or one Settings row body, into a container a Remote
+ * connection observes, carrying that container's mutations over the mount's
+ * transferred MessagePort, batched to at most one flush per 16 ms window.
  *
  * This is the entry a host-side test imports (jsdom and the web lane), because
  * it loads no Remote DOM polyfill: it leaves the real DOM and its own
@@ -118,6 +118,8 @@ interface MountedSurface {
 
 export interface ServePluginUiOptions {
   pages: PluginUiPages;
+  /** The Settings row bodies, keyed by each row's Plugin-local id. */
+  settingsRows?: PluginUiPages;
   onHostRequest?: HostRequestHandler;
   /** How the page's tree attaches to a connection; defaults to `observeContainer()`. */
   attach?: PluginUiAttach;
@@ -136,10 +138,10 @@ function nextTask(): Promise<void> {
 
 /**
  * Answers the host's Remote UI requests for one Plugin. `ui.mount` renders the
- * named page into a container `options.attach` produces (a plain observed `div`
- * by default); `ui.unmount` tears the mount down. Every other method is
- * forwarded to `options.onHostRequest`, and throws the same "No handler" error
- * the client uses when no handler is given.
+ * named page, or the named Settings row body, into a container `options.attach`
+ * produces (a plain observed `div` by default); `ui.unmount` tears the mount
+ * down. Every other method is forwarded to `options.onHostRequest`, and throws
+ * the same "No handler" error the client uses when no handler is given.
  */
 export function servePluginUi(
   client: Pick<PluginClient, "onHostRequest">,
@@ -148,12 +150,16 @@ export function servePluginUi(
   const attach = options.attach ?? observeContainer();
   const mounted = new Map<string, MountedSurface>();
 
-  function mount({ surface, page, port }: PluginUiMountParams): null {
+  function mount({ surface, kind, page, port }: PluginUiMountParams): null {
     if (mounted.has(surface)) {
       throw new Error(`Surface ${surface} is already mounted`);
     }
-    const Page = options.pages[page];
-    if (Page === undefined) throw new Error(`Unknown page ${page}`);
+    const settingsRow = kind === "settingsRow";
+    const registry = settingsRow ? options.settingsRows : options.pages;
+    const Page = registry?.[page];
+    if (Page === undefined) {
+      throw new Error(settingsRow ? `Unknown Settings row ${page}` : `Unknown page ${page}`);
+    }
 
     // The kit elements only exist once defined; a Worker's polyfill provides the
     // registry, so define them here, on first mount, not at module load.

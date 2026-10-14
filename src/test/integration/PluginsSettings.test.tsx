@@ -6,6 +6,16 @@ import { focusSettingsRow } from "@/features/settings/focus-row";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 import { registerPluginSettingsRows } from "@/features/settings/rows";
 import { buildSettingsItems } from "@/features/command-palette/settings-items";
+import {
+  resetPluginLifecycleForTests,
+  setPluginLifecycleInstance,
+} from "@/features/plugins/lifecycle-instance";
+import { createTestHost } from "@/features/plugins/test-kit";
+import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
+import { createPluginClient } from "@/plugin-sdk";
+import { ui } from "@/plugin-sdk/ui";
+import { servePluginUi } from "@/plugin-sdk/ui-serve";
+import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
 
 const { platformState, mockT, syncState } = vi.hoisted(() => ({
   platformState: { isWeb: true, isDesktop: false, isAndroid: false },
@@ -202,7 +212,7 @@ describe("Plugins Settings section", () => {
     expect(found?.terms).toContain("echo");
   });
 
-  it("opens the owning accordion by keyboard and focuses the row, and a search result reveals it", async () => {
+  it("opens the owning accordion by keyboard and mounts the row, and a search result reveals it", async () => {
     unregisters.push(
       registerPluginSettingsRows("echoes", {
         displayName: "Echoes",
@@ -212,8 +222,11 @@ describe("Plugins Settings section", () => {
     const user = userEvent.setup();
     renderSettings();
 
+    const rowIn = () =>
+      document.querySelector('[data-settings-row="plugin.echoes.threshold"]');
+
     // The accordion starts closed: its row is not mounted.
-    expect(screen.queryByLabelText("Echo threshold")).toBeNull();
+    expect(rowIn()).toBeNull();
 
     // Tab to the accordion trigger and open it with Enter alone.
     const trigger = screen.getByRole("button", { name: "Echoes" });
@@ -222,29 +235,82 @@ describe("Plugins Settings section", () => {
     }
     expect(document.activeElement).toBe(trigger);
     await user.keyboard("{Enter}");
-    const field = await screen.findByLabelText("Echo threshold");
-    expect(field).toBeInTheDocument();
+    // The row anchor mounts with the declaration's label. Its live controls are
+    // the Plugin's Remote UI body, mounted only while a Plugin is running
+    // (proved host-side in PluginsSection.test.tsx).
+    expect(rowIn()).not.toBeNull();
+    expect(screen.getByText("Echo threshold")).toBeInTheDocument();
 
-    // Tab moves into the opened accordion's field; Shift+Tab returns to the
-    // trigger, where Enter closes the accordion again.
-    for (let i = 0; i < 10 && document.activeElement !== field; i++) {
-      await user.tab();
-    }
-    expect(document.activeElement).toBe(field);
-    await user.tab({ shift: true });
+    // The trigger keeps focus; Enter closes the accordion again.
     expect(document.activeElement).toBe(trigger);
     await user.keyboard("{Enter}");
-    expect(screen.queryByLabelText("Echo threshold")).toBeNull();
+    expect(rowIn()).toBeNull();
 
-    // Following a search result opens the accordion and focuses the row.
+    // Following a search result opens the accordion and mounts the row.
     focusSettingsRow("plugin.echoes.threshold");
-    await waitFor(() => expect(screen.getByLabelText("Echo threshold")).toBeInTheDocument());
-    await waitFor(() =>
-      expect(
-        (screen.getByLabelText("Echo threshold") as HTMLElement) === document.activeElement
-      ).toBe(true)
-    );
-    expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
+    await waitFor(() => expect(rowIn()).not.toBeNull());
+    await waitFor(() => expect(useSettingsRevealStore.getState().pendingRowId).toBeNull());
     expect(useSettingsRevealStore.getState().pluginOpen.echoes).toBe(true);
   });
+
+  it("reveals a Plugin Settings row and focuses its mounted control", async () => {
+    unregisters.push(
+      registerPluginSettingsRows("echoes", {
+        displayName: "Echoes",
+        rows: [{ id: "threshold", label: "Echo threshold" }],
+      })
+    );
+
+    // A running Plugin serving the row's body, so the mounted control is real.
+    const host = createTestHost({ manifest: PLUGIN_MANIFEST });
+    try {
+      function ThresholdBody() {
+        return <ui.Switch label="Echo threshold" isSelected={false} onChange={() => {}} />;
+      }
+      servePluginUi(createPluginClient(host.port), {
+        pages: {},
+        settingsRows: { threshold: ThresholdBody },
+      });
+      installReadyLifecycle("echoes", {
+        manifest: PLUGIN_MANIFEST,
+        broker: host.broker,
+        stop: () => {},
+      });
+
+      renderSettings();
+      focusSettingsRow("plugin.echoes.threshold");
+
+      const control = await screen.findByRole("switch", { name: "Echo threshold" });
+      await waitFor(() => expect(document.activeElement).toBe(control));
+      expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
+    } finally {
+      host.stop();
+      resetPluginLifecycleForTests();
+    }
+  });
 });
+
+/**
+ * Installs a fake lifecycle whose one Plugin is ready, so a Settings row mounts
+ * the Plugin's Remote UI body the way the app does when it is running.
+ */
+function installReadyLifecycle(pluginId: string, runtime: PluginRuntime): void {
+  const ready = { status: "ready", startReason: "enable" } as const;
+  const lifecycle = {
+    launch: async () => {},
+    installed: () => [],
+    launchScanned: () => true,
+    onLaunchScanned: () => () => {},
+    surfaceReached: () => {},
+    surfaceLeft: () => {},
+    start: async () => ({ ok: true, startReason: "enable" }),
+    install: async () => ({ ok: true, startReason: "enable" }),
+    uninstall: () => {},
+    stop: () => {},
+    state: (id: string) => (id === pluginId ? ready : null),
+    runtime: (id: string) => (id === pluginId ? runtime : null),
+    subscribe: () => () => {},
+    dispose: () => {},
+  } as unknown as PluginLifecycle;
+  setPluginLifecycleInstance(lifecycle);
+}

@@ -4,6 +4,7 @@ import { PluginConfirmDialog } from "@/components/plugins/PluginConfirmDialog";
 import { PluginPermissionDialog } from "@/components/plugins/PluginPermissionDialog";
 import { PluginRemoveDialog } from "@/components/plugins/PluginRemoveDialog";
 import { PluginReviewDialog } from "@/components/plugins/PluginReviewDialog";
+import { PluginSettingsRowBody } from "@/components/plugins/PluginSettingsRowBody";
 import { PluginSurface } from "@/components/plugins/PluginSurface";
 import { ReplaceBuiltInDialog } from "@/components/plugins/ReplaceBuiltInDialog";
 import { PluginRow } from "@/components/settings/PluginRow";
@@ -451,16 +452,7 @@ export function PluginsSection() {
                     <PluginSurface pluginId={owner.pluginId} surface="settings" />
                     {rows.map((row) => (
                       <SettingRow key={row.id} id={row.id} className={SETTINGS_ROW_CLASS}>
-                        {/* Placeholder field until the remote-UI host renders the
-                            row's live controls (#437). A field needs no Command;
-                            it exists so search and reveal already focus a row. */}
-                        <input
-                          type="text"
-                          aria-label={row.label}
-                          placeholder={row.label}
-                          defaultValue=""
-                          className="w-full max-w-xs rounded border border-border bg-background px-2 py-1 text-sm"
-                        />
+                        <PluginSettingsRowBody pluginId={owner.pluginId} rowId={row.localId} />
                       </SettingRow>
                     ))}
                   </div>

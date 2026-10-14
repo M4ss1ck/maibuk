@@ -707,6 +707,11 @@ export interface TestHostOptions {
   library?: TestLibrary;
   /** The app language the host serves; defaults to `en`. */
   language?: string;
+  /**
+   * The storage the `storage.*` handlers serve, `Map<key, value>`. Share one
+   * Map across two hosts to simulate a reload over the same device storage.
+   */
+  storage?: Map<string, unknown>;
   /** UI-string overrides `renderPage` applies to the manifest before rendering. */
   locale?: PluginLocale;
   /**
@@ -761,6 +766,12 @@ export interface TestHost {
    * `stop()` too.
    */
   renderPage(page: string): Promise<TestPage>;
+  /**
+   * Renders one Settings row body the Plugin serves, the way the host mounts it
+   * inside Settings, and resolves once the Plugin accepts it. Rejects when the
+   * Plugin serves no body for that row. Unmounted by `stop()` too.
+   */
+  renderSettingsRow(rowId: string): Promise<TestPage>;
   /**
    * Stops the Worker: stops the broker and severs every open Remote UI mount,
    * while leaving the host renderer mounted. This is what a stopped Worker

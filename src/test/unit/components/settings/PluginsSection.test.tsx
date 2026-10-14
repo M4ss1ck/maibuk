@@ -6,6 +6,7 @@
  */
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import "@/i18n";
@@ -13,16 +14,26 @@ import { PluginsSection } from "@/components/settings/PluginsSection";
 import { toast } from "@/components/ui/Toast";
 import { useModalStore } from "@/components/ui/modal-store";
 import { PLUGIN_FILTER_CATEGORIES, PLUGIN_DATA_SIZE_WARNING_BYTES, usePluginManagementStore } from "@/features/plugins/management";
+import {
+  resetPluginLifecycleForTests,
+  setPluginLifecycleInstance,
+} from "@/features/plugins/lifecycle-instance";
+import { createTestHost } from "@/features/plugins/test-kit";
 import { registerPluginSettingsRows } from "@/features/settings/rows";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 import { useSettingsStore } from "@/features/settings/store";
 import type {
   PluginApproval,
+  PluginLifecycle,
   PluginManagementEntry,
   PluginManifest,
   PluginPermissionId,
   PluginReview,
+  PluginRuntime,
 } from "@/features/plugins/types";
+import { createPluginClient } from "@/plugin-sdk";
+import { ui } from "@/plugin-sdk/ui";
+import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { runCommand } from "@/lib/command-runner";
 import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
@@ -383,7 +394,11 @@ describe("PluginsSection", () => {
     render(<PluginsSection />);
 
     await openRow(user);
-    expect(await screen.findByLabelText("Echo threshold")).toBeInTheDocument();
+    // The row anchor carries the declaration's label; the live controls come
+    // from the Plugin's own Remote UI body (proved in the test below).
+    const row = document.querySelector('[data-settings-row="plugin.echoes.threshold"]');
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText("Echo threshold")).toBeInTheDocument();
   });
 
   it("shows Modified and Update available badges", () => {
@@ -1156,5 +1171,83 @@ describe("Plugin management (#443)", () => {
     await user.click(within(dialog).getByText("Also delete this Plugin’s data"));
 
     expect(checkbox).toBeChecked();
+  });
+});
+
+/**
+ * Installs a fake lifecycle whose one Plugin is ready, so the Settings section
+ * mounts the Plugin's Remote UI body the way the app does when it is running.
+ */
+function installReadyLifecycle(pluginId: string, runtime: PluginRuntime): void {
+  const ready = { status: "ready", startReason: "enable" } as const;
+  const lifecycle = {
+    launch: async () => {},
+    installed: () => [],
+    launchScanned: () => true,
+    onLaunchScanned: () => () => {},
+    surfaceReached: () => {},
+    surfaceLeft: () => {},
+    start: async () => ({ ok: true, startReason: "enable" }),
+    install: async () => ({ ok: true, startReason: "enable" }),
+    uninstall: () => {},
+    stop: () => {},
+    state: (id: string) => (id === pluginId ? ready : null),
+    runtime: (id: string) => (id === pluginId ? runtime : null),
+    subscribe: () => () => {},
+    dispose: () => {},
+  } as unknown as PluginLifecycle;
+  setPluginLifecycleInstance(lifecycle);
+}
+
+describe("Plugin Settings row body (#450)", () => {
+  let host: ReturnType<typeof createTestHost> | null = null;
+
+  afterEach(() => {
+    host?.stop();
+    host = null;
+    resetPluginLifecycleForTests();
+  });
+
+  it("mounts the Plugin's controls in Settings and reaches them by keyboard", async () => {
+    const user = userEvent.setup();
+    unregisters.push(
+      registerPluginSettingsRows("echoes", {
+        displayName: "Echoes",
+        rows: [{ id: "threshold", label: "Echo threshold" }],
+      })
+    );
+    seed(entry());
+
+    host = createTestHost({ manifest: manifest() });
+
+    /** The Settings row body the Plugin serves under the row's Plugin-local id. */
+    function ThresholdBody() {
+      const [on, setOn] = useState(false);
+      return (
+        <ui.Switch
+          label="Echo threshold"
+          isSelected={on}
+          onChange={(event: { detail: boolean }) => setOn(event.detail)}
+        />
+      );
+    }
+    servePluginUi(createPluginClient(host.port), {
+      pages: {},
+      settingsRows: { threshold: ThresholdBody },
+    });
+
+    installReadyLifecycle("echoes", {
+      manifest: manifest(),
+      broker: host.broker,
+      stop: () => {},
+    });
+
+    render(<PluginsSection />);
+    await openRow(user);
+
+    const control = await screen.findByRole("switch", { name: "Echo threshold" });
+    await tabTo(user, control, 40);
+    await user.keyboard(" ");
+    expect(control).toBeChecked();
   });
 });

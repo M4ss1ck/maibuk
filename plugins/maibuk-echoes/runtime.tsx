@@ -1,26 +1,36 @@
 /**
- * The Echoes runtime: the report page it serves and the Command handlers it
- * answers. Kept apart from `index.tsx` (the Worker bootstrap) so a test can
- * drive the same logic over the polyfill-free Remote UI entry the test kit uses
- * (`@/plugin-sdk/ui-serve`), without loading the Worker's Remote DOM polyfill
- * into jsdom. Imports only `@/plugin-sdk` (and its subpaths) and its own files.
+ * The Echoes runtime: the report page and the detection Settings row it serves,
+ * plus the Command handlers it answers. Kept apart from `index.tsx` (the Worker
+ * bootstrap) so a test can drive the same logic over the polyfill-free Remote UI
+ * entry the test kit uses (`@/plugin-sdk/ui-serve`), without loading the
+ * Worker's Remote DOM polyfill into jsdom. Imports only `@/plugin-sdk` (and its
+ * subpaths) and its own files.
  *
  * The page is a placeholder for the report the later units draw. It already
  * reads the scope the `Find echoes` Command stored, so opening the page from a
- * Chapter or Book Item Menu lands on that item.
+ * Chapter or Book Item Menu lands on that item. The Settings row is the
+ * `detection` row's body, mounted by the host under the row's Plugin-local id.
  */
 
-import { useEffect, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import {
   PLUGIN_COMMAND_RUN_REQUEST,
   ui,
   type HostRequestHandler,
   type PluginClient,
 } from "@/plugin-sdk";
+import {
+  DEFAULT_ECHO_SETTINGS,
+  type EchoSettings,
+} from "./find-echoes";
 import { translate } from "./i18n";
+import { clampNearbyWindow, readEchoesSettings, writeEchoesSettings } from "./settings";
 
 /** The report page id, exactly as the manifest declares it. */
 export const REPORT_PAGE_ID = "report";
+
+/** The Settings row whose body the Plugin draws, exactly as the manifest declares its id. */
+export const SETTINGS_ROW_ID = "detection";
 
 /** The Command-local ids the manifest declares. */
 export const OPEN_ECHOES = "openEchoes";
@@ -41,6 +51,7 @@ export type EchoServe = (
   client: Pick<PluginClient, "onHostRequest">,
   options: {
     pages: Record<string, ComponentType>;
+    settingsRows?: Record<string, ComponentType>;
     onHostRequest?: HostRequestHandler;
   }
 ) => void;
@@ -56,11 +67,12 @@ interface EchoRuntime {
   scope: EchoScope | null;
 }
 
-/** Wires the client to the report page and the Command handlers. */
+/** Wires the client to the report page, the Settings row, and the Command handlers. */
 export function startEchoes(client: PluginClient, serve: EchoServe): void {
   const runtime: EchoRuntime = { scope: null };
   serve(client, {
     pages: { [REPORT_PAGE_ID]: createReportPage(client, runtime) },
+    settingsRows: { [SETTINGS_ROW_ID]: createDetectionSettings(client) },
     onHostRequest: (method, params) => handleHostRequest(client, runtime, method, params),
   });
 }
@@ -189,4 +201,84 @@ function useEchoLanguage(client: PluginClient): string {
     };
   }, [client]);
   return language;
+}
+
+/**
+ * The `detection` Settings row's body: one switch per echo kind the detection
+ * supports, the stemming switch, the nearby-echo window, and the ignore list.
+ * Values load from the Plugin's storage on mount and every change is written
+ * back, so the row survives a reload; labels come from the runtime catalogs.
+ */
+function createDetectionSettings(client: PluginClient): ComponentType {
+  function DetectionSettings() {
+    const language = useEchoLanguage(client);
+    const [settings, setSettings] = useState<EchoSettings>(() => ({
+      ...DEFAULT_ECHO_SETTINGS,
+      ignore: [],
+    }));
+    // Nothing is written before the stored value has been read, so a slow read
+    // cannot be clobbered by the initial defaults.
+    const hydrated = useRef(false);
+
+    useEffect(() => {
+      let cancelled = false;
+      void readEchoesSettings(client).then((stored) => {
+        if (cancelled) return;
+        hydrated.current = true;
+        setSettings(stored);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [client]);
+
+    useEffect(() => {
+      if (!hydrated.current) return;
+      void writeEchoesSettings(client, settings);
+    }, [client, settings]);
+
+    const update = useCallback((patch: Partial<EchoSettings>) => {
+      setSettings((current) => ({ ...current, ...patch }));
+    }, []);
+
+    return (
+      <ui.View direction="column" gap="md">
+        <ui.Switch
+          label={translate(language, "settings.nearby")}
+          isSelected={settings.nearby}
+          onChange={(event) => update({ nearby: event.detail })}
+        />
+        <ui.Switch
+          label={translate(language, "settings.overused")}
+          isSelected={settings.overused}
+          onChange={(event) => update({ overused: event.detail })}
+        />
+        <ui.Switch
+          label={translate(language, "settings.phrase")}
+          isSelected={settings.phrases}
+          onChange={(event) => update({ phrases: event.detail })}
+        />
+        <ui.Switch
+          label={translate(language, "settings.stemming")}
+          isSelected={settings.stemming}
+          onChange={(event) => update({ stemming: event.detail })}
+        />
+        <ui.NumberField
+          label={translate(language, "settings.nearbyWindow")}
+          value={settings.nearbyWindow}
+          // The plugin clamps the committed value to the range detection
+          // accepts; the host field carries no bounds so typing stays natural.
+          onChange={(event) => update({ nearbyWindow: clampNearbyWindow(event.detail) })}
+        />
+        <ui.MultiSelectCombobox
+          label={translate(language, "settings.ignoreList")}
+          options={[]}
+          selectedKeys={settings.ignore}
+          allowsCustomValue
+          onChange={(event) => update({ ignore: [...event.detail] })}
+        />
+      </ui.View>
+    );
+  }
+  return DetectionSettings;
 }
