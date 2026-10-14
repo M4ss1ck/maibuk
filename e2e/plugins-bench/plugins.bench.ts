@@ -4,12 +4,13 @@
 // device once, then takes N samples of one measurement and writes them to
 // PLUGINS_BENCH_OUT/<name>.json, which the runner assembles into the
 // PluginsBenchReport. These are measurements, not specs: the keyboard contract
-// does not apply, and a warm-up load is discarded where the measurement needs
-// one (launch).
+// does not apply, and a warm-up load (launch) or warm-up keystrokes (echo and
+// burst) are discarded where the measurement needs one.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Page } from "@playwright/test";
+import { ECHO_WARMUP_KEYS, echoWarmupText } from "@/features/plugins/bench/measure";
 import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { SEED_BOOK } from "../support/seed/names";
 import { REPO_ROOT } from "../support/seed/seeds";
@@ -258,12 +259,24 @@ async function measureCommand(page: Page): Promise<number[]> {
   return samples;
 }
 
+/** Waits until the echo Text reads exactly `value` (e.g. `echo:` when empty). */
+async function waitForEcho(page: Page, value: string): Promise<void> {
+  await page.waitForFunction((expected) => {
+    const el = [...document.querySelectorAll("p")].find((p) => p.textContent?.startsWith("echo:"));
+    return el?.textContent === expected;
+  }, value);
+}
+
 /**
  * Types `text` into the echo field and, per key, samples keydown -> the echo
  * Text containing that key's prefix, committed to the DOM. `delay` is the typing pace:
  * 120 ms for echo, 0 for the burst. A later echo of a longer prefix still
  * contains this key's prefix, so a burst the Worker coalesces into one update
- * still yields one sample per key.
+ * still yields one sample per key. Before arming it types `ECHO_WARMUP_KEYS`
+ * warm-up characters, waits for their echo, then clears the field (select all +
+ * Backspace) back to an empty echo, so a cold first keystroke (JIT, the first
+ * Remote UI update) does not decide p95 — the WebKitGTK echo samples were
+ * [22,6,3,3,...] — exactly as launch discards two warm-up loads (issue #448).
  */
 async function measureEcho(page: Page, text: string, delay: number): Promise<number[]> {
   const field = page.getByRole("textbox", { name: "Echo input" });
@@ -295,6 +308,16 @@ async function measureEcho(page: Page, text: string, delay: number): Promise<num
     });
     observer.observe(el, { childList: true, characterData: true, subtree: true });
   });
+
+  // Warm up before arming, then clear the field back to an empty echo. The
+  // observer ignores both (armed is still false), so neither reaches the samples.
+  const warmup = echoWarmupText(ECHO_WARMUP_KEYS);
+  await page.keyboard.type(warmup, { delay });
+  await waitForEcho(page, `echo:${warmup}`);
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await waitForEcho(page, "echo:");
+
   await page.evaluate(() => {
     const w = window as unknown as {
       __benchEcho: { keys: number[]; mutations: unknown[]; armed: boolean };

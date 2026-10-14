@@ -23,6 +23,8 @@ import { BENCH_COLLECTOR_PATHS } from "@/features/plugins/bench/protocol";
 import {
   dispatchShortcut,
   dispatchTypingKey,
+  ECHO_WARMUP_KEYS,
+  echoWarmupText,
   findEchoElement,
   findEchoInput,
   GALLERY_MARK,
@@ -174,7 +176,10 @@ async function waitForEchoPage(): Promise<{ input: HTMLInputElement; element: El
 /**
  * Types `text` into the echo field, one synthetic keystroke per character, and
  * returns one keydown->echo-commit sample per key. `pace` is the gap between
- * keys: 120 ms for echo, 0 for the burst.
+ * keys: 120 ms for echo, 0 for the burst. Before sampling it types
+ * `ECHO_WARMUP_KEYS` warm-up characters, waits for their echo, then clears the
+ * field through the native setter + `input` path, so a cold first keystroke
+ * (JIT, the first Remote UI update) does not decide p95 (issue #448).
  */
 async function measureEcho(
   input: HTMLInputElement,
@@ -190,6 +195,26 @@ async function measureEcho(
   observer.observe(element, { childList: true, characterData: true, subtree: true });
   input.focus();
   try {
+    const warmup = echoWarmupText();
+    for (let i = 0; i < warmup.length; i += 1) {
+      keys.push(performance.now());
+      dispatchTypingKey(input, warmup[i], warmup.slice(0, i + 1));
+      await sleep(pace);
+    }
+    await pollFor(() => (element.textContent === `echo:${warmup}` ? true : null), {
+      timeoutMs: MEASURE_TIMEOUT_MS,
+      sleep,
+    });
+    // Clear the field (select all + Backspace) through the same native-setter +
+    // input path a keystroke uses, then wait for the echo to read "echo:".
+    dispatchTypingKey(input, "Backspace", "");
+    await pollFor(() => (element.textContent === "echo:" ? true : null), {
+      timeoutMs: MEASURE_TIMEOUT_MS,
+      sleep,
+    });
+    // Drop the warm-up's echoes: the measured phase starts from the clear.
+    mutations.length = 0;
+
     for (let i = 0; i < text.length; i += 1) {
       keys.push(performance.now());
       dispatchTypingKey(input, text[i], text.slice(0, i + 1));
@@ -202,7 +227,7 @@ async function measureEcho(
   } finally {
     observer.disconnect();
   }
-  return matchEchoSamples(keys, mutations, text);
+  return matchEchoSamples(keys, mutations, text, ECHO_WARMUP_KEYS);
 }
 
 async function measureLaunch(): Promise<number[]> {

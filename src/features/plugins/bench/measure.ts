@@ -213,22 +213,40 @@ export interface EchoMutation {
 }
 
 /**
+ * Warm-up keystrokes an echo/burst measurement dispatches and discards before it
+ * samples (issue #448). A cold first keystroke — JIT, the first Remote UI update
+ * — would otherwise decide p95: the WebKitGTK echo samples were
+ * [22, 6, 3, 3, 3, 3, 3, 3, 3, 3]. Launch discards two warm-up loads for the
+ * same reason (`plugins.bench.ts` `WARMUPS`).
+ */
+export const ECHO_WARMUP_KEYS = 2;
+
+/** The characters the echo warm-up types: `warmupKeys` of them, so a lane can type them. */
+export function echoWarmupText(warmupKeys: number = ECHO_WARMUP_KEYS): string {
+  return Array.from({ length: warmupKeys }, (_, index) => String.fromCharCode(97 + index)).join("");
+}
+
+/**
  * Pairs each keystroke's start time with the first echo that contains its
  * prefix, the same rule `plugins.bench.ts` `measureEcho` uses: a later echo of
  * a longer prefix still contains this key's prefix, so a burst the Worker
- * coalesces into one update still yields one sample per key. Pure.
+ * coalesces into one update still yields one sample per key. `keyTimes` may
+ * include the `warmupKeys` warm-up keystrokes that preceded sampling (their
+ * echoes were discarded), so only the measured keys yield a sample. Pure.
  */
 export function matchEchoSamples(
   keyTimes: readonly number[],
   mutations: readonly EchoMutation[],
-  text: string
+  text: string,
+  warmupKeys = 0
 ): number[] {
   const samples: number[] = [];
   for (let i = 0; i < text.length; i += 1) {
     const expected = `echo:${text.slice(0, i + 1)}`;
     const mutation = mutations.find((entry) => entry.text.includes(expected));
-    if (mutation !== undefined && keyTimes[i] !== undefined) {
-      samples.push(mutation.t - keyTimes[i]);
+    const key = keyTimes[i + warmupKeys];
+    if (mutation !== undefined && key !== undefined) {
+      samples.push(mutation.t - key);
     }
   }
   return samples;

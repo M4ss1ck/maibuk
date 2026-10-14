@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ECHO_WARMUP_KEYS,
   dispatchShortcut,
   dispatchTypingKey,
+  echoWarmupText,
   findEchoElement,
   findEchoInput,
   matchEchoSamples,
@@ -117,6 +119,28 @@ describe("matchEchoSamples", () => {
 
   it("drops a key whose echo never arrived", () => {
     expect(matchEchoSamples([100, 200], [{ t: 150, text: "echo:a" }], "ab")).toEqual([50]);
+  });
+
+  it("dispatches the warm-up keys but excludes them from the samples", () => {
+    // Two warm-up keydowns (10, 20) precede the measured ones; the samples cover
+    // the measured text only, so their length is the measured text length, not +2.
+    const keys = [10, 20, 110, 210, 310];
+    const mutations = [
+      { t: 160, text: "echo:a" },
+      { t: 260, text: "echo:ab" },
+      { t: 360, text: "echo:abc" },
+    ];
+    const samples = matchEchoSamples(keys, mutations, "abc", ECHO_WARMUP_KEYS);
+    expect(samples).toEqual([50, 50, 50]);
+    expect(samples).toHaveLength(3);
+  });
+});
+
+describe("echoWarmupText", () => {
+  it("types ECHO_WARMUP_KEYS characters, mirroring launch's two warm-up loads", () => {
+    expect(ECHO_WARMUP_KEYS).toBe(2);
+    expect(echoWarmupText()).toHaveLength(ECHO_WARMUP_KEYS);
+    expect(echoWarmupText(3)).toHaveLength(3);
   });
 });
 
