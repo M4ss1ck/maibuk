@@ -101,6 +101,9 @@ export const MEASUREMENT_FILES = {
   commandToEffect: "commandToEffect",
   remoteUiEcho: "remoteUiEcho",
   remoteUiBurst: "remoteUiBurst",
+  echoHighlightUpdate: "echoHighlightUpdate",
+  echoWorkerRecompute: "echoWorkerRecompute",
+  echoRefreshLatency: "echoRefreshLatency",
 } as const;
 
 /** One measurement the bench specs wrote: its base name (no `.json`) and its text. */
@@ -175,6 +178,29 @@ export function assembleReport(
     }
     return value;
   };
+  /**
+   * One optional measurement's samples. A missing file is empty unless
+   * `required` (the Chromium lane's Echoes rows, #451); a present-but-wrong
+   * shape is always an `unmeasured` reason.
+   */
+  const optionalNumbers = (name: string, required: boolean): number[] | undefined => {
+    const text = byName.get(name);
+    if (text === undefined) {
+      if (required) unmeasured.push(`${name}: no measurement was written`);
+      return undefined;
+    }
+    try {
+      const value = JSON.parse(text);
+      if (!isNumberArray(value)) {
+        unmeasured.push(`${name}: expected an array of numbers`);
+        return undefined;
+      }
+      return value;
+    } catch {
+      unmeasured.push(`${name}: invalid JSON`);
+      return undefined;
+    }
+  };
   const idMap = (name: string): Record<string, number[]> => {
     const value = read(name);
     if (value === undefined) return {};
@@ -196,6 +222,9 @@ export function assembleReport(
 
   const remoteUiEcho = echo(MEASUREMENT_FILES.remoteUiEcho);
   const remoteUiBurst = echo(MEASUREMENT_FILES.remoteUiBurst);
+  // The Echoes highlight rows (#451) are the Chromium lane's own; the WebKitGTK
+  // lane writes none, so they are required only for `chromium`.
+  const echoes = engine === "chromium";
   const report: PluginsBenchReport = {
     engine: engine === "webkitgtk" ? "webkit" : "chromium",
     launch: {
@@ -209,6 +238,13 @@ export function assembleReport(
     remoteUiBurst: remoteUiBurst.samples,
     remoteUiEchoTextLost: remoteUiEcho.textLost,
     remoteUiBurstTextLost: remoteUiBurst.textLost,
+    ...(echoes
+      ? {
+          echoHighlightUpdate: optionalNumbers(MEASUREMENT_FILES.echoHighlightUpdate, true) ?? [],
+          echoWorkerRecompute: optionalNumbers(MEASUREMENT_FILES.echoWorkerRecompute, true) ?? [],
+          echoRefreshLatency: optionalNumbers(MEASUREMENT_FILES.echoRefreshLatency, true) ?? [],
+        }
+      : {}),
   };
   if (unmeasured.length > 0) report.unmeasured = unmeasured;
   return report;

@@ -37,6 +37,44 @@ import {
 } from "./highlights";
 import { readEchoesSettings, readEditorKinds, toFindEchoesOptions } from "./settings";
 
+/**
+ * The bench ring for Echoes' own recompute time (#451): the last
+ * `RECOMPUTE_RING_MAX` durations of `findEchoes` + `echoHighlightRanges`, in ms.
+ * The `bench:plugins` lane reads it from the Plugin Worker global
+ * (`globalThis.__maibukEchoesRecomputeMs`). A Plugin cannot read the host's
+ * `benchMarksEnabled()` gate, so this stays always on but cheap: one
+ * `performance.now()` pair and a fixed-length array per recompute, and at most
+ * one `performance.measure` on the Worker's own timeline at a time.
+ */
+const RECOMPUTE_RING_MAX = 200;
+const RECOMPUTE_MEASURE = "echoes.recompute";
+const recomputeDurations: number[] = [];
+(globalThis as unknown as { __maibukEchoesRecomputeMs?: number[] }).__maibukEchoesRecomputeMs =
+  recomputeDurations;
+
+/** A monotonic timestamp, or 0 where the clock is unavailable. */
+function nowMs(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : 0;
+}
+
+/** Records one recompute's duration, ring-bounded and readable by the bench (#451). */
+function recordRecompute(startedAt: number): void {
+  const endedAt = nowMs();
+  recomputeDurations.push(endedAt - startedAt);
+  if (recomputeDurations.length > RECOMPUTE_RING_MAX) recomputeDurations.shift();
+  if (typeof performance === "undefined" || typeof performance.measure !== "function") return;
+  try {
+    // Keep the Worker's timeline bounded (one measure, not one per recompute);
+    // the ring above is the bench's source of the recent samples.
+    performance.clearMeasures?.(RECOMPUTE_MEASURE);
+    performance.measure(RECOMPUTE_MEASURE, { start: startedAt, end: endedAt });
+  } catch {
+    // Timing must never break a recompute.
+  }
+}
+
 /** The slice of the SDK client the controller uses. */
 export interface EchoEditorClient {
   editor: Pick<PluginClient["editor"], "getContent" | "getSelection" | "reveal" | "setHighlights">;
@@ -199,8 +237,12 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     const { settings, kinds } = await enabledKinds();
     if (!state.on) return;
     const t = translate();
+    // Time only Echoes' own compute (findEchoes + echoHighlightRanges) for the
+    // Worker-recompute bench row (#451): no await runs inside this span.
+    const startedAt = nowMs();
     const echoes = findEchoes(text, state.detectionLanguage, toFindEchoesOptions(settings));
     const sets = echoHighlightRanges(echoes, kinds, t, text);
+    recordRecompute(startedAt);
     await paint(sets, entity);
     if (!state.on || state.entity === null || !sameEntity(state.entity, entity)) return;
     state.list = echoNavigationList(sets);

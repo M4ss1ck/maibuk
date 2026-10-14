@@ -18,6 +18,12 @@ export interface FrameScenarioPlugin {
   id: string;
   /** The Plugin Permissions every seeded Plugin is approved for. */
   granted: readonly string[];
+  /**
+   * Whether the fixture is seeded as a Built-in Plugin (`builtInPlugins`),
+   * which the E2E/bench builds compile in. A `maibuk-` id (Echoes) only parses
+   * under the Built-in manifest schema, so it must be seeded this way.
+   */
+  builtIn?: boolean;
 }
 
 export interface FrameScenario {
@@ -203,6 +209,30 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
         "seeding the Plugin Directory needs OPFS, which the pinned Playwright WebKit (the probe engine) lacks",
       android:
         "the Android WebView seeds no web Plugin Directory, so the Chapter gets no Plugin highlights",
+    },
+  },
+  {
+    id: "typing-with-echoes",
+    title: "Typing in a long Chapter with spell check and Echoes highlights",
+    seed: "perfLongChapter",
+    warmUp:
+      "Install the Echoes Plugin, open the long Chapter, wait for Echoes' Commands to be live, toggle its nearby highlights on with Alt+F7, wait for the highlight decorations, and type one sentence.",
+    measured:
+      "Type 120 characters at 12 per second while spell check and Echoes' nearby highlights both refresh 300 ms after each edit (Echoes recomputes findEchoes + echoHighlightRanges in its Worker and re-sends the ranges).",
+    repetitions: 3,
+    recordsInput: true,
+    plugins: [
+      {
+        id: "maibuk-echoes",
+        granted: ["library:read", "editor:read", "editor:decorate"],
+        builtIn: true,
+      },
+    ],
+    skip: {
+      probe:
+        "seeding the Plugin Directory needs OPFS, which the pinned Playwright WebKit (the probe engine) lacks",
+      android:
+        "the Android WebView seeds no web Plugin Directory, so the Chapter gets no Echoes highlights",
     },
   },
 ];

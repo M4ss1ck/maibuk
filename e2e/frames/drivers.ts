@@ -596,6 +596,50 @@ const typingWithHighlights: FrameDriver = {
   },
 };
 
+/**
+ * The `typing-with-echoes` scenario (#451): spell check and the real Echoes
+ * Plugin's nearby highlights are both on while the same 120-character burst is
+ * typed, judged like `typing`. Echoes' Default Shortcut toggles its highlights
+ * on the focused editor; its Commands are live once its sidebar entry shows.
+ */
+const typingWithEchoes: FrameDriver = {
+  async prepare(ctx) {
+    const { page } = ctx;
+    await ctx.open("/");
+    // The on-demand Echoes Plugin warm-starts at launch (its Open Echoes Command
+    // is global); its sidebar entry appearing means its Commands are live.
+    await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });
+    await openBookInGallery(ctx, PERF_BOOK.title, editorText(page));
+    // Toggle nearby-echo highlights on with the Command's Default Shortcut. The
+    // first press can land before the Plugin's Commands are available (the
+    // sidebar entry shows at scan, before the Worker is ready), and a press
+    // while unavailable is a no-op, so retry until the highlights appear.
+    const marks = pluginHighlight(page);
+    let on = false;
+    for (let attempt = 0; attempt < 12 && !on; attempt++) {
+      await page.keyboard.press("Alt+F7");
+      on = await marks
+        .first()
+        .waitFor({ state: "visible", timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false);
+    }
+    if (!on) throw new Error("Echoes' highlights never turned on");
+    // Deep in the Chapter, like `typing`.
+    await page.keyboard.press("ControlOrMeta+End");
+    for (let i = 0; i < 12; i++) await page.keyboard.press("PageUp");
+    await page.keyboard.press("End");
+    await page.keyboard.type(TYPING_WARMUP, { delay: 60 });
+    await sleep(500);
+  },
+  async measure({ page }) {
+    // Spell check and Echoes' highlights both refresh 300 ms after the last edit;
+    // the burst is judged keystroke to next frame, like `typing`.
+    await page.keyboard.type(TYPING_TEXT, { delay: 1000 / 12 });
+    await sleep(300);
+  },
+};
+
 export const FRAME_DRIVERS: Record<string, FrameDriver> = {
   typing,
   scroll,
@@ -619,4 +663,5 @@ export const FRAME_DRIVERS: Record<string, FrameDriver> = {
   "pane-slide": paneSlide,
   "plugin-remote-ui": pluginRemoteUi,
   "typing-with-highlights": typingWithHighlights,
+  "typing-with-echoes": typingWithEchoes,
 };

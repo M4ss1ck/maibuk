@@ -21,6 +21,12 @@ export const BUDGETS = Object.freeze({
   remoteUiEchoP95Ms: 16,
   /** Remote UI burst p95, in ms. */
   remoteUiBurstP95Ms: 50,
+  /** Echoes highlight update p95, in ms (#451): the host's setHighlights dispatch and decoration build. */
+  echoHighlightUpdateP95Ms: 10,
+  /** Echoes Worker recompute p95, in ms (#451): findEchoes + echoHighlightRanges. */
+  echoWorkerRecomputeP95Ms: 50,
+  /** Echoes refresh latency p95, in ms (#451): spell check's 300 ms debounce plus the 50 ms Worker budget. */
+  echoRefreshLatencyP95Ms: 350,
 });
 
 /** Nearest-rank percentile: sort ascending, take index ceil(p/100 * n) - 1. */
@@ -66,6 +72,13 @@ export function checkBudgets(report) {
   const commandToEffect = report.commandToEffect ?? [];
   const remoteUiEcho = report.remoteUiEcho ?? [];
   const remoteUiBurst = report.remoteUiBurst ?? [];
+  // The Echoes highlight rows (#451) are measured on the Chromium lane; the
+  // WebKitGTK lane drives the native binary and does not produce them, so they
+  // are required (and reported) only for `chromium`.
+  const echoes = report.engine === "chromium";
+  const echoHighlightUpdate = report.echoHighlightUpdate ?? [];
+  const echoWorkerRecompute = report.echoWorkerRecompute ?? [];
+  const echoRefreshLatency = report.echoRefreshLatency ?? [];
 
   const baselineMedian = median(baseline);
   const allowance = Math.max(
@@ -85,12 +98,28 @@ export function checkBudgets(report) {
   rows.push(row("commandToEffect", percentile(commandToEffect, 95), BUDGETS.commandToEffectP95Ms));
   rows.push(row("remoteUiEcho", percentile(remoteUiEcho, 95), BUDGETS.remoteUiEchoP95Ms));
   rows.push(row("remoteUiBurst", percentile(remoteUiBurst, 95), BUDGETS.remoteUiBurstP95Ms));
+  if (echoes) {
+    rows.push(
+      row("echoHighlightUpdate", percentile(echoHighlightUpdate, 95), BUDGETS.echoHighlightUpdateP95Ms)
+    );
+    rows.push(
+      row("echoWorkerRecompute", percentile(echoWorkerRecompute, 95), BUDGETS.echoWorkerRecomputeP95Ms)
+    );
+    rows.push(
+      row("echoRefreshLatency", percentile(echoRefreshLatency, 95), BUDGETS.echoRefreshLatencyP95Ms)
+    );
+  }
   // A lost echo/burst text is a miss, not "cannot measure": the final typed
   // text never showed, so the lane cannot claim the hold it measured.
   rows.push(flagRow("remoteUiEcho text kept", report.remoteUiEchoTextLost === true));
   rows.push(flagRow("remoteUiBurst text kept", report.remoteUiBurstTextLost === true));
 
   const required = { baseline, installed20, persistent3, commandToEffect, remoteUiEcho, remoteUiBurst };
+  if (echoes) {
+    required.echoHighlightUpdate = echoHighlightUpdate;
+    required.echoWorkerRecompute = echoWorkerRecompute;
+    required.echoRefreshLatency = echoRefreshLatency;
+  }
   for (const [id, samples] of Object.entries(startToReady)) required[`startToReady ${id}`] = samples;
   const empty = Object.keys(required).filter((name) => required[name].length === 0);
 

@@ -42,6 +42,7 @@ import type {
   PluginHighlightSet,
   PluginRevealRange,
 } from "@/features/plugins/types";
+import { benchMarksEnabled, pluginHighlightsMeasureName } from "@/lib/bench-marks";
 import { isOutsideLayer } from "@/lib/top-layer";
 
 /** How long a burst of keystrokes coalesces into one `editor.contentChanged`. */
@@ -370,6 +371,11 @@ export function setPluginEditorHighlights(
 ): PluginEditorApplied {
   const entry = resolveFocusedEditor();
   if (!entry) return { status: "no-target" };
+  // The host share of one highlight update — the transaction dispatch and the
+  // decoration build it triggers — timed for the #401 Echoes main-thread budget
+  // (#451). Guarded by `benchMarksEnabled()`, so a shipped build emits nothing.
+  const measured = benchMarksEnabled();
+  const startedAt = measured ? performance.now() : 0;
   entry.editor.view.dispatch(
     entry.editor.state.tr.setMeta(entry.key, {
       type: "set",
@@ -377,7 +383,27 @@ export function setPluginEditorHighlights(
       set: { kind: input.kind, ranges: input.ranges },
     } satisfies HighlightMeta)
   );
+  if (measured) benchHighlightMeasure(pluginId, startedAt);
   return { status: "applied" };
+}
+
+/**
+ * Records one highlight update's host-side duration under
+ * `plugin.highlights:<pluginId>`, the measure the `bench:plugins` lane reads for
+ * its main-thread-per-update row (#451). A missing or partial User Timing API
+ * never breaks a highlight update, and only ever emits when the bench gate is
+ * on.
+ */
+function benchHighlightMeasure(pluginId: string, startedAt: number): void {
+  if (typeof performance === "undefined" || typeof performance.measure !== "function") return;
+  try {
+    performance.measure(pluginHighlightsMeasureName(pluginId), {
+      start: startedAt,
+      end: performance.now(),
+    });
+  } catch {
+    // A missing timing API must never break a highlight update.
+  }
 }
 
 /** Removes every kind of one Plugin's highlights from every open editor (disabling it). */

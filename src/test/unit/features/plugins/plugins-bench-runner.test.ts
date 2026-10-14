@@ -97,6 +97,9 @@ function completeFiles(): { name: string; text: string }[] {
     file(MEASUREMENT_FILES.commandToEffect, [20, 21]),
     file(MEASUREMENT_FILES.remoteUiEcho, { samples: [8, 9], textLost: false }),
     file(MEASUREMENT_FILES.remoteUiBurst, { samples: [30, 31], textLost: false }),
+    file(MEASUREMENT_FILES.echoHighlightUpdate, [5, 6]),
+    file(MEASUREMENT_FILES.echoWorkerRecompute, [3, 4]),
+    file(MEASUREMENT_FILES.echoRefreshLatency, [320, 321]),
   ];
 }
 
@@ -116,6 +119,26 @@ describe("assembleReport", () => {
     expect(report.remoteUiBurst).toEqual([30, 31]);
     expect(report.remoteUiEchoTextLost).toBe(false);
     expect(report.remoteUiBurstTextLost).toBe(false);
+    expect(report.echoHighlightUpdate).toEqual([5, 6]);
+    expect(report.echoWorkerRecompute).toEqual([3, 4]);
+    expect(report.echoRefreshLatency).toEqual([320, 321]);
+  });
+
+  it("requires the Echoes rows on Chromium but not on WebKitGTK (#451)", () => {
+    const withoutEchoes = completeFiles().filter((entry) =>
+      (["echoHighlightUpdate", "echoWorkerRecompute", "echoRefreshLatency"] as const).every(
+        (key) => MEASUREMENT_FILES[key] !== entry.name
+      )
+    );
+    const chromium = assembleReport("chromium", withoutEchoes);
+    expect(chromium.unmeasured).toEqual([
+      `${MEASUREMENT_FILES.echoHighlightUpdate}: no measurement was written`,
+      `${MEASUREMENT_FILES.echoWorkerRecompute}: no measurement was written`,
+      `${MEASUREMENT_FILES.echoRefreshLatency}: no measurement was written`,
+    ]);
+    const webkit = assembleReport("webkitgtk", withoutEchoes);
+    expect(webkit.unmeasured).toBeUndefined();
+    expect(webkit.echoHighlightUpdate).toBeUndefined();
   });
 
   it("carries a lost echo/burst text as a flag beside the samples it gathered", () => {

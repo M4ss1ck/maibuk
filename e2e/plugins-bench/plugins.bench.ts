@@ -10,13 +10,14 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Page } from "@playwright/test";
+import { pluginHighlightsMeasureName } from "@/lib/bench-marks";
 import { ECHO_WARMUP_KEYS, echoWarmupText } from "@/features/plugins/bench/measure";
 import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
-import { SEED_BOOK } from "../support/seed/names";
+import { PERF_BOOK, SEED_BOOK } from "../support/seed/names";
 import { REPO_ROOT } from "../support/seed/seeds";
 import { clonePluginSeeds, seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
-import type { EchoMeasurement } from "./report";
+import { MEASUREMENT_FILES, type EchoMeasurement } from "./report";
 
 function benchOutDir(): string {
   const dir = process.env.PLUGINS_BENCH_OUT;
@@ -455,5 +456,224 @@ test.describe("remoteUiBurst: typing into the echo page in a burst", () => {
     await seedSettings(page, { lastPath: null });
     await page.goto("/plugin/fixture-bench/echo");
     write("remoteUiBurst", await measureEcho(page, ECHO_TEXT, 0));
+  });
+});
+
+// --- Echoes highlights (issue #451): the Echoes budget on the real Plugin.
+//
+// One run in the perfLongChapter Book's long Chapter with Echoes' nearby
+// highlights on measures three things: the host share of one highlight update
+// (the `plugin.highlights:<id>` User Timing measure the host emits per
+// `editor.setHighlights`), Echoes' own Worker recompute (the ring the Plugin
+// exposes on its Worker global), and the keystroke-to-decoration refresh
+// latency. Every sample is one content change: typing a fresh word twice in a
+// row makes a nearby echo, so the highlights refresh and the decoration DOM
+// changes.
+
+/** Echoes' recompute ring, exposed on the Plugin Worker global (#451). */
+const ECHOES_RECOMPUTE_GLOBAL = "__maibukEchoesRecomputeMs";
+/** The measure the host emits per `editor.setHighlights` (#451). */
+const ECHOES_HIGHLIGHTS_MEASURE = pluginHighlightsMeasureName(ECHOES_PLUGIN);
+/** Samples discarded before p95, so a cold first refresh never decides it. */
+const ECHOES_WARMUPS = 2;
+
+/** The page probe's state: armed while a sample types, and the last keydown time. */
+interface EchoesProbe {
+  armed: boolean;
+  lastKey: number;
+}
+
+/** Two uses of one fresh four-letter word in a row make a nearby echo. */
+function echoSampleToken(index: number): string {
+  const first = String.fromCharCode(97 + (index % 26));
+  const second = String.fromCharCode(97 + (Math.floor(index / 26) % 26));
+  return `zq${first}${second}`;
+}
+
+/**
+ * Arms the page probe once: it records the last keydown time while armed, so a
+ * sample's refresh latency is measured from the last keystroke. The decoration
+ * update itself is read from the host's `plugin.highlights:<id>` measure, which
+ * `editor.view.dispatch` records after it has synchronously committed the
+ * decorations to the DOM (the update happens in the dispatch, not a later paint).
+ */
+async function armEchoesProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __benchEchoes?: EchoesProbe };
+    w.__benchEchoes = { armed: false, lastKey: 0 };
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        const probe = w.__benchEchoes;
+        if (probe && probe.armed) probe.lastKey = event.timeStamp;
+      },
+      true
+    );
+  });
+}
+
+/** Starts one sample: armed, no key recorded yet. */
+async function armEchoesSample(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const probe = (window as unknown as { __benchEchoes: EchoesProbe }).__benchEchoes;
+    probe.lastKey = 0;
+    probe.armed = true;
+  });
+}
+
+/** Clears the host's per-update measures, so sampling starts from zero. */
+async function clearEchoesMeasures(page: Page): Promise<void> {
+  await page.evaluate((name) => performance.clearMeasures(name), ECHOES_HIGHLIGHTS_MEASURE);
+}
+
+/** The host's per-update ms samples. */
+async function readEchoesMeasures(page: Page): Promise<number[]> {
+  return page.evaluate(
+    (name) => performance.getEntriesByName(name, "measure").map((entry) => entry.duration),
+    ECHOES_HIGHLIGHTS_MEASURE
+  );
+}
+
+/** The number of host updates applied so far. */
+async function echoesMeasureCount(page: Page): Promise<number> {
+  return page.evaluate(
+    (name) => performance.getEntriesByName(name, "measure").length,
+    ECHOES_HIGHLIGHTS_MEASURE
+  );
+}
+
+/**
+ * The last keystroke-to-update ms for one armed sample: the first host update
+ * recorded at or after the last keydown, ended by `startTime + duration`.
+ */
+async function echoesRefreshLatency(page: Page): Promise<number | null> {
+  return page.evaluate((name) => {
+    const probe = (window as unknown as { __benchEchoes: EchoesProbe }).__benchEchoes;
+    const entries = performance.getEntriesByName(name, "measure");
+    const first = entries.find((entry) => entry.startTime >= probe.lastKey);
+    return first === undefined ? null : first.startTime + first.duration - probe.lastKey;
+  }, ECHOES_HIGHLIGHTS_MEASURE);
+}
+
+/**
+ * The dedicated Workers carrying Echoes' recompute ring. The Plugin Worker runs
+ * inside the sandbox frame, so it is found by looking for the ring on each
+ * Worker's global rather than by URL.
+ */
+async function echoesWorkers(page: Page) {
+  const found = [];
+  for (const worker of page.workers()) {
+    try {
+      const hasRing = await worker.evaluate(
+        (key) => Array.isArray((self as unknown as Record<string, unknown>)[key]),
+        ECHOES_RECOMPUTE_GLOBAL
+      );
+      if (hasRing) found.push(worker);
+    } catch {
+      // Not a Worker this probe can read; skip it.
+    }
+  }
+  return found;
+}
+
+async function clearEchoesRecompute(page: Page): Promise<void> {
+  for (const worker of await echoesWorkers(page)) {
+    await worker.evaluate((key) => {
+      const ring = (self as unknown as Record<string, unknown>)[key];
+      if (Array.isArray(ring)) ring.length = 0;
+    }, ECHOES_RECOMPUTE_GLOBAL);
+  }
+}
+
+async function readEchoesRecompute(page: Page): Promise<number[]> {
+  for (const worker of await echoesWorkers(page)) {
+    const values = await worker.evaluate((key) => {
+      const ring = (self as unknown as Record<string, unknown>)[key];
+      return Array.isArray(ring) ? [...(ring as number[])] : [];
+    }, ECHOES_RECOMPUTE_GLOBAL);
+    if (values.length > 0) return values;
+  }
+  return [];
+}
+
+interface EchoesHighlightsMeasurement {
+  hostUpdateMs: number[];
+  workerRecomputeMs: number[];
+  refreshLatencyMs: number[];
+}
+
+/**
+ * Opens the long Chapter, toggles Echoes' nearby highlights on with its Default
+ * Shortcut, then takes `SAMPLES` highlight updates by typing one fresh word
+ * twice per sample, waiting for each refresh.
+ */
+async function measureEchoesHighlights(page: Page): Promise<EchoesHighlightsMeasurement> {
+  await page.goto("/");
+  // The on-demand Echoes Plugin warm-starts at launch (its Open Echoes Command
+  // is global); its sidebar entry appearing means its Commands are live.
+  await expect(navList(page).getByRole("option", { name: /^Echoes/ })).toBeVisible({
+    timeout: 60_000,
+  });
+
+  const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
+  await expect(card).toHaveCount(1);
+  await page.keyboard.press("1");
+  await expect(card).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: PERF_BOOK.title, level: 1 })).toBeVisible();
+  const editor = page.getByRole("textbox", { name: `Text of ${PERF_BOOK.longChapter}` });
+  await expect(editor).toBeVisible({ timeout: 30_000 });
+  await editor.focus();
+  await page.keyboard.press("ControlOrMeta+End");
+
+  await armEchoesProbe(page);
+  // The Command's Default Shortcut toggles nearby-echo highlights on.
+  await page.keyboard.press("Alt+F7");
+  await expect(page.locator("[data-plugin-highlight]").first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(500);
+
+  await clearEchoesMeasures(page);
+  await clearEchoesRecompute(page);
+
+  const total = ECHOES_WARMUPS + SAMPLES;
+  const refreshes: number[] = [];
+  for (let i = 0; i < total; i++) {
+    await armEchoesSample(page);
+    const before = await echoesMeasureCount(page);
+    const token = echoSampleToken(i);
+    // A leading space keeps each token a separate word, so its two uses are a
+    // nearby echo however the previous sample ended.
+    await page.keyboard.type(` ${token} ${token}`);
+    await page.waitForFunction(
+      ({ name, seen }) => performance.getEntriesByName(name, "measure").length > seen,
+      { name: ECHOES_HIGHLIGHTS_MEASURE, seen: before },
+      { timeout: 20_000 }
+    );
+    const latency = await echoesRefreshLatency(page);
+    if (latency !== null) refreshes.push(latency);
+  }
+
+  return {
+    hostUpdateMs: await readEchoesMeasures(page),
+    workerRecomputeMs: await readEchoesRecompute(page),
+    refreshLatencyMs: refreshes.slice(ECHOES_WARMUPS),
+  };
+}
+
+test.describe("echoesHighlights: typing in the long Chapter with Echoes on", () => {
+  test.use({
+    library: "perfLongChapter",
+    plugins: [ECHOES_PLUGIN],
+    pluginApprovals: [{ pluginId: ECHOES_PLUGIN, granted: ECHOES_PERMISSIONS }],
+    // `maibuk-` is a reserved id prefix, so the folder only parses as a
+    // Built-in; the E2E/bench builds seed the Built-in seam.
+    builtInPlugins: [{ id: ECHOES_PLUGIN }],
+  });
+  test("echoesHighlights", async ({ page }) => {
+    await seedSettings(page, { lastPath: null });
+    const result = await measureEchoesHighlights(page);
+    write(MEASUREMENT_FILES.echoHighlightUpdate, result.hostUpdateMs);
+    write(MEASUREMENT_FILES.echoWorkerRecompute, result.workerRecomputeMs);
+    write(MEASUREMENT_FILES.echoRefreshLatency, result.refreshLatencyMs);
   });
 });

@@ -19,6 +19,9 @@ function baseReport(overrides: Partial<PluginsBenchReport> = {}): PluginsBenchRe
     commandToEffect: [50, 50],
     remoteUiEcho: [10, 10],
     remoteUiBurst: [30, 30],
+    echoHighlightUpdate: [5, 5],
+    echoWorkerRecompute: [4, 4],
+    echoRefreshLatency: [320, 320],
     ...overrides,
   };
 }
@@ -47,6 +50,9 @@ describe("plugins bench budget check", () => {
       commandToEffectP95Ms: 100,
       remoteUiEchoP95Ms: 16,
       remoteUiBurstP95Ms: 50,
+      echoHighlightUpdateP95Ms: 10,
+      echoWorkerRecomputeP95Ms: 50,
+      echoRefreshLatencyP95Ms: 350,
     });
   });
 
@@ -70,6 +76,9 @@ describe("plugins bench budget check", () => {
       "commandToEffect",
       "remoteUiEcho",
       "remoteUiBurst",
+      "echoHighlightUpdate",
+      "echoWorkerRecompute",
+      "echoRefreshLatency",
       "remoteUiEcho text kept",
       "remoteUiBurst text kept",
     ]);
@@ -198,6 +207,57 @@ describe("plugins bench budget check", () => {
 
   it("returns exitCode 1 for a synthetic miss with every sample present", () => {
     expect(checkBudgets(baseReport({ commandToEffect: [200, 200] })).exitCode).toBe(1);
+  });
+
+  it("holds the Echoes highlight rows on Chromium (#451)", () => {
+    const cases: Array<[string, Partial<PluginsBenchReport>, Partial<PluginsBenchReport>]> = [
+      [
+        "echoHighlightUpdate",
+        { echoHighlightUpdate: [10, 10] },
+        { echoHighlightUpdate: [10.1, 10.1] },
+      ],
+      [
+        "echoWorkerRecompute",
+        { echoWorkerRecompute: [50, 50] },
+        { echoWorkerRecompute: [50.1, 50.1] },
+      ],
+      [
+        "echoRefreshLatency",
+        { echoRefreshLatency: [350, 350] },
+        { echoRefreshLatency: [350.1, 350.1] },
+      ],
+    ];
+    for (const [name, passOverride, failOverride] of cases) {
+      expect(checkBudgets(baseReport(passOverride)).exitCode, name).toBe(0);
+      const failed = checkBudgets(baseReport(failOverride));
+      expect(failed.exitCode, name).toBe(1);
+      expect(failed.rows.find((row) => row.name === name)?.pass).toBe(false);
+    }
+  });
+
+  it("requires a Chromium report to carry the Echoes rows", () => {
+    const missing = checkBudgets(
+      baseReport({
+        echoHighlightUpdate: [],
+        echoWorkerRecompute: [],
+        echoRefreshLatency: [],
+      })
+    );
+    expect(missing.exitCode).toBe(2);
+    expect(missing.reasons).toContain(
+      "no samples: echoHighlightUpdate, echoWorkerRecompute, echoRefreshLatency"
+    );
+  });
+
+  it("does not require the Echoes rows on the WebKitGTK lane", () => {
+    const webkit = checkBudgets({
+      ...baseReport({ engine: "webkit" }),
+      echoHighlightUpdate: undefined,
+      echoWorkerRecompute: undefined,
+      echoRefreshLatency: undefined,
+    });
+    expect(webkit.exitCode).toBe(0);
+    expect(webkit.rows.find((row) => row.name === "echoHighlightUpdate")).toBeUndefined();
   });
 
   it("returns exitCode 2 when a required sample array is empty", () => {
