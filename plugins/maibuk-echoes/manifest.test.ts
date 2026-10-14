@@ -49,6 +49,28 @@ describe("Echoes manifest", () => {
     expect(contributes?.itemMenuEntries?.map((entry) => entry.command)).toEqual(["findEchoes"]);
   });
 
+  it("contributes the editor Commands with free Default Shortcuts", () => {
+    const commands = manifest().contributes?.commands ?? [];
+    for (const id of ["toggleHighlights", "nextEcho", "previousEcho"]) {
+      const command = commands.find((candidate) => candidate.id === id);
+      expect(command?.contexts, id).toEqual(["editor"]);
+      expect(command?.defaults ?? [], id).toHaveLength(1);
+    }
+    expect(commands.find((command) => command.id === "toggleHighlights")?.defaults).toEqual([
+      ["Alt+F7"],
+    ]);
+    expect(commands.find((command) => command.id === "nextEcho")?.defaults).toEqual([["Alt+F8"]]);
+    expect(commands.find((command) => command.id === "previousEcho")?.defaults).toEqual([
+      ["Alt+Shift+F8"],
+    ]);
+  });
+
+  it("contributes the toggle as an editor toolbar button", () => {
+    expect(manifest().contributes?.toolbarButtons).toEqual([
+      { id: "toggleHighlights", command: "toggleHighlights", icon: "highlighter" },
+    ]);
+  });
+
   it("contributes one Settings row for detection", () => {
     expect(manifest().contributes?.settingsRows?.map((row) => row.id)).toEqual(["detection"]);
   });

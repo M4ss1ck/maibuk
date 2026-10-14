@@ -46,7 +46,15 @@ import {
   type ReportScope,
   type ReportSource,
 } from "./report";
-import { clampNearbyWindow, readEchoesSettings, writeEchoesSettings } from "./settings";
+import {
+  clampNearbyWindow,
+  DEFAULT_EDITOR_KINDS,
+  readEchoesSettings,
+  readEditorKinds,
+  toggledEditorKind,
+  writeEchoesSettings,
+  writeEditorKinds,
+} from "./settings";
 
 /** The report page id, exactly as the manifest declares it. */
 export const REPORT_PAGE_ID = "report";
@@ -162,6 +170,13 @@ const KIND_UI: Readonly<
   nearby: { tab: "tab.nearby", empty: "empty.nearby", enabled: "nearby" },
   overused: { tab: "tab.overused", empty: "empty.overused", enabled: "overused" },
   phrase: { tab: "tab.phrase", empty: "empty.phrase", enabled: "phrases" },
+};
+
+/** The editor-highlight switch label for each kind. */
+const EDITOR_KIND_LABEL: Readonly<Record<EchoKind, EchoKey>> = {
+  nearby: "settings.editor.nearby",
+  overused: "settings.editor.overused",
+  phrase: "settings.editor.phrase",
 };
 
 /** Adds a word to the ignore list unless it is already there, case-insensitively. */
@@ -576,9 +591,11 @@ function useEchoLanguage(client: PluginClient): string {
 
 /**
  * The `detection` Settings row's body: one switch per echo kind the detection
- * supports, the stemming switch, the nearby-echo window, and the ignore list.
- * Values load from the Plugin's storage on mount and every change is written
- * back, so the row survives a reload; labels come from the runtime catalogs.
+ * supports, the stemming switch, the nearby-echo window, and the ignore list,
+ * then the editor-highlight switches — the kinds the editor paints, nearby only
+ * until the author turns the others on (#451, decision 3). Values load from the
+ * Plugin's storage on mount and every change is written back, so the row
+ * survives a reload; labels come from the runtime catalogs.
  */
 function createDetectionSettings(client: PluginClient): ComponentType {
   function DetectionSettings() {
@@ -587,17 +604,21 @@ function createDetectionSettings(client: PluginClient): ComponentType {
       ...DEFAULT_ECHO_SETTINGS,
       ignore: [],
     }));
+    const [editorKinds, setEditorKinds] = useState<readonly EchoKind[]>(DEFAULT_EDITOR_KINDS);
     // Nothing is written before the stored value has been read, so a slow read
     // cannot be clobbered by the initial defaults.
     const hydrated = useRef(false);
 
     useEffect(() => {
       let cancelled = false;
-      void readEchoesSettings(client).then((stored) => {
-        if (cancelled) return;
-        hydrated.current = true;
-        setSettings(stored);
-      });
+      void Promise.all([readEchoesSettings(client), readEditorKinds(client)]).then(
+        ([stored, kinds]) => {
+          if (cancelled) return;
+          hydrated.current = true;
+          setSettings(stored);
+          setEditorKinds(kinds);
+        }
+      );
       return () => {
         cancelled = true;
       };
@@ -606,10 +627,15 @@ function createDetectionSettings(client: PluginClient): ComponentType {
     useEffect(() => {
       if (!hydrated.current) return;
       void writeEchoesSettings(client, settings);
-    }, [client, settings]);
+      void writeEditorKinds(client, editorKinds);
+    }, [client, settings, editorKinds]);
 
     const update = useCallback((patch: Partial<EchoSettings>) => {
       setSettings((current) => ({ ...current, ...patch }));
+    }, []);
+
+    const toggleKind = useCallback((kind: EchoKind) => {
+      setEditorKinds((current) => toggledEditorKind(current, kind));
     }, []);
 
     return (
@@ -650,6 +676,22 @@ function createDetectionSettings(client: PluginClient): ComponentType {
           selectedKeys={settings.ignore}
           allowsCustomValue
           onChange={(event) => update({ ignore: [...event.detail] })}
+        />
+        <ui.Heading level={3}>{translate(language, "settings.editor.title")}</ui.Heading>
+        <ui.Switch
+          label={translate(language, EDITOR_KIND_LABEL.nearby)}
+          isSelected={editorKinds.includes("nearby")}
+          onChange={() => toggleKind("nearby")}
+        />
+        <ui.Switch
+          label={translate(language, EDITOR_KIND_LABEL.overused)}
+          isSelected={editorKinds.includes("overused")}
+          onChange={() => toggleKind("overused")}
+        />
+        <ui.Switch
+          label={translate(language, EDITOR_KIND_LABEL.phrase)}
+          isSelected={editorKinds.includes("phrase")}
+          onChange={() => toggleKind("phrase")}
         />
       </ui.View>
     );

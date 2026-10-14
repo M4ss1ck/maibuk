@@ -16,7 +16,7 @@ import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { FIND_ECHOES, REPORT_PAGE_ID, SETTINGS_ROW_ID, startEchoes } from "./runtime";
-import { ECHOES_SETTINGS_KEY } from "./settings";
+import { ECHOES_EDITOR_KEY, ECHOES_SETTINGS_KEY } from "./settings";
 import { echoesManifest, settingsStorage, shiftTabTo, tabTo } from "./test-support";
 
 const BOOK = {
@@ -52,6 +52,9 @@ describe("Echoes runtime", () => {
       expect(host.manifest.contributes?.commands?.map((command) => command.id)).toEqual([
         "openEchoes",
         "findEchoes",
+        "toggleHighlights",
+        "nextEcho",
+        "previousEcho",
       ]);
     } finally {
       host.stop();
@@ -170,8 +173,31 @@ describe("Echoes detection settings", () => {
     }
   });
 
-  it("clamps an out-of-range nearby window when it is committed", async () => {
+  it("toggles the editor highlight kinds, nearby only by default", async () => {
     const storage = settingsStorage();
+    const host = settingsHost(storage);
+    try {
+      const page = await host.renderSettingsRow(SETTINGS_ROW_ID);
+      const user = userEvent.setup();
+      await waitFor(() => expect(storage.has(ECHOES_EDITOR_KEY)).toBe(true));
+      expect(storage.get(ECHOES_EDITOR_KEY)).toEqual(["nearby"]);
+
+      const overused = screen.getByRole("switch", { name: "Highlight overused words" });
+      expect(overused).not.toBeChecked();
+      await tabTo(user, overused);
+      expect(overused).toHaveFocus();
+      await user.keyboard(" ");
+      await waitFor(() => expect(storage.get(ECHOES_EDITOR_KEY)).toEqual(["nearby", "overused"]));
+
+      await user.keyboard(" ");
+      await waitFor(() => expect(storage.get(ECHOES_EDITOR_KEY)).toEqual(["nearby"]));
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("clamps an out-of-range nearby window when it is committed", async () => {    const storage = settingsStorage();
     const host = settingsHost(storage);
     try {
       const page = await host.renderSettingsRow(SETTINGS_ROW_ID);

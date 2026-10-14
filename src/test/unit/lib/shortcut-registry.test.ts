@@ -1,7 +1,9 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { EDITOR_COMMANDS } from "@/components/editor/editor-commands";
+import { parsePluginManifest } from "@/features/plugins/manifest-validate";
+import type { PluginManifest } from "@/features/plugins/types";
 import en from "@/locales/en.json";
 import es from "@/locales/es.json";
 import {
@@ -11,11 +13,12 @@ import {
   ROUTE_CONTEXTS,
   SHORTCUT_SECTIONS,
   commandSection,
+  registerPluginCommands,
   type CommandDef,
   type ShortcutContext,
 } from "@/lib/shortcut-registry";
 import { normalizeShortcut } from "@/lib/shortcut-keys";
-import { effectiveShortcuts, findDefaultConflicts } from "@/lib/shortcut-resolve";
+import { defaultShortcuts, effectiveShortcuts, findConflicts, findDefaultConflicts } from "@/lib/shortcut-resolve";
 
 function lookup(messages: unknown, key: string): unknown {
   return key.split(".").reduce<unknown>((node, part) => {
@@ -150,5 +153,81 @@ describe("command registry", () => {
         expect(EDITOR_COMMANDS[id], id).toBeTypeOf("function");
       }
     }
+  });
+});
+
+/**
+ * The Built-in Plugin manifests (#451): their Commands' Default Shortcuts are
+ * the Plugin's own, so `findDefaultConflicts` deliberately ignores them (they
+ * go inactive on a clash, ADR 0024). A Built-in still ships keys its authors
+ * proved free (decision 5), so this gate registers every shipped manifest and
+ * refuses a Default Shortcut that clashes with the core registry or another
+ * Built-in on either the desktop or the web build.
+ */
+describe("built-in Plugin manifest Default Shortcuts", () => {
+  const PLUGINS_DIR = join(process.cwd(), "plugins");
+  const unregisters: Array<() => void> = [];
+  afterEach(() => {
+    while (unregisters.length > 0) unregisters.pop()?.();
+  });
+
+  /** Every Built-in Plugin folder's manifest, parsed with the host's Built-in rules. */
+  function builtInManifests(): PluginManifest[] {
+    return readdirSync(PLUGINS_DIR, { withFileTypes: true })
+      .filter(
+        (entry) => entry.isDirectory() && existsSync(join(PLUGINS_DIR, entry.name, "manifest.json"))
+      )
+      .map((entry) => {
+        const text = readFileSync(join(PLUGINS_DIR, entry.name, "manifest.json"), "utf8");
+        const result = parsePluginManifest(text, { builtIn: true });
+        if (!result.ok) throw new Error(`${entry.name}: ${JSON.stringify(result.problems)}`);
+        return result.manifest;
+      });
+  }
+
+  it("ships Echoes among the manifests it checks", () => {
+    expect(builtInManifests().map((manifest) => manifest.id)).toContain("maibuk-echoes");
+  });
+
+  it("ships no Default Shortcut that conflicts on desktop or web", () => {
+    const manifests = builtInManifests();
+    for (const manifest of manifests) {
+      const commands = manifest.contributes?.commands ?? [];
+      const pages = (manifest.contributes?.pages ?? []).map((page) => page.id);
+      unregisters.push(
+        registerPluginCommands(manifest.id, {
+          defaultLanguage: manifest.defaultLanguage,
+          commands: commands.map((command) => ({
+            id: command.id,
+            label: command.label,
+            contexts: command.contexts,
+            ...(command.defaults !== undefined ? { defaults: command.defaults } : {}),
+            ...(command.web !== undefined ? { web: command.web } : {}),
+          })),
+          ...(pages.length > 0 ? { pages } : {}),
+        })
+      );
+    }
+
+    const conflicts: string[] = [];
+    let checked = 0;
+    for (const manifest of manifests) {
+      for (const command of manifest.contributes?.commands ?? []) {
+        const id = `plugin.${manifest.id}.${command.id}` as const;
+        for (const web of [false, true]) {
+          for (const shortcut of defaultShortcuts(id, web)) {
+            checked += 1;
+            for (const conflict of findConflicts(id, shortcut, {}, web)) {
+              conflicts.push(
+                `${id} ${shortcut.join("+")} (${web ? "web" : "desktop"}) clashes with ${conflict.id}`
+              );
+            }
+          }
+        }
+      }
+    }
+    // Echoes' three editor Commands each ship one Default Shortcut on both builds.
+    expect(checked).toBeGreaterThanOrEqual(6);
+    expect(conflicts).toEqual([]);
   });
 });

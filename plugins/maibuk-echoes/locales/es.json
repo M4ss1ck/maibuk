@@ -3,7 +3,10 @@
   "description": "Señala palabras y frases repetidas lo bastante cerca, o con la frecuencia suficiente, como para que un lector lo note.",
   "commands.openEchoes.label": "Abrir Ecos",
   "commands.findEchoes.label": "Buscar ecos",
+  "commands.toggleHighlights.label": "Alternar resaltados de ecos",
+  "commands.nextEcho.label": "Eco siguiente",
+  "commands.previousEcho.label": "Eco anterior",
   "pages.report.title": "Ecos",
   "settingsRows.detection.label": "Detección de ecos",
-  "settingsRows.detection.description": "Elige qué ecos buscar y a qué distancia cuentan."
+  "settingsRows.detection.description": "Elige qué ecos buscar, a qué distancia cuentan y cuáles resalta el editor."
 }
