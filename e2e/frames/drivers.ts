@@ -515,18 +515,50 @@ async function tableWheelTicks(page: Page): Promise<number> {
   return Math.max(1, Math.ceil(distance / 100));
 }
 
+/** Leaves the echo page by keyboard, so the Worker keeps running (on-demand). */
+async function leaveBenchEcho(page: Page): Promise<void> {
+  await tabTo(page, navOption(page, "Books"));
+  await page.keyboard.press("Enter");
+}
+
+/**
+ * Opens the echo page from the sidebar, then waits for its full Remote UI tree
+ * (the 1,000-row table). The Worker is already running (`prepare`), so this
+ * measures rendering the transplanted Remote UI, not starting the Plugin.
+ */
+async function openBenchEchoFromSidebar(page: Page): Promise<void> {
+  await tabTo(
+    page,
+    page
+      .getByRole("listbox", { name: "Primary navigation" })
+      .getByRole("option", { name: /^Books/ })
+  );
+  await pressUntilFocused(page, "ArrowDown", navOption(page, "Bench echo"));
+  await page.keyboard.press("Enter");
+  await expect(echoInput(page)).toBeVisible({ timeout: 30_000 });
+  await expect(benchTableRowCount(page)).toHaveCount(1000, { timeout: 30_000 });
+}
+
 const pluginRemoteUi: FrameDriver = {
   async prepare({ page }) {
+    // Start the Plugin's Worker by opening its page once, then leave it by
+    // keyboard so the measured window opens the page fresh (its Remote UI tree
+    // is transplanted into the app, not a bare reload). Keystroke echo is
+    // bench:plugins' job (remoteUiEcho); this scenario measures rendering only.
     await openBenchEcho(page);
-    // Warm-up: a short scroll down and back. Keystroke echo is bench:plugins'
-    // job (remoteUiEcho); this scenario measures Remote UI rendering only.
-    const at = await viewportPoint(page, 0.5, 0.5);
-    await page.mouse.move(at.x, at.y);
-    await wheelTicks(page, 0, 100, 5);
-    await wheelTicks(page, 0, -100, 5);
+    await leaveBenchEcho(page);
     await sleep(300);
   },
+  async arrange({ page }) {
+    // Each repetition opens the echo page itself, so bring the app back to the
+    // Books gallery first; the Worker stays alive.
+    await leaveBenchEcho(page);
+    await sleep(200);
+  },
   async measure({ page }) {
+    // The measured span: open the echo page from the sidebar, wait for its
+    // 1,000 rows, then wheel the table top to bottom and back.
+    await openBenchEchoFromSidebar(page);
     const at = await viewportPoint(page, 0.5, 0.5);
     await page.mouse.move(at.x, at.y);
     // The table's whole height in 100 px ticks, top to bottom, then back up.

@@ -318,6 +318,14 @@ export default defineConfig(() => ({
         "src/test/support/plugin-conformance/report.ts",
         "src/test/support/plugin-conformance/wait.ts",
         "scripts/plugin-conformance-gate.mjs",
+        // Plugins bench lane (issue #448): the marks gate and the driver's pure
+        // measurement primitives and seed shape. `driver.ts`, `seed.ts`,
+        // `protocol.ts`, and `index.ts` are deliberately absent: the gated
+        // WebKitGTK driver only runs inside the real app and no Vitest test
+        // reaches them.
+        "src/lib/bench-marks.ts",
+        "src/features/plugins/bench/measure.ts",
+        "src/features/plugins/bench/types.ts",
         // Deep-link / strict link-uri
         "src/features/links/link-uri.ts",
         "src/features/links/navigate.ts",

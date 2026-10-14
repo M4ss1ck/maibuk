@@ -1,4 +1,5 @@
-import { writeFile, readFile } from "@tauri-apps/plugin-fs";
+import { BaseDirectory, writeFile, readFile, readTextFile } from "@tauri-apps/plugin-fs";
+import { appDataDir, join } from "@tauri-apps/api/path";
 import type { FileSystemAdapter } from "@/lib/platform/types";
 
 export const tauriFileSystem: FileSystemAdapter = {
@@ -8,6 +9,22 @@ export const tauriFileSystem: FileSystemAdapter = {
 
   async readFile(path: string): Promise<Uint8Array> {
     return await readFile(path);
+  },
+
+  async readAppConfigTextFile(name: string): Promise<string | null> {
+    const attempts: (() => Promise<string>)[] = [
+      () => readTextFile(name, { baseDir: BaseDirectory.AppConfig }),
+      async () => readTextFile(await join(await appDataDir(), name)),
+      () => readTextFile(name, { baseDir: BaseDirectory.AppData }),
+    ];
+    for (const attempt of attempts) {
+      try {
+        return await attempt();
+      } catch {
+        // The file is missing or the scope refuses this location; try the next.
+      }
+    }
+    return null;
   },
 
   downloadFile(_filename: string, _data: Uint8Array, _mimeType: string): void {

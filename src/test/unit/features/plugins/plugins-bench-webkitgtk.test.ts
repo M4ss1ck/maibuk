@@ -139,4 +139,16 @@ describe("createCapture", () => {
     expect(capture.done()).toBe(false);
     expect(capture.samples()).toEqual([]);
   });
+
+  it("keeps a lost echo/burst text flag and clears it on reset", () => {
+    const capture = createCapture();
+    expect(capture.textLost()).toBe(false);
+    capture.measure([1, 2], true);
+    expect(capture.textLost()).toBe(true);
+    // A later measure without the flag never un-loses the launch.
+    capture.measure([3]);
+    expect(capture.textLost()).toBe(true);
+    capture.reset();
+    expect(capture.textLost()).toBe(false);
+  });
 });

@@ -16,6 +16,7 @@ import { SEED_BOOK } from "../support/seed/names";
 import { REPO_ROOT } from "../support/seed/seeds";
 import { clonePluginSeeds, seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
+import type { EchoMeasurement } from "./report";
 
 function benchOutDir(): string {
   const dir = process.env.PLUGINS_BENCH_OUT;
@@ -277,8 +278,13 @@ async function waitForEcho(page: Page, value: string): Promise<void> {
  * Backspace) back to an empty echo, so a cold first keystroke (JIT, the first
  * Remote UI update) does not decide p95 — the WebKitGTK echo samples were
  * [22,6,3,3,...] — exactly as launch discards two warm-up loads (issue #448).
+ *
+ * When the full typed text never echoes within the timeout the text is lost:
+ * that is a budget miss (exit 1), not "cannot measure", so this returns
+ * `textLost` instead of throwing and the samples gathered before the loss still
+ * count.
  */
-async function measureEcho(page: Page, text: string, delay: number): Promise<number[]> {
+async function measureEcho(page: Page, text: string, delay: number): Promise<EchoMeasurement> {
   const field = page.getByRole("textbox", { name: "Echo input" });
   await expect(field).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Row 1000", { exact: true })).toBeVisible({ timeout: 15_000 });
@@ -330,15 +336,21 @@ async function measureEcho(page: Page, text: string, delay: number): Promise<num
   await page.keyboard.type(text, { delay });
   // Wait for the observer to have recorded the full value, not just for the
   // text to show it, so the last (or, in a coalesced burst, the only) sample
-  // is never lost.
-  await page.waitForFunction(
-    (full) => {
-      const w = window as unknown as { __benchEcho: { mutations: { text: string }[] } };
-      return w.__benchEcho.mutations.some((entry) => entry.text === `echo:${full}`);
-    },
-    text,
-    { timeout: 20_000 }
-  );
+  // is never lost. A timeout means the text was lost: record it as a miss and
+  // keep the samples gathered before it.
+  let textLost = false;
+  try {
+    await page.waitForFunction(
+      (full) => {
+        const w = window as unknown as { __benchEcho: { mutations: { text: string }[] } };
+        return w.__benchEcho.mutations.some((entry) => entry.text === `echo:${full}`);
+      },
+      text,
+      { timeout: 20_000 }
+    );
+  } catch {
+    textLost = true;
+  }
 
   const { keys, mutations } = await page.evaluate(() => {
     const w = window as unknown as {
@@ -356,7 +368,7 @@ async function measureEcho(page: Page, text: string, delay: number): Promise<num
     const mutation = mutations.find((entry) => entry.text.includes(expected));
     if (mutation !== undefined && keys[i] !== undefined) samples.push(mutation.t - keys[i]);
   }
-  return samples;
+  return { samples, textLost };
 }
 
 test.describe("launch: no Plugins", () => {

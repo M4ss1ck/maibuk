@@ -13,6 +13,7 @@ import {
   assembleReport,
   combineExitCodes,
   parsePluginsBenchArgs,
+  shouldBuildPluginFixtures,
   unmeasuredReport,
 } from "../../../../../e2e/plugins-bench/report";
 
@@ -70,6 +71,19 @@ describe("combineExitCodes", () => {
   });
 });
 
+describe("shouldBuildPluginFixtures", () => {
+  it("builds on every run, so the WebKitGTK lane alone still finds the folders", () => {
+    expect(shouldBuildPluginFixtures(false, false)).toBe(true);
+    expect(shouldBuildPluginFixtures(false, true)).toBe(true);
+  });
+
+  it("skips the build under --reuse-build only when every folder already exists", () => {
+    expect(shouldBuildPluginFixtures(true, true)).toBe(false);
+    // The folders are missing: even --reuse-build must build them.
+    expect(shouldBuildPluginFixtures(true, false)).toBe(true);
+  });
+});
+
 function file(name: string, data: unknown): { name: string; text: string } {
   return { name, text: JSON.stringify(data) };
 }
@@ -81,8 +95,8 @@ function completeFiles(): { name: string; text: string }[] {
     file(MEASUREMENT_FILES.launchPersistent3, [105, 106]),
     file(MEASUREMENT_FILES.startToReady, { "fixture-everything-on-demand": [40, 41] }),
     file(MEASUREMENT_FILES.commandToEffect, [20, 21]),
-    file(MEASUREMENT_FILES.remoteUiEcho, [8, 9]),
-    file(MEASUREMENT_FILES.remoteUiBurst, [30, 31]),
+    file(MEASUREMENT_FILES.remoteUiEcho, { samples: [8, 9], textLost: false }),
+    file(MEASUREMENT_FILES.remoteUiBurst, { samples: [30, 31], textLost: false }),
   ];
 }
 
@@ -100,6 +114,21 @@ describe("assembleReport", () => {
     expect(report.commandToEffect).toEqual([20, 21]);
     expect(report.remoteUiEcho).toEqual([8, 9]);
     expect(report.remoteUiBurst).toEqual([30, 31]);
+    expect(report.remoteUiEchoTextLost).toBe(false);
+    expect(report.remoteUiBurstTextLost).toBe(false);
+  });
+
+  it("carries a lost echo/burst text as a flag beside the samples it gathered", () => {
+    const files = completeFiles().map((entry) =>
+      entry.name === MEASUREMENT_FILES.remoteUiBurst
+        ? file(entry.name, { samples: [30, 31], textLost: true })
+        : entry
+    );
+    const report = assembleReport("chromium", files);
+    expect(report.remoteUiBurst).toEqual([30, 31]);
+    expect(report.remoteUiBurstTextLost).toBe(true);
+    expect(report.remoteUiEchoTextLost).toBe(false);
+    expect(report.unmeasured).toBeUndefined();
   });
 
   it("names every missing measurement as unmeasured and leaves its samples empty", () => {
@@ -126,7 +155,7 @@ describe("assembleReport", () => {
     const report = assembleReport("chromium", files);
     expect(report.unmeasured).toEqual([
       `${MEASUREMENT_FILES.remoteUiEcho}: invalid JSON`,
-      `${MEASUREMENT_FILES.remoteUiBurst}: expected an array of numbers`,
+      `${MEASUREMENT_FILES.remoteUiBurst}: expected echo samples`,
     ]);
     expect(report.remoteUiEcho).toEqual([]);
     expect(report.remoteUiBurst).toEqual([]);

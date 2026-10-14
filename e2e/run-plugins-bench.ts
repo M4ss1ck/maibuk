@@ -28,6 +28,7 @@ import {
   assembleReport,
   combineExitCodes,
   parsePluginsBenchArgs,
+  shouldBuildPluginFixtures,
   unmeasuredReport,
 } from "./plugins-bench/report";
 import {
@@ -42,11 +43,19 @@ import {
 } from "./preview-server.mjs";
 import { measureWebKitGtk } from "./plugins-bench/webkitgtk";
 import { buildWeb, root, wallClock } from "./run-steps.mjs";
+import { PLUGIN_FIXTURE_FOLDERS, buildPluginFixtures } from "./support/plugin-fixtures-build";
 
 /** The `VITE_PLUGIN_BENCH=1` build, kept apart from the E2E build. */
 const PLUGINS_BENCH_WEB = "e2e/.output/plugins-bench-web";
 /** Where the specs write their per-measurement JSON, one run dir per run. */
 const MEASUREMENTS_ROOT = "e2e/.output/plugins-bench";
+/** The built fixture Plugins the lanes seed (`e2e/support/plugin-fixtures-build.ts`). */
+const PLUGIN_BUILD_DIR = "e2e/.output/plugins";
+
+/** True when every source-built fixture Plugin folder is already on disk. */
+function pluginFixturesExist(): boolean {
+  return PLUGIN_FIXTURE_FOLDERS.every((name) => existsSync(resolve(root, PLUGIN_BUILD_DIR, name)));
+}
 
 function git(args: string[]): string {
   try {
@@ -155,6 +164,14 @@ async function main(): Promise<void> {
   }
 
   const started = Date.now();
+  // The Chromium specs and the WebKitGTK lane both read the source-built
+  // fixture Plugins from e2e/.output/plugins, and with only `--engine webkitgtk`
+  // nothing else would build them, so the runner builds them once here, before
+  // any lane runs. `--reuse-build` skips it only when they are already on disk.
+  if (shouldBuildPluginFixtures(options.reuseBuild, pluginFixturesExist())) {
+    console.log("[plugins-bench] building the source-built fixture Plugins");
+    await buildPluginFixtures({ origin: "" });
+  }
   const codes: number[] = [];
   for (const engine of options.engines) {
     let report: PluginsBenchReport;

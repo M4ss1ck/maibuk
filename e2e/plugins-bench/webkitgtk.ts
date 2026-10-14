@@ -291,8 +291,6 @@ function seedFor(
   }
 }
 
-/** The measurement state one launch's collector folds. */
-
 function describeScenario(scenario: WebkitScenario): string {
   switch (scenario.kind) {
     case "launch":
@@ -347,13 +345,13 @@ export async function measureWebKitGtk(
       if (request.method === "OPTIONS") return { status: 204 };
       if (request.method === "POST" && request.path === BENCH_COLLECTOR_PATHS.measure) {
         const body = request.body as
-          | { mode?: unknown; samples?: unknown; error?: unknown }
+          | { mode?: unknown; samples?: unknown; textLost?: unknown; error?: unknown }
           | undefined;
         if (typeof body?.error === "string") {
           console.warn(`[plugins-bench] driver ${String(body.mode)}: ${body.error}`);
         }
         if (typeof body?.mode === "string" && Array.isArray(body.samples)) {
-          capture.measure(body.samples as number[]);
+          capture.measure(body.samples as number[], body.textLost === true);
         }
         return { status: 204 };
       }
@@ -400,6 +398,13 @@ export async function measureWebKitGtk(
       const name = measurementFile(scenario);
       if (scenario.kind === "startToReady") {
         startToReady[scenario.id] = collected;
+      } else if (scenario.kind === "remoteUiEcho" || scenario.kind === "remoteUiBurst") {
+        // An echo/burst file carries the samples and whether the full typed text
+        // was lost; the budget check turns a lost text into a miss (exit 1).
+        files.push({
+          name,
+          text: JSON.stringify({ samples: collected, textLost: capture.textLost() }),
+        });
       } else {
         files.push({ name, text: JSON.stringify(collected) });
       }

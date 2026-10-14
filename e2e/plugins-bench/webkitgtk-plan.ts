@@ -148,31 +148,37 @@ export function echoTextFor(samples: number): string {
  */
 export interface LaunchCapture {
   /** Folds one `/bench/measure` payload's samples in, in arrival order. */
-  measure(samples: number[]): void;
+  measure(samples: number[], textLost?: boolean): void;
   /** The driver's `/done` arrived. */
   markDone(): void;
   /** Forgets the previous launch before the next. */
   reset(): void;
   done(): boolean;
   samples(): number[];
+  /** Whether this launch's echo/burst text was lost (never fully echoed). */
+  textLost(): boolean;
 }
 
 /** A fresh one-launch capture. Pure, so the folding is unit-tested. */
 export function createCapture(): LaunchCapture {
   let measured: number[] = [];
+  let lost = false;
   let done = false;
   return {
-    measure(samples) {
+    measure(samples, textLost = false) {
       measured.push(...samples);
+      if (textLost) lost = true;
     },
     markDone() {
       done = true;
     },
     reset() {
       measured = [];
+      lost = false;
       done = false;
     },
     done: () => done,
     samples: () => measured,
+    textLost: () => lost,
   };
 }

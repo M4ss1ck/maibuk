@@ -6,8 +6,8 @@
 import type { PluginsBenchReport } from "../../scripts/plugins-bench-budget.mjs";
 
 /**
- * A lane the runner can measure. `chromium` runs the bench specs; `webkitgtk`
- * is reserved for unit 4b and, until then, records an `unmeasured` report.
+ * A lane the runner can measure. `chromium` runs the bench specs in Playwright;
+ * `webkitgtk` drives the real Tauri Linux binary (`e2e/plugins-bench/webkitgtk.ts`).
  */
 export type PluginsBenchEngine = "chromium" | "webkitgtk";
 
@@ -113,6 +113,26 @@ function isNumberArray(value: unknown): value is number[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "number");
 }
 
+/**
+ * One echo/burst measurement file: the per-key samples and whether the lane
+ * never saw the full typed text echoed within its timeout. A lost text is a
+ * budget miss (the budget check adds a "text kept" row), not "cannot measure",
+ * so the samples gathered before the loss are kept and written here too.
+ */
+export interface EchoMeasurement {
+  samples: number[];
+  textLost: boolean;
+}
+
+function isEchoMeasurement(value: unknown): value is EchoMeasurement {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    isNumberArray(record.samples) &&
+    (record.textLost === undefined || typeof record.textLost === "boolean")
+  );
+}
+
 function isNumberArrayMap(value: unknown): value is Record<string, number[]> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   return Object.values(value as Record<string, unknown>).every(isNumberArray);
@@ -124,7 +144,8 @@ function isNumberArrayMap(value: unknown): value is Record<string, number[]> {
  * `unmeasured` reason, so an incomplete run never reads as a pass or a miss.
  *
  * The report's `engine` field is the report's own vocabulary (`chromium` or
- * `webkit`); `webkitgtk` is the lane name, and unit 4b maps it to `webkit` too.
+ * `webkit`); `webkitgtk` is the lane name, and the `webkitgtk` lane maps it to
+ * `webkit` too.
  */
 export function assembleReport(
   engine: PluginsBenchEngine,
@@ -163,7 +184,18 @@ export function assembleReport(
     }
     return value;
   };
+  const echo = (name: string): EchoMeasurement => {
+    const value = read(name);
+    if (value === undefined) return { samples: [], textLost: false };
+    if (!isEchoMeasurement(value)) {
+      unmeasured.push(`${name}: expected echo samples`);
+      return { samples: [], textLost: false };
+    }
+    return { samples: value.samples, textLost: value.textLost === true };
+  };
 
+  const remoteUiEcho = echo(MEASUREMENT_FILES.remoteUiEcho);
+  const remoteUiBurst = echo(MEASUREMENT_FILES.remoteUiBurst);
   const report: PluginsBenchReport = {
     engine: engine === "webkitgtk" ? "webkit" : "chromium",
     launch: {
@@ -173,17 +205,19 @@ export function assembleReport(
     },
     startToReady: idMap(MEASUREMENT_FILES.startToReady),
     commandToEffect: numbers(MEASUREMENT_FILES.commandToEffect),
-    remoteUiEcho: numbers(MEASUREMENT_FILES.remoteUiEcho),
-    remoteUiBurst: numbers(MEASUREMENT_FILES.remoteUiBurst),
+    remoteUiEcho: remoteUiEcho.samples,
+    remoteUiBurst: remoteUiBurst.samples,
+    remoteUiEchoTextLost: remoteUiEcho.textLost,
+    remoteUiBurstTextLost: remoteUiBurst.textLost,
   };
   if (unmeasured.length > 0) report.unmeasured = unmeasured;
   return report;
 }
 
 /**
- * A report that could not measure anything, for a lane the runner did not run
- * (the `webkitgtk` lane today, or a harness failure). Every required sample
- * array is empty and `unmeasured` is non-empty, so the budget check exits 2.
+ * A report that could not measure anything, for a lane a harness failure kept
+ * from running. Every required sample array is empty and `unmeasured` is
+ * non-empty, so the budget check exits 2.
  */
 export function unmeasuredReport(
   engine: PluginsBenchEngine,
@@ -197,6 +231,8 @@ export function unmeasuredReport(
     commandToEffect: [],
     remoteUiEcho: [],
     remoteUiBurst: [],
+    remoteUiEchoTextLost: false,
+    remoteUiBurstTextLost: false,
   };
 }
 
@@ -211,4 +247,15 @@ export function combineExitCodes(codes: readonly number[]): 0 | 1 | 2 {
     else if (code === 1 && worst === 0) worst = 1;
   }
   return worst;
+}
+
+/**
+ * Whether the runner must build the source-built fixture Plugins into
+ * `e2e/.output/plugins` before it runs a lane. Every run builds them: the
+ * WebKitGTK lane reads the folders directly (nothing else builds them when only
+ * that engine is asked for), and a `--reuse-build` run skips the build only when
+ * every fixture folder is already on disk. Pure, so the decision is unit-tested.
+ */
+export function shouldBuildPluginFixtures(reuseBuild: boolean, fixturesExist: boolean): boolean {
+  return !(reuseBuild && fixturesExist);
 }

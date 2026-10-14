@@ -11,18 +11,17 @@
  * The seed lives in the app **config** dir, not the app data dir: the product's
  * `fs:default` only grants `read-text-file` inside a scope this bench build does
  * not extend, while `fs:allow-appconfig-write-recursive` already grants the
- * config dir (a bench launch writes no Library there of its own). A missing or
- * malformed seed is not fatal: the driver then does nothing, so a mis-launched
- * app is a normal app, never a crashed one.
+ * config dir (a bench launch writes no Library there of its own). The read goes
+ * through the platform layer (`FileSystemAdapter.readAppConfigTextFile`), never
+ * a Tauri API here. A missing or malformed seed is not fatal: the driver then
+ * does nothing, so a mis-launched app is a normal app, never a crashed one.
  */
-
-import { BaseDirectory, readTextFile } from "@tauri-apps/plugin-fs";
-import { appDataDir, join } from "@tauri-apps/api/path";
 
 import { savePluginApproval } from "@/features/plugins/approvals";
 import { BENCH_SEED_FILE } from "@/features/plugins/bench/protocol";
 import { type PluginsBenchSeed, isPluginsBenchSeed } from "@/features/plugins/bench/types";
 import { useTutorialStore } from "@/features/tutorial/store";
+import { getFileSystem } from "@/lib/platform";
 
 let currentSeed: PluginsBenchSeed | null = null;
 
@@ -32,7 +31,7 @@ export function getPluginsBenchSeed(): PluginsBenchSeed | null {
 }
 
 async function readVia(
-  run: () => Promise<string>
+  run: () => Promise<string | null>
 ): Promise<{ text: string | null; error: string | null }> {
   try {
     return { text: await run(), error: null };
@@ -43,25 +42,23 @@ async function readVia(
 
 /**
  * The seed file's parsed contents, or null when it is missing or malformed. The
- * app config dir is tried first (the one the scope permits); the app data dir is
- * a harmless fallback.
+ * adapter tries the app config dir first (the one the scope permits) and the app
+ * data dir second, so a harmless fallback location needs no work here.
  */
 export async function readBenchSeed(): Promise<PluginsBenchSeed | null> {
-  const attempts: (() => Promise<string>)[] = [
-    () => readTextFile(BENCH_SEED_FILE, { baseDir: BaseDirectory.AppConfig }),
-    async () => readTextFile(await join(await appDataDir(), BENCH_SEED_FILE)),
-    () => readTextFile(BENCH_SEED_FILE, { baseDir: BaseDirectory.AppData }),
-  ];
-  for (const attempt of attempts) {
-    const { text, error } = await readVia(attempt);
-    if (text === null) {
-      console.warn("[plugins-bench] no seed file at one location", error);
-      continue;
-    }
-    const parsed: unknown = JSON.parse(text);
-    if (isPluginsBenchSeed(parsed)) return parsed;
+  const fileSystem = await getFileSystem();
+  const { text, error } = await readVia(() => fileSystem.readAppConfigTextFile(BENCH_SEED_FILE));
+  if (text === null) {
+    console.warn("[plugins-bench] no seed file", error);
+    return null;
   }
-  return null;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return isPluginsBenchSeed(parsed) ? parsed : null;
+  } catch {
+    // A malformed seed reads as no seed: the driver then does nothing.
+    return null;
+  }
 }
 
 /**

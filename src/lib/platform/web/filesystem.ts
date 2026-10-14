@@ -13,6 +13,11 @@ export const webFileSystem: FileSystemAdapter = {
     throw new Error("Direct file reading not supported on web. Use dialog.openWithData instead.");
   },
 
+  async readAppConfigTextFile(_name: string): Promise<string | null> {
+    // The web build has no app config or app data directory.
+    return null;
+  },
+
   downloadFile(filename: string, data: Uint8Array, mimeType: string): void {
     const blob = new Blob([new Uint8Array(data)], { type: mimeType });
     const url = URL.createObjectURL(blob);

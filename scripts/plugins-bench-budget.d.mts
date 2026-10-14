@@ -21,13 +21,21 @@ export interface PluginsBenchReport {
   remoteUiEcho: number[];
   /** Remote UI burst ms samples. */
   remoteUiBurst: number[];
+  /**
+   * Whether the echo/burst measurement never saw the full typed text echoed
+   * within its timeout (a lost burst). A lost text is a budget miss (exit 1),
+   * not "cannot measure": the samples gathered before the loss still count.
+   * Absent means the text was kept.
+   */
+  remoteUiEchoTextLost?: boolean;
+  remoteUiBurstTextLost?: boolean;
 }
 
 export interface BudgetRow {
   name: string;
   value: number | null;
   budget: number;
-  unit: "ms";
+  unit: "ms" | "bool";
   pass: boolean | null;
 }
 

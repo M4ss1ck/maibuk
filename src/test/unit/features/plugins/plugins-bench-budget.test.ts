@@ -70,8 +70,41 @@ describe("plugins bench budget check", () => {
       "commandToEffect",
       "remoteUiEcho",
       "remoteUiBurst",
+      "remoteUiEcho text kept",
+      "remoteUiBurst text kept",
     ]);
-    expect(result.rows.every((row) => row.unit === "ms")).toBe(true);
+    // The measured rows are in ms; the text-kept rows are a 0/1 flag.
+    for (const row of result.rows) {
+      expect(row.unit, row.name).toBe(row.name.endsWith("text kept") ? "bool" : "ms");
+    }
+  });
+
+  it("misses when an echo or burst text is lost, keeping the samples gathered before it", () => {
+    const lost = checkBudgets(baseReport({ remoteUiEchoTextLost: true }));
+    expect(lost.exitCode).toBe(1);
+    expect(lost.rows.find((row) => row.name === "remoteUiEcho text kept")).toMatchObject({
+      value: 1,
+      budget: 0,
+      unit: "bool",
+      pass: false,
+    });
+    // The other text-kept row still holds, and the samples gathered before the
+    // loss still count (the remoteUiEcho row is present with its value).
+    expect(lost.rows.find((row) => row.name === "remoteUiBurst text kept")?.pass).toBe(true);
+    expect(lost.rows.find((row) => row.name === "remoteUiEcho")?.value).toBe(10);
+  });
+
+  it("holds both text-kept rows when the report says the text was kept or omits the flag", () => {
+    const explicit = checkBudgets(
+      baseReport({ remoteUiEchoTextLost: false, remoteUiBurstTextLost: false })
+    );
+    expect(explicit.exitCode).toBe(0);
+    expect(explicit.rows.find((row) => row.name === "remoteUiEcho text kept")).toMatchObject({
+      value: 0,
+      pass: true,
+    });
+    // A report without the flags (an older shape) reads as kept.
+    expect(checkBudgets(baseReport()).exitCode).toBe(0);
   });
 
   it("holds the launch delta at the 20 ms floor and fails just past it", () => {

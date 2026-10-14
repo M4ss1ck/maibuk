@@ -4,6 +4,7 @@ import {
   ECHO_WARMUP_KEYS,
   dispatchShortcut,
   dispatchTypingKey,
+  echoTextArrived,
   echoWarmupText,
   findEchoElement,
   findEchoInput,
@@ -141,6 +142,28 @@ describe("echoWarmupText", () => {
     expect(ECHO_WARMUP_KEYS).toBe(2);
     expect(echoWarmupText()).toHaveLength(ECHO_WARMUP_KEYS);
     expect(echoWarmupText(3)).toHaveLength(3);
+  });
+});
+
+describe("echoTextArrived", () => {
+  it("is false while only a prefix of the typed text has echoed", () => {
+    expect(echoTextArrived([{ t: 1, text: "echo:ab" }], "abc")).toBe(false);
+  });
+
+  it("is true once the full typed text has echoed, even with a longer echo after it", () => {
+    expect(
+      echoTextArrived(
+        [
+          { t: 1, text: "echo:abc" },
+          { t: 2, text: "echo:abcd" },
+        ],
+        "abc"
+      )
+    ).toBe(true);
+  });
+
+  it("is false when nothing ever echoed", () => {
+    expect(echoTextArrived([], "abc")).toBe(false);
   });
 });
 

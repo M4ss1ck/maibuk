@@ -24,6 +24,8 @@ import {
   dispatchShortcut,
   dispatchTypingKey,
   ECHO_WARMUP_KEYS,
+  type EchoSamples,
+  echoTextArrived,
   echoWarmupText,
   findEchoElement,
   findEchoInput,
@@ -179,16 +181,20 @@ async function waitForEchoPage(): Promise<{ input: HTMLInputElement; element: El
  * keys: 120 ms for echo, 0 for the burst. Before sampling it types
  * `ECHO_WARMUP_KEYS` warm-up characters, waits for their echo, then clears the
  * field through the native setter + `input` path, so a cold first keystroke
- * (JIT, the first Remote UI update) does not decide p95 (issue #448).
+ * (JIT, the first Remote UI update) does not decide p95 (issue #448). When the
+ * full typed text never echoes within the timeout the text is lost: that is a
+ * budget miss (exit 1), not "cannot measure", so it is recorded in `textLost`
+ * and the samples gathered before the loss still count.
  */
 async function measureEcho(
   input: HTMLInputElement,
   element: Element,
   text: string,
   pace: number
-): Promise<number[]> {
+): Promise<EchoSamples> {
   const keys: number[] = [];
   const mutations: EchoMutation[] = [];
+  let textLost = false;
   const observer = new MutationObserver(() => {
     mutations.push({ t: performance.now(), text: element.textContent ?? "" });
   });
@@ -220,14 +226,19 @@ async function measureEcho(
       dispatchTypingKey(input, text[i], text.slice(0, i + 1));
       await sleep(pace);
     }
-    await pollFor(() => (mutations.some((entry) => entry.text === `echo:${text}`) ? true : null), {
-      timeoutMs: MEASURE_TIMEOUT_MS,
-      sleep,
-    });
+    try {
+      await pollFor(() => (echoTextArrived(mutations, text) ? true : null), {
+        timeoutMs: MEASURE_TIMEOUT_MS,
+        sleep,
+      });
+    } catch {
+      // The full text never echoed: record the loss and keep the samples so far.
+      textLost = true;
+    }
   } finally {
     observer.disconnect();
   }
-  return matchEchoSamples(keys, mutations, text, ECHO_WARMUP_KEYS);
+  return { samples: matchEchoSamples(keys, mutations, text, ECHO_WARMUP_KEYS), textLost };
 }
 
 async function measureLaunch(): Promise<number[]> {
@@ -266,7 +277,7 @@ async function measureCommand(seed: PluginsBenchSeed): Promise<number[]> {
   return samples;
 }
 
-async function measureRemoteUi(seed: PluginsBenchSeed, pace: number): Promise<number[]> {
+async function measureRemoteUi(seed: PluginsBenchSeed, pace: number): Promise<EchoSamples> {
   const text = seed.echoText ?? "";
   await closeOverlays();
   navigateTo("/plugin/fixture-bench/echo");
@@ -274,14 +285,14 @@ async function measureRemoteUi(seed: PluginsBenchSeed, pace: number): Promise<nu
   return measureEcho(input, element, text, pace);
 }
 
-async function runMode(seed: PluginsBenchSeed): Promise<number[]> {
+async function runMode(seed: PluginsBenchSeed): Promise<EchoSamples> {
   switch (seed.mode) {
     case "launch":
-      return measureLaunch();
+      return { samples: await measureLaunch(), textLost: false };
     case "startToReady":
-      return measureStartToReady(seed);
+      return { samples: await measureStartToReady(seed), textLost: false };
     case "commandToEffect":
-      return measureCommand(seed);
+      return { samples: await measureCommand(seed), textLost: false };
     case "remoteUiEcho":
       return measureRemoteUi(seed, ECHO_PACE_MS);
     case "remoteUiBurst":
@@ -301,10 +312,10 @@ async function runMode(seed: PluginsBenchSeed): Promise<number[]> {
 export async function runPluginsBenchDriver(): Promise<void> {
   const seed = getPluginsBenchSeed();
   if (seed === null) return;
-  let samples: number[] = [];
+  let result: EchoSamples = { samples: [], textLost: false };
   let error: string | undefined;
   try {
-    samples = await runMode(seed);
+    result = await runMode(seed);
   } catch (thrown) {
     error = thrown instanceof Error ? thrown.message : String(thrown);
     console.warn(`[plugins-bench] ${seed.mode} failed`, thrown);
@@ -312,7 +323,8 @@ export async function runPluginsBenchDriver(): Promise<void> {
   }
   await post(seed, BENCH_COLLECTOR_PATHS.measure, {
     mode: seed.mode,
-    samples,
+    samples: result.samples,
+    ...(result.textLost ? { textLost: true } : {}),
     ...(error !== undefined ? { error } : {}),
   });
   await post(seed, BENCH_COLLECTOR_PATHS.done);

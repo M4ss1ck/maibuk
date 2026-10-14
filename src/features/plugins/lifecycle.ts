@@ -138,13 +138,13 @@ function messageOf(error: unknown): string {
  * build (`VITE_PLUGIN_BENCH=1`) shows them; a shipped build and an engine
  * without User Timing emit nothing. See `benchMarksEnabled()`.
  */
-function devMark(name: string): void {
+function benchMark(name: string): void {
   if (!benchMarksEnabled()) return;
   if (typeof performance === "undefined" || typeof performance.mark !== "function") return;
   performance.mark(name);
 }
 
-function devMeasure(name: string, startMark: string, endMark: string): void {
+function benchMeasure(name: string, startMark: string, endMark: string): void {
   if (!benchMarksEnabled()) return;
   if (typeof performance === "undefined" || typeof performance.measure !== "function") return;
   try {
@@ -509,7 +509,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       return { ok: false, refusal };
     }
 
-    devMark(startMark);
+    benchMark(startMark);
     setState(entry, { status: "starting", startReason: reason });
 
     // An incompatible manifest stays listed and off (#436): the check runs
@@ -597,8 +597,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     }
 
     entry.runtime = result.plugin;
-    devMark(handshakeMark);
-    devMeasure(`plugin.start.host:${pluginId}`, startMark, handshakeMark);
+    benchMark(handshakeMark);
+    benchMeasure(`plugin.start.host:${pluginId}`, startMark, handshakeMark);
 
     // The dataVersion gate runs before ready (ADR 0023). Data at an older
     // version is migrated by the Plugin's own migrateData, once; a throw
@@ -652,9 +652,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     startHeartbeat(entry);
     armIdle(entry);
     const readyMark = `plugin.start:${pluginId}:ready`;
-    devMark(readyMark);
-    devMeasure(`plugin.start:${pluginId}`, startMark, readyMark);
-    devMeasure(`plugin.start.gate:${pluginId}`, handshakeMark, readyMark);
+    benchMark(readyMark);
+    benchMeasure(`plugin.start:${pluginId}`, startMark, readyMark);
+    benchMeasure(`plugin.start.gate:${pluginId}`, handshakeMark, readyMark);
     return { ok: true, startReason: reason };
   }
 

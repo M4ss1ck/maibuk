@@ -251,3 +251,19 @@ export function matchEchoSamples(
   }
   return samples;
 }
+
+/** One echo/burst measurement: the samples and whether the full text ever echoed. */
+export interface EchoSamples {
+  samples: number[];
+  textLost: boolean;
+}
+
+/**
+ * Whether the echo Text ever showed the full typed `text`. When it never does
+ * within the lane's timeout the text is lost: that is a budget miss (exit 1),
+ * not "cannot measure", so a lane records the loss instead of throwing and the
+ * samples gathered before it still count (issue #448). Pure.
+ */
+export function echoTextArrived(mutations: readonly EchoMutation[], text: string): boolean {
+  return mutations.some((entry) => entry.text === `echo:${text}`);
+}

@@ -43,6 +43,12 @@ function row(name, value, budget) {
   return { name, value, budget, unit: "ms", pass: value === null ? null : value <= budget };
 }
 
+/** A row that holds only when the flag is false: value 1 (lost) against budget 0. */
+function flagRow(name, lost) {
+  const value = lost ? 1 : 0;
+  return { name, value, budget: 0, unit: "bool", pass: value <= 0 };
+}
+
 function delta(installed, baseline) {
   const installedMedian = median(installed);
   const baselineMedian = median(baseline);
@@ -79,6 +85,10 @@ export function checkBudgets(report) {
   rows.push(row("commandToEffect", percentile(commandToEffect, 95), BUDGETS.commandToEffectP95Ms));
   rows.push(row("remoteUiEcho", percentile(remoteUiEcho, 95), BUDGETS.remoteUiEchoP95Ms));
   rows.push(row("remoteUiBurst", percentile(remoteUiBurst, 95), BUDGETS.remoteUiBurstP95Ms));
+  // A lost echo/burst text is a miss, not "cannot measure": the final typed
+  // text never showed, so the lane cannot claim the hold it measured.
+  rows.push(flagRow("remoteUiEcho text kept", report.remoteUiEchoTextLost === true));
+  rows.push(flagRow("remoteUiBurst text kept", report.remoteUiBurstTextLost === true));
 
   const required = { baseline, installed20, persistent3, commandToEffect, remoteUiEcho, remoteUiBurst };
   for (const [id, samples] of Object.entries(startToReady)) required[`startToReady ${id}`] = samples;
