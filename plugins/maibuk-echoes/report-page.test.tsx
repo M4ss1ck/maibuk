@@ -20,7 +20,7 @@ import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { DEFAULT_ECHO_SETTINGS, findEchoes } from "./find-echoes";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
-import { buildReport } from "./report";
+import { buildReport, occurrenceContext } from "./report";
 import { FIND_ECHOES, REPORT_PAGE_ID, startEchoes } from "./runtime";
 import { ECHOES_SETTINGS_KEY } from "./settings";
 
@@ -239,6 +239,39 @@ describe("Echoes report page", () => {
           },
         ])
       );
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("labels an occurrence with its context and describes it with the Chapter title", async () => {
+    const host = reportHost();
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      const row = await screen.findByRole("option", { name: /harbor/ });
+      await tabTo(user, row);
+      await user.keyboard("{Enter}");
+
+      // The echoed word alone would repeat row after row, so the label is the
+      // context around that occurrence and the description is its Chapter.
+      const occurrences = buildReport(
+        findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS),
+        [HARBOR, SHORE]
+      ).nearby[0].occurrences;
+      const options = screen.getAllByRole("option").slice(1, 1 + occurrences.length); // the harbor row's occurrences
+      expect(options).toHaveLength(occurrences.length);
+      occurrences.forEach((occurrence, index) => {
+        expect(options[index]).toHaveTextContent(occurrenceContext(HARBOR, occurrence));
+        expect(options[index]).toHaveTextContent("Chapter One");
+      });
+
+      // Every occurrence's accessible name still tells it apart from the rest.
+      const names = screen.getAllByRole("option").map((option) => option.textContent);
+      expect(new Set(names).size).toBe(names.length);
 
       page.unmount();
     } finally {

@@ -22,7 +22,7 @@ import {
   type EchoSettings,
   findEchoes,
 } from "./find-echoes";
-import { type Token, tokenize } from "./language";
+import { breaksBetween, type Token, tokenize } from "./language";
 
 /** One row of a report tab: one word or phrase, its count, and where it appears. */
 export interface EchoReportRow {
@@ -187,10 +187,15 @@ function compareRows(a: EchoReportRow, b: EchoReportRow): number {
 /** How many words of context an occurrence row shows on each side. */
 export const CONTEXT_WORDS = 6;
 
+/** Marks that a snippet was cut from the middle of its sentence. */
+const ELLIPSIS = "…";
+
 /**
  * About `words` words around an occurrence in its Chapter text, the matched run
- * included in place. Token offsets, not character math, so a word is never
- * clipped; falls back to the whole text when the occurrence is not found.
+ * included in place, with a leading or trailing "…" wherever the window was cut
+ * from the middle of a sentence (a cut that lands on a sentence boundary is not
+ * marked). Token offsets, not character math, so a word is never clipped; falls
+ * back to the whole text when the occurrence is not found.
  */
 export function occurrenceContext(
   chapterText: string,
@@ -202,7 +207,14 @@ export function occurrenceContext(
   if (range === null) return chapterText;
   const first = Math.max(0, range.start - words);
   const last = Math.min(tokens.length - 1, range.end + words);
-  return chapterText.slice(tokens[first].from, tokens[last].to);
+  const snippet = chapterText.slice(tokens[first].from, tokens[last].to);
+  const lead =
+    first > 0 && !breaksBetween(chapterText, tokens[first - 1], tokens[first]) ? ELLIPSIS : "";
+  const tail =
+    last < tokens.length - 1 && !breaksBetween(chapterText, tokens[last], tokens[last + 1])
+      ? ELLIPSIS
+      : "";
+  return `${lead}${snippet}${tail}`;
 }
 
 function tokenRange(

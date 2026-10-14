@@ -308,12 +308,15 @@ test.describe("Echoes report @wf:plugins-echoes @no-webkit", () => {
     await expect(page).toHaveURL(/\/plugin\/maibuk-echoes\/report$/);
     await expect(page.getByRole("heading", { name: "Echoes", level: 1 })).toBeVisible();
 
-    // A tap on a row expands it: its occurrences render under it.
+    // A tap on a row expands it: its occurrences render under it, each labelled
+    // with its own context around the echo (the echoed word alone would repeat).
     const harbor = nearbyList(page).getByRole("option", { name: /^harbor / });
     await expect(harbor).toBeVisible({ timeout: 20_000 });
     await harbor.tap();
     await expect(
-      nearbyList(page).getByRole("option", { name: /The harbor was calm/ }).first()
+      nearbyList(page)
+        .getByRole("option", { name: /The harbor was calm\. The harbor was empty/ })
+        .first()
     ).toBeVisible();
   });
 });

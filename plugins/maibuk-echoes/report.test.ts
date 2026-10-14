@@ -100,13 +100,42 @@ describe("buildReport()", () => {
 });
 
 describe("occurrenceContext()", () => {
-  it("shows about six words on each side with the match in place", () => {
+  it("shows about six words on each side with the match in place, eliding a mid-sentence cut", () => {
     const text =
       "one two three four five six seven harbor eight nine ten eleven twelve thirteen";
     const from = text.indexOf("harbor");
     const context = occurrenceContext(text, occurrence(0, from, from + "harbor".length));
 
-    expect(context).toBe("two three four five six seven harbor eight nine ten eleven twelve thirteen");
+    // The window opens inside the first sentence, so the leading cut is marked;
+    // it runs to the end of the text, so nothing trails.
+    expect(context).toBe(
+      "…two three four five six seven harbor eight nine ten eleven twelve thirteen"
+    );
+  });
+
+  it("elides both sides when the window is cut mid-sentence at both ends", () => {
+    const text =
+      "alpha beta gamma delta epsilon zeta eta harbor theta iota kappa lambda mu nu xi omicron";
+    const from = text.indexOf("harbor");
+    const context = occurrenceContext(text, occurrence(0, from, from + "harbor".length));
+
+    expect(context).toBe("…beta gamma delta epsilon zeta eta harbor theta iota kappa lambda mu nu…");
+  });
+
+  it("does not elide a cut that lands on a sentence boundary", () => {
+    const text = "Ends here. one two harbor three four. five six";
+    const from = text.indexOf("harbor");
+    const context = occurrenceContext(text, occurrence(0, from, from + "harbor".length), 2);
+
+    expect(context).toBe("one two harbor three four");
+  });
+
+  it("does not elide when the whole Chapter fits in the window", () => {
+    const text = "The harbor was calm.";
+    const from = text.indexOf("harbor");
+    expect(occurrenceContext(text, occurrence(0, from, from + "harbor".length))).toBe(
+      "The harbor was calm"
+    );
   });
 
   it("returns the whole text when the occurrence is not found", () => {

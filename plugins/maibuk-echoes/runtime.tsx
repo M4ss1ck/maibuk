@@ -401,6 +401,9 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     const enabledKinds = ECHO_KINDS.filter((kind) => settings[ENABLED_FLAG[kind]]);
     const activeKind = enabledKinds.includes(tab) ? tab : (enabledKinds[0] ?? "nearby");
     const rows = report?.[activeKind] ?? [];
+    // The loaded report Chapters carry only id and text; the Library list the
+    // page already read carries the titles, so map id to title for the rows.
+    const titleById = new Map(chapters.map((chapter) => [chapter.id, chapter.title]));
     const scopeOptions = [
       { value: SCOPE_WHOLE, label: translate(language, "wholeBook") },
       ...chapters.map((chapter) => ({ value: chapter.id, label: chapter.title })),
@@ -438,8 +441,11 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           <ui.CollectionRow
             key={`${rowId}:${index}`}
             id={`${rowId}:${index}`}
-            label={chapterText.slice(occurrence.from, occurrence.to)}
-            description={occurrenceContext(chapterText, occurrence)}
+            // The echoed word alone would repeat row after row; the context
+            // around this occurrence is the label that tells them apart, and the
+            // Chapter it sits in is the right-aligned description.
+            label={occurrenceContext(chapterText, occurrence)}
+            description={chapter === undefined ? "" : (titleById.get(chapter.id) ?? "")}
             onAction={() => {
               if (chapter === undefined) return;
               void client.navigation.openEntity({
