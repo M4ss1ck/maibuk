@@ -119,12 +119,12 @@ describe("buildBuiltInPlugins()", () => {
     expect(() => readdirSync(join(outRoot, "desktop-only"))).toThrow();
   });
 
-  it("writes an index with zero plugins for the empty shipped list, without fixtures", async () => {
+  it("builds the shipped list, Echoes only, without fixtures", async () => {
     const outRoot = tempOutRoot();
     const shipped = JSON.parse(readFileSync(join(REPO_ROOT, "plugins/builtins.json"), "utf8")) as {
       plugins: string[];
     };
-    expect(shipped.plugins).toEqual([]);
+    expect(shipped.plugins).toEqual(["maibuk-echoes"]);
 
     await buildBuiltInPlugins({
       sourceRoot: join(REPO_ROOT, "plugins"),
@@ -134,10 +134,10 @@ describe("buildBuiltInPlugins()", () => {
     });
 
     const names = readdirSync(outRoot);
-    expect(names).toEqual(["index.json"]);
+    expect(names.sort()).toEqual(["index.json", "maibuk-echoes"]);
     expect(names).not.toContain("sample-builtin");
     expect(names).not.toContain("remote-ui");
-    expect(readIndex(outRoot).plugins).toEqual([]);
+    expect(readIndex(outRoot).plugins.map((plugin) => plugin.id)).toEqual(["maibuk-echoes"]);
   });
 });
 

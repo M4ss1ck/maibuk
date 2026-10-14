@@ -25,10 +25,10 @@ plugins/<id>/
 `plugins/builtins.json` lists the ids to build and ship, in order:
 
 ```json
-{ "plugins": [] }
+{ "plugins": ["maibuk-echoes"] }
 ```
 
-The list starts empty; issue #451 adds `maibuk-echoes`. Fixture Plugins under
+Echoes (`maibuk-echoes`) is the first Built-in Plugin. Fixture Plugins under
 `e2e/` or `src/test/` are never bundled; the build only reads this list.
 
 ## Activation
