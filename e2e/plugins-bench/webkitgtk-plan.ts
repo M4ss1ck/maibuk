@@ -10,6 +10,7 @@
  * anything. `webkitgtk.ts` is the process and socket shell around it.
  */
 
+import type { PluginPermissionId } from "@/features/plugins/types";
 import { MEASUREMENT_FILES } from "./report";
 
 /** One launch-configuration scenario: the same three the Chromium lane runs. */
@@ -46,7 +47,7 @@ export interface PluginFolderPlan {
   /** How many clones (0 = one plain copy of `from`). */
   clones: number;
   /** The Plugin Permissions the seeded approval record grants. */
-  granted: readonly string[];
+  granted: readonly PluginPermissionId[];
 }
 
 /** How many app launches one scenario needs, and how many are warm-ups. */

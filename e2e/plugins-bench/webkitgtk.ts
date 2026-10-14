@@ -29,7 +29,7 @@ import { resolve } from "node:path";
 import { BENCH_SEED_FILE, BENCH_COLLECTOR_PATHS } from "@/features/plugins/bench/protocol";
 import type { PluginsBenchSeed } from "@/features/plugins/bench/types";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
-import type { PluginFolderFile } from "@/features/plugins/types";
+import type { PluginApproval, PluginFolderFile, PluginPermissionId } from "@/features/plugins/types";
 import { BENCH_IDENTIFIER, benchConfigOverride } from "@/test/support/plugin-conformance/csp";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
 import type { PluginsBenchReport } from "../../scripts/plugins-bench-budget.mjs";
@@ -41,7 +41,7 @@ import {
   linuxBinaryFor,
 } from "../conformance/linux";
 import type { RunDir } from "../conformance/types";
-import { clonePluginId, clonePluginManifest, clonePluginSeeds } from "../support/storage";
+import { clonePluginId, clonePluginManifest, clonePluginSeeds, type PluginSeed } from "../support/storage";
 import { type MeasurementFile, type PluginsBenchOptions, assembleReport } from "./report";
 import {
   type LaunchCapture,
@@ -72,7 +72,7 @@ interface SeedFolder {
   id: string;
   files: PluginFolderFile[];
   pinnedHash: string;
-  granted: readonly string[];
+  granted: readonly PluginPermissionId[];
 }
 
 /** Adds the desktop host platform to a manifest, so its surfaces register on Tauri. */
@@ -131,14 +131,14 @@ export async function seedFoldersFor(
     if (plan.clones > 0) {
       // Use `clonePluginSeeds` to validate the library is present and to keep
       // the clone count and ids in one place; the ids are re-derived identically.
-      const seeds = clonePluginSeeds(plan.from as never, plan.clones);
+      const seeds = clonePluginSeeds(plan.from as PluginSeed, plan.clones);
       if (seeds.size !== plan.clones) {
         throw new Error(`clonePluginSeeds produced ${seeds.size} of ${plan.clones} clones`);
       }
       for (let index = 1; index <= plan.clones; index += 1) {
         const files = folderFilesFor(root, plan.from, index);
         folders.push({
-          id: clonePluginId(plan.from as never, index),
+          id: clonePluginId(plan.from as PluginSeed, index),
           files,
           pinnedHash: await hashPluginDirectory(files),
           granted: plan.granted,
@@ -167,7 +167,7 @@ function writePluginFolder(pluginsRoot: string, folder: SeedFolder): void {
 }
 
 /** The approval record a seeded folder needs: enabled, pinned to its own hash. */
-function approvalFor(folder: SeedFolder) {
+function approvalFor(folder: SeedFolder): PluginApproval {
   return {
     pluginId: folder.id,
     pinnedHash: folder.pinnedHash,
