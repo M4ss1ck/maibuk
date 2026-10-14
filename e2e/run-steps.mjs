@@ -39,22 +39,26 @@ export function preflight({ allowPlanned }) {
  * animation frame.
  * The build imports the vendored Moonshine WASM, so a clean checkout fetches
  * it first (cached by digest, a no-op afterwards).
+ *
+ * `outDir` lets a lane build to a directory of its own (the Plugins bench's
+ * `VITE_PLUGIN_BENCH=1` build must never leak into the E2E build), and `env`
+ * adds build-time variables on top of the E2E-only Built-in seed.
  */
-export function buildWeb({ sourcemap = false } = {}) {
+export function buildWeb({ sourcemap = false, outDir = "e2e/.output/web-dist", env = {} } = {}) {
   if (process.env.E2E_REUSE_BUILD === "1") return;
   step("dictation WASM runtime (build input)", "node", [
     "scripts/fetch-dictation-runtime.mjs",
     "--web",
   ]);
   step(
-    "build web target -> e2e/.output/web-dist",
+    `build web target -> ${outDir}`,
     "pnpm",
     [
       "exec",
       "vite",
       "build",
       "--outDir",
-      "e2e/.output/web-dist",
+      outDir,
       "--emptyOutDir",
       "--logLevel",
       "warn",
@@ -62,7 +66,7 @@ export function buildWeb({ sourcemap = false } = {}) {
     ],
     // The E2E-only Built-in seed (src/features/plugins/builtin.ts) is compiled
     // in only here; every other build drops it.
-    { VITE_BUILD_TARGET: "web", VITE_E2E_BUILTIN_SEED: "1" }
+    { VITE_BUILD_TARGET: "web", VITE_E2E_BUILTIN_SEED: "1", ...env }
   );
 }
 
