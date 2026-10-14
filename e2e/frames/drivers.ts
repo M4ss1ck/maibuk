@@ -79,7 +79,7 @@ const editorText = (page: Page) =>
 
 /**
  * The measured typing burst: 120 characters, the pace of a fast typist. The
- * `typing`, `plugin-remote-ui`, and `typing-with-highlights` scenarios type the
+ * `typing` and `typing-with-highlights` scenarios type the
  * same text so their keystroke-to-next-frame numbers compare.
  */
 const TYPING_BURST =
@@ -518,25 +518,21 @@ async function tableWheelTicks(page: Page): Promise<number> {
 const pluginRemoteUi: FrameDriver = {
   async prepare({ page }) {
     await openBenchEcho(page);
-    // Warm-up: focus the field, a short scroll down and back, a short sentence.
-    await echoInput(page).focus();
+    // Warm-up: a short scroll down and back. Keystroke echo is bench:plugins'
+    // job (remoteUiEcho); this scenario measures Remote UI rendering only.
     const at = await viewportPoint(page, 0.5, 0.5);
     await page.mouse.move(at.x, at.y);
     await wheelTicks(page, 0, 100, 5);
     await wheelTicks(page, 0, -100, 5);
-    await page.keyboard.type(" The bench warms up.", { delay: 60 });
     await sleep(300);
   },
   async measure({ page }) {
-    await echoInput(page).focus();
     const at = await viewportPoint(page, 0.5, 0.5);
     await page.mouse.move(at.x, at.y);
     // The table's whole height in 100 px ticks, top to bottom, then back up.
     const ticks = await tableWheelTicks(page);
     await wheelTicks(page, 0, 100, ticks);
     await wheelTicks(page, 0, -100, ticks);
-    // The wheel gesture never moved focus from Echo input.
-    await page.keyboard.type(TYPING_TEXT, { delay: 1000 / 12 });
     await sleep(300);
   },
 };

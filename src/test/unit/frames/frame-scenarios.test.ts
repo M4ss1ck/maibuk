@@ -101,8 +101,11 @@ describe("frame scenarios", () => {
       // (WebKit) and android sources lack: both must be skipped, with a reason.
       expect(scenario.skip?.probe, scenario.id).toBeTruthy();
       expect(scenario.skip?.android, scenario.id).toBeTruthy();
-      expect(scenario.recordsInput, scenario.id).toBe(true);
     }
+    // Remote UI rendering is scroll only; typing with highlights records keys.
+    const byId = new Map(pluginScenarios.map((s) => [s.id, s]));
+    expect(byId.get("plugin-remote-ui")?.recordsInput).toBe(false);
+    expect(byId.get("typing-with-highlights")?.recordsInput).toBe(true);
     for (const source of ["probe", "android"] as const) {
       const ids = scenariosFor(source).map((s) => s.id);
       expect(ids, source).not.toContain("plugin-remote-ui");

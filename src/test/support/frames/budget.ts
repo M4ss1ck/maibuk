@@ -78,15 +78,7 @@ export const FRAME_BUDGETS: Readonly<Record<string, ScenarioBudget>> = {
     },
   },
   "pane-slide": { overrides: {}, reasons: {} },
-  "plugin-remote-ui": {
-    overrides: { inputP95Intervals: 1, minInputs: 60 },
-    reasons: {
-      inputP95Intervals:
-        "issue #448: each keystroke round-trips through the Plugin and back, so the frame that renders it starts within one refresh interval, judged like typing",
-      minInputs:
-        "half the measured burst of 120 characters, so a lost Remote UI echo listener is not-measured",
-    },
-  },
+  "plugin-remote-ui": { overrides: {}, reasons: {} },
   "typing-with-highlights": {
     overrides: { inputP95Intervals: 1, minInputs: 60 },
     reasons: {

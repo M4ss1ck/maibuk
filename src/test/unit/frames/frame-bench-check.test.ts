@@ -76,10 +76,16 @@ describe("the frozen frame budget", () => {
     expect(budgetFor("typing")).toMatchObject({ inputP95Intervals: 1 });
   });
 
-  it("judges each Plugin scenario's keystroke to next frame like typing", () => {
-    for (const id of ["plugin-remote-ui", "typing-with-highlights"]) {
-      expect(budgetFor(id), id).toMatchObject({ inputP95Intervals: 1, minInputs: 60 });
-    }
+  it("judges typing with Plugin highlights keystroke to next frame like typing", () => {
+    expect(budgetFor("typing-with-highlights")).toMatchObject({
+      inputP95Intervals: 1,
+      minInputs: 60,
+    });
+  });
+
+  it("judges Plugin Remote UI rendering by the default budget, with no keystrokes", () => {
+    // Keystroke echo through a Plugin is bench:plugins' remoteUiEcho row.
+    expect(budgetFor("plugin-remote-ui")).toEqual(budgetFor("scroll"));
   });
 });
 

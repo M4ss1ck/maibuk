@@ -171,14 +171,14 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
   },
   {
     id: "plugin-remote-ui",
-    title: "Plugin Remote UI: scrolling 1,000 rows and typing into Echo input",
+    title: "Plugin Remote UI: rendering 1,000 rows while scrolling",
     seed: "empty",
     warmUp:
-      "Install the fixture-bench Plugin, open its echo page, focus Echo input, wheel the table once down and back, and type one sentence.",
+      "Install the fixture-bench Plugin, open its echo page, and wheel the table once down and back.",
     measured:
-      "Wheel the 1,000-row table from its top to the last row and back in 100 px ticks, one per frame, then type 120 characters at 12 per second into Echo input, whose every keystroke round-trips through the Plugin.",
+      "Wheel the 1,000-row Remote UI table from its top to the last row and back in 100 px ticks, one per frame. Keystroke echo through the Plugin is measured by bench:plugins (remoteUiEcho, remoteUiBurst), not here.",
     repetitions: 3,
-    recordsInput: true,
+    recordsInput: false,
     plugins: [{ id: "fixture-bench", granted: ["editor:read", "editor:decorate"] }],
     skip: {
       probe:
