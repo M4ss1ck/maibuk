@@ -8,6 +8,7 @@ import {
   launchPlan,
   measurementFile,
   pluginFoldersFor,
+  isStaleBenchInstance,
 } from "../../../../../e2e/plugins-bench/webkitgtk-plan";
 
 describe("benchScenarios", () => {
@@ -150,5 +151,22 @@ describe("createCapture", () => {
     expect(capture.textLost()).toBe(true);
     capture.reset();
     expect(capture.textLost()).toBe(false);
+  });
+});
+
+describe("isStaleBenchInstance", () => {
+  const root = "/repo/e2e/.output/bench-webkitgtk";
+  const environ = (home: string) => `PATH=/usr/bin\0HOME=${home}\0LANG=C\0`;
+
+  it("matches a bench launch whose HOME is inside the bench output tree", () => {
+    expect(isStaleBenchInstance(environ(`${root}/1791947653099/homes/home-hYRudH`), root)).toBe(
+      true
+    );
+  });
+
+  it("never matches the author's own app or a sibling directory", () => {
+    expect(isStaleBenchInstance(environ("/home/author"), root)).toBe(false);
+    expect(isStaleBenchInstance(environ(`${root}-other/1/homes/h`), root)).toBe(false);
+    expect(isStaleBenchInstance("PATH=/usr/bin\0", root)).toBe(false);
   });
 });

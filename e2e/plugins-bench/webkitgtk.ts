@@ -16,20 +16,17 @@
 //
 // Not in CI: real app timing on a shared machine is noise.
 
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { BENCH_SEED_FILE, BENCH_COLLECTOR_PATHS } from "@/features/plugins/bench/protocol";
 import type { PluginsBenchSeed } from "@/features/plugins/bench/types";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
-import type { PluginApproval, PluginFolderFile, PluginPermissionId } from "@/features/plugins/types";
+import type {
+  PluginApproval,
+  PluginFolderFile,
+  PluginPermissionId,
+} from "@/features/plugins/types";
 import { BENCH_IDENTIFIER, benchConfigOverride } from "@/test/support/plugin-conformance/csp";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
 import type { PluginsBenchReport } from "../../scripts/plugins-bench-budget.mjs";
@@ -41,13 +38,19 @@ import {
   linuxBinaryFor,
 } from "../conformance/linux";
 import type { RunDir } from "../conformance/types";
-import { clonePluginId, clonePluginManifest, clonePluginSeeds, type PluginSeed } from "../support/storage";
+import {
+  clonePluginId,
+  clonePluginManifest,
+  clonePluginSeeds,
+  type PluginSeed,
+} from "../support/storage";
 import { type MeasurementFile, type PluginsBenchOptions, assembleReport } from "./report";
 import {
   type LaunchCapture,
   type WebkitScenario,
   benchScenarios,
   createCapture,
+  isStaleBenchInstance,
   echoTextFor,
   launchPlan,
   measurementFile,
@@ -216,7 +219,10 @@ function launchEnv(dirs: LaunchDirs): NodeJS.ProcessEnv {
 
 /** The page a Plugin's first declared surface opens, from its built manifest. */
 function pageIdFor(root: string, pluginId: string): string {
-  for (const dir of [resolve(root, PLUGIN_BUILD_DIR, pluginId), resolve(root, "plugins", pluginId)]) {
+  for (const dir of [
+    resolve(root, PLUGIN_BUILD_DIR, pluginId),
+    resolve(root, "plugins", pluginId),
+  ]) {
     const manifestPath = resolve(dir, "manifest.json");
     if (!existsSync(manifestPath)) continue;
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
@@ -307,12 +313,35 @@ function describeScenario(scenario: WebkitScenario): string {
  * samples into a `PluginsBenchReport` for the `webkit` engine, and returns it.
  * Throws on any missing prerequisite or harness failure.
  */
+/**
+ * Stops any bench launch a killed runner left behind (see
+ * `isStaleBenchInstance`); without this the next launch exits at once.
+ */
+function stopStaleBenchInstances(benchRoot: string): void {
+  for (const pid of readdirSync("/proc").filter((name) => /^\d+$/.test(name))) {
+    let environ: string;
+    try {
+      environ = readFileSync(`/proc/${pid}/environ`, "utf8");
+    } catch {
+      continue; // another user's process, or it already exited
+    }
+    if (!isStaleBenchInstance(environ, benchRoot)) continue;
+    console.warn(`[plugins-bench] stopping a stale bench launch (pid ${pid})`);
+    try {
+      process.kill(Number(pid), "SIGTERM");
+    } catch {
+      // it exited between the read and the kill
+    }
+  }
+}
+
 export async function measureWebKitGtk(
   root: string,
   options: PluginsBenchOptions,
   started: number
 ): Promise<PluginsBenchReport> {
   assertLinuxPrerequisites();
+  stopStaleBenchInstances(resolve(root, RUN_ROOT));
 
   const release = process.env.PLUGINS_BENCH_PROFILE === "release";
   const runDir: RunDir = {

@@ -182,3 +182,18 @@ export function createCapture(): LaunchCapture {
     textLost: () => lost,
   };
 }
+
+/**
+ * Whether a process environment (`/proc/<pid>/environ`, NUL-separated) belongs
+ * to a bench launch: its HOME sits inside the bench output tree. A launch the
+ * runner could not reap (the runner was killed) keeps the single-instance lock,
+ * so every later launch exits at once and reads as "the app died". Only a HOME
+ * under `root` matches, so the author's own app is never touched.
+ */
+export function isStaleBenchInstance(environ: string, root: string): boolean {
+  const home = environ
+    .split("\0")
+    .find((entry) => entry.startsWith("HOME="))
+    ?.slice("HOME=".length);
+  return home !== undefined && home.startsWith(`${root.replace(/\/+$/, "")}/`);
+}
