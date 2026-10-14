@@ -52,7 +52,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
 import { scopePluginCss } from "@/features/plugins/remote-ui/css-scope";
 import { createEchoTracker, type PluginEchoTracker } from "@/features/plugins/remote-ui/echo";
-import { useRestoreFocus } from "@/hooks";
+import { useItemContextMenu, useRestoreFocus } from "@/hooks";
 import { openExternal } from "@/lib/platform";
 import { PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 import type { PluginUiOption } from "@/plugin-sdk/ui.generated";
@@ -1050,10 +1050,20 @@ function CollectionRowHost({
       onAction: () => onMenuAction?.(item.value),
     })
   );
+  // An expandable row gives Enter to its expansion, and a listbox item's ⋯
+  // button is not a Tab stop, so the row's Item Menu also opens on the same
+  // context-menu gesture Maibuk's own lists use (Shift+F10, the Context Menu
+  // key, a right click, a touch long-press) while the row has focus.
+  const { itemProps, setOwnerRef } = useItemContextMenu({
+    onOpen: () => setMenuOpen(true),
+    isDisabled: actions.length === 0,
+  });
   return (
     <ListBoxItem
       // Key by the remote `id`: React Aria refuses to mutate an item's id in place, so a new id remounts the row.
       key={id}
+      ref={setOwnerRef}
+      {...itemProps}
       id={id}
       textValue={label}
       isDisabled={isDisabled}

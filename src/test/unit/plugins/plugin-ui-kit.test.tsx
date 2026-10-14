@@ -216,6 +216,40 @@ describe("the Remote UI kit, part 2", () => {
       expect(actions).toEqual(["rename"]);
     });
 
+    it("opens an expandable row's Item Menu with Shift+F10 while the row has focus @ui-kbd:maibuk-collection-row", async () => {
+      harness = renderRemoteUi();
+      const actions: string[] = [];
+      function Plugin() {
+        const [expanded, setExpanded] = useState(false);
+        return (
+          <ui.Collection label="Echoes" selectionMode="none">
+            <ui.CollectionRow
+              id="harbor"
+              label="harbor"
+              isExpandable
+              isExpanded={expanded}
+              onExpandedChange={(event) => setExpanded(event.detail)}
+              menuItems={[{ value: "ignore", label: "Ignore this word" }]}
+              onMenuAction={(event) => actions.push(event.detail)}
+            >
+              <ui.Text>harbor was calm</ui.Text>
+            </ui.CollectionRow>
+          </ui.Collection>
+        );
+      }
+      await harness.mount(<Plugin />);
+
+      // Enter expands an expandable row, so its Item Menu needs the context-menu
+      // gesture (Shift+F10) that Maibuk's other lists use.
+      await userEvent.tab();
+      await userEvent.keyboard("{Shift>}{F10}{/Shift}");
+      await screen.findByRole("menu");
+      await userEvent.keyboard("{ArrowDown}");
+      await userEvent.keyboard("{Enter}");
+
+      expect(actions).toEqual(["ignore"]);
+    });
+
     it("gives the kit IconButton a coarse-pointer target", async () => {
       harness = renderRemoteUi();
       await harness.mount(<ui.IconButton label="Mark favourite" icon="star" />);
