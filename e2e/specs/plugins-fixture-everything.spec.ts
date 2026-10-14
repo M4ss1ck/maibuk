@@ -286,10 +286,12 @@ test.describe("fixture-everything contributions @wf:plugins-contributions @no-we
     });
   });
 
-  test("the Settings row the Plugin declares renders", async ({ page }) => {
+  test("the Settings row the Plugin declares mounts the Plugin's own controls", async ({ page }) => {
     await openPluginsSection(page);
     await expandPluginRow(page);
-    await expect(page.getByRole("textbox", { name: "Fixture row" })).toBeVisible();
+    // The row's body is the Plugin's Remote UI, not a host placeholder field;
+    // the switch it draws is the proof the mount reached the Worker (#450).
+    await expect(page.getByRole("switch", { name: "Fixture switch" })).toBeVisible();
     await capture(page, "plugins-fixture-settings-row");
   });
 

@@ -134,7 +134,7 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
       await expect(dialog).toBeHidden();
       // The Worker ran, and the Plugin's contributed Settings row is installed.
       await expect(ran(page)).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByRole("textbox", { name: "Approvals kept data" })).toBeVisible();
+      await expect(page.getByRole("switch", { name: "Approvals kept data" })).toBeVisible();
     });
   });
 
@@ -176,7 +176,7 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
       await openPluginsSection(page);
       await expandPluginRow(page);
       // Its contributed Settings row is present while it is installed.
-      await expect(page.getByRole("textbox", { name: "Approvals kept data" })).toBeVisible();
+      await expect(page.getByRole("switch", { name: "Approvals kept data" })).toBeVisible();
 
       const revoke = page.getByRole("button", {
         name: "Disable Plugin and revoke access",
@@ -192,7 +192,7 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
         page.getByText("Required access is missing. Review and approve it to enable this Plugin.")
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Review and enable", exact: true })).toBeVisible();
-      await expect(page.getByRole("textbox", { name: "Approvals kept data" })).toHaveCount(0);
+      await expect(page.getByRole("switch", { name: "Approvals kept data" })).toHaveCount(0);
     });
   });
 

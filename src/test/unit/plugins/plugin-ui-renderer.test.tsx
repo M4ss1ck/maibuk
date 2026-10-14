@@ -226,6 +226,38 @@ describe("the Remote UI renderer", () => {
       expect(commits.at(-1)).toBe(200);
     });
 
+    it("keeps the typed text while typing and clamps only on commit @ui-kbd:maibuk-number-field", async () => {
+      const commits: number[] = [];
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.NumberField
+          label="Count"
+          value={50}
+          minValue={10}
+          maxValue={200}
+          onInput={() => {}}
+          onChange={(event) => commits.push(event.detail)}
+        />
+      );
+      const field = screen.getByRole("textbox", { name: "Count" });
+      await userEvent.tab();
+      expect(field).toHaveFocus();
+      // In range: the input shows exactly what was typed, never a snapped value.
+      await userEvent.keyboard("{Control>}a{/Control}120");
+      expect(field).toHaveValue("120");
+      await userEvent.tab();
+      expect(commits.at(-1)).toBe(120);
+      expect(field).toHaveValue("120");
+
+      // Below the minimum: still typed as-is, clamped only once committed.
+      await userEvent.click(field);
+      await userEvent.keyboard("{Control>}a{/Control}5");
+      expect(field).toHaveValue("5");
+      await userEvent.tab();
+      expect(commits.at(-1)).toBe(10);
+      expect(field).toHaveValue("10");
+    });
+
     it("fires onChange with the parsed number on Enter @ui-kbd:maibuk-number-field", async () => {
       const commits: number[] = [];
       harness = renderRemoteUi();

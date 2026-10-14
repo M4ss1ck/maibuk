@@ -21,6 +21,8 @@ import {
 } from "@/plugin-sdk";
 import {
   DEFAULT_ECHO_SETTINGS,
+  NEARBY_WINDOW_MAX,
+  NEARBY_WINDOW_MIN,
   type EchoSettings,
 } from "./find-echoes";
 import { translate } from "./i18n";
@@ -266,8 +268,11 @@ function createDetectionSettings(client: PluginClient): ComponentType {
         <ui.NumberField
           label={translate(language, "settings.nearbyWindow")}
           value={settings.nearbyWindow}
-          // The plugin clamps the committed value to the range detection
-          // accepts; the host field carries no bounds so typing stays natural.
+          // The field carries detection's own range so a typed value is clamped
+          // on commit; the settings module clamps again as the storage guard,
+          // so anything read from a stale or malformed store stays in range.
+          minValue={NEARBY_WINDOW_MIN}
+          maxValue={NEARBY_WINDOW_MAX}
           onChange={(event) => update({ nearbyWindow: clampNearbyWindow(event.detail) })}
         />
         <ui.MultiSelectCombobox

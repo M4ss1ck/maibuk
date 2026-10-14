@@ -250,38 +250,45 @@ function NumberFieldHost({
   onInput,
   onChange,
 }: NumberFieldHostProps) {
-  const { local, send } = useHostValue(value === undefined ? undefined : String(value), (next) => {
-    const parsed = parseNumber(next);
-    if (parsed !== undefined) onInput?.(parsed);
-  });
-  // The value the Plugin hears on commit is the parsed, min/max-clamped number.
-  // React Aria owns stepping and reports the snapped value through its own
-  // `onChange`; Enter and blur commit `local` directly, because feeding the
-  // typed text back as the controlled `value` makes React Aria's own commit a
-  // no-op (the controlled value already equals the snapped one). The ref keeps a
-  // later blur from repeating the value a step already reported.
-  const lastCommitted = useRef<number | null>(null);
-  const commit = useCallback(
-    (next: number) => {
-      const clamped = clampNumber(next, minValue, maxValue);
-      if (lastCommitted.current === clamped) return;
-      lastCommitted.current = clamped;
-      onChange?.(clamped);
+  // React Aria owns the field's text; the host feeds it only the committed
+  // number, so typing never snaps. Feeding the typed value back through the
+  // controlled `value` made React Aria clamp mid-keystroke (typing 120 into a
+  // 10-200 field landed on 200); instead the input shows exactly what is typed
+  // and only blur, Enter, or stepping parse and clamp it (#450).
+  const [committed, setCommitted] = useState<number | undefined>(value);
+  // The in-flight echo rule, as for the text fields: a value the host did not
+  // report is a programmatic reset, while an echo of a reported value is
+  // dropped so a burst of keystrokes is never rolled back.
+  const tracker = useRef<PluginEchoTracker | null>(null);
+  tracker.current ??= createEchoTracker();
+  // The number the host last reported, so a repeated commit is not sent twice
+  // and an echo of it is not read as a reset.
+  const reported = useRef<number | undefined>(value);
+  useEffect(() => {
+    if (value === undefined) return;
+    if (!tracker.current?.shouldApply(String(value))) return;
+    reported.current = value;
+    setCommitted(value);
+  }, [value]);
+  const report = useCallback(
+    (next: number | undefined) => {
+      if (next === undefined) return;
+      tracker.current?.sent(String(next));
+      if (reported.current === next) return;
+      reported.current = next;
+      setCommitted(next);
+      onChange?.(next);
     },
-    [minValue, maxValue, onChange]
+    [onChange]
   );
-  const commitLocal = useCallback(() => {
-    const parsed = parseNumber(local);
-    if (parsed !== undefined) commit(parsed);
-  }, [local, commit]);
   return (
     <AriaNumberField
-      value={parseNumber(local)}
-      // RAC's `onChange` fires on commit (blur, Enter, stepping); only a real
-      // number is reported. Live typing is read from the input's own `onInput`
-      // below, so the Plugin sees each keystroke the way it does from a text field.
+      // A controlled committed number: stable while typing, updated on commit
+      // and on a programmatic reset. React Aria reports the parsed, min/max-
+      // clamped number through `onChange` on commit (blur, Enter, stepping).
+      value={committed}
       onChange={(next) => {
-        if (Number.isFinite(next)) commit(next);
+        if (Number.isFinite(next)) report(clampNumber(next, minValue, maxValue));
       }}
       minValue={minValue}
       maxValue={maxValue}
@@ -294,11 +301,14 @@ function NumberFieldHost({
       <AriaLabel className="block text-sm font-medium mb-1.5">{label}</AriaLabel>
       <AriaInput
         className={INPUT_CLASS}
-        onInput={(event) => send(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") commitLocal();
+        // Live typing is reported to the Plugin the way a text field reports
+        // each keystroke, without ever changing the controlled committed value.
+        onInput={(event) => {
+          const parsed = parseNumber(event.currentTarget.value);
+          if (parsed === undefined) return;
+          tracker.current?.sent(String(parsed));
+          onInput?.(parsed);
         }}
-        onBlur={commitLocal}
       />
       {description && (
         <AriaText slot="description" className="mt-1 block text-sm text-muted-foreground">
