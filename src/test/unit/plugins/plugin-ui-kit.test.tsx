@@ -250,6 +250,84 @@ describe("the Remote UI kit, part 2", () => {
       expect(document.activeElement).toHaveAttribute("data-key", "two");
     });
 
+    it("replaces the rows when the Plugin sends rows with new ids", async () => {
+      harness = renderRemoteUi();
+      let setRows: (rows: string[]) => void = () => {};
+      function Plugin() {
+        const [rows, set] = useState(["dark", "night"]);
+        setRows = set;
+        return (
+          <ui.Collection label="Echoes" selectionMode="none">
+            {/* Key by the Plugin's own position so the host reuses the remote node and only its id changes. */}
+            {rows.map((id, index) => (
+              <ui.CollectionRow key={index} id={id} label={id} />
+            ))}
+          </ui.Collection>
+        );
+      }
+      await harness.mount(<Plugin />);
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(["dark", "night"]);
+
+      await act(async () => {
+        setRows(["p1", "p2", "p3"]);
+      });
+
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(["p1", "p2", "p3"]);
+    });
+
+    it("keeps focus in the listbox when the focused row is removed (Ignore this word)", async () => {
+      harness = renderRemoteUi();
+      let setRows: (rows: string[]) => void = () => {};
+      function Plugin() {
+        const [rows, set] = useState(["dark", "night", "gloom"]);
+        setRows = set;
+        return (
+          <ui.Collection label="Echoes" selectionMode="none">
+            {/* The report keys a row by its own id, so ignoring one leaves the other ids untouched. */}
+            {rows.map((id) => (
+              <ui.CollectionRow key={id} id={id} label={id} />
+            ))}
+          </ui.Collection>
+        );
+      }
+      await harness.mount(<Plugin />);
+      await userEvent.tab();
+      await userEvent.keyboard("{ArrowDown}");
+      expect(document.activeElement).toHaveTextContent("night");
+
+      // The report removes the ignored row only; it never remounts the list.
+      await act(async () => {
+        setRows(["dark", "gloom"]);
+      });
+
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(["dark", "gloom"]);
+      expect(screen.getByRole("listbox").contains(document.activeElement)).toBe(true);
+    });
+
+    it("keeps both rows when the Plugin replaces them with a reordered list", async () => {
+      harness = renderRemoteUi();
+      let setRows: (rows: string[]) => void = () => {};
+      function Plugin() {
+        const [rows, set] = useState(["dark", "night"]);
+        setRows = set;
+        return (
+          <ui.Collection label="Echoes" selectionMode="none">
+            {/* Key by the Plugin's own position so the host reuses the remote node and only its id changes. */}
+            {rows.map((id, index) => (
+              <ui.CollectionRow key={index} id={id} label={id} />
+            ))}
+          </ui.Collection>
+        );
+      }
+      await harness.mount(<Plugin />);
+
+      await act(async () => {
+        setRows(["night", "dark"]);
+      });
+
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(["night", "dark"]);
+    });
+
     it("renders a read-only table @ui:maibuk-table @ui:maibuk-table-row", async () => {
       harness = renderRemoteUi();
       await harness.mount(

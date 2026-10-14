@@ -1052,6 +1052,8 @@ function CollectionRowHost({
   );
   return (
     <ListBoxItem
+      // Key by the remote `id`: React Aria refuses to mutate an item's id in place, so a new id remounts the row.
+      key={id}
       id={id}
       textValue={label}
       isDisabled={isDisabled}
