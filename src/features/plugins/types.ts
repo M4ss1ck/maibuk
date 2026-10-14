@@ -688,6 +688,12 @@ export interface TestNavigation {
   reveal?: PluginRevealRange;
 }
 
+/** One `navigation.openPage` a Plugin asked for, in order. */
+export interface TestPageNavigation {
+  pluginId: string;
+  pageId: string;
+}
+
 export interface TestNotification {
   variant: string;
   message: string;
@@ -736,6 +742,8 @@ export interface TestHost {
   notifications: TestNotification[];
   /** Every `navigation.openEntity` the Plugin asked for, in order. */
   navigations: TestNavigation[];
+  /** Every `navigation.openPage` the Plugin asked for, in order. */
+  pageNavigations: TestPageNavigation[];
   /** The app language the host serves right now. */
   language: string;
   /** The UI-string overrides this host carries, before they are applied. */
@@ -1022,6 +1030,9 @@ export interface PluginHighlightSet {
 export type PluginEditorContentResult = PluginApiOutput<"editor.getContent">;
 export type PluginEditorSelectionResult = PluginApiOutput<"editor.getSelection">;
 export type PluginEditorApplied = PluginApiOutput<"editor.reveal">;
+
+/** What `navigation.openPage` reports: the page was opened, or it does not exist. */
+export type PluginPageOpenResult = PluginApiOutput<"navigation.openPage">;
 
 // Broker (broker.ts)
 

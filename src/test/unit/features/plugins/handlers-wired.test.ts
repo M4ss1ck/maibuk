@@ -2,8 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import i18n from "@/i18n";
+import {
+  registerPluginContributions,
+  resetPluginContributionsForTests,
+} from "@/features/plugins/contributions";
 import { resetPluginEditorHostForTests, registerPluginEditor } from "@/features/plugins/editor-host";
-import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
+import { readPluginManifest } from "@/features/plugins/runtime";
+import { PLUGIN_MANIFEST, pluginFolder } from "@/test/support/plugin-fixtures";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
@@ -80,6 +85,38 @@ describe("createPluginHandlers(): the wired rows", () => {
       });
     } finally {
       unregister();
+    }
+  });
+
+  it("opens a Plugin page, defaulting to the caller's own Plugin", async () => {
+    const folder = pluginFolder(
+      {},
+      {
+        id: "tracer",
+        name: "Tracer",
+        platforms: ["desktop"],
+        contributes: {
+          commands: [{ id: "open", label: "Open", contexts: ["global"], navigates: true }],
+          pages: [{ id: "report", title: "Report", command: "open" }],
+        },
+      }
+    );
+    const parsed = readPluginManifest(folder);
+    if (!parsed.ok) throw new Error("fixture manifest is invalid");
+    const unregisterContrib = registerPluginContributions({ manifest: parsed.manifest, folder });
+    const navigate = vi.fn();
+    const unregisterNav = setPluginNavigator(navigate);
+    try {
+      const open = createPluginHandlers(PLUGIN_MANIFEST)["navigation.openPage"];
+      if (!open) throw new Error("navigation.openPage is not wired");
+      // No pluginId: the caller's own Plugin, taken from the handler context.
+      await expect(open({ pageId: "report" }, context)).resolves.toEqual({ status: "opened" });
+      expect(navigate).toHaveBeenCalledWith("/plugin/tracer/report");
+      await expect(open({ pageId: "ghost" }, context)).resolves.toEqual({ status: "not-found" });
+    } finally {
+      unregisterNav();
+      unregisterContrib();
+      resetPluginContributionsForTests();
     }
   });
 

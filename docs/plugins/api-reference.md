@@ -589,6 +589,32 @@ Output:
 null
 ```
 
+### `navigation.openPage`
+
+Opens a Plugin page by its page id, in this Plugin or another installed one.
+
+- Plugin Permission: none (rate-limited instead)
+- Effect: write
+
+Input:
+
+```ts
+{
+  pageId: string;
+  pluginId?: string;
+}
+```
+
+Output:
+
+```ts
+{
+  status: "opened";
+} | {
+  status: "not-found";
+}
+```
+
 ## language
 
 ### `language.get`

@@ -212,6 +212,33 @@ describe("createTestHost()", () => {
     }
   });
 
+  it("opens a Plugin page with no Plugin Permissions, its own or another installed Plugin's", async () => {
+    const host = createTestHost({
+      manifest: {
+        ...fixtureManifest(),
+        permissions: { required: ["library:read"], optional: [] },
+      },
+      permissions: [],
+    });
+    try {
+      const client = createPluginClient(host.port);
+      // No pluginId: the calling Plugin's own page.
+      await expect(client.navigation.openPage({ pageId: "report" })).resolves.toEqual({
+        status: "opened",
+      });
+      // Another installed Plugin's page is reachable by naming it.
+      await expect(
+        client.navigation.openPage({ pageId: "panel", pluginId: "other" })
+      ).resolves.toEqual({ status: "opened" });
+      expect(host.pageNavigations).toEqual([
+        { pluginId: "tracer", pageId: "report" },
+        { pluginId: "other", pageId: "panel" },
+      ]);
+    } finally {
+      host.stop();
+    }
+  });
+
   it("refuses navigation.openEntity with library-unavailable while the Tutorial runs", async () => {
     // Decision #398: the Tutorial refuses Library access, and navigation reads
     // the Library to resolve a route and drives the router out of the run.

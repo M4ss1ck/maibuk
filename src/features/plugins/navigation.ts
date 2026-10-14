@@ -1,14 +1,18 @@
 /**
  * Host navigation for Plugins: `navigation.openEntity` opens a Book, Chapter,
- * Note, or Canvas, optionally revealing a plain-text range. The route table and
- * the one `navigate` the app shell provides live here, so the handler only asks
- * to open something and never knows a route. A Chapter's route needs its
- * containing Book, read from the Library at open time.
+ * Note, or Canvas, optionally revealing a plain-text range; `navigation.openPage`
+ * opens a Plugin page by its page id. The route table and the one `navigate` the
+ * app shell provides live here, so the handler only asks to open something and
+ * never knows a route. A Chapter's route needs its containing Book, read from
+ * the Library at open time; a Plugin page resolves against the installed
+ * Plugins' registered pages, so any installed Plugin's page may be opened.
  */
 
+import { getPluginPage, pluginPageRoute } from "@/features/plugins/contributions-registry";
 import type {
   PluginEntityTarget,
   PluginNavigator,
+  PluginPageOpenResult,
   PluginRevealRange,
   PluginRoute,
 } from "@/features/plugins/types";
@@ -78,4 +82,19 @@ export async function openPluginEntity(
   if (route === null || navigator === null) return;
   const state = reveal !== undefined ? { ...(route.state ?? {}), reveal } : route.state;
   navigator(route.to, state !== undefined ? { state } : undefined);
+}
+
+/**
+ * Opens a Plugin page through the registered navigator. A Plugin that is not
+ * installed or does not declare the page is a typed `not-found`; the call never
+ * rejects the Plugin. Like `openPluginEntity`, no registered navigator is a
+ * no-op (the page still resolves for the caller).
+ */
+export async function openPluginPage(
+  pluginId: string,
+  pageId: string
+): Promise<PluginPageOpenResult> {
+  if (getPluginPage(pluginId, pageId) === undefined) return { status: "not-found" };
+  navigator?.(pluginPageRoute(pluginId, pageId));
+  return { status: "opened" };
 }

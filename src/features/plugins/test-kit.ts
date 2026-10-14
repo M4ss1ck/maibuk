@@ -33,6 +33,7 @@ import type {
   TestNavigation,
   TestNotification,
   TestPage,
+  TestPageNavigation,
 } from "@/features/plugins/types";
 
 /**
@@ -49,6 +50,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const channel = new MessageChannel();
   const notifications: TestNotification[] = [];
   const navigations: TestNavigation[] = [];
+  const pageNavigations: TestPageNavigation[] = [];
   const books = [...(options.library?.books ?? [])];
   const chapters = [...(options.library?.chapters ?? [])];
   const notes = [...(options.library?.notes ?? [])];
@@ -110,6 +112,10 @@ export function createTestHost(options: TestHostOptions): TestHost {
     "navigation.openEntity": ({ entity, reveal }) => {
       navigations.push(reveal === undefined ? { entity } : { entity, reveal });
       return null;
+    },
+    "navigation.openPage": ({ pageId, pluginId }) => {
+      pageNavigations.push({ pluginId: pluginId ?? options.manifest.id, pageId });
+      return { status: "opened" };
     },
     "language.get": () => ({ language }),
   };
@@ -192,6 +198,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
     manifest: applyPluginLocale(options.manifest, options.locale ?? {}),
     notifications,
     navigations,
+    pageNavigations,
     locale: options.locale ?? null,
     startReason,
     get language() {
