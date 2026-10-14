@@ -17,6 +17,7 @@ plugins/<id>/
   assets/           optional; copied verbatim into the built folder
   locales/          optional; copied verbatim (the manifest's locale files)
   *.test.ts         the Plugin's own tests, never built, never shipped
+  fixtures/         optional; test inputs, never built
   GLOSSARY.md       optional; the Plugin's own terms (CODING_STANDARDS.md, Domain language)
   vendor/           optional; third-party source copied in, with its licence and provenance
 ```

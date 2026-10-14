@@ -328,6 +328,14 @@ for (const subject of SUBJECTS) {
       });
       expect(echoes.filter((echo) => echo.kind === "nearby")).toHaveLength(1);
     });
+
+    it("does not ignore a word just because a multi-word entry starts with it", () => {
+      const echoes = findEchoes(atDistance(subject.anchor, 10), language, {
+        ...nearbyOnly,
+        ignore: [`${subject.anchor} ${subject.second}`],
+      });
+      expect(echoes.filter((echo) => echo.kind === "nearby")).toHaveLength(1);
+    });
   });
 
   describe(`findEchoes() Repeated phrase — ${language}`, () => {

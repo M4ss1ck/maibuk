@@ -830,7 +830,7 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-/** Zipf-ish weighting: rank 1 is picked far more often than the last rank. */
+// Zipf-ish: rank 1 is picked far more often than the last rank.
 function weightedPicker(vocabulary: readonly string[], rand: () => number): () => string {
   const cumulative: number[] = [];
   let total = 0;
@@ -851,7 +851,6 @@ function weightedPicker(vocabulary: readonly string[], rand: () => number): () =
   };
 }
 
-/** One Chapter: sentences of 8-20 words, a paragraph break every six of them. */
 function buildChapter(rand: () => number, vocabulary: readonly string[]): string {
   const pick = weightedPicker(vocabulary, rand);
   const parts: string[] = [];

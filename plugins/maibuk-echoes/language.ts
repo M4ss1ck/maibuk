@@ -23,7 +23,7 @@ export interface Token {
 const WORD_PATTERN = /[\p{L}\p{M}]+(?:['’][\p{L}\p{M}]+)*/gu;
 const LETTER_PATTERN = /\p{L}/gu;
 
-/** NFC, lowercase, and the typographic apostrophe as ASCII, so "didn’t" meets the stop lists. */
+// Fold the typographic apostrophe to ASCII, so "didn’t" meets the stop lists.
 function fold(word: string): string {
   return word.normalize("NFC").toLowerCase().replace(/’/g, "'");
 }

@@ -94,9 +94,11 @@ function assertBoundsAndSlice(
 }
 
 /** Document order, and the count a kind needs before it is ever reported. */
-function assertOrderAndCount(echoes: readonly Echo[]): void {
+function assertOrderAndCount(echoes: readonly Echo[], bookScope: boolean): void {
   for (const echo of echoes) {
-    const minimum = echo.kind === "overused" ? 5 : 2;
+    let minimum = 2;
+    if (echo.kind === "overused") minimum = 5;
+    else if (echo.kind === "phrase" && bookScope) minimum = 3;
     expect(echo.occurrences.length).toBeGreaterThanOrEqual(minimum);
     const positions = echo.occurrences.map(
       (occurrence) => occurrence.chapter * 1_000_000 + occurrence.from
@@ -115,7 +117,7 @@ describe("findEchoes() properties", () => {
 
         const echoes = findEchoes(text, input.language, settings);
         assertBoundsAndSlice(echoes, text, input.language, input.stemming);
-        assertOrderAndCount(echoes);
+        assertOrderAndCount(echoes, !input.single);
         expect(findEchoes(text, input.language, settings)).toEqual(echoes);
       }),
       { seed: 449, numRuns: 200 }

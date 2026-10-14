@@ -293,6 +293,9 @@ export default defineConfig(() => ({
         // Built-in Plugin build lane (issue #444): the pure build, target, and
         // bundle-size logic.
         "scripts/build-builtin-plugins.ts",
+        // Echoes Built-in Plugin (issue #449): the analyzer and the find logic.
+        "plugins/maibuk-echoes/find-echoes.ts",
+        "plugins/maibuk-echoes/language.ts",
         // Frame-rate lane (issue #372): the pure Frame Report, budget, and parsers.
         "src/test/support/frames/frame-report.ts",
         "src/test/support/frames/attribution.ts",

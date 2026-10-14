@@ -35,17 +35,16 @@ export const DEFAULT_ECHO_SETTINGS: EchoSettings = {
   ignore: [],
 };
 
-/** A word below this many letters is never eligible (short words carry no signal). */
+// Short words carry no signal.
 const MIN_WORD_LETTERS = 4;
 const OVERUSED_MIN_COUNT = 5;
 const OVERUSED_RATE_PER_THOUSAND = 3;
 
-/** Repeated phrase: n-grams of these lengths, longest first so containment lands on the longer one. */
+// Longest first, so a contained phrase lands on the longer one.
 const PHRASE_LENGTHS: readonly number[] = [5, 4, 3];
 const PHRASE_CHAPTER_MIN_COUNT = 2;
 const PHRASE_BOOK_MIN_COUNT = 3;
 
-/** Folded forms and match keys of the Ignore list; a token is ignored when either matches. */
 interface IgnoreIndex {
   folded: ReadonlySet<string>;
   keys: ReadonlySet<string>;
@@ -55,15 +54,16 @@ function buildIgnoreIndex(entries: readonly string[], analyzer: Analyzer): Ignor
   const folded = new Set<string>();
   const keys = new Set<string>();
   for (const entry of entries) {
-    const [token] = tokenize(entry.trim());
-    if (token === undefined) continue;
+    const tokens = tokenize(entry.trim());
+    // Only a one-word entry names a word; a longer entry is a phrase key.
+    if (tokens.length !== 1) continue;
+    const [token] = tokens;
     folded.add(token.folded);
     keys.add(analyzer.key(token.folded));
   }
   return { folded, keys };
 }
 
-/** The match key of an eligible token, or null when it is too short, a stop word, or ignored. */
 function matchKey(token: Token, analyzer: Analyzer, ignore: IgnoreIndex): string | null {
   if (token.letters < MIN_WORD_LETTERS) return null;
   if (analyzer.isStopWord(token.folded)) return null;
@@ -156,18 +156,16 @@ function overusedEchoes(
   return sortByFirstOccurrence(echoes);
 }
 
-/** The folded words of each Ignore list entry, joined by one space — the phrase match key. */
 function buildPhraseIgnoreKeys(entries: readonly string[]): ReadonlySet<string> {
   const keys = new Set<string>();
   for (const entry of entries) {
     const tokens = tokenize(entry);
     if (tokens.length === 0) continue;
-    keys.add(tokens.map((token) => token.folded).join(" "));
+    keys.add(tokenKey(tokens, 0, tokens.length - 1));
   }
   return keys;
 }
 
-/** For each token index, the last index of its run: the last token before a sentence break. */
 function runEndsFor(text: string, tokens: readonly Token[]): Int32Array {
   const ends = new Int32Array(tokens.length);
   if (tokens.length === 0) return ends;
@@ -185,7 +183,6 @@ interface PhraseOccurrence {
   occurrence: EchoOccurrence;
 }
 
-/** One entry per phrase key: its occurrences of length `n`, in document order. */
 function phraseOccurrencesByKey(
   chapters: readonly Token[][],
   runEnds: readonly Int32Array[],
@@ -224,14 +221,13 @@ function phraseOccurrencesByKey(
   return byKey;
 }
 
-/** The folded words `start..end` joined by one space (the phrase key, no stemming). */
+// Folded, not stemmed: a phrase matches on its exact words.
 function tokenKey(tokens: readonly Token[], start: number, end: number): string {
   let key = tokens[start].folded;
   for (let index = start + 1; index <= end; index++) key += ` ${tokens[index].folded}`;
   return key;
 }
 
-/** Greedy left to right: a run that overlaps the last kept one of the same phrase counts once. */
 function withoutOverlaps(group: readonly PhraseOccurrence[]): PhraseOccurrence[] {
   const kept: PhraseOccurrence[] = [];
   let lastChapter = -1;
@@ -245,11 +241,6 @@ function withoutOverlaps(group: readonly PhraseOccurrence[]): PhraseOccurrence[]
   return kept;
 }
 
-/**
- * A phrase per folded run of three to five words that returns often enough. A
- * phrase inside a longer flagged one is dropped, so only the longer one is
- * reported; see docs/plans/449-find-echoes.md.
- */
 function phraseEchoes(
   texts: readonly string[],
   chapters: readonly Token[][],
