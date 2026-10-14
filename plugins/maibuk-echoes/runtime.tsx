@@ -12,7 +12,14 @@
  * `detection` row's body, mounted by the host under the row's Plugin-local id.
  */
 
-import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import {
   PLUGIN_COMMAND_RUN_REQUEST,
   ui,
@@ -21,11 +28,24 @@ import {
 } from "@/plugin-sdk";
 import {
   DEFAULT_ECHO_SETTINGS,
+  type EchoKind,
+  type EchoSettings,
   NEARBY_WINDOW_MAX,
   NEARBY_WINDOW_MIN,
-  type EchoSettings,
 } from "./find-echoes";
-import { translate } from "./i18n";
+import { type EchoKey, format, translate } from "./i18n";
+import {
+  computeReport,
+  ECHO_KINDS,
+  EMPTY_REPORT,
+  occurrenceContext,
+  type EchoReport,
+  type EchoReportRow,
+  type ReportChapter,
+  type ReportProgress,
+  type ReportScope,
+  type ReportSource,
+} from "./report";
 import { clampNearbyWindow, readEchoesSettings, writeEchoesSettings } from "./settings";
 
 /** The report page id, exactly as the manifest declares it. */
@@ -126,53 +146,382 @@ async function scopeForTarget(
   return null;
 }
 
-/** The report page: the placeholder plus the scope it was opened for. */
+/** A Book as the Library read returns it. */
+type LibraryBook = Awaited<ReturnType<PluginClient["library"]["books"]["list"]>>[number];
+
+/** A Chapter summary as the Library read returns it (no content). */
+type LibraryChapter = Awaited<ReturnType<PluginClient["library"]["chapters"]["list"]>>[number];
+
+/** The scope select's Whole Book value; every other value is a Chapter id. */
+const SCOPE_WHOLE = "whole";
+
+/** The report row Item Menu's one action value. */
+const IGNORE_ACTION = "ignore";
+
+/** A kind's tab title and its empty line, and the settings switch that enables it. */
+const TAB_KEY: Readonly<Record<EchoKind, EchoKey>> = {
+  nearby: "tab.nearby",
+  overused: "tab.overused",
+  phrase: "tab.phrase",
+};
+const EMPTY_KEY: Readonly<Record<EchoKind, EchoKey>> = {
+  nearby: "empty.nearby",
+  overused: "empty.overused",
+  phrase: "empty.phrase",
+};
+const ENABLED_FLAG: Readonly<Record<EchoKind, "nearby" | "overused" | "phrases">> = {
+  nearby: "nearby",
+  overused: "overused",
+  phrase: "phrases",
+};
+
+/** Adds a word to the ignore list unless it is already there, case-insensitively. */
+function withIgnored(ignore: readonly string[], word: string): string[] {
+  const trimmed = word.trim();
+  const key = trimmed.toLowerCase();
+  if (key === "" || ignore.some((entry) => entry.trim().toLowerCase() === key)) {
+    return [...ignore];
+  }
+  return [...ignore, trimmed];
+}
+
+/** Reads one Chapter's text by id; a missing Chapter or a refused read is empty text. */
+async function loadChapter(client: PluginClient, chapterId: string): Promise<ReportChapter> {
+  try {
+    const chapter = await client.library.chapters.get({ chapterId });
+    return { id: chapterId, text: chapter?.content.text ?? "" };
+  } catch {
+    return { id: chapterId, text: "" };
+  }
+}
+
+/** True when a `library.changed` payload touches the Book the report shows. */
+function touchesBook(payload: { scope: "all" } | { entity: string; id: string }, bookId: string): boolean {
+  if ("scope" in payload) return payload.scope === "all";
+  return payload.entity === "book" && payload.id === bookId;
+}
+
+/**
+ * The report page (#450, unit 3): a Book and scope header, the three kind tabs,
+ * and their rows. It computes on open and whenever the Book or scope changes,
+ * marks itself out of date on a `library.changed` that touches the Book (without
+ * ever reordering on its own), and recomputes only when Refresh is pressed.
+ */
 function createReportPage(client: PluginClient, runtime: EchoRuntime): ComponentType {
   function ReportPage() {
     const language = useEchoLanguage(client);
-    const [scopeLabel, setScopeLabel] = useState<string | null>(null);
-    const scope = runtime.scope;
+
+    const [initialized, setInitialized] = useState(false);
+    const [books, setBooks] = useState<LibraryBook[]>([]);
+    const [bookId, setBookId] = useState<string | null>(null);
+    const [chapters, setChapters] = useState<LibraryChapter[]>([]);
+    const [scopeKey, setScopeKey] = useState<string>(SCOPE_WHOLE);
+    const [settings, setSettings] = useState<EchoSettings>(() => ({
+      ...DEFAULT_ECHO_SETTINGS,
+      ignore: [],
+    }));
+    const [report, setReport] = useState<EchoReport | null>(null);
+    const [computing, setComputing] = useState(false);
+    const [progress, setProgress] = useState<ReportProgress>({ done: 0, total: 0 });
+    const [stale, setStale] = useState(false);
+    const [tab, setTab] = useState<EchoKind>("nearby");
+    const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+    const [reloadToken, setReloadToken] = useState(0);
+
+    // The latest values the async flows read, kept in refs so they never close
+    // over a stale render (the event handler and the compute effect both need
+    // what the current selection is, not what it was when they were created).
+    const bookIdRef = useRef<string | null>(null);
+    const settingsRef = useRef<EchoSettings>(settings);
+    const booksRef = useRef<LibraryBook[]>([]);
+    const chaptersRef = useRef<readonly ReportChapter[]>([]);
+
+    // Initial load: the stored settings, the Library's Books, and the scope the
+    // Find echoes Command stored (else the first Book, Whole Book).
     useEffect(() => {
       let cancelled = false;
-      void resolveScopeLabel(client, scope).then((label) => {
-        if (!cancelled) setScopeLabel(label);
-      });
+      void (async () => {
+        const [stored, list] = await Promise.all([
+          readEchoesSettings(client),
+          client.library
+            .books.list()
+            .catch((): LibraryBook[] => []),
+        ]);
+        if (cancelled) return;
+        settingsRef.current = stored;
+        setSettings(stored);
+        booksRef.current = list;
+        setBooks(list);
+        const scope = runtime.scope;
+        const scopedBook =
+          scope !== null && list.some((book) => book.id === scope.bookId)
+            ? scope.bookId
+            : (list[0]?.id ?? null);
+        bookIdRef.current = scopedBook;
+        setBookId(scopedBook);
+        setScopeKey(
+          scope !== null && scope.chapterId !== undefined && scopedBook === scope.bookId
+            ? scope.chapterId
+            : SCOPE_WHOLE
+        );
+        setInitialized(true);
+      })();
       return () => {
         cancelled = true;
       };
-    }, [client, scope]);
+    }, [client, runtime]);
+
+    // The scope select's Chapters, read whenever the Book changes.
+    useEffect(() => {
+      if (!initialized || bookId === null) {
+        setChapters([]);
+        return;
+      }
+      let cancelled = false;
+      void client.library
+        .chapters.list({ bookId })
+        .then((list) => {
+          if (!cancelled) setChapters(list);
+        })
+        .catch(() => {
+          if (!cancelled) setChapters([]);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [client, initialized, bookId]);
+
+    // Compute on open and whenever the Book, the scope, or a Refresh changes.
+    // Detection reads the Book's own language; the app language is UI only.
+    useEffect(() => {
+      if (!initialized || bookId === null) return;
+      const scope: ReportScope = scopeKey === SCOPE_WHOLE ? "book" : "chapter";
+      const bookLanguage =
+        booksRef.current.find((book) => book.id === bookId)?.language ?? "en";
+      let cancelled = false;
+      setComputing(true);
+      setStale(false);
+      setExpanded(new Set());
+      void (async () => {
+        try {
+          const source: ReportSource =
+            scope === "book"
+              ? await bookSource(client, bookId)
+              : { count: 1, load: () => loadChapter(client, scopeKey) };
+          if (cancelled) return;
+          const result = await computeReport(source, bookLanguage, settingsRef.current, {
+            scope,
+            onProgress: (next) => {
+              if (!cancelled) setProgress(next);
+            },
+          });
+          if (cancelled) return;
+          chaptersRef.current = result.chapters;
+          setReport(result.report);
+        } catch {
+          if (!cancelled) setReport(EMPTY_REPORT);
+        } finally {
+          if (!cancelled) setComputing(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [client, initialized, bookId, scopeKey, reloadToken]);
+
+    // A `library.changed` that touches the shown Book only marks the report out
+    // of date; it never recomputes or reorders (a list that moves under the
+    // focused row breaks keyboard and screen-reader use).
+    useEffect(() => {
+      let active = true;
+      let unsubscribe: (() => Promise<void>) | null = null;
+      void client
+        .on("library.changed", (payload) => {
+          const current = bookIdRef.current;
+          if (current !== null && touchesBook(payload, current)) setStale(true);
+        })
+        .then((off) => {
+          if (active) unsubscribe = off;
+          else void off();
+        })
+        .catch(() => {});
+      return () => {
+        active = false;
+        if (unsubscribe !== null) void unsubscribe();
+      };
+    }, [client]);
+
+    const selectBook = useCallback((id: string) => {
+      bookIdRef.current = id;
+      setBookId(id);
+      setScopeKey(SCOPE_WHOLE);
+      setExpanded(new Set());
+    }, []);
+
+    const toggleRow = useCallback((rowId: string, open: boolean) => {
+      setExpanded((current) => {
+        const next = new Set(current);
+        if (open) next.add(rowId);
+        else next.delete(rowId);
+        return next;
+      });
+    }, []);
+
+    const ignoreRow = useCallback(
+      (row: EchoReportRow) => {
+        const next = { ...settingsRef.current, ignore: withIgnored(settingsRef.current.ignore, row.label) };
+        settingsRef.current = next;
+        setSettings(next);
+        void writeEchoesSettings(client, next);
+        // Remove the row now; the report is not recomputed for an ignore.
+        setReport((current) =>
+          current === null
+            ? current
+            : { ...current, [row.kind]: current[row.kind].filter((entry) => entry.key !== row.key) }
+        );
+      },
+      [client]
+    );
+
+    const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
+
+    if (!initialized) {
+      return (
+        <ui.View direction="column" gap="md">
+          <ui.ProgressBar label={translate(language, "report.loading")} isIndeterminate />
+        </ui.View>
+      );
+    }
+
+    if (books.length === 0) {
+      return (
+        <ui.View direction="column" gap="md">
+          <ui.Text>{translate(language, "report.noBook")}</ui.Text>
+        </ui.View>
+      );
+    }
+
+    const enabledKinds = ECHO_KINDS.filter((kind) => settings[ENABLED_FLAG[kind]]);
+    const activeKind = enabledKinds.includes(tab) ? tab : (enabledKinds[0] ?? "nearby");
+    const rows = report?.[activeKind] ?? [];
+    const scopeOptions = [
+      { value: SCOPE_WHOLE, label: translate(language, "wholeBook") },
+      ...chapters.map((chapter) => ({ value: chapter.id, label: chapter.title })),
+    ];
+    const tabItems = enabledKinds.map((kind) => ({
+      value: kind,
+      label: translate(language, TAB_KEY[kind]),
+    }));
+
+    const activeChildren: ReactNode[] = [];
+    for (const row of rows) {
+      const rowId = `${activeKind}:${row.key}`;
+      const isExpanded = expanded.has(rowId);
+      activeChildren.push(
+        <ui.CollectionRow
+          key={rowId}
+          id={rowId}
+          label={row.label}
+          description={format(translate(language, "report.summary"), {
+            count: row.count,
+            chapters: row.chapterIndexes.map((index) => index + 1).join(", "),
+          })}
+          isExpandable
+          isExpanded={isExpanded}
+          onExpandedChange={(event) => toggleRow(rowId, event.detail)}
+          menuItems={[{ value: IGNORE_ACTION, label: translate(language, "ignore") }]}
+          onMenuAction={() => ignoreRow(row)}
+        />
+      );
+      if (!isExpanded) continue;
+      row.occurrences.forEach((occurrence, index) => {
+        const chapter = chaptersRef.current[occurrence.chapter];
+        const chapterText = chapter?.text ?? "";
+        activeChildren.push(
+          <ui.CollectionRow
+            key={`${rowId}:${index}`}
+            id={`${rowId}:${index}`}
+            label={chapterText.slice(occurrence.from, occurrence.to)}
+            description={occurrenceContext(chapterText, occurrence)}
+            onAction={() => {
+              if (chapter === undefined) return;
+              void client.navigation.openEntity({
+                entity: { kind: "chapter", id: chapter.id },
+                reveal: { from: occurrence.from, to: occurrence.to },
+              });
+            }}
+          />
+        );
+      });
+    }
+
     return (
       <ui.View direction="column" gap="md">
-        <ui.Text>{translate(language, "report.placeholder")}</ui.Text>
-        <ui.Text>{scopeLabel ?? translate(language, "report.noBook")}</ui.Text>
+        <ui.View direction="row" gap="md" align="end">
+          <ui.Select
+            label={translate(language, "report.book")}
+            options={books.map((book) => ({ value: book.id, label: book.title }))}
+            selectedKey={bookId ?? ""}
+            onChange={(event) => {
+              if (event.detail !== "") selectBook(event.detail);
+            }}
+          />
+          <ui.Select
+            label={translate(language, "report.scope")}
+            options={scopeOptions}
+            selectedKey={scopeKey}
+            onChange={(event) => setScopeKey(event.detail)}
+          />
+        </ui.View>
+
+        {stale ? (
+          <ui.View direction="row" gap="sm" align="center">
+            <ui.Text tone="muted">{translate(language, "stale")}</ui.Text>
+            <ui.Button variant="secondary" onPress={refresh}>
+              {translate(language, "refresh")}
+            </ui.Button>
+          </ui.View>
+        ) : null}
+
+        {computing && report !== null ? (
+          <ui.ProgressBar
+            label={translate(language, "report.computing")}
+            value={progress.done}
+            maxValue={Math.max(1, progress.total)}
+          />
+        ) : null}
+
+        {report === null ? (
+          <ui.ProgressBar label={translate(language, "report.loading")} isIndeterminate />
+        ) : (
+          <ui.Tabs
+            label={translate(language, "report.tabs")}
+            items={tabItems}
+            selectedKey={activeKind}
+            onChange={(event) => setTab(event.detail as EchoKind)}
+          >
+            {rows.length === 0 ? (
+              <ui.Text tone="muted">{translate(language, EMPTY_KEY[activeKind])}</ui.Text>
+            ) : (
+              <ui.Collection label={translate(language, TAB_KEY[activeKind])} selectionMode="none">
+                {activeChildren}
+              </ui.Collection>
+            )}
+          </ui.Tabs>
+        )}
       </ui.View>
     );
   }
   return ReportPage;
 }
 
-/**
- * The name to show for the scope: the Chapter's title when one is scoped, its
- * Book's title otherwise, and the first Book when no scope was stored.
- */
-async function resolveScopeLabel(
-  client: PluginClient,
-  scope: EchoScope | null
-): Promise<string | null> {
-  try {
-    if (scope === null) {
-      const books = await client.library.books.list();
-      return books[0]?.title ?? null;
-    }
-    if (scope.chapterId !== undefined) {
-      const chapter = await client.library.chapters.get({ chapterId: scope.chapterId });
-      if (chapter !== null) return chapter.title;
-    }
-    const book = await client.library.books.get({ bookId: scope.bookId });
-    return book === null ? null : book.title;
-  } catch {
-    return null;
-  }
+/** A whole-Book source: the Book's Chapters in order, each read on demand. */
+async function bookSource(client: PluginClient, bookId: string): Promise<ReportSource> {
+  const list = await client.library.chapters.list({ bookId });
+  return {
+    count: list.length,
+    load: (index) => loadChapter(client, list[index].id),
+  };
 }
 
 /**

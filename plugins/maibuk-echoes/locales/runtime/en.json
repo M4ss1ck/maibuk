@@ -15,6 +15,11 @@
   "settings.stemming": "Match word forms",
   "settings.nearbyWindow": "Nearby window",
   "settings.ignoreList": "Ignore list",
-  "report.placeholder": "The Echo report appears here.",
+  "report.book": "Book",
+  "report.scope": "Scope",
+  "report.tabs": "Echo kinds",
+  "report.loading": "Checking the Book…",
+  "report.computing": "Updating the report…",
+  "report.summary": "{{count}} times · Chapters {{chapters}}",
   "report.noBook": "No Book yet."
 }

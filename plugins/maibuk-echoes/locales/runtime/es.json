@@ -15,6 +15,11 @@
   "settings.stemming": "Agrupar formas de la palabra",
   "settings.nearbyWindow": "Ventana cercana",
   "settings.ignoreList": "Lista de ignoradas",
-  "report.placeholder": "El informe de ecos aparece aquí.",
+  "report.book": "Libro",
+  "report.scope": "Ámbito",
+  "report.tabs": "Tipos de eco",
+  "report.loading": "Revisando el libro…",
+  "report.computing": "Actualizando el informe…",
+  "report.summary": "{{count}} veces · Capítulos {{chapters}}",
   "report.noBook": "Todavía no hay ningún libro."
 }

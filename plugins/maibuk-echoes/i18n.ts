@@ -27,3 +27,13 @@ export function catalogFor(language: string): Readonly<Record<EchoKey, string>> 
 export function translate(language: string, key: EchoKey): string {
   return catalogFor(language)[key] ?? en[key];
 }
+
+/** Fills `{{name}}` placeholders in a runtime string; an unknown name fills empty. */
+export function format(
+  template: string,
+  values: Readonly<Record<string, string | number>>
+): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) =>
+    name in values ? String(values[name]) : ""
+  );
+}
