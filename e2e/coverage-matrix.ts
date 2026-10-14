@@ -3119,4 +3119,26 @@ export const ROWS: MatrixRow[] = [
     tags: [],
     status: "accepted",
   },
+  {
+    id: "plugins-echoes",
+    area: "plugins",
+    workflow:
+      "Echoes reports echoes for a seeded Book: opening it from the Command Palette shows report rows and the sidebar entry opens the same page; arrows switch tabs (the phrase tab lists only phrase rows), Enter expands a row, and Enter on an occurrence opens the Chapter editor; Find echoes from a Chapter Item Menu scopes the report to that Chapter; a row Item Menu ignores a word for good; a Chapter edit marks the report out of date until Refresh; the Settings row changes what is detected; touch opens the page and expands a row by tap; asserts: the row names, the scope select, the occurrence rows, the Chapter editor route, the out-of-date notice, the changed counts; persists: yes (the ignore list is in Plugin storage)",
+    edges: [
+      "Open Echoes from the Command Palette shows rows for the Book",
+      "Open Echoes from the sidebar entry shows the same page",
+      "Keyboard switches to the phrase kind, which lists only phrase rows, expands one, and Enter on an occurrence opens the Chapter editor",
+      "Find echoes from a Chapter Item Menu opens the report scoped to that Chapter",
+      "Ignore this word from a row Item Menu removes the row, and it stays gone after reopening the page",
+      "An edit to the Chapter marks the report out of date; it does not recompute itself, and Refresh updates the counts",
+      "Settings toggles a kind off, narrows the nearby window, and adds an ignore word, each reflected in the report",
+      "Touch opens Echoes from the navigation menu and expands a row by tap",
+    ],
+    terms: ["Plugin", "Item Menu"],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId", "/book/:bookId", "/", "/settings"],
+    fixture: "echoesBook",
+    tags: ["no-webkit", "touch"],
+    status: "accepted",
+  },
 ];

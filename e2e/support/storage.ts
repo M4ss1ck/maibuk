@@ -47,7 +47,8 @@ export type PluginSeed =
   | "fixture-hostile"
   | "fixture-everything"
   | "fixture-everything-on-demand"
-  | "fixture-bench";
+  | "fixture-bench"
+  | "maibuk-echoes";
 
 /**
  * One Plugin the seed installs: a named Plugin Directory folder (`name`), the
@@ -129,6 +130,7 @@ const BUILT_PLUGIN_SEEDS: ReadonlySet<PluginSeed> = new Set([
   "fixture-everything",
   "fixture-everything-on-demand",
   "fixture-bench",
+  "maibuk-echoes",
 ]);
 
 const BLANK_PATH = "/__e2e__/blank";

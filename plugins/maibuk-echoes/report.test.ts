@@ -62,6 +62,36 @@ describe("buildReport()", () => {
     expect(row.chapterIndexes).toEqual([0, 1]);
   });
 
+  it("merges Echoes that share a kind and key into one row across Chapters", () => {
+    // One word echoing in two Chapters arrives as two Echoes (a Chapter break
+    // resets the nearby window); the report shows one row for the word.
+    const echoes: Echo[] = [
+      { kind: "nearby", normalized: "harbor", occurrences: [occurrence(0, 4, 10)] },
+      { kind: "nearby", normalized: "harbor", occurrences: [occurrence(1, 0, 6)] },
+    ];
+
+    const report = buildReport(echoes, ["The harbor was calm.", "harbor again."]);
+
+    expect(report.nearby).toHaveLength(1);
+    const [row] = report.nearby;
+    expect(row.label).toBe("harbor");
+    expect(row.count).toBe(2);
+    expect(row.chapterIndexes).toEqual([0, 1]);
+    expect(row.occurrences).toEqual([occurrence(0, 4, 10), occurrence(1, 0, 6)]);
+  });
+
+  it("concatenates merged occurrences in reading order regardless of arrival", () => {
+    const echoes: Echo[] = [
+      { kind: "phrase", normalized: "dark night", occurrences: [occurrence(1, 8, 18)] },
+      { kind: "phrase", normalized: "dark night", occurrences: [occurrence(0, 2, 12)] },
+    ];
+
+    const report = buildReport(echoes, ["the dark night fell", "the dark night came"]);
+
+    expect(report.phrase).toHaveLength(1);
+    expect(report.phrase[0].occurrences).toEqual([occurrence(0, 2, 12), occurrence(1, 8, 18)]);
+  });
+
   it("keeps every kind present even when it has no Echoes", () => {
     const report = buildReport([], ["text"]);
     expect(Object.keys(report).sort()).toEqual([...ECHO_KINDS].sort());

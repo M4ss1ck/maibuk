@@ -8,7 +8,7 @@
  *
  * The page is a placeholder for the report the later units draw. It already
  * reads the scope the `Find echoes` Command stored, so opening the page from a
- * Chapter or Book Item Menu lands on that item. The Settings row is the
+ * Chapter Item Menu lands on that Chapter. The Settings row is the
  * `detection` row's body, mounted by the host under the row's Plugin-local id.
  */
 
@@ -128,22 +128,19 @@ async function runEchoCommand(
   return null;
 }
 
-/** The scope a Command target implies: a Book, or a Chapter and its Book. */
+/** The scope a Command target implies: the Chapter and its Book. */
 async function scopeForTarget(
   client: PluginClient,
   target: EchoCommandTarget | undefined
 ): Promise<EchoScope | null> {
   if (target === undefined || typeof target.id !== "string") return null;
+  if (target.kind !== "chapter") return null;
   try {
-    if (target.kind === "book") return { bookId: target.id };
-    if (target.kind === "chapter") {
-      const chapter = await client.library.chapters.get({ chapterId: target.id });
-      return chapter === null ? null : { bookId: chapter.bookId, chapterId: chapter.id };
-    }
+    const chapter = await client.library.chapters.get({ chapterId: target.id });
+    return chapter === null ? null : { bookId: chapter.bookId, chapterId: chapter.id };
   } catch {
     return null;
   }
-  return null;
 }
 
 /** A Book as the Library read returns it. */

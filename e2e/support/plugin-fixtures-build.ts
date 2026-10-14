@@ -25,8 +25,10 @@ export const PLUGIN_BUILD_DIR = resolve(REPO_ROOT, "e2e/.output/plugins");
 
 /** One source-built fixture: where it reads from and the folder the seed reads. */
 interface FixturePlugin {
-  /** The source folder under `plugin-sources/`. */
+  /** The source folder, under `plugin-sources/` unless `repoSource` is true. */
   source: string;
+  /** When true, `source` is resolved against the repo root instead of `plugin-sources/`. */
+  repoSource?: boolean;
   /** The manifest file inside that source folder. */
   manifest: string;
   /** The folder name under `.output/plugins` the seed reads from. */
@@ -44,6 +46,12 @@ const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
     output: "fixture-everything-on-demand",
   },
   { source: "fixture-bench", manifest: "manifest.json", output: "fixture-bench" },
+  {
+    source: "plugins/maibuk-echoes",
+    repoSource: true,
+    manifest: "manifest.json",
+    output: "maibuk-echoes",
+  },
 ];
 
 /** The folder names under `.output/plugins` the seeds read, for a build check. */
@@ -61,7 +69,9 @@ function buildFixturePlugin(
   fixture: FixturePlugin,
   requestLog: { origin: string }
 ): Promise<void> {
-  const sourceDir = resolve(PLUGIN_SOURCES_DIR, fixture.source);
+  const sourceDir = fixture.repoSource
+    ? resolve(REPO_ROOT, fixture.source)
+    : resolve(PLUGIN_SOURCES_DIR, fixture.source);
   return buildPlugin({
     sourceDir,
     manifestPath: resolve(sourceDir, fixture.manifest),

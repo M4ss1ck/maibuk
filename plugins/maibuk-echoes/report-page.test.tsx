@@ -121,6 +121,47 @@ describe("Echoes report page", () => {
     }
   });
 
+  it("shows one row per word, so no two options share a name in a tab", async () => {
+    // "harbor" echoes in both Chapters; the report shows it as one Whole Book
+    // row listing both, never two rows that a listbox would confuse.
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: {
+        books: [book("b1", "Dune")],
+        chapters: [
+          chapter("c1", "b1", "Chapter One", 0, "The harbor was calm. The harbor was empty."),
+          chapter("c2", "b1", "Chapter Two", 1, "The harbor was far. The harbor was cold."),
+        ],
+      },
+    });
+    startEchoes(createPluginClient(host.port), servePluginUi);
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      const harborRows = (await screen.findAllByRole("option")).filter((option) =>
+        /^harbor/.test(option.textContent ?? "")
+      );
+      expect(harborRows).toHaveLength(1);
+      expect(harborRows[0]).toHaveTextContent("4 times");
+      expect(harborRows[0]).toHaveTextContent("Chapters 1, 2");
+
+      // No two rows in a tab share a name, on the nearby tab and the phrase tab.
+      const names = () => screen.getAllByRole("option").map((option) => option.textContent);
+      expect(new Set(names()).size).toBe(names().length);
+
+      const nearby = screen.getByRole("tab", { name: en["tab.nearby"] });
+      nearby.focus();
+      await user.keyboard("{ArrowRight}");
+      await user.keyboard("{ArrowRight}");
+      expect(new Set(names()).size).toBe(names().length);
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
   it("switches tabs with the arrow keys", async () => {
     const host = reportHost();
     try {

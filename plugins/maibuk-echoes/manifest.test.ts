@@ -5,7 +5,7 @@ import { parsePluginLocale, parsePluginManifest } from "@/features/plugins/manif
 
 // The Echoes manifest (#450): its page, sidebar entry, Settings row, and the
 // two Commands (`Open Echoes` opens the report page; `Find echoes` joins the
-// Chapter and Book Item Menus and opens the report scoped to that item).
+// Chapter Item Menu and opens the report scoped to that Chapter).
 describe("Echoes manifest", () => {
   const text = readFileSync(join(__dirname, "manifest.json"), "utf8");
 
@@ -42,10 +42,10 @@ describe("Echoes manifest", () => {
     );
   });
 
-  it("contributes Find echoes to the Chapter and Book Item Menus", () => {
+  it("contributes Find echoes to the Chapter Item Menu", () => {
     const contributes = manifest().contributes;
     const find = contributes?.commands?.find((command) => command.id === "findEchoes");
-    expect(find?.targets).toEqual(["book", "chapter"]);
+    expect(find?.targets).toEqual(["chapter"]);
     expect(contributes?.itemMenuEntries?.map((entry) => entry.command)).toEqual(["findEchoes"]);
   });
 

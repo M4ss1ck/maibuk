@@ -7,8 +7,10 @@
  * Detection stays in `find-echoes.ts`. This module only loads one Chapter at a
  * time — yielding between them so a large Book never blocks a single frame, and
  * reporting progress for the bar — runs `findEchoes` once over the loaded text,
- * and groups its Echoes into rows ordered by count (descending), then word
- * (ascending), so the order is stable run to run.
+ * and groups its Echoes into rows: every Echo of a kind with the same normalized
+ * key is merged into one row (count is the total, Chapters the union), and the
+ * rows are ordered by count (descending), then word (ascending), so the order is
+ * stable run to run and one row's id is unique.
  *
  * Imports only this Plugin's own files.
  */
@@ -22,16 +24,21 @@ import {
 } from "./find-echoes";
 import { type Token, tokenize } from "./language";
 
-/** One row of a report tab: an Echo, its count, and where it appears. */
+/** One row of a report tab: one word or phrase, its count, and where it appears. */
 export interface EchoReportRow {
   kind: EchoKind;
-  /** The Echo's normalized match key; unique inside its kind. */
+  /**
+   * The Echo's normalized match key. Every Echo of this kind with the same key
+   * is merged into one row, so the key is unique inside its kind — which is what
+   * makes `"<kind>:<key>"` a stable, unique row identity for the page.
+   */
   key: string;
   /** The word or phrase as it first appears in the text. */
   label: string;
   count: number;
-  /** The 0-based Chapter positions the Echo appears in, ascending, distinct. */
+  /** The 0-based Chapter positions the row appears in, ascending, distinct. */
   chapterIndexes: number[];
+  /** Every occurrence across the merged Echoes, in reading order. */
   occurrences: EchoOccurrence[];
 }
 
@@ -113,22 +120,55 @@ export async function computeReport(
 /** Groups Echoes into the three kind lists, each ordered by count then word. */
 export function buildReport(echoes: readonly Echo[], texts: readonly string[]): EchoReport {
   const report: Record<EchoKind, EchoReportRow[]> = { nearby: [], overused: [], phrase: [] };
-  for (const echo of echoes) report[echo.kind].push(toRow(echo, texts));
-  for (const kind of ECHO_KINDS) report[kind].sort(compareRows);
+  // Detection can return several Echoes for one word or phrase of a kind: the
+  // nearby rule resets at a Chapter break, so the same word repeats as a
+  // separate Echo per Chapter. A report row is one word or phrase per kind
+  // across the whole scope, so merge by key first — the count is the total and
+  // the Chapters are the union.
+  const grouped = new Map<EchoKind, Map<string, Echo[]>>();
+  for (const echo of echoes) {
+    let byKey = grouped.get(echo.kind);
+    if (byKey === undefined) {
+      byKey = new Map();
+      grouped.set(echo.kind, byKey);
+    }
+    const group = byKey.get(echo.normalized);
+    if (group === undefined) byKey.set(echo.normalized, [echo]);
+    else group.push(echo);
+  }
+  for (const kind of ECHO_KINDS) {
+    const byKey = grouped.get(kind);
+    if (byKey === undefined) continue;
+    for (const [key, group] of byKey) report[kind].push(toRow(kind, key, group, texts));
+    report[kind].sort(compareRows);
+  }
   return report;
 }
 
-function toRow(echo: Echo, texts: readonly string[]): EchoReportRow {
-  const first = echo.occurrences[0];
+function toRow(
+  kind: EchoKind,
+  key: string,
+  group: readonly Echo[],
+  texts: readonly string[]
+): EchoReportRow {
+  const occurrences = group
+    .flatMap((echo) => echo.occurrences)
+    .sort(compareOccurrences);
+  const first = occurrences[0];
   const chapterText = texts[first.chapter] ?? "";
   return {
-    kind: echo.kind,
-    key: echo.normalized,
+    kind,
+    key,
     label: chapterText.slice(first.from, first.to),
-    count: echo.occurrences.length,
-    chapterIndexes: distinctChapters(echo.occurrences),
-    occurrences: echo.occurrences,
+    count: occurrences.length,
+    chapterIndexes: distinctChapters(occurrences),
+    occurrences,
   };
+}
+
+function compareOccurrences(a: EchoOccurrence, b: EchoOccurrence): number {
+  if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+  return a.from - b.from;
 }
 
 function distinctChapters(occurrences: readonly EchoOccurrence[]): number[] {
