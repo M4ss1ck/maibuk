@@ -12,7 +12,7 @@ import {
   type LibrarySeed,
   type PluginApprovalSeed,
   type PluginSeed,
-  type PluginSeedOverride,
+  type PluginSeedEntry,
   type TutorialProgressSeed,
 } from "./storage";
 
@@ -22,7 +22,7 @@ interface Options {
   /** Specs default to a dismissed offer; Tutorial specs set `clean`. */
   tutorialProgress: TutorialProgressSeed;
   /** Fixture Plugins written into the web Plugin Directory (OPFS) with their approvals. */
-  plugins: (PluginSeed | PluginSeedOverride)[];
+  plugins: Iterable<PluginSeed | PluginSeedEntry>;
   /** Fixture Plugins written into OPFS with no approval record (installed but unapproved). */
   unapprovedPlugins: PluginSeed[];
   /** Approval records written as declared, overriding the default per Plugin. */

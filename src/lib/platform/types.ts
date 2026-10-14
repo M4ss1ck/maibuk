@@ -26,6 +26,13 @@ export interface FileSystemAdapter {
   writeFile(path: string, data: Uint8Array): Promise<void>;
   readFile(path: string): Promise<Uint8Array>;
   downloadFile(filename: string, data: Uint8Array, mimeType: string): void;
+  /**
+   * Reads the named UTF-8 text file from the app config dir, then the app data
+   * dir. The Plugins bench seed lives there (issue #448); the product's `fs`
+   * scope permits the config dir, so it is tried first. Null when neither holds
+   * the file. The web build has no such directory, so it returns null.
+   */
+  readAppConfigTextFile(name: string): Promise<string | null>;
 }
 
 export interface DialogAdapter {

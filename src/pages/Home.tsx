@@ -22,6 +22,7 @@ import { isTypingTarget } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { useCommandHint } from "@/lib/command-keys";
+import { benchMarksEnabled } from "@/lib/bench-marks";
 import { scanEpubForImport } from "@/features/import/epub-import-service";
 import type { CompatibilityReport, ImportPreview } from "@/features/import";
 import { BOOK_STATUSES, type Book, type BookStatus } from "@/features/books/types";
@@ -32,6 +33,13 @@ interface EpubImportState {
   report: CompatibilityReport;
   preview: ImportPreview;
 }
+
+/**
+ * The Gallery's first render that shows content marks once per page load
+ * (#448), even if the Gallery remounts inside that load. A module-level flag,
+ * not state: the mark belongs to the page load, not to a mount.
+ */
+let galleryFirstRenderMarked = false;
 
 export function Home() {
   const { t } = useTranslation();
@@ -81,6 +89,21 @@ export function Home() {
   useEffect(() => {
     loadBooks();
   }, [loadBooks]);
+
+  // The first committed render that shows the Book list or the empty state —
+  // not the loading spinner — marks `app.gallery.first-render` once per page
+  // load, behind `benchMarksEnabled()`; a remount must not mark again, so the
+  // guard is the module-level flag above, never state. When the gate is off no
+  // `performance.*` call is made.
+  const galleryContentShown = !(isLoading && books.length === 0);
+  useEffect(() => {
+    if (!galleryContentShown) return;
+    if (!benchMarksEnabled()) return;
+    if (galleryFirstRenderMarked) return;
+    galleryFirstRenderMarked = true;
+    if (typeof performance === "undefined" || typeof performance.mark !== "function") return;
+    performance.mark("app.gallery.first-render");
+  }, [galleryContentShown]);
 
   // Arriving after the open Book was deleted: its screen is gone and focus
   // with it. Put focus back in the Gallery unless something else took it.

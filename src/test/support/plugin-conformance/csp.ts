@@ -19,6 +19,12 @@ export const CONFORMANCE_IDENTIFIER = "com.massick.maibuk.conformance";
 /** The product name the conformance build uses. */
 export const CONFORMANCE_PRODUCT_NAME = "maibuk-conformance";
 
+/** The identifier the Plugins bench WebKitGTK build uses (#448). */
+export const BENCH_IDENTIFIER = "com.massick.maibuk.bench";
+
+/** The product name the Plugins bench WebKitGTK build uses. */
+export const BENCH_PRODUCT_NAME = "maibuk-bench";
+
 /**
  * The app document's CSP with `origin` added to its `connect-src`, and every
  * other directive kept verbatim. A `null`/empty CSP stays `null`: there is
@@ -60,6 +66,24 @@ export function conformanceConfigOverride(baseConfig: unknown): {
   return {
     identifier: CONFORMANCE_IDENTIFIER,
     productName: CONFORMANCE_PRODUCT_NAME,
+    app: { security: { csp: cspWithCollectorConnectSrc(baseCspOf(baseConfig)) } },
+  };
+}
+
+/**
+ * The `--config` override the Plugins bench WebKitGTK build is given
+ * (#448): its own identifier and product name, so it never touches the
+ * author's install (or a conformance install). The app CSP stays the base's;
+ * the bench collector is reached on `127.0.0.1` under no CSP, like conformance.
+ */
+export function benchConfigOverride(baseConfig: unknown): {
+  identifier: string;
+  productName: string;
+  app: { security: { csp: string | null } };
+} {
+  return {
+    identifier: BENCH_IDENTIFIER,
+    productName: BENCH_PRODUCT_NAME,
     app: { security: { csp: cspWithCollectorConnectSrc(baseCspOf(baseConfig)) } },
   };
 }

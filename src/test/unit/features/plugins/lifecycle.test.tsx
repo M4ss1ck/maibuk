@@ -262,6 +262,7 @@ afterEach(() => {
   });
   restoreMessageChannel?.();
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
   resetLibrarySwitchForTests();
   resetPluginLifecycleForTests();
@@ -1238,6 +1239,31 @@ describe("Plugin lifecycle: dev timing marks", () => {
         "plugin.start:alpha",
         "plugin.start.gate:alpha",
       ]);
+    } finally {
+      // jsdom has no User Timing; drop what this test added.
+      if (!hadMark) delete timing.mark;
+      if (!hadMeasure) delete timing.measure;
+    }
+  });
+
+  it("marks the same activation in a production bench build with VITE_PLUGIN_BENCH=1", async () => {
+    // A shipped build has DEV off; the bench flag is what turns the marks on.
+    vi.stubEnv("DEV", false);
+    vi.stubEnv("VITE_PLUGIN_BENCH", "1");
+    const marks: string[] = [];
+    const measures: string[] = [];
+    const timing = performance as unknown as Record<string, unknown>;
+    const hadMark = "mark" in timing;
+    const hadMeasure = "measure" in timing;
+    timing.mark = (name: string) => marks.push(name);
+    timing.measure = (name: string) => measures.push(name);
+    try {
+      const h = await createHarness({ approved: [makePlugin("alpha")] });
+      await launchAll(h);
+
+      expect(marks).toContain("plugin.start:alpha:begin");
+      expect(marks).toContain("plugin.start:alpha:ready");
+      expect(measures).toContain("plugin.start:alpha");
     } finally {
       // jsdom has no User Timing; drop what this test added.
       if (!hadMark) delete timing.mark;

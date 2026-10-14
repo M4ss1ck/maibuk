@@ -8,5 +8,9 @@ export function step(
   env?: Record<string, string>
 ): void;
 export function preflight(options: { allowPlanned: boolean }): void;
-export function buildWeb(options?: { sourcemap?: boolean }): void;
+export function buildWeb(options?: {
+  sourcemap?: boolean;
+  outDir?: string;
+  env?: Record<string, string>;
+}): void;
 export function wallClock(started: number): void;

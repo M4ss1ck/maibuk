@@ -30,7 +30,7 @@ export interface Preview {
   stopSync: () => void;
 }
 
-export function startPreview(root: string, runDir: string): Promise<Preview>;
+export function startPreview(root: string, runDir: string, outDir?: string): Promise<Preview>;
 
 export interface Teardown {
   track: (child: { kill: (signal: string) => void }) => void;

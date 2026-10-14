@@ -7,6 +7,19 @@ export type FrameSource = "chromium" | "probe" | "android";
 
 export const FRAME_SOURCES: readonly FrameSource[] = ["chromium", "probe", "android"];
 
+/**
+ * A fixture Plugin the scenario's device seeds before the app boots, and the
+ * Plugin Permissions its approval record grants. Seeding a Plugin writes the web
+ * Plugin Directory (OPFS), which the `probe` (Playwright WebKit) and `android`
+ * sources lack, so every scenario with `plugins` skips both (see `skip`).
+ */
+export interface FrameScenarioPlugin {
+  /** The Plugin fixture id (a `PluginSeed` in e2e/support/storage.ts). */
+  id: string;
+  /** The Plugin Permissions every seeded Plugin is approved for. */
+  granted: readonly string[];
+}
+
 export interface FrameScenario {
   id: string;
   title: string;
@@ -20,6 +33,8 @@ export interface FrameScenario {
   repetitions: number;
   /** Whether keystroke-to-next-frame is recorded. */
   recordsInput: boolean;
+  /** Fixture Plugins the device seeds; needs the OPFS Plugin Directory. */
+  plugins?: readonly FrameScenarioPlugin[];
   /** Sources that do not run this scenario, each with why. */
   skip?: Partial<Record<FrameSource, string>>;
 }
@@ -152,6 +167,42 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
     skip: {
       android:
         "a phone shows one Pane at a time (the lists are a drawer below md), so there is no Pane to cross into",
+    },
+  },
+  {
+    id: "plugin-remote-ui",
+    title: "Plugin Remote UI: rendering 1,000 rows while scrolling",
+    seed: "empty",
+    warmUp:
+      "Install the fixture-bench Plugin, open its echo page once so its Worker is running, then leave the page by keyboard to the Books gallery.",
+    measured:
+      "Open the fixture-bench echo page from the sidebar, wait for its 1,000 rows, then wheel the table from its top to the last row and back in 100 px ticks, one per frame. Keystroke echo through the Plugin is measured by bench:plugins (remoteUiEcho, remoteUiBurst), not here.",
+    repetitions: 3,
+    recordsInput: false,
+    plugins: [{ id: "fixture-bench", granted: ["editor:read", "editor:decorate"] }],
+    skip: {
+      probe:
+        "seeding the Plugin Directory needs OPFS, which the pinned Playwright WebKit (the probe engine) lacks",
+      android:
+        "the Android WebView seeds no web Plugin Directory, so the echo page has no Plugin to open",
+    },
+  },
+  {
+    id: "typing-with-highlights",
+    title: "Typing in a long Chapter with Plugin highlight decorations",
+    seed: "perfLongChapter",
+    warmUp:
+      "Install the fixture-bench Plugin, open its echo page first (its highlight subscription is not replayed), then open the long Chapter, wait for the highlight decorations, and type one sentence.",
+    measured:
+      "Type 120 characters at 12 per second while the fixture-bench Plugin maps highlights on every content change, refreshing them 300 ms after each edit.",
+    repetitions: 3,
+    recordsInput: true,
+    plugins: [{ id: "fixture-bench", granted: ["editor:read", "editor:decorate"] }],
+    skip: {
+      probe:
+        "seeding the Plugin Directory needs OPFS, which the pinned Playwright WebKit (the probe engine) lacks",
+      android:
+        "the Android WebView seeds no web Plugin Directory, so the Chapter gets no Plugin highlights",
     },
   },
 ];

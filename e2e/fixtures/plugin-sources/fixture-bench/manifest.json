@@ -1,0 +1,29 @@
+{
+  "manifestVersion": 1,
+  "id": "fixture-bench",
+  "name": "Bench Fixture",
+  "description": "The E2E bench fixture Plugin (issue #448): one on-demand Plugin whose page renders a host-owned text field that echoes every keystroke and a 1,000-row table through Remote UI, and whose Worker paints ~500 editor highlights on the focused Chapter and refreshes them on content change, so the bench:plugins and bench:frames lanes have a deterministic Plugin workload to measure.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web"],
+  "lifecycle": "on-demand",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": ["editor:read", "editor:decorate"],
+    "optional": []
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "openEcho",
+        "label": "Open bench echo",
+        "contexts": ["global"],
+        "navigates": true
+      }
+    ],
+    "pages": [{ "id": "echo", "title": "Bench echo", "command": "openEcho" }],
+    "sidebarEntries": [{ "page": "echo", "icon": "gauge" }]
+  }
+}

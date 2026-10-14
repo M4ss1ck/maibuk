@@ -123,13 +123,14 @@ export function createRunDir(root, runsDir) {
 }
 
 /**
- * Serves the web build (e2e/.output/web-dist) on a free port, in a process
- * group of its own so `stop` takes the whole pnpm > vite tree with it. Its pid
- * goes in `runDir` for killRecordedPreview and the next run's sweep. The runner
- * owns it instead of Playwright's webServer, which an interrupted Playwright
- * leaves running on its port.
+ * Serves the web build (e2e/.output/web-dist by default, or `outDir` for a lane
+ * with a build of its own) on a free port, in a process group of its own so
+ * `stop` takes the whole pnpm > vite tree with it. Its pid goes in `runDir` for
+ * killRecordedPreview and the next run's sweep. The runner owns it instead of
+ * Playwright's webServer, which an interrupted Playwright leaves running on its
+ * port.
  */
-export async function startPreview(root, runDir) {
+export async function startPreview(root, runDir, outDir = "e2e/.output/web-dist") {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const child = spawn(
@@ -139,7 +140,7 @@ export async function startPreview(root, runDir) {
       "vite",
       "preview",
       "--outDir",
-      "e2e/.output/web-dist",
+      outDir,
       "--host",
       "127.0.0.1",
       "--port",

@@ -72,6 +72,7 @@ import { toast } from "@/components/ui/Toast";
 import { APP_VERSION } from "@/constants";
 import { useSettingsStore } from "@/features/settings/store";
 import i18n from "@/i18n";
+import { benchMarksEnabled } from "@/lib/bench-marks";
 import { waitForDatabaseReady } from "@/lib/db";
 import { getPluginDirectory } from "@/lib/platform";
 import { PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
@@ -132,18 +133,19 @@ function messageOf(error: unknown): string {
 }
 
 /**
- * Dev-only User Timing marks for one activation's host-side work (the #401
- * per-start budget). A devtools Performance profile shows them; a production
- * build and an engine without User Timing emit nothing.
+ * User Timing marks for one activation's host-side work (the #401 per-start
+ * budget). A devtools Performance profile or the production `bench:plugins`
+ * build (`VITE_PLUGIN_BENCH=1`) shows them; a shipped build and an engine
+ * without User Timing emit nothing. See `benchMarksEnabled()`.
  */
-function devMark(name: string): void {
-  if (!import.meta.env.DEV) return;
+function benchMark(name: string): void {
+  if (!benchMarksEnabled()) return;
   if (typeof performance === "undefined" || typeof performance.mark !== "function") return;
   performance.mark(name);
 }
 
-function devMeasure(name: string, startMark: string, endMark: string): void {
-  if (!import.meta.env.DEV) return;
+function benchMeasure(name: string, startMark: string, endMark: string): void {
+  if (!benchMarksEnabled()) return;
   if (typeof performance === "undefined" || typeof performance.measure !== "function") return;
   try {
     performance.measure(name, startMark, endMark);
@@ -507,7 +509,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       return { ok: false, refusal };
     }
 
-    devMark(startMark);
+    benchMark(startMark);
     setState(entry, { status: "starting", startReason: reason });
 
     // An incompatible manifest stays listed and off (#436): the check runs
@@ -595,8 +597,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     }
 
     entry.runtime = result.plugin;
-    devMark(handshakeMark);
-    devMeasure(`plugin.start.host:${pluginId}`, startMark, handshakeMark);
+    benchMark(handshakeMark);
+    benchMeasure(`plugin.start.host:${pluginId}`, startMark, handshakeMark);
 
     // The dataVersion gate runs before ready (ADR 0023). Data at an older
     // version is migrated by the Plugin's own migrateData, once; a throw
@@ -650,9 +652,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     startHeartbeat(entry);
     armIdle(entry);
     const readyMark = `plugin.start:${pluginId}:ready`;
-    devMark(readyMark);
-    devMeasure(`plugin.start:${pluginId}`, startMark, readyMark);
-    devMeasure(`plugin.start.gate:${pluginId}`, handshakeMark, readyMark);
+    benchMark(readyMark);
+    benchMeasure(`plugin.start:${pluginId}`, startMark, readyMark);
+    benchMeasure(`plugin.start.gate:${pluginId}`, handshakeMark, readyMark);
     return { ok: true, startReason: reason };
   }
 

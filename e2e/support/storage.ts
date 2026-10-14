@@ -37,8 +37,8 @@ export type TutorialProgressSeed = "dismissed" | "clean";
 /**
  * A fixture Plugin the seed can write into the web Plugin Directory (OPFS). The
  * `tracer` and `approvals` folders are committed and used as-is; `remote-ui`,
- * `fixture-hostile`, `fixture-everything`, and `fixture-everything-on-demand`
- * are built from source at global setup.
+ * `fixture-hostile`, `fixture-everything`, `fixture-everything-on-demand`, and
+ * `fixture-bench` are built from source at global setup.
  */
 export type PluginSeed =
   | "tracer"
@@ -46,14 +46,31 @@ export type PluginSeed =
   | "approvals"
   | "fixture-hostile"
   | "fixture-everything"
-  | "fixture-everything-on-demand";
+  | "fixture-everything-on-demand"
+  | "fixture-bench";
 
-/** A seeded folder with files overridden (path -> UTF-8 text), never committed. */
-export interface PluginSeedOverride {
-  name: PluginSeed;
-  /** Replaces or adds files by POSIX-relative path, e.g. a changed manifest. */
+/**
+ * One Plugin the seed installs: a named Plugin Directory folder (`name`), the
+ * fixture its bytes are read from (`from`, defaulting to `name`), and any files
+ * replaced or added by POSIX-relative path. A plain `PluginSeed` string is the
+ * simple case; a clone (`clonePluginSeeds`) is an entry whose `name` is the
+ * clone id and whose `from` is the fixture it copies.
+ */
+export interface PluginSeedEntry {
+  /** The Plugin id and Plugin Directory folder name. */
+  name: string;
+  /** The fixture folder the files are read from; defaults to `name`. */
+  from?: PluginSeed;
+  /** Replaces or adds files by POSIX-relative path, e.g. a rewritten manifest. */
   files?: Record<string, string>;
 }
+
+/**
+ * A seeded folder with files overridden (path -> UTF-8 text), never committed.
+ * @deprecated A `PluginSeedEntry` whose `name` is a known fixture; kept for the
+ * existing call sites.
+ */
+export type PluginSeedOverride = PluginSeedEntry & { name: PluginSeed };
 
 /**
  * The approval record the seed writes for a Plugin, matching the v2 payload
@@ -111,31 +128,105 @@ const BUILT_PLUGIN_SEEDS: ReadonlySet<PluginSeed> = new Set([
   "fixture-hostile",
   "fixture-everything",
   "fixture-everything-on-demand",
+  "fixture-bench",
 ]);
 
 const BLANK_PATH = "/__e2e__/blank";
 
 export interface PluginSeedData {
-  name: PluginSeed;
+  /** The Plugin id and Plugin Directory folder name (a clone id for a clone). */
+  name: string;
   files: { path: string; base64: string }[];
   /** The fixture's committed pin; the app must compute the same h1: from OPFS. */
   pinnedHash: string;
 }
 
+/** The source folder a fixture's bytes are read from, built or committed. */
+function pluginSeedDir(name: PluginSeed): string {
+  return BUILT_PLUGIN_SEEDS.has(name)
+    ? resolve(PLUGIN_BUILD_DIR, name)
+    : resolve(PLUGIN_FIXTURES_DIR, name);
+}
+
+/**
+ * The clone id for the `index`-th (1-based) copy of `from`, e.g.
+ * `fixture-everything-on-demand-clone-01`. Pure, so it is unit-tested.
+ */
+export function clonePluginId(from: PluginSeed, index: number): string {
+  return `${from}-clone-${String(index).padStart(2, "0")}`;
+}
+
+/**
+ * Rewrites a fixture manifest for a clone: its `id` and `name` become the
+ * clone's, and every Command drops its `defaults` (and `web` override) so no
+ * clone's Shortcuts collide with its siblings'. Pure, so it is unit-tested; the
+ * clone's pinned hash is recomputed from these rewritten bytes at seed time.
+ */
+export function clonePluginManifest(manifestText: string, id: string, name: string): string {
+  const manifest = JSON.parse(manifestText) as Record<string, unknown>;
+  manifest.id = id;
+  manifest.name = name;
+  const contributes = manifest.contributes as
+    | { commands?: Record<string, unknown>[] }
+    | undefined;
+  for (const command of contributes?.commands ?? []) {
+    delete command.defaults;
+    delete command.web;
+  }
+  return JSON.stringify(manifest, null, 2);
+}
+
+/**
+ * `count` clones of the built fixture `from`, each under its own Plugin id
+ * (`clonePluginId`) with its manifest id and name rewritten and its default
+ * Shortcuts dropped, so one spec can seed twenty Plugins that never collide.
+ * Reads the built fixture's manifest, which global setup wrote before any spec
+ * loads, so it must be called after global setup (a spec's `test.use` is).
+ *
+ * Returns a `Set`, not an array: Playwright's `test.use` reads an array whose
+ * second element is an object as a fixture tuple (`isFixtureTuple`), so
+ * `plugins: [clone1, clone2, …]` would seed one clone, not `count`.
+ */
+export function clonePluginSeeds(from: PluginSeed, count: number): Set<PluginSeedEntry> {
+  const manifestPath = resolve(pluginSeedDir(from), "manifest.json");
+  if (!existsSync(manifestPath)) {
+    throw new Error(
+      `the fixture Plugin "${from}" has no built manifest at ${manifestPath}; run the E2E global setup`
+    );
+  }
+  const sourceManifest = readFileSync(manifestPath, "utf8");
+  const sourceName = (JSON.parse(sourceManifest) as { name: string }).name;
+  const entries = new Set<PluginSeedEntry>();
+  for (let index = 0; index < count; index++) {
+    const id = clonePluginId(from, index + 1);
+    entries.add({
+      name: id,
+      from,
+      files: {
+        "manifest.json": clonePluginManifest(sourceManifest, id, `${sourceName} Clone ${index + 1}`),
+      },
+    });
+  }
+  return entries;
+}
+
 async function readPluginSeed(
-  seed: PluginSeed | PluginSeedOverride
+  seed: PluginSeed | PluginSeedEntry
 ): Promise<PluginSeedData> {
-  const name = typeof seed === "string" ? seed : seed.name;
-  const overrides = typeof seed === "string" ? undefined : seed.files;
+  const entry: PluginSeedEntry = typeof seed === "string" ? { name: seed } : seed;
+  const name = entry.name;
+  const from = entry.from ?? name;
+  const overrides = entry.files;
   // `tracer` is committed and used as-is, pinned by its committed
   // `tracer.expected.json`. `approvals` is committed without a pinned file:
   // its folder hash is computed here, so a single fixture serves approved,
   // changed, and Built-in seeds. The built fixtures are built from source at
   // global setup, so their pin is computed from the built bytes the app will
-  // hash.
-  const dir = BUILT_PLUGIN_SEEDS.has(name)
-    ? await builtPluginSeed(name)
-    : { dir: resolve(PLUGIN_FIXTURES_DIR, name) };
+  // hash. A clone reads its source fixture's bytes and recomputes the pin from
+  // the rewritten files, so the app hashes exactly what it installs.
+  const dir = BUILT_PLUGIN_SEEDS.has(from as PluginSeed)
+    ? await builtPluginSeed(from as PluginSeed)
+    : { dir: resolve(PLUGIN_FIXTURES_DIR, from) };
   let files = readFolderFiles(dir.dir);
   if (overrides !== undefined) {
     files = files.filter((file) => !(file.path in overrides));
@@ -245,7 +336,7 @@ export async function prepareDevice(
   }: {
     library: LibrarySeed;
     tutorial: TutorialProgressSeed;
-    plugins?: (PluginSeed | PluginSeedOverride)[];
+    plugins?: Iterable<PluginSeed | PluginSeedEntry>;
     /** Folders seeded with no approval record at all (installed but unapproved). */
     unapprovedPlugins?: PluginSeed[];
     /** Approval records written as declared, overriding the default per Plugin. */
@@ -263,7 +354,7 @@ export async function prepareDevice(
   );
   const byId = new Map(seeds.map((seed) => [seed.name, seed]));
   const custom = new Map(pluginApprovals.map((approval) => [approval.pluginId, approval]));
-  const unapproved = new Set(unapprovedPlugins);
+  const unapproved = new Set<string>(unapprovedPlugins);
 
   const approvals: PluginApproval[] = [];
   for (const seed of seeds) {

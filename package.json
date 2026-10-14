@@ -50,6 +50,7 @@
     "bench:editor-highlights": "vitest bench --run src/test/bench/editor-highlights.bench.ts --outputJson .bench/editor-highlights.json && node scripts/editor-highlights-bench-budget.mjs .bench/editor-highlights.json",
     "bench:dictation:android": "node scripts/dictation-bench/android.mjs .bench/dictation-android.json",
     "bench:frames": "tsx e2e/run-frames.ts",
+    "bench:plugins": "tsx e2e/run-plugins-bench.ts",
     "e2e:voice-audio": "bash scripts/e2e-voice-audio.sh"
   },
   "dependencies": {

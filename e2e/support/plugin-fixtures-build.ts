@@ -43,7 +43,13 @@ const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
     manifest: "manifest.on-demand.json",
     output: "fixture-everything-on-demand",
   },
+  { source: "fixture-bench", manifest: "manifest.json", output: "fixture-bench" },
 ];
+
+/** The folder names under `.output/plugins` the seeds read, for a build check. */
+export const PLUGIN_FIXTURE_FOLDERS: readonly string[] = FIXTURE_PLUGINS.map(
+  (fixture) => fixture.output
+);
 
 /** Builds every source-built fixture Plugin the seed can read from `.output`. */
 export async function buildPluginFixtures(requestLog: { origin: string }): Promise<void> {
