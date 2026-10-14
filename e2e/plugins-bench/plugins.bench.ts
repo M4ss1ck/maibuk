@@ -260,10 +260,10 @@ async function measureCommand(page: Page): Promise<number[]> {
 
 /**
  * Types `text` into the echo field and, per key, samples keydown -> the echo
- * Text showing that prefix -> next rAF. `delay` is the typing pace: 120 ms for
- * echo, 0 for the burst. Pairs each keydown with the mutation whose echo text
- * is exactly that key's prefix, so a coalesced burst yields fewer samples but
- * never a wrong one.
+ * Text containing that key's prefix, committed to the DOM. `delay` is the typing pace:
+ * 120 ms for echo, 0 for the burst. A later echo of a longer prefix still
+ * contains this key's prefix, so a burst the Worker coalesces into one update
+ * still yields one sample per key.
  */
 async function measureEcho(page: Page, text: string, delay: number): Promise<number[]> {
   const field = page.getByRole("textbox", { name: "Echo input" });
@@ -287,10 +287,11 @@ async function measureEcho(page: Page, text: string, delay: number): Promise<num
     );
     const observer = new MutationObserver(() => {
       if (!w.__benchEcho.armed) return;
-      // Read the text when the mutation is delivered, not inside the rAF: a
-      // later keystroke's echo could otherwise overwrite it before the rAF runs.
-      const text = el.textContent ?? "";
-      requestAnimationFrame(() => w.__benchEcho.mutations.push({ t: performance.now(), text }));
+      // The sample ends when the echo is committed to the DOM, not at the next
+      // rAF: the rAF tail adds up to one frame of phase noise that measures the
+      // display, not the Plugin round trip. Keystroke to next frame is
+      // bench:frames' job (its plugin-remote-ui scenario).
+      w.__benchEcho.mutations.push({ t: performance.now(), text: el.textContent ?? "" });
     });
     observer.observe(el, { childList: true, characterData: true, subtree: true });
   });
@@ -304,9 +305,9 @@ async function measureEcho(page: Page, text: string, delay: number): Promise<num
   });
 
   await page.keyboard.type(text, { delay });
-  // Wait for the echo Text to show the full value *and* for the mutation's rAF
-  // to have pushed it: reading right after the text updates would race the
-  // scheduled rAF and lose the last (or, in a coalesced burst, the only) sample.
+  // Wait for the observer to have recorded the full value, not just for the
+  // text to show it, so the last (or, in a coalesced burst, the only) sample
+  // is never lost.
   await page.waitForFunction(
     (full) => {
       const w = window as unknown as { __benchEcho: { mutations: { text: string }[] } };
