@@ -40,6 +40,9 @@ const source = pluginFolder(
         { id: "tag", label: "Tag chapter", contexts: ["chapterItem"], targets: ["chapter"] },
         // A target Command that declares a screen Context: the four-ways fixture.
         { id: "stamp", label: "Stamp", contexts: ["global", "chapterItem"], targets: ["chapter"] },
+        // An editor-context Command: its Default Shortcut must fire while the
+        // author types in the focused editor (#451).
+        { id: "highlight", label: "Toggle highlights", contexts: ["editor"], defaults: [["Alt+F7"]] },
       ],
       pages: [{ id: "report", title: "Report", command: "open" }],
       itemMenuEntries: [{ command: "tag" }],
@@ -170,6 +173,30 @@ describe("pluginCommandBindings", () => {
     expect(stamp?.enabled).toBe(false);
     stamp?.onTrigger?.();
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it("lets an editor-context Command run while the author types, but no other Context", () => {
+    const runtime = {
+      broker: { request: vi.fn(async () => null) },
+      stop: vi.fn(),
+    } as unknown as PluginRuntime;
+    const lifecycle = stubLifecycle({ status: "ready", startReason: "launch" }, runtime);
+    const bindings = pluginCommandBindings(lifecycle, vi.fn());
+
+    // A Command in the `editor` Context is allowed in a typing target, so its
+    // Default Shortcut fires in the focused editor.
+    const highlight = bindings.find((binding) => binding.id === "plugin.sample.highlight");
+    expect(highlight?.enabled).toBe(true);
+    expect(highlight?.allowInInput).toBe(true);
+
+    // A global, page, item-only, or targeted Command is not: it must not steal
+    // keys while the author types.
+    const allow = (id: string) =>
+      bindings.find((binding) => binding.id === id)?.allowInInput ?? false;
+    expect(allow("plugin.sample.report")).toBe(false);
+    expect(allow("plugin.sample.open")).toBe(false);
+    expect(allow("plugin.sample.tag")).toBe(false);
+    expect(allow("plugin.sample.stamp")).toBe(false);
   });
 
   it("keeps an item-menu-only Command item-scoped (its focused row binds it)", () => {
