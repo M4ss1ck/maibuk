@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!!**/dist", "!!**/node_modules", "!!**/src/features/symbols/data"]
+    "includes": ["**", "!!**/dist", "!!**/node_modules", "!!**/src/features/symbols/data", "!!plugins/*/vendor"]
   },
   "formatter": {
     "enabled": true,

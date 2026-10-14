@@ -51,7 +51,12 @@ export default defineConfig(() => ({
         replacement: resolve(__dirname, "src/test/support/sql-wasm-url.ts"),
       },
     ],
-    include: ["src/test/**/*.test.ts", "src/test/**/*.test.tsx"],
+    include: [
+      "src/test/**/*.test.ts",
+      "src/test/**/*.test.tsx",
+      "plugins/**/*.test.ts",
+      "plugins/**/*.test.tsx",
+    ],
     // One budget for every test; see src/test/time-budget.ts.
     testTimeout: TEST_TIMEOUT_MS,
     hookTimeout: TEST_TIMEOUT_MS,
