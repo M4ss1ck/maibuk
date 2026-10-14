@@ -375,7 +375,8 @@ export const PLUGIN_API_TABLE = [
   }),
   defineApiRow({
     id: "notifications.show",
-    description: "Shows a toast naming this Plugin. At most one every 5 seconds.",
+    description:
+      "Shows a toast naming this Plugin. At most one every 5 seconds, except while answering the author's own Command run.",
     input: z.strictObject({
       variant: z.enum(["info", "success", "warning", "error"]),
       message: z.string().min(1).max(500),

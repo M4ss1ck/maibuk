@@ -6,6 +6,10 @@
  * rate. Only then does the row's handler run. Refusals are typed errors and
  * the Plugin keeps running; only sustained throttling stops it.
  *
+ * A per-method rate limit does not apply while the host is awaiting this
+ * Plugin's own `command.run`: a call it makes then is answering the author,
+ * not announcing on its own. See `inFlightCommandRuns`.
+ *
  * Events go only to Plugins that subscribed, and only while the event's
  * Plugin Permission is still granted at the moment of delivery.
  *
@@ -30,6 +34,7 @@ import type {
 } from "@/features/plugins/types";
 import {
   type HostToPluginMessage,
+  PLUGIN_COMMAND_RUN_REQUEST,
   PLUGIN_MESSAGE_MAX_BYTES,
   PLUGIN_STREAM_CHUNK_MAX_BYTES,
   PluginApiError,
@@ -45,6 +50,12 @@ export const CALL_RATE_PER_SECOND = 100;
 export const CALL_BURST = 500;
 /** Throttled this long without a break stops the Plugin. */
 export const THROTTLE_STOP_MS = 30_000;
+/**
+ * How long a `command.run` exempts its Plugin from `minIntervalMs`. A run left
+ * unanswered past it stops counting, so a Plugin cannot hold a run open to
+ * toast without limit.
+ */
+export const COMMAND_RUN_EXEMPTION_MS = 10_000;
 /**
  * A break ends a throttling streak once no call was refused for as long as
  * the bucket takes to refill completely (5 s): the Plugin gave back its whole
@@ -130,6 +141,27 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   const pending: PendingReplies = new Map();
   const pendingMethods = new Map<number, string>();
   const openBodies = new Set<AsyncIterator<unknown>>();
+  /**
+   * The ids of host `command.run` requests this Plugin has not answered yet.
+   * While any is in flight the Plugin is running a Command the author picked,
+   * so a call it makes in that window is answering the author rather than
+   * announcing on its own: a method's `minIntervalMs` does not apply to it.
+   * Such a call is accepted without touching `lastAcceptedAt`, so a solicited
+   * announcement never eats into the budget for unsolicited ones and the
+   * limit the author's own call would otherwise start does not begin until
+   * the run settles. The id is dropped when the run settles (its reply, an
+   * error, or a stop), and a run older than `COMMAND_RUN_EXEMPTION_MS` no
+   * longer counts, so the exemption ends with the run or its window.
+   */
+  const inFlightCommandRuns = new Map<number, number>();
+
+  function hasRecentCommandRun(): boolean {
+    const time = now();
+    for (const sentAt of inFlightCommandRuns.values()) {
+      if (time - sentAt < COMMAND_RUN_EXEMPTION_MS) return true;
+    }
+    return false;
+  }
 
   function post(message: HostToPluginMessage) {
     if (!stopped) port.postMessage(message);
@@ -164,6 +196,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     }
     pending.clear();
     pendingMethods.clear();
+    inFlightCommandRuns.clear();
     subscriptions.clear();
     // Cancels each open body, so the network connection behind it closes now
     // instead of at its next chunk.
@@ -270,7 +303,12 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       fail(id, refusal("library-unavailable", "The Library is not available", { method }));
       return;
     }
-    if (row.minIntervalMs !== undefined) {
+    // While the host awaits this Plugin's own `command.run`, a call with a
+    // `minIntervalMs` is answering the author: accept it, and leave
+    // `lastAcceptedAt` alone so solicited announcements do not consume the
+    // unsolicited budget (see `inFlightCommandRuns`).
+    const solicited = hasRecentCommandRun();
+    if (row.minIntervalMs !== undefined && !solicited) {
       const last = lastAcceptedAt.get(method);
       if (last !== undefined && now() - last < row.minIntervalMs) {
         fail(
@@ -288,7 +326,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       fail(id, refusal("not-implemented", `${method} is not available yet`, { method }));
       return;
     }
-    if (row.minIntervalMs !== undefined) lastAcceptedAt.set(method, now());
+    if (row.minIntervalMs !== undefined && !solicited) lastAcceptedAt.set(method, now());
 
     let outcome: unknown;
     try {
@@ -361,6 +399,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     const method = pendingMethods.get(id);
     pending.delete(id);
     pendingMethods.delete(id);
+    inFlightCommandRuns.delete(id);
     if (message.ok === true) {
       entry.resolve(message.result);
       return;
@@ -441,6 +480,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
         return Promise.reject(new PluginApiError(refusal("plugin-stopped", "Plugin stopped")));
       }
       const id = nextRequestId++;
+      if (method === PLUGIN_COMMAND_RUN_REQUEST) inFlightCommandRuns.set(id, now());
       return new Promise((resolve, reject) => {
         pending.set(id, { resolve, reject });
         pendingMethods.set(id, method);

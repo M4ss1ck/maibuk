@@ -791,11 +791,11 @@ null
 
 ### `notifications.show`
 
-Shows a toast naming this Plugin. At most one every 5 seconds.
+Shows a toast naming this Plugin. At most one every 5 seconds, except while answering the author's own Command run.
 
 - Plugin Permission: none (rate-limited instead)
 - Effect: write
-- At most one call every 5 s
+- At most one call every 5 s, except while answering the author's own Command run
 
 Input:
 

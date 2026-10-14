@@ -414,7 +414,7 @@ export interface PluginApiMethods {
     };
     output: null;
   };
-  /** Shows a toast naming this Plugin. At most one every 5 seconds. */
+  /** Shows a toast naming this Plugin. At most one every 5 seconds, except while answering the author's own Command run. */
   "notifications.show": {
     input: {
       variant: "info" | "success" | "warning" | "error";
@@ -575,7 +575,7 @@ export interface PluginApi {
     writeText(params: PluginApiMethods["clipboard.writeText"]["input"]): Promise<PluginApiMethods["clipboard.writeText"]["output"]>;
   };
   notifications: {
-    /** Shows a toast naming this Plugin. At most one every 5 seconds. */
+    /** Shows a toast naming this Plugin. At most one every 5 seconds, except while answering the author's own Command run. */
     show(params: PluginApiMethods["notifications.show"]["input"]): Promise<PluginApiMethods["notifications.show"]["output"]>;
   };
   storage: {

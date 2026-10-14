@@ -290,7 +290,11 @@ export function renderPluginApiDocs(
       ...(row.requiresLibrary
         ? ["- Refused with `library-unavailable` while the Library cannot be read or written"]
         : []),
-      ...(row.minIntervalMs ? [`- At most one call every ${row.minIntervalMs / 1000} s`] : []),
+      ...(row.minIntervalMs
+        ? [
+            `- At most one call every ${row.minIntervalMs / 1000} s, except while answering the author's own Command run`,
+          ]
+        : []),
     ];
     sections.push(
       [

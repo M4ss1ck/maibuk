@@ -4,9 +4,10 @@
 // off makes Next announce that and move nothing, the editor toolbar button
 // toggles the same highlights, and a Note editor toggles too.
 //
-// The Plugin announces a step with `notifications.show`, which the broker allows
-// at most once every 5 seconds (`api-table.ts`), so a test that asserts two
-// step announcements waits out that window between them.
+// The Plugin announces a step with `notifications.show`, which the broker
+// otherwise allows at most once every 5 seconds (`api-table.ts`). A step
+// announcement answers the author's own Command run, so the broker exempts it
+// from that limit and back-to-back Next/Previous assertions need no wait.
 //
 // @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
 // Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
@@ -30,8 +31,6 @@ const PLUGIN_NAME = "Echoes";
 const REQUIRED_PERMISSIONS = ["library:read", "editor:read", "editor:decorate"];
 /** Echoes' nearby echoes in the Chapter: four "harbor", two "keeper", six short words. */
 const ECHO_COUNT = 12;
-/** The broker allows one `notifications.show` every 5s; wait past it for the next. */
-const ANNOUNCEMENT_GAP_MS = 5_200;
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -120,13 +119,11 @@ test.describe(
         await expect.poll(async () => (await caretText(page)).startsWith("harbor")).toBe(true);
 
         // Previous from the first wraps to the last.
-        await page.waitForTimeout(ANNOUNCEMENT_GAP_MS);
         await page.keyboard.press("Alt+Shift+F8");
         await expect(toast(page, "Echo 12 of 12: night, repeated 6 words earlier")).toBeVisible();
         await expect.poll(async () => (await caretText(page)).startsWith("night")).toBe(true);
 
         // Next from the last wraps back to the first.
-        await page.waitForTimeout(ANNOUNCEMENT_GAP_MS);
         await page.keyboard.press("Alt+F8");
         await expect(toast(page, "Echo 1 of 12: harbor, repeated 4 words later")).toBeVisible();
         await expect.poll(async () => (await caretText(page)).startsWith("harbor")).toBe(true);
