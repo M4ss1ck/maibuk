@@ -6,4 +6,3 @@
  */
 export { preparePluginsBench, getPluginsBenchSeed, readBenchSeed } from "@/features/plugins/bench/seed";
 export { runPluginsBenchDriver } from "@/features/plugins/bench/driver";
-export { diag } from "@/features/plugins/bench/diag";

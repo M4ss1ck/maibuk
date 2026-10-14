@@ -33,7 +33,7 @@ import type { PluginFolderFile } from "@/features/plugins/types";
 import { BENCH_IDENTIFIER, benchConfigOverride } from "@/test/support/plugin-conformance/csp";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
 import type { PluginsBenchReport } from "../../scripts/plugins-bench-budget.mjs";
-import { type HttpCollector, startHttpCollector } from "../conformance/collector";
+import { startHttpCollector } from "../conformance/collector";
 import {
   assertLinuxPrerequisites,
   buildLinuxApp,
@@ -44,8 +44,10 @@ import type { RunDir } from "../conformance/types";
 import { clonePluginId, clonePluginManifest, clonePluginSeeds } from "../support/storage";
 import { type MeasurementFile, type PluginsBenchOptions, assembleReport } from "./report";
 import {
+  type LaunchCapture,
   type WebkitScenario,
   benchScenarios,
+  createCapture,
   echoTextFor,
   launchPlan,
   measurementFile,
@@ -73,22 +75,41 @@ interface SeedFolder {
   granted: readonly string[];
 }
 
-/** The bytes of the fixture `from`, with a clone's rewritten manifest applied. */
+/** Adds the desktop host platform to a manifest, so its surfaces register on Tauri. */
+function withDesktopPlatform(manifestText: string): string {
+  const manifest = JSON.parse(manifestText) as { platforms?: string[] };
+  manifest.platforms = [...new Set([...(manifest.platforms ?? []), "desktop"])];
+  return JSON.stringify(manifest, null, 2);
+}
+
+/**
+ * The bytes of the fixture `from`, with a clone's rewritten manifest applied and
+ * the desktop host platform added. The E2E fixtures declare
+ * `platforms: ["web"]` (they are seeded into a Chromium OPFS), and the desktop
+ * host filters a Plugin's Commands, pages, and sidebar entries by platform
+ * (`contributions.ts`), so on the WebKitGTK lane nothing would register without
+ * this. Each folder's pinned hash is computed over exactly these bytes.
+ */
 function folderFilesFor(root: string, from: string, cloneIndex: number | null): PluginFolderFile[] {
   const dir = resolve(root, PLUGIN_BUILD_DIR, from);
   if (!existsSync(dir)) {
     throw new Error(`the built fixture Plugin "${from}" is missing at ${dir}; run the E2E setup`);
   }
   const files = readFolderFiles(dir);
-  if (cloneIndex === null) return files;
-  const id = clonePluginId(from as never, cloneIndex);
   const sourceManifest = files.find((file) => file.path === "manifest.json");
   if (sourceManifest === undefined) throw new Error(`fixture "${from}" has no manifest.json`);
   const sourceText = new TextDecoder().decode(sourceManifest.bytes);
-  const name = (JSON.parse(sourceText) as { name: string }).name;
-  const rewritten = new TextEncoder().encode(
-    clonePluginManifest(sourceText, id, `${name} Clone ${cloneIndex}`)
-  );
+  let manifestText: string;
+  if (cloneIndex === null) {
+    manifestText = withDesktopPlatform(sourceText);
+  } else {
+    const id = clonePluginId(from as never, cloneIndex);
+    const name = (JSON.parse(sourceText) as { name: string }).name;
+    manifestText = withDesktopPlatform(
+      clonePluginManifest(sourceText, id, `${name} Clone ${cloneIndex}`)
+    );
+  }
+  const rewritten = new TextEncoder().encode(manifestText);
   return files.map((file) =>
     file.path === "manifest.json" ? { path: file.path, bytes: rewritten } : file
   );
@@ -271,33 +292,6 @@ function seedFor(
 }
 
 /** The measurement state one launch's collector folds. */
-export interface LaunchCapture {
-  measure(mode: string, samples: number[]): void;
-  markDone(): void;
-  reset(): void;
-  done(): boolean;
-  samples(): number[];
-}
-
-/** A one-launch capture; the collector and the launch loop share it. */
-export function createCapture(): LaunchCapture {
-  let measured: number[] = [];
-  let done = false;
-  return {
-    measure(_mode, samples) {
-      measured.push(...samples);
-    },
-    markDone() {
-      done = true;
-    },
-    reset() {
-      measured = [];
-      done = false;
-    },
-    done: () => done,
-    samples: () => measured,
-  };
-}
 
 function describeScenario(scenario: WebkitScenario): string {
   switch (scenario.kind) {
@@ -352,9 +346,14 @@ export async function measureWebKitGtk(
       // actual measurement POST is not blocked.
       if (request.method === "OPTIONS") return { status: 204 };
       if (request.method === "POST" && request.path === BENCH_COLLECTOR_PATHS.measure) {
-        const body = request.body as { mode?: unknown; samples?: unknown } | undefined;
+        const body = request.body as
+          | { mode?: unknown; samples?: unknown; error?: unknown }
+          | undefined;
+        if (typeof body?.error === "string") {
+          console.warn(`[plugins-bench] driver ${String(body.mode)}: ${body.error}`);
+        }
         if (typeof body?.mode === "string" && Array.isArray(body.samples)) {
-          capture.measure(body.mode, body.samples as number[]);
+          capture.measure(body.samples as number[]);
         }
         return { status: 204 };
       }
@@ -413,7 +412,11 @@ export async function measureWebKitGtk(
   files.push({ name: "startToReady", text: JSON.stringify(startToReady) });
 
   const report = assembleReport("webkitgtk", files);
-  return { ...report, build: release ? "release" : "debug" };
+  return {
+    ...report,
+    build: release ? "release" : "debug",
+    note: "WebKitGTK samples use synthetic events: the Shortcut and keystrokes are dispatched in-app (no Playwright).",
+  };
 }
 
 async function runLaunch(input: {
@@ -441,8 +444,9 @@ async function runLaunch(input: {
     input.pageId
   );
   const seedText = JSON.stringify(seed);
-  // The driver reads the seed from the app data dir, with an app config dir
-  // fallback; write both so whichever the fs scope permits is there.
+  // The driver reads the seed from the app config dir first and the app data
+  // dir second (the product's `fs` scope only permits one of them); write both
+  // so the seed is there whichever the capability allows.
   writeFileSync(resolve(dirs.dataDir, BENCH_SEED_FILE), seedText);
   writeFileSync(resolve(dirs.configDir, BENCH_SEED_FILE), seedText);
 
@@ -472,6 +476,3 @@ async function runLaunch(input: {
   }
   return input.capture.samples();
 }
-
-/** Kept for symmetry with the conformance lane's `HttpCollector` type import. */
-export type { HttpCollector };

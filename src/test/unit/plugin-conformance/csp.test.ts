@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BENCH_IDENTIFIER,
+  BENCH_PRODUCT_NAME,
   CONFORMANCE_COLLECTOR_ORIGIN,
   CONFORMANCE_IDENTIFIER,
   CONFORMANCE_PRODUCT_NAME,
+  benchConfigOverride,
   conformanceConfigOverride,
   cspWithCollectorConnectSrc,
 } from "@/test/support/plugin-conformance/csp";
@@ -54,5 +57,22 @@ describe("conformanceConfigOverride()", () => {
 
   it("tolerates a config with no app.security.csp", () => {
     expect(conformanceConfigOverride({}).app.security.csp).toBeNull();
+  });
+});
+
+describe("benchConfigOverride()", () => {
+  it("gives the bench build its own identifier and product name, off the author's install", () => {
+    const override = benchConfigOverride({ app: { security: { csp: null } } });
+    expect(override.identifier).toBe(BENCH_IDENTIFIER);
+    expect(override.productName).toBe(BENCH_PRODUCT_NAME);
+    expect(override.identifier).not.toBe(CONFORMANCE_IDENTIFIER);
+    expect(override.app.security.csp).toBeNull();
+  });
+
+  it("extends a string CSP with the collector, like the conformance build", () => {
+    const override = benchConfigOverride({ app: { security: { csp: "default-src 'self'" } } });
+    expect(override.app.security.csp).toBe(
+      `default-src 'self'; connect-src 'self' ${CONFORMANCE_COLLECTOR_ORIGIN}`
+    );
   });
 });

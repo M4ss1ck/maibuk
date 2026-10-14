@@ -54,6 +54,8 @@ describe("plugins bench budget check", () => {
     const withBuild = baseReport({ build: "debug" });
     expect(withBuild.build).toBe("debug");
     expect(checkBudgets(withBuild).exitCode).toBe(0);
+    // The WebKitGTK lane also records a note about its synthetic events.
+    expect(checkBudgets(baseReport({ build: "debug", note: "synthetic events" })).exitCode).toBe(0);
     // The field is optional: a report without it checks the same.
     expect(checkBudgets(baseReport()).exitCode).toBe(0);
   });

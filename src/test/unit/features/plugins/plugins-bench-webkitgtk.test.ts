@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   type WebkitScenario,
   benchScenarios,
+  createCapture,
   echoTextFor,
   launchPlan,
   measurementFile,
@@ -116,5 +117,26 @@ describe("echoTextFor", () => {
     expect(echoTextFor(10)).toBe("abcdefghij");
     expect(echoTextFor(28)).toHaveLength(28);
     expect(echoTextFor(28).at(-1)).toBe("b");
+  });
+});
+
+describe("createCapture", () => {
+  it("folds one launch's posted samples and reports its /done", () => {
+    const capture = createCapture();
+    expect(capture.done()).toBe(false);
+    capture.measure([10, 11]);
+    capture.measure([12]);
+    capture.markDone();
+    expect(capture.done()).toBe(true);
+    expect(capture.samples()).toEqual([10, 11, 12]);
+  });
+
+  it("forgets the previous launch on reset", () => {
+    const capture = createCapture();
+    capture.measure([1]);
+    capture.markDone();
+    capture.reset();
+    expect(capture.done()).toBe(false);
+    expect(capture.samples()).toEqual([]);
   });
 });

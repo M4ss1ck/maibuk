@@ -36,9 +36,8 @@ const BENCH_DRIVER_ENABLED = import.meta.env.VITE_PLUGIN_BENCH_DRIVER === "1";
 
 const loadPlugins = async () => {
   if (BENCH_DRIVER_ENABLED) {
-    const bench = await import("@/features/plugins/bench");
-    await bench.diag("main: bench imported");
-    await bench.preparePluginsBench();
+    const { preparePluginsBench } = await import("@/features/plugins/bench");
+    await preparePluginsBench();
   }
   const { installPluginLifecycle } = await import("@/features/plugins/lifecycle");
   installPluginLifecycle();

@@ -20,7 +20,6 @@
  */
 
 import { BENCH_COLLECTOR_PATHS } from "@/features/plugins/bench/protocol";
-import { diag } from "@/features/plugins/bench/diag";
 import {
   dispatchShortcut,
   dispatchTypingKey,
@@ -64,6 +63,22 @@ function navigateTo(to: string): void {
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
+/**
+ * Closes any modal (the first-launch Tutorial offer), which hides the Shortcut
+ * listeners the command measurement needs. Escape is the Modal's own dismiss.
+ */
+async function closeOverlays(): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const dialog = document.querySelector('[role="dialog"]');
+    if (dialog === null) return;
+    const target = document.activeElement ?? dialog;
+    target.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true })
+    );
+    await sleep(100);
+  }
+}
+
 /** POSTs one payload to the collector; a missing or slow collector never breaks the app. */
 async function post(seed: PluginsBenchSeed, path: string, body?: unknown): Promise<void> {
   try {
@@ -75,6 +90,30 @@ async function post(seed: PluginsBenchSeed, path: string, body?: unknown): Promi
   } catch {
     // The runner records a collector failure as unmeasured; the app stays up.
   }
+}
+
+/** A short description of the app's Plugin and route state, for a failed run. */
+async function diagnosePlugins(seed: PluginsBenchSeed): Promise<string> {
+  const parts = [
+    `mode=${seed.mode}`,
+    `approvals=${seed.approvals.map((a) => a.pluginId).join(",")}`,
+    `path=${window.location.pathname}`,
+    `dialogs=${document.querySelectorAll('[role="dialog"]').length}`,
+    `statuses=${document.querySelectorAll('[role="status"]').length}`,
+  ];
+  try {
+    const { getPluginDirectory } = await import("@/lib/platform");
+    const directory = await getPluginDirectory();
+    const folders = await directory.listFolders();
+    parts.push(`kind=${directory.kind}`, `folders=${folders.join(",")}`);
+    for (const folder of folders) {
+      const read = await directory.readFolder(folder);
+      parts.push(`${folder}:hash=${read?.hash ?? "none"}`);
+    }
+  } catch (error) {
+    parts.push(`directory-error=${error instanceof Error ? error.message : String(error)}`);
+  }
+  return parts.join(" ");
 }
 
 /**
@@ -177,6 +216,7 @@ async function measureLaunch(): Promise<number[]> {
 async function measureStartToReady(seed: PluginsBenchSeed): Promise<number[]> {
   const target = seed.startToReady;
   if (target === undefined) throw new Error("startToReady has no target");
+  await closeOverlays();
   navigateTo(`/plugin/${target.pluginId}/${target.pageId}`);
   const duration = await waitForPluginReady(target.pluginId);
   return [duration];
@@ -185,11 +225,13 @@ async function measureStartToReady(seed: PluginsBenchSeed): Promise<number[]> {
 async function measureCommand(seed: PluginsBenchSeed): Promise<number[]> {
   const pluginId = "fixture-everything";
   await waitForPluginReady(pluginId);
+  await closeOverlays();
   // The Book editor route puts a Book in the Command's target context, so the
   // target `stamp` Command is enabled; the id need not resolve to a Book
   // (the Plugin reads `null` and names the kind), so the Library stays empty.
   navigateTo("/book/plugins-bench");
   await sleep(500);
+  await closeOverlays();
   const chord = stampChordOf(seed);
   const samples: number[] = [];
   for (let i = 0; i < seed.samples; i += 1) {
@@ -201,6 +243,7 @@ async function measureCommand(seed: PluginsBenchSeed): Promise<number[]> {
 
 async function measureRemoteUi(seed: PluginsBenchSeed, pace: number): Promise<number[]> {
   const text = seed.echoText ?? "";
+  await closeOverlays();
   navigateTo("/plugin/fixture-bench/echo");
   const { input, element } = await waitForEchoPage();
   return measureEcho(input, element, text, pace);
@@ -232,17 +275,20 @@ async function runMode(seed: PluginsBenchSeed): Promise<number[]> {
  */
 export async function runPluginsBenchDriver(): Promise<void> {
   const seed = getPluginsBenchSeed();
-  await diag(`driver: enter seed=${seed ? seed.mode : "null"}`);
   if (seed === null) return;
   let samples: number[] = [];
+  let error: string | undefined;
   try {
     samples = await runMode(seed);
-    await diag(`driver: ${seed.mode} samples=${samples.join(",")}`);
-  } catch (error) {
-    console.warn(`[plugins-bench] ${seed.mode} failed`, error);
-    await diag(`driver: ${seed.mode} error=${error instanceof Error ? error.message : String(error)}`);
+  } catch (thrown) {
+    error = thrown instanceof Error ? thrown.message : String(thrown);
+    console.warn(`[plugins-bench] ${seed.mode} failed`, thrown);
+    error = `${error} | ${await diagnosePlugins(seed)}`;
   }
-  await post(seed, BENCH_COLLECTOR_PATHS.measure, { mode: seed.mode, samples });
+  await post(seed, BENCH_COLLECTOR_PATHS.measure, {
+    mode: seed.mode,
+    samples,
+    ...(error !== undefined ? { error } : {}),
+  });
   await post(seed, BENCH_COLLECTOR_PATHS.done);
-  await diag(`driver: posted ${seed.mode}`);
 }

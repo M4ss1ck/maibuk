@@ -3,20 +3,23 @@
  *
  * `main.tsx` calls `preparePluginsBench()` before it installs the Plugin
  * lifecycle, only in a build made with `VITE_PLUGIN_BENCH_DRIVER=1`. It reads
- * the seed file the runner wrote into the app data dir, writes the approval
+ * the seed file the runner wrote into the app config dir, writes the approval
  * records it carries into the device (the same `savePluginApproval` the install
  * flow uses), and keeps the seed for the driver. Reading before the lifecycle
  * install is what lets the seeded Plugins be approved when the launch scan runs.
  *
- * A missing or malformed seed is not fatal: the driver then does nothing, so a
- * mis-launched app is a normal app, never a crashed one.
+ * The seed lives in the app **config** dir, not the app data dir: the product's
+ * `fs:default` only grants `read-text-file` inside a scope this bench build does
+ * not extend, while `fs:allow-appconfig-write-recursive` already grants the
+ * config dir (a bench launch writes no Library there of its own). A missing or
+ * malformed seed is not fatal: the driver then does nothing, so a mis-launched
+ * app is a normal app, never a crashed one.
  */
 
 import { BaseDirectory, readTextFile } from "@tauri-apps/plugin-fs";
 import { appDataDir, join } from "@tauri-apps/api/path";
 
 import { savePluginApproval } from "@/features/plugins/approvals";
-import { diag } from "@/features/plugins/bench/diag";
 import { BENCH_SEED_FILE } from "@/features/plugins/bench/protocol";
 import { type PluginsBenchSeed, isPluginsBenchSeed } from "@/features/plugins/bench/types";
 import { useTutorialStore } from "@/features/tutorial/store";
@@ -28,7 +31,9 @@ export function getPluginsBenchSeed(): PluginsBenchSeed | null {
   return currentSeed;
 }
 
-async function readVia(run: () => Promise<string>): Promise<{ text: string | null; error: string | null }> {
+async function readVia(
+  run: () => Promise<string>
+): Promise<{ text: string | null; error: string | null }> {
   try {
     return { text: await run(), error: null };
   } catch (error) {
@@ -36,28 +41,25 @@ async function readVia(run: () => Promise<string>): Promise<{ text: string | nul
   }
 }
 
-/** The seed file's parsed contents, or null when it is missing or malformed. */
+/**
+ * The seed file's parsed contents, or null when it is missing or malformed. The
+ * app config dir is tried first (the one the scope permits); the app data dir is
+ * a harmless fallback.
+ */
 export async function readBenchSeed(): Promise<PluginsBenchSeed | null> {
-  const attempts: { where: string; run: () => Promise<string> }[] = [];
-  attempts.push({
-    where: "appData absolute",
-    run: async () => readTextFile(await join(await appDataDir(), BENCH_SEED_FILE)),
-  });
-  attempts.push({
-    where: "appData baseDir",
-    run: () => readTextFile(BENCH_SEED_FILE, { baseDir: BaseDirectory.AppData }),
-  });
-  attempts.push({
-    where: "appConfig baseDir",
-    run: () => readTextFile(BENCH_SEED_FILE, { baseDir: BaseDirectory.AppConfig }),
-  });
+  const attempts: (() => Promise<string>)[] = [
+    () => readTextFile(BENCH_SEED_FILE, { baseDir: BaseDirectory.AppConfig }),
+    async () => readTextFile(await join(await appDataDir(), BENCH_SEED_FILE)),
+    () => readTextFile(BENCH_SEED_FILE, { baseDir: BaseDirectory.AppData }),
+  ];
   for (const attempt of attempts) {
-    const { text, error } = await readVia(attempt.run);
-    await diag(`readBenchSeed[${attempt.where}]: ${error === null ? `ok ${text?.length ?? 0}b` : error}`);
-    if (text === null) continue;
+    const { text, error } = await readVia(attempt);
+    if (text === null) {
+      console.warn("[plugins-bench] no seed file at one location", error);
+      continue;
+    }
     const parsed: unknown = JSON.parse(text);
     if (isPluginsBenchSeed(parsed)) return parsed;
-    await diag(`readBenchSeed[${attempt.where}]: malformed`);
   }
   return null;
 }
@@ -67,7 +69,6 @@ export async function readBenchSeed(): Promise<PluginsBenchSeed | null> {
  * the seeded Plugins as enabled and approved.
  */
 export async function preparePluginsBench(): Promise<void> {
-  await diag("prepare: enter");
   const seed = await readBenchSeed();
   currentSeed = seed;
   if (seed === null) return;
@@ -76,5 +77,4 @@ export async function preparePluginsBench(): Promise<void> {
   // the offer decides, so a fresh bench device never shows it.
   useTutorialStore.getState().dismiss();
   for (const approval of seed.approvals) savePluginApproval(approval);
-  await diag(`prepare: done approvals=${seed.approvals.length}`);
 }

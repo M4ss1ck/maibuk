@@ -139,3 +139,39 @@ export function echoTextFor(samples: number): string {
     ""
   );
 }
+
+/**
+ * The measurement state one launch's collector folds: the samples the in-app
+ * driver posted and whether its `/done` arrived. The runner resets it before a
+ * launch and reads it after, so exactly one launch's samples reach the report.
+ */
+export interface LaunchCapture {
+  /** Folds one `/bench/measure` payload's samples in, in arrival order. */
+  measure(samples: number[]): void;
+  /** The driver's `/done` arrived. */
+  markDone(): void;
+  /** Forgets the previous launch before the next. */
+  reset(): void;
+  done(): boolean;
+  samples(): number[];
+}
+
+/** A fresh one-launch capture. Pure, so the folding is unit-tested. */
+export function createCapture(): LaunchCapture {
+  let measured: number[] = [];
+  let done = false;
+  return {
+    measure(samples) {
+      measured.push(...samples);
+    },
+    markDone() {
+      done = true;
+    },
+    reset() {
+      measured = [];
+      done = false;
+    },
+    done: () => done,
+    samples: () => measured,
+  };
+}

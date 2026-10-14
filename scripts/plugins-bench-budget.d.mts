@@ -6,9 +6,11 @@ export interface PluginsBenchReport {
   unmeasured?: string[];
   /**
    * The native build profile the WebKitGTK lane measured (`"debug"` or
-   * `"release"`). Absent for the Chromium lane.
+   * `"release"`), and the WebKitGTK lane's own note that its samples come from
+   * synthetic in-app events (no Playwright). Absent for the Chromium lane.
    */
   build?: string;
+  note?: string;
   /** Launch timings in ms, one sample per reload. */
   launch: { baseline: number[]; installed20: number[]; persistent3: number[] };
   /** Plugin id -> ms samples. */

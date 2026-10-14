@@ -504,6 +504,33 @@ so a rerun can prove #492's hard memory cap once it exists — and the T8 run
 records the renderer death. Android runs are recorded as unsupported-in-v1 with
 the #492 follow-up rather than dropped.
 
+## Plugins bench lane
+
+`pnpm bench:plugins` measures the browser Plugin budget (issue #448) against
+frozen budgets (`scripts/plugins-bench-budget.mjs`): the launch delta with 20
+on-demand clones and 3 persistent versus no-Plugin baseline, per-id
+start-to-ready, Command-to-effect, and Remote UI echo/burst. It exits 0 (every
+budget holds), 1 (a budget missed), or 2 (it could not measure), and never runs
+in CI.
+
+The `chromium` engine builds the web app with `VITE_PLUGIN_BENCH=1` and runs the
+Playwright bench specs in `e2e/plugins-bench/`. The `webkitgtk` engine cannot use
+Playwright: its WebKit has no OPFS, so Plugins cannot be seeded there. It drives
+the **real Tauri Linux binary** instead — built once with `VITE_PLUGIN_BENCH=1`
+and `VITE_PLUGIN_BENCH_DRIVER=1`, whose gated in-app driver
+(`src/features/plugins/bench/`) seeds the approvals, measures, and posts to a
+local collector. Every launch gets a fresh temporary `HOME`/XDG tree, so it is a
+fresh device and the author's real Library is never touched. WebKitGTK samples
+use synthetic events (a dispatched Shortcut, keystrokes through the native input
+value setter); the report records the native `build` profile (debug or release).
+It needs a display and WebKitGTK, like the conformance lane's Linux half.
+
+```bash
+pnpm bench:plugins                                 # both engines
+pnpm bench:plugins --engine webkitgtk --samples 10 # the native Linux lane
+pnpm bench:plugins --engine chromium --reuse-build
+```
+
 ## Output
 
 Everything generated lands in `e2e/.output/` (gitignored): the web build,
