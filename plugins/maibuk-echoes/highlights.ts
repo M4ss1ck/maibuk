@@ -101,9 +101,11 @@ function chapterTextOf(text: string | readonly string[], chapter: number): strin
   return typeof text === "string" ? (chapter === 0 ? text : "") : (text[chapter] ?? "");
 }
 
-/** The token index of the token that starts at `from`, or -1 when none does. */
-function indexOfFrom(tokens: readonly Token[], from: number): number {
-  return tokens.findIndex((token) => token.from === from);
+/** Each token's index keyed by the offset it starts at, for O(1) distance lookups. */
+function tokenIndexByFrom(tokens: readonly Token[]): Map<number, number> {
+  const indexes = new Map<number, number>();
+  tokens.forEach((token, index) => indexes.set(token.from, index));
+  return indexes;
 }
 
 function surface(text: string | readonly string[], occurrence: EchoOccurrence): string {
@@ -131,14 +133,14 @@ export function echoHighlightRanges(
     warning: [],
   };
   const seen = new Set<string>();
-  const tokensByChapter = new Map<number, Token[]>();
-  const tokensFor = (chapter: number): Token[] => {
-    let tokens = tokensByChapter.get(chapter);
-    if (tokens === undefined) {
-      tokens = tokenize(chapterTextOf(text, chapter));
-      tokensByChapter.set(chapter, tokens);
+  const indexesByChapter = new Map<number, Map<number, number>>();
+  const indexesFor = (chapter: number): Map<number, number> => {
+    let indexes = indexesByChapter.get(chapter);
+    if (indexes === undefined) {
+      indexes = tokenIndexByFrom(tokenize(chapterTextOf(text, chapter)));
+      indexesByChapter.set(chapter, indexes);
     }
-    return tokens;
+    return indexes;
   };
   const push = (kind: PluginEchoHighlightKind, range: EchoHighlightRange): void => {
     const key = `${kind}\u0000${range.from}\u0000${range.to}\u0000${range.label}`;
@@ -152,8 +154,8 @@ export function echoHighlightRanges(
     const hostKind = ECHO_HIGHLIGHT_KIND[echo.kind];
     const occurrences = echo.occurrences;
     if (echo.kind === "nearby") {
-      const tokens = tokensFor(occurrences[0].chapter);
-      const indexes = occurrences.map((occurrence) => indexOfFrom(tokens, occurrence.from));
+      const tokenIndexes = indexesFor(occurrences[0].chapter);
+      const indexes = occurrences.map((occurrence) => tokenIndexes.get(occurrence.from) ?? -1);
       occurrences.forEach((occurrence, index) => {
         const word = surface(text, occurrence);
         const distance =
