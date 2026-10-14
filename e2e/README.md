@@ -433,6 +433,17 @@ to back after one warm-up; the table shows every run and the pooled verdict.
 `frame-scenarios.test.ts` fails when a scenario names a seed, budget, or driver
 that does not exist.
 
+Two scenarios render a `fixture-bench` Plugin, so they run on the `chromium`
+source only: the `probe` (Playwright WebKit) and `android` sources seed no
+Plugin Directory (WebKit has no OPFS, and the Android WebView seeds no web one),
+and each carries that `skip` reason. `plugin-remote-ui` wheels the Plugin's
+1,000-row Remote UI table while scrolling, on the default budget, and records no
+keystrokes: keystroke echo belongs to `bench:plugins`, not here.
+`typing-with-highlights` types the 120-character burst in `perfLongChapter`
+while the Plugin paints about 500 highlight ranges, judged like `typing` (each
+keystroke's frame starts within one refresh interval). A scenario for Echoes
+arrives with [#451](https://github.com/M4ss1ck/maibuk/issues/451).
+
 **Comparing runs.** The report records the source, engine and version, mode
 (headed, new-headless, headless, device), device, refresh rate, CPU
 throttling, app version, and commit (`-dirty` with local changes). Compare two
@@ -507,28 +518,72 @@ the #492 follow-up rather than dropped.
 ## Plugins bench lane
 
 `pnpm bench:plugins` measures the browser Plugin budget (issue #448) against
-frozen budgets (`scripts/plugins-bench-budget.mjs`): the launch delta with 20
-on-demand clones and 3 persistent versus no-Plugin baseline, per-id
-start-to-ready, Command-to-effect, and Remote UI echo/burst. It exits 0 (every
-budget holds), 1 (a budget missed), or 2 (it could not measure), and never runs
-in CI.
+frozen budgets (`scripts/plugins-bench-budget.mjs`). It sits beside the other
+periodic lanes (`bench:frames`, `bench:palette`, `conformance:plugins`): run it
+before a release and whenever a Plugin's start path moves, never in CI, because
+browser timing on a shared runner is noise. Six rows are judged, all in
+milliseconds:
 
-The `chromium` engine builds the web app with `VITE_PLUGIN_BENCH=1` and runs the
-Playwright bench specs in `e2e/plugins-bench/`. The `webkitgtk` engine cannot use
-Playwright: its WebKit has no OPFS, so Plugins cannot be seeded there. It drives
-the **real Tauri Linux binary** instead — built once with `VITE_PLUGIN_BENCH=1`
-and `VITE_PLUGIN_BENCH_DRIVER=1`, whose gated in-app driver
-(`src/features/plugins/bench/`) seeds the approvals, measures, and posts to a
-local collector. Every launch gets a fresh temporary `HOME`/XDG tree, so it is a
-fresh device and the author's real Library is never touched. WebKitGTK samples
-use synthetic events (a dispatched Shortcut, keystrokes through the native input
-value setter); the report records the native `build` profile (debug or release).
-It needs a display and WebKitGTK, like the conformance lane's Linux half.
+- **launch delta**: a launch with 20 on-demand clones against a no-Plugin
+  baseline, as the difference of their medians.
+- **persistent delta**: a launch with 3 persistent Plugins against the same
+  baseline, judged the same way. Both deltas must stay within
+  `max(5% of the baseline median, 20 ms)`.
+- **start-to-ready**, per on-demand Built-in Plugin: the p95 of the
+  `plugin.start:<id>` measure, from opening a surface to the Plugin ready, at or
+  under 150 ms. It runs on `fixture-everything-on-demand` plus every on-demand
+  id in `plugins/builtins.json` (none today, so only the fixture).
+- **Command to effect**: a Plugin Command's Shortcut press to its first visible
+  effect, p95 at or under 100 ms.
+- **Remote UI echo**: one keystroke's echo committed to the DOM with a
+  1,000-row page, p95 at or under 16 ms.
+- **Remote UI burst**: the same echo typed in a burst, p95 at or under 50 ms.
+
+**Engines.** `chromium` builds the web app with `VITE_PLUGIN_BENCH=1` into a
+directory of its own (`e2e/.output/plugins-bench-web`, so the flag never leaks
+into the E2E build) and runs the Playwright bench specs in `e2e/plugins-bench/`.
+`webkitgtk` measures the real engine of the Linux desktop shell. Playwright's
+WebKit has no OPFS, so it cannot seed a Plugin Directory, and the lane drives
+the **real Tauri Linux debug binary** instead: built once with
+`VITE_PLUGIN_BENCH=1` and `VITE_PLUGIN_BENCH_DRIVER=1` under its own app
+identifier and product name (`com.massick.maibuk.bench`), so it never touches
+the author's install. Every launch gets a fresh temporary `HOME`/XDG tree, so it
+is a fresh device with its own Plugin Directory, seeded with the fixture's bytes
+and the approval records the scenario needs; the gated in-app driver
+(`src/features/plugins/bench/`) reads the per-launch seed, measures, and posts
+to a local collector. The
+WebKitGTK samples use synthetic events (a dispatched Shortcut, keystrokes
+through the native input value setter), since no Playwright drives that lane;
+the report records the native `build` profile (debug or release). It needs a
+display and WebKitGTK, like the conformance lane's Linux half.
+
+**Measurement choices.** Echo and burst end when the echo is committed to the
+DOM, not at the next frame: the frame tail is the display's phase noise, and
+keystroke-to-frame alignment belongs to `bench:frames`, whose
+`plugin-remote-ui` and `typing-with-highlights` scenarios cover it. Launch
+discards two warm-up loads, so a cold first start never decides the delta, and
+echo/burst discard two warm-up keystrokes, so a cold first Remote UI update
+never decides p95. Every row is a nearest-rank p95 (sort, index
+`ceil(0.95n) - 1`), except the two launch deltas, which compare medians.
 
 ```bash
-pnpm bench:plugins                                 # both engines
+pnpm bench:plugins                                 # both engines, chromium first
+pnpm bench:plugins --engine chromium               # the web build only
 pnpm bench:plugins --engine webkitgtk --samples 10 # the native Linux lane
-pnpm bench:plugins --engine chromium --reuse-build
+pnpm bench:plugins --headless                      # Chromium without a window
+pnpm bench:plugins --engine chromium --reuse-build # serve the last build
+```
+
+Each engine writes `.bench/plugins-<engine>.json` (the WebKitGTK report's own
+`engine` field is `webkit`). The command exits 0 when every budget holds, 1 when
+a budget is missed, and 2 when it could not measure (no display, no web build,
+no Linux binary, a harness failure). A missing prerequisite is an `unmeasured`
+reason rather than a crash, and it takes precedence over a miss, so an
+incomplete run never reads as a pass or a fail. Re-check a saved report without
+rerunning:
+
+```bash
+node scripts/plugins-bench-budget.mjs .bench/plugins-chromium.json
 ```
 
 ## Output
