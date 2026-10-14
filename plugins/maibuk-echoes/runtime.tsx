@@ -6,9 +6,8 @@
  * Worker's Remote DOM polyfill into jsdom. Imports only `@/plugin-sdk` (and its
  * subpaths) and its own files.
  *
- * The page is a placeholder for the report the later units draw. It already
- * reads the scope the `Find echoes` Command stored, so opening the page from a
- * Chapter Item Menu lands on that Chapter. The Settings row is the
+ * The page reads the scope the `Find echoes` Command stored, so opening the page
+ * from a Chapter Item Menu lands on that Chapter. The Settings row is the
  * `detection` row's body, mounted by the host under the row's Plugin-local id.
  */
 
@@ -34,6 +33,7 @@ import {
   NEARBY_WINDOW_MIN,
 } from "./find-echoes";
 import { type EchoKey, format, translate } from "./i18n";
+import { languageSupport } from "./language";
 import {
   computeReport,
   ECHO_KINDS,
@@ -155,21 +155,13 @@ const SCOPE_WHOLE = "whole";
 /** The report row Item Menu's one action value. */
 const IGNORE_ACTION = "ignore";
 
-/** A kind's tab title and its empty line, and the settings switch that enables it. */
-const TAB_KEY: Readonly<Record<EchoKind, EchoKey>> = {
-  nearby: "tab.nearby",
-  overused: "tab.overused",
-  phrase: "tab.phrase",
-};
-const EMPTY_KEY: Readonly<Record<EchoKind, EchoKey>> = {
-  nearby: "empty.nearby",
-  overused: "empty.overused",
-  phrase: "empty.phrase",
-};
-const ENABLED_FLAG: Readonly<Record<EchoKind, "nearby" | "overused" | "phrases">> = {
-  nearby: "nearby",
-  overused: "overused",
-  phrase: "phrases",
+/** One kind's UI: its tab title, its empty line, and the settings switch that enables it. */
+const KIND_UI: Readonly<
+  Record<EchoKind, { tab: EchoKey; empty: EchoKey; enabled: "nearby" | "overused" | "phrases" }>
+> = {
+  nearby: { tab: "tab.nearby", empty: "empty.nearby", enabled: "nearby" },
+  overused: { tab: "tab.overused", empty: "empty.overused", enabled: "overused" },
+  phrase: { tab: "tab.phrase", empty: "empty.phrase", enabled: "phrases" },
 };
 
 /** Adds a word to the ignore list unless it is already there, case-insensitively. */
@@ -398,20 +390,35 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       );
     }
 
-    const enabledKinds = ECHO_KINDS.filter((kind) => settings[ENABLED_FLAG[kind]]);
-    const activeKind = enabledKinds.includes(tab) ? tab : (enabledKinds[0] ?? "nearby");
-    const rows = report?.[activeKind] ?? [];
+    const rows = report?.[tab] ?? [];
     // The loaded report Chapters carry only id and text; the Library list the
     // page already read carries the titles, so map id to title for the rows.
     const titleById = new Map(chapters.map((chapter) => [chapter.id, chapter.title]));
+    // A row names its Chapters by title, in Chapter order; a Chapter without a
+    // title (or one the list no longer carries) falls back to its number.
+    const chapterTitles = (indexes: readonly number[]): string =>
+      indexes
+        .map((index) => {
+          const id = chaptersRef.current[index]?.id;
+          const title = id === undefined ? undefined : titleById.get(id);
+          return title !== undefined && title.trim() !== "" ? title : String(index + 1);
+        })
+        .join(", ");
     const scopeOptions = [
       { value: SCOPE_WHOLE, label: translate(language, "wholeBook") },
       ...chapters.map((chapter) => ({ value: chapter.id, label: chapter.title })),
     ];
-    const tabItems = enabledKinds.map((kind) => ({
+    const tabItems = ECHO_KINDS.map((kind) => ({
       value: kind,
-      label: translate(language, TAB_KEY[kind]),
+      label: translate(language, KIND_UI[kind].tab),
     }));
+
+    // Detection reads the Book's own language; en/es are fully supported, any
+    // other language runs without stop words or a stemmer, and the report says so.
+    const bookLanguage = books.find((book) => book.id === bookId)?.language ?? "en";
+    const limitedLanguage = languageSupport(bookLanguage) === "limited" ? bookLanguage : null;
+    const activeKind = tab;
+    const kindEnabled = settings[KIND_UI[activeKind].enabled];
 
     const activeChildren: ReactNode[] = [];
     for (const row of rows) {
@@ -424,7 +431,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           label={row.label}
           description={format(translate(language, "report.summary"), {
             count: row.count,
-            chapters: row.chapterIndexes.map((index) => index + 1).join(", "),
+            chapters: chapterTitles(row.chapterIndexes),
           })}
           isExpandable
           isExpanded={isExpanded}
@@ -477,6 +484,12 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           />
         </ui.View>
 
+        {limitedLanguage !== null ? (
+          <ui.Text tone="muted">
+            {format(translate(language, "report.limitedSupport"), { language: limitedLanguage })}
+          </ui.Text>
+        ) : null}
+
         {stale ? (
           <ui.View direction="row" gap="sm" align="center">
             <ui.Text tone="muted">{translate(language, "stale")}</ui.Text>
@@ -504,9 +517,13 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
             onChange={(event) => setTab(event.detail as EchoKind)}
           >
             {rows.length === 0 ? (
-              <ui.Text tone="muted">{translate(language, EMPTY_KEY[activeKind])}</ui.Text>
+              <ui.Text tone="muted">
+                {kindEnabled
+                  ? translate(language, KIND_UI[activeKind].empty)
+                  : translate(language, "kind.off")}
+              </ui.Text>
             ) : (
-              <ui.Collection label={translate(language, TAB_KEY[activeKind])} selectionMode="none">
+              <ui.Collection label={translate(language, KIND_UI[activeKind].tab)} selectionMode="none">
                 {activeChildren}
               </ui.Collection>
             )}

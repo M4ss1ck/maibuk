@@ -18,6 +18,8 @@ const ROOT = __dirname;
 const VENDOR_DIR = join(ROOT, "vendor");
 const SOURCE_PATTERN = /\.(ts|tsx)$/;
 const TEST_PATTERN = /\.test\.(ts|tsx)$/;
+/** Test-only support beside the tests, like `test-support.ts`: never built, never shipped. */
+const TEST_SUPPORT_PATTERN = /(^|\/)test-support\.(ts|tsx)$/;
 
 /** Every file under `dir`, as absolute paths. */
 function listFiles(dir: string): string[] {
@@ -64,6 +66,7 @@ const files = listFiles(ROOT).filter(
   (file) =>
     SOURCE_PATTERN.test(file) &&
     !TEST_PATTERN.test(file) &&
+    !TEST_SUPPORT_PATTERN.test(file) &&
     !(skipVendor && file.startsWith(VENDOR_DIR))
 );
 

@@ -5,15 +5,12 @@
  * `user-event` key presses over the real Remote UI renderer.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import "@/i18n";
-import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { createTestHost } from "@/features/plugins/test-kit";
-import type { PluginManifest, TestChapter } from "@/features/plugins/types";
+import type { TestChapter } from "@/features/plugins/types";
 import { createPluginClient } from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
@@ -23,6 +20,7 @@ import es from "./locales/runtime/es.json";
 import { buildReport, occurrenceContext } from "./report";
 import { FIND_ECHOES, REPORT_PAGE_ID, startEchoes } from "./runtime";
 import { ECHOES_SETTINGS_KEY } from "./settings";
+import { echoesManifest, settingsStorage, tabTo, type User } from "./test-support";
 
 const HARBOR =
   "The harbor was calm. The harbor was empty. The harbor was quiet. We left the harbor at dawn.";
@@ -61,16 +59,8 @@ const CHAPTERS = [
   chapter("c3", "b2", "Chapter One", 0, GARDEN),
 ];
 
-function echoesManifest(): PluginManifest {
-  const result = parsePluginManifest(readFileSync(join(__dirname, "manifest.json"), "utf8"), {
-    builtIn: true,
-  });
-  if (!result.ok) throw new Error(JSON.stringify(result.problems));
-  return result.manifest;
-}
-
 /** A host whose Library serves the two Books, over one Plugin instance. */
-function reportHost(storage = new Map<string, unknown>()) {
+function reportHost(storage = settingsStorage()) {
   const host = createTestHost({
     manifest: echoesManifest(),
     library: { books: BOOKS, chapters: CHAPTERS },
@@ -78,13 +68,6 @@ function reportHost(storage = new Map<string, unknown>()) {
   });
   startEchoes(createPluginClient(host.port), servePluginUi);
   return host;
-}
-
-type User = ReturnType<typeof userEvent.setup>;
-
-/** Tabs forward until `element` has focus, so every action is reached by keyboard. */
-async function tabTo(user: User, element: HTMLElement, max = 40): Promise<void> {
-  for (let i = 0; i < max && document.activeElement !== element; i++) await user.tab();
 }
 
 /** Focuses a select's trigger and picks a value by arrow keys, never a pointer. */
@@ -144,16 +127,21 @@ describe("Echoes report page", () => {
       );
       expect(harborRows).toHaveLength(1);
       expect(harborRows[0]).toHaveTextContent("4 times");
-      expect(harborRows[0]).toHaveTextContent("Chapters 1, 2");
+      // The row names its Chapters by title, in Chapter order.
+      expect(harborRows[0]).toHaveTextContent("Chapter One, Chapter Two");
 
       // No two rows in a tab share a name, on the nearby tab and the phrase tab.
       const names = () => screen.getAllByRole("option").map((option) => option.textContent);
       expect(new Set(names()).size).toBe(names().length);
 
       const nearby = screen.getByRole("tab", { name: en["tab.nearby"] });
-      nearby.focus();
+      await tabTo(user, nearby);
+      expect(nearby).toHaveFocus();
+      // Await each tab between the arrows, so the panel settles before the next key.
       await user.keyboard("{ArrowRight}");
+      await screen.findByText(en["empty.overused"]);
       await user.keyboard("{ArrowRight}");
+      await screen.findByRole("option", { name: /The harbor was/ });
       expect(new Set(names()).size).toBe(names().length);
 
       page.unmount();
@@ -172,15 +160,15 @@ describe("Echoes report page", () => {
       await tabTo(user, nearby);
       expect(nearby).toHaveFocus();
 
+      // The arrow changes what the visible panel shows, not just an attribute:
+      // the overused tab's empty line replaces the nearby tab's rows.
       await user.keyboard("{ArrowRight}");
-      expect(await screen.findByRole("tab", { name: en["tab.overused"] })).toHaveAttribute(
-        "aria-selected",
-        "true"
-      );
-      expect(screen.getByText(en["empty.overused"])).toBeInTheDocument();
+      expect(await screen.findByText(en["empty.overused"])).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument();
 
       await user.keyboard("{ArrowRight}");
       expect(await screen.findByRole("option", { name: /The harbor was/ })).toBeInTheDocument();
+      expect(screen.queryByText(en["empty.overused"])).not.toBeInTheDocument();
 
       page.unmount();
     } finally {
@@ -280,7 +268,7 @@ describe("Echoes report page", () => {
   });
 
   it("ignores a word from the row Item Menu with the keyboard and removes the row", async () => {
-    const storage = new Map<string, unknown>();
+    const storage = settingsStorage();
     const host = reportHost(storage);
     try {
       const page = await host.renderPage(REPORT_PAGE_ID);
@@ -387,15 +375,26 @@ describe("Echoes report page", () => {
     }
   });
 
-  it("only shows and computes the echo kinds enabled in Settings", async () => {
-    const storage = new Map<string, unknown>();
+  it("keeps every kind tab and says a disabled kind is off in Settings", async () => {
+    const storage = settingsStorage();
     storage.set(ECHOES_SETTINGS_KEY, { phrases: false });
     const host = reportHost(storage);
     try {
       const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
 
-      expect(await screen.findByRole("tab", { name: en["tab.nearby"] })).toBeInTheDocument();
-      expect(screen.queryByRole("tab", { name: en["tab.phrase"] })).not.toBeInTheDocument();
+      // The three tabs are always drawn; the disabled kind keeps its tab.
+      const nearby = await screen.findByRole("tab", { name: en["tab.nearby"] });
+      const phrase = screen.getByRole("tab", { name: en["tab.phrase"] });
+      expect(screen.getByRole("tab", { name: en["tab.overused"] })).toBeInTheDocument();
+
+      await tabTo(user, nearby);
+      await user.keyboard("{ArrowRight}");
+      await user.keyboard("{ArrowRight}");
+      expect(phrase).toHaveFocus();
+
+      // Its panel says the check is off rather than showing an empty list.
+      expect(await screen.findByText(en["kind.off"])).toBeInTheDocument();
 
       page.unmount();
     } finally {
@@ -403,8 +402,45 @@ describe("Echoes report page", () => {
     }
   });
 
+  it("claims limited support only for a Book language without stop words or a stemmer", async () => {
+    for (const language of ["en", "es"]) {
+      const host = createTestHost({
+        manifest: echoesManifest(),
+        library: {
+          books: [{ ...book("b1", "Dune"), language }],
+          chapters: [chapter("c1", "b1", "Chapter One", 0, HARBOR)],
+        },
+      });
+      startEchoes(createPluginClient(host.port), servePluginUi);
+      try {
+        const page = await host.renderPage(REPORT_PAGE_ID);
+        await screen.findByRole("option", { name: /harbor/ });
+        expect(screen.queryByText(/Limited support/)).not.toBeInTheDocument();
+        page.unmount();
+      } finally {
+        host.stop();
+      }
+    }
+
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: {
+        books: [{ ...book("b1", "Dune"), language: "fr" }],
+        chapters: [chapter("c1", "b1", "Chapter One", 0, HARBOR)],
+      },
+    });
+    startEchoes(createPluginClient(host.port), servePluginUi);
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      expect(await screen.findByText("Limited support for fr")).toBeInTheDocument();
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
   it("honours the stored ignore list", async () => {
-    const storage = new Map<string, unknown>();
+    const storage = settingsStorage();
     storage.set(ECHOES_SETTINGS_KEY, { ignore: ["harbor"] });
     const host = reportHost(storage);
     try {

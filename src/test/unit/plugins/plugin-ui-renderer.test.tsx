@@ -250,7 +250,8 @@ describe("the Remote UI renderer", () => {
       expect(field).toHaveValue("120");
 
       // Below the minimum: still typed as-is, clamped only once committed.
-      await userEvent.click(field);
+      await userEvent.tab({ shift: true });
+      expect(field).toHaveFocus();
       await userEvent.keyboard("{Control>}a{/Control}5");
       expect(field).toHaveValue("5");
       await userEvent.tab();

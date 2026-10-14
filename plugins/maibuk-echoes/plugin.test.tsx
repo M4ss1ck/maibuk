@@ -5,15 +5,11 @@
  * the kit's jsdom uses; `index.tsx` (the Worker bootstrap) is never imported.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import "@/i18n";
-import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { createTestHost } from "@/features/plugins/test-kit";
-import type { PluginManifest } from "@/features/plugins/types";
 import { createPluginClient } from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
@@ -21,6 +17,7 @@ import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { FIND_ECHOES, REPORT_PAGE_ID, SETTINGS_ROW_ID, startEchoes } from "./runtime";
 import { ECHOES_SETTINGS_KEY } from "./settings";
+import { echoesManifest, settingsStorage, shiftTabTo, tabTo } from "./test-support";
 
 const BOOK = {
   id: "b1",
@@ -42,14 +39,6 @@ const CHAPTER = {
   updatedAt: 1_000,
   content: { text: "Hello", html: "<p>Hello</p>" },
 };
-
-function echoesManifest(): PluginManifest {
-  const result = parsePluginManifest(readFileSync(join(__dirname, "manifest.json"), "utf8"), {
-    builtIn: true,
-  });
-  if (!result.ok) throw new Error(JSON.stringify(result.problems));
-  return result.manifest;
-}
 
 describe("Echoes runtime", () => {
   it("activates and answers its Commands, declaring both in the manifest", async () => {
@@ -130,20 +119,6 @@ describe("Echoes runtime", () => {
   });
 });
 
-type User = ReturnType<typeof userEvent.setup>;
-
-/** Tabs forward until `element` has focus, so every action is reached by keyboard. */
-async function tabTo(user: User, element: HTMLElement, max = 15): Promise<void> {
-  for (let i = 0; i < max && document.activeElement !== element; i++) await user.tab();
-}
-
-/** Tabs backward until `element` has focus. */
-async function shiftTabTo(user: User, element: HTMLElement, max = 5): Promise<void> {
-  for (let i = 0; i < max && document.activeElement !== element; i++) {
-    await user.tab({ shift: true });
-  }
-}
-
 /**
  * The detection Settings row (#450, unit 2): the Plugin draws it through the
  * host UI kit, so the tests drive it with the keyboard through `createTestHost`
@@ -158,7 +133,7 @@ describe("Echoes detection settings", () => {
   }
 
   it("toggles each switch with Space and persists it", async () => {
-    const storage = new Map<string, unknown>();
+    const storage = settingsStorage();
     const host = settingsHost(storage);
     try {
       const page = await host.renderSettingsRow(SETTINGS_ROW_ID);
@@ -196,7 +171,7 @@ describe("Echoes detection settings", () => {
   });
 
   it("clamps an out-of-range nearby window when it is committed", async () => {
-    const storage = new Map<string, unknown>();
+    const storage = settingsStorage();
     const host = settingsHost(storage);
     try {
       const page = await host.renderSettingsRow(SETTINGS_ROW_ID);
@@ -224,7 +199,7 @@ describe("Echoes detection settings", () => {
   });
 
   it("adds a custom ignore word with the keyboard and removes it", async () => {
-    const storage = new Map<string, unknown>();
+    const storage = settingsStorage();
     const host = settingsHost(storage);
     try {
       const page = await host.renderSettingsRow(SETTINGS_ROW_ID);
@@ -253,7 +228,7 @@ describe("Echoes detection settings", () => {
   });
 
   it("restores saved values in a new host over the same storage", async () => {
-    const storage = new Map<string, unknown>();
+    const storage = settingsStorage();
     const first = settingsHost(storage);
     const page1 = await first.renderSettingsRow(SETTINGS_ROW_ID);
     try {
@@ -299,7 +274,7 @@ describe("Echoes detection settings", () => {
   });
 
   it("falls back to defaults when the stored value is malformed", async () => {
-    const storage = new Map<string, unknown>();
+    const storage = settingsStorage();
     storage.set(ECHOES_SETTINGS_KEY, "not settings");
     const host = settingsHost(storage);
     try {

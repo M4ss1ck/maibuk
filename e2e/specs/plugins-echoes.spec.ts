@@ -9,7 +9,7 @@
 // Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Page } from "@playwright/test";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { caretText, pressUntilFocused, tabTo } from "../support/keyboard";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -129,13 +129,14 @@ test.describe("Echoes report @wf:plugins-echoes @no-webkit", () => {
     // The listbox is one Tab stop that focus enters on its first row; Enter on
     // the row expands it and its occurrences render under it.
     const firstRow = phrases.getByRole("option").first();
+    const phrase = ((await firstRow.locator("span").first().textContent()) ?? "").trim();
     await tabTo(page, firstRow, { max: 20 });
     await expect(firstRow).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(phrases.getByRole("option")).toHaveCount(9);
 
     // ArrowDown moves onto the first occurrence; Enter hands its Chapter to the
-    // host, which opens the Chapter editor on it.
+    // host, which opens the Chapter editor with the caret on the echoed phrase.
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
 
@@ -143,6 +144,10 @@ test.describe("Echoes report @wf:plugins-echoes @no-webkit", () => {
     await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
     await expect(chapterRow(page, ECHO_CHAPTER)).toBeVisible();
     await expect(page.getByRole("textbox", { name: `Text of ${ECHO_CHAPTER}` })).toBeVisible();
+    // The caret lands on the echoed word: the editor text from the caret on
+    // begins with the phrase the row reported.
+    expect(phrase).not.toBe("");
+    await expect.poll(async () => (await caretText(page)).startsWith(phrase)).toBe(true);
   });
 
   test("Find echoes from a Chapter Item Menu opens the report scoped to that Chapter", async ({
@@ -281,15 +286,20 @@ test.describe("Echoes report @wf:plugins-echoes @no-webkit", () => {
     await page.keyboard.press("Enter");
     await expect(page.getByRole("button", { name: "Remove harbor" })).toBeVisible();
 
-    // The report reflects each: the phrase kind is gone, and so are the
-    // ignored "harbor" and the now-too-distant "keeper".
+    // The report reflects each: the ignored "harbor" and the now-too-distant
+    // "keeper" are gone, and the phrase kind's tab stays but says the check is
+    // off in Settings.
     await openEchoesFromPalette(page);
-    await expect(page.getByRole("tab", { name: "Repeated phrase" })).toHaveCount(0);
     await expect(nearbyList(page).getByRole("option", { name: /^dark / })).toBeVisible({
       timeout: 20_000,
     });
     await expect(nearbyList(page).getByRole("option", { name: /^harbor / })).toHaveCount(0);
     await expect(nearbyList(page).getByRole("option", { name: /^keeper / })).toHaveCount(0);
+
+    const phraseTab = page.getByRole("tab", { name: "Repeated phrase" });
+    await pressUntilFocused(page, "ArrowRight", phraseTab, { max: 3 });
+    await expect(phraseTab).toBeFocused();
+    await expect(page.getByText("This check is off in Settings.")).toBeVisible();
   });
 
   test("opens Echoes by tap and expands a row by tap @touch", async ({ page }) => {
