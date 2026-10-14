@@ -1,0 +1,20 @@
+{
+  "tab.nearby": "Nearby echo",
+  "tab.overused": "Overused word",
+  "tab.phrase": "Repeated phrase",
+  "refresh": "Refresh",
+  "stale": "This report is out of date. Refresh to update it.",
+  "ignore": "Ignore this word",
+  "wholeBook": "Whole Book",
+  "empty.nearby": "Nothing echoes nearby.",
+  "empty.overused": "No word is overused here.",
+  "empty.phrase": "No phrase repeats here.",
+  "settings.nearby": "Nearby echo",
+  "settings.overused": "Overused word",
+  "settings.phrase": "Repeated phrase",
+  "settings.stemming": "Match word forms",
+  "settings.nearbyWindow": "Nearby window",
+  "settings.ignoreList": "Ignore list",
+  "report.placeholder": "The Echo report appears here.",
+  "report.noBook": "No Book yet."
+}

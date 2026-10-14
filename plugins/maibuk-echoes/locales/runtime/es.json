@@ -1,0 +1,20 @@
+{
+  "tab.nearby": "Eco cercano",
+  "tab.overused": "Palabra excesiva",
+  "tab.phrase": "Frase repetida",
+  "refresh": "Actualizar",
+  "stale": "Este informe está desactualizado. Actualízalo para ponerlo al día.",
+  "ignore": "Ignorar esta palabra",
+  "wholeBook": "Todo el libro",
+  "empty.nearby": "Nada se repite cerca.",
+  "empty.overused": "Ninguna palabra se usa de más aquí.",
+  "empty.phrase": "Ninguna frase se repite aquí.",
+  "settings.nearby": "Eco cercano",
+  "settings.overused": "Palabra excesiva",
+  "settings.phrase": "Frase repetida",
+  "settings.stemming": "Agrupar formas de la palabra",
+  "settings.nearbyWindow": "Ventana cercana",
+  "settings.ignoreList": "Lista de ignoradas",
+  "report.placeholder": "El informe de ecos aparece aquí.",
+  "report.noBook": "Todavía no hay ningún libro."
+}

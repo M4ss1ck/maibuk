@@ -1,0 +1,9 @@
+{
+  "name": "Echoes",
+  "description": "Points out words and phrases repeated closely enough, or often enough, that a reader would notice.",
+  "commands.openEchoes.label": "Open Echoes",
+  "commands.findEchoes.label": "Find echoes",
+  "pages.report.title": "Echoes",
+  "settingsRows.detection.label": "Echo detection",
+  "settingsRows.detection.description": "Choose which echoes to look for and how close they count."
+}

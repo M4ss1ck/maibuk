@@ -1,0 +1,9 @@
+{
+  "name": "Ecos",
+  "description": "Señala palabras y frases repetidas lo bastante cerca, o con la frecuencia suficiente, como para que un lector lo note.",
+  "commands.openEchoes.label": "Abrir Ecos",
+  "commands.findEchoes.label": "Buscar ecos",
+  "pages.report.title": "Ecos",
+  "settingsRows.detection.label": "Detección de ecos",
+  "settingsRows.detection.description": "Elige qué ecos buscar y a qué distancia cuentan."
+}
