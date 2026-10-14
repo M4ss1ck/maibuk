@@ -4,6 +4,11 @@ export interface PluginsBenchReport {
   engine: "chromium" | "webkit";
   /** Reasons the runner could not measure; any entry forces exit code 2. */
   unmeasured?: string[];
+  /**
+   * The native build profile the WebKitGTK lane measured (`"debug"` or
+   * `"release"`). Absent for the Chromium lane.
+   */
+  build?: string;
   /** Launch timings in ms, one sample per reload. */
   launch: { baseline: number[]; installed20: number[]; persistent3: number[] };
   /** Plugin id -> ms samples. */

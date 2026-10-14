@@ -15,6 +15,14 @@ import type { RunningApp, RunDir } from "./types";
 /** The debug binary `pnpm tauri build --debug` leaves (Cargo package name). */
 export const LINUX_BINARY = "src-tauri/target/debug/maibuk";
 
+/** The release binary `pnpm tauri build` leaves. */
+export const LINUX_RELEASE_BINARY = "src-tauri/target/release/maibuk";
+
+/** The binary a build profile writes. */
+export function linuxBinaryFor(release: boolean): string {
+  return release ? LINUX_RELEASE_BINARY : LINUX_BINARY;
+}
+
 /** The config file `tauri build` merges, relative to the repo root. */
 const TAURI_CONFIG = "src-tauri/tauri.conf.json";
 
@@ -59,44 +67,77 @@ export function assertLinuxPrerequisites(): { webkitgtk: string } {
 }
 
 /**
- * Builds the Linux debug binary with `VITE_PLUGIN_CONFORMANCE=1` and the
- * conformance config override (separate identifier, product name, CSP). Writes
- * the override to `runDir.configPath` first.
+ * Builds the Linux binary with `VITE_PLUGIN_CONFORMANCE=1` and the conformance
+ * config override (separate identifier, product name, CSP). Writes the override
+ * to `runDir.configPath` first.
+ *
+ * The options are parameterised so the Plugins bench's WebKitGTK lane reuses
+ * this exact build (issue #448, unit 4b) instead of copying it: `env` replaces
+ * the frontend flags, `release` picks the profile (and the binary path), and
+ * `configOverride` supplies the `--config` writer (the bench gets its own
+ * identifier so it never touches the conformance install, let alone the
+ * author's). The defaults are the conformance build.
  */
-export function buildLinuxApp(options: { root: string; runDir: RunDir }): void {
+export function buildLinuxApp(options: {
+  root: string;
+  runDir: RunDir;
+  /** The frontend build flags; defaults to the conformance flag. */
+  env?: Record<string, string>;
+  /** Build the release profile (default: debug). */
+  release?: boolean;
+  /** The `--config` override writer; defaults to the conformance override. */
+  configOverride?: (base: unknown) => unknown;
+}): void {
   const base = JSON.parse(readFileSync(resolve(options.root, TAURI_CONFIG), "utf8"));
-  writeFileSync(options.runDir.configPath, `${JSON.stringify(conformanceConfigOverride(base), null, 2)}\n`);
+  const override = options.configOverride ?? conformanceConfigOverride;
+  writeFileSync(options.runDir.configPath, `${JSON.stringify(override(base), null, 2)}\n`);
   execFileSync(
     "pnpm",
-    ["tauri", "build", "--debug", "--no-bundle", "--config", options.runDir.configPath],
+    [
+      "tauri",
+      "build",
+      ...(options.release ? [] : ["--debug"]),
+      "--no-bundle",
+      "--config",
+      options.runDir.configPath,
+    ],
     {
       cwd: options.root,
       stdio: "inherit",
-      env: { ...process.env, VITE_PLUGIN_CONFORMANCE: "1" },
+      env: { ...process.env, ...(options.env ?? { VITE_PLUGIN_CONFORMANCE: "1" }) },
     }
   );
 }
 
 /**
- * Launches the debug binary, piping its output to the run directory, and returns
- * a handle whose `isAlive` is false once the process (and its group) is gone.
+ * Launches the binary, piping its output to the run directory, and returns a
+ * handle whose `isAlive` is false once the process (and its group) is gone.
+ * `binary` and `env` override the debug binary and the inherited environment:
+ * the bench gives each launch its own temporary HOME/XDG dirs, so every launch
+ * is a fresh device and the author's real Library is never touched.
  */
 export async function launchLinuxApp(options: {
   root: string;
   runDir: RunDir;
+  /** The binary to run; defaults to the debug binary. */
+  binary?: string;
+  /** The process environment; defaults to the inherited one. */
+  env?: NodeJS.ProcessEnv;
+  /** The log file name under the run dir; defaults to `linux.log`. */
+  logName?: string;
 }): Promise<RunningApp> {
-  const binary = resolve(options.root, LINUX_BINARY);
+  const binary = resolve(options.root, options.binary ?? LINUX_BINARY);
   if (!existsSync(binary)) {
     throw new PrerequisiteMissing(
-      `no Linux binary at ${LINUX_BINARY}: build without --skip-build`
+      `no Linux binary at ${options.binary ?? LINUX_BINARY}: build without --skip-build`
     );
   }
-  const log = createWriteStream(resolve(options.runDir.dir, "linux.log"));
+  const log = createWriteStream(resolve(options.runDir.dir, options.logName ?? "linux.log"));
   const child = spawn(binary, [], {
     cwd: options.root,
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env },
+    env: options.env ?? { ...process.env },
   });
   child.stdout?.pipe(log);
   child.stderr?.pipe(log);

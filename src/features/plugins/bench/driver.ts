@@ -1,0 +1,248 @@
+/**
+ * The Plugins bench in-app driver (issue #448, unit 4b).
+ *
+ * The WebKitGTK half of `bench:plugins` cannot use Playwright (its WebKit has
+ * no OPFS, so Plugins cannot be seeded there), so it drives the **real Tauri
+ * Linux binary** instead. `main.tsx` imports this module dynamically only in a
+ * build made with `VITE_PLUGIN_BENCH_DRIVER=1`, after the seed was read and its
+ * approvals written (`seed.ts`) and after the Plugin lifecycle was installed.
+ *
+ * There is no Playwright here, so the interplay is synthetic: navigation goes
+ * through `history.pushState` (the app uses `BrowserRouter`, which reacts to
+ * `popstate`), a Shortcut is a dispatched `KeyboardEvent`, and typing is a
+ * `keydown` plus a native-setter value write plus an `input` event plus
+ * `keyup` — the same things Playwright would do. Every sample posts to the
+ * runner's collector (the same `node:http` shell the conformance lane reuses).
+ *
+ * This module is measurement plumbing, like `ConformancePage.tsx` for the
+ * conformance lane: the pure pieces it stands on (`measure.ts`) carry the unit
+ * tests.
+ */
+
+import { BENCH_COLLECTOR_PATHS } from "@/features/plugins/bench/protocol";
+import { diag } from "@/features/plugins/bench/diag";
+import {
+  dispatchShortcut,
+  dispatchTypingKey,
+  findEchoElement,
+  findEchoInput,
+  GALLERY_MARK,
+  matchEchoSamples,
+  type EchoMutation,
+  parseChord,
+  pluginStartMeasure,
+  pollFor,
+  readMarkStart,
+  readMeasureDuration,
+} from "@/features/plugins/bench/measure";
+import { getPluginsBenchSeed } from "@/features/plugins/bench/seed";
+import type { PluginsBenchSeed } from "@/features/plugins/bench/types";
+
+/** How long a single measurement may take before the lane gives up. */
+const MEASURE_TIMEOUT_MS = 45_000;
+/** How long a Plugin may take to become ready before the lane gives up. */
+const READY_TIMEOUT_MS = 30_000;
+/** The echo page's full tree (1,000 rows); the measurement waits for it. */
+const ROW_SENTINEL = "Row 1000";
+/** The echo typing pace: 120 ms for echo, 0 for a burst. */
+const ECHO_PACE_MS = 120;
+/**
+ * The notification throttle admits one call every 5 s, so two `stamp` presses
+ * need this gap between them (the 2 s toast is gone well before).
+ */
+const STAMP_GAP_MS = 5_300;
+/** The first visible effect of `stamp`: the notification the fixture shows. */
+const STAMP_EFFECT = "Fixture stamped";
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Navigates the app the way `BrowserRouter` observes (pushState + popstate). */
+function navigateTo(to: string): void {
+  window.history.pushState({}, "", to);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+/** POSTs one payload to the collector; a missing or slow collector never breaks the app. */
+async function post(seed: PluginsBenchSeed, path: string, body?: unknown): Promise<void> {
+  try {
+    await fetch(`${seed.collectorUrl}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    // The runner records a collector failure as unmeasured; the app stays up.
+  }
+}
+
+/**
+ * Arms a MutationObserver and runs `arm`; resolves with the `performance.now()`
+ * of the next rAF after a `[role="status"]` carrying `effect` first appears.
+ */
+function firstVisibleEffect(effect: string, arm: () => void): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const observer = new MutationObserver(() => {
+      const toast = [...document.querySelectorAll('[role="status"]')].find((element) =>
+        element.textContent?.includes(effect)
+      );
+      if (!toast) return;
+      observer.disconnect();
+      clearTimeout(timer);
+      requestAnimationFrame(() => resolve(performance.now()));
+    });
+    const timer = setTimeout(() => {
+      observer.disconnect();
+      reject(new Error(`the "${effect}" effect never appeared`));
+    }, 15_000);
+    observer.observe(document.body, { childList: true, subtree: true });
+    arm();
+  });
+}
+
+/** One `stamp` press: keydown to the next rAF after the notification shows. */
+async function pressStamp(chord: ReturnType<typeof parseChord>): Promise<number> {
+  const target = document.activeElement ?? document.body;
+  const started = performance.now();
+  const effectAt = await firstVisibleEffect(STAMP_EFFECT, () => dispatchShortcut(target, chord));
+  return effectAt - started;
+}
+
+function stampChordOf(seed: PluginsBenchSeed): ReturnType<typeof parseChord> {
+  return parseChord(seed.stampShortcut ?? "Mod+Alt+e");
+}
+
+/** Resolves once a Plugin's `plugin.start:<id>` measure exists. */
+function waitForPluginReady(pluginId: string): Promise<number> {
+  return pollFor(() => readMeasureDuration(pluginStartMeasure(pluginId)), {
+    timeoutMs: READY_TIMEOUT_MS,
+    sleep,
+  });
+}
+
+/** Waits until the echo page's input and its echo Text are both in the DOM. */
+async function waitForEchoPage(): Promise<{ input: HTMLInputElement; element: Element }> {
+  return pollFor(() => {
+    const input = findEchoInput(document);
+    const element = findEchoElement(document);
+    const row = document.body.textContent?.includes(ROW_SENTINEL) ?? false;
+    if (input === null || element === null || !row) return null;
+    return { input, element };
+  }, { timeoutMs: READY_TIMEOUT_MS, sleep });
+}
+
+/**
+ * Types `text` into the echo field, one synthetic keystroke per character, and
+ * returns one keydown->echo-commit sample per key. `pace` is the gap between
+ * keys: 120 ms for echo, 0 for the burst.
+ */
+async function measureEcho(
+  input: HTMLInputElement,
+  element: Element,
+  text: string,
+  pace: number
+): Promise<number[]> {
+  const keys: number[] = [];
+  const mutations: EchoMutation[] = [];
+  const observer = new MutationObserver(() => {
+    mutations.push({ t: performance.now(), text: element.textContent ?? "" });
+  });
+  observer.observe(element, { childList: true, characterData: true, subtree: true });
+  input.focus();
+  try {
+    for (let i = 0; i < text.length; i += 1) {
+      keys.push(performance.now());
+      dispatchTypingKey(input, text[i], text.slice(0, i + 1));
+      await sleep(pace);
+    }
+    await pollFor(() => (mutations.some((entry) => entry.text === `echo:${text}`) ? true : null), {
+      timeoutMs: MEASURE_TIMEOUT_MS,
+      sleep,
+    });
+  } finally {
+    observer.disconnect();
+  }
+  return matchEchoSamples(keys, mutations, text);
+}
+
+async function measureLaunch(): Promise<number[]> {
+  const start = await pollFor(() => readMarkStart(GALLERY_MARK), {
+    timeoutMs: READY_TIMEOUT_MS,
+    sleep,
+  });
+  return [start];
+}
+
+async function measureStartToReady(seed: PluginsBenchSeed): Promise<number[]> {
+  const target = seed.startToReady;
+  if (target === undefined) throw new Error("startToReady has no target");
+  navigateTo(`/plugin/${target.pluginId}/${target.pageId}`);
+  const duration = await waitForPluginReady(target.pluginId);
+  return [duration];
+}
+
+async function measureCommand(seed: PluginsBenchSeed): Promise<number[]> {
+  const pluginId = "fixture-everything";
+  await waitForPluginReady(pluginId);
+  // The Book editor route puts a Book in the Command's target context, so the
+  // target `stamp` Command is enabled; the id need not resolve to a Book
+  // (the Plugin reads `null` and names the kind), so the Library stays empty.
+  navigateTo("/book/plugins-bench");
+  await sleep(500);
+  const chord = stampChordOf(seed);
+  const samples: number[] = [];
+  for (let i = 0; i < seed.samples; i += 1) {
+    samples.push(await pressStamp(chord));
+    if (i < seed.samples - 1) await sleep(STAMP_GAP_MS);
+  }
+  return samples;
+}
+
+async function measureRemoteUi(seed: PluginsBenchSeed, pace: number): Promise<number[]> {
+  const text = seed.echoText ?? "";
+  navigateTo("/plugin/fixture-bench/echo");
+  const { input, element } = await waitForEchoPage();
+  return measureEcho(input, element, text, pace);
+}
+
+async function runMode(seed: PluginsBenchSeed): Promise<number[]> {
+  switch (seed.mode) {
+    case "launch":
+      return measureLaunch();
+    case "startToReady":
+      return measureStartToReady(seed);
+    case "commandToEffect":
+      return measureCommand(seed);
+    case "remoteUiEcho":
+      return measureRemoteUi(seed, ECHO_PACE_MS);
+    case "remoteUiBurst":
+      return measureRemoteUi(seed, 0);
+    default: {
+      const unreachable: never = seed.mode;
+      throw new Error(`unknown bench mode ${String(unreachable)}`);
+    }
+  }
+}
+
+/**
+ * Runs the seeded measurement once and posts it, then `/done`. `main.tsx`
+ * calls this fire-and-forget after the lifecycle is installed; the runner
+ * reads `/done` and kills the process.
+ */
+export async function runPluginsBenchDriver(): Promise<void> {
+  const seed = getPluginsBenchSeed();
+  await diag(`driver: enter seed=${seed ? seed.mode : "null"}`);
+  if (seed === null) return;
+  let samples: number[] = [];
+  try {
+    samples = await runMode(seed);
+    await diag(`driver: ${seed.mode} samples=${samples.join(",")}`);
+  } catch (error) {
+    console.warn(`[plugins-bench] ${seed.mode} failed`, error);
+    await diag(`driver: ${seed.mode} error=${error instanceof Error ? error.message : String(error)}`);
+  }
+  await post(seed, BENCH_COLLECTOR_PATHS.measure, { mode: seed.mode, samples });
+  await post(seed, BENCH_COLLECTOR_PATHS.done);
+  await diag(`driver: posted ${seed.mode}`);
+}

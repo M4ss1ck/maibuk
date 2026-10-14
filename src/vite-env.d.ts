@@ -16,6 +16,13 @@ interface ImportMetaEnv {
    * `app.gallery.first-render`), which a normal production build leaves out.
    */
   readonly VITE_PLUGIN_BENCH?: string;
+  /**
+   * "1" only in the native `bench:plugins` WebKitGTK build (#448, unit 4b): it
+   * turns on the in-app bench driver, whose seed/measurement code lives under
+   * `src/features/plugins/bench/` and is dynamically imported so a normal build
+   * carries none of it.
+   */
+  readonly VITE_PLUGIN_BENCH_DRIVER?: string;
   readonly TAURI_ENV_PLATFORM: "linux" | "windows" | "macos" | "android" | "ios" | undefined;
 }
 

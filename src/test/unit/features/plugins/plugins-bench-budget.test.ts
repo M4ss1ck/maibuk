@@ -50,6 +50,14 @@ describe("plugins bench budget check", () => {
     });
   });
 
+  it("accepts the optional build profile without changing the check", () => {
+    const withBuild = baseReport({ build: "debug" });
+    expect(withBuild.build).toBe("debug");
+    expect(checkBudgets(withBuild).exitCode).toBe(0);
+    // The field is optional: a report without it checks the same.
+    expect(checkBudgets(baseReport()).exitCode).toBe(0);
+  });
+
   it("passes inside every budget with one row per Plugin id and ms units", () => {
     const result = checkBudgets(baseReport());
     expect(result.exitCode).toBe(0);

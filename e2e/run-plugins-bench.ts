@@ -7,8 +7,10 @@
 // prerequisite is an `unmeasured` reason and exit 2, never a crash. Never in
 // CI: browser timing on a shared runner is noise.
 //
-// Unit 4a measures Chromium. The `webkitgtk` lane is reserved for unit 4b and,
-// until then, records `["webkitgtk lane not implemented"]` so its report exits 2.
+// Unit 4a measures Chromium. Unit 4b measures the real Tauri Linux binary
+// (`webkitgtk`), because Playwright's WebKit has no OPFS and cannot seed
+// Plugins there; its plan lives in `e2e/plugins-bench/webkitgtk-plan.ts` and its
+// process shell in `e2e/plugins-bench/webkitgtk.ts`.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -38,6 +40,7 @@ import {
   startPreview,
   sweepStalePreviews,
 } from "./preview-server.mjs";
+import { measureWebKitGtk } from "./plugins-bench/webkitgtk";
 import { buildWeb, root, wallClock } from "./run-steps.mjs";
 
 /** The `VITE_PLUGIN_BENCH=1` build, kept apart from the E2E build. */
@@ -154,17 +157,15 @@ async function main(): Promise<void> {
   const started = Date.now();
   const codes: number[] = [];
   for (const engine of options.engines) {
-    if (engine === "webkitgtk") {
-      // Unit 4b replaces this with a real WebKitGTK measurement.
-      codes.push(
-        writeAndPrint(engine, unmeasuredReport(engine, ["webkitgtk lane not implemented"]))
-      );
-      continue;
-    }
     let report: PluginsBenchReport;
     try {
-      report = await measureChromium(options, started);
+      report =
+        engine === "webkitgtk"
+          ? await measureWebKitGtk(root, options, started)
+          : await measureChromium(options, started);
     } catch (error) {
+      // A missing prerequisite or a harness failure is "cannot measure" (exit
+      // 2), with the reason in `unmeasured`, never a crash.
       const reason = error instanceof Error ? error.message : String(error);
       report = unmeasuredReport(engine, [reason]);
     }
