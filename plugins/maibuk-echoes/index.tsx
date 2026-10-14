@@ -8,8 +8,10 @@
  * drive `./runtime` over the polyfill-free `@/plugin-sdk/ui-serve` entry.
  */
 
-import { PLUGIN_READY_MESSAGE, createPluginClient } from "@/plugin-sdk";
+// The Worker entry installs the Remote DOM polyfill, so it stays first among
+// the SDK imports: `@/plugin-sdk` touches HTMLElement when it is evaluated.
 import { servePluginUi } from "@/plugin-sdk/worker-ui";
+import { PLUGIN_READY_MESSAGE, createPluginClient } from "@/plugin-sdk";
 import { startEchoes } from "./runtime";
 
 /** The Worker global surface this plugin uses, without the DOM's Window types. */

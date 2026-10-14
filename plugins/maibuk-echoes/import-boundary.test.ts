@@ -90,4 +90,11 @@ describe("Echoes import boundary", () => {
     }
     expect(violations).toEqual([]);
   });
+
+  it("loads the Worker's Remote DOM polyfill before any other SDK import", () => {
+    // `@/plugin-sdk` touches HTMLElement when evaluated; imported first, the
+    // Worker crashes at start with "HTMLElement is not defined".
+    const entry = importSpecifiers(readFileSync(join(ROOT, "index.tsx"), "utf8"));
+    expect(entry[0]).toBe("@/plugin-sdk/worker-ui");
+  });
 });
