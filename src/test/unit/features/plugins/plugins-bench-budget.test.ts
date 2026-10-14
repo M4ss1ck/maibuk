@@ -185,6 +185,17 @@ describe("plugins bench budget check", () => {
     const report = baseReport({ unmeasured: ["remoteUiBurst"], commandToEffect: [200, 200] });
     expect(checkBudgets(report).exitCode).toBe(2);
   });
+
+  it("names why a report cannot be measured", () => {
+    expect(checkBudgets(baseReport({ unmeasured: ["no display"] })).reasons).toEqual([
+      "no display",
+    ]);
+    expect(checkBudgets(baseReport({ remoteUiEcho: [], startToReady: {} })).reasons).toEqual([
+      "no samples: remoteUiEcho",
+      "no on-demand Plugin to start",
+    ]);
+    expect(checkBudgets(baseReport()).reasons).toEqual([]);
+  });
 });
 
 const script = join(process.cwd(), "scripts", "plugins-bench-budget.mjs");

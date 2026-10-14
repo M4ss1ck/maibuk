@@ -80,23 +80,18 @@ export function checkBudgets(report) {
   rows.push(row("remoteUiEcho", percentile(remoteUiEcho, 95), BUDGETS.remoteUiEchoP95Ms));
   rows.push(row("remoteUiBurst", percentile(remoteUiBurst, 95), BUDGETS.remoteUiBurstP95Ms));
 
-  const emptySamples =
-    baseline.length === 0 ||
-    installed20.length === 0 ||
-    persistent3.length === 0 ||
-    commandToEffect.length === 0 ||
-    remoteUiEcho.length === 0 ||
-    remoteUiBurst.length === 0 ||
-    Object.values(startToReady).some((samples) => samples.length === 0);
-  const noIds = Object.keys(startToReady).length === 0;
-  const unmeasured = report.unmeasured ?? [];
+  const required = { baseline, installed20, persistent3, commandToEffect, remoteUiEcho, remoteUiBurst };
+  for (const [id, samples] of Object.entries(startToReady)) required[`startToReady ${id}`] = samples;
+  const empty = Object.keys(required).filter((name) => required[name].length === 0);
 
   // "Cannot measure" takes precedence over a miss, so an incomplete report
-  // never reads as a pass or a fail.
-  const cannotMeasure = unmeasured.length > 0 || emptySamples || noIds;
+  // never reads as a pass or a fail. Each reason names what is missing.
+  const reasons = [...(report.unmeasured ?? [])];
+  if (empty.length > 0) reasons.push(`no samples: ${empty.join(", ")}`);
+  if (Object.keys(startToReady).length === 0) reasons.push("no on-demand Plugin to start");
   const missed = rows.some((r) => r.pass === false);
-  const exitCode = cannotMeasure ? 2 : missed ? 1 : 0;
-  return { rows, exitCode };
+  const exitCode = reasons.length > 0 ? 2 : missed ? 1 : 0;
+  return { rows, exitCode, reasons };
 }
 
 /** Prints the budget table to stdout; returns the exit code. */
@@ -115,7 +110,7 @@ export function printBudgetReport(result, heading = "") {
     );
   }
   if (result.exitCode === 2) {
-    console.error("cannot measure: the report is missing required samples");
+    for (const reason of result.reasons) console.error(`cannot measure: ${reason}`);
   }
   return result.exitCode;
 }

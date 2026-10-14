@@ -34,6 +34,8 @@ export interface BudgetRow {
 export interface BudgetResult {
   rows: BudgetRow[];
   exitCode: 0 | 1 | 2;
+  /** Why the report cannot be measured; empty unless exitCode is 2. */
+  reasons: string[];
 }
 
 export const BUDGETS: {
