@@ -991,6 +991,8 @@ export interface PluginNoteSummary {
   id: string;
   bookId: string | null;
   title: string;
+  /** The Note's own language; null when the Note has none. */
+  language: string | null;
   tags: string[];
   wordCount: number;
   updatedAt: number;

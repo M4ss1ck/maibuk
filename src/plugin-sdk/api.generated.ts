@@ -123,6 +123,7 @@ export interface PluginApiMethods {
       id: string;
       bookId: string | null;
       title: string;
+      language: string | null;
       tags: string[];
       wordCount: number;
       /** Milliseconds since the Unix epoch. */
@@ -138,6 +139,7 @@ export interface PluginApiMethods {
       id: string;
       bookId: string | null;
       title: string;
+      language: string | null;
       tags: string[];
       wordCount: number;
       /** Milliseconds since the Unix epoch. */

@@ -171,6 +171,7 @@ Output:
   id: string;
   bookId: string | null;
   title: string;
+  language: string | null;
   tags: string[];
   wordCount: number;
   /** Milliseconds since the Unix epoch. */
@@ -201,6 +202,7 @@ Output:
   id: string;
   bookId: string | null;
   title: string;
+  language: string | null;
   tags: string[];
   wordCount: number;
   /** Milliseconds since the Unix epoch. */

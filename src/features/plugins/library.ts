@@ -82,6 +82,7 @@ function toNoteSummary(row: Row): PluginNoteSummary {
     id: row.id as string,
     bookId: (row.book_id as string | null) ?? null,
     title: row.title as string,
+    language: (row.language as string | null) ?? null,
     tags: parseTags(row.tags),
     wordCount: (row.word_count as number) ?? 0,
     updatedAt: toMillis(row.updated_at),

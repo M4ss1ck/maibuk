@@ -67,10 +67,11 @@ export type EchoTranslate = (
 
 /** A `t` for one language over the runtime catalog. */
 export function createEchoTranslator(language: string): EchoTranslate {
-  return (key, values) =>
-    values === undefined
-      ? translate(language, key)
-      : format(translate(language, key), values);
+  return (key, values) => {
+    const count = typeof values?.count === "number" ? values.count : undefined;
+    const template = translate(language, key, count);
+    return values === undefined ? template : format(template, values);
+  };
 }
 
 /** A nearby echo's two ends: the word itself with the direction named. */

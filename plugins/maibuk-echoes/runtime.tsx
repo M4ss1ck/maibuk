@@ -25,6 +25,7 @@ import {
   type HostRequestHandler,
   type PluginClient,
 } from "@/plugin-sdk";
+import { createEchoEditor, type EchoEditorController } from "./editor";
 import {
   DEFAULT_ECHO_SETTINGS,
   type EchoKind,
@@ -65,6 +66,9 @@ export const SETTINGS_ROW_ID = "detection";
 /** The Command-local ids the manifest declares. */
 export const OPEN_ECHOES = "openEchoes";
 export const FIND_ECHOES = "findEchoes";
+export const TOGGLE_HIGHLIGHTS = "toggleHighlights";
+export const NEXT_ECHO = "nextEcho";
+export const PREVIOUS_ECHO = "previousEcho";
 
 /** What the report is scoped to: a Book, or one Chapter inside it. */
 export interface EchoScope {
@@ -100,21 +104,23 @@ interface EchoRuntime {
 /** Wires the client to the report page, the Settings row, and the Command handlers. */
 export function startEchoes(client: PluginClient, serve: EchoServe): void {
   const runtime: EchoRuntime = { scope: null };
+  const editor = createEchoEditor(client);
   serve(client, {
     pages: { [REPORT_PAGE_ID]: createReportPage(client, runtime) },
     settingsRows: { [SETTINGS_ROW_ID]: createDetectionSettings(client) },
-    onHostRequest: (method, params) => handleHostRequest(client, runtime, method, params),
+    onHostRequest: (method, params) => handleHostRequest(client, runtime, editor, method, params),
   });
 }
 
 function handleHostRequest(
   client: PluginClient,
   runtime: EchoRuntime,
+  editor: EchoEditorController,
   method: string,
   params: unknown
 ): unknown {
   if (method === "health.check") return "pong";
-  if (method === PLUGIN_COMMAND_RUN_REQUEST) return runEchoCommand(client, runtime, params);
+  if (method === PLUGIN_COMMAND_RUN_REQUEST) return runEchoCommand(client, runtime, editor, params);
   throw new Error(`No handler for ${method}`);
 }
 
@@ -122,14 +128,28 @@ function handleHostRequest(
  * Answers one Command run. `Find echoes` stores the scope from the item the
  * host captured, then opens the report; `Open Echoes` is the report page's
  * navigating Command, so the host normally navigates without a `command.run`,
- * and answering it here keeps the page reachable the other way.
+ * and answering it here keeps the page reachable the other way. The three
+ * editor Commands go straight to the editor controller.
  */
 async function runEchoCommand(
   client: PluginClient,
   runtime: EchoRuntime,
+  editor: EchoEditorController,
   params: unknown
 ): Promise<null> {
   const { id, target } = (params ?? {}) as { id?: string; target?: EchoCommandTarget };
+  if (id === TOGGLE_HIGHLIGHTS) {
+    await editor.toggleHighlights();
+    return null;
+  }
+  if (id === NEXT_ECHO) {
+    await editor.nextEcho();
+    return null;
+  }
+  if (id === PREVIOUS_ECHO) {
+    await editor.previousEcho();
+    return null;
+  }
   if (id !== FIND_ECHOES && id !== OPEN_ECHOES) return null;
   if (id === FIND_ECHOES) runtime.scope = await scopeForTarget(client, target);
   await client.navigation.openPage({ pageId: REPORT_PAGE_ID });
@@ -444,7 +464,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           key={rowId}
           id={rowId}
           label={row.label}
-          description={format(translate(language, "report.summary"), {
+          description={format(translate(language, "report.summary", row.count), {
             count: row.count,
             chapters: chapterTitles(row.chapterIndexes),
           })}

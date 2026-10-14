@@ -84,6 +84,7 @@ const noteSummary = z.strictObject({
   id,
   bookId: id.nullable(),
   title: z.string(),
+  language: z.string().nullable(),
   tags: z.array(z.string()),
   wordCount: z.int(),
   updatedAt: timestamp,

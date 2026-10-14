@@ -60,6 +60,16 @@ describe("echoHighlightRanges()", () => {
     ]);
   });
 
+  it("uses the singular for a distance of one word", () => {
+    const text = "A door door creaked.";
+    const echoes = findEchoes(text, "en", settings({ overused: false, phrases: false }));
+    const sets = echoHighlightRanges(echoes, ["nearby"], t, text);
+    expect(sets.repetition.map((range) => range.label)).toEqual([
+      "door, repeated 1 word later",
+      "door, repeated 1 word earlier",
+    ]);
+  });
+
   it("labels an overused word with its total count on every occurrence", () => {
     const text = "harbor harbor harbor harbor harbor";
     const echoes = findEchoes(text, "en", settings({ nearby: false, phrases: false }));
@@ -94,7 +104,7 @@ describe("echoHighlightRanges()", () => {
       { kind: "overused", normalized: "just", occurrences: [{ chapter: 0, from: 0, to: 4 }] },
     ];
     const sets = echoHighlightRanges(duplicated, ["overused"], t, "just");
-    expect(sets.info).toEqual([{ from: 0, to: 4, label: "just, used 1 times" }]);
+    expect(sets.info).toEqual([{ from: 0, to: 4, label: "just, used 1 time" }]);
   });
 
   it("counts an overused word across the whole Book and reads each Chapter's text", () => {
