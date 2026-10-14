@@ -41,6 +41,8 @@ e2e/.output/
 
 # Fetched Moonshine runtimes (never committed; run `pnpm fetch:dictation`)
 vendor/
+# Third-party source a Built-in Plugin ships (plugins/<id>/vendor/README.md says where from)
+!plugins/*/vendor/
 
 # Dictation Interpreter bench output (pnpm bench:dictation)
 .bench/

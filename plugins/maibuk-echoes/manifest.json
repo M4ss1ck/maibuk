@@ -1,0 +1,17 @@
+{
+  "manifestVersion": 1,
+  "id": "maibuk-echoes",
+  "name": "Echoes",
+  "description": "Points out words and phrases repeated closely enough, or often enough, that a reader would notice.",
+  "author": "Maibuk",
+  "version": "0.1.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web", "desktop"],
+  "lifecycle": "on-demand",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": ["library:read", "editor:read", "editor:decorate"],
+    "optional": []
+  }
+}
