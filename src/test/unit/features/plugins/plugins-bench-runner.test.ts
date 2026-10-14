@@ -1,6 +1,6 @@
 // @vitest-environment node
 //
-// The pure half of the Plugins bench runner (issue #448, unit 4a): argument
+// The pure half of the Plugins bench runner (issue #448): argument
 // parsing, the worst-exit-code combination, and assembling a PluginsBenchReport
 // from the per-measurement JSON the bench specs wrote (`e2e/plugins-bench/report.ts`).
 // No browser: these are the runner's decisions, unit-tested on their own.

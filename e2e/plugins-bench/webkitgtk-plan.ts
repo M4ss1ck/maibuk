@@ -1,5 +1,5 @@
 /**
- * The pure half of the Plugins bench's WebKitGTK lane (issue #448, unit 4b).
+ * The pure half of the Plugins bench's WebKitGTK lane (issue #448).
  *
  * The lane drives the real Tauri Linux binary because its WebKit has no OPFS,
  * so Plugins cannot be seeded the Playwright way. Everything the lane decides

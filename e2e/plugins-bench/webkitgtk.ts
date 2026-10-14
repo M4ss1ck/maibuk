@@ -1,4 +1,4 @@
-// The Plugins bench's WebKitGTK lane (issue #448, unit 4b): the process and
+// The Plugins bench's WebKitGTK lane (issue #448): the process and
 // socket shell around `webkitgtk-plan.ts`.
 //
 // Playwright's WebKit cannot measure this lane (it has no OPFS, so Plugins

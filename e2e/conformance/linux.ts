@@ -72,7 +72,7 @@ export function assertLinuxPrerequisites(): { webkitgtk: string } {
  * to `runDir.configPath` first.
  *
  * The options are parameterised so the Plugins bench's WebKitGTK lane reuses
- * this exact build (issue #448, unit 4b) instead of copying it: `env` replaces
+ * this exact build (issue #448) instead of copying it: `env` replaces
  * the frontend flags, `release` picks the profile (and the binary path), and
  * `configOverride` supplies the `--config` writer (the bench gets its own
  * identifier so it never touches the conformance install, let alone the

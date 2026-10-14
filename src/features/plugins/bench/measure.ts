@@ -1,5 +1,5 @@
 /**
- * The Plugins bench driver's measurement primitives (issue #448, unit 4b).
+ * The Plugins bench driver's measurement primitives (issue #448).
  *
  * These are the browser-side halves of the measurements `e2e/plugins-bench/
  * plugins.bench.ts` takes through Playwright: reading the User Timing mark or

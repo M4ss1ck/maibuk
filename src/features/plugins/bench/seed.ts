@@ -1,5 +1,5 @@
 /**
- * The Plugins bench driver's seed loader (issue #448, unit 4b).
+ * The Plugins bench driver's seed loader (issue #448).
  *
  * `main.tsx` calls `preparePluginsBench()` before it installs the Plugin
  * lifecycle, only in a build made with `VITE_PLUGIN_BENCH_DRIVER=1`. It reads

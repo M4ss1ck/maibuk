@@ -1,7 +1,7 @@
 // The lanes' `node:http` collectors. The conformance lane (#447, D5) serves the
 // in-page reporter's contract (reporter.ts) and logs every request the
 // sandboxed Plugin should not have been able to make. The Plugins bench's
-// WebKitGTK lane (#448, unit 4b) receives the measurements its in-app driver
+// WebKitGTK lane (#448) receives the measurements its in-app driver
 // POSTs. Both are the same socket shell over a different reducer.
 //
 // `startHttpCollector` is that shell: read the body, hand the request to a

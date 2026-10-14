@@ -1,5 +1,5 @@
 /**
- * The Plugins bench in-app driver (issue #448, unit 4b).
+ * The Plugins bench in-app driver (issue #448).
  *
  * The WebKitGTK half of `bench:plugins` cannot use Playwright (its WebKit has
  * no OPFS, so Plugins cannot be seeded there), so it drives the **real Tauri

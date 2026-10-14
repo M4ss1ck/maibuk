@@ -31,7 +31,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 // `VITE_PLUGIN_BENCH_DRIVER` is read inline so Rollup replaces it statically:
 // in a normal build it folds to false, both guarded blocks are dropped, and the
 // bench driver is never emitted. Only the native `bench:plugins` WebKitGTK
-// build (issue #448, unit 4b) seeds its approvals and runs its measurement.
+// build (issue #448) seeds its approvals and runs its measurement.
 const BENCH_DRIVER_ENABLED = import.meta.env.VITE_PLUGIN_BENCH_DRIVER === "1";
 
 const loadPlugins = async () => {

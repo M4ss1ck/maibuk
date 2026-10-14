@@ -1,4 +1,4 @@
-// The pure half of the Plugins bench runner (issue #448, unit 4a): argument
+// The pure half of the Plugins bench runner (issue #448): argument
 // parsing, the worst-exit-code combination, and assembling a PluginsBenchReport
 // from the per-measurement JSON the bench specs wrote. No I/O here, so the
 // runner's decisions are unit-tested without launching a browser.

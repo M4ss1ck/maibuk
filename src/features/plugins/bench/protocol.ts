@@ -1,5 +1,5 @@
 /**
- * The Plugins bench driver's wire contract (issue #448, unit 4b).
+ * The Plugins bench driver's wire contract (issue #448).
  *
  * The `bench:plugins` WebKitGTK lane builds the app with
  * `VITE_PLUGIN_BENCH_DRIVER=1`; the gated driver then reads one seed file from

@@ -1,5 +1,5 @@
 /**
- * The Plugins bench driver's seed shape (issue #448, unit 4b).
+ * The Plugins bench driver's seed shape (issue #448).
  *
  * The runner writes one of these into the app data dir before it launches the
  * app; the gated driver (`VITE_PLUGIN_BENCH_DRIVER=1`) reads it, seeds the

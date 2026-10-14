@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * The Plugins bench's in-app driver (issue #448, unit 4b) is test-only: it
+ * The Plugins bench's in-app driver (issue #448) is test-only: it
  * exists only in a build made with `VITE_PLUGIN_BENCH_DRIVER=1`, and a shipped
  * bundle must not carry it. This follows the conformance route-gate test: it
  * walks the static value-import graph from `main.tsx` and proves the bench
