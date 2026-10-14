@@ -104,7 +104,7 @@ function chapterTextOf(text: string | readonly string[], chapter: number): strin
 /** Each token's index keyed by the offset it starts at, for O(1) distance lookups. */
 function tokenIndexByFrom(tokens: readonly Token[]): Map<number, number> {
   const indexes = new Map<number, number>();
-  tokens.forEach((token, index) => indexes.set(token.from, index));
+  for (let index = 0; index < tokens.length; index++) indexes.set(tokens[index].from, index);
   return indexes;
 }
 
@@ -124,7 +124,8 @@ export function echoHighlightRanges(
   echoes: readonly Echo[],
   enabledKinds: readonly EchoKind[],
   t: EchoTranslate,
-  text: string | readonly string[]
+  text: string | readonly string[],
+  tokens?: readonly (readonly Token[])[]
 ): EchoHighlightSets {
   const enabled = new Set<EchoKind>(enabledKinds);
   const sets: Record<PluginEchoHighlightKind, EchoHighlightRange[]> = {
@@ -132,20 +133,34 @@ export function echoHighlightRanges(
     info: [],
     warning: [],
   };
-  const seen = new Set<string>();
+  // A range is deduplicated by (kind, from, to, label). A numeric bucket keyed
+  // by `from`/`to` plus a per-position label set avoids building a string key
+  // for each of the ~10,900 ranges (#451).
+  const seen: Record<PluginEchoHighlightKind, Map<number, Set<string>>> = {
+    repetition: new Map(),
+    info: new Map(),
+    warning: new Map(),
+  };
   const indexesByChapter = new Map<number, Map<number, number>>();
   const indexesFor = (chapter: number): Map<number, number> => {
     let indexes = indexesByChapter.get(chapter);
     if (indexes === undefined) {
-      indexes = tokenIndexByFrom(tokenize(chapterTextOf(text, chapter)));
+      const chapterTokens = tokens?.[chapter] ?? tokenize(chapterTextOf(text, chapter));
+      indexes = tokenIndexByFrom(chapterTokens);
       indexesByChapter.set(chapter, indexes);
     }
     return indexes;
   };
   const push = (kind: PluginEchoHighlightKind, range: EchoHighlightRange): void => {
-    const key = `${kind}\u0000${range.from}\u0000${range.to}\u0000${range.label}`;
-    if (seen.has(key)) return;
-    seen.add(key);
+    const bucket = seen[kind];
+    const numeric = range.from * 1_000_000 + range.to;
+    let labels = bucket.get(numeric);
+    if (labels === undefined) {
+      labels = new Set();
+      bucket.set(numeric, labels);
+    }
+    if (labels.has(range.label)) return;
+    labels.add(range.label);
     sets[kind].push(range);
   };
 

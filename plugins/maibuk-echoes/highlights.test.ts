@@ -13,6 +13,7 @@ import {
   findEchoes,
 } from "./find-echoes";
 import * as en from "./fixtures/en";
+import { tokenize } from "./language";
 import {
   ECHO_HIGHLIGHTS_OFF_KEY,
   ECHO_NO_ECHOES_KEY,
@@ -204,5 +205,17 @@ describe("echoAnnouncement()", () => {
     expect(echoNoEchoes(es)).toBe("No se encontraron ecos");
     expect(ECHO_HIGHLIGHTS_OFF_KEY).toBe("echo.highlightsOff");
     expect(ECHO_NO_ECHOES_KEY).toBe("echo.none");
+  });
+});
+
+describe("echoHighlightRanges() reusing findEchoes' tokens", () => {
+  it("paints the same sets with the tokens handed over as with its own tokenization", () => {
+    const text = "A door creaked. Then a door slammed, and a door shut.";
+    const settingsHere = settings({ overused: false, phrases: false });
+    const echoes = findEchoes(text, "en", settingsHere);
+    const kinds = ["nearby"] as const;
+    const own = echoHighlightRanges(echoes, kinds, t, text);
+    const reused = echoHighlightRanges(echoes, kinds, t, text, [tokenize(text)]);
+    expect(reused).toEqual(own);
   });
 });

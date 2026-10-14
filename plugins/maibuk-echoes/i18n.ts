@@ -38,16 +38,27 @@ export function catalogFor(language: string): Readonly<Catalog> {
 }
 
 const PLURAL_RULES = new Map<string, Intl.PluralRules>();
+/** Selected categories by base language and count; `select` is the hot call. */
+const PLURAL_CATEGORIES = new Map<string, Map<number, Intl.LDMLPluralRule>>();
 
 /** The CLDR plural category ("one", "other", …) Intl.PluralRules picks for a count. */
 export function pluralCategory(language: string, count: number): Intl.LDMLPluralRule {
   const base = baseLanguage(language);
+  let byCount = PLURAL_CATEGORIES.get(base);
+  if (byCount === undefined) {
+    byCount = new Map();
+    PLURAL_CATEGORIES.set(base, byCount);
+  }
+  const cached = byCount.get(count);
+  if (cached !== undefined) return cached;
   let rules = PLURAL_RULES.get(base);
   if (rules === undefined) {
     rules = new Intl.PluralRules(base);
     PLURAL_RULES.set(base, rules);
   }
-  return rules.select(count);
+  const category = rules.select(count);
+  byCount.set(count, category);
+  return category;
 }
 
 /**
@@ -57,23 +68,57 @@ export function pluralCategory(language: string, count: number): Intl.LDMLPlural
  */
 export function translate(language: string, key: EchoKey, count?: number): string {
   const catalog = catalogFor(language) as Readonly<Record<string, string>>;
-  const candidates =
-    count === undefined
-      ? [`${key}_other`, key]
-      : [`${key}_${pluralCategory(language, count)}`, `${key}_other`, key];
-  for (const candidate of candidates) {
-    const value = catalog[candidate];
-    if (typeof value === "string") return value;
+  const other = catalog[`${key}_other`];
+  if (count === undefined) {
+    if (typeof other === "string") return other;
+    const plain = catalog[key];
+    return typeof plain === "string" ? plain : key;
   }
-  return key;
+  const form = catalog[`${key}_${pluralCategory(language, count)}`];
+  if (typeof form === "string") return form;
+  if (typeof other === "string") return other;
+  const plain = catalog[key];
+  return typeof plain === "string" ? plain : key;
+}
+
+/** The `{{name}}` placeholders a template carries, and its literal parts. */
+type TemplateValues = Readonly<Record<string, string | number>>;
+const TEMPLATE_PATTERN = /\{\{(\w+)\}\}/g;
+/** Compiled templates by source, so `format` runs no regex per call (#451). */
+const TEMPLATE_COMPILERS = new Map<string, (values: TemplateValues) => string>();
+
+/**
+ * Precompiles one template into a filler: the `{{name}}` placeholders are
+ * found once, so a highlight update fills 10,900 labels with no regex per call.
+ * An unknown name fills empty, matching the original `replace` callback.
+ */
+export function compileTemplate(template: string): (values: TemplateValues) => string {
+  const cached = TEMPLATE_COMPILERS.get(template);
+  if (cached !== undefined) return cached;
+  // Alternates literal, name, literal, name, …, literal; even indices literal.
+  const parts: string[] = [];
+  let last = 0;
+  TEMPLATE_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null = TEMPLATE_PATTERN.exec(template);
+  while (match !== null) {
+    parts.push(template.slice(last, match.index), match[1]);
+    last = match.index + match[0].length;
+    match = TEMPLATE_PATTERN.exec(template);
+  }
+  parts.push(template.slice(last));
+  const compiled = (values: TemplateValues): string => {
+    let out = "";
+    for (let index = 0; index < parts.length; index++) {
+      if ((index & 1) === 0) out += parts[index];
+      else out += parts[index] in values ? String(values[parts[index]]) : "";
+    }
+    return out;
+  };
+  TEMPLATE_COMPILERS.set(template, compiled);
+  return compiled;
 }
 
 /** Fills `{{name}}` placeholders in a runtime string; an unknown name fills empty. */
-export function format(
-  template: string,
-  values: Readonly<Record<string, string | number>>
-): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) =>
-    name in values ? String(values[name]) : ""
-  );
+export function format(template: string, values: TemplateValues): string {
+  return compileTemplate(template)(values);
 }

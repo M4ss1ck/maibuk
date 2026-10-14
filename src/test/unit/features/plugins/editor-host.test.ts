@@ -431,6 +431,26 @@ describe("editor highlights", () => {
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--info").length).toBeGreaterThan(0);
   });
 
+  it("walks the document once per doc and again only when the doc changes", () => {
+    const editor = mountEditor("<p>one two three four</p>");
+    editor.view.dom.focus();
+    register(editor);
+    const spy = vi.spyOn(plainTextOffsets, "buildPlainTextMap");
+
+    setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // A second kind on the same doc reuses the cached plain-text map.
+    setPluginEditorHighlights("a", { kind: "warning", ranges: [{ from: 4, to: 7 }] });
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // The edit makes a new doc node, so the next set rebuilds the map.
+    editor.commands.insertContentAt(1, "X");
+    setPluginEditorHighlights("a", { kind: "repetition", ranges: [{ from: 5, to: 8 }] });
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--repetition").length).toBeGreaterThan(0);
+  });
+
   it("never becomes saved formatting", () => {
     const editor = mountEditor("<p>one two</p>");
     editor.view.dom.focus();

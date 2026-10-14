@@ -21,7 +21,7 @@
  */
 
 import type { PluginApiEventId, PluginApiEvents, PluginClient } from "@/plugin-sdk";
-import { findEchoes } from "./find-echoes";
+import { findEchoesWithTokens } from "./find-echoes";
 import {
   ECHO_HIGHLIGHT_KINDS,
   type EchoHighlightSets,
@@ -240,8 +240,12 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     // Time only Echoes' own compute (findEchoes + echoHighlightRanges) for the
     // Worker-recompute bench row (#451): no await runs inside this span.
     const startedAt = nowMs();
-    const echoes = findEchoes(text, state.detectionLanguage, toFindEchoesOptions(settings));
-    const sets = echoHighlightRanges(echoes, kinds, t, text);
+    const { echoes, chapters } = findEchoesWithTokens(
+      text,
+      state.detectionLanguage,
+      toFindEchoesOptions(settings)
+    );
+    const sets = echoHighlightRanges(echoes, kinds, t, text, chapters);
     recordRecompute(startedAt);
     await paint(sets, entity);
     if (!state.on || state.entity === null || !sameEntity(state.entity, entity)) return;

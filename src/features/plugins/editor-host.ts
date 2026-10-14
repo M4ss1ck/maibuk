@@ -26,6 +26,7 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import {
+  type PlainTextMap,
   buildPlainTextMap,
   plainOffsetToPm,
   plainRangeToPmRange,
@@ -111,6 +112,23 @@ function entityKey(entity: PluginEntityTarget): string {
   return `${entity.kind}:${entity.id}`;
 }
 
+/**
+ * The plain-text map by document. A ProseMirror node is immutable, so the same
+ * node means the same text; the host re-reads the map several times per
+ * highlight update (the three kinds, a selection, a reveal) and never walks the
+ * document twice for one of them (#451).
+ */
+const plainTextMaps = new WeakMap<ProseMirrorNode, PlainTextMap>();
+
+function plainTextMapFor(doc: ProseMirrorNode): PlainTextMap {
+  let map = plainTextMaps.get(doc);
+  if (map === undefined) {
+    map = buildPlainTextMap(doc);
+    plainTextMaps.set(doc, map);
+  }
+  return map;
+}
+
 function isUsable(entry: EditorEntry): boolean {
   return !entry.editor.isDestroyed && !isOutsideLayer(entry.editor.view.dom);
 }
@@ -172,7 +190,7 @@ function buildHighlightDecorations(
   sets: Map<string, PluginHighlightEntry>
 ): DecorationSet {
   if (sets.size === 0) return DecorationSet.empty;
-  const map = buildPlainTextMap(doc);
+  const map = plainTextMapFor(doc);
   const decorations: Decoration[] = [];
   for (const { pluginId, set } of sets.values()) {
     for (const range of set.ranges) {
@@ -222,19 +240,28 @@ function createHighlightsPlugin(entryId: string): {
         }
         const sets = new Map(mapped.sets);
         if (meta.type === "clear") {
+          let changed = false;
           for (const [key, entry] of sets) {
-            if (entry.pluginId === meta.pluginId) sets.delete(key);
+            if (entry.pluginId === meta.pluginId) {
+              sets.delete(key);
+              changed = true;
+            }
           }
+          // Nothing of this Plugin was painted: no decoration work to do.
+          if (!changed) return mapped;
         } else if (meta.set.ranges.length === 0) {
-          // An empty set is the host's way to clear exactly one kind.
-          sets.delete(highlightSetKey(meta.pluginId, meta.set.kind));
+          // An empty set is the host's way to clear exactly one kind. A kind
+          // that was never set clears nothing, so the decorations stay put.
+          const key = highlightSetKey(meta.pluginId, meta.set.kind);
+          if (!sets.has(key)) return mapped;
+          sets.delete(key);
         } else {
           sets.set(highlightSetKey(meta.pluginId, meta.set.kind), {
             pluginId: meta.pluginId,
             set: meta.set,
           });
         }
-        // One document walk per set or clear, never per transaction.
+        // One document walk per set or clear that changed something, never per transaction.
         return { sets, decorations: buildHighlightDecorations(tr.doc, sets) };
       },
     },
@@ -248,7 +275,7 @@ function createHighlightsPlugin(entryId: string): {
 }
 
 function applyReveal(entry: EditorEntry, range: PluginRevealRange): void {
-  const map = buildPlainTextMap(entry.editor.state.doc);
+  const map = plainTextMapFor(entry.editor.state.doc);
   const pos = plainOffsetToPm(map, range.from, "start");
   entry.editor.chain().focus().setTextSelection(pos).scrollIntoView().run();
 }
@@ -351,7 +378,7 @@ export function getPluginEditorContent(): PluginEditorContentResult {
 export function getPluginEditorSelection(): PluginEditorSelectionResult {
   const entry = resolveFocusedEditor();
   if (!entry) return { status: "no-target" };
-  const map = buildPlainTextMap(entry.editor.state.doc);
+  const map = plainTextMapFor(entry.editor.state.doc);
   const { from, to } = entry.editor.state.selection;
   const range = pmRangeToPlainRange(map, from, to);
   return { status: "ok", entity: entry.entity, range, text: map.text.slice(range.from, range.to) };

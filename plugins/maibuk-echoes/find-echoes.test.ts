@@ -9,6 +9,7 @@ import {
   NEARBY_WINDOW_MAX,
   NEARBY_WINDOW_MIN,
   findEchoes,
+  findEchoesWithTokens,
 } from "./find-echoes";
 
 /** The shared fixtures every case needs; Spanish carries one extra string. */
@@ -552,5 +553,19 @@ describe("findEchoes() accents", () => {
     const nearby = echoes.filter((echo) => echo.kind === "nearby");
     expect(nearby).toHaveLength(1);
     expect(nearby[0].normalized).toBe(keyOf("mamá", "es"));
+  });
+});
+
+describe("findEchoesWithTokens()", () => {
+  it("returns the same echoes as findEchoes plus the tokens behind them", () => {
+    const book = [en.nearbyChain, en.caseFolding];
+    const config = settings({});
+    const echoes = findEchoes(book, "en", config);
+    const { echoes: withTokens, chapters } = findEchoesWithTokens(book, "en", config);
+
+    expect(withTokens).toEqual(echoes);
+    expect(chapters).toHaveLength(book.length);
+    expect(chapters[0]).toEqual(tokenize(book[0]));
+    expect(chapters[1]).toEqual(tokenize(book[1]));
   });
 });
