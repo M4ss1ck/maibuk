@@ -43,6 +43,7 @@ const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
     manifest: "manifest.on-demand.json",
     output: "fixture-everything-on-demand",
   },
+  { source: "fixture-bench", manifest: "manifest.json", output: "fixture-bench" },
 ];
 
 /** Builds every source-built fixture Plugin the seed can read from `.output`. */
