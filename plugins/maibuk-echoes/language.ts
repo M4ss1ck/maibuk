@@ -25,7 +25,7 @@ const LETTER_PATTERN = /\p{L}/gu;
 
 /** NFC, lowercase, and the typographic apostrophe as ASCII, so "didn’t" meets the stop lists. */
 function fold(word: string): string {
-  return word.normalize("NFC").toLowerCase().replaceAll("’", "'");
+  return word.normalize("NFC").toLowerCase().replace(/’/g, "'");
 }
 
 function countLetters(word: string): number {

@@ -119,7 +119,6 @@ describe("createAnalyzer()", () => {
     expect(createAnalyzer("en", { stemming: true }).isStopWord(token.folded)).toBe(true);
   });
 
-
   it("knows English stop words", () => {
     const analyzer = createAnalyzer("en", { stemming: true });
     expect(analyzer.isStopWord("the")).toBe(true);
