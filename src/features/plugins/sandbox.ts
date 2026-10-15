@@ -20,6 +20,7 @@
  * message to the Plugin's handler. Verified on all three engines.
  */
 
+import { createSandboxElement, hostDocument } from "@/features/plugins/frame/host-document";
 import type { PluginSandboxFrame } from "@/features/plugins/types";
 import {
   PLUGIN_BOOT_MESSAGE,
@@ -93,15 +94,18 @@ export const PRELUDE_SOURCE = `"use strict";
  * frame creates, `'unsafe-inline'` for this bootstrap, and
  * `'wasm-unsafe-eval'` so a Plugin may load its own hashed Wasm;
  * `connect-src 'none'` is the platform-level network block. Kept as one meta
- * tag; a sandboxed frame is one per Plugin.
+ * tag inside the fixed document `hostDocument` builds; a sandboxed frame is one
+ * per Plugin.
  */
-export const BOOTSTRAP_HTML = `<!doctype html>
-<html>
-<head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob: 'wasm-unsafe-eval'; worker-src blob:; connect-src 'none'; img-src 'none'; style-src 'none'; font-src 'none'; media-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'">
-</head>
-<body>
-<script>
+const BOOTSTRAP_CSP =
+  "default-src 'none'; script-src 'unsafe-inline' blob: 'wasm-unsafe-eval'; worker-src blob:; connect-src 'none'; img-src 'none'; style-src 'none'; font-src 'none'; media-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
+
+/**
+ * The bootstrap's fixed host script: the only code in the frame's document,
+ * never Plugin bytes. It becomes a module URL for the host's `create-module`
+ * and starts the one Worker from its own prelude URL.
+ */
+const BOOTSTRAP_SCRIPT = `<script>
 "use strict";
 (() => {
   const host = window.parent;
@@ -161,10 +165,9 @@ export const BOOTSTRAP_HTML = `<!doctype html>
   });
   send({ kind: "bootstrap-ready" });
 })();
-</script>
-</body>
-</html>
-`;
+</script>`;
+
+export const BOOTSTRAP_HTML = hostDocument(BOOTSTRAP_CSP, BOOTSTRAP_SCRIPT);
 
 interface PendingModule {
   resolve: (url: string) => void;
@@ -181,8 +184,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * stops; removing the frame terminates its Worker.
  */
 export function createPluginFrame(doc: Document): PluginSandboxFrame {
-  const element = doc.createElement("iframe");
-  element.setAttribute("sandbox", "allow-scripts");
+  const element = createSandboxElement(doc);
   element.setAttribute("aria-hidden", "true");
   element.setAttribute("inert", "");
   element.tabIndex = -1;
