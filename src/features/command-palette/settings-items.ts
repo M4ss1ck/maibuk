@@ -1,17 +1,22 @@
 import { PLUGINS_SECTION } from "@/components/settings/PluginsSection.rows";
 import { SETTINGS_SECTIONS } from "@/components/settings/settings-sections";
 import type { PaletteItem, PaletteTranslate } from "@/features/command-palette/palette-index";
+import { pluginCardEntries } from "@/features/settings/outline";
 import {
   getAllPluginSettingsRows,
   rowOnPlatform,
   type SettingsPlatform,
   type SettingsRowDef,
 } from "@/features/settings/rows";
+import type { Language } from "@/features/settings/types";
+import { currentUILanguage } from "@/features/plugins/contributions-registry";
 
 export interface BuildSettingsItemsOptions {
   t: PaletteTranslate;
   /** Rows the platform this build runs on does not have are left out. */
   platform: SettingsPlatform;
+  /** The language the Plugins section names its cards in. Defaults to the UI language. */
+  language?: Language;
 }
 
 function keywordsOf(t: PaletteTranslate, key: string): string[] {
@@ -32,7 +37,7 @@ function labelOf(t: PaletteTranslate, key: string, fallback: string): string {
  * detail that says where choosing it lands. Runtime Plugin rows join with
  * their metadata only, without running the Plugin.
  */
-export function buildSettingsItems({ t, platform }: BuildSettingsItemsOptions): PaletteItem[] {
+export function buildSettingsItems({ t, platform, language }: BuildSettingsItemsOptions): PaletteItem[] {
   const items: PaletteItem[] = [];
   for (const section of SETTINGS_SECTIONS) {
     const sectionLabel = labelOf(t, section.labelKey, section.id);
@@ -66,6 +71,19 @@ export function buildSettingsItems({ t, platform }: BuildSettingsItemsOptions): 
       id: row.id,
       label: row.label,
       terms: terms.filter((term) => term !== ""),
+      state: "runnable",
+      detail: pluginsLabel,
+    });
+  }
+  // And one item per Plugin card, so choosing it scrolls to the card and
+  // expands it; its description is the search term, its section the detail.
+  for (const card of pluginCardEntries(language ?? currentUILanguage())) {
+    items.push({
+      key: `settingsRow:${card.id}`,
+      kind: "settingsRow",
+      id: card.id,
+      label: card.label,
+      terms: card.description === "" ? [] : [card.description],
       state: "runnable",
       detail: pluginsLabel,
     });

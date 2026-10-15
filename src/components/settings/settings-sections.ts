@@ -1,10 +1,19 @@
 import type {
+  PluginCardRowDef,
+  PluginCardRowId,
   PluginSettingsRowDef,
   PluginSettingsRowId,
   SettingsRowDef,
   SettingsSectionDef,
 } from "@/features/settings/rows";
-import { findPluginSettingsRow, resolvePluginSettingsRowRename } from "@/features/settings/rows";
+import {
+  findPluginSettingsRow,
+  getPluginSettingsOwners,
+  pluginCardRowId,
+  pluginIdOfCardRow,
+  resolvePluginSettingsRowRename,
+} from "@/features/settings/rows";
+import { usePluginManagementStore } from "@/features/plugins/management";
 import { APPEARANCE_SECTION } from "@/components/settings/AppearanceSection.rows";
 import { WINDOW_SECTION } from "@/components/settings/WindowSection.rows";
 import { GENERAL_SECTION } from "@/components/settings/GeneralSection.rows";
@@ -39,10 +48,16 @@ export const SETTINGS_SECTIONS = [
 ] as const;
 
 type CoreSettingsRowId = (typeof SETTINGS_SECTIONS)[number]["rows"][number]["id"];
-/** Any Settings row: a core row or a runtime Plugin row. */
-export type SettingsRowId = CoreSettingsRowId | PluginSettingsRowId;
+/** Any Settings row: a core row, a runtime Plugin row, or a Plugin card. */
+export type SettingsRowId = CoreSettingsRowId | PluginSettingsRowId | PluginCardRowId;
 
-export type AnySettingsRow = SettingsRowDef | PluginSettingsRowDef;
+export type AnySettingsRow = SettingsRowDef | PluginSettingsRowDef | PluginCardRowDef;
+
+/** Whether a Plugin id is one Settings knows: a card or a legacy Settings owner. */
+function isKnownPluginCard(pluginId: string): boolean {
+  if (usePluginManagementStore.getState().plugins[pluginId] !== undefined) return true;
+  return getPluginSettingsOwners().some((owner) => owner.pluginId === pluginId);
+}
 
 export function findSettingsRow(
   id: string
@@ -58,6 +73,15 @@ export function findSettingsRow(
   const runtime = findPluginSettingsRow(lookupId);
   if (runtime) {
     return { section: PLUGINS_SECTION as unknown as SettingsSectionDef, row: runtime.row };
+  }
+  // A Plugin card resolves to the Plugins section, opening its accordion. An
+  // unknown Plugin has no card to reveal, so the id resolves to nothing.
+  const pluginId = pluginIdOfCardRow(lookupId);
+  if (pluginId !== null && isKnownPluginCard(pluginId)) {
+    return {
+      section: PLUGINS_SECTION as unknown as SettingsSectionDef,
+      row: { id: pluginCardRowId(pluginId), reveal: { kind: "plugin", pluginId } },
+    };
   }
   return undefined;
 }

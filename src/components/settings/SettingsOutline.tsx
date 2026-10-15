@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Button as AriaButton,
@@ -15,10 +15,17 @@ import type { SettingsSectionId } from "@/components/settings/SettingsSection";
 import {
   INITIAL_OUTLINE_TRANSITION,
   buildOutline,
+  pluginCardEntries,
   reduceOutlineTransition,
   type OutlineSelection,
 } from "@/features/settings/outline";
-import { currentSettingsPlatform } from "@/features/settings/rows";
+import {
+  currentSettingsPlatform,
+  getPluginSettingsOwners,
+  onSettingsRowsChange,
+} from "@/features/settings/rows";
+import { usePluginManagementStore } from "@/features/plugins/management";
+import { currentUILanguage } from "@/features/plugins/contributions-registry";
 import {
   OUTLINE_EASING,
   OUTLINE_MOTION_MS,
@@ -65,6 +72,22 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
     });
   }, [selection.section, query]);
 
+  // The Plugins section lists one entry per card. The outline reads the same
+  // cards the screen renders, so a Plugin that arrives, changes name, or is
+  // registered as a legacy Settings owner re-renders the outline too: the
+  // management store and the Settings-rows registry are its dependencies.
+  const plugins = usePluginManagementStore((state) => state.plugins);
+  const owners = useSyncExternalStore(
+    onSettingsRowsChange,
+    getPluginSettingsOwners,
+    getPluginSettingsOwners
+  );
+  const pluginCards = useMemo(
+    () => pluginCardEntries(currentUILanguage()),
+    // `plugins` and `owners` are the store snapshots pluginCardEntries reads.
+    [plugins, owners]
+  );
+
   const outline = useMemo(
     () =>
       buildOutline(SETTINGS_SECTIONS, {
@@ -73,8 +96,9 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
         translate,
         query,
         openSection: transition.shown,
+        pluginCards,
       }),
-    [present, translate, query, transition.shown]
+    [present, translate, query, transition.shown, pluginCards]
   );
 
   const expandedKeys = useMemo(

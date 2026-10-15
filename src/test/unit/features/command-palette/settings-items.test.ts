@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { SETTINGS_SECTIONS } from "@/components/settings/settings-sections";
 import { buildSettingsItems } from "@/features/command-palette/settings-items";
-import { rowOnPlatform } from "@/features/settings/rows";
+import { usePluginManagementStore } from "@/features/plugins/management";
+import type { PluginManagementEntry } from "@/features/plugins/types";
+import {
+  pluginCardRowId,
+  registerPluginSettingsRows,
+  rowOnPlatform,
+} from "@/features/settings/rows";
 import type { SettingsPlatform, SettingsRowDef } from "@/features/settings/rows";
+import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
 
 const t = (key: string, options?: Record<string, unknown>) => {
   if (options?.returnObjects === true) {
@@ -98,6 +105,48 @@ describe("buildSettingsItems()", () => {
     for (const row of allRows()) {
       const present = items.some((item) => item.id === row.id);
       expect(present, `${row.id} on ${platform}`).toBe(rowOnPlatform(row, platform));
+    }
+  });
+
+  it("adds one item per Plugin card and keeps the runtime Plugin Settings row items", () => {
+    const unregister = registerPluginSettingsRows("echoes", {
+      displayName: "Echoes",
+      rows: [{ id: "threshold", label: "Echo threshold", description: "How alike" }],
+    });
+    usePluginManagementStore.setState({
+      plugins: {
+        echoes: {
+          pluginId: "echoes",
+          manifest: {
+            ...PLUGIN_MANIFEST,
+            id: "echoes",
+            name: "Echoes",
+            description: "Find repeated passages.",
+          },
+          locales: {},
+        } as unknown as PluginManagementEntry,
+      },
+    });
+    try {
+      const items = buildSettingsItems({ t, platform: "web" });
+
+      // One item per card, keyed and labelled like the card's outline entry.
+      const card = items.find((item) => item.key === `settingsRow:${pluginCardRowId("echoes")}`);
+      expect(card).toBeDefined();
+      expect(card?.id).toBe(pluginCardRowId("echoes"));
+      expect(card?.kind).toBe("settingsRow");
+      expect(card?.label).toBe("Echoes");
+      expect(card?.terms).toEqual(["Find repeated passages."]);
+      expect(card?.detail).toBe("settings.plugins");
+
+      // The runtime Plugin Settings row stays findable in the palette.
+      const runtime = items.find((item) => item.key === "settingsRow:plugin.echoes.threshold");
+      expect(runtime).toBeDefined();
+      expect(runtime?.label).toBe("Echo threshold");
+      expect(runtime?.terms).toEqual(["How alike"]);
+    } finally {
+      usePluginManagementStore.setState({ plugins: {} });
+      unregister();
     }
   });
 });

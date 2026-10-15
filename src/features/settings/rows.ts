@@ -54,6 +54,28 @@ export function rowOnPlatform(
   return row.platforms === undefined || row.platforms.includes(platform);
 }
 
+/**
+ * The Settings row id of a Plugin's own card in the Plugins section outline.
+ * Derived as `pluginCard.<pluginId>`, so it never collides with a Plugin
+ * Settings row (`plugin.<id>.<local>`) or a core row id, and never contains a
+ * colon (the outline's row keys split on `:`).
+ */
+export type PluginCardRowId = `pluginCard.${string}`;
+
+const PLUGIN_CARD_PREFIX = "pluginCard.";
+
+/** The card row id of a Plugin in the Plugins section. */
+export function pluginCardRowId(pluginId: string): PluginCardRowId {
+  return `${PLUGIN_CARD_PREFIX}${pluginId}`;
+}
+
+/** The Plugin id of a card row id, or null when the id is not a card row. */
+export function pluginIdOfCardRow(id: string): string | null {
+  if (!id.startsWith(PLUGIN_CARD_PREFIX)) return null;
+  const pluginId = id.slice(PLUGIN_CARD_PREFIX.length);
+  return PLUGIN_ID_PATTERN.test(pluginId) ? pluginId : null;
+}
+
 /** A Plugin Settings row id, derived by the host as `plugin.<pluginId>.<localId>`. */
 export type PluginSettingsRowId = `plugin.${string}.${string}`;
 
@@ -91,6 +113,16 @@ export interface PluginSettingsRowDef {
   description?: string;
   keywords?: readonly string[];
   platforms?: readonly SettingsPlatform[];
+  reveal: { kind: "plugin"; pluginId: string };
+}
+
+/**
+ * A synthetic Settings row for a Plugin's card: no core declaration, only the
+ * id the reveal searches for and the accordion it opens. `findSettingsRow`
+ * returns one so a card id resolves like any other row.
+ */
+export interface PluginCardRowDef {
+  id: PluginCardRowId;
   reveal: { kind: "plugin"; pluginId: string };
 }
 

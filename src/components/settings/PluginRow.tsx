@@ -52,6 +52,7 @@ import { pluginStopMessageKey } from "@/features/plugins/stop-messages";
 import type { PluginManagementEntry, PluginPermissionId } from "@/features/plugins/types";
 import {
   getPluginSettingsRows,
+  pluginCardRowId,
   rowOnPlatform,
   type SettingsPlatform,
 } from "@/features/settings/rows";
@@ -208,6 +209,7 @@ export function PluginRow({
     <Disclosure
       isExpanded={open}
       onExpandedChange={onToggle}
+      data-settings-row={pluginCardRowId(entry.pluginId)}
       className="rounded-lg border border-border bg-card"
     >
       <div className="flex w-full items-center gap-4 rounded-lg px-3 py-2 hover:bg-muted/40">

@@ -33,6 +33,9 @@ import {
   getPluginSettingsOwners,
   getPluginSettingsRows,
   onSettingsRowsChange,
+  pluginCardRowId,
+  pluginIdOfCardRow,
+  pluginIdOfSettingsRow,
   rowOnPlatform,
 } from "@/features/settings/rows";
 import { getPluginDirectory } from "@/lib/platform";
@@ -64,6 +67,7 @@ export function PluginsSection() {
   const pluginOpen = useSettingsRevealStore((state) => state.pluginOpen);
   const setPluginOpen = useSettingsRevealStore((state) => state.setPluginOpen);
   const pendingReviewId = useSettingsRevealStore((state) => state.pendingPluginReviewId);
+  const pendingRowId = useSettingsRevealStore((state) => state.pendingRowId);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [diffId, setDiffId] = useState<string | null>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
@@ -125,6 +129,18 @@ export function PluginsSection() {
 
   const counts = countPluginsByCategory(entries);
   const visible = filterPluginsByCategories(entries, selected);
+
+  // A jump to a Plugin card, or to one of its Settings rows, must find the
+  // card on screen. When the current status filter hides that Plugin, reset
+  // the filter to every category so the card mounts and the reveal lands on
+  // its trigger instead of falling back to the section heading.
+  useEffect(() => {
+    if (pendingRowId === null) return;
+    const pluginId = pluginIdOfCardRow(pendingRowId) ?? pluginIdOfSettingsRow(pendingRowId);
+    if (pluginId === null || plugins[pluginId] === undefined) return;
+    const shown = visible.some((entry) => entry.pluginId === pluginId);
+    if (!shown) setSelected([...PLUGIN_FILTER_CATEGORIES]);
+  }, [pendingRowId, plugins, visible]);
   const filterOptions = useMemo(
     () =>
       PLUGIN_FILTER_CATEGORIES.map((category) => ({
@@ -461,6 +477,7 @@ export function PluginsSection() {
                 key={owner.pluginId}
                 isExpanded={open}
                 onExpandedChange={(next) => setPluginOpen(owner.pluginId, next)}
+                data-settings-row={pluginCardRowId(owner.pluginId)}
                 className="rounded-lg border border-border bg-card"
               >
                 <div className="flex w-full items-center gap-4 rounded-lg px-3 py-2 hover:bg-muted/40">

@@ -10,8 +10,16 @@ import {
   resetPluginLifecycleForTests,
   setPluginLifecycleInstance,
 } from "@/features/plugins/lifecycle-instance";
+import { usePluginManagementStore } from "@/features/plugins/management";
 import { createTestHost } from "@/features/plugins/test-kit";
-import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
+import type {
+  PluginApproval,
+  PluginLifecycle,
+  PluginManagementEntry,
+  PluginManifest,
+  PluginReview,
+  PluginRuntime,
+} from "@/features/plugins/types";
 import { createPluginClient } from "@/plugin-sdk";
 import { ui } from "@/plugin-sdk/ui";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
@@ -421,6 +429,128 @@ describe("Plugins Settings section", () => {
 
       await waitFor(() => expect(useSettingsRevealStore.getState().pendingRowId).toBeNull());
     });
+  });
+});
+
+/**
+ * A management entry for the store, with the fields the card reads filled.
+ * The Settings outline and the Plugins section both key the card off its id.
+ */
+function manifest(overrides: Partial<PluginManifest> = {}): PluginManifest {
+  return { ...PLUGIN_MANIFEST, id: "echoes", name: "Echoes", ...overrides };
+}
+
+function approval(overrides: Partial<PluginApproval> = {}): PluginApproval {
+  return {
+    pluginId: "echoes",
+    pinnedHash: "h1:x",
+    granted: [],
+    enabled: true,
+    approvedVersion: "1.0.0",
+    approvedPermissions: { required: [], optional: [] },
+    approvedFiles: {},
+    ...overrides,
+  };
+}
+
+function review(overrides: Partial<PluginReview> = {}): PluginReview {
+  return {
+    status: "approved",
+    files: { added: [], removed: [], changed: [] },
+    permissions: { added: [], removed: [], nowRequired: [], nowOptional: [] },
+    olderVersion: false,
+    ...overrides,
+  };
+}
+
+function entry(overrides: Partial<PluginManagementEntry> = {}): PluginManagementEntry {
+  return {
+    pluginId: "echoes",
+    manifest: manifest(),
+    approval: approval(),
+    review: review(),
+    running: false,
+    builtIn: false,
+    modified: false,
+    updateAvailable: false,
+    installed: true,
+    removed: false,
+    available: false,
+    unsupported: false,
+    duplicateFolders: [],
+    stopped: null,
+    locales: {},
+    ...overrides,
+  };
+}
+
+describe("Plugin cards in the Settings outline", () => {
+  let originalRefresh: () => Promise<void>;
+
+  beforeEach(() => {
+    resetStores();
+    // The mounted section refreshes on mount; keep the seeded copy in place.
+    originalRefresh = usePluginManagementStore.getState().refresh;
+    usePluginManagementStore.setState({
+      plugins: {
+        echoes: entry({ manifest: manifest({ description: "Find repeated passages." }) }),
+      },
+      refresh: async () => {},
+    });
+  });
+
+  afterEach(() => {
+    usePluginManagementStore.setState({ plugins: {}, refresh: originalRefresh });
+  });
+
+  /** The card's disclosure trigger, matched by its name substring. */
+  const cardTrigger = () => screen.queryByRole("button", { name: /^Echoes/ });
+
+  /** Searches the outline and activates the Plugin card's row with the keyboard. */
+  async function activateCardOutlineEntry(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByRole("searchbox"), "Echoes");
+    const row = await screen.findByRole("row", { name: "Echoes" });
+    row.focus();
+    await user.keyboard("{Enter}");
+  }
+
+  it("expands a Plugin card from the outline by keyboard", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await waitFor(() => expect(cardTrigger()).not.toBeNull());
+    expect(cardTrigger()).toHaveAttribute("aria-expanded", "false");
+
+    await activateCardOutlineEntry(user);
+
+    await waitFor(() => expect(cardTrigger()).toHaveAttribute("aria-expanded", "true"));
+    await waitFor(() => expect(document.activeElement).toBe(cardTrigger()));
+  });
+
+  it("resets the filter that hid the card and still reveals it", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await waitFor(() => expect(cardTrigger()).not.toBeNull());
+
+    // Hide the card: deselect the Installed category in the status filter.
+    await user.click(screen.getByRole("button", { name: "plugins.management.filters.label" }));
+    await user.click(
+      await screen.findByRole("option", { name: /plugins\.management\.filters\.installed/ })
+    );
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(cardTrigger()).toBeNull());
+
+    await activateCardOutlineEntry(user);
+
+    // The jump reset the filter to every category, so the card mounted and
+    // the reveal landed on its trigger.
+    await waitFor(() => expect(cardTrigger()).not.toBeNull());
+    await waitFor(() => expect(cardTrigger()).toHaveAttribute("aria-expanded", "true"));
+    await waitFor(() => expect(document.activeElement).toBe(cardTrigger()));
+    expect(
+      screen.getByRole("button", { name: "plugins.management.filters.label" })
+    ).toHaveTextContent("plugins.management.all");
   });
 });
 
