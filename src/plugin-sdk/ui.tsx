@@ -6,9 +6,17 @@
  *
  * Every component is built from `ui-table.ts`, the one table the host's
  * validator and renderer also read, so a tag that renders here is a tag the
- * host accepts. Properties are declared with their names only: React sets them
- * as properties on the custom element and Remote DOM carries their real types,
+ * host accepts. Properties are declared with their names only: they are set as
+ * properties on the custom element and Remote DOM carries their real types,
  * while the generated `PluginUiElementProps` types the JSX.
+ *
+ * Every prop and event handler reaches the element before the element is
+ * attached, so its insert record already carries them (ADR 0027). React sets an
+ * unknown prop on a custom element as a property while it builds the detached
+ * subtree, so each component passes one `maibukProps` bundle and the element's
+ * setter applies it. `@remote-dom/react`'s `createRemoteComponent` sets props in
+ * a layout effect instead, after the commit has inserted every element, which
+ * splits each insert from its required props on a large render.
  *
  * This entry bundles into Plugins (inside the sandbox Worker), so it imports
  * only `src/plugin-sdk/` and Remote DOM. The Worker's polyfill must be loaded
@@ -16,8 +24,14 @@
  */
 
 import { createRemoteElement } from "@remote-dom/core/elements";
-import { createRemoteComponent } from "@remote-dom/react";
-import { useCallback, useState, type ComponentType } from "react";
+import {
+  createElement,
+  forwardRef,
+  useCallback,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 import type { PluginUiComponents, PluginUiElementProps } from "@/plugin-sdk/ui.generated";
 
@@ -45,6 +59,62 @@ function runtimeElements(): RuntimeElement[] {
   }));
 }
 
+/** The one React prop each kit element takes: what to set on it, and which listeners. */
+const KIT_PROPS = "maibukProps";
+
+interface KitProps {
+  properties: Record<string, unknown>;
+  listeners: Record<string, EventListener | undefined>;
+}
+
+const NO_KIT_PROPS: KitProps = { properties: {}, listeners: {} };
+
+/**
+ * A kit element class: Remote DOM's element plus the `maibukProps` setter, which
+ * applies only what changed since the last bundle. A prop that is no longer
+ * passed is unset, and a prop the element does not declare goes to an attribute,
+ * as `createRemoteComponent` did.
+ */
+function kitElement(definition: Omit<RuntimeElement, "tag">) {
+  const Base = createRemoteElement(definition) as unknown as {
+    new (): HTMLElement & Record<string, unknown>;
+  };
+  return class KitElement extends Base {
+    #applied: KitProps = NO_KIT_PROPS;
+
+    get [KIT_PROPS](): KitProps {
+      return this.#applied;
+    }
+
+    set [KIT_PROPS](next: KitProps) {
+      const previous = this.#applied;
+      this.#applied = next;
+      for (const name of Object.keys(previous.properties)) {
+        if (!(name in next.properties)) this.#setProperty(name, undefined);
+      }
+      for (const [name, value] of Object.entries(next.properties)) {
+        if (previous.properties[name] !== value) this.#setProperty(name, value);
+      }
+      for (const event of new Set([
+        ...Object.keys(previous.listeners),
+        ...Object.keys(next.listeners),
+      ])) {
+        const before = previous.listeners[event];
+        const after = next.listeners[event];
+        if (before === after) continue;
+        if (before !== undefined) this.removeEventListener(event, before);
+        if (after !== undefined) this.addEventListener(event, after);
+      }
+    }
+
+    #setProperty(name: string, value: unknown): void {
+      if (name in this) this[name] = value;
+      else if (value == null) this.removeAttribute(name);
+      else this.setAttribute(name, String(value));
+    }
+  };
+}
+
 /**
  * Defines every kit element. Idempotent, so a re-import (or a test file that
  * defines them itself) cannot throw. In a sandbox Worker this runs after the
@@ -55,9 +125,34 @@ export function installPluginUiElements(): void {
   if (typeof customElements === "undefined") return;
   for (const { tag, properties, events, methods } of runtimeElements()) {
     if (customElements.get(tag) !== undefined) continue;
-    const Element = createRemoteElement({ properties, events, methods });
-    customElements.define(tag, Element);
+    customElements.define(tag, kitElement({ properties, events, methods }));
   }
+}
+
+/**
+ * The React component for one kit element. Its props are split into the
+ * element's properties and its event listeners (a table event's `prop`, such as
+ * `onPress`, names the Remote DOM event it listens to) and handed over as one
+ * `maibukProps` bundle; `children` render as the element's children.
+ */
+function kitComponent(
+  tag: string,
+  eventProps: Readonly<Record<string, string>>,
+  name: string
+): ComponentType<Record<string, unknown>> {
+  const KitComponent = forwardRef<HTMLElement, Record<string, unknown>>(
+    function KitComponent({ children, ...props }, ref) {
+      const bundle: KitProps = { properties: {}, listeners: {} };
+      for (const [prop, value] of Object.entries(props)) {
+        const event = eventProps[prop];
+        if (event === undefined) bundle.properties[prop] = value;
+        else if (typeof value === "function") bundle.listeners[event] = value as EventListener;
+      }
+      return createElement(tag, { ref, [KIT_PROPS]: bundle }, children as ReactNode);
+    }
+  );
+  KitComponent.displayName = name;
+  return KitComponent as unknown as ComponentType<Record<string, unknown>>;
 }
 
 const components = new Map<string, ComponentType<Record<string, unknown>>>();
@@ -95,16 +190,11 @@ function buildComponents(): void {
   for (const element of runtimeElements()) {
     if (components.has(element.tag)) continue;
     const row = PLUGIN_UI_TABLE.find((candidate) => candidate.tag === element.tag);
-    const Element = customElements.get(element.tag);
-    const remote = createRemoteComponent(
-      element.tag as keyof HTMLElementTagNameMap,
-      Element as never,
-      {
-        eventProps: Object.fromEntries(
-          row?.events.map((event) => [event.prop, { event: event.event }]) ?? []
-        ),
-      } as never
-    ) as ComponentType<Record<string, unknown>>;
+    const remote = kitComponent(
+      element.tag,
+      Object.fromEntries(row?.events.map((event) => [event.prop, event.event]) ?? []),
+      row?.component ?? element.tag
+    );
     const component =
       row !== undefined && Object.keys(row.props).includes("openSeq")
         ? withOpenSeq(remote, row.component)

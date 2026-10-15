@@ -3229,6 +3229,7 @@ export const ROWS: MatrixRow[] = [
       "An edit to the Chapter marks the report out of date; it does not recompute itself, and Refresh updates the counts",
       "Settings toggles a kind off, narrows the nearby window, and adds an ignore word, each reflected in the report",
       "Touch opens Echoes from the navigation menu and expands a row by tap",
+      "A large Book draws 200 rows per tab and 50 occurrences in the one expanded row; Show more adds rows within a drawing budget and the next 50 occurrences by keyboard; expand, collapse, and tab switch timings are logged",
     ],
     terms: ["Plugin", "Item Menu"],
     shortcuts: ["plugin.maibuk-echoes.openEchoes", "plugin.maibuk-echoes.findEchoes"],
@@ -3243,13 +3244,14 @@ export const ROWS: MatrixRow[] = [
     workflow:
       "Echoes' editor Commands in an open Chapter and Note: its Default Shortcut toggles nearby-echo highlights, which paint a labelled mark on each repeated word (both ends of a nearby echo); Next echo moves the caret and announces 'Echo N of M: <label>' and Previous echo wraps to the last, Next wraps back to Echo 1; with highlights off both announce 'Echo highlights are off' and move nothing; the editor toolbar button toggles the same highlights from the keyboard; asserts: the labelled marks, the announcement toast, the caret on the echoed word, the marks gone when off; persists: no",
     edges: [
+      "The toolbar button is a Toggle Button: it shows on while highlights are on and off once they are off",
       "Toggle echo highlights from its Default Shortcut paints a labelled mark on every repeated word, and toggling again clears them",
       "Next echo moves the caret and announces Echo N of M; Next wraps from the last back to Echo 1, is the Default Shortcut on the keyboard, and Previous wraps from the first to the last",
       "With highlights off, Next echo announces they are off and does not move the caret",
       "The editor toolbar button toggles the same highlights from the keyboard",
       "A Note editor toggles highlights for its own content",
     ],
-    terms: ["Plugin"],
+    terms: ["Plugin", "Toggle Button"],
     shortcuts: [
       "plugin.maibuk-echoes.toggleHighlights",
       "plugin.maibuk-echoes.nextEcho",

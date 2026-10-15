@@ -79,6 +79,7 @@ function fakeClient(options: FakeOptions = {}) {
   const highlights: HighlightCall[] = [];
   const reveals: Array<{ from: number; to: number }> = [];
   const notifications: NotificationCall[] = [];
+  const pressed: boolean[] = [];
 
   // A minimal Library: one Book whose language the options set, one Chapter in
   // it, and one Note that may carry its own language.
@@ -172,6 +173,13 @@ function fakeClient(options: FakeOptions = {}) {
         return null;
       },
     },
+    toolbar: {
+      async setPressed({ button, pressed: value }) {
+        if (button !== "toggleHighlights") throw new Error(`unexpected button ${button}`);
+        pressed.push(value);
+        return null;
+      },
+    },
     language: {
       async get() {
         return { language: "en" };
@@ -209,6 +217,8 @@ function fakeClient(options: FakeOptions = {}) {
     highlights,
     reveals,
     notifications,
+    /** Every `toolbar.setPressed` value the controller sent, in order. */
+    pressed,
     getContentCalls: () => getContentCalls,
     setSelection(next: { from: number; to: number } | null) {
       selection = next;
@@ -245,6 +255,30 @@ function repeatedEchoText(count: number): string {
 }
 
 const kindsOf = (calls: readonly HighlightCall[]): string[] => calls.map((call) => call.kind);
+
+describe("toggleHighlights() Toggle Button state", () => {
+  it("sets the Toggle Button pressed when highlights turn on, and back off when they turn off", async () => {
+    const fake = fakeClient();
+    const controller = createEchoEditor(fake.client);
+
+    await controller.toggleHighlights();
+    expect(fake.pressed).toEqual([true]);
+
+    await controller.toggleHighlights();
+    expect(fake.pressed).toEqual([true, false]);
+  });
+
+  it("tracks every flip, however many times the author toggles", async () => {
+    const fake = fakeClient();
+    const controller = createEchoEditor(fake.client);
+
+    await controller.toggleHighlights();
+    await controller.toggleHighlights();
+    await controller.toggleHighlights();
+
+    expect(fake.pressed).toEqual([true, false, true]);
+  });
+});
 
 describe("toggleHighlights()", () => {
   it("turns on all three kinds with nearby only by default", async () => {

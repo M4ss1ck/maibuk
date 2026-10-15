@@ -272,6 +272,7 @@ export function registerPluginContributions(source: PluginContributionsSource): 
           id: button.id,
           command: button.command,
           icon: button.icon,
+          toggle: button.toggle,
         }));
         next.push(
           registerToolbarButtons(manifest.id, {

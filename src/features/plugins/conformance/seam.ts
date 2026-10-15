@@ -241,6 +241,7 @@ export async function createRuntimeSeam(
       return null;
     },
     "storage.delete": () => null,
+    "toolbar.setPressed": () => null,
   };
 
   const dataVersions = new Map<string, number>();

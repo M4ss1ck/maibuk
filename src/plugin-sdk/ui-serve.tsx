@@ -28,6 +28,25 @@ import {
   type PluginUiUnmountParams,
 } from "@/plugin-sdk/protocol";
 import { installPluginUiElements } from "@/plugin-sdk/ui";
+import { PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
+
+/**
+ * Cuts one flush into in-order batches of at most `max` records, the most the
+ * host accepts in one batch. Each insert already carries its props (ADR 0027),
+ * so a cut anywhere leaves every batch valid on its own. A flush within the
+ * limit goes out as it is.
+ */
+export function splitMutationRecords(
+  records: readonly RemoteMutationRecord[],
+  max: number
+): RemoteMutationRecord[][] {
+  if (records.length <= max) return [records as RemoteMutationRecord[]];
+  const batches: RemoteMutationRecord[][] = [];
+  for (let start = 0; start < records.length; start += max) {
+    batches.push(records.slice(start, start + max));
+  }
+  return batches;
+}
 
 /** Defines the UI kit's custom elements if they are not defined yet (idempotent). */
 function ensureRemoteElements(): void {
@@ -175,9 +194,13 @@ export function servePluginUi(
     // no-op then instead of touching the closed thread.
     const state = { closed: false };
     const hostConnection: RemoteConnection = {
+      // The host refuses a batch over maxRecordsPerBatch whole and stops the
+      // Plugin, so a large flush goes out in in-order batches under it.
       mutate: (records) => {
-        if (state.closed) return;
-        void thread.imports.mutate(records).catch(() => {});
+        for (const batch of splitMutationRecords(records, PLUGIN_UI_LIMITS.maxRecordsPerBatch)) {
+          if (state.closed) return;
+          void thread.imports.mutate(batch).catch(() => {});
+        }
       },
       call: (id, method, ...args) => {
         if (state.closed) {

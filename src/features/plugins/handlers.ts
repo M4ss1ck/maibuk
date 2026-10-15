@@ -10,7 +10,8 @@
  * `language.get` reads the app language; `secrets.*` writes the calling
  * Plugin's credentials through the registered store; `network.fetch` fetches
  * on a granted host and streams the body, injecting a named secret into a
- * declared header; and `clipboard.*` reads and writes the platform clipboard.
+ * declared header; `clipboard.*` reads and writes the platform clipboard; and
+ * `toolbar.setPressed` sets one of the Plugin's Toggle Buttons on or off.
  * The broker already enforces each row's Plugin Permission, input schema,
  * Library availability, and rate limit, so a handler only does its work.
  */
@@ -47,6 +48,7 @@ import {
   listPluginStorageKeys,
   setPluginStorageValue,
 } from "@/features/plugins/storage";
+import { setToolbarPressed } from "@/features/plugins/toolbar-pressed";
 import type { PluginApiHandlers, PluginManifest } from "@/features/plugins/types";
 import { getClipboard, getPluginFetch } from "@/lib/platform";
 import type { ClipboardAdapter } from "@/lib/platform/types";
@@ -84,6 +86,23 @@ async function runClipboard<T>(
     throw new PluginApiError({
       code: "internal-error",
       message: `The clipboard could not be ${action}.`,
+    });
+  }
+}
+
+/**
+ * Refuses a `toolbar.setPressed` the manifest cannot back: the Plugin must
+ * declare a toolbar button with that id, and the button must be a Toggle Button.
+ */
+export function assertToggleButton(manifest: PluginManifest, button: string): void {
+  const declared = manifest.contributes?.toolbarButtons?.find((entry) => entry.id === button);
+  if (declared === undefined) {
+    throw new PluginApiError({ code: "invalid-params", message: `No toolbar button ${button}` });
+  }
+  if (declared.toggle !== true) {
+    throw new PluginApiError({
+      code: "invalid-params",
+      message: `Toolbar button ${button} is not a Toggle Button`,
     });
   }
 }
@@ -151,6 +170,11 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
         store: pluginSecretStore(),
         fetch: await getPluginFetch(),
       }),
+    "toolbar.setPressed": ({ button, pressed }) => {
+      assertToggleButton(manifest, button);
+      setToolbarPressed(manifest.id, button, pressed);
+      return null;
+    },
     "clipboard.readText": () => runClipboard("read", (clipboard) => clipboard.readText()),
     "clipboard.writeText": ({ text }) =>
       runClipboard("written", (clipboard) => clipboard.writeText(text)).then(() => null),

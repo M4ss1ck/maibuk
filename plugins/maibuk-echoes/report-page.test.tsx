@@ -5,9 +5,9 @@
  * `user-event` key presses over the real Remote UI renderer.
  */
 
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import { createTestHost } from "@/features/plugins/test-kit";
 import type { TestChapter } from "@/features/plugins/types";
@@ -15,12 +15,13 @@ import { createPluginClient } from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { DEFAULT_ECHO_SETTINGS, findEchoes } from "./find-echoes";
+import { format } from "./i18n";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { buildReport, occurrenceContext } from "./report";
-import { FIND_ECHOES, REPORT_PAGE_ID, startEchoes } from "./runtime";
+import { FIND_ECHOES, offeredMore, REPORT_PAGE_ID, startEchoes } from "./runtime";
 import { ECHOES_SETTINGS_KEY } from "./settings";
-import { echoesManifest, settingsStorage, tabTo, type User } from "./test-support";
+import { echoesManifest, settingsStorage, shiftTabTo, tabTo, type User } from "./test-support";
 
 const HARBOR =
   "The harbor was calm. The harbor was empty. The harbor was quiet. We left the harbor at dawn.";
@@ -39,7 +40,13 @@ function book(id: string, title: string) {
   };
 }
 
-function chapter(id: string, bookId: string, title: string, order: number, text: string): TestChapter {
+function chapter(
+  id: string,
+  bookId: string,
+  title: string,
+  order: number,
+  text: string
+): TestChapter {
   return {
     id,
     bookId,
@@ -80,6 +87,75 @@ async function pickOption(user: User, label: string, option: string): Promise<vo
   while (document.activeElement !== target) await user.keyboard("{ArrowDown}");
   await user.keyboard("{Enter}");
 }
+
+/**
+ * Consonant-only four-letter words, one per index: detection skips words under
+ * four letters, and with no vowels no stemmer folds two of them into one.
+ */
+const CODE_LETTERS = "bcdfghjklmnpqrtvwxz";
+function codeWord(index: number): string {
+  let rest = index;
+  let word = "";
+  for (let place = 0; place < 4; place++) {
+    word += CODE_LETTERS[rest % CODE_LETTERS.length];
+    rest = Math.floor(rest / CODE_LETTERS.length);
+  }
+  return word;
+}
+
+/** 250 words, each echoed within a few words: well past one page of nearby rows. */
+const SPREAD = Array.from({ length: 250 }, (_, index) => {
+  const word = codeWord(index);
+  return `${word} zq ${word} vk`;
+}).join(" ");
+/** One word echoed 450 times, so one expanded row has more occurrences than a page. */
+const HARBOR_RUN = Array.from({ length: 450 }, () => "harbor door").join(" ");
+
+/** A Book whose Nearby tab is past one page, and whose harbor row is past one page of occurrences. */
+function widePage(): { books: ReturnType<typeof book>[]; chapters: TestChapter[] } {
+  return {
+    books: [book("b5", "Atlas"), book("b2", "Emma")],
+    chapters: [
+      chapter("w1", "b5", "Chapter One", 0, SPREAD),
+      chapter("w2", "b5", "Chapter Two", 1, HARBOR_RUN),
+      CHAPTERS[2],
+    ],
+  };
+}
+
+function wideHost() {
+  const { books, chapters } = widePage();
+  const host = createTestHost({
+    manifest: echoesManifest(),
+    library: { books, chapters },
+    storage: settingsStorage(),
+  });
+  startEchoes(createPluginClient(host.port), servePluginUi);
+  return host;
+}
+
+/**
+ * A host whose Plugin client's Chapter reads are counted: the page reads a Chapter
+ * through `client.library.chapters.get`, so a kept report that is shown again
+ * reads no Chapter at all.
+ */
+function countedReportHost(storage = settingsStorage()) {
+  const host = createTestHost({
+    manifest: echoesManifest(),
+    library: { books: BOOKS, chapters: CHAPTERS },
+    storage,
+  });
+  const client = createPluginClient(host.port);
+  const read = client.library.chapters.get.bind(client.library.chapters);
+  const reads = vi.spyOn(client.library.chapters, "get");
+  startEchoes(client, servePluginUi);
+  return { host, reads, read };
+}
+
+const WIDE_REPORT = buildReport(findEchoes([SPREAD, HARBOR_RUN], "en", DEFAULT_ECHO_SETTINGS), [
+  SPREAD,
+  HARBOR_RUN,
+]);
 
 describe("Echoes report page", () => {
   it("opens on the first Book, Whole Book scope, with the detected rows", async () => {
@@ -215,10 +291,10 @@ describe("Echoes report page", () => {
       await user.keyboard("{ArrowDown}");
       await user.keyboard("{Enter}");
 
-      const expected = buildReport(
-        findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS),
-        [HARBOR, SHORE]
-      ).nearby[0].occurrences[0];
+      const expected = buildReport(findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS), [
+        HARBOR,
+        SHORE,
+      ]).nearby[0].occurrences[0];
       await waitFor(() =>
         expect(host.navigations).toEqual([
           {
@@ -226,6 +302,47 @@ describe("Echoes report page", () => {
             reveal: { from: expected.from, to: expected.to },
           },
         ])
+      );
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("keeps one row expanded: expanding another collapses the first", async () => {
+    const host = reportHost();
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      const harbor = await screen.findByRole("option", { name: /^harbor/ });
+      await tabTo(user, harbor);
+      await user.keyboard("{Enter}");
+      // The open row's occurrences arrive over the Remote UI connection, a tick later.
+      await waitFor(() =>
+        expect(screen.getAllByRole("option", { name: /The harbor was/ }).length).toBeGreaterThan(0)
+      );
+
+      // Arrow moves through the open row's occurrences to the shore row below.
+      const shore = screen.getByRole("option", { name: /^shore/ });
+      for (let step = 0; step < 50 && document.activeElement !== shore; step++) {
+        await user.keyboard("{ArrowDown}");
+      }
+      expect(shore).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      const shoreOccurrences = buildReport(findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS), [
+        HARBOR,
+        SHORE,
+      ]).nearby[1].occurrences;
+      await waitFor(() =>
+        expect(screen.getAllByRole("option")).toHaveLength(2 + shoreOccurrences.length)
+      );
+      // The collapsed harbor row keeps no occurrences; the shore row's are listed.
+      expect(screen.queryByRole("option", { name: /The harbor was/ })).not.toBeInTheDocument();
+      expect(screen.getAllByRole("option", { name: /The shore was/ })).toHaveLength(
+        shoreOccurrences.length
       );
 
       page.unmount();
@@ -246,10 +363,14 @@ describe("Echoes report page", () => {
 
       // The echoed word alone would repeat row after row, so the label is the
       // context around that occurrence and the description is its Chapter.
-      const occurrences = buildReport(
-        findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS),
-        [HARBOR, SHORE]
-      ).nearby[0].occurrences;
+      const occurrences = buildReport(findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS), [
+        HARBOR,
+        SHORE,
+      ]).nearby[0].occurrences;
+      // The expanded rows arrive over the Remote UI connection, a tick later.
+      await waitFor(() =>
+        expect(screen.getAllByRole("option").length).toBeGreaterThan(occurrences.length)
+      );
       const options = screen.getAllByRole("option").slice(1, 1 + occurrences.length); // the harbor row's occurrences
       expect(options).toHaveLength(occurrences.length);
       occurrences.forEach((occurrence, index) => {
@@ -260,6 +381,78 @@ describe("Echoes report page", () => {
       // Every occurrence's accessible name still tells it apart from the rest.
       const names = screen.getAllByRole("option").map((option) => option.textContent);
       expect(new Set(names).size).toBe(names.length);
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("keeps a row that echoes across many long-titled Chapters inside the host's limits", async () => {
+    // A word in 60 Chapters once listed every title in the row description,
+    // past the host's 1024-character cap: the host refused the declaration and
+    // stopped Echoes with "declared an interface Maibuk could not accept".
+    const many = Array.from({ length: 60 }, (_, index) =>
+      chapter(
+        `m${index}`,
+        "b3",
+        `A rather long working title for planning chapter number ${index + 1}`,
+        index,
+        "The lantern swung. The lantern dimmed. The lantern went out."
+      )
+    );
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: { books: [book("b3", "Notebook")], chapters: many },
+      storage: settingsStorage(),
+    });
+    startEchoes(createPluginClient(host.port), servePluginUi);
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+
+      const row = await screen.findByRole("option", { name: /lantern/ });
+      expect(page.violations).toEqual([]);
+      expect(row).toHaveTextContent(
+        "180 times · A rather long working title for planning chapter number 1,"
+      );
+      expect(row).toHaveTextContent(/, \+\d+ more$/);
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("lists every Chapter of a 250-Chapter Book in the scope picker", async () => {
+    // The host once capped option lists at 200, so the scope picker of a long
+    // Book was refused and Echoes stopped before drawing a row.
+    const long = Array.from({ length: 250 }, (_, index) =>
+      chapter(`d${index}`, "b4", `Day ${index + 1}`, index, "The kettle sang. The kettle cooled.")
+    );
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: { books: [book("b4", "Journal")], chapters: long },
+      storage: settingsStorage(),
+    });
+    startEchoes(createPluginClient(host.port), servePluginUi);
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      // Loading yields between Chapters, so 250 of them take a few frames; a
+      // slow poll keeps the role query from starving that loop.
+      expect(
+        await screen.findByRole("option", { name: /kettle/ }, { timeout: 20_000, interval: 500 })
+      ).toBeInTheDocument();
+      expect(page.violations).toEqual([]);
+
+      const trigger = screen.getByLabelText(en["report.scope"]);
+      await tabTo(user, trigger);
+      await user.keyboard("{Enter}");
+      const listbox = await screen.findByRole("listbox");
+      // Whole Book plus one entry per Chapter.
+      expect(within(listbox).getAllByRole("option")).toHaveLength(251);
+      expect(within(listbox).getByRole("option", { name: "Day 250" })).toBeInTheDocument();
 
       page.unmount();
     } finally {
@@ -473,5 +666,272 @@ describe("Echoes report page", () => {
     } finally {
       host.stop();
     }
+  });
+
+  it("shows the first 200 rows and adds 200 more with the keyboard", async () => {
+    // The fixture must actually pass one page, or the cap is never exercised.
+    const total = WIDE_REPORT.nearby.length;
+    expect(total).toBeGreaterThan(200);
+    const host = wideHost();
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
+      const left = total - 200;
+      const more = await screen.findByRole("button", {
+        name: format(en["report.showMore"], { count: Math.min(200, left), left }),
+      });
+      expect(more).toHaveTextContent(`(${left} left)`);
+
+      // Each row's Item Menu button is a Tab stop, so a forward walk to Show more
+      // passes the whole page; Shift+Tab from the body reaches it, the last stop.
+      await shiftTabTo(user, more, 2);
+      expect(more).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(Math.min(400, total)));
+      expect(screen.queryByRole("button", { name: /left\)$/ })).not.toBeInTheDocument();
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("caps an expanded row's occurrences and shows more with the keyboard", async () => {
+    const harbor = WIDE_REPORT.nearby.find((row) => row.label === "harbor");
+    expect(harbor).toBeDefined();
+    const occurrences = harbor?.occurrences.length ?? 0;
+    // Past two pages, so the press leaves occurrences behind.
+    expect(occurrences).toBeGreaterThan(100);
+    const host = wideHost();
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      // Tab reaches the list's first row; Arrow keys move along the list to harbor.
+      const options = await screen.findAllByRole("option");
+      const row = options.find((option) => /^harbor/.test(option.textContent ?? ""));
+      expect(row).toBeDefined();
+      await tabTo(user, options[0]);
+      for (let step = 0; step < 50 && document.activeElement !== row; step++) {
+        await user.keyboard("{ArrowDown}");
+      }
+      expect(row).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      // The top 200 rows, the first 50 occurrences, and the Show more option.
+      const firstMore = format(en["report.showMoreOccurrences"], {
+        count: 50,
+        left: occurrences - 50,
+      });
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(251));
+      const more = screen.getByRole("option", { name: firstMore });
+
+      // Arrow keys walk the 50 occurrences to the Show more option.
+      for (let step = 0; step < 100 && document.activeElement !== more; step++) {
+        await user.keyboard("{ArrowDown}");
+      }
+      expect(more).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      // The press shows 50 more: 100 occurrences, with the rest still left.
+      const secondMore = format(en["report.showMoreOccurrences"], {
+        count: 50,
+        left: occurrences - 100,
+      });
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(301));
+      expect(screen.getByRole("option", { name: secondMore })).toBeInTheDocument();
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("resets the shown rows when the Book changes", async () => {
+    const host = wideHost();
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
+      const more = await screen.findByRole("button", { name: /left\)$/ });
+      // Each row's Item Menu button is a Tab stop, so a forward walk to Show more
+      // passes the whole page; Shift+Tab from the body reaches it, the last stop.
+      await shiftTabTo(user, more, 2);
+      await user.keyboard("{Enter}");
+      await waitFor(() =>
+        expect(screen.getAllByRole("option")).toHaveLength(WIDE_REPORT.nearby.length)
+      );
+
+      // Switch to the other Book and back: the first tab starts at one page again.
+      await pickOption(user, en["report.book"], "Emma");
+      expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
+      // The list opens on Emma, which sits below Atlas, so Arrow Up walks back
+      // (pickOption only walks down).
+      await tabTo(user, screen.getByLabelText(en["report.book"]));
+      await user.keyboard("{Enter}");
+      const atlas = await screen.findByRole("option", { name: "Atlas" });
+      for (let step = 0; step < 5 && document.activeElement !== atlas; step++) {
+        await user.keyboard("{ArrowUp}");
+      }
+      expect(atlas).toHaveFocus();
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
+      expect(screen.getByRole("button", { name: /left\)$/ })).toBeInTheDocument();
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("shows the kept report on a revisit without recomputing", async () => {
+    const { host, reads } = countedReportHost();
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      const before = screen.getAllByRole("option").map((row) => row.textContent);
+      const computedReads = reads.mock.calls.length;
+      expect(computedReads).toBeGreaterThan(0);
+      first.unmount();
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(before);
+      expect(screen.queryByText(en.stale)).not.toBeInTheDocument();
+      // No Chapter was read again: the kept report answered the page.
+      expect(reads.mock.calls.length).toBe(computedReads);
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("marks a kept report out of date after a change while the page was closed, and recomputes on Refresh", async () => {
+    const { host, reads } = countedReportHost();
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      const computedReads = reads.mock.calls.length;
+      first.unmount();
+
+      await waitFor(() =>
+        expect(
+          host.broker.emit("library.changed", {
+            entity: "book",
+            id: "b1",
+            origin: "local",
+            kind: "content",
+          })
+        ).toBe(true)
+      );
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+      // The notice shows, and the rows are still the kept ones.
+      expect(await screen.findByText(en.stale)).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: /harbor/ })).toBeInTheDocument();
+      expect(reads.mock.calls.length).toBe(computedReads);
+
+      // Refresh recomputes: Chapters are read again, and the notice goes away.
+      const refresh = screen.getByRole("button", { name: en.refresh });
+      await tabTo(user, refresh);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.queryByText(en.stale)).not.toBeInTheDocument());
+      await waitFor(() => expect(reads.mock.calls.length).toBeGreaterThan(computedReads));
+      expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("keeps a report out of date when a change lands while it is still computing", async () => {
+    const { host, reads, read } = countedReportHost();
+    // Hold the first Chapter read, so the change arrives mid-compute.
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    reads.mockImplementationOnce(async (...args) => {
+      await held;
+      return read(...args);
+    });
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await waitFor(() => expect(reads).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(
+          host.broker.emit("library.changed", {
+            entity: "book",
+            id: "b1",
+            origin: "local",
+            kind: "content",
+          })
+        ).toBe(true)
+      );
+      release();
+      await screen.findByRole("option", { name: /harbor/ });
+      first.unmount();
+
+      // The kept report remembers the change it missed.
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      expect(await screen.findByText(en.stale)).toBeInTheDocument();
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("keeps the report after ignoring a word, so a revisit still omits the row without recomputing", async () => {
+    const storage = settingsStorage();
+    const { host, reads } = countedReportHost(storage);
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      const row = await screen.findByRole("option", { name: /harbor/ });
+      await tabTo(user, row);
+      await user.tab();
+      await user.keyboard("{Enter}");
+      const item = await screen.findByRole("menuitem", { name: en.ignore });
+      await user.keyboard("{Enter}");
+      await waitFor(() =>
+        expect(storage.get(ECHOES_SETTINGS_KEY)).toMatchObject({ ignore: ["harbor"] })
+      );
+      expect(item).not.toBeInTheDocument();
+      const readsAfterIgnore = reads.mock.calls.length;
+      first.unmount();
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      expect(await screen.findByRole("option", { name: /shore/ })).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument();
+      expect(reads.mock.calls.length).toBe(readsAfterIgnore);
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+describe("offeredMore", () => {
+  it("offers a page, capped by what is left and by the room in the drawing budget", () => {
+    expect(offeredMore(200, 1000, 4000)).toBe(200);
+    expect(offeredMore(200, 30, 4000)).toBe(30);
+    expect(offeredMore(200, 1000, 45)).toBe(45);
+    expect(offeredMore(50, 500, 0)).toBe(0);
+  });
+
+  it("offers nothing when no room or nothing left is left, and never a negative count", () => {
+    expect(offeredMore(200, 0, 4000)).toBe(0);
+    expect(offeredMore(200, 1000, 0)).toBe(0);
+    expect(offeredMore(200, 1000, -7)).toBe(0);
+    expect(offeredMore(200, -3, 4000)).toBe(0);
   });
 });

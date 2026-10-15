@@ -78,6 +78,40 @@ describe("the connection validator", () => {
     expect(violations[0]?.code).toBe("invalid-prop");
   });
 
+  it("accepts a Select with as many options as the limit allows", () => {
+    // A Book with a few hundred Chapters lists them all in a scope picker; the
+    // old 200-option cap stopped the Plugin that drew it (Echoes).
+    const options = Array.from({ length: PLUGIN_UI_LIMITS.maxOptions }, (_, index) => ({
+      value: `c${index}`,
+      label: `Chapter ${index + 1}`,
+    }));
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-select", { properties: { label: "Scope", options } })),
+    ]);
+    expect(violations).toEqual([]);
+    expect(receiver.root.children).toHaveLength(1);
+  });
+
+  it("refuses an option list longer than the limit and names the limit", () => {
+    const options = [
+      { value: "a", label: "A" },
+      { value: "b", label: "B" },
+      { value: "c", label: "C" },
+    ];
+    const { receiver, violations, connection } = setup({ ...PLUGIN_UI_LIMITS, maxOptions: 2 });
+    connection.mutate([
+      insert(element("1", "maibuk-select", { properties: { label: "Scope", options } })),
+    ]);
+    expect(violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-select",
+      prop: "options",
+      message: "The prop maibuk-select.options has more than 2 entries",
+    });
+    expect(receiver.root.children).toHaveLength(0);
+  });
+
   it("accepts the internal openSeq count on a modal", () => {
     const { receiver, violations, connection } = setup();
     connection.mutate([
@@ -304,7 +338,7 @@ describe("the connection validator", () => {
   });
 
   it("refuses a batch with too many records", () => {
-    const { violations, connection } = setup({ maxNodes: 10, maxRecordsPerBatch: 1, maxBatchesPerSecond: 120 });
+    const { violations, connection } = setup({ ...PLUGIN_UI_LIMITS, maxNodes: 10, maxRecordsPerBatch: 1, maxBatchesPerSecond: 120 });
     connection.mutate([insert(element("1", "maibuk-text")), insert(element("2", "maibuk-text"), 1)]);
     expect(violations[0]?.code).toBe("too-many-records");
   });
@@ -353,11 +387,12 @@ describe("the connection validator", () => {
       maxNodes: 10_000,
       maxRecordsPerBatch: 2_000,
       maxBatchesPerSecond: 120,
+      maxOptions: 2_000,
     });
   });
 
   it("refuses a tree over the node budget", () => {
-    const { violations, connection } = setup({ maxNodes: 1, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
+    const { violations, connection } = setup({ ...PLUGIN_UI_LIMITS, maxNodes: 1, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
     connection.mutate([insert(element("1", "maibuk-text")), insert(element("2", "maibuk-text"), 1)]);
     expect(violations[0]?.code).toBe("too-many-nodes");
   });
@@ -365,7 +400,7 @@ describe("the connection validator", () => {
   it("counts only Plugin nodes toward the node cap, not the receiver root", () => {
     // The receiver root is the host's `~`, so a budget of N accepts N Plugin
     // nodes: it refuses the (N+1)th, not the Nth.
-    const atBudget = setup({ maxNodes: 3, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
+    const atBudget = setup({ ...PLUGIN_UI_LIMITS, maxNodes: 3, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
     atBudget.connection.mutate([
       insert(element("1", "maibuk-text")),
       insert(element("2", "maibuk-text"), 1),
@@ -374,7 +409,7 @@ describe("the connection validator", () => {
     expect(atBudget.violations).toEqual([]);
     expect(atBudget.receiver.root.children).toHaveLength(3);
 
-    const overBudget = setup({ maxNodes: 3, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
+    const overBudget = setup({ ...PLUGIN_UI_LIMITS, maxNodes: 3, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
     overBudget.connection.mutate([
       insert(element("1", "maibuk-text")),
       insert(element("2", "maibuk-text"), 1),

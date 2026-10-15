@@ -32,6 +32,7 @@ export const PLUGIN_API_METHODS = [
   "clipboard.readText",
   "clipboard.writeText",
   "notifications.show",
+  "toolbar.setPressed",
   "storage.get",
   "storage.set",
   "storage.delete",
@@ -422,6 +423,14 @@ export interface PluginApiMethods {
     };
     output: null;
   };
+  /** Sets whether one of this Plugin's Toggle Buttons shows as on. Only a toolbar button the manifest declares with toggle: true. */
+  "toolbar.setPressed": {
+    input: {
+      button: string;
+      pressed: boolean;
+    };
+    output: null;
+  };
   /** Reads a JSON value from this Plugin's storage, or null when the key is unset. */
   "storage.get": {
     input: {
@@ -577,6 +586,10 @@ export interface PluginApi {
   notifications: {
     /** Shows a toast naming this Plugin. At most one every 5 seconds, except while answering the author's own Command run. */
     show(params: PluginApiMethods["notifications.show"]["input"]): Promise<PluginApiMethods["notifications.show"]["output"]>;
+  };
+  toolbar: {
+    /** Sets whether one of this Plugin's Toggle Buttons shows as on. Only a toolbar button the manifest declares with toggle: true. */
+    setPressed(params: PluginApiMethods["toolbar.setPressed"]["input"]): Promise<PluginApiMethods["toolbar.setPressed"]["output"]>;
   };
   storage: {
     /** Reads a JSON value from this Plugin's storage, or null when the key is unset. */

@@ -167,11 +167,19 @@ test.describe(
         await pressUntilFocused(page, "ArrowRight", button, { max: 200 });
         await expect(button).toBeFocused();
 
+        // It is a Toggle Button: it shows on while the highlights are on.
         await expect(marks(page)).toHaveCount(0);
+        await expect(button).toHaveAttribute("aria-pressed", "false");
         await page.keyboard.press("Enter");
         await expect(marks(page)).toHaveCount(ECHO_COUNT);
+        await expect(
+          toolbar.getByRole("button", { name: "Toggle echo highlights", pressed: true })
+        ).toBeVisible();
         await page.keyboard.press("Enter");
         await expect(marks(page)).toHaveCount(0);
+        await expect(
+          toolbar.getByRole("button", { name: "Toggle echo highlights", pressed: false })
+        ).toBeVisible();
       });
     });
 

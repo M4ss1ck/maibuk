@@ -19,6 +19,7 @@ import { ThreadMessagePort } from "@quilted/threads";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { createPluginBroker } from "@/features/plugins/broker";
+import { assertToggleButton } from "@/features/plugins/handlers";
 import { applyPluginLocale } from "@/features/plugins/manifest-validate";
 import { pluginFetch } from "@/features/plugins/network";
 import { openPluginUiMount, type PluginUiMount } from "@/features/plugins/remote-ui/mount";
@@ -61,6 +62,8 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const secrets = options.secrets ?? new Map<string, string>();
   const testFetch = options.fetch;
   let clipboard = options.clipboard ?? "";
+  // The pressed state of each Toggle Button the Plugin set, by its local id.
+  const toolbarPressedState = new Map<string, boolean>();
   let language = options.language ?? "en";
   let libraryAvailable = true;
   const startReason = options.startReason ?? "enable";
@@ -170,6 +173,12 @@ export function createTestHost(options: TestHostOptions): TestHost {
       return { status: "opened" };
     },
     "language.get": () => ({ language }),
+    // Refuses what the host refuses (the same rule as the app's handler), then records the state.
+    "toolbar.setPressed": ({ button, pressed }) => {
+      assertToggleButton(options.manifest, button);
+      toolbarPressedState.set(button, pressed);
+      return null;
+    },
   };
 
   const broker = createPluginBroker({
@@ -258,6 +267,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
     },
     get clipboard() {
       return clipboard;
+    },
+    toolbarPressed(button) {
+      return toolbarPressedState.get(button) ?? false;
     },
     setClipboard(next) {
       clipboard = next;

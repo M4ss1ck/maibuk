@@ -665,3 +665,53 @@ describe("the tracer fixture and the protocol", () => {
     await expect(hashPluginDirectory(readFolderFiles(FIXTURE_DIR))).resolves.toBe(expected.hash);
   });
 });
+
+describe("createTestHost() toolbar.setPressed", () => {
+  const toggleManifest = () => {
+    const manifest = fixtureManifest();
+    return {
+      ...manifest,
+      contributes: {
+        toolbarButtons: [
+          { id: "toggleHighlights", command: "run", icon: "highlighter", toggle: true },
+          { id: "plain", command: "run", icon: "book-open" },
+        ],
+      },
+    };
+  };
+
+  it("records a declared Toggle Button's pressed state, as the app's handler does", async () => {
+    const host = createTestHost({ manifest: toggleManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      expect(host.toolbarPressed("toggleHighlights")).toBe(false);
+
+      await expect(
+        client.toolbar.setPressed({ button: "toggleHighlights", pressed: true })
+      ).resolves.toBeNull();
+      expect(host.toolbarPressed("toggleHighlights")).toBe(true);
+
+      await client.toolbar.setPressed({ button: "toggleHighlights", pressed: false });
+      expect(host.toolbarPressed("toggleHighlights")).toBe(false);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses an undeclared button and a plain button with invalid-params, recording nothing", async () => {
+    const host = createTestHost({ manifest: toggleManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(
+        client.toolbar.setPressed({ button: "missing", pressed: true })
+      ).rejects.toMatchObject({ code: "invalid-params", message: "No toolbar button missing" });
+      await expect(client.toolbar.setPressed({ button: "plain", pressed: true })).rejects.toMatchObject(
+        { code: "invalid-params", message: "Toolbar button plain is not a Toggle Button" }
+      );
+      expect(host.toolbarPressed("missing")).toBe(false);
+      expect(host.toolbarPressed("plain")).toBe(false);
+    } finally {
+      host.stop();
+    }
+  });
+});
