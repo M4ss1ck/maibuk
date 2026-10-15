@@ -653,8 +653,9 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           // not pre-grant it again, so removal survives until the author
           // reinstalls it (reinstallBuiltIn clears the mark first) (#443).
           const knownRemoved = getKnownPlugin(pluginId)?.removed === true;
-          // First sight of a Built-in: an untouched copy is pre-granted and
-          // enabled, while a modified copy is recorded against the shipped one
+          // First sight of a Built-in: an untouched copy is pre-granted but left
+          // off (a later enable needs no review), while a modified copy is
+          // recorded against the shipped one
           // so it reads "review-required" (with its file and permission diff)
           // instead of "never approved". Nothing is granted until review, a
           // duplicated id is never pre-granted, and a removed Built-in stays

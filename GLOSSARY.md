@@ -545,7 +545,7 @@ A packaged addition to Maibuk that adds its own Commands, pages, Settings rows, 
 _Avoid_: extension (TipTap's word in code), add-on, mod
 
 **Built-in Plugin**:
-A Plugin that ships with Maibuk. It is copied into the Plugin Directory and starts with its Plugin Permissions granted, which the author can revoke like any other.
+A Plugin that ships with Maibuk. It is copied into the Plugin Directory and starts disabled, with its Plugin Permissions already granted, so turning it on needs no review; the author can revoke those grants like any other.
 
 **Plugin Directory**:
 The folder on this device that Maibuk loads Plugins from, chosen in Settings (ADR 0020).

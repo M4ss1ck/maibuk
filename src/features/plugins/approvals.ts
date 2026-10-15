@@ -175,8 +175,9 @@ export function approvePluginCopy(
 /**
  * Builds the record for a Built-in Plugin's first sight: an untouched copy is
  * pre-granted, so every declared Plugin Permission (required and optional) is
- * granted, the shipped hash is recorded, and the Plugin starts enabled. A
- * Built-in's grants are listed and revocable like any other Plugin's (#442).
+ * granted and the shipped hash is recorded, but it starts disabled. A later
+ * enable needs no review: every required grant is already present. A Built-in's
+ * grants are listed and revocable like any other Plugin's (#442).
  */
 export function approveBuiltInCopy(
   manifest: PluginManifest,
@@ -187,6 +188,7 @@ export function approveBuiltInCopy(
   const optionalGranted = manifest.permissions.optional as PluginPermissionId[];
   return {
     ...approvePluginCopy(manifest, hash, digests, optionalGranted),
+    enabled: false,
     builtIn: { shippedHash },
   };
 }

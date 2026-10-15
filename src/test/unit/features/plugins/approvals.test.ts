@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   PLUGIN_APPROVALS_STORAGE_KEY,
+  approveBuiltInCopy,
   approvePluginCopy,
   clearStartupError,
   disablePlugin,
@@ -128,6 +129,40 @@ describe("approvePluginCopy()", () => {
     const approval = approvePluginCopy(MANIFEST, "h1:abc", new Map());
     expect(approval.granted).toEqual(["library:read"]);
     expect(approval.enabled).toBe(true);
+  });
+});
+
+describe("approveBuiltInCopy()", () => {
+  it("pre-grants every declared permission but leaves the Built-in off on first sight", () => {
+    const approval = approveBuiltInCopy(
+      MANIFEST,
+      "h1:abc",
+      new Map([
+        ["manifest.json", "aa"],
+        ["index.js", "bb"],
+      ]),
+      "h1:shipped"
+    );
+    expect(approval).toEqual({
+      pluginId: "tracer",
+      pinnedHash: "h1:abc",
+      granted: ["library:read", "editor:read", "network:api.example.com"],
+      enabled: false,
+      approvedVersion: MANIFEST.version,
+      approvedPermissions: {
+        required: ["library:read"],
+        optional: ["editor:read", "network:api.example.com"],
+      },
+      approvedFiles: { "manifest.json": "aa", "index.js": "bb" },
+      builtIn: { shippedHash: "h1:shipped" },
+    });
+  });
+
+  it("turns on with no review because every required permission is pre-granted", () => {
+    const approval = approveBuiltInCopy(MANIFEST, "h1:abc", new Map(), "h1:shipped");
+    const result = enablePlugin(approval, MANIFEST);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.approval.enabled).toBe(true);
   });
 });
 

@@ -149,9 +149,9 @@ async function writeShippedCopy(
 
 /**
  * Brings a Built-in's approval record in line after its folder was installed
- * or replaced. A copy the author never approved is pre-granted from the shipped
- * manifest (`approveBuiltInCopy`, the store's first sight); an existing record
- * is re-pinned to the shipped copy keeping its grants
+ * or replaced. A copy the author never approved is pre-granted but left off
+ * from the shipped manifest (`approveBuiltInCopy`, the store's first sight); an
+ * existing record is re-pinned to the shipped copy keeping its grants
  * (`repinnedBuiltInApproval`, what `replaceBuiltIn` leaves). A folder that
  * cannot be read leaves the record alone.
  */
