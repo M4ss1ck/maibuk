@@ -58,6 +58,13 @@ export interface OSAdapter {
   locale(): Promise<string | null>;
 }
 
+export interface ClipboardAdapter {
+  /** The clipboard's plain text; `""` when it holds none. */
+  readText(): Promise<string>;
+  /** Replaces the clipboard with `text`. */
+  writeText(text: string): Promise<void>;
+}
+
 export interface BackupEntry {
   filename: string;
   trigger: "daily" | "pre-sync" | "pre-restore" | "manual" | "close" | "unknown";

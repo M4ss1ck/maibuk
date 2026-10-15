@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import i18n from "@/i18n";
@@ -13,11 +13,21 @@ import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
+const { mockGetClipboard } = vi.hoisted(() => ({ mockGetClipboard: vi.fn() }));
 
 vi.mock("@/lib/db", () => ({ getDatabase: mockGetDatabase }));
+// The clipboard platform adapter is swapped for a fake, so the handlers are
+// proven to go through the adapter and nothing else.
+vi.mock("@/lib/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/platform")>()),
+  getClipboard: mockGetClipboard,
+}));
 
 const { createPluginHandlers } = await import("@/features/plugins/handlers");
 const { setPluginNavigator } = await import("@/features/plugins/navigation");
+const { createMemoryPluginSecretStore, registerPluginSecretStore } = await import(
+  "@/features/plugins/secret-store"
+);
 
 const context = { pluginId: "tracer" };
 
@@ -179,5 +189,112 @@ describe("createPluginHandlers(): the wired rows", () => {
       editor.view.dom.remove();
       editor.destroy();
     }
+  });
+});
+
+describe("createPluginHandlers(): secrets", () => {
+  let store: ReturnType<typeof createMemoryPluginSecretStore>;
+
+  beforeEach(() => {
+    store = createMemoryPluginSecretStore();
+    registerPluginSecretStore(store);
+  });
+
+  afterEach(() => {
+    registerPluginSecretStore(null);
+  });
+
+  it("stores a secret and lists only its name, never its value", async () => {
+    const handlers = createPluginHandlers(PLUGIN_MANIFEST);
+    const set = handlers["secrets.set"];
+    const list = handlers["secrets.listNames"];
+    const del = handlers["secrets.delete"];
+    if (!set || !list || !del) throw new Error("secrets rows are not wired");
+    const value = "hunter2-not-a-real-token";
+
+    const results: unknown[] = [];
+    results.push(await set({ name: "token", value }, context));
+    await expect(store.read("tracer", "token")).resolves.toBe(value);
+    results.push(await list({}, context));
+    results.push(await del({ name: "token" }, context));
+    results.push(await list({}, context));
+
+    // The names travel; the value never crosses the API in any response.
+    expect(results[1]).toEqual(["token"]);
+    expect(results[3]).toEqual([]);
+    for (const result of results) {
+      expect(JSON.stringify(result) ?? "").not.toContain(value);
+    }
+  });
+
+  it("keeps each Plugin's secrets out of another Plugin's reach", async () => {
+    const handlers = createPluginHandlers(PLUGIN_MANIFEST);
+    const set = handlers["secrets.set"];
+    const list = handlers["secrets.listNames"];
+    const del = handlers["secrets.delete"];
+    if (!set || !list || !del) throw new Error("secrets rows are not wired");
+    const other = { pluginId: "other" };
+
+    await set({ name: "token", value: "other-value" }, other);
+    await expect(list({}, context)).resolves.toEqual([]);
+    // Deleting by the same name never reaches the other Plugin's secret.
+    await del({ name: "token" }, context);
+    await expect(list({}, other)).resolves.toEqual(["token"]);
+  });
+
+  it("refuses with internal-error when no secret store is registered", async () => {
+    registerPluginSecretStore(null);
+    const list = createPluginHandlers(PLUGIN_MANIFEST)["secrets.listNames"];
+    if (!list) throw new Error("secrets.listNames is not wired");
+
+    await expect(list({}, context)).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "internal-error",
+    });
+  });
+});
+
+describe("createPluginHandlers(): clipboard", () => {
+  beforeEach(() => {
+    mockGetClipboard.mockReset();
+  });
+
+  it("reads and writes through the platform adapter", async () => {
+    const writeText = vi.fn(async () => {});
+    mockGetClipboard.mockResolvedValue({
+      readText: async () => "from the clipboard",
+      writeText,
+    });
+    const handlers = createPluginHandlers(PLUGIN_MANIFEST);
+    const read = handlers["clipboard.readText"];
+    const write = handlers["clipboard.writeText"];
+    if (!read || !write) throw new Error("clipboard rows are not wired");
+
+    await expect(read({}, context)).resolves.toBe("from the clipboard");
+    await expect(write({ text: "to the clipboard" }, context)).resolves.toBeNull();
+    expect(writeText).toHaveBeenCalledWith("to the clipboard");
+  });
+
+  it("refuses with internal-error when the browser clipboard rejects", async () => {
+    const denied = () => {
+      throw new DOMException("not focused", "NotAllowedError");
+    };
+    mockGetClipboard.mockResolvedValue({
+      readText: async () => denied(),
+      writeText: async () => denied(),
+    });
+    const handlers = createPluginHandlers(PLUGIN_MANIFEST);
+    const read = handlers["clipboard.readText"];
+    const write = handlers["clipboard.writeText"];
+    if (!read || !write) throw new Error("clipboard rows are not wired");
+
+    await expect(read({}, context)).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "internal-error",
+    });
+    await expect(write({ text: "x" }, context)).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "internal-error",
+    });
   });
 });

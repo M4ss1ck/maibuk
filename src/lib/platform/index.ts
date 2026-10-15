@@ -6,6 +6,7 @@ import type {
   OSAdapter,
   WebDialogAdapter,
   BackupAdapter,
+  ClipboardAdapter,
   PluginDirectoryAdapter,
 } from "@/lib/platform/types";
 
@@ -38,6 +39,7 @@ export type {
   FileWithData,
   BackupAdapter,
   BackupEntry,
+  ClipboardAdapter,
   PluginDirectoryAdapter,
 } from "@/lib/platform/types";
 
@@ -140,6 +142,18 @@ export async function getOS(): Promise<OSAdapter> {
     const { tauriOS } = await import("@/lib/platform/tauri/os");
     return tauriOS;
   }
+}
+
+// Clipboard factory. Desktop and Android go through the clipboard-manager
+// plugin; the web build uses the browser's `navigator.clipboard`, which may
+// refuse a call without focus or a user gesture.
+export async function getClipboard(): Promise<ClipboardAdapter> {
+  if (IS_WEB) {
+    const { webClipboard } = await import("@/lib/platform/web/clipboard");
+    return webClipboard;
+  }
+  const { tauriClipboard } = await import("@/lib/platform/tauri/clipboard");
+  return tauriClipboard;
 }
 
 // Backup factory

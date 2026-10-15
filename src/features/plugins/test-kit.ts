@@ -56,6 +56,8 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const notes = [...(options.library?.notes ?? [])];
   const canvases = [...(options.library?.canvases ?? [])];
   const storage = options.storage ?? new Map<string, unknown>();
+  const secrets = options.secrets ?? new Map<string, string>();
+  let clipboard = options.clipboard ?? "";
   let language = options.language ?? "en";
   let libraryAvailable = true;
   const startReason = options.startReason ?? "enable";
@@ -109,6 +111,22 @@ export function createTestHost(options: TestHostOptions): TestHost {
       return null;
     },
     "storage.keys": () => [...storage.keys()].sort(),
+    // Secret values are kept host-side only: `listNames` is the Plugin's one
+    // read, and it returns names, never a value.
+    "secrets.set": ({ name, value }) => {
+      secrets.set(name, value);
+      return null;
+    },
+    "secrets.delete": ({ name }) => {
+      secrets.delete(name);
+      return null;
+    },
+    "secrets.listNames": () => [...secrets.keys()].sort(),
+    "clipboard.readText": () => clipboard,
+    "clipboard.writeText": ({ text }) => {
+      clipboard = text;
+      return null;
+    },
     "navigation.openEntity": ({ entity, reveal }) => {
       navigations.push(reveal === undefined ? { entity } : { entity, reveal });
       return null;
@@ -203,6 +221,12 @@ export function createTestHost(options: TestHostOptions): TestHost {
     startReason,
     get language() {
       return language;
+    },
+    get clipboard() {
+      return clipboard;
+    },
+    setClipboard(next) {
+      clipboard = next;
     },
     setGranted(permissions) {
       granted = new Set(permissions);

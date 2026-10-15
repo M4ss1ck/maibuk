@@ -319,6 +319,17 @@ describe("typed errors", () => {
     expect((await refusal(client.clipboard.readText())).code).toBe("permission-denied");
   });
 
+  it("refuses secrets and clipboard calls whose Plugin Permission is not granted", async () => {
+    const { client } = setup({ declared: ["secrets", "clipboard"], grantedAtStart: [] });
+    expect((await refusal(client.secrets.set({ name: "token", value: "v" }))).code).toBe(
+      "permission-denied"
+    );
+    expect((await refusal(client.secrets.listNames())).code).toBe("permission-denied");
+    expect((await refusal(client.clipboard.writeText({ text: "x" }))).code).toBe(
+      "permission-denied"
+    );
+  });
+
   it("refuses params the row's schema rejects", async () => {
     const { client } = setup({ declared: ["library:read"] });
     const extra = { bookId: "b1", surprise: true } as unknown as { bookId: string };

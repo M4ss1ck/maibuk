@@ -210,6 +210,38 @@ describe("createTestHost()", () => {
     }
   });
 
+  it("serves this Plugin's secrets write-only and the shared clipboard", async () => {
+    const secrets = new Map<string, string>();
+    const host = createTestHost({
+      manifest: {
+        ...fixtureManifest(),
+        permissions: { required: ["secrets", "clipboard"], optional: [] },
+      },
+      permissions: ["secrets", "clipboard"],
+      secrets,
+      clipboard: "seeded",
+    });
+    try {
+      const client = createPluginClient(host.port);
+
+      await expect(client.clipboard.readText()).resolves.toBe("seeded");
+      await expect(client.clipboard.writeText({ text: "written" })).resolves.toBeNull();
+      expect(host.clipboard).toBe("written");
+      host.setClipboard("seeded again");
+      await expect(client.clipboard.readText()).resolves.toBe("seeded again");
+
+      await expect(client.secrets.listNames()).resolves.toEqual([]);
+      await expect(client.secrets.set({ name: "token", value: "s3cret" })).resolves.toBeNull();
+      await expect(client.secrets.listNames()).resolves.toEqual(["token"]);
+      // The kit keeps the value host-side: the Plugin's one read is names only.
+      expect(secrets.get("token")).toBe("s3cret");
+      await expect(client.secrets.delete({ name: "token" })).resolves.toBeNull();
+      await expect(client.secrets.listNames()).resolves.toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
   it("records navigation.openEntity with its reveal range", async () => {
     const host = createTestHost({ manifest: fixtureManifest() });
     try {
