@@ -39,6 +39,7 @@ import {
 } from "./find-echoes";
 import { type EchoKey, format, translate } from "./i18n";
 import { languageSupport } from "./language";
+import { createReportCache, reportCacheKey, type ReportCache } from "./report-cache";
 import {
   computeReport,
   clampText,
@@ -108,12 +109,33 @@ interface EchoCommandTarget {
 /** The runtime's own state; one per activation, so tests never share it. */
 interface EchoRuntime {
   scope: EchoScope | null;
+  /** The reports computed so far, kept until the runtime ends. */
+  reports: ReportCache;
+  /**
+   * How many touching changes each Book has seen. A compute reads it before
+   * and after, so a change that lands while it runs keeps its report out of date.
+   */
+  changes: Map<string, number>;
 }
 
 /** Wires the client to the report page, the Settings row, and the Command handlers. */
 export function startEchoes(client: PluginClient, serve: EchoServe): void {
-  const runtime: EchoRuntime = { scope: null };
+  const runtime: EchoRuntime = { scope: null, reports: createReportCache(), changes: new Map() };
   const editor = createEchoEditor(client);
+  // Subscribed once for the runtime's life: a change marks every kept report of
+  // the Book it touches out of date, whether or not its page is open.
+  void client
+    .on("library.changed", (payload) => {
+      if ("scope" in payload) {
+        for (const [bookId, count] of runtime.changes) runtime.changes.set(bookId, count + 1);
+      } else if (payload.entity === "book") {
+        runtime.changes.set(payload.id, (runtime.changes.get(payload.id) ?? 0) + 1);
+      }
+      for (const bookId of runtime.reports.bookIds()) {
+        if (touchesBook(payload, bookId)) runtime.reports.markStale(bookId);
+      }
+    })
+    .catch(() => {});
   serve(client, {
     pages: { [REPORT_PAGE_ID]: createReportPage(client, runtime) },
     settingsRows: { [SETTINGS_ROW_ID]: createDetectionSettings(client, editor) },
@@ -402,6 +424,11 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     const settingsRef = useRef<EchoSettings>(settings);
     const booksRef = useRef<LibraryBook[]>([]);
     const chaptersRef = useRef<readonly ReportChapter[]>([]);
+    // The Refresh token the last compute saw: a new token is an author's Refresh,
+    // which skips the cache; any other run (open, Book or scope change) may use it.
+    const lastReloadToken = useRef(0);
+    // The cache key and selection of the report on screen, for Ignore word.
+    const displayed = useRef<{ key: string; bookId: string; scopeKey: string } | null>(null);
 
     // Initial load: the stored settings, the Library's Books, and the scope the
     // Find echoes Command stored (else the first Book, Whole Book).
@@ -456,18 +483,36 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       };
     }, [client, initialized, bookId]);
 
-    // Compute on open and whenever the Book, the scope, or a Refresh changes.
-    // Detection reads the Book's own language; the app language is UI only.
+    // Compute on open and whenever the Book, the scope, or a Refresh changes. A
+    // kept report for the same Book, scope, and settings is shown as it is; only
+    // a Refresh (a new token) recomputes it. Detection reads the Book's own
+    // language; the app language is UI only.
     useEffect(() => {
       if (!initialized || bookId === null) return;
       const scope: ReportScope = scopeKey === SCOPE_WHOLE ? "book" : "chapter";
       const bookLanguage = booksRef.current.find((book) => book.id === bookId)?.language ?? "en";
+      const key = reportCacheKey(bookId, scopeKey, settingsRef.current);
+      const refreshed = lastReloadToken.current !== reloadToken;
+      lastReloadToken.current = reloadToken;
+      const kept = refreshed ? undefined : runtime.reports.get(key);
+      displayed.current = { key, bookId, scopeKey };
       let cancelled = false;
-      setComputing(true);
       setStale(false);
       setExpanded(new Set());
       setShown(FIRST_PAGE);
       setOccurrenceLimits({});
+      if (kept !== undefined) {
+        chaptersRef.current = kept.chapters;
+        setReport(kept.report);
+        setStale(kept.stale);
+        setComputing(false);
+        return () => {
+          cancelled = true;
+        };
+      }
+      setComputing(true);
+      if (!runtime.changes.has(bookId)) runtime.changes.set(bookId, 0);
+      const changesBefore = runtime.changes.get(bookId);
       void (async () => {
         try {
           const source: ReportSource =
@@ -484,6 +529,12 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           if (cancelled) return;
           chaptersRef.current = result.chapters;
           setReport(result.report);
+          runtime.reports.set(key, {
+            bookId,
+            report: result.report,
+            chapters: result.chapters,
+            stale: runtime.changes.get(bookId) !== changesBefore,
+          });
         } catch {
           if (!cancelled) setReport(EMPTY_REPORT);
         } finally {
@@ -493,7 +544,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       return () => {
         cancelled = true;
       };
-    }, [client, initialized, bookId, scopeKey, reloadToken]);
+    }, [client, runtime, initialized, bookId, scopeKey, reloadToken]);
 
     // A `library.changed` that touches the shown Book only marks the report out
     // of date; it never recomputes or reorders (a list that moves under the
@@ -504,7 +555,10 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       void client
         .on("library.changed", (payload) => {
           const current = bookIdRef.current;
-          if (current !== null && touchesBook(payload, current)) setStale(true);
+          if (current !== null && touchesBook(payload, current)) {
+            setStale(true);
+            runtime.reports.markStale(current);
+          }
         })
         .then((off) => {
           if (active) unsubscribe = off;
@@ -515,7 +569,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
         active = false;
         if (unsubscribe !== null) void unsubscribe();
       };
-    }, [client]);
+    }, [client, runtime]);
 
     const selectBook = useCallback((id: string) => {
       bookIdRef.current = id;
@@ -541,17 +595,31 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           ...settingsRef.current,
           ignore: withIgnored(settingsRef.current.ignore, row.label),
         };
+        const shown = displayed.current;
+        const kept = shown === null ? undefined : runtime.reports.get(shown.key);
         settingsRef.current = next;
         setSettings(next);
         void writeEchoesSettings(client, next);
-        // Remove the row now; the report is not recomputed for an ignore.
-        setReport((current) =>
-          current === null
-            ? current
-            : { ...current, [row.kind]: current[row.kind].filter((entry) => entry.key !== row.key) }
-        );
+        // Remove the row now; the report is not recomputed for an ignore. The
+        // kept report moves to the key the new settings give, so a revisit still
+        // omits the row without a compute. The displayed report and the kept one
+        // are the same report, so the filter runs over the kept copy.
+        const filter = (report: EchoReport): EchoReport => ({
+          ...report,
+          [row.kind]: report[row.kind].filter((entry) => entry.key !== row.key),
+        });
+        if (shown !== null && kept !== undefined) {
+          const nextKey = reportCacheKey(shown.bookId, shown.scopeKey, next);
+          const filtered = filter(kept.report);
+          runtime.reports.delete(shown.key);
+          runtime.reports.set(nextKey, { ...kept, report: filtered });
+          displayed.current = { ...shown, key: nextKey };
+          setReport(filtered);
+        } else {
+          setReport((current) => (current === null ? current : filter(current)));
+        }
       },
-      [client]
+      [client, runtime]
     );
 
     const refresh = useCallback(() => setReloadToken((token) => token + 1), []);

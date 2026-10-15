@@ -7,7 +7,7 @@
 
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import { createTestHost } from "@/features/plugins/test-kit";
 import type { TestChapter } from "@/features/plugins/types";
@@ -132,6 +132,24 @@ function wideHost() {
   });
   startEchoes(createPluginClient(host.port), servePluginUi);
   return host;
+}
+
+/**
+ * A host whose Plugin client's Chapter reads are counted: the page reads a Chapter
+ * through `client.library.chapters.get`, so a kept report that is shown again
+ * reads no Chapter at all.
+ */
+function countedReportHost(storage = settingsStorage()) {
+  const host = createTestHost({
+    manifest: echoesManifest(),
+    library: { books: BOOKS, chapters: CHAPTERS },
+    storage,
+  });
+  const client = createPluginClient(host.port);
+  const read = client.library.chapters.get.bind(client.library.chapters);
+  const reads = vi.spyOn(client.library.chapters, "get");
+  startEchoes(client, servePluginUi);
+  return { host, reads, read };
 }
 
 const WIDE_REPORT = buildReport(findEchoes([SPREAD, HARBOR_RUN], "en", DEFAULT_ECHO_SETTINGS), [
@@ -724,6 +742,137 @@ describe("Echoes report page", () => {
       expect(screen.getByRole("button", { name: /left\)$/ })).toBeInTheDocument();
 
       page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("shows the kept report on a revisit without recomputing", async () => {
+    const { host, reads } = countedReportHost();
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      const before = screen.getAllByRole("option").map((row) => row.textContent);
+      const computedReads = reads.mock.calls.length;
+      expect(computedReads).toBeGreaterThan(0);
+      first.unmount();
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(before);
+      expect(screen.queryByText(en.stale)).not.toBeInTheDocument();
+      // No Chapter was read again: the kept report answered the page.
+      expect(reads.mock.calls.length).toBe(computedReads);
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("marks a kept report out of date after a change while the page was closed, and recomputes on Refresh", async () => {
+    const { host, reads } = countedReportHost();
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      const computedReads = reads.mock.calls.length;
+      first.unmount();
+
+      await waitFor(() =>
+        expect(
+          host.broker.emit("library.changed", {
+            entity: "book",
+            id: "b1",
+            origin: "local",
+            kind: "content",
+          })
+        ).toBe(true)
+      );
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+      // The notice shows, and the rows are still the kept ones.
+      expect(await screen.findByText(en.stale)).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: /harbor/ })).toBeInTheDocument();
+      expect(reads.mock.calls.length).toBe(computedReads);
+
+      // Refresh recomputes: Chapters are read again, and the notice goes away.
+      const refresh = screen.getByRole("button", { name: en.refresh });
+      await tabTo(user, refresh);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.queryByText(en.stale)).not.toBeInTheDocument());
+      await waitFor(() => expect(reads.mock.calls.length).toBeGreaterThan(computedReads));
+      expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("keeps a report out of date when a change lands while it is still computing", async () => {
+    const { host, reads, read } = countedReportHost();
+    // Hold the first Chapter read, so the change arrives mid-compute.
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    reads.mockImplementationOnce(async (...args) => {
+      await held;
+      return read(...args);
+    });
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await waitFor(() => expect(reads).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(
+          host.broker.emit("library.changed", {
+            entity: "book",
+            id: "b1",
+            origin: "local",
+            kind: "content",
+          })
+        ).toBe(true)
+      );
+      release();
+      await screen.findByRole("option", { name: /harbor/ });
+      first.unmount();
+
+      // The kept report remembers the change it missed.
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      expect(await screen.findByText(en.stale)).toBeInTheDocument();
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("keeps the report after ignoring a word, so a revisit still omits the row without recomputing", async () => {
+    const storage = settingsStorage();
+    const { host, reads } = countedReportHost(storage);
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      const row = await screen.findByRole("option", { name: /harbor/ });
+      await tabTo(user, row);
+      await user.tab();
+      await user.keyboard("{Enter}");
+      const item = await screen.findByRole("menuitem", { name: en.ignore });
+      await user.keyboard("{Enter}");
+      await waitFor(() =>
+        expect(storage.get(ECHOES_SETTINGS_KEY)).toMatchObject({ ignore: ["harbor"] })
+      );
+      expect(item).not.toBeInTheDocument();
+      const readsAfterIgnore = reads.mock.calls.length;
+      first.unmount();
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      expect(await screen.findByRole("option", { name: /shore/ })).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument();
+      expect(reads.mock.calls.length).toBe(readsAfterIgnore);
+
+      second.unmount();
     } finally {
       host.stop();
     }
