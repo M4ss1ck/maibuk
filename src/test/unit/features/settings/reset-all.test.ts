@@ -23,7 +23,10 @@ import {
   createPluginManagementStore,
   usePluginManagementStore,
 } from "@/features/plugins/management";
-import { registerPluginSecretStore, type PluginSecretStore } from "@/features/plugins/secret-store";
+import {
+  createMemoryPluginSecretStore,
+  registerPluginSecretStore,
+} from "@/features/plugins/secret-store";
 import { getPluginStorageValue, setPluginStorageValue } from "@/features/plugins/storage";
 import { createTestHost } from "@/features/plugins/test-kit";
 import type {
@@ -240,17 +243,12 @@ describe("resetAllSettings", () => {
   });
 
   it("deletes every saved Plugin credential through the registered keyring", async () => {
-    const secrets = new Map<string, string>([
-      [TRACER, "tracer-token"],
-      [GUIDE, "guide-token"],
-    ]);
-    const keyring: PluginSecretStore = {
-      clearAll: async () => {
-        secrets.clear();
-      },
-    };
+    const keyring = createMemoryPluginSecretStore();
+    await keyring.set(TRACER, "token", "tracer-token");
+    await keyring.set(GUIDE, "token", "guide-token");
     registerPluginSecretStore(keyring);
-    expect(secrets.size).toBe(2);
+    await expect(keyring.listNames(TRACER)).resolves.toHaveLength(1);
+    await expect(keyring.listNames(GUIDE)).resolves.toHaveLength(1);
 
     await resetAllSettings({
       stopPlugins: () => {},
@@ -258,8 +256,9 @@ describe("resetAllSettings", () => {
       restartBuiltIns: async () => {},
     });
 
-    // The keyring the app registered is empty after the reset.
-    expect(secrets.size).toBe(0);
+    // The store the app registered holds nothing after the reset.
+    await expect(keyring.listNames(TRACER)).resolves.toEqual([]);
+    await expect(keyring.listNames(GUIDE)).resolves.toEqual([]);
   });
 
   it("erases every user-modified Plugin category while Plugin Library data stays", async () => {
@@ -292,12 +291,9 @@ describe("resetAllSettings", () => {
       }),
     });
     // A saved secret.
-    const secrets = new Map<string, string>([[TRACER, "tracer-token"]]);
-    registerPluginSecretStore({
-      clearAll: async () => {
-        secrets.clear();
-      },
-    });
+    const secrets = createMemoryPluginSecretStore();
+    await secrets.set(TRACER, "token", "tracer-token");
+    registerPluginSecretStore(secrets);
     // Plugin Library data is not a setting.
     await setPluginStorageValue(TRACER, "report", { kept: true });
 
@@ -313,7 +309,7 @@ describe("resetAllSettings", () => {
     expect(getKnownPlugin(TRACER)).toBeNull();
     expect(useShortcutSettingsStore.getState().shortcuts.custom).toEqual({});
     expect(useShortcutSettingsStore.getState().shortcuts.voice).toEqual({});
-    expect(secrets.size).toBe(0);
+    await expect(secrets.read(TRACER, "token")).resolves.toBeNull();
     // Plugin Library data survives the reset.
     await expect(getPluginStorageValue(TRACER, "report")).resolves.toEqual({ kept: true });
   });

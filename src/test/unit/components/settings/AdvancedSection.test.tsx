@@ -32,7 +32,9 @@ const { useModalStore } = await import("@/components/ui/modal-store");
 const { PLUGIN_APPROVALS_STORAGE_KEY, listPluginApprovals, savePluginApproval } = await import(
   "@/features/plugins/approvals"
 );
-const { registerPluginSecretStore } = await import("@/features/plugins/secret-store");
+const { createMemoryPluginSecretStore, registerPluginSecretStore } = await import(
+  "@/features/plugins/secret-store"
+);
 const { usePluginManagementStore } = await import("@/features/plugins/management");
 const { useSettingsRevealStore } = await import("@/features/settings/settings-reveal-store");
 const { useSettingsStore } = await import("@/features/settings/store");
@@ -138,6 +140,7 @@ describe("AdvancedSection Reset settings", () => {
 
   it("shows an error toast when deleting credentials fails, after resetting everything else", async () => {
     registerPluginSecretStore({
+      ...createMemoryPluginSecretStore(),
       clearAll: async () => {
         throw new Error("keychain locked");
       },

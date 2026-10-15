@@ -35,6 +35,13 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 const BENCH_DRIVER_ENABLED = import.meta.env.VITE_PLUGIN_BENCH_DRIVER === "1";
 
 const loadPlugins = async () => {
+  // A Plugin credential store is always present: the default is session-only,
+  // in memory (later #453 units swap in the desktop keychain and, on web, the
+  // opt-in "remember on this device" store).
+  const { createMemoryPluginSecretStore, registerPluginSecretStore } = await import(
+    "@/features/plugins/secret-store"
+  );
+  registerPluginSecretStore(createMemoryPluginSecretStore());
   if (BENCH_DRIVER_ENABLED) {
     const { preparePluginsBench } = await import("@/features/plugins/bench");
     await preparePluginsBench();

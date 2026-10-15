@@ -32,8 +32,9 @@
  * `.zip` or a picked folder, removing one (optionally deleting its retained
  * data), reinstalling a removed Built-in from the bundled copy, and reading a
  * Plugin's stored data size, warning once when it passes 50 MB (#401). Removal
- * stops the Plugin, deletes its files, approval, and startup error, and keeps
- * its row; it never touches Custom Shortcuts or Voice Commands. An app update
+ * stops the Plugin, deletes its files, approval, startup error, and saved
+ * credentials, and keeps its row; it never touches Custom Shortcuts or Voice
+ * Commands. An app update
  * never silently reinstalls a removed Built-in: the pre-grant path skips a
  * Plugin whose known record is removed.
  */
@@ -64,6 +65,7 @@ import { pluginsRunOn } from "@/features/plugins/host-platform";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { planPluginModules } from "@/features/plugins/modules";
 import { reviewPluginCopy } from "@/features/plugins/review";
+import { getPluginSecretStore } from "@/features/plugins/secret-store";
 import { clearPluginStorage, getPluginDataSize } from "@/features/plugins/storage";
 import type {
   BuiltInPlugin,
@@ -970,12 +972,16 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         }
         // The approval (grants and pin) goes; a startup error lives on it, so
         // clearing it after the removal is a no-op kept for the decided order.
-        // No credentials store exists in `src/features/plugins` yet, so there
-        // is nothing more to delete. Custom Shortcuts and custom Voice Commands
-        // are never touched: they stay, inactive until the Plugin returns.
         removePluginApproval(pluginId);
         clearStartupError(pluginId);
         markPluginRemoved(pluginId);
+        // The Plugin's saved credentials always go, not only when the "also
+        // delete this Plugin's data" choice is on: that choice covers Library
+        // data, and secrets are never Library data. A store failure rejects
+        // the removal, like the folder and data steps above. Custom Shortcuts
+        // and custom Voice Commands are never touched: they stay, inactive until
+        // the Plugin returns.
+        await getPluginSecretStore()?.clearPlugin(pluginId);
         if (deleteDataOption) await clearPluginStorage(pluginId);
         await get().refresh();
         // Refresh the shown data size after the removal: `refresh()` rebuilds the
