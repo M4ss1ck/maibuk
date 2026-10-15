@@ -16,6 +16,11 @@
  * was found in: `findEchoes` returns plain-text offsets and no text, so the
  * caller passes the same text (or Chapter list) it detected against as `text`.
  *
+ * Decision 7 caps what one editor paints (`ECHO_PAINT_LIMIT`): `buildEchoList`
+ * returns the full, label-free list, `paintWindow` slices it around the caret,
+ * and `echoHighlightSets` builds label text only for that slice; Next/Previous
+ * walk the full list and the announcement names its full count.
+ *
  * Imports only this Plugin's own files.
  */
 
@@ -40,6 +45,9 @@ export const ECHO_HIGHLIGHT_KIND: Readonly<Record<EchoKind, PluginEchoHighlightK
   phrase: "warning",
 };
 
+/** The most ranges one editor paints at a time (#451, decision 7). */
+export const ECHO_PAINT_LIMIT = 2000;
+
 /** One labelled range the editor paints. */
 export interface EchoHighlightRange {
   from: number;
@@ -50,9 +58,25 @@ export interface EchoHighlightRange {
 /** Each host kind and the ranges it paints; a kind with nothing is an empty list. */
 export type EchoHighlightSets = Readonly<Record<PluginEchoHighlightKind, readonly EchoHighlightRange[]>>;
 
+/**
+ * Everything needed to build one range's localized label (#451, decision 7): the
+ * runtime key and its `{{word}}`/`{{count}}` values. A range keeps this instead
+ * of a label string, so a list of thousands builds no label text until it is
+ * painted or announced.
+ */
+export interface EchoLabelSpec {
+  key: EchoKey;
+  word: string;
+  count: number;
+}
+
 /** One entry of the ordered list Next/Previous echo step through. */
-export interface EchoNavigationEntry extends EchoHighlightRange {
+export interface EchoNavigationEntry {
+  from: number;
+  to: number;
   kind: PluginEchoHighlightKind;
+  /** The label's runtime key and values, built into text only when painted or announced. */
+  label: EchoLabelSpec;
 }
 
 /**
@@ -72,6 +96,11 @@ export function createEchoTranslator(language: string): EchoTranslate {
     const template = translate(language, key, count);
     return values === undefined ? template : format(template, values);
   };
+}
+
+/** Builds one entry's localized label text from its spec (#451, decision 7). */
+export function echoLabel(spec: EchoLabelSpec, t: EchoTranslate): string {
+  return t(spec.key, { word: spec.word, count: spec.count });
 }
 
 /** A nearby echo's two ends: the word itself with the direction named. */
@@ -114,33 +143,24 @@ function surface(text: string | readonly string[], occurrence: EchoOccurrence): 
 }
 
 /**
- * Turns `findEchoes` output into per-host-kind range lists. Only the kinds in
- * `enabledKinds` contribute; a nearby Echo highlights both of its words, the
- * first labelled "later" and every other "earlier"; an overused word and a
- * repeated phrase label every occurrence with the word's total count. Identical
- * ranges within one kind are deduplicated.
+ * The full, ordered list of an editor's Echo ranges (#451, decision 7): one
+ * entry per range of an enabled kind, sorted by `from` then `to` and
+ * deduplicated. Only the kinds in `enabledKinds` contribute; a nearby Echo
+ * highlights both of its words, the first labelled "later" and every other
+ * "earlier"; an overused word and a repeated phrase carry the word's total
+ * count. Labels are kept as specs, so the whole list costs no string building.
  */
-export function echoHighlightRanges(
+export function buildEchoList(
   echoes: readonly Echo[],
   enabledKinds: readonly EchoKind[],
-  t: EchoTranslate,
   text: string | readonly string[],
   tokens?: readonly (readonly Token[])[]
-): EchoHighlightSets {
+): EchoNavigationEntry[] {
   const enabled = new Set<EchoKind>(enabledKinds);
-  const sets: Record<PluginEchoHighlightKind, EchoHighlightRange[]> = {
-    repetition: [],
-    info: [],
-    warning: [],
-  };
-  // A range is deduplicated by (kind, from, to, label). A numeric bucket keyed
-  // by `from`/`to` plus a per-position label set avoids building a string key
-  // for each of the ~10,900 ranges (#451).
-  const seen: Record<PluginEchoHighlightKind, Map<number, Set<string>>> = {
-    repetition: new Map(),
-    info: new Map(),
-    warning: new Map(),
-  };
+  const list: EchoNavigationEntry[] = [];
+  // An entry is deduplicated by (kind, from, to, label spec). One string key per
+  // candidate avoids building the label text itself (#451).
+  const seen = new Set<string>();
   const indexesByChapter = new Map<number, Map<number, number>>();
   const indexesFor = (chapter: number): Map<number, number> => {
     let indexes = indexesByChapter.get(chapter);
@@ -151,17 +171,16 @@ export function echoHighlightRanges(
     }
     return indexes;
   };
-  const push = (kind: PluginEchoHighlightKind, range: EchoHighlightRange): void => {
-    const bucket = seen[kind];
-    const numeric = range.from * 1_000_000 + range.to;
-    let labels = bucket.get(numeric);
-    if (labels === undefined) {
-      labels = new Set();
-      bucket.set(numeric, labels);
-    }
-    if (labels.has(range.label)) return;
-    labels.add(range.label);
-    sets[kind].push(range);
+  const push = (
+    kind: PluginEchoHighlightKind,
+    from: number,
+    to: number,
+    label: EchoLabelSpec
+  ): void => {
+    const id = `${kind}|${from}|${to}|${label.key}|${label.word}|${label.count}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    list.push({ from, to, kind, label });
   };
 
   for (const echo of echoes) {
@@ -176,29 +195,88 @@ export function echoHighlightRanges(
         const distance =
           index === 0 ? indexes[1] - indexes[0] : indexes[index] - indexes[index - 1];
         const key = index === 0 ? NEARBY_LATER : NEARBY_EARLIER;
-        push(hostKind, { from: occurrence.from, to: occurrence.to, label: t(key, { word, count: distance }) });
+        push(hostKind, occurrence.from, occurrence.to, { key, word, count: distance });
       });
       continue;
     }
     const count = occurrences.length;
-    const first = occurrences[0];
-    const firstWord = surface(text, first);
+    const firstWord = surface(text, occurrences[0]);
     for (const occurrence of occurrences) {
       const word = echo.kind === "phrase" ? firstWord : surface(text, occurrence);
       const key = echo.kind === "overused" ? OVERUSED : PHRASE;
-      push(hostKind, { from: occurrence.from, to: occurrence.to, label: t(key, { word, count }) });
+      push(hostKind, occurrence.from, occurrence.to, { key, word, count });
     }
+  }
+  return list.sort((a, b) => a.from - b.from || a.to - b.to);
+}
+
+/**
+ * The painted ranges for the entries given, split by host kind and labelled
+ * (#451, decision 7). Label text is built only here — for a painted window — and
+ * for an announced entry, never for the whole list.
+ */
+export function echoHighlightSets(
+  entries: readonly EchoNavigationEntry[],
+  t: EchoTranslate
+): EchoHighlightSets {
+  const sets: Record<PluginEchoHighlightKind, EchoHighlightRange[]> = {
+    repetition: [],
+    info: [],
+    warning: [],
+  };
+  for (const entry of entries) {
+    sets[entry.kind].push({
+      from: entry.from,
+      to: entry.to,
+      label: echoLabel(entry.label, t),
+    });
   }
   return sets;
 }
 
-/** Merges every kind's ranges into one list, ordered by `from`, then `to`. */
-export function echoNavigationList(sets: EchoHighlightSets): EchoNavigationEntry[] {
-  const list: EchoNavigationEntry[] = [];
-  for (const kind of ECHO_HIGHLIGHT_KINDS) {
-    for (const range of sets[kind]) list.push({ ...range, kind });
+/**
+ * The labelled per-kind sets for a whole Echo list: `buildEchoList` followed by
+ * `echoHighlightSets`. Kept as the combined, label-building entry point.
+ */
+export function echoHighlightRanges(
+  echoes: readonly Echo[],
+  enabledKinds: readonly EchoKind[],
+  t: EchoTranslate,
+  text: string | readonly string[],
+  tokens?: readonly (readonly Token[])[]
+): EchoHighlightSets {
+  return echoHighlightSets(buildEchoList(echoes, enabledKinds, text, tokens), t);
+}
+
+/**
+ * The `[start, end)` slice of a `from`-sorted list the editor paints (#451,
+ * decision 7): `min(limit, list.length)` contiguous entries centered on the
+ * caret, clamped at both ends. An empty list, or a non-positive limit, yields an
+ * empty slice.
+ */
+export function paintWindow(
+  list: readonly { from: number }[],
+  caret: number,
+  limit: number
+): { start: number; end: number } {
+  const total = list.length;
+  const size = Math.max(0, Math.min(Math.floor(limit), total));
+  if (size === 0) return { start: 0, end: 0 };
+  const half = Math.floor(size / 2);
+  const start = Math.min(Math.max(lowerBoundFrom(list, caret) - half, 0), total - size);
+  return { start, end: start + size };
+}
+
+/** The first index whose `from` is at or after `caret` (binary search). */
+function lowerBoundFrom(list: readonly { from: number }[], caret: number): number {
+  let low = 0;
+  let high = list.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (list[mid].from < caret) low = mid + 1;
+    else high = mid;
   }
-  return list.sort((a, b) => a.from - b.from || a.to - b.to);
+  return low;
 }
 
 /**
@@ -207,7 +285,7 @@ export function echoNavigationList(sets: EchoHighlightSets): EchoNavigationEntry
  * empty list stays null.
  */
 export function stepEcho(
-  list: readonly EchoNavigationEntry[],
+  list: readonly { from: number }[],
   currentIndex: number | null,
   direction: "next" | "previous"
 ): number | null {
@@ -217,7 +295,11 @@ export function stepEcho(
   return (currentIndex + step + list.length) % list.length;
 }
 
-/** "Echo 3 of 12: door, repeated 14 words earlier" (1-based); "No echoes found" when empty. */
+/**
+ * "Echo 3 of 12: door, repeated 14 words earlier" (1-based); "No echoes found"
+ * when empty. The label is built here, for the one announced entry, and the
+ * count is the full list's (decision 7).
+ */
 export function echoAnnouncement(
   list: readonly EchoNavigationEntry[],
   index: number,
@@ -225,5 +307,5 @@ export function echoAnnouncement(
 ): string {
   const entry = list[index];
   if (entry === undefined) return echoNoEchoes(t);
-  return t(ANNOUNCEMENT, { index: index + 1, count: list.length, label: entry.label });
+  return t(ANNOUNCEMENT, { index: index + 1, count: list.length, label: echoLabel(entry.label, t) });
 }

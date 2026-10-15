@@ -24,25 +24,28 @@ import type { PluginApiEventId, PluginApiEvents, PluginClient } from "@/plugin-s
 import { findEchoesWithTokens } from "./find-echoes";
 import {
   ECHO_HIGHLIGHT_KINDS,
+  ECHO_PAINT_LIMIT,
   type EchoHighlightSets,
   type EchoNavigationEntry,
   type EchoTranslate,
+  type PluginEchoHighlightKind,
+  buildEchoList,
   createEchoTranslator,
   echoAnnouncement,
-  echoHighlightRanges,
+  echoHighlightSets,
   echoHighlightsOff,
-  echoNavigationList,
   echoNoEchoes,
+  paintWindow,
   stepEcho,
 } from "./highlights";
-import { readEchoesSettings, readEditorKinds, toFindEchoesOptions } from "./settings";
+import { readEchoesSettings, readEditorKinds, toEditorFindOptions } from "./settings";
 
 /**
  * The bench ring for Echoes' own recompute time (#451): the last
- * `RECOMPUTE_RING_MAX` durations of `findEchoes` + `echoHighlightRanges`, in ms.
- * The `bench:plugins` lane reads it from the Plugin Worker global
- * (`globalThis.__maibukEchoesRecomputeMs`). A Plugin cannot read the host's
- * `benchMarksEnabled()` gate, so this stays always on but cheap: one
+ * `RECOMPUTE_RING_MAX` durations of `findEchoes` + building and labelling the
+ * painted window, in ms. The `bench:plugins` lane reads it from the Plugin
+ * Worker global (`globalThis.__maibukEchoesRecomputeMs`). A Plugin cannot read
+ * the host's `benchMarksEnabled()` gate, so this stays always on but cheap: one
  * `performance.now()` pair and a fixed-length array per recompute, and at most
  * one `performance.measure` on the Worker's own timeline at a time.
  */
@@ -106,7 +109,12 @@ export interface EchoEditorController {
 interface EchoEditorState {
   on: boolean;
   entity: EntityTarget | null;
+  /** The full navigation list Next/Previous step through (decision 7). */
   list: readonly EchoNavigationEntry[];
+  /** The `[start, end)` slice of `list` the host currently shows (decision 7). */
+  window: { start: number; end: number };
+  /** Whether each host kind is currently empty, so an unchanged empty kind is not re-sent. */
+  empty: Record<PluginEchoHighlightKind, boolean>;
   /** The last index Next/Previous moved to, for the no-selection fallback. */
   index: number | null;
   /** The app's UI language, for labels and announcements. */
@@ -147,6 +155,8 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     on: false,
     entity: null,
     list: [],
+    window: { start: 0, end: 0 },
+    empty: { repetition: false, info: false, warning: false },
     index: null,
     uiLanguage: "en",
     detectionLanguage: "en",
@@ -202,22 +212,34 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
   }
 
   /**
-   * Replaces this Plugin's set of each kind in the focused editor. When
-   * `entity` is given, a paint that finds a different editor focused — focus
-   * moved mid-recompute — stops, so the newly focused editor is never painted
-   * with the previous one's ranges.
+   * Replaces this Plugin's set of each kind in the focused editor. The three
+   * kinds are dispatched concurrently (#451, decision 7). When `entity` is
+   * given, a paint that finds a different editor focused — focus moved
+   * mid-recompute — stops, so the newly focused editor is never painted with the
+   * previous one's ranges. Unless `force`, a kind that is empty and was already
+   * empty in the previous paint is left alone (still cleared by `force`).
    */
-  async function paint(sets: EchoHighlightSets, entity?: EntityTarget): Promise<void> {
-    for (const kind of ECHO_HIGHLIGHT_KINDS) {
-      if (entity !== undefined && (!state.on || state.entity === null || !sameEntity(state.entity, entity))) {
-        return;
-      }
-      try {
-        await client.editor.setHighlights({ kind, ranges: [...sets[kind]] });
-      } catch {
-        // The editor may have lost focus between reads; leave it to the next event.
-      }
+  async function paint(sets: EchoHighlightSets, entity?: EntityTarget, force = false): Promise<void> {
+    if (entity !== undefined && (!state.on || state.entity === null || !sameEntity(state.entity, entity))) {
+      return;
     }
+    const tasks: Promise<void>[] = [];
+    for (const kind of ECHO_HIGHLIGHT_KINDS) {
+      const ranges = sets[kind];
+      const isEmpty = ranges.length === 0;
+      if (!force && isEmpty && state.empty[kind]) continue;
+      state.empty[kind] = isEmpty;
+      tasks.push(
+        (async () => {
+          try {
+            await client.editor.setHighlights({ kind, ranges: [...ranges] });
+          } catch {
+            // The editor may have lost focus between reads; leave it to the next event.
+          }
+        })()
+      );
+    }
+    await Promise.all(tasks);
   }
 
   /** Reads the detection settings and the kinds the editor paints. */
@@ -232,32 +254,46 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     return { settings, kinds };
   }
 
-  /** Detects against one editor's text, paints its enabled kinds, and stores the list. */
-  async function apply(text: string, entity: EntityTarget): Promise<void> {
+  /**
+   * Detects against one editor's text, paints the window of its enabled kinds
+   * centered on `caret`, and stores the full list (#451, decision 7). Only the
+   * enabled kinds are detected, and only the window's ranges are labelled.
+   */
+  async function apply(text: string, entity: EntityTarget, caret: number): Promise<void> {
     const { settings, kinds } = await enabledKinds();
-    if (!state.on) return;
+    if (!state.on || state.entity === null || !sameEntity(state.entity, entity)) return;
     const t = translate();
-    // Time only Echoes' own compute (findEchoes + echoHighlightRanges) for the
-    // Worker-recompute bench row (#451): no await runs inside this span.
+    // Time only Echoes' own compute (findEchoes + building and labelling the
+    // painted window) for the Worker-recompute bench row (#451); no await runs
+    // inside this span.
     const startedAt = nowMs();
     const { echoes, chapters } = findEchoesWithTokens(
       text,
       state.detectionLanguage,
-      toFindEchoesOptions(settings)
+      toEditorFindOptions(settings, kinds)
     );
-    const sets = echoHighlightRanges(echoes, kinds, t, text, chapters);
+    const list = buildEchoList(echoes, kinds, text, chapters);
+    const { start, end } = paintWindow(list, caret, ECHO_PAINT_LIMIT);
+    const sets = echoHighlightSets(list.slice(start, end), t);
     recordRecompute(startedAt);
     await paint(sets, entity);
     if (!state.on || state.entity === null || !sameEntity(state.entity, entity)) return;
-    state.list = echoNavigationList(sets);
+    state.list = list;
+    state.window = { start, end };
   }
 
   /** One coalesced recompute of the highlighted entity's highlights. */
   async function recomputeOnce(): Promise<void> {
-    const content = await client.editor.getContent();
+    // The caret is read alongside the content, so the paint can center on it
+    // without a further round trip (#451, decision 7).
+    const [content, selection] = await Promise.all([
+      client.editor.getContent(),
+      client.editor.getSelection(),
+    ]);
     if (content.status !== "ok") return;
     if (!state.on || state.entity === null || !sameEntity(content.entity, state.entity)) return;
-    await apply(content.content.text, content.entity);
+    const caret = selection.status === "ok" ? selection.range.from : 0;
+    await apply(content.content.text, content.entity, caret);
   }
 
   async function recompute(): Promise<void> {
@@ -279,15 +315,29 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
 
   /** Sends empty ranges for every kind, so no stale highlight is left behind. */
   async function clear(): Promise<void> {
-    await paint({ repetition: [], info: [], warning: [] });
+    await paint({ repetition: [], info: [], warning: [] }, undefined, true);
   }
 
   function turnOff(): Promise<void> {
     state.on = false;
     state.entity = null;
     state.list = [];
+    state.window = { start: 0, end: 0 };
     state.index = null;
     return clear();
+  }
+
+  /**
+   * Repaints the window centered on a revealed entry that falls outside it
+   * (#451, decision 7), through the same paint path as a recompute.
+   */
+  async function repaintAround(index: number): Promise<void> {
+    if (!state.on || state.entity === null) return;
+    const caret = state.list[index]?.from ?? 0;
+    const { start, end } = paintWindow(state.list, caret, ECHO_PAINT_LIMIT);
+    state.window = { start, end };
+    const sets = echoHighlightSets(state.list.slice(start, end), translate());
+    await paint(sets, state.entity);
   }
 
   async function step(direction: "next" | "previous"): Promise<void> {
@@ -319,6 +369,8 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     state.index = index;
     const entry = state.list[index];
     await client.editor.reveal({ range: { from: entry.from, to: entry.to } });
+    // The full list is walked; the window follows when the entry leaves it.
+    if (index < state.window.start || index >= state.window.end) await repaintAround(index);
     await notify(echoAnnouncement(state.list, index, t));
   }
 
@@ -361,14 +413,22 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
           await turnOff();
           return;
         }
-        const content = await client.editor.getContent();
+        // The caret comes with the content, so the first paint centers on it
+        // without an extra round trip (#451, decision 7).
+        const [content, selection] = await Promise.all([
+          client.editor.getContent(),
+          client.editor.getSelection(),
+        ]);
         if (content.status !== "ok") return;
         state.on = true;
         state.entity = content.entity;
         state.index = null;
         state.list = [];
+        state.window = { start: 0, end: 0 };
+        state.empty = { repetition: false, info: false, warning: false };
         state.detectionLanguage = await resolveDetectionLanguage(content.entity);
-        await apply(content.content.text, content.entity);
+        const caret = selection.status === "ok" ? selection.range.from : 0;
+        await apply(content.content.text, content.entity, caret);
         if (state.on && state.list.length === 0) await notify(echoNoEchoes(translate()));
       } catch {
         // Keep the controller alive; the next toggle retries.

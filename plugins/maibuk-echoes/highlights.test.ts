@@ -1,8 +1,12 @@
 /**
  * Echoes' editor highlight model (#451, unit 2): the pure step between
  * `findEchoes` output and `editor.setHighlights`. The labels, the host-kind
- * mapping, the enable filter, the dedupe, the ordered navigation list, the wrap
- * around, and the announcement all run here with no host.
+ * mapping, the enable filter, the dedupe, the ordered navigation list, the paint
+ * window, the wrap around, and the announcement all run here with no host.
+ *
+ * Decision 7 splits the work: `buildEchoList` returns the full, label-free list,
+ * `paintWindow` slices it around the caret, and `echoHighlightSets` labels only
+ * that slice; `echoHighlightRanges` stays the combined, label-building entry.
  */
 
 import { describe, expect, it } from "vitest";
@@ -17,13 +21,17 @@ import { tokenize } from "./language";
 import {
   ECHO_HIGHLIGHTS_OFF_KEY,
   ECHO_NO_ECHOES_KEY,
-  type EchoHighlightSets,
+  ECHO_PAINT_LIMIT,
+  type EchoNavigationEntry,
+  buildEchoList,
   createEchoTranslator,
   echoAnnouncement,
   echoHighlightRanges,
+  echoHighlightSets,
   echoHighlightsOff,
-  echoNavigationList,
+  echoLabel,
   echoNoEchoes,
+  paintWindow,
   stepEcho,
 } from "./highlights";
 
@@ -135,32 +143,129 @@ describe("echoHighlightRanges()", () => {
   });
 });
 
-describe("echoNavigationList()", () => {
-  it("merges every kind into one list ordered by from then to", () => {
-    const sets: EchoHighlightSets = {
-      repetition: [{ from: 10, to: 14, label: "b" }],
-      info: [{ from: 2, to: 6, label: "a" }],
-      warning: [
-        { from: 2, to: 9, label: "c" },
-        { from: 2, to: 5, label: "d" },
-      ],
-    };
-    expect(echoNavigationList(sets).map((entry) => entry.label)).toEqual(["d", "a", "c", "b"]);
-    expect(echoNavigationList(sets).map((entry) => entry.kind)).toEqual([
-      "warning",
-      "info",
-      "warning",
-      "repetition",
+describe("echoHighlightRanges() reusing findEchoes' tokens", () => {
+  it("paints the same sets with the tokens handed over as with its own tokenization", () => {
+    const text = "A door creaked. Then a door slammed, and a door shut.";
+    const settingsHere = settings({ overused: false, phrases: false });
+    const echoes = findEchoes(text, "en", settingsHere);
+    const kinds = ["nearby"] as const;
+    const own = echoHighlightRanges(echoes, kinds, t, text);
+    const reused = echoHighlightRanges(echoes, kinds, t, text, [tokenize(text)]);
+    expect(reused).toEqual(own);
+  });
+});
+
+describe("buildEchoList()", () => {
+  it("keeps from, to, kind, and a label spec (no label text)", () => {
+    const text = "A door door creaked.";
+    const echoes = findEchoes(text, "en", settings({ overused: false, phrases: false }));
+    const list = buildEchoList(echoes, ["nearby"], text);
+    expect(list).toEqual([
+      {
+        from: 2,
+        to: 6,
+        kind: "repetition",
+        label: { key: "echo.label.nearbyLater", word: "door", count: 1 },
+      },
+      {
+        from: 7,
+        to: 11,
+        kind: "repetition",
+        label: { key: "echo.label.nearbyEarlier", word: "door", count: 1 },
+      },
+    ]);
+  });
+
+  it("orders entries by from then to", () => {
+    const echoes: Echo[] = [
+      { kind: "overused", normalized: "b", occurrences: [{ chapter: 0, from: 10, to: 14 }] },
+      { kind: "overused", normalized: "a", occurrences: [{ chapter: 0, from: 2, to: 6 }] },
+    ];
+    const list = buildEchoList(echoes, ["overused"], "x".repeat(20));
+    expect(list.map((entry) => entry.from)).toEqual([2, 10]);
+    expect(list.map((entry) => entry.kind)).toEqual(["info", "info"]);
+  });
+
+  it("deduplicates identical entries by their label spec", () => {
+    const duplicated: Echo[] = [
+      { kind: "overused", normalized: "just", occurrences: [{ chapter: 0, from: 0, to: 4 }] },
+      { kind: "overused", normalized: "just", occurrences: [{ chapter: 0, from: 0, to: 4 }] },
+    ];
+    const list = buildEchoList(duplicated, ["overused"], "just");
+    expect(list).toEqual([
+      { from: 0, to: 4, kind: "info", label: { key: "echo.label.overused", word: "just", count: 1 } },
     ]);
   });
 });
 
-describe("stepEcho()", () => {
-  const list = echoNavigationList({
-    repetition: [{ from: 0, to: 1, label: "a" }],
-    info: [{ from: 5, to: 6, label: "b" }],
-    warning: [{ from: 9, to: 10, label: "c" }],
+describe("echoHighlightSets()", () => {
+  it("splits entries into per-kind labelled ranges, keeping order", () => {
+    const entries: EchoNavigationEntry[] = [
+      { from: 2, to: 6, kind: "info", label: { key: "echo.label.overused", word: "a", count: 2 } },
+      {
+        from: 10,
+        to: 14,
+        kind: "repetition",
+        label: { key: "echo.label.nearbyLater", word: "b", count: 4 },
+      },
+    ];
+    const sets = echoHighlightSets(entries, t);
+    expect(sets.info).toEqual([{ from: 2, to: 6, label: "a, used 2 times" }]);
+    expect(sets.repetition).toEqual([{ from: 10, to: 14, label: "b, repeated 4 words later" }]);
+    expect(sets.warning).toEqual([]);
   });
+});
+
+describe("echoLabel()", () => {
+  it("builds the one label string from a spec", () => {
+    expect(echoLabel({ key: "echo.label.nearbyEarlier", word: "door", count: 14 }, t)).toBe(
+      "door, repeated 14 words earlier"
+    );
+    expect(echoLabel({ key: "echo.label.overused", word: "just", count: 1 }, t)).toBe(
+      "just, used 1 time"
+    );
+  });
+});
+
+describe("paintWindow()", () => {
+  // Entries 10 apart, so the caret's position names an index.
+  const list = Array.from({ length: 100 }, (_, index) => ({ from: index * 10 }));
+
+  it("centers the window on the caret", () => {
+    expect(paintWindow(list, 500, 10)).toEqual({ start: 45, end: 55 });
+  });
+
+  it("clamps at the start", () => {
+    expect(paintWindow(list, 0, 10)).toEqual({ start: 0, end: 10 });
+  });
+
+  it("clamps at the end", () => {
+    expect(paintWindow(list, 990, 10)).toEqual({ start: 90, end: 100 });
+  });
+
+  it("keeps the whole list when it is shorter than the limit", () => {
+    const small = [{ from: 0 }, { from: 5 }, { from: 9 }];
+    expect(paintWindow(small, 5, ECHO_PAINT_LIMIT)).toEqual({ start: 0, end: 3 });
+  });
+
+  it("is empty for an empty list or a non-positive limit", () => {
+    expect(paintWindow([], 0, ECHO_PAINT_LIMIT)).toEqual({ start: 0, end: 0 });
+    expect(paintWindow(list, 500, 0)).toEqual({ start: 0, end: 0 });
+  });
+
+  it("is never longer than the limit and always exactly min(limit, length)", () => {
+    const window = paintWindow(list, 250, 30);
+    expect(window.end - window.start).toBe(30);
+    expect(window).toEqual({ start: 10, end: 40 });
+  });
+});
+
+describe("stepEcho()", () => {
+  const list = [
+    { from: 0, to: 1 },
+    { from: 5, to: 6 },
+    { from: 9, to: 10 },
+  ];
 
   it("returns null for an empty list", () => {
     expect(stepEcho([], null, "next")).toBeNull();
@@ -181,16 +286,18 @@ describe("stepEcho()", () => {
 });
 
 describe("echoAnnouncement()", () => {
-  const list = echoNavigationList({
-    repetition: [{ from: 0, to: 4, label: "door, repeated 14 words earlier" }],
-    info: [{ from: 20, to: 28, label: "just, used 23 times" }],
-    warning: [],
-  });
+  const list: EchoNavigationEntry[] = [
+    {
+      from: 0,
+      to: 4,
+      kind: "repetition",
+      label: { key: "echo.label.nearbyEarlier", word: "door", count: 14 },
+    },
+    { from: 20, to: 28, kind: "info", label: { key: "echo.label.overused", word: "just", count: 23 } },
+  ];
 
   it("announces the entry 1-based with its label", () => {
-    expect(echoAnnouncement(list, 0, t)).toBe(
-      "Echo 1 of 2: door, repeated 14 words earlier"
-    );
+    expect(echoAnnouncement(list, 0, t)).toBe("Echo 1 of 2: door, repeated 14 words earlier");
     expect(echoAnnouncement(list, 1, t)).toBe("Echo 2 of 2: just, used 23 times");
   });
 
@@ -205,17 +312,5 @@ describe("echoAnnouncement()", () => {
     expect(echoNoEchoes(es)).toBe("No se encontraron ecos");
     expect(ECHO_HIGHLIGHTS_OFF_KEY).toBe("echo.highlightsOff");
     expect(ECHO_NO_ECHOES_KEY).toBe("echo.none");
-  });
-});
-
-describe("echoHighlightRanges() reusing findEchoes' tokens", () => {
-  it("paints the same sets with the tokens handed over as with its own tokenization", () => {
-    const text = "A door creaked. Then a door slammed, and a door shut.";
-    const settingsHere = settings({ overused: false, phrases: false });
-    const echoes = findEchoes(text, "en", settingsHere);
-    const kinds = ["nearby"] as const;
-    const own = echoHighlightRanges(echoes, kinds, t, text);
-    const reused = echoHighlightRanges(echoes, kinds, t, text, [tokenize(text)]);
-    expect(reused).toEqual(own);
   });
 });

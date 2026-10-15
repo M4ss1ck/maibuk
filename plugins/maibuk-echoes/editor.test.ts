@@ -13,6 +13,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PluginApiEventId, PluginClient } from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
 import { createEchoEditor, type EchoEditorClient } from "./editor";
+import { ECHO_PAINT_LIMIT } from "./highlights";
 import {
   NEXT_ECHO,
   PREVIOUS_ECHO,
@@ -234,6 +235,15 @@ function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * A Chapter of `count` "echo" words, each five characters apart (one per word),
+ * so the text is a single nearby chain of `count` ranges. Offsets: word `i` runs
+ * from `i * 5` to `i * 5 + 4` (#451, decision 7).
+ */
+function repeatedEchoText(count: number): string {
+  return "echo ".repeat(count).trimEnd();
+}
+
 const kindsOf = (calls: readonly HighlightCall[]): string[] => calls.map((call) => call.kind);
 
 describe("toggleHighlights()", () => {
@@ -294,7 +304,9 @@ describe("contentChanged while on", () => {
 
     fake.emit("editor.contentChanged", { entity: fake.entity });
 
-    await vi.waitFor(() => expect(fake.highlights.length).toBe(6));
+    // Toggle (3) + the recompute's repetition (1); info and warning were already
+    // empty, so they are not re-sent (decision 7).
+    await vi.waitFor(() => expect(fake.highlights.length).toBe(4));
     expect(fake.getContentCalls()).toBe(2);
   });
 
@@ -311,8 +323,9 @@ describe("contentChanged while on", () => {
     fake.emit("editor.contentChanged", { entity: fake.entity });
     release();
 
-    // Toggle (3) + the in-flight recompute (3) + one coalesced recompute (3).
-    await vi.waitFor(() => expect(fake.highlights.length).toBe(9));
+    // Toggle (3) + the in-flight recompute's repetition (1) + one coalesced
+    // recompute's repetition (1).
+    await vi.waitFor(() => expect(fake.highlights.length).toBe(5));
     expect(fake.getContentCalls()).toBe(3);
   });
 
@@ -367,7 +380,7 @@ describe("focusChanged while on", () => {
 
     // Still on: a change for the highlighted entity still recomputes.
     fake.emit("editor.contentChanged", { entity: fake.entity });
-    await vi.waitFor(() => expect(fake.highlights.length).toBe(6));
+    await vi.waitFor(() => expect(fake.highlights.length).toBe(4));
   });
 });
 
@@ -483,6 +496,135 @@ describe("nextEcho() / previousEcho() while off", () => {
       { variant: "info", message: "Echo highlights are off" },
       { variant: "info", message: "Echo highlights are off" },
     ]);
+  });
+});
+
+describe("painted window (decision 7)", () => {
+  const FULL = ECHO_PAINT_LIMIT + 500;
+
+  it("paints at most ECHO_PAINT_LIMIT ranges", async () => {
+    const fake = fakeClient({
+      text: repeatedEchoText(FULL),
+      selection: { from: 0, to: 0 },
+    });
+    await createEchoEditor(fake.client).toggleHighlights();
+
+    const repetition = fake.highlights[0];
+    expect(repetition.kind).toBe("repetition");
+    expect(repetition.ranges).toHaveLength(ECHO_PAINT_LIMIT);
+    // The caret is at the start, so the window is clamped to the first entries.
+    expect(repetition.ranges[0].from).toBe(0);
+  });
+
+  it("centers the painted window on the caret", async () => {
+    const fake = fakeClient({ text: repeatedEchoText(FULL), selection: { from: 0, to: 0 } });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    expect(fake.highlights[0].ranges[0].from).toBe(0);
+
+    // Move the caret to the last word and recompute: the window follows, clamped
+    // to the end, and still holds the limit.
+    fake.setSelection({ from: (FULL - 1) * 5, to: (FULL - 1) * 5 });
+    fake.emit("editor.contentChanged", { entity: fake.entity });
+    await vi.waitFor(() => expect(fake.highlights.length).toBe(4));
+
+    const repainted = fake.highlights.at(-1);
+    expect(repainted?.kind).toBe("repetition");
+    expect(repainted?.ranges).toHaveLength(ECHO_PAINT_LIMIT);
+    expect(repainted?.ranges.at(-1)?.from).toBe((FULL - 1) * 5);
+  });
+
+  it("repaints the window when Next moves past its edge", async () => {
+    const fake = fakeClient({ text: repeatedEchoText(FULL), selection: { from: 0, to: 0 } });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    const before = fake.highlights.length;
+
+    // The caret is on the last painted entry (index 1999); Next lands on index
+    // 2000, just outside the [0, 2000) window.
+    fake.setSelection({ from: 1999 * 5, to: 1999 * 5 });
+    await controller.nextEcho();
+
+    expect(fake.reveals.at(-1)).toEqual({ from: 2000 * 5, to: 2000 * 5 + 4 });
+    expect(fake.highlights.length).toBeGreaterThan(before);
+    const repainted = fake.highlights.at(-1);
+    expect(repainted?.kind).toBe("repetition");
+    expect(repainted?.ranges.some((range) => range.from === 2000 * 5)).toBe(true);
+  });
+
+  it("announces the full count, not the painted window's", async () => {
+    const fake = fakeClient({ text: repeatedEchoText(FULL), selection: { from: 0, to: 0 } });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+
+    fake.setSelection({ from: 1999 * 5, to: 1999 * 5 });
+    await controller.nextEcho();
+
+    expect(fake.notifications.at(-1)).toEqual({
+      variant: "info",
+      message: `Echo 2001 of ${FULL}: echo, repeated 1 word earlier`,
+    });
+  });
+});
+
+describe("kind gating and paint dispatch (decision 7)", () => {
+  it("detects only the kinds the editor paints", async () => {
+    // DOORS is both a nearby chain and an overused word; nearby-only skips
+    // overused detection, so info stays empty.
+    const nearby = fakeClient({ text: DOORS });
+    await createEchoEditor(nearby.client).toggleHighlights();
+    expect(nearby.highlights.map((call) => call.kind)).toEqual([
+      "repetition",
+      "info",
+      "warning",
+    ]);
+    expect(nearby.highlights[0].ranges.length).toBeGreaterThan(0);
+    expect(nearby.highlights[1].ranges).toEqual([]);
+    expect(nearby.highlights[2].ranges).toEqual([]);
+
+    // Overused-only is the mirror image: no repetition, five info ranges.
+    const overused = fakeClient({ text: DOORS, editorKinds: ["overused"] });
+    await createEchoEditor(overused.client).toggleHighlights();
+    expect(overused.highlights[0].ranges).toEqual([]);
+    expect(overused.highlights[1].ranges).toHaveLength(5);
+  });
+
+  it("skips sending a kind that was already empty in the previous paint", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    expect(fake.highlights.map((call) => call.kind)).toEqual([
+      "repetition",
+      "info",
+      "warning",
+    ]);
+
+    fake.emit("editor.contentChanged", { entity: fake.entity });
+    // Only repetition is re-sent; info and warning were already empty.
+    await vi.waitFor(() => expect(fake.highlights.length).toBe(4));
+    expect(fake.highlights.at(-1)?.kind).toBe("repetition");
+  });
+
+  it("dispatches the three kinds before any one resolves", async () => {
+    const fake = fakeClient({ text: DOORS, editorKinds: ["nearby", "overused", "phrase"] });
+    const gates: Array<() => void> = [];
+    fake.client.editor.setHighlights = async ({ kind, ranges }) => {
+      fake.highlights.push({ kind, ranges: ranges.map((range) => ({ ...range })) });
+      await new Promise<void>((resolve) => gates.push(resolve));
+      return { status: "applied" };
+    };
+    const controller = createEchoEditor(fake.client);
+
+    const done = controller.toggleHighlights();
+    await flush();
+    // All three were dispatched while the first still awaits its gate.
+    expect(fake.highlights.map((call) => call.kind)).toEqual([
+      "repetition",
+      "info",
+      "warning",
+    ]);
+    for (const release of gates) release();
+    await done;
   });
 });
 

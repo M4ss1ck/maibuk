@@ -112,6 +112,25 @@ export function toFindEchoesOptions(settings: EchoSettings): EchoSettings {
   };
 }
 
+/**
+ * The `findEchoes` options the editor runs with (#451, decision 7): the
+ * detection settings with the three kind switches forced to the kinds the editor
+ * paints, so a kind the editor does not show is never detected. `settings` still
+ * carries stemming, the nearby window, and the ignore list.
+ */
+export function toEditorFindOptions(
+  settings: EchoSettings,
+  editorKinds: readonly EchoKind[]
+): EchoSettings {
+  const enabled = new Set<EchoKind>(editorKinds);
+  return {
+    ...toFindEchoesOptions(settings),
+    nearby: enabled.has("nearby"),
+    overused: enabled.has("overused"),
+    phrases: enabled.has("phrase"),
+  };
+}
+
 /** Reads the settings, falling back to the defaults when the key is unset or the read fails. */
 export async function readEchoesSettings(client: EchoesStorage): Promise<EchoSettings> {
   try {

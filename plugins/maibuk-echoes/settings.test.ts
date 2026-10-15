@@ -16,6 +16,7 @@ import {
   parseEditorKinds,
   readEchoesSettings,
   readEditorKinds,
+  toEditorFindOptions,
   toFindEchoesOptions,
   toggledEditorKind,
   writeEchoesSettings,
@@ -82,6 +83,26 @@ describe("Echoes settings", () => {
     });
     expect(mapped.nearbyWindow).toBe(NEARBY_WINDOW_MAX);
     expect(mapped.ignore).toEqual(["a"]);
+  });
+
+  it("turns on only the kinds the editor paints (#451, decision 7)", () => {
+    const stored = { ...DEFAULT_ECHO_SETTINGS, nearby: false, overused: false, phrases: false };
+    const nearbyOnly = toEditorFindOptions(stored, ["nearby"]);
+    expect(nearbyOnly).toMatchObject({ nearby: true, overused: false, phrases: false });
+
+    const overusedAndPhrase = toEditorFindOptions(stored, ["overused", "phrase"]);
+    expect(overusedAndPhrase).toMatchObject({ nearby: false, overused: true, phrases: true });
+
+    // Detection's stemming, window, and ignore list still apply.
+    const withStemming = toEditorFindOptions(
+      { ...stored, stemming: false, nearbyWindow: 120, ignore: ["harbor"] },
+      ["nearby"]
+    );
+    expect(withStemming).toMatchObject({
+      stemming: false,
+      nearbyWindow: 120,
+      ignore: ["harbor"],
+    });
   });
 
   it("round-trips through the storage API under the one key", async () => {
