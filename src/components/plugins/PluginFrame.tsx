@@ -7,8 +7,9 @@
  *
  * The surface refuses and shows a localized placeholder when the manifest does
  * not set `customUi` (D2) or the platform has Frames off (D6), and always shows
- * the reused custom-UI notice above the Frame (D5). Frames get no accessibility
- * test beyond the tab-order test (#402).
+ * the reused custom-UI notice above the Frame (D5). It carries the public theme
+ * tokens on `frame-load` and posts each later change as a `frame-theme` (U4).
+ * Frames get no accessibility test beyond the tab-order test (#402).
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -17,13 +18,12 @@ import {
   buildFrameLoadMessage,
   createFrameElement,
   FRAME_READY_MESSAGE,
+  FRAME_THEME_MESSAGE,
 } from "@/features/plugins/frame";
 import { isPluginFrameAvailable } from "@/features/plugins/host-platform";
+import { useFrameThemeTokens } from "@/components/plugins/useFrameThemeTokens";
 import { pluginRunKey } from "@/components/plugins/plugin-run-key";
-import {
-  useInstalledPluginLifecycle,
-  usePluginLifecycleRevision,
-} from "@/hooks/usePluginSurface";
+import { useInstalledPluginLifecycle, usePluginLifecycleRevision } from "@/hooks/usePluginSurface";
 import type { PluginFolderFile, PluginManifest, PluginRuntime } from "@/features/plugins/types";
 
 /**
@@ -40,13 +40,7 @@ export interface PluginFrameHost {
 
 let nextFrameId = 0;
 
-function FramePlaceholder({
-  variant,
-  message,
-}: {
-  variant: "page" | "embedded";
-  message: string;
-}) {
+function FramePlaceholder({ variant, message }: { variant: "page" | "embedded"; message: string }) {
   return (
     <div data-plugin-frame={variant}>
       <p role="alert" className="text-sm text-muted-foreground">
@@ -79,6 +73,16 @@ export function PluginFrame({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  // The public tokens, and the loaded iframe they update. `loadedRef` stays
+  // false until `frame-load` has gone out, so no `frame-theme` can precede it.
+  const tokens = useFrameThemeTokens();
+  const tokensRef = useRef(tokens);
+  const loadedRef = useRef(false);
+  const frameWindowRef = useRef<Window | null>(null);
+
+  useEffect(() => {
+    tokensRef.current = tokens;
+  }, [tokens]);
 
   useEffect(() => {
     if (!customUi || !available) return;
@@ -90,18 +94,22 @@ export function PluginFrame({
     // `[tabindex]`), and never removes the Frame from the tab order.
     iframe.tabIndex = 0;
     container.appendChild(iframe);
+    frameWindowRef.current = iframe.contentWindow;
+    loadedRef.current = false;
 
     const frameId = `frame:${++nextFrameId}`;
     let channel: MessageChannel | null = null;
 
     const onLoad = () => {
       try {
-        const message = buildFrameLoadMessage(runtime.files, src, {});
+        const message = buildFrameLoadMessage(runtime.files, src, tokensRef.current);
         channel = new MessageChannel();
         // Port A goes to the Frame (the shim exposes it as `window.maibuk.port`);
         // port B goes to the owning Worker (D1). The host parses neither.
         iframe.contentWindow?.postMessage(message, "*", [channel.port1]);
         runtime.sendFrame(frameId, src, channel.port2);
+        // Only now may a `frame-theme` follow: the shim is listening.
+        loadedRef.current = true;
       } catch {
         // A `src` outside the verified set (HashChanged since approval, or a
         // misdeclared path) fails closed: no Frame, a localized placeholder.
@@ -127,8 +135,18 @@ export function PluginFrame({
       channel?.port1.close();
       channel?.port2.close();
       iframe.remove();
+      frameWindowRef.current = null;
+      loadedRef.current = false;
     };
   }, [customUi, available, runtime, src, title]);
+
+  // A live update (theme, accent, font): push the changed tokens to the loaded
+  // Frame. `tokens` is a new object only when a value actually changed, and the
+  // guard keeps every post after `frame-load` and none after unmount.
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    frameWindowRef.current?.postMessage({ kind: FRAME_THEME_MESSAGE.kind, tokens }, "*");
+  }, [tokens]);
 
   if (!customUi) {
     return <FramePlaceholder variant={variant} message={t("plugins.frame.customUiRequired")} />;
@@ -140,8 +158,7 @@ export function PluginFrame({
     return <FramePlaceholder variant={variant} message={t("plugins.ui.couldNotDisplay")} />;
   }
 
-  const wrapperClass =
-    variant === "page" ? "flex h-full min-h-0 flex-col" : "flex w-full flex-col";
+  const wrapperClass = variant === "page" ? "flex h-full min-h-0 flex-col" : "flex w-full flex-col";
   const frameClass =
     variant === "page"
       ? "relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card"

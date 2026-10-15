@@ -62,3 +62,52 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 - **Panel layout responds to its container, not the viewport**: content sits beside a resizable sidebar, so a viewport breakpoint (`md:`) does not describe the space a panel actually has. Mark the wrapper `@container` and use container variants (`@md:`, `@3xl:`) for anything laid out inside the main content area — see the notes filter panel in `src/pages/NotesGallery.tsx`. Viewport breakpoints stay correct for the outermost page shell
 - **Touch compatibility**: No hover-only controls (`CODING_STANDARDS.md`, "Keyboard and accessibility", item 7). Use `pointer-coarse:` for touch-only visibility and larger touch targets, never a viewport breakpoint; desktop hover affordances stay as they are
 - **Keyboard compatibility**: Any UI feature with interactive controls must meet "Keyboard and accessibility" and its test gate in `CODING_STANDARDS.md` — this is a definition-of-done item, not a styling preference
+
+## Frame theme tokens
+
+A `Frame` is a Plugin's own sandboxed document (ADR 0021, the second UI path).
+It has an opaque origin, so the app's `:root` variables do not reach it. The
+host resolves them and the shim writes them onto the Frame's `<html>` as the
+public `--maibuk-*` properties below (the table is
+`FRAME_THEME_TOKENS` in `src/features/plugins/frame/theme-tokens.ts`). The host
+sends them on `frame-load` and re-sends changes as a `frame-theme` message, so a
+Frame that uses these properties follows a light/dark flip, an accent change,
+and a font change live.
+
+**These public names are a Plugin-facing contract.** They are stable and
+independent of the internal variables that back them: an internal variable may be
+renamed or reorganized, but a public name only changes if the contract itself
+changes. Status, table, update, and preview variables are app internals and are
+not part of the contract.
+
+| Public name                        | Meaning                                             |
+| ---------------------------------- | --------------------------------------------------- |
+| `--maibuk-color-primary`           | Primary accent (the user's chosen color)            |
+| `--maibuk-color-primary-hover`     | Primary accent on hover                             |
+| `--maibuk-color-primary-foreground`| Text/icon color on a primary fill                   |
+| `--maibuk-color-secondary`         | Secondary accent                                    |
+| `--maibuk-color-background`        | Page background                                     |
+| `--maibuk-color-foreground`        | Default text color                                  |
+| `--maibuk-color-muted`             | Muted surface (code blocks, subtle fills)           |
+| `--maibuk-color-muted-foreground`  | Muted/secondary text                                |
+| `--maibuk-color-border`            | Borders and dividers                                |
+| `--maibuk-color-card`              | Card/panel surface                                  |
+| `--maibuk-color-card-foreground`   | Text on a card surface                              |
+| `--maibuk-color-destructive`       | Destructive action / error accent                   |
+| `--maibuk-color-destructive-hover` | Destructive accent on hover                         |
+| `--maibuk-color-success`           | Success accent                                      |
+| `--maibuk-color-info-bg`           | Info banner background                              |
+| `--maibuk-color-info-text`         | Info banner text                                    |
+| `--maibuk-color-warning-bg`        | Warning banner background                           |
+| `--maibuk-color-warning-text`      | Warning banner text                                 |
+| `--maibuk-color-error-bg`          | Error banner background                             |
+| `--maibuk-color-error-text`        | Error banner text                                   |
+| `--maibuk-color-success-bg`        | Success banner background                           |
+| `--maibuk-color-success-text`      | Success banner text                                 |
+| `--maibuk-color-scheme`            | Resolved scheme: `"light"` or `"dark"`              |
+| `--maibuk-font-sans`               | Sans-serif family stack (UI)                        |
+| `--maibuk-font-serif`              | Serif family stack (editor)                         |
+| `--maibuk-font-mono`               | Monospace family stack                              |
+| `--maibuk-font-size`               | The user's chosen body font size                    |
+| `--maibuk-spacing-editor-max`      | Editor column max width (a real design measure)     |
+

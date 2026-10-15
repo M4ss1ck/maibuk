@@ -9,7 +9,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import "@/i18n";
 import { PluginFrame, type PluginFrameHost } from "@/components/plugins/PluginFrame";
-import { FRAME_LOAD_MESSAGE, FRAME_READY_MESSAGE } from "@/features/plugins/frame";
+import {
+  FRAME_LOAD_MESSAGE,
+  FRAME_READY_MESSAGE,
+  FRAME_THEME_MESSAGE,
+} from "@/features/plugins/frame";
 import { isPluginFrameAvailable } from "@/features/plugins/host-platform";
 import type { PluginManifest } from "@/features/plugins/types";
 
@@ -44,6 +48,8 @@ function renderFrame(host: PluginFrameHost, extra: Partial<{ variant: "page" | "
 
 afterEach(() => {
   vi.mocked(isPluginFrameAvailable).mockReturnValue(true);
+  document.documentElement.removeAttribute("style");
+  document.documentElement.classList.remove("dark");
 });
 
 describe("PluginFrame", () => {
@@ -56,24 +62,18 @@ describe("PluginFrame", () => {
   it("refuses when the platform has Frames off: a placeholder, never an iframe", () => {
     vi.mocked(isPluginFrameAvailable).mockReturnValue(false);
     const { container, queryByText } = renderFrame(frameHost());
-    expect(
-      queryByText("Custom UI is not available on this platform.")
-    ).toBeInTheDocument();
+    expect(queryByText("Custom UI is not available on this platform.")).toBeInTheDocument();
     expect(container.querySelector("iframe")).toBeNull();
   });
 
   it("shows the reused custom-UI notice above the Frame", () => {
     const { getByText, container } = renderFrame(frameHost());
-    expect(
-      getByText("Custom UI: accessibility not verified by Maibuk")
-    ).toBeInTheDocument();
+    expect(getByText("Custom UI: accessibility not verified by Maibuk")).toBeInTheDocument();
     // The notice sits before the Frame's container in document order.
     const notice = getByText("Custom UI: accessibility not verified by Maibuk");
     const frame = container.querySelector("iframe");
     expect(frame).not.toBeNull();
-    expect(notice.compareDocumentPosition(frame as Node)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
+    expect(notice.compareDocumentPosition(frame as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("renders a named iframe that can only run scripts", () => {
@@ -171,5 +171,99 @@ describe("PluginFrame", () => {
     expect(document.activeElement).toBe(container.querySelector("button"));
     await user.tab();
     expect(document.activeElement).toBe(iframe);
+  });
+});
+
+// The live theme-token bridge (#454 unit U4, D3). jsdom does not apply the
+// stylesheet, so a real theme flip (which swaps values through `.dark`) is
+// simulated the way the app's own writers do it: the inline custom property on
+// the root changes, which is the attribute the hook observes.
+describe("PluginFrame theme tokens", () => {
+  function loadedFrame() {
+    document.documentElement.style.setProperty("--color-primary", "#101010");
+    const host = frameHost();
+    const rendered = renderFrame(host);
+    const iframe = rendered.container.querySelector("iframe") as HTMLIFrameElement;
+    const win = iframe.contentWindow as Window;
+    const postMessage = vi.spyOn(win, "postMessage").mockImplementation(() => {});
+    return { ...rendered, iframe, win, postMessage };
+  }
+
+  it("carries the current tokens on frame-load", async () => {
+    const { iframe, postMessage } = loadedFrame();
+
+    await act(async () => {
+      iframe.dispatchEvent(new Event("load"));
+    });
+
+    const [message] = postMessage.mock.calls[0] as unknown as [
+      { kind: string; tokens: Record<string, string> },
+    ];
+    expect(message.kind).toBe(FRAME_LOAD_MESSAGE.kind);
+    expect(message.tokens["--maibuk-color-primary"]).toBe("#101010");
+    expect(message.tokens["--maibuk-color-scheme"]).toBe("light");
+  });
+
+  it("posts nothing before load, then exactly one frame-theme per change", async () => {
+    const { iframe, postMessage } = loadedFrame();
+
+    // A change before the Frame is loaded is not posted.
+    await act(async () => {
+      document.documentElement.style.setProperty("--color-primary", "#202020");
+    });
+    expect(postMessage).not.toHaveBeenCalled();
+
+    // Load carries the changed value.
+    await act(async () => {
+      iframe.dispatchEvent(new Event("load"));
+    });
+    const afterLoad = postMessage.mock.calls.length;
+    expect(afterLoad).toBe(1);
+    const loadMessage = postMessage.mock.calls[0][0] as unknown as {
+      tokens: Record<string, string>;
+    };
+    expect(loadMessage.tokens["--maibuk-color-primary"]).toBe("#202020");
+
+    // A change after load posts exactly one frame-theme with the new value.
+    await act(async () => {
+      document.documentElement.style.setProperty("--color-primary", "#303030");
+    });
+    expect(postMessage.mock.calls.length).toBe(afterLoad + 1);
+    const themeMessage = postMessage.mock.calls[afterLoad][0] as unknown as {
+      kind: string;
+      tokens: Record<string, string>;
+    };
+    expect(themeMessage.kind).toBe(FRAME_THEME_MESSAGE.kind);
+    expect(themeMessage.tokens["--maibuk-color-primary"]).toBe("#303030");
+  });
+
+  it("does not post the same values twice", async () => {
+    const { iframe, postMessage } = loadedFrame();
+    await act(async () => {
+      iframe.dispatchEvent(new Event("load"));
+    });
+    const afterLoad = postMessage.mock.calls.length;
+
+    // Re-writing the same value is not a change.
+    await act(async () => {
+      document.documentElement.style.setProperty("--color-primary", "#101010");
+    });
+
+    expect(postMessage.mock.calls.length).toBe(afterLoad);
+  });
+
+  it("posts nothing after unmount", async () => {
+    const { iframe, postMessage, unmount } = loadedFrame();
+    await act(async () => {
+      iframe.dispatchEvent(new Event("load"));
+    });
+    const afterLoad = postMessage.mock.calls.length;
+
+    unmount();
+    await act(async () => {
+      document.documentElement.style.setProperty("--color-primary", "#404040");
+    });
+
+    expect(postMessage.mock.calls.length).toBe(afterLoad);
   });
 });
