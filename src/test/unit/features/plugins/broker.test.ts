@@ -6,6 +6,8 @@ import {
   THROTTLE_STOP_MS,
   createPluginBroker,
 } from "@/features/plugins/broker";
+import { pluginFetch } from "@/features/plugins/network";
+import { createMemoryPluginSecretStore } from "@/features/plugins/secret-store";
 import type {
   PluginApiHandlers,
   PluginBrokerOptions,
@@ -156,12 +158,30 @@ describe("Plugin Permission checks", () => {
   it("matches a wildcard host on subdomains only", async () => {
     const { client } = setup({ declared: ["network:*.example.com"] });
     await expect(client.network.fetch({ url: "https://a.b.example.com/" })).resolves.toBeTruthy();
+    await expect(client.network.fetch({ url: "https://api.example.com/" })).resolves.toBeTruthy();
     expect((await refusal(client.network.fetch({ url: "https://example.com/" }))).code).toBe(
       "permission-denied"
     );
     expect(
-      (await refusal(client.network.fetch({ url: "https://notexample.com/" }))).permission
-    ).toBe("network:notexample.com");
+      (await refusal(client.network.fetch({ url: "https://evil-example.com/" }))).permission
+    ).toBe("network:evil-example.com");
+    expect((await refusal(client.network.fetch({ url: "https://notexample.com/" }))).permission).toBe(
+      "network:notexample.com"
+    );
+  });
+
+  it("refuses a fetch to a declared network host that is not granted", async () => {
+    const { client } = setup({ declared: ["network:api.example.com"], grantedAtStart: [] });
+    const error = await refusal(client.network.fetch({ url: "https://api.example.com/" }));
+    expect(error.code).toBe("permission-denied");
+    expect(error.permission).toBe("network:api.example.com");
+  });
+
+  it("refuses a fetch to a host no Plugin Permission declares", async () => {
+    const { client } = setup({ declared: [] });
+    const error = await refusal(client.network.fetch({ url: "https://undeclared.example.com/" }));
+    expect(error.code).toBe("permission-denied");
+    expect(error.permission).toBe("network:undeclared.example.com");
   });
 
   it("refuses a fetch URL that is not http or https", async () => {
@@ -1056,6 +1076,50 @@ describe("streamed bodies", () => {
     const { received, ended } = stream(client);
     await expect(ended).resolves.toBeUndefined();
     expect(received).toEqual(["data: a\n\n", "data: b\n\n"]);
+  });
+
+  it("streams a network.fetch body larger than 64 KB through the real broker with no error", async () => {
+    const text = "line of text\n".repeat(8_000);
+    const fetch = async () => {
+      const bytes = new TextEncoder().encode(text);
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(bytes);
+            controller.close();
+          },
+        }),
+        { status: 200, statusText: "OK" }
+      );
+    };
+    const { client } = setup({
+      declared: ["network:api.example.com"],
+      handlers: {
+        "network.fetch": (params) =>
+          pluginFetch(params, {
+            pluginId: "fixture",
+            store: createMemoryPluginSecretStore(),
+            fetch,
+          }),
+      },
+    });
+
+    const received: string[] = [];
+    const ended = new Promise<PluginApiError | undefined>((resolve) => {
+      void client.network.fetch(
+        { url: "https://api.example.com/big" },
+        { onChunk: (chunk) => received.push(chunk.text), onEnd: resolve }
+      );
+    });
+
+    await expect(ended).resolves.toBeUndefined();
+    expect(received.length).toBeGreaterThan(1);
+    for (const chunk of received) {
+      expect(utf8ByteLength(JSON.stringify({ text: chunk }))).toBeLessThanOrEqual(
+        PLUGIN_STREAM_CHUNK_MAX_BYTES
+      );
+    }
+    expect(received.join("")).toBe(text);
   });
 
   it("ends the body with internal-error when the host's stream fails, hiding the detail", async () => {

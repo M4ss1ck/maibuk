@@ -7,7 +7,7 @@ import type { z } from "zod";
 import type { PLUGIN_API_EVENTS, PLUGIN_API_TABLE } from "@/features/plugins/api-table";
 import type { pluginManifestSchema } from "@/features/plugins/manifest-schema";
 import type { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-validate";
-import type { PluginDirectoryAdapter } from "@/lib/platform/types";
+import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
 
@@ -720,6 +720,13 @@ export interface TestHostOptions {
   secrets?: Map<string, string>;
   /** The clipboard text `clipboard.readText` serves; defaults to empty. */
   clipboard?: string;
+  /**
+   * The fetch `network.fetch` uses. Give one to test a Plugin against a fake
+   * server; without it the row refuses `not-implemented`, like any unwired row.
+   * The host still injects a `secretHeaders` value from `secrets` and never
+   * hands a value back to the Plugin.
+   */
+  fetch?: PluginFetchAdapter;
   /** UI-string overrides `renderPage` applies to the manifest before rendering. */
   locale?: PluginLocale;
   /**

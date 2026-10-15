@@ -382,7 +382,7 @@ export interface PluginApiMethods {
     input: Record<string, never>;
     output: string[];
   };
-  /** Fetches a URL on a granted host. A header can name a stored secret the host injects. */
+  /** Fetches a URL on a granted host. A header can name a stored secret the host injects. A redirect is refused, so a granted host cannot forward the request, or an injected secret, to another host. */
   "network.fetch": {
     input: {
       url: string;
@@ -565,7 +565,7 @@ export interface PluginApi {
     listNames(params?: PluginApiMethods["secrets.listNames"]["input"]): Promise<PluginApiMethods["secrets.listNames"]["output"]>;
   };
   network: {
-    /** Fetches a URL on a granted host. A header can name a stored secret the host injects. */
+    /** Fetches a URL on a granted host. A header can name a stored secret the host injects. A redirect is refused, so a granted host cannot forward the request, or an injected secret, to another host. */
     fetch(params: PluginApiMethods["network.fetch"]["input"], listener?: PluginStreamListener<PluginApiMethods["network.fetch"]["chunk"]>): Promise<PluginApiMethods["network.fetch"]["output"]>;
   };
   clipboard: {

@@ -14,6 +14,7 @@ Every method returns a promise. A refused call rejects with a `PluginApiError` w
 - `library-unavailable`
 - `not-implemented`
 - `message-too-large`
+- `network-error`
 - `internal-error`
 
 A `permission-denied` error also names the missing Plugin Permission in `permission`.
@@ -708,7 +709,7 @@ string[]
 
 ### `network.fetch`
 
-Fetches a URL on a granted host. A header can name a stored secret the host injects.
+Fetches a URL on a granted host. A header can name a stored secret the host injects. A redirect is refused, so a granted host cannot forward the request, or an injected secret, to another host.
 
 - Plugin Permission: `network:<host>` matching the URL's host
 - Effect: write

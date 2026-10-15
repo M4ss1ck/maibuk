@@ -32,6 +32,10 @@
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-image",
-    "deep-link:default"
+    "deep-link:default",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://*" }, { "url": "http://*" }]
+    }
   ]
 }

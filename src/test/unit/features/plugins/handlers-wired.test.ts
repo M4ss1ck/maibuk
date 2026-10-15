@@ -14,6 +14,7 @@ import { createTestDatabase } from "@/test/support/db-test-context";
 
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
 const { mockGetClipboard } = vi.hoisted(() => ({ mockGetClipboard: vi.fn() }));
+const { mockGetPluginFetch } = vi.hoisted(() => ({ mockGetPluginFetch: vi.fn() }));
 
 vi.mock("@/lib/db", () => ({ getDatabase: mockGetDatabase }));
 // The clipboard platform adapter is swapped for a fake, so the handlers are
@@ -21,6 +22,7 @@ vi.mock("@/lib/db", () => ({ getDatabase: mockGetDatabase }));
 vi.mock("@/lib/platform", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/platform")>()),
   getClipboard: mockGetClipboard,
+  getPluginFetch: mockGetPluginFetch,
 }));
 
 const { createPluginHandlers } = await import("@/features/plugins/handlers");
@@ -251,6 +253,56 @@ describe("createPluginHandlers(): secrets", () => {
       name: "PluginApiError",
       code: "internal-error",
     });
+  });
+});
+
+describe("createPluginHandlers(): network", () => {
+  let store: ReturnType<typeof createMemoryPluginSecretStore>;
+
+  beforeEach(() => {
+    store = createMemoryPluginSecretStore();
+    registerPluginSecretStore(store);
+    mockGetPluginFetch.mockReset();
+  });
+
+  afterEach(() => {
+    registerPluginSecretStore(null);
+  });
+
+  it("fetches through the platform adapter, injecting a declared secret header", async () => {
+    let received: Headers | undefined;
+    mockGetPluginFetch.mockResolvedValue(async (_url: string, init: RequestInit) => {
+      received = new Headers(init.headers);
+      return new Response("data: a\n\n", { status: 200, statusText: "OK" });
+    });
+    await store.set("tracer", "token", "sk-handler-secret");
+
+    const fetch = createPluginHandlers(PLUGIN_MANIFEST)["network.fetch"];
+    if (!fetch) throw new Error("network.fetch is not wired");
+    const stream = await fetch(
+      { url: "https://api.example.com/sse", secretHeaders: { authorization: "token" } },
+      context
+    );
+    if (!("body" in stream)) throw new Error("network.fetch did not stream");
+
+    expect(received?.get("authorization")).toBe("sk-handler-secret");
+    expect(stream.result).toMatchObject({ status: 200 });
+    const chunks: string[] = [];
+    for await (const chunk of stream.body) chunks.push(chunk.text);
+    expect(chunks.join("")).toBe("data: a\n\n");
+    expect(JSON.stringify(stream.result)).not.toContain("sk-handler-secret");
+    expect(chunks.join("")).not.toContain("sk-handler-secret");
+  });
+
+  it("refuses with internal-error when no secret store is registered", async () => {
+    registerPluginSecretStore(null);
+    const fetch = createPluginHandlers(PLUGIN_MANIFEST)["network.fetch"];
+    if (!fetch) throw new Error("network.fetch is not wired");
+    await expect(fetch({ url: "https://api.example.com/" }, context)).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "internal-error",
+    });
+    expect(mockGetPluginFetch).not.toHaveBeenCalled();
   });
 });
 

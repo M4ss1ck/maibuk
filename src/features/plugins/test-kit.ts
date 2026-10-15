@@ -20,10 +20,12 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { createPluginBroker } from "@/features/plugins/broker";
 import { applyPluginLocale } from "@/features/plugins/manifest-validate";
+import { pluginFetch } from "@/features/plugins/network";
 import { openPluginUiMount, type PluginUiMount } from "@/features/plugins/remote-ui/mount";
 import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import { PluginRemoteUiSurface } from "@/features/plugins/remote-ui/surface";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
+import type { PluginSecretStore } from "@/features/plugins/secret-store";
 import { PLUGIN_INIT_MESSAGE, type PluginUiMountKind } from "@/plugin-sdk/protocol";
 import type {
   PluginApiHandlers,
@@ -57,6 +59,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const canvases = [...(options.library?.canvases ?? [])];
   const storage = options.storage ?? new Map<string, unknown>();
   const secrets = options.secrets ?? new Map<string, string>();
+  const testFetch = options.fetch;
   let clipboard = options.clipboard ?? "";
   let language = options.language ?? "en";
   let libraryAvailable = true;
@@ -66,6 +69,34 @@ export function createTestHost(options: TestHostOptions): TestHost {
     ...options.manifest.permissions.optional,
   ] as PluginPermissionId[];
   let granted = new Set<PluginPermissionId>(options.permissions ?? declared);
+
+  // The `network.fetch` header injection reads through the same store seam the
+  // app registers, over the test's in-memory `secrets`, scoped to this Plugin.
+  const secretStore: PluginSecretStore = {
+    set: async (pluginId, name, value) => {
+      if (pluginId === options.manifest.id) secrets.set(name, value);
+    },
+    delete: async (pluginId, name) => {
+      if (pluginId === options.manifest.id) secrets.delete(name);
+    },
+    listNames: async (pluginId) =>
+      pluginId === options.manifest.id ? [...secrets.keys()].sort() : [],
+    read: async (pluginId, name) =>
+      pluginId === options.manifest.id ? (secrets.get(name) ?? null) : null,
+    clearPlugin: async (pluginId) => {
+      if (pluginId === options.manifest.id) secrets.clear();
+    },
+    clearAll: async () => {
+      secrets.clear();
+    },
+  };
+
+  const networkHandler: PluginApiHandlers = testFetch
+    ? {
+        "network.fetch": (params, { pluginId }) =>
+          pluginFetch(params, { pluginId, store: secretStore, fetch: testFetch }),
+      }
+    : {};
 
   const handlers: PluginApiHandlers = {
     "notifications.show": ({ variant, message }) => {
@@ -122,6 +153,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
       return null;
     },
     "secrets.listNames": () => [...secrets.keys()].sort(),
+    // Present only when the test supplied a fetch; otherwise the row refuses
+    // `not-implemented` exactly like any other unwired row.
+    ...networkHandler,
     "clipboard.readText": () => clipboard,
     "clipboard.writeText": ({ text }) => {
       clipboard = text;

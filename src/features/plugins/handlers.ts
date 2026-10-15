@@ -8,10 +8,11 @@
  * writes the Plugin's own Library namespace; `navigation.openEntity` opens an
  * entity through the app shell; `navigation.openPage` opens a Plugin page;
  * `language.get` reads the app language; `secrets.*` writes the calling
- * Plugin's credentials through the registered store, and `clipboard.*` reads
- * and writes the platform clipboard. The
- * broker already enforces each row's Plugin Permission, input schema, Library
- * availability, and rate limit, so a handler only does its work.
+ * Plugin's credentials through the registered store; `network.fetch` fetches
+ * on a granted host and streams the body, injecting a named secret into a
+ * declared header; and `clipboard.*` reads and writes the platform clipboard.
+ * The broker already enforces each row's Plugin Permission, input schema,
+ * Library availability, and rate limit, so a handler only does its work.
  */
 
 import { toast } from "@/components/ui/Toast";
@@ -38,6 +39,7 @@ import {
   updatePluginNote,
 } from "@/features/plugins/library";
 import { openPluginEntity, openPluginPage } from "@/features/plugins/navigation";
+import { pluginFetch } from "@/features/plugins/network";
 import { getPluginSecretStore, type PluginSecretStore } from "@/features/plugins/secret-store";
 import {
   deletePluginStorageValue,
@@ -46,7 +48,7 @@ import {
   setPluginStorageValue,
 } from "@/features/plugins/storage";
 import type { PluginApiHandlers, PluginManifest } from "@/features/plugins/types";
-import { getClipboard } from "@/lib/platform";
+import { getClipboard, getPluginFetch } from "@/lib/platform";
 import type { ClipboardAdapter } from "@/lib/platform/types";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
@@ -143,6 +145,12 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     },
     // Names only: no handler in this app ever returns a secret value to a Plugin.
     "secrets.listNames": async (_params, { pluginId }) => pluginSecretStore().listNames(pluginId),
+    "network.fetch": async (params, { pluginId }) =>
+      pluginFetch(params, {
+        pluginId,
+        store: pluginSecretStore(),
+        fetch: await getPluginFetch(),
+      }),
     "clipboard.readText": () => runClipboard("read", (clipboard) => clipboard.readText()),
     "clipboard.writeText": ({ text }) =>
       runClipboard("written", (clipboard) => clipboard.writeText(text)).then(() => null),
