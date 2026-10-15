@@ -3244,6 +3244,7 @@ export const ROWS: MatrixRow[] = [
     workflow:
       "Echoes' editor Commands in an open Chapter and Note: its Default Shortcut toggles nearby-echo highlights, which paint a labelled mark on each repeated word (both ends of a nearby echo); Next echo moves the caret and announces 'Echo N of M: <label>' and Previous echo wraps to the last, Next wraps back to Echo 1; with highlights off both announce 'Echo highlights are off' and move nothing; the editor toolbar button toggles the same highlights from the keyboard; asserts: the labelled marks, the announcement toast, the caret on the echoed word, the marks gone when off; persists: no",
     edges: [
+      "The toolbar button is a Toggle Button: it shows on while highlights are on and off once they are off",
       "Toggle echo highlights from its Default Shortcut paints a labelled mark on every repeated word, and toggling again clears them",
       "Next echo moves the caret and announces Echo N of M; Next wraps from the last back to Echo 1, is the Default Shortcut on the keyboard, and Previous wraps from the first to the last",
       "With highlights off, Next echo announces they are off and does not move the caret",
