@@ -26,11 +26,12 @@ import boundary, package, layout) and stops at the first failure.
 
 ## The import rule
 
-Your Plugin may import only `@maibuk/plugin-sdk` (and its public subpaths) or a
-relative file inside your own folder. The test kit `@maibuk/plugin-test-kit` is
-allowed in test files only. `pnpm check` refuses a private `@/...` import, an
-absolute path, another `@maibuk/` package, a relative path that leaves the
-folder, and a Node builtin in shipped source.
+Your Plugin may import `@maibuk/plugin-sdk` (and its public subpaths), a package
+you install in your own `node_modules`, or a relative file inside your own
+folder. `react` and `react-dom` resolve to Maibuk's own copy. The test kit
+`@maibuk/plugin-test-kit` is allowed in test files only. `pnpm check` refuses a
+private `@/...` import, an absolute path, another `@maibuk/` package, a relative
+path that leaves the folder, and a Node builtin in shipped source.
 
 ## Output
 
