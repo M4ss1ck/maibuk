@@ -10,6 +10,7 @@
 
 import type { Page } from "@playwright/test";
 import { caretText, pressUntilFocused, tabTo } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -81,7 +82,10 @@ test.use({
   builtInPlugins: [{ id: "maibuk-echoes" }],
 });
 
-test.describe("Echoes report @wf:plugins-echoes @no-webkit", () => {
+// Open Echoes and Find echoes carry no Default Shortcut: the report spec proves
+// them through the Command Palette, the sidebar entry, and the Chapter Item
+// Menu, so its `@sc:` tags name those Commands for the coverage guard.
+test.describe("Echoes report @wf:plugins-echoes @sc:plugin.maibuk-echoes.openEchoes @sc:plugin.maibuk-echoes.findEchoes @no-webkit", () => {
   test("opens from the Command Palette and shows rows for the Book", async ({ page }) => {
     await page.goto("/");
     await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });
@@ -264,8 +268,16 @@ test.describe("Echoes report @wf:plugins-echoes @no-webkit", () => {
     await tabTo(page, accordion, { max: 250 });
     await page.keyboard.press("Enter");
 
-    // Turn the repeated-phrase kind off.
-    const phraseSwitch = page.getByRole("switch", { name: "Repeated phrase" });
+    // The row now renders: its label and description stack above the Plugin's
+    // full-width body (captured before the assertions the fix targets).
+    const settingsRow = page.locator('[data-settings-row="plugin.maibuk-echoes.detection"]');
+    await expect(settingsRow).toBeVisible({ timeout: 20_000 });
+    await settingsRow.scrollIntoViewIfNeeded();
+    await capture(page, "plugin-settings-row");
+
+    // Turn the repeated-phrase kind off. The exact name picks the detection
+    // switch, not the editor-highlight "Highlight repeated phrases" one.
+    const phraseSwitch = page.getByRole("switch", { name: "Repeated phrase", exact: true });
     await expect(phraseSwitch).toBeVisible({ timeout: 15_000 });
     await tabTo(page, phraseSwitch);
     await page.keyboard.press("Space");

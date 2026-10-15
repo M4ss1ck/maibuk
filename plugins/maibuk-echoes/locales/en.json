@@ -3,7 +3,10 @@
   "description": "Points out words and phrases repeated closely enough, or often enough, that a reader would notice.",
   "commands.openEchoes.label": "Open Echoes",
   "commands.findEchoes.label": "Find echoes",
+  "commands.toggleHighlights.label": "Toggle echo highlights",
+  "commands.nextEcho.label": "Next echo",
+  "commands.previousEcho.label": "Previous echo",
   "pages.report.title": "Echoes",
   "settingsRows.detection.label": "Echo detection",
-  "settingsRows.detection.description": "Choose which echoes to look for and how close they count."
+  "settingsRows.detection.description": "Choose which echoes to look for, how close they count, and which the editor highlights."
 }

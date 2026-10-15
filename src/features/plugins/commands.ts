@@ -40,9 +40,14 @@ export interface PluginItemTarget {
 /**
  * A Plugin Command's runnable binding. A screen binding that also declares an
  * item Context carries `deferToOtherSource`, so a focused item row's binding for
- * the same Command runs it instead (#446).
+ * the same Command runs it instead (#446). A binding whose Command declares the
+ * `editor` Context carries `allowInInput`, so its Default Shortcut fires while
+ * the author types in the focused editor, like the core editor Commands.
  */
-export type PluginCommandBinding = RunnableBinding & { deferToOtherSource?: boolean };
+export type PluginCommandBinding = RunnableBinding & {
+  deferToOtherSource?: boolean;
+  allowInInput?: boolean;
+};
 
 export type PluginCommandOutcome = "ran" | "unavailable" | "cancelled" | "refused";
 
@@ -142,6 +147,11 @@ export function pluginCommandBindings(
         bindings.push({ id: command.id, enabled: true, onTrigger: () => navigate(route) });
         continue;
       }
+      // A Command in the `editor` Context is meant to run while the author is in
+      // the focused editor (Next/Previous echo, Toggle echo highlights), so its
+      // Default Shortcut must fire there too, not only when focus leaves the
+      // editor: the core editor Commands set the same flag (#451).
+      const allowInInput = command.contexts.includes("editor");
       const targets = command.targets;
       const hasTargets = (targets?.length ?? 0) > 0;
       if (hasTargets && !isItemOnlyContext(command.contexts)) {
@@ -156,6 +166,7 @@ export function pluginCommandBindings(
           id: command.id,
           enabled: ready && resolvePluginTarget(targets, readContext()) !== null,
           deferToOtherSource: hasItemContext,
+          allowInInput,
           onTrigger: () => {
             const target = resolvePluginTarget(targets, readContext());
             if (target === null) return;
@@ -167,6 +178,7 @@ export function pluginCommandBindings(
       bindings.push({
         id: command.id,
         enabled: ready && !hasTargets,
+        allowInInput,
         onTrigger: () => {
           void runPluginCommand(lifecycle, installed.pluginId, command.localId);
         },

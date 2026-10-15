@@ -36,12 +36,12 @@ describe("Plugin Library reads", () => {
        VALUES ('c1', 'b1', 'One', '<p>Hello <script>alert(1)</script><span onclick="x()">world</span></p>', 0, NULL, 2, 100, 2000)`
     );
     await testDb.execute(
-      `INSERT INTO notes (id, book_id, title, content, tags, word_count, "order", created_at, updated_at)
-       VALUES ('n1', 'b1', 'Note', '<p>Body</p>', '["a","b"]', 1, 0, 100, 3000)`
+      `INSERT INTO notes (id, book_id, title, content, tags, language, word_count, "order", created_at, updated_at)
+       VALUES ('n1', 'b1', 'Note', '<p>Body</p>', '["a","b"]', 'es', 1, 0, 100, 3000)`
     );
     await testDb.execute(
-      `INSERT INTO notes (id, book_id, title, content, tags, word_count, "order", created_at, updated_at)
-       VALUES ('n2', NULL, 'Unfiled', '', NULL, 0, 1, 100, 4000)`
+      `INSERT INTO notes (id, book_id, title, content, tags, language, word_count, "order", created_at, updated_at)
+       VALUES ('n2', NULL, 'Unfiled', '', NULL, NULL, 0, 1, 100, 4000)`
     );
     await testDb.execute(
       `INSERT INTO canvases (id, title, doc, pinned, "order", created_at, updated_at, content_updated_at)
@@ -87,13 +87,26 @@ describe("Plugin Library reads", () => {
   it("lists every Note or one Book's, and parses tags for a Note's content read", async () => {
     await expect(listPluginNotes()).resolves.toHaveLength(2);
     await expect(listPluginNotes("b1")).resolves.toEqual([
-      { id: "n1", bookId: "b1", title: "Note", tags: ["a", "b"], wordCount: 1, updatedAt: 3_000_000 },
+      {
+        id: "n1",
+        bookId: "b1",
+        title: "Note",
+        language: "es",
+        tags: ["a", "b"],
+        wordCount: 1,
+        updatedAt: 3_000_000,
+      },
     ]);
 
     const note = await getPluginNote("n1");
+    expect(note?.language).toBe("es");
     expect(note?.tags).toEqual(["a", "b"]);
     expect(note?.content).toEqual({ text: "Body", html: "<p>Body</p>" });
     expect(await getPluginNote("absent")).toBeNull();
+
+    // A Note with no language reads as null, so a reader can fall back to its Book.
+    const unfiled = (await listPluginNotes()).find((entry) => entry.id === "n2");
+    expect(unfiled?.language).toBeNull();
   });
 
   it("returns Canvas metadata with no Book association and no content", async () => {

@@ -30,7 +30,6 @@ import {
 } from "@/components/plugins/plugin-startup-error";
 import { PluginSurface } from "@/components/plugins/PluginSurface";
 import { SettingRow } from "@/components/settings/SettingRow";
-import { SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 import { formatPluginDataSize } from "@/components/settings/plugin-data-size";
 import { asPluginTranslate } from "@/components/settings/plugin-translate";
 import { Button } from "@/components/ui/Button";
@@ -374,7 +373,12 @@ export function PluginRow({
 
         <PluginSurface pluginId={entry.pluginId} surface="settings" />
         {rows.map((row) => (
-          <SettingRow key={row.id} id={row.id} className={SETTINGS_ROW_CLASS}>
+          // A Plugin Settings row holds the Plugin's own tall body (several
+          // controls, a heading, a list). It cannot sit in the label-left,
+          // control-right row shell the simple rows use: stacked like the
+          // Dictation model list and the Backups list, the label and description
+          // read at the top and the Plugin's controls take the full width below.
+          <SettingRow key={row.id} id={row.id} className="flex flex-col gap-2 py-3">
             <PluginSettingsRowBody pluginId={entry.pluginId} rowId={row.localId} />
           </SettingRow>
         ))}

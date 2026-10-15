@@ -1,4 +1,7 @@
 {
+  "build": {
+    "beforeDevCommand": "pnpm build:plugins --target android && pnpm dev"
+  },
   "app": {
     "windows": [
       {

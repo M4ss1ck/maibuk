@@ -78,12 +78,15 @@ export function Layout() {
     });
   }, [isMobileMenuOpen, setIsMobileMenuOpen]);
 
-  const navigationItems: Array<{
+  type NavItem = {
     id: string;
     label: string;
     icon: ReactNode;
     shortcut: CommandId;
-  }> = [
+  };
+  // Core destinations first; the pinned tail (Metrics, Settings) is appended
+  // after the Plugin entries below, so it always renders last.
+  const coreNavigationItems: NavItem[] = [
     {
       id: "/",
       label: t("common.projects"),
@@ -108,6 +111,8 @@ export function Layout() {
       icon: <Feather className="w-5 h-5 shrink-0" />,
       shortcut: "global.gotoEphemeral",
     },
+  ];
+  const pinnedNavigationItems: NavItem[] = [
     {
       id: "/metrics",
       label: t("common.metrics"),
@@ -122,88 +127,109 @@ export function Layout() {
     },
   ];
 
-  // Plugin sidebar entries follow Maibuk's own, ordered by the contributions
-  // registry (Plugin name, then id, then declared order). A sidebar entry is
-  // its page's navigation Command, so it shows the same Shortcut hint as any
-  // other navigation control.
-  const pluginNavItems: typeof navigationItems = pluginSidebarEntries.map((entry) => ({
+  // Plugin sidebar entries follow the core destinations, ordered by the
+  // contributions registry (Plugin name, then id, then declared order). A
+  // sidebar entry is its page's navigation Command, so it shows the same
+  // Shortcut hint as any other navigation control. Metrics and Settings come
+  // after them, whether or not a Plugin contributes an entry.
+  const pluginNavItems: NavItem[] = pluginSidebarEntries.map((entry) => ({
     id: entry.pageRoute,
     label: entry.title,
     icon: <PluginIcon icon={entry.icon} className="w-5 h-5 shrink-0" />,
     shortcut: entry.commandId,
   }));
-  const allNavItems = [...navigationItems, ...pluginNavItems];
+  // The core destinations and the Plugin entries share one scrolling list.
+  const scrollNavItems = [...coreNavigationItems, ...pluginNavItems];
+  const navDependencies = [i18n.resolvedLanguage, location.pathname, pluginSidebarEntries];
 
-  const sidebarContent = (mobile: boolean) => (
-    <>
-      <PluginSidebarSurfaces entries={mobile ? [] : pluginSidebarEntries} />
-      <div className="px-4 border-b border-border flex flex-row items-end gap-2 justify-start">
-        <MaibukLogo className="w-14 text-primary" />
-        <div className="text-3xl mb-1 font-semibold">{t("app.title")}</div>
-        {mobile && (
-          <button
-            type="button"
-            autoFocus
-            onClick={closeMobileMenu}
-            className="ml-auto p-2 hover:bg-muted rounded-lg transition-colors mb-1"
-            aria-label={t("nav.closeMenu")}
-          >
-            <CloseIcon className="w-5 h-5" />
-          </button>
-        )}
-      </div>
+  const sidebarContent = (mobile: boolean) => {
+    const renderNavItem = (item: NavItem) => {
+      const isCurrent = location.pathname === item.id;
+      return (
+        <ListBoxItem
+          id={item.id}
+          href={item.id}
+          textValue={item.label}
+          data-tutorial={mobile ? undefined : NAV_TUTORIAL_ANCHORS[item.id]}
+          onAction={closeMobileMenu}
+          className={({ isFocusVisible }) =>
+            `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+              isCurrent ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground"
+            } ${isFocusVisible ? "outline-2 outline-offset-2 outline-primary" : "outline-none"}`
+          }
+        >
+          {item.icon}
+          <span className="flex-1 truncate" aria-current={isCurrent ? "page" : undefined}>
+            {item.label}
+          </span>
+          <NavShortcut id={item.shortcut} className="ml-auto hidden lg:inline-flex" />
+        </ListBoxItem>
+      );
+    };
 
-      <nav
-        className="flex-1 p-2"
-        aria-label={t("nav.primary")}
-        data-tutorial={mobile ? undefined : "books.nav"}
-      >
-        <RouterProvider navigate={navigate} useHref={useHref}>
-          <ListBox
-            aria-label={t("nav.primary")}
-            items={allNavItems}
-            dependencies={[i18n.resolvedLanguage, location.pathname, pluginSidebarEntries]}
-            selectionMode="none"
-            className="flex flex-col gap-2"
-          >
-            {(item) => (
-              <ListBoxItem
-                id={item.id}
-                href={item.id}
-                textValue={item.label}
-                data-tutorial={mobile ? undefined : NAV_TUTORIAL_ANCHORS[item.id]}
-                onAction={closeMobileMenu}
-                className={({ isFocusVisible }) =>
-                  `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                    location.pathname === item.id
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-muted text-foreground"
-                  } ${isFocusVisible ? "outline-2 outline-offset-2 outline-primary" : "outline-none"}`
-                }
-              >
-                {item.icon}
-                <span
-                  className="flex-1 truncate"
-                  aria-current={location.pathname === item.id ? "page" : undefined}
-                >
-                  {item.label}
-                </span>
-                <NavShortcut id={item.shortcut} className="ml-auto hidden lg:inline-flex" />
-              </ListBoxItem>
-            )}
-          </ListBox>
-        </RouterProvider>
-      </nav>
-
-      <div className="p-4 border-t border-border space-y-3">
-        <ThemeToggle />
-        <div className="flex items-center justify-between gap-2">
-          <ReleaseBadge variant="sidebar" />
-          <CommandPaletteButton size="sm" />
+    return (
+      <>
+        <PluginSidebarSurfaces entries={mobile ? [] : pluginSidebarEntries} />
+        <div className="px-4 border-b border-border flex flex-row items-end gap-2 justify-start">
+          <MaibukLogo className="w-14 text-primary" />
+          <div className="text-3xl mb-1 font-semibold">{t("app.title")}</div>
+          {mobile && (
+            <button
+              type="button"
+              autoFocus
+              onClick={closeMobileMenu}
+              className="ml-auto p-2 hover:bg-muted rounded-lg transition-colors mb-1"
+              aria-label={t("nav.closeMenu")}
+            >
+              <CloseIcon className="w-5 h-5" />
+            </button>
+          )}
         </div>
-      </div>
-    </>
-  );
+
+        <nav
+          className="flex flex-1 flex-col min-h-0 p-2"
+          aria-label={t("nav.primary")}
+          data-tutorial={mobile ? undefined : "books.nav"}
+        >
+          <RouterProvider navigate={navigate} useHref={useHref}>
+            {/* Core destinations and Plugin entries: this list is the one that
+                scrolls when the seven-or-more rows outgrow the sidebar. It is a
+                single roving stop, so Tab and the arrows walk it in order. */}
+            <ListBox
+              aria-label={t("nav.primary")}
+              items={scrollNavItems}
+              dependencies={navDependencies}
+              selectionMode="none"
+              className="flex flex-col gap-2 min-h-0 shrink overflow-y-auto scrollbar-themed"
+            >
+              {renderNavItem}
+            </ListBox>
+            {/* Metrics and Settings: always the last two, pinned at the bottom of
+                the nav area so they stay visible above the theme switcher. A
+                separate list keeps them out of the scroll and keeps the arrows
+                in visual order (they never overlap the scrolling rows). */}
+            <ListBox
+              aria-label={t("nav.pinned")}
+              items={pinnedNavigationItems}
+              dependencies={navDependencies}
+              selectionMode="none"
+              className="flex flex-col gap-2 shrink-0 pt-2"
+            >
+              {renderNavItem}
+            </ListBox>
+          </RouterProvider>
+        </nav>
+
+        <div className="p-4 border-t border-border space-y-3">
+          <ThemeToggle />
+          <div className="flex items-center justify-between gap-2">
+            <ReleaseBadge variant="sidebar" />
+            <CommandPaletteButton size="sm" />
+          </div>
+        </div>
+      </>
+    );
+  };
 
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-background text-foreground">

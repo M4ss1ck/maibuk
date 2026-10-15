@@ -10,13 +10,19 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import "@/i18n";
 import { createTestHost } from "@/features/plugins/test-kit";
-import { createPluginClient } from "@/plugin-sdk";
+import { createPluginClient, type PluginClient } from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
-import { FIND_ECHOES, REPORT_PAGE_ID, SETTINGS_ROW_ID, startEchoes } from "./runtime";
-import { ECHOES_SETTINGS_KEY } from "./settings";
+import {
+  FIND_ECHOES,
+  REPORT_PAGE_ID,
+  SETTINGS_ROW_ID,
+  TOGGLE_HIGHLIGHTS,
+  startEchoes,
+} from "./runtime";
+import { ECHOES_EDITOR_KEY, ECHOES_SETTINGS_KEY } from "./settings";
 import { echoesManifest, settingsStorage, shiftTabTo, tabTo } from "./test-support";
 
 const BOOK = {
@@ -52,6 +58,9 @@ describe("Echoes runtime", () => {
       expect(host.manifest.contributes?.commands?.map((command) => command.id)).toEqual([
         "openEchoes",
         "findEchoes",
+        "toggleHighlights",
+        "nextEcho",
+        "previousEcho",
       ]);
     } finally {
       host.stop();
@@ -170,6 +179,30 @@ describe("Echoes detection settings", () => {
     }
   });
 
+  it("toggles the editor highlight kinds, nearby only by default", async () => {
+    const storage = settingsStorage();
+    const host = settingsHost(storage);
+    try {
+      const page = await host.renderSettingsRow(SETTINGS_ROW_ID);
+      const user = userEvent.setup();
+      await waitFor(() => expect(storage.has(ECHOES_EDITOR_KEY)).toBe(true));
+      expect(storage.get(ECHOES_EDITOR_KEY)).toEqual(["nearby"]);
+
+      const overused = screen.getByRole("switch", { name: "Highlight overused words" });
+      expect(overused).not.toBeChecked();
+      await tabTo(user, overused);
+      expect(overused).toHaveFocus();
+      await user.keyboard(" ");
+      await waitFor(() => expect(storage.get(ECHOES_EDITOR_KEY)).toEqual(["nearby", "overused"]));
+
+      await user.keyboard(" ");
+      await waitFor(() => expect(storage.get(ECHOES_EDITOR_KEY)).toEqual(["nearby"]));
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
   it("clamps an out-of-range nearby window when it is committed", async () => {
     const storage = settingsStorage();
     const host = settingsHost(storage);
@@ -217,9 +250,7 @@ describe("Echoes detection settings", () => {
       await shiftTabTo(user, remove);
       expect(remove).toHaveFocus();
       await user.keyboard("{Enter}");
-      await waitFor(() =>
-        expect(storage.get(ECHOES_SETTINGS_KEY)).toMatchObject({ ignore: [] })
-      );
+      await waitFor(() => expect(storage.get(ECHOES_SETTINGS_KEY)).toMatchObject({ ignore: [] }));
 
       page.unmount();
     } finally {
@@ -292,6 +323,98 @@ describe("Echoes detection settings", () => {
       expect(screen.getByRole("switch", { name: "Nearby echo" })).toBeChecked();
       expect(screen.getByRole("switch", { name: "Match word forms" })).toBeChecked();
       expect(screen.getByRole("textbox", { name: "Nearby window" })).toHaveValue("50");
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+/**
+ * The Settings row and the editor controller share one runtime (#451): turning
+ * an editor highlight kind on or off must repaint an open editor at once, not
+ * wait for its next edit. The editor API is not part of `createTestHost`, so the
+ * Plugin client's `editor` namespace is replaced with a local fake; the
+ * controller's Command still runs through the real broker, and the row renders
+ * through the real Remote UI renderer.
+ */
+describe("Echoes editor highlight kinds from Settings", () => {
+  /** A Chapter whose text repeats a word enough times to be overused. */
+  const ECHO_CHAPTER = {
+    ...CHAPTER,
+    wordCount: 5,
+    content: {
+      text: "harbor harbor harbor harbor harbor",
+      html: "<p>harbor harbor harbor harbor harbor</p>",
+    },
+  };
+
+  /** A local stand-in for the host editor API, recording each paint. */
+  function fakeEditor(text: string) {
+    const entity = { kind: "chapter" as const, id: CHAPTER.id };
+    const highlights: Array<{ kind: string; ranges: Array<{ from: number; to: number }> }> = [];
+    return {
+      highlights,
+      editor: {
+        async getContent() {
+          return { status: "ok" as const, entity, content: { text, html: `<p>${text}</p>` } };
+        },
+        async getSelection() {
+          return { status: "ok" as const, entity, range: { from: 0, to: 0 }, text: "" };
+        },
+        async reveal() {
+          return { status: "applied" as const };
+        },
+        async setHighlights(params: { kind: string; ranges: Array<{ from: number; to: number }> }) {
+          highlights.push({
+            kind: params.kind,
+            ranges: params.ranges.map((range) => ({ ...range })),
+          });
+          return { status: "applied" as const };
+        },
+      },
+    };
+  }
+
+  it("repaints an open editor the moment a kind is turned on", async () => {
+    const storage = settingsStorage();
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: { books: [BOOK], chapters: [ECHO_CHAPTER] },
+      storage,
+    });
+    const fake = fakeEditor(ECHO_CHAPTER.content.text);
+    const client = {
+      ...createPluginClient(host.port),
+      editor: fake.editor,
+    } as unknown as PluginClient;
+    startEchoes(client, servePluginUi);
+    try {
+      // Turn highlights on with the nearby-only default: no overused ranges yet.
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_HIGHLIGHTS });
+      expect(
+        fake.highlights.some((call) => call.kind === "repetition" && call.ranges.length > 0)
+      ).toBe(true);
+      expect(fake.highlights.some((call) => call.kind === "info" && call.ranges.length > 0)).toBe(
+        false
+      );
+
+      const page = await host.renderSettingsRow(SETTINGS_ROW_ID);
+      const user = userEvent.setup();
+      await waitFor(() => expect(storage.has(ECHOES_EDITOR_KEY)).toBe(true));
+
+      const overused = screen.getByRole("switch", { name: "Highlight overused words" });
+      await tabTo(user, overused);
+      await user.keyboard(" ");
+      await waitFor(() => expect(storage.get(ECHOES_EDITOR_KEY)).toEqual(["nearby", "overused"]));
+
+      // The controller recomputed without an edit: the five overused ranges are
+      // now painted.
+      await waitFor(() =>
+        expect(
+          fake.highlights.some((call) => call.kind === "info" && call.ranges.length === 5)
+        ).toBe(true)
+      );
       page.unmount();
     } finally {
       host.stop();

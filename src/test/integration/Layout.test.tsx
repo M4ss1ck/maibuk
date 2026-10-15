@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -13,6 +13,7 @@ const translations = {
     "common.projects": "Projects",
     "common.notes": "Notes",
     "common.canvas": "Canvas",
+    "common.ephemeral": "Ephemeral",
     "common.metrics": "Metrics",
     "common.settings": "Settings",
     "nav.primary": "Primary navigation",
@@ -30,6 +31,7 @@ const translations = {
     "common.projects": "Proyectos",
     "common.notes": "Notas",
     "common.canvas": "Lienzos",
+    "common.ephemeral": "Efímero",
     "common.metrics": "Métricas",
     "common.settings": "Configuración",
     "nav.primary": "Navegación principal",
@@ -68,10 +70,64 @@ vi.mock("react-i18next", () => ({
 
 import { Layout } from "@/components/Layout";
 import { APP_VERSION } from "@/constants";
+import {
+  notifyContributionsChange,
+  resetPluginContributionsForTests,
+  setRegisteredContributions,
+} from "@/features/plugins/contributions-registry";
 import { useReleaseStore } from "@/features/releases/store";
 import { useThemeStore } from "@/features/theme/store";
 import { useSettingsStore } from "@/features/settings/store";
 import { runTopBackDismiss } from "@/lib/platform/backDismiss";
+import { registerPluginCommands } from "@/lib/shortcut-registry";
+
+let unregisterPluginCommands: (() => void) | null = null;
+
+/** Registers one Plugin page with a sidebar entry, as a launch scan would. */
+function registerPluginSidebarEntry({ entryTitle = "Report" } = {}) {
+  unregisterPluginCommands?.();
+  unregisterPluginCommands = registerPluginCommands("sample", {
+    defaultLanguage: "en",
+    commands: [{ id: "report", label: entryTitle, contexts: ["global"], navigates: true }],
+    pages: ["report"],
+  });
+  setRegisteredContributions("sample", {
+    pluginId: "sample",
+    displayName: "Sample",
+    commands: [
+      {
+        id: "plugin.sample.report",
+        pluginId: "sample",
+        localId: "report",
+        contexts: ["plugin.sample.report"],
+        pageId: "report",
+      },
+    ],
+    pages: [
+      {
+        pluginId: "sample",
+        displayName: "Sample",
+        localId: "report",
+        id: "plugin.sample.report",
+        title: entryTitle,
+        commandId: "plugin.sample.report",
+      },
+    ],
+    sidebarEntries: [
+      {
+        pluginId: "sample",
+        displayName: "Sample",
+        pageId: "report",
+        pageRoute: "/plugin/sample/report",
+        title: entryTitle,
+        commandId: "plugin.sample.report",
+      },
+    ],
+    itemMenuEntries: [],
+    token: Symbol("sample"),
+  });
+  notifyContributionsChange();
+}
 
 function RouteFixture() {
   const { pathname } = useLocation();
@@ -91,6 +147,12 @@ describe("Layout", () => {
     useThemeStore.setState({ theme: "system" });
     useSettingsStore.setState({ mainSidebarWidth: 280 });
     document.documentElement.classList.remove("dark");
+  });
+
+  afterEach(() => {
+    resetPluginContributionsForTests();
+    unregisterPluginCommands?.();
+    unregisterPluginCommands = null;
   });
 
   function renderLayout(route = "/") {
@@ -147,25 +209,101 @@ describe("Layout", () => {
     );
   });
 
-  it("moves link focus with ArrowUp, ArrowDown, Home, and End", async () => {
+  it("moves link focus inside the scrolling list and onto the pinned pair with Tab", async () => {
     const user = userEvent.setup();
     renderLayout();
     const projects = getNavigationLink("Projects");
     const notes = getNavigationLink("Notes");
+    const canvas = getNavigationLink("Canvas");
+    const ephemeral = getNavigationLink("Ephemeral");
+    const metrics = getNavigationLink("Metrics");
     const settings = getNavigationLink("Settings");
 
+    // The scrolling list is one roving stop: arrows walk it in order, Home and
+    // End land on its ends.
     projects.focus();
     await user.keyboard("{ArrowDown}");
     expect(notes).toHaveFocus();
-
     await user.keyboard("{End}");
-    expect(settings).toHaveFocus();
-
+    expect(ephemeral).toHaveFocus();
     await user.keyboard("{ArrowUp}");
-    expect(getNavigationLink("Metrics")).toHaveFocus();
-
+    expect(canvas).toHaveFocus();
     await user.keyboard("{Home}");
     expect(projects).toHaveFocus();
+
+    // Tab leaves the scrolling list for the pinned pair, whose arrows walk it too.
+    await user.tab();
+    expect(metrics).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(settings).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(metrics).toHaveFocus();
+  });
+
+  it("orders core destinations, a Plugin entry, then the pinned Metrics and Settings", () => {
+    registerPluginSidebarEntry();
+    renderLayout();
+
+    const hrefs = Array.from(getNavigation().querySelectorAll("a[href]")).map((el) =>
+      el.getAttribute("href")
+    );
+    expect(hrefs).toEqual([
+      "/",
+      "/notes",
+      "/canvas",
+      "/ephemeral",
+      "/plugin/sample/report",
+      "/metrics",
+      "/settings",
+    ]);
+  });
+
+  it("keeps the Plugin entry in the scrolling list and Metrics and Settings after it", async () => {
+    const user = userEvent.setup();
+    registerPluginSidebarEntry();
+    renderLayout();
+    const projects = getNavigationLink("Projects");
+    const report = getNavigationLink("Report");
+    const metrics = getNavigationLink("Metrics");
+    const settings = getNavigationLink("Settings");
+
+    // The scrolling list ends at the Plugin entry; arrows walk it in order.
+    projects.focus();
+    for (const name of ["Notes", "Canvas", "Ephemeral", "Report"]) {
+      await user.keyboard("{ArrowDown}");
+      expect(getNavigationLink(name)).toHaveFocus();
+    }
+    await user.keyboard("{End}");
+    expect(report).toHaveFocus();
+
+    // Tab reaches the pinned pair, whose arrows walk Metrics then Settings.
+    await user.tab();
+    expect(metrics).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(settings).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(metrics).toHaveFocus();
+  });
+
+  it("keeps the core, Plugin, Metrics, Settings order in the mobile drawer", async () => {
+    const user = userEvent.setup();
+    registerPluginSidebarEntry();
+    renderLayout();
+
+    await user.click(screen.getByRole("button", { name: "Open navigation menu" }));
+    const dialog = await screen.findByRole("dialog", { name: "Primary navigation" });
+    const hrefs = Array.from(dialog.querySelectorAll("a[href]")).map((el) =>
+      el.getAttribute("href")
+    );
+    expect(hrefs).toEqual([
+      "/",
+      "/notes",
+      "/canvas",
+      "/ephemeral",
+      "/plugin/sample/report",
+      "/metrics",
+      "/settings",
+    ]);
   });
 
   it("uses localized typeahead and Enter for client-side routing", async () => {
@@ -176,7 +314,10 @@ describe("Layout", () => {
     const projects = within(nav).getByText("Proyectos").closest("a") as HTMLAnchorElement;
     const settings = within(nav).getByText("Configuración").closest("a") as HTMLAnchorElement;
 
+    // Typeahead works within each nav list; reach the pinned list (Métricas,
+    // Configuración) with Tab first.
     projects.focus();
+    await user.tab();
     await user.keyboard("conf");
     expect(settings).toHaveFocus();
 

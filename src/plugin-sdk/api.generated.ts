@@ -123,6 +123,7 @@ export interface PluginApiMethods {
       id: string;
       bookId: string | null;
       title: string;
+      language: string | null;
       tags: string[];
       wordCount: number;
       /** Milliseconds since the Unix epoch. */
@@ -138,6 +139,7 @@ export interface PluginApiMethods {
       id: string;
       bookId: string | null;
       title: string;
+      language: string | null;
       tags: string[];
       wordCount: number;
       /** Milliseconds since the Unix epoch. */
@@ -273,7 +275,7 @@ export interface PluginApiMethods {
       status: "no-target";
     };
   };
-  /** Replaces this Plugin's whole set of highlights in the focused editor. Never changes text. */
+  /** Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text. */
   "editor.setHighlights": {
     input: {
       kind: "info" | "warning" | "repetition";
@@ -412,7 +414,7 @@ export interface PluginApiMethods {
     };
     output: null;
   };
-  /** Shows a toast naming this Plugin. At most one every 5 seconds. */
+  /** Shows a toast naming this Plugin. At most one every 5 seconds, except while answering the author's own Command run. */
   "notifications.show": {
     input: {
       variant: "info" | "success" | "warning" | "error";
@@ -537,7 +539,7 @@ export interface PluginApi {
     getSelection(params?: PluginApiMethods["editor.getSelection"]["input"]): Promise<PluginApiMethods["editor.getSelection"]["output"]>;
     /** Scrolls the focused editor to a range and places the caret there. */
     reveal(params: PluginApiMethods["editor.reveal"]["input"]): Promise<PluginApiMethods["editor.reveal"]["output"]>;
-    /** Replaces this Plugin's whole set of highlights in the focused editor. Never changes text. */
+    /** Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text. */
     setHighlights(params: PluginApiMethods["editor.setHighlights"]["input"]): Promise<PluginApiMethods["editor.setHighlights"]["output"]>;
     /** Inserts text or an HTML fragment at the caret as one undoable step. */
     insert(params: PluginApiMethods["editor.insert"]["input"]): Promise<PluginApiMethods["editor.insert"]["output"]>;
@@ -573,7 +575,7 @@ export interface PluginApi {
     writeText(params: PluginApiMethods["clipboard.writeText"]["input"]): Promise<PluginApiMethods["clipboard.writeText"]["output"]>;
   };
   notifications: {
-    /** Shows a toast naming this Plugin. At most one every 5 seconds. */
+    /** Shows a toast naming this Plugin. At most one every 5 seconds, except while answering the author's own Command run. */
     show(params: PluginApiMethods["notifications.show"]["input"]): Promise<PluginApiMethods["notifications.show"]["output"]>;
   };
   storage: {

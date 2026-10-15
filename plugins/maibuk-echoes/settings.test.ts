@@ -7,13 +7,20 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_ECHO_SETTINGS, NEARBY_WINDOW_MAX, NEARBY_WINDOW_MIN } from "./find-echoes";
 import {
+  DEFAULT_EDITOR_KINDS,
+  ECHOES_EDITOR_KEY,
   ECHOES_SETTINGS_KEY,
   type EchoesStorage,
   clampNearbyWindow,
   parseEchoesSettings,
+  parseEditorKinds,
   readEchoesSettings,
+  readEditorKinds,
+  toEditorFindOptions,
   toFindEchoesOptions,
+  toggledEditorKind,
   writeEchoesSettings,
+  writeEditorKinds,
 } from "./settings";
 
 /** A storage double over one Map, shaped like the SDK client's `storage`. */
@@ -78,6 +85,26 @@ describe("Echoes settings", () => {
     expect(mapped.ignore).toEqual(["a"]);
   });
 
+  it("turns on only the kinds the editor paints (#451, decision 7)", () => {
+    const stored = { ...DEFAULT_ECHO_SETTINGS, nearby: false, overused: false, phrases: false };
+    const nearbyOnly = toEditorFindOptions(stored, ["nearby"]);
+    expect(nearbyOnly).toMatchObject({ nearby: true, overused: false, phrases: false });
+
+    const overusedAndPhrase = toEditorFindOptions(stored, ["overused", "phrase"]);
+    expect(overusedAndPhrase).toMatchObject({ nearby: false, overused: true, phrases: true });
+
+    // Detection's stemming, window, and ignore list still apply.
+    const withStemming = toEditorFindOptions(
+      { ...stored, stemming: false, nearbyWindow: 120, ignore: ["harbor"] },
+      ["nearby"]
+    );
+    expect(withStemming).toMatchObject({
+      stemming: false,
+      nearbyWindow: 120,
+      ignore: ["harbor"],
+    });
+  });
+
   it("round-trips through the storage API under the one key", async () => {
     const data = new Map<string, unknown>();
     const client = fakeStorage(data);
@@ -113,5 +140,69 @@ describe("Echoes settings", () => {
       },
     };
     expect(await readEchoesSettings(client)).toEqual(DEFAULT_ECHO_SETTINGS);
+  });
+});
+
+/**
+ * The editor highlight kinds (#451, unit 2): nearby only until the author turns
+ * the others on, stored under their own key so they never inherit the detection
+ * switches' on-by-default.
+ */
+describe("Echoes editor kinds", () => {
+  it("defaults to nearby only for a missing or malformed value", () => {
+    expect(DEFAULT_EDITOR_KINDS).toEqual(["nearby"]);
+    expect(parseEditorKinds(null)).toEqual(["nearby"]);
+    expect(parseEditorKinds(undefined)).toEqual(["nearby"]);
+    expect(parseEditorKinds("nearby")).toEqual(["nearby"]);
+    expect(parseEditorKinds(42)).toEqual(["nearby"]);
+    expect(parseEditorKinds({ nearby: true })).toEqual(["nearby"]);
+  });
+
+  it("keeps the known kinds, drops unknown ones, and orders them", () => {
+    expect(parseEditorKinds(["phrase", "nearby", "phrase", "nope", 7])).toEqual([
+      "nearby",
+      "phrase",
+    ]);
+    expect(parseEditorKinds(["overused"])).toEqual(["overused"]);
+  });
+
+  it("keeps an explicit empty list as the author turning every kind off", () => {
+    expect(parseEditorKinds([])).toEqual([]);
+  });
+
+  it("round-trips through storage under its own key", async () => {
+    const data = new Map<string, unknown>();
+    const client = fakeStorage(data);
+
+    await writeEditorKinds(client, ["nearby", "overused"]);
+
+    expect(data.get(ECHOES_EDITOR_KEY)).toEqual(["nearby", "overused"]);
+    expect(await readEditorKinds(client)).toEqual(["nearby", "overused"]);
+  });
+
+  it("reads nearby only when storage refuses the read", async () => {
+    const client: EchoesStorage = {
+      storage: {
+        async get() {
+          throw new Error("refused");
+        },
+        async set() {
+          return null;
+        },
+        async delete() {
+          return null;
+        },
+        async keys() {
+          return [];
+        },
+      },
+    };
+    expect(await readEditorKinds(client)).toEqual(["nearby"]);
+  });
+
+  it("toggles one kind without disturbing the others, in order", () => {
+    expect(toggledEditorKind(["nearby"], "overused")).toEqual(["nearby", "overused"]);
+    expect(toggledEditorKind(["nearby", "overused"], "overused")).toEqual(["nearby"]);
+    expect(toggledEditorKind(["overused", "nearby"], "overused")).toEqual(["nearby"]);
   });
 });

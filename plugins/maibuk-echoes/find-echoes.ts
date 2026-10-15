@@ -73,6 +73,19 @@ function matchKey(token: Token, analyzer: Analyzer, ignore: IgnoreIndex): string
   return key;
 }
 
+/**
+ * Each token's match key, or null when it is short, a stop word, or ignored.
+ * Nearby and overused both group by this key, so it is computed once per token
+ * instead of once per detection pass (#451).
+ */
+function matchKeys(
+  chapters: readonly Token[][],
+  analyzer: Analyzer,
+  ignore: IgnoreIndex
+): (string | null)[][] {
+  return chapters.map((tokens) => tokens.map((token) => matchKey(token, analyzer, ignore)));
+}
+
 interface GroupedToken {
   index: number; // token index in the Chapter, counting every token
   occurrence: EchoOccurrence;
@@ -95,18 +108,18 @@ function collectChain(
 
 function nearbyEchoes(
   chapters: readonly Token[][],
-  analyzer: Analyzer,
-  ignore: IgnoreIndex,
+  keys: readonly (string | null)[][],
   window: number
 ): Echo[] {
   const echoes: Echo[] = [];
   for (let chapter = 0; chapter < chapters.length; chapter++) {
     const tokens = chapters[chapter];
+    const chapterKeys = keys[chapter];
     const byKey = new Map<string, GroupedToken[]>();
     for (let index = 0; index < tokens.length; index++) {
-      const token = tokens[index];
-      const key = matchKey(token, analyzer, ignore);
+      const key = chapterKeys[index];
       if (key === null) continue;
+      const token = tokens[index];
       const occurrence: EchoOccurrence = { chapter, from: token.from, to: token.to };
       const group = byKey.get(key);
       if (group === undefined) byKey.set(key, [{ index, occurrence }]);
@@ -126,19 +139,17 @@ function nearbyEchoes(
   return sortByFirstOccurrence(echoes);
 }
 
-function overusedEchoes(
-  chapters: readonly Token[][],
-  analyzer: Analyzer,
-  ignore: IgnoreIndex
-): Echo[] {
+function overusedEchoes(chapters: readonly Token[][], keys: readonly (string | null)[][]): Echo[] {
   const groups = new Map<string, EchoOccurrence[]>();
   let totalWords = 0;
   for (let chapter = 0; chapter < chapters.length; chapter++) {
     const tokens = chapters[chapter];
+    const chapterKeys = keys[chapter];
     totalWords += tokens.length;
-    for (const token of tokens) {
-      const key = matchKey(token, analyzer, ignore);
+    for (let index = 0; index < tokens.length; index++) {
+      const key = chapterKeys[index];
       if (key === null) continue;
+      const token = tokens[index];
       const occurrence: EchoOccurrence = { chapter, from: token.from, to: token.to };
       const group = groups.get(key);
       if (group === undefined) groups.set(key, [occurrence]);
@@ -302,12 +313,32 @@ function clampWindow(window: number): number {
   return window;
 }
 
+/** `findEchoes` output plus the tokenization it ran, for callers that reuse it. */
+export interface EchoDetection {
+  echoes: Echo[];
+  /** One token list per Chapter, in the same order as the input. */
+  chapters: Token[][];
+}
+
 /** A string is one Chapter (Chapter scope). An array is a Book, one string per Chapter (Book scope). */
 export function findEchoes(
   text: string | readonly string[],
   language: string,
   settings: EchoSettings
 ): Echo[] {
+  return findEchoesWithTokens(text, language, settings).echoes;
+}
+
+/**
+ * `findEchoes` plus the tokenization behind it, so a caller that already needs
+ * the tokens (the highlight ranges' word-distance lookup) never retokenizes the
+ * Chapter (#451). The `echoes` result is identical to `findEchoes`.
+ */
+export function findEchoesWithTokens(
+  text: string | readonly string[],
+  language: string,
+  settings: EchoSettings
+): EchoDetection {
   const analyzer = createAnalyzer(language, { stemming: settings.stemming });
   const chapterTexts = typeof text === "string" ? [text] : text;
   const chapters = chapterTexts.map((chapter) => tokenize(chapter));
@@ -315,11 +346,13 @@ export function findEchoes(
   const window = clampWindow(settings.nearbyWindow);
   const phraseThreshold =
     typeof text === "string" ? PHRASE_CHAPTER_MIN_COUNT : PHRASE_BOOK_MIN_COUNT;
+  const keys =
+    settings.nearby || settings.overused ? matchKeys(chapters, analyzer, ignore) : [];
 
   // concat, not push(...): a Book can yield more Echoes than a call accepts arguments.
-  return [
-    settings.nearby ? nearbyEchoes(chapters, analyzer, ignore, window) : [],
-    settings.overused ? overusedEchoes(chapters, analyzer, ignore) : [],
+  const echoes = [
+    settings.nearby ? nearbyEchoes(chapters, keys, window) : [],
+    settings.overused ? overusedEchoes(chapters, keys) : [],
     settings.phrases
       ? phraseEchoes(
           chapterTexts,
@@ -330,4 +363,5 @@ export function findEchoes(
         )
       : [],
   ].flat();
+  return { echoes, chapters };
 }

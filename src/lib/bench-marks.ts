@@ -14,3 +14,12 @@
 export function benchMarksEnabled(): boolean {
   return import.meta.env.DEV || import.meta.env.VITE_PLUGIN_BENCH === "1";
 }
+
+/**
+ * The User Timing measure name one Plugin's highlight updates are recorded
+ * under (#451). One source, shared by `editor-host.ts` (which emits it) and the
+ * `bench:plugins` spec (which reads it), so the two never drift.
+ */
+export function pluginHighlightsMeasureName(pluginId: string): string {
+  return `plugin.highlights:${pluginId}`;
+}

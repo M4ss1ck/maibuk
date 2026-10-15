@@ -441,8 +441,10 @@ and each carries that `skip` reason. `plugin-remote-ui` wheels the Plugin's
 keystrokes: keystroke echo belongs to `bench:plugins`, not here.
 `typing-with-highlights` types the 120-character burst in `perfLongChapter`
 while the Plugin paints about 500 highlight ranges, judged like `typing` (each
-keystroke's frame starts within one refresh interval). A scenario for Echoes
-arrives with [#451](https://github.com/M4ss1ck/maibuk/issues/451).
+keystroke's frame starts within one refresh interval). `typing-with-echoes`
+types the same burst with spell check and Echoes highlights on (toggled with
+its Default Shortcut), so Echoes' at most 2,000 painted ranges are judged the
+same way.
 
 **Comparing runs.** The report records the source, engine and version, mode
 (headed, new-headless, headless, device), device, refresh rate, CPU
@@ -566,6 +568,14 @@ discards two warm-up loads, so a cold first start never decides the delta, and
 echo/burst discard two warm-up keystrokes, so a cold first Remote UI update
 never decides p95. Every row is a nearest-rank p95 (sort, index
 `ceil(0.95n) - 1`), except the two launch deltas, which compare medians.
+
+**Echoes rows (Chromium only).** On `perfLongChapter` with Echoes highlights
+on: `echoHighlightUpdate` is the host main-thread time per `setHighlights`
+apply (budget 10 ms), `echoWorkerRecompute` is Echoes' own detection and range
+building in its Worker (50 ms), and `echoRefreshLatency` runs from the last
+keystroke to the highlight update (350 ms: spell check's 300 ms debounce plus
+Worker time). The host marks are gated by `benchMarksEnabled()`; Echoes keeps
+a bounded ring of its recompute times for the bench to read.
 
 ```bash
 pnpm bench:plugins                                 # both engines, chromium first

@@ -25,6 +25,7 @@ import {
   type HostRequestHandler,
   type PluginClient,
 } from "@/plugin-sdk";
+import { createEchoEditor, type EchoEditorController } from "./editor";
 import {
   DEFAULT_ECHO_SETTINGS,
   type EchoKind,
@@ -46,7 +47,15 @@ import {
   type ReportScope,
   type ReportSource,
 } from "./report";
-import { clampNearbyWindow, readEchoesSettings, writeEchoesSettings } from "./settings";
+import {
+  clampNearbyWindow,
+  DEFAULT_EDITOR_KINDS,
+  readEchoesSettings,
+  readEditorKinds,
+  toggledEditorKind,
+  writeEchoesSettings,
+  writeEditorKinds,
+} from "./settings";
 
 /** The report page id, exactly as the manifest declares it. */
 export const REPORT_PAGE_ID = "report";
@@ -57,6 +66,9 @@ export const SETTINGS_ROW_ID = "detection";
 /** The Command-local ids the manifest declares. */
 export const OPEN_ECHOES = "openEchoes";
 export const FIND_ECHOES = "findEchoes";
+export const TOGGLE_HIGHLIGHTS = "toggleHighlights";
+export const NEXT_ECHO = "nextEcho";
+export const PREVIOUS_ECHO = "previousEcho";
 
 /** What the report is scoped to: a Book, or one Chapter inside it. */
 export interface EchoScope {
@@ -92,21 +104,23 @@ interface EchoRuntime {
 /** Wires the client to the report page, the Settings row, and the Command handlers. */
 export function startEchoes(client: PluginClient, serve: EchoServe): void {
   const runtime: EchoRuntime = { scope: null };
+  const editor = createEchoEditor(client);
   serve(client, {
     pages: { [REPORT_PAGE_ID]: createReportPage(client, runtime) },
-    settingsRows: { [SETTINGS_ROW_ID]: createDetectionSettings(client) },
-    onHostRequest: (method, params) => handleHostRequest(client, runtime, method, params),
+    settingsRows: { [SETTINGS_ROW_ID]: createDetectionSettings(client, editor) },
+    onHostRequest: (method, params) => handleHostRequest(client, runtime, editor, method, params),
   });
 }
 
 function handleHostRequest(
   client: PluginClient,
   runtime: EchoRuntime,
+  editor: EchoEditorController,
   method: string,
   params: unknown
 ): unknown {
   if (method === "health.check") return "pong";
-  if (method === PLUGIN_COMMAND_RUN_REQUEST) return runEchoCommand(client, runtime, params);
+  if (method === PLUGIN_COMMAND_RUN_REQUEST) return runEchoCommand(client, runtime, editor, params);
   throw new Error(`No handler for ${method}`);
 }
 
@@ -114,14 +128,28 @@ function handleHostRequest(
  * Answers one Command run. `Find echoes` stores the scope from the item the
  * host captured, then opens the report; `Open Echoes` is the report page's
  * navigating Command, so the host normally navigates without a `command.run`,
- * and answering it here keeps the page reachable the other way.
+ * and answering it here keeps the page reachable the other way. The three
+ * editor Commands go straight to the editor controller.
  */
 async function runEchoCommand(
   client: PluginClient,
   runtime: EchoRuntime,
+  editor: EchoEditorController,
   params: unknown
 ): Promise<null> {
   const { id, target } = (params ?? {}) as { id?: string; target?: EchoCommandTarget };
+  if (id === TOGGLE_HIGHLIGHTS) {
+    await editor.toggleHighlights();
+    return null;
+  }
+  if (id === NEXT_ECHO) {
+    await editor.nextEcho();
+    return null;
+  }
+  if (id === PREVIOUS_ECHO) {
+    await editor.previousEcho();
+    return null;
+  }
   if (id !== FIND_ECHOES && id !== OPEN_ECHOES) return null;
   if (id === FIND_ECHOES) runtime.scope = await scopeForTarget(client, target);
   await client.navigation.openPage({ pageId: REPORT_PAGE_ID });
@@ -162,6 +190,13 @@ const KIND_UI: Readonly<
   nearby: { tab: "tab.nearby", empty: "empty.nearby", enabled: "nearby" },
   overused: { tab: "tab.overused", empty: "empty.overused", enabled: "overused" },
   phrase: { tab: "tab.phrase", empty: "empty.phrase", enabled: "phrases" },
+};
+
+/** The editor-highlight switch label for each kind. */
+const EDITOR_KIND_LABEL: Readonly<Record<EchoKind, EchoKey>> = {
+  nearby: "settings.editor.nearby",
+  overused: "settings.editor.overused",
+  phrase: "settings.editor.phrase",
 };
 
 /** Adds a word to the ignore list unless it is already there, case-insensitively. */
@@ -429,7 +464,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           key={rowId}
           id={rowId}
           label={row.label}
-          description={format(translate(language, "report.summary"), {
+          description={format(translate(language, "report.summary", row.count), {
             count: row.count,
             chapters: chapterTitles(row.chapterIndexes),
           })}
@@ -576,28 +611,39 @@ function useEchoLanguage(client: PluginClient): string {
 
 /**
  * The `detection` Settings row's body: one switch per echo kind the detection
- * supports, the stemming switch, the nearby-echo window, and the ignore list.
- * Values load from the Plugin's storage on mount and every change is written
- * back, so the row survives a reload; labels come from the runtime catalogs.
+ * supports, the stemming switch, the nearby-echo window, and the ignore list,
+ * then the editor-highlight switches — the kinds the editor paints, nearby only
+ * until the author turns the others on (#451, decision 3). Values load from the
+ * Plugin's storage on mount and every change is written back, so the row
+ * survives a reload; a change to the editor kinds also asks the controller to
+ * recompute, so an open editor updates at once. Labels come from the runtime
+ * catalogs.
  */
-function createDetectionSettings(client: PluginClient): ComponentType {
+function createDetectionSettings(
+  client: PluginClient,
+  editor: Pick<EchoEditorController, "refresh">
+): ComponentType {
   function DetectionSettings() {
     const language = useEchoLanguage(client);
     const [settings, setSettings] = useState<EchoSettings>(() => ({
       ...DEFAULT_ECHO_SETTINGS,
       ignore: [],
     }));
+    const [editorKinds, setEditorKinds] = useState<readonly EchoKind[]>(DEFAULT_EDITOR_KINDS);
     // Nothing is written before the stored value has been read, so a slow read
     // cannot be clobbered by the initial defaults.
     const hydrated = useRef(false);
 
     useEffect(() => {
       let cancelled = false;
-      void readEchoesSettings(client).then((stored) => {
-        if (cancelled) return;
-        hydrated.current = true;
-        setSettings(stored);
-      });
+      void Promise.all([readEchoesSettings(client), readEditorKinds(client)]).then(
+        ([stored, kinds]) => {
+          if (cancelled) return;
+          hydrated.current = true;
+          setSettings(stored);
+          setEditorKinds(kinds);
+        }
+      );
       return () => {
         cancelled = true;
       };
@@ -608,8 +654,20 @@ function createDetectionSettings(client: PluginClient): ComponentType {
       void writeEchoesSettings(client, settings);
     }, [client, settings]);
 
+    // The kinds the editor paints are stored, then applied to an open editor at
+    // once (#451): `refresh` recomputes when highlighting is on and is a no-op
+    // otherwise.
+    useEffect(() => {
+      if (!hydrated.current) return;
+      void writeEditorKinds(client, editorKinds).then(() => editor.refresh());
+    }, [client, editor, editorKinds]);
+
     const update = useCallback((patch: Partial<EchoSettings>) => {
       setSettings((current) => ({ ...current, ...patch }));
+    }, []);
+
+    const toggleKind = useCallback((kind: EchoKind) => {
+      setEditorKinds((current) => toggledEditorKind(current, kind));
     }, []);
 
     return (
@@ -650,6 +708,22 @@ function createDetectionSettings(client: PluginClient): ComponentType {
           selectedKeys={settings.ignore}
           allowsCustomValue
           onChange={(event) => update({ ignore: [...event.detail] })}
+        />
+        <ui.Heading level={3}>{translate(language, "settings.editor.title")}</ui.Heading>
+        <ui.Switch
+          label={translate(language, EDITOR_KIND_LABEL.nearby)}
+          isSelected={editorKinds.includes("nearby")}
+          onChange={() => toggleKind("nearby")}
+        />
+        <ui.Switch
+          label={translate(language, EDITOR_KIND_LABEL.overused)}
+          isSelected={editorKinds.includes("overused")}
+          onChange={() => toggleKind("overused")}
+        />
+        <ui.Switch
+          label={translate(language, EDITOR_KIND_LABEL.phrase)}
+          isSelected={editorKinds.includes("phrase")}
+          onChange={() => toggleKind("phrase")}
         />
       </ui.View>
     );

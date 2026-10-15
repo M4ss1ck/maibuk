@@ -89,27 +89,44 @@ describe("frame scenarios", () => {
     const pluginScenarios = FRAME_SCENARIOS.filter((s) => s.plugins !== undefined);
     expect(pluginScenarios.map((s) => s.id).sort()).toEqual([
       "plugin-remote-ui",
+      "typing-with-echoes",
       "typing-with-highlights",
     ]);
     for (const scenario of pluginScenarios) {
       expect(scenario.plugins?.length, scenario.id).toBeGreaterThan(0);
       for (const plugin of scenario.plugins ?? []) {
-        expect(plugin.id, scenario.id).toBe("fixture-bench");
-        expect(plugin.granted, scenario.id).toEqual(["editor:read", "editor:decorate"]);
+        expect(["fixture-bench", "maibuk-echoes"], scenario.id).toContain(plugin.id);
+        expect(plugin.granted.length, scenario.id).toBeGreaterThan(0);
       }
       // Seeding a Plugin writes the OPFS Plugin Directory, which the probe
       // (WebKit) and android sources lack: both must be skipped, with a reason.
       expect(scenario.skip?.probe, scenario.id).toBeTruthy();
       expect(scenario.skip?.android, scenario.id).toBeTruthy();
     }
-    // Remote UI rendering is scroll only; typing with highlights records keys.
+    // The two fixture-bench scenarios grant the bench fixture's Permissions; the
+    // Echoes scenario installs Echoes with its own.
     const byId = new Map(pluginScenarios.map((s) => [s.id, s]));
+    for (const id of ["plugin-remote-ui", "typing-with-highlights"]) {
+      expect(byId.get(id)?.plugins).toEqual([
+        { id: "fixture-bench", granted: ["editor:read", "editor:decorate"] },
+      ]);
+    }
+    expect(byId.get("typing-with-echoes")?.plugins).toEqual([
+      {
+        id: "maibuk-echoes",
+        granted: ["library:read", "editor:read", "editor:decorate"],
+        builtIn: true,
+      },
+    ]);
+    // Remote UI rendering is scroll only; the typing scenarios record keys.
     expect(byId.get("plugin-remote-ui")?.recordsInput).toBe(false);
     expect(byId.get("typing-with-highlights")?.recordsInput).toBe(true);
+    expect(byId.get("typing-with-echoes")?.recordsInput).toBe(true);
     for (const source of ["probe", "android"] as const) {
       const ids = scenariosFor(source).map((s) => s.id);
       expect(ids, source).not.toContain("plugin-remote-ui");
       expect(ids, source).not.toContain("typing-with-highlights");
+      expect(ids, source).not.toContain("typing-with-echoes");
     }
   });
 });

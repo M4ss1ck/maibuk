@@ -1,11 +1,17 @@
 /**
- * Echoes' detection settings (#450, unit 2): the one typed, validated shape the
- * Settings row reads and writes in the Plugin's own storage, and the mapper the
- * report and editor units reuse to call `findEchoes`.
+ * Echoes' settings (#450 unit 2, #451 unit 2): the typed, validated shapes the
+ * Settings row reads and writes in the Plugin's own storage.
  *
- * A stored value is never trusted: anything missing or malformed falls back to
- * the default field by field, the nearby window is clamped to the range
- * detection accepts, and the ignore list is trimmed to non-empty, unique words.
+ * Detection (`settings`): the one shape the Settings row and the report reuse to
+ * call `findEchoes`. A stored value is never trusted: anything missing or
+ * malformed falls back to the default field by field, the nearby window is
+ * clamped to the range detection accepts, and the ignore list is trimmed to
+ * non-empty, unique words.
+ *
+ * Editor highlights (`editor`): the kinds the editor paints, nearby only until
+ * the author turns the others on. They live under their own key so they never
+ * inherit the detection switches' on-by-default (decision 3).
+ *
  * Read and write are best-effort; a refused storage call leaves the row usable.
  *
  * Imports only `@/plugin-sdk` (the storage API type) and this Plugin's files.
@@ -14,6 +20,7 @@
 import type { PluginClient } from "@/plugin-sdk";
 import {
   DEFAULT_ECHO_SETTINGS,
+  type EchoKind,
   type EchoSettings,
   NEARBY_WINDOW_MAX,
   NEARBY_WINDOW_MIN,
@@ -21,6 +28,24 @@ import {
 
 /** The one storage key Echoes' detection settings live under. */
 export const ECHOES_SETTINGS_KEY = "settings";
+
+/** The one storage key Echoes' editor highlight kinds live under. */
+export const ECHOES_EDITOR_KEY = "editor";
+
+/** The kinds the editor highlights before the author changes anything: nearby only. */
+export const DEFAULT_EDITOR_KINDS: readonly EchoKind[] = ["nearby"];
+
+const ECHO_KIND_ORDER: readonly EchoKind[] = ["nearby", "overused", "phrase"];
+const ECHO_KIND_SET: ReadonlySet<string> = new Set(ECHO_KIND_ORDER);
+
+/** The known kinds in `value`, deduplicated and put back in a stable order. */
+function orderKinds(value: Iterable<unknown>): EchoKind[] {
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry === "string" && ECHO_KIND_SET.has(entry)) seen.add(entry);
+  }
+  return ECHO_KIND_ORDER.filter((kind) => seen.has(kind));
+}
 
 /** The SDK storage surface the settings module needs. */
 export type EchoesStorage = Pick<PluginClient, "storage">;
@@ -87,6 +112,25 @@ export function toFindEchoesOptions(settings: EchoSettings): EchoSettings {
   };
 }
 
+/**
+ * The `findEchoes` options the editor runs with (#451, decision 7): the
+ * detection settings with the three kind switches forced to the kinds the editor
+ * paints, so a kind the editor does not show is never detected. `settings` still
+ * carries stemming, the nearby window, and the ignore list.
+ */
+export function toEditorFindOptions(
+  settings: EchoSettings,
+  editorKinds: readonly EchoKind[]
+): EchoSettings {
+  const enabled = new Set<EchoKind>(editorKinds);
+  return {
+    ...toFindEchoesOptions(settings),
+    nearby: enabled.has("nearby"),
+    overused: enabled.has("overused"),
+    phrases: enabled.has("phrase"),
+  };
+}
+
 /** Reads the settings, falling back to the defaults when the key is unset or the read fails. */
 export async function readEchoesSettings(client: EchoesStorage): Promise<EchoSettings> {
   try {
@@ -109,4 +153,39 @@ export async function writeEchoesSettings(
   } catch {
     // Storage is best-effort: a refused write must not break the Settings row.
   }
+}
+
+/** The editor highlight kinds from a stored value, nearby only when unset or malformed. */
+export function parseEditorKinds(value: unknown): EchoKind[] {
+  if (!Array.isArray(value)) return [...DEFAULT_EDITOR_KINDS];
+  return orderKinds(value);
+}
+
+/** Reads the editor kinds, falling back to nearby only when the read fails. */
+export async function readEditorKinds(client: EchoesStorage): Promise<EchoKind[]> {
+  try {
+    return parseEditorKinds(await client.storage.get({ key: ECHOES_EDITOR_KEY }));
+  } catch {
+    return [...DEFAULT_EDITOR_KINDS];
+  }
+}
+
+/** Stores the editor kinds under the one key; a refused write is ignored. */
+export async function writeEditorKinds(
+  client: EchoesStorage,
+  kinds: readonly EchoKind[]
+): Promise<void> {
+  try {
+    await client.storage.set({ key: ECHOES_EDITOR_KEY, value: orderKinds(kinds) });
+  } catch {
+    // Storage is best-effort: a refused write must not break the Settings row.
+  }
+}
+
+/** One kind flipped on or off, the result kept in the stable kind order. */
+export function toggledEditorKind(kinds: readonly EchoKind[], kind: EchoKind): EchoKind[] {
+  const next = new Set(kinds);
+  if (next.has(kind)) next.delete(kind);
+  else next.add(kind);
+  return orderKinds(next);
 }

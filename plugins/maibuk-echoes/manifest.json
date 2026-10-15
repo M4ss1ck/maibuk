@@ -27,15 +27,36 @@
         "label": "Find echoes",
         "contexts": ["chapterItem"],
         "targets": ["chapter"]
+      },
+      {
+        "id": "toggleHighlights",
+        "label": "Toggle echo highlights",
+        "contexts": ["editor"],
+        "defaults": [["Alt+F7"]]
+      },
+      {
+        "id": "nextEcho",
+        "label": "Next echo",
+        "contexts": ["editor"],
+        "defaults": [["Alt+F8"]]
+      },
+      {
+        "id": "previousEcho",
+        "label": "Previous echo",
+        "contexts": ["editor"],
+        "defaults": [["Alt+Shift+F8"]]
       }
     ],
     "pages": [{ "id": "report", "title": "Echoes", "command": "openEchoes" }],
     "sidebarEntries": [{ "page": "report", "icon": "waves" }],
+    "toolbarButtons": [
+      { "id": "toggleHighlights", "command": "toggleHighlights", "icon": "highlighter" }
+    ],
     "settingsRows": [
       {
         "id": "detection",
         "label": "Echo detection",
-        "description": "Choose which echoes to look for and how close they count."
+        "description": "Choose which echoes to look for, how close they count, and which the editor highlights."
       }
     ],
     "itemMenuEntries": [{ "command": "findEchoes" }]

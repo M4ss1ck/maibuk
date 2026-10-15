@@ -78,6 +78,7 @@
   },
   "nav": {
     "primary": "Navegación principal",
+    "pinned": "Destinos fijados",
     "openMenu": "Abrir menú de navegación",
     "closeMenu": "Cerrar menú de navegación",
     "backToHome": "Inicio",

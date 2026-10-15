@@ -148,7 +148,15 @@ describe("createTestHost()", () => {
           },
         ],
         notes: [
-          { id: "n1", bookId: "b1", title: "Note", tags: ["a"], wordCount: 1, updatedAt: 2_000 },
+          {
+            id: "n1",
+            bookId: "b1",
+            title: "Note",
+            language: "en",
+            tags: ["a"],
+            wordCount: 1,
+            updatedAt: 2_000,
+          },
         ],
         canvases: [{ id: "cv1", bookId: null, title: "Board", updatedAt: 3_000 }],
       },
@@ -163,7 +171,15 @@ describe("createTestHost()", () => {
         content: { text: "Hello", html: "<p>Hello</p>" },
       });
       await expect(client.library.notes.list({})).resolves.toEqual([
-        { id: "n1", bookId: "b1", title: "Note", tags: ["a"], wordCount: 1, updatedAt: 2_000 },
+        {
+          id: "n1",
+          bookId: "b1",
+          title: "Note",
+          language: "en",
+          tags: ["a"],
+          wordCount: 1,
+          updatedAt: 2_000,
+        },
       ]);
       await expect(client.library.notes.get({ noteId: "n1" })).resolves.toMatchObject({ id: "n1" });
       await expect(client.library.canvases.list({})).resolves.toEqual([

@@ -401,6 +401,40 @@ describe("PluginsSection", () => {
     expect(within(row as HTMLElement).getByText("Echo threshold")).toBeInTheDocument();
   });
 
+  it("stacks a Plugin Settings row so its tall body takes the full width", async () => {
+    const user = userEvent.setup();
+    unregisters.push(
+      registerPluginSettingsRows("echoes", {
+        displayName: "Echoes",
+        rows: [
+          {
+            id: "threshold",
+            label: "Echo threshold",
+            description: "How alike two passages must be",
+          },
+        ],
+      })
+    );
+    seed(entry());
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    const row = document.querySelector<HTMLElement>(
+      '[data-settings-row="plugin.echoes.threshold"]'
+    );
+    expect(row).not.toBeNull();
+    // The stacked shell: label and description on top, the Plugin's body below
+    // at full width — never the label-left/control-right shell the simple rows
+    // use, which left the label floating in a wide column beside tall controls.
+    expect(row).toHaveClass("flex-col");
+    expect(row).toHaveClass("py-3");
+    expect(row).not.toHaveClass("@lg:flex-row");
+    const labelBlock = row!.firstElementChild as HTMLElement;
+    expect(within(labelBlock).getByText("Echo threshold")).toBeInTheDocument();
+    expect(within(labelBlock).getByText("How alike two passages must be")).toBeInTheDocument();
+  });
+
   it("shows Modified and Update available badges", () => {
     seed(
       entry({
@@ -1246,6 +1280,13 @@ describe("Plugin Settings row body (#450)", () => {
     await openRow(user);
 
     const control = await screen.findByRole("switch", { name: "Echo threshold" });
+    // The Plugin's body (holding the control) is a sibling after the stacked
+    // row's label block, so it takes the full width below the label.
+    const row = control.closest<HTMLElement>('[data-settings-row="plugin.echoes.threshold"]');
+    expect(row).toHaveClass("flex-col");
+    expect(row).not.toHaveClass("@lg:flex-row");
+    expect(row!.firstElementChild).not.toContainElement(control);
+    expect(row!.firstElementChild?.nextElementSibling).toContainElement(control);
     await tabTo(user, control, 40);
     await user.keyboard(" ");
     expect(control).toBeChecked();

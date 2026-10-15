@@ -4,8 +4,15 @@ import { ENGLISH_STOP_WORDS, SPANISH_STOP_WORDS } from "./vendor/snowball/stop-w
 
 export type LanguageSupport = "full" | "limited";
 
+/** Base subtags by language tag; `baseLanguage` runs per label and per token lookup. */
+const BASE_LANGUAGES = new Map<string, string>();
+
 export function baseLanguage(language: string): string {
-  return language.split(/[-_]/)[0].toLowerCase();
+  const cached = BASE_LANGUAGES.get(language);
+  if (cached !== undefined) return cached;
+  const base = language.split(/[-_]/)[0].toLowerCase();
+  BASE_LANGUAGES.set(language, base);
+  return base;
 }
 
 export function languageSupport(language: string): LanguageSupport {
@@ -25,11 +32,19 @@ const LETTER_PATTERN = /\p{L}/gu;
 
 // Fold the typographic apostrophe to ASCII, so "didn’t" meets the stop lists.
 function fold(word: string): string {
-  return word.normalize("NFC").toLowerCase().replace(/’/g, "'");
+  const lower = word.normalize("NFC").toLowerCase();
+  return lower.indexOf("\u2019") === -1 ? lower : lower.replace(/’/g, "'");
 }
 
+/** Letters in a word, without a per-word match allocation for the common ASCII case. */
 function countLetters(word: string): number {
-  return word.match(LETTER_PATTERN)?.length ?? 0;
+  let count = 0;
+  for (let index = 0; index < word.length; index++) {
+    const code = word.charCodeAt(index);
+    if (code > 127) return word.match(LETTER_PATTERN)?.length ?? 0;
+    if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) count++;
+  }
+  return count;
 }
 
 export function tokenize(text: string): Token[] {

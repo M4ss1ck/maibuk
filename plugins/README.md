@@ -25,10 +25,10 @@ plugins/<id>/
 `plugins/builtins.json` lists the ids to build and ship, in order:
 
 ```json
-{ "plugins": [] }
+{ "plugins": ["maibuk-echoes"] }
 ```
 
-The list starts empty; issue #451 adds `maibuk-echoes`. Fixture Plugins under
+Echoes (`maibuk-echoes`) is the first Built-in Plugin. Fixture Plugins under
 `e2e/` or `src/test/` are never bundled; the build only reads this list.
 
 ## Activation
@@ -65,6 +65,11 @@ pnpm tsx scripts/build-builtin-plugins.ts --target web|desktop|android
 The build writes an installable folder per Plugin to `dist/plugins/<id>/`
 (manifest, bundled entry, copied assets and locales) plus `dist/plugins/index.json`,
 the shipped list the app installs from. `dist/` is not committed.
+
+Both dev lanes build the Plugins once before Vite starts, so the running app sees
+the current sources: `pnpm tauri dev` runs `pnpm build:plugins --target desktop`
+first, and `pnpm dev:web` runs `--target web`. Vite dev serves `dist/plugins/` at
+`/plugins/` (the desktop run also re-copies it into the app's resources).
 
 A Release build includes a Built-in only for the platforms its manifest declares:
 a Plugin whose `platforms` exclude the target is skipped with

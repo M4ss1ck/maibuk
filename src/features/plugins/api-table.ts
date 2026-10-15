@@ -84,6 +84,7 @@ const noteSummary = z.strictObject({
   id,
   bookId: id.nullable(),
   title: z.string(),
+  language: z.string().nullable(),
   tags: z.array(z.string()),
   wordCount: z.int(),
   updatedAt: timestamp,
@@ -246,7 +247,7 @@ export const PLUGIN_API_TABLE = [
   defineApiRow({
     id: "editor.setHighlights",
     description:
-      "Replaces this Plugin's whole set of highlights in the focused editor. Never changes text.",
+      "Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text.",
     input: z.strictObject({
       kind: z.enum(["info", "warning", "repetition"]),
       ranges: z.array(z.strictObject({ ...range.shape, label: z.string().max(200).optional() })),
@@ -374,7 +375,8 @@ export const PLUGIN_API_TABLE = [
   }),
   defineApiRow({
     id: "notifications.show",
-    description: "Shows a toast naming this Plugin. At most one every 5 seconds.",
+    description:
+      "Shows a toast naming this Plugin. At most one every 5 seconds, except while answering the author's own Command run.",
     input: z.strictObject({
       variant: z.enum(["info", "success", "warning", "error"]),
       message: z.string().min(1).max(500),

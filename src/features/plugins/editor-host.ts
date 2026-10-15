@@ -9,10 +9,11 @@
  * reveal, and highlights all address that one editor, in the plain-text offsets
  * the Library reads share (#396).
  *
- * Highlights live in a per-editor ProseMirror plugin, keyed by Plugin id, so
- * each Plugin replaces only its own set, several coexist, and disabling one
- * removes only its own. They are view-only decorations: they never enter the
- * document, so they never become saved formatting. The plugin state holds the
+ * Highlights live in a per-editor ProseMirror plugin, keyed by Plugin id and
+ * kind, so each Plugin replaces only its own set of one kind, several kinds
+ * coexist, and disabling one Plugin removes only its own kinds. They are
+ * view-only decorations: they never enter the document, so they never become
+ * saved formatting. The plugin state holds the
  * built DecorationSet and maps it through local edits, so a keystroke never
  * rebuilds the decorations; the Plugin re-highlights on editor.contentChanged.
  *
@@ -25,6 +26,7 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import {
+  type PlainTextMap,
   buildPlainTextMap,
   plainOffsetToPm,
   plainRangeToPmRange,
@@ -37,9 +39,11 @@ import type {
   PluginEditorContentResult,
   PluginEditorSelectionResult,
   PluginEntityTarget,
+  PluginHighlightKind,
   PluginHighlightSet,
   PluginRevealRange,
 } from "@/features/plugins/types";
+import { benchMarksEnabled, pluginHighlightsMeasureName } from "@/lib/bench-marks";
 import { isOutsideLayer } from "@/lib/top-layer";
 
 /** How long a burst of keystrokes coalesces into one `editor.contentChanged`. */
@@ -65,8 +69,19 @@ type HighlightMeta =
   | { type: "clearAll" };
 
 interface HighlightsState {
-  sets: Map<string, PluginHighlightSet>;
+  /** One Plugin's highlight set of one kind, keyed by `pluginId` + kind. */
+  sets: Map<string, PluginHighlightEntry>;
   decorations: DecorationSet;
+}
+
+interface PluginHighlightEntry {
+  pluginId: string;
+  set: PluginHighlightSet;
+}
+
+/** The one key per (Plugin id, kind) the host keys a highlight set by. */
+function highlightSetKey(pluginId: string, kind: PluginHighlightKind): string {
+  return `${pluginId}\u0000${kind}`;
 }
 
 interface EditorEntry {
@@ -95,6 +110,23 @@ let focusClearTimer: ReturnType<typeof setTimeout> | null = null;
 
 function entityKey(entity: PluginEntityTarget): string {
   return `${entity.kind}:${entity.id}`;
+}
+
+/**
+ * The plain-text map by document. A ProseMirror node is immutable, so the same
+ * node means the same text; the host re-reads the map several times per
+ * highlight update (the three kinds, a selection, a reveal) and never walks the
+ * document twice for one of them (#451).
+ */
+const plainTextMaps = new WeakMap<ProseMirrorNode, PlainTextMap>();
+
+function plainTextMapFor(doc: ProseMirrorNode): PlainTextMap {
+  let map = plainTextMaps.get(doc);
+  if (map === undefined) {
+    map = buildPlainTextMap(doc);
+    plainTextMaps.set(doc, map);
+  }
+  return map;
 }
 
 function isUsable(entry: EditorEntry): boolean {
@@ -155,12 +187,12 @@ function notifyContentChanged(entry: EditorEntry): void {
 /** Builds every Plugin's decorations against one document walk. */
 function buildHighlightDecorations(
   doc: ProseMirrorNode,
-  sets: Map<string, PluginHighlightSet>
+  sets: Map<string, PluginHighlightEntry>
 ): DecorationSet {
   if (sets.size === 0) return DecorationSet.empty;
-  const map = buildPlainTextMap(doc);
+  const map = plainTextMapFor(doc);
   const decorations: Decoration[] = [];
-  for (const [pluginId, set] of sets) {
+  for (const { pluginId, set } of sets.values()) {
     for (const range of set.ranges) {
       const pm = plainRangeToPmRange(map, range.from, range.to);
       if (pm === null) continue;
@@ -207,9 +239,29 @@ function createHighlightsPlugin(entryId: string): {
           return { sets: new Map(), decorations: DecorationSet.empty };
         }
         const sets = new Map(mapped.sets);
-        if (meta.type === "clear") sets.delete(meta.pluginId);
-        else sets.set(meta.pluginId, meta.set);
-        // One document walk per set or clear, never per transaction.
+        if (meta.type === "clear") {
+          let changed = false;
+          for (const [key, entry] of sets) {
+            if (entry.pluginId === meta.pluginId) {
+              sets.delete(key);
+              changed = true;
+            }
+          }
+          // Nothing of this Plugin was painted: no decoration work to do.
+          if (!changed) return mapped;
+        } else if (meta.set.ranges.length === 0) {
+          // An empty set is the host's way to clear exactly one kind. A kind
+          // that was never set clears nothing, so the decorations stay put.
+          const key = highlightSetKey(meta.pluginId, meta.set.kind);
+          if (!sets.has(key)) return mapped;
+          sets.delete(key);
+        } else {
+          sets.set(highlightSetKey(meta.pluginId, meta.set.kind), {
+            pluginId: meta.pluginId,
+            set: meta.set,
+          });
+        }
+        // One document walk per set or clear that changed something, never per transaction.
         return { sets, decorations: buildHighlightDecorations(tr.doc, sets) };
       },
     },
@@ -223,7 +275,7 @@ function createHighlightsPlugin(entryId: string): {
 }
 
 function applyReveal(entry: EditorEntry, range: PluginRevealRange): void {
-  const map = buildPlainTextMap(entry.editor.state.doc);
+  const map = plainTextMapFor(entry.editor.state.doc);
   const pos = plainOffsetToPm(map, range.from, "start");
   entry.editor.chain().focus().setTextSelection(pos).scrollIntoView().run();
 }
@@ -326,7 +378,7 @@ export function getPluginEditorContent(): PluginEditorContentResult {
 export function getPluginEditorSelection(): PluginEditorSelectionResult {
   const entry = resolveFocusedEditor();
   if (!entry) return { status: "no-target" };
-  const map = buildPlainTextMap(entry.editor.state.doc);
+  const map = plainTextMapFor(entry.editor.state.doc);
   const { from, to } = entry.editor.state.selection;
   const range = pmRangeToPlainRange(map, from, to);
   return { status: "ok", entity: entry.entity, range, text: map.text.slice(range.from, range.to) };
@@ -339,13 +391,18 @@ export function revealInFocusedEditor(range: PluginRevealRange): PluginEditorApp
   return { status: "applied" };
 }
 
-/** Replaces one Plugin's whole highlight set in the focused editor. */
+/** Replaces one Plugin's highlight set for one kind in the focused editor. */
 export function setPluginEditorHighlights(
   pluginId: string,
   input: PluginApiInput<"editor.setHighlights">
 ): PluginEditorApplied {
   const entry = resolveFocusedEditor();
   if (!entry) return { status: "no-target" };
+  // The host share of one highlight update — the transaction dispatch and the
+  // decoration build it triggers — timed for the #401 Echoes main-thread budget
+  // (#451). Guarded by `benchMarksEnabled()`, so a shipped build emits nothing.
+  const measured = benchMarksEnabled();
+  const startedAt = measured ? performance.now() : 0;
   entry.editor.view.dispatch(
     entry.editor.state.tr.setMeta(entry.key, {
       type: "set",
@@ -353,18 +410,45 @@ export function setPluginEditorHighlights(
       set: { kind: input.kind, ranges: input.ranges },
     } satisfies HighlightMeta)
   );
+  if (measured) benchHighlightMeasure(pluginId, startedAt);
   return { status: "applied" };
 }
 
-/** Removes one Plugin's highlights from every open editor (disabling it). */
+/**
+ * Records one highlight update's host-side duration under
+ * `plugin.highlights:<pluginId>`, the measure the `bench:plugins` lane reads for
+ * its main-thread-per-update row (#451). A missing or partial User Timing API
+ * never breaks a highlight update, and only ever emits when the bench gate is
+ * on.
+ */
+function benchHighlightMeasure(pluginId: string, startedAt: number): void {
+  if (typeof performance === "undefined" || typeof performance.measure !== "function") return;
+  try {
+    performance.measure(pluginHighlightsMeasureName(pluginId), {
+      start: startedAt,
+      end: performance.now(),
+    });
+  } catch {
+    // A missing timing API must never break a highlight update.
+  }
+}
+
+/** Removes every kind of one Plugin's highlights from every open editor (disabling it). */
 export function clearPluginHighlights(pluginId: string): void {
   for (const entry of editors.values()) {
     const sets = entry.key.getState(entry.editor.state)?.sets;
-    if (!sets?.has(pluginId)) continue;
+    if (!sets || !hasPluginSet(sets, pluginId)) continue;
     entry.editor.view.dispatch(
       entry.editor.state.tr.setMeta(entry.key, { type: "clear", pluginId } satisfies HighlightMeta)
     );
   }
+}
+
+function hasPluginSet(sets: Map<string, PluginHighlightEntry>, pluginId: string): boolean {
+  for (const entry of sets.values()) {
+    if (entry.pluginId === pluginId) return true;
+  }
+  return false;
 }
 
 /**

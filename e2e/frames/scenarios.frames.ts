@@ -103,6 +103,11 @@ async function webPage(
       pluginId: plugin.id,
       granted: [...plugin.granted],
     })),
+    // A `maibuk-` id only parses under the Built-in manifest schema, and the
+    // E2E/bench build compiles the Built-in seed seam in.
+    builtInPlugins: (scenario.plugins ?? [])
+      .filter((plugin) => plugin.builtIn === true)
+      .map((plugin) => ({ id: plugin.id })) as never,
   });
   await page.addInitScript({ content: frameProbeScript() });
   return {

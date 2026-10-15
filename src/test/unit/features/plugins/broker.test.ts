@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CALL_BURST,
+  COMMAND_RUN_EXEMPTION_MS,
   THROTTLE_GAP_MS,
   THROTTLE_STOP_MS,
   createPluginBroker,
@@ -446,6 +447,111 @@ describe("call rate", () => {
     const empty = { variant: "info", message: "" } as const;
     expect((await refusal(client.notifications.show(empty))).code).toBe("invalid-params");
     await expect(client.notifications.show({ variant: "info", message: "hi" })).resolves.toBe(null);
+  });
+});
+
+describe("Command run exemption", () => {
+  /**
+   * Starts hosting a `command.run` the Plugin keeps in flight: `reached`
+   * resolves once the Plugin received it, and `finish`/`fail` settle it.
+   */
+  function holdRun(client: ReturnType<typeof setup>["client"]) {
+    let reached: () => void = () => {};
+    let settle: (error?: Error) => void = () => {};
+    const arrived = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    client.onHostRequest(
+      () =>
+        new Promise<null>((resolve, reject) => {
+          reached();
+          settle = (error) => (error ? reject(error) : resolve(null));
+        })
+    );
+    return {
+      arrived,
+      finish: () => settle(),
+      fail: () => settle(new Error("Command failed")),
+    };
+  }
+
+  it("still refuses an unsolicited second notification within the window", async () => {
+    const { client } = setup();
+    await expect(client.notifications.show({ variant: "info", message: "one" })).resolves.toBe(null);
+    const error = await refusal(client.notifications.show({ variant: "info", message: "two" }));
+    expect(error.code).toBe("rate-limited");
+  });
+
+  it("accepts two notifications while the Plugin answers a Command run", async () => {
+    const { broker, client } = setup();
+    const { arrived, finish } = holdRun(client);
+    const run = broker.request("command.run", { id: "nextEcho" });
+    await arrived;
+
+    await expect(client.notifications.show({ variant: "info", message: "one" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "two" })).resolves.toBe(null);
+
+    finish();
+    await expect(run).resolves.toBeNull();
+  });
+
+  it("applies the limit again once the Command run settles", async () => {
+    const { broker, client } = setup();
+    await expect(client.notifications.show({ variant: "info", message: "own" })).resolves.toBe(null);
+    const { arrived, finish } = holdRun(client);
+    const run = broker.request("command.run", { id: "nextEcho" });
+    await arrived;
+    // The solicited announcements come through the exemption and do not reset
+    // the unsolicited slot, so the first unsolicited call still owns it.
+    await expect(client.notifications.show({ variant: "info", message: "step 1" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "step 2" })).resolves.toBe(null);
+    finish();
+    await expect(run).resolves.toBeNull();
+
+    const error = await refusal(client.notifications.show({ variant: "info", message: "own again" }));
+    expect(error.code).toBe("rate-limited");
+  });
+
+  it("ends the exemption for a Command run left unanswered past its window", async () => {
+    const { broker, client, advance } = setup();
+    const { arrived, finish } = holdRun(client);
+    const run = broker.request("command.run", { id: "nextEcho" });
+    await arrived;
+    await expect(client.notifications.show({ variant: "info", message: "step" })).resolves.toBe(null);
+
+    advance(COMMAND_RUN_EXEMPTION_MS);
+    await expect(client.notifications.show({ variant: "info", message: "own" })).resolves.toBe(null);
+    const error = await refusal(client.notifications.show({ variant: "info", message: "spam" }));
+    expect(error.code).toBe("rate-limited");
+
+    finish();
+    await expect(run).resolves.toBeNull();
+  });
+
+  it("releases the exemption when the Command run fails", async () => {
+    const { broker, client } = setup();
+    await expect(client.notifications.show({ variant: "info", message: "own" })).resolves.toBe(null);
+    const { arrived, fail } = holdRun(client);
+    const run = refusal(broker.request("command.run", { id: "nextEcho" }));
+    await arrived;
+    await expect(client.notifications.show({ variant: "info", message: "step" })).resolves.toBe(null);
+    fail();
+    expect((await run).code).toBe("internal-error");
+
+    const error = await refusal(client.notifications.show({ variant: "info", message: "own again" }));
+    expect(error.code).toBe("rate-limited");
+  });
+
+  it("releases the exemption when the Plugin stops with a Command run in flight", async () => {
+    const { broker, client, onStop } = setup();
+    const { arrived } = holdRun(client);
+    const run = refusal(broker.request("command.run", { id: "nextEcho" }));
+    await arrived;
+    await expect(client.notifications.show({ variant: "info", message: "step" })).resolves.toBe(null);
+
+    broker.stop("requested");
+    expect((await run).code).toBe("plugin-stopped");
+    expect(onStop).toHaveBeenCalledWith("requested");
   });
 });
 

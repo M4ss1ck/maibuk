@@ -88,6 +88,15 @@ export const FRAME_BUDGETS: Readonly<Record<string, ScenarioBudget>> = {
         "half the measured burst of 120 characters, so a lost editor content listener is not-measured",
     },
   },
+  "typing-with-echoes": {
+    overrides: { inputP95Intervals: 1, minInputs: 60 },
+    reasons: {
+      inputP95Intervals:
+        "issue #451: typing with spell check and Echoes' highlights both on must meet the frame budget, so the frame that renders each keystroke starts within one refresh interval, judged like typing",
+      minInputs:
+        "half the measured burst of 120 characters, so a lost editor content listener is not-measured",
+    },
+  },
 };
 
 export function budgetFor(scenarioId: string): FrameBudget {

@@ -104,8 +104,10 @@ export const ROWS: MatrixRow[] = [
     id: "shell-nav-sidebar",
     area: "shell",
     workflow:
-      "Tab into primary nav (nav.primary), Arrow/Tab through Books, Notes, Canvas, Ephemeral, Metrics, Settings; Enter navigates; asserts: Focused link; RouteAnnouncer live region text changes",
-    edges: [],
+      "Tab into primary nav (nav.primary), Arrow through Books, Notes, Canvas, Ephemeral and any Plugin sidebar entry in the scrolling list, then Tab onto the pinned Metrics and Settings; Enter navigates; asserts: Focused link; RouteAnnouncer live region text changes. A Plugin entry renders between the core destinations and the pinned Metrics and Settings, which stay the last two items",
+    edges: [
+      "Short viewport: the scrolling list scrolls while the pinned Metrics and Settings stay in view above the theme switcher",
+    ],
     terms: [],
     shortcuts: [],
     routes: ["/", "/notes", "/canvas", "/ephemeral", "/metrics", "/settings"],
@@ -3135,10 +3137,33 @@ export const ROWS: MatrixRow[] = [
       "Touch opens Echoes from the navigation menu and expands a row by tap",
     ],
     terms: ["Plugin", "Item Menu"],
-    shortcuts: [],
+    shortcuts: ["plugin.maibuk-echoes.openEchoes", "plugin.maibuk-echoes.findEchoes"],
     routes: ["/plugin/:pluginId/:pageId", "/book/:bookId", "/", "/settings"],
     fixture: "echoesBook",
     tags: ["no-webkit", "touch"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-echoes-editor",
+    area: "plugins",
+    workflow:
+      "Echoes' editor Commands in an open Chapter and Note: its Default Shortcut toggles nearby-echo highlights, which paint a labelled mark on each repeated word (both ends of a nearby echo); Next echo moves the caret and announces 'Echo N of M: <label>' and Previous echo wraps to the last, Next wraps back to Echo 1; with highlights off both announce 'Echo highlights are off' and move nothing; the editor toolbar button toggles the same highlights from the keyboard; asserts: the labelled marks, the announcement toast, the caret on the echoed word, the marks gone when off; persists: no",
+    edges: [
+      "Toggle echo highlights from its Default Shortcut paints a labelled mark on every repeated word, and toggling again clears them",
+      "Next echo moves the caret and announces Echo N of M; Next wraps from the last back to Echo 1, is the Default Shortcut on the keyboard, and Previous wraps from the first to the last",
+      "With highlights off, Next echo announces they are off and does not move the caret",
+      "The editor toolbar button toggles the same highlights from the keyboard",
+      "A Note editor toggles highlights for its own content",
+    ],
+    terms: ["Plugin"],
+    shortcuts: [
+      "plugin.maibuk-echoes.toggleHighlights",
+      "plugin.maibuk-echoes.nextEcho",
+      "plugin.maibuk-echoes.previousEcho",
+    ],
+    routes: ["/book/:bookId", "/notes/:noteId"],
+    fixture: "echoesBook",
+    tags: ["no-webkit"],
     status: "accepted",
   },
 ];

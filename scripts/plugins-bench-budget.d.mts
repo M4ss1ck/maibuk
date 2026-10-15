@@ -22,6 +22,15 @@ export interface PluginsBenchReport {
   /** Remote UI burst ms samples. */
   remoteUiBurst: number[];
   /**
+   * Echoes highlight rows (#451), measured on the Chromium lane only: the host
+   * share of one highlight update (`echoHighlightUpdate`), Echoes' own Worker
+   * recompute (`echoWorkerRecompute`), and the keystroke-to-decoration refresh
+   * latency (`echoRefreshLatency`). Absent on the WebKitGTK lane.
+   */
+  echoHighlightUpdate?: number[];
+  echoWorkerRecompute?: number[];
+  echoRefreshLatency?: number[];
+  /**
    * Whether the echo/burst measurement never saw the full typed text echoed
    * within its timeout (a lost burst). A lost text is a budget miss (exit 1),
    * not "cannot measure": the samples gathered before the loss still count.
@@ -53,6 +62,9 @@ export const BUDGETS: {
   readonly commandToEffectP95Ms: number;
   readonly remoteUiEchoP95Ms: number;
   readonly remoteUiBurstP95Ms: number;
+  readonly echoHighlightUpdateP95Ms: number;
+  readonly echoWorkerRecomputeP95Ms: number;
+  readonly echoRefreshLatencyP95Ms: number;
 };
 
 export function percentile(samples: readonly number[], p: number): number | null;

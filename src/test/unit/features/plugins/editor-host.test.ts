@@ -312,7 +312,7 @@ describe("editor highlights", () => {
     expect(remaining[0]).toHaveTextContent("one");
   });
 
-  it("replaces a Plugin's whole set on every call", () => {
+  it("renders two kinds from one Plugin at the same time", () => {
     const editor = mountEditor("<p>one two three four</p>");
     editor.view.dom.focus();
     register(editor);
@@ -323,13 +323,64 @@ describe("editor highlights", () => {
       ranges: [{ from: 4, to: 7, label: "again" }],
     });
 
-    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(0);
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--repetition")).toHaveLength(1);
+    expect(editor.view.dom.querySelector(".plugin-highlight--info")?.textContent).toBe("one");
+    expect(editor.view.dom.querySelector(".plugin-highlight--repetition")?.textContent).toBe("two");
     expect(
       editor.view.dom
         .querySelector(".plugin-highlight--repetition")
         ?.getAttribute("data-plugin-highlight-label")
     ).toBe("again");
+  });
+
+  it("replaces only the kind being set and keeps the Plugin's other kinds", () => {
+    const editor = mountEditor("<p>one two three four</p>");
+    editor.view.dom.focus();
+    register(editor);
+
+    setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    setPluginEditorHighlights("a", { kind: "warning", ranges: [{ from: 4, to: 7 }] });
+
+    // Replacing the info kind moves it; the warning kind stays put.
+    setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 14, to: 18 }] });
+
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
+    expect(editor.view.dom.querySelector(".plugin-highlight--info")?.textContent).toBe("four");
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--warning")).toHaveLength(1);
+    expect(editor.view.dom.querySelector(".plugin-highlight--warning")?.textContent).toBe("two");
+  });
+
+  it("clears only the kind whose ranges are empty", () => {
+    const editor = mountEditor("<p>one two three four</p>");
+    editor.view.dom.focus();
+    register(editor);
+
+    setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    setPluginEditorHighlights("a", { kind: "warning", ranges: [{ from: 4, to: 7 }] });
+
+    setPluginEditorHighlights("a", { kind: "info", ranges: [] });
+
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(0);
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--warning")).toHaveLength(1);
+    expect(editor.view.dom.querySelector(".plugin-highlight--warning")?.textContent).toBe("two");
+  });
+
+  it("clears every kind of one Plugin and leaves another Plugin untouched", () => {
+    const editor = mountEditor("<p>one two three four</p>");
+    editor.view.dom.focus();
+    register(editor);
+
+    setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    setPluginEditorHighlights("a", { kind: "repetition", ranges: [{ from: 4, to: 7 }] });
+    setPluginEditorHighlights("b", { kind: "warning", ranges: [{ from: 14, to: 18 }] });
+
+    clearPluginHighlights("a");
+
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(0);
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--repetition")).toHaveLength(0);
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--warning")).toHaveLength(1);
+    expect(editor.view.dom.querySelector(".plugin-highlight--warning")?.textContent).toBe("four");
   });
 
   it("keeps a highlight on the same word when typing before it", () => {
@@ -378,6 +429,26 @@ describe("editor highlights", () => {
     // A keystroke maps the stored decorations; it never walks the text again.
     expect(spy).toHaveBeenCalledTimes(1);
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--info").length).toBeGreaterThan(0);
+  });
+
+  it("walks the document once per doc and again only when the doc changes", () => {
+    const editor = mountEditor("<p>one two three four</p>");
+    editor.view.dom.focus();
+    register(editor);
+    const spy = vi.spyOn(plainTextOffsets, "buildPlainTextMap");
+
+    setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 3 }] });
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // A second kind on the same doc reuses the cached plain-text map.
+    setPluginEditorHighlights("a", { kind: "warning", ranges: [{ from: 4, to: 7 }] });
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // The edit makes a new doc node, so the next set rebuilds the map.
+    editor.commands.insertContentAt(1, "X");
+    setPluginEditorHighlights("a", { kind: "repetition", ranges: [{ from: 5, to: 8 }] });
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(editor.view.dom.querySelectorAll(".plugin-highlight--repetition").length).toBeGreaterThan(0);
   });
 
   it("never becomes saved formatting", () => {

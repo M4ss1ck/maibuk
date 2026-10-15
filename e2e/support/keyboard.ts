@@ -97,18 +97,36 @@ export async function selectedText(page: Page): Promise<string> {
 /**
  * The text from the caret on to the end of its node in the focused editor, or
  * the selected text when a range is selected. A Plugin reveal lands a collapsed
- * caret on the echoed word, which `selectedText` would report as empty.
+ * caret on the echoed word, which `selectedText` would report as empty, and the
+ * browser anchors that caret at the end of the text node before the decorated
+ * word, so the text from the caret on is read from the next text node.
  */
 export async function caretText(page: Page): Promise<string> {
   return page.evaluate(() => {
+    function nextTextNode(node: Node): Text | null {
+      const doc = node.ownerDocument;
+      if (doc === null) return null;
+      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+      walker.currentNode = node;
+      const next = walker.nextNode();
+      return next instanceof Text ? next : null;
+    }
+
     const selection = document.getSelection();
     if (selection === null || selection.rangeCount === 0) return "";
     if (!selection.isCollapsed) return selection.toString();
     const node = selection.anchorNode;
-    const text =
-      node !== null && node.nodeType === Node.TEXT_NODE
-        ? (node as Text).data
-        : (node?.textContent ?? "");
-    return text.slice(selection.anchorOffset);
+    if (node === null) return "";
+    if (node.nodeType === Node.TEXT_NODE) {
+      const data = (node as Text).data;
+      if (selection.anchorOffset >= data.length) return nextTextNode(node)?.data ?? "";
+      return data.slice(selection.anchorOffset);
+    }
+    // An element anchor's offset is a child index: the text from there on.
+    const text = Array.from(node.childNodes)
+      .slice(selection.anchorOffset)
+      .map((child) => child.textContent ?? "")
+      .join("");
+    return text !== "" ? text : (nextTextNode(node)?.data ?? "");
   });
 }
