@@ -1,0 +1,10 @@
+{
+  "name": "Frame Fixture",
+  "description": "El Plugin fixture-frame de E2E (issue #454 unit U6): un Plugin que declara customUi: true, una Frame de página completa (ui/page.html) que dibuja su propio DOM y una página de Remote UI que incrusta una Frame del kit (ui/embed.html). Su Worker responde a un ping por el puerto de la Frame y reenvía el idioma actual de la interfaz, para que el carril @sandbox pruebe el aislamiento, los tokens de tema, el aviso y el reenvío de idioma de la Frame en los motores reales. Nunca se incluye en un paquete del producto.",
+  "commands.openFrame.label": "Abrir página de Frame",
+  "commands.openEmbed.label": "Abrir Frame incrustada",
+  "commands.navigateData.label": "Frame navega a data",
+  "commands.navigateBlob.label": "Frame navega a blob",
+  "pages.frame.title": "Frame de prueba",
+  "pages.embed.title": "Frame incrustada"
+}
