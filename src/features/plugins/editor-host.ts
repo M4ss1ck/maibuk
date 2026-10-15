@@ -17,12 +17,26 @@
  * built DecorationSet and maps it through local edits, so a keystroke never
  * rebuilds the decorations; the Plugin re-highlights on editor.contentChanged.
  *
+ * The writes (`editor.insert` / `editor.replace`, #452) act on that same one
+ * focused editor, at its caret or at a plain-text range, as a single undoable
+ * step that never merges into the author's typing on either side. They dispatch
+ * an ordinary editor transaction, so the debounced save persists the change
+ * through the normal save path and highlights map through as for any edit.
+ *
  * Editor events are invalidation-only (`editor.contentChanged`,
  * `editor.focusChanged`); the lifecycle forwards them to subscribed Plugins.
  */
 
-import type { Editor } from "@tiptap/core";
-import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import {
+  type Content,
+  type CreateNodeFromContentOptions,
+  type Editor,
+  type JSONContent,
+  createNodeFromContent,
+  selectionToInsertionEnd,
+} from "@tiptap/core";
+import { closeHistory } from "@tiptap/pm/history";
+import { Fragment, type Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import {
@@ -32,7 +46,7 @@ import {
   plainRangeToPmRange,
   pmRangeToPlainRange,
 } from "@/components/editor/plain-text-offsets";
-import { sanitizePluginHtml } from "@/features/plugins/library";
+import { type PluginContentFragment, sanitizePluginHtml } from "@/features/plugins/library";
 import type {
   PluginApiInput,
   PluginEditorApplied,
@@ -43,6 +57,7 @@ import type {
   PluginHighlightSet,
   PluginRevealRange,
 } from "@/features/plugins/types";
+import { PluginApiError } from "@/plugin-sdk/protocol";
 import { benchMarksEnabled, pluginHighlightsMeasureName } from "@/lib/bench-marks";
 import { isOutsideLayer } from "@/lib/top-layer";
 
@@ -388,6 +403,147 @@ export function revealInFocusedEditor(range: PluginRevealRange): PluginEditorApp
   const entry = resolveFocusedEditor();
   if (!entry) return { status: "no-target" };
   applyReveal(entry, range);
+  return { status: "applied" };
+}
+
+/**
+ * The document range a Plugin range names, in the same plain-text coordinates
+ * the reads and reveal share. A range outside the editor's text, or one whose
+ * `from` is past its `to`, is refused rather than clamped, so a Plugin never
+ * edits text it did not name (#452).
+ */
+function resolvePluginRange(
+  entry: EditorEntry,
+  range: PluginRevealRange
+): { from: number; to: number } {
+  const map = plainTextMapFor(entry.editor.state.doc);
+  if (range.from < 0 || range.from > range.to || range.to > map.text.length) {
+    throw new PluginApiError({
+      code: "invalid-params",
+      message: `range ${range.from}-${range.to} is outside the editor's text (0-${map.text.length})`,
+    });
+  }
+  const from = plainOffsetToPm(map, range.from, "start");
+  return { from, to: Math.max(from, plainOffsetToPm(map, range.to, "end")) };
+}
+
+/** One line or block of plain text as schema content: newlines become hard breaks. */
+function plainTextInlineContent(text: string): JSONContent[] {
+  const nodes: JSONContent[] = [];
+  text.split("\n").forEach((line, index) => {
+    if (index > 0) nodes.push({ type: "hardBreak" });
+    if (line.length > 0) nodes.push({ type: "text", text: line });
+  });
+  return nodes;
+}
+
+/** JSON, HTML, or a node as schema content; a node result is wrapped in a Fragment. */
+function fragmentFromContent(
+  editor: Editor,
+  content: Content,
+  options?: CreateNodeFromContentOptions
+): Fragment {
+  const parsed = createNodeFromContent(content, editor.schema, options);
+  return parsed instanceof Fragment ? parsed : Fragment.from(parsed);
+}
+
+/**
+ * Plain text as schema content: a single block stays inline (so inserting a
+ * word at the caret does not split its paragraph), a single newline becomes a
+ * hard break, and a blank line becomes a paragraph break — the shape the
+ * Library reads give back through `editor.getText()`.
+ */
+function plainTextContent(editor: Editor, text: string): Fragment {
+  const blocks = text.split(/\n{2,}/);
+  if (blocks.length <= 1) return fragmentFromContent(editor, plainTextInlineContent(blocks[0] ?? ""));
+  return fragmentFromContent(
+    editor,
+    blocks.map((block) => ({ type: "paragraph", content: plainTextInlineContent(block) }))
+  );
+}
+
+/**
+ * A fragment's editable content: an HTML fragment passes the host sanitizer,
+ * then the editor's schema parses it (anything the schema rejects is dropped,
+ * never thrown); plain text is built directly. Both keep the sanitizer every
+ * read uses (#452).
+ */
+function fragmentContent(editor: Editor, fragment: PluginContentFragment): Fragment {
+  if ("html" in fragment) {
+    return fragmentFromContent(editor, sanitizePluginHtml(fragment.html), {
+      parseOptions: { preserveWhitespace: "full" },
+    });
+  }
+  return plainTextContent(editor, fragment.text);
+}
+
+/**
+ * Applies one fragment at a document range as a single undoable step. The
+ * transaction closes the current history group first, so it never merges into
+ * the author's previous typing; a second, non-document-changing transaction
+ * carries the same close, so the author's next keystrokes form their own step
+ * instead of joining the Plugin's. `closeHistory` is what prosemirror-history
+ * resets its group on.
+ */
+function applyEditorFragment(
+  entry: EditorEntry,
+  from: number,
+  to: number,
+  content: Fragment
+): void {
+  const { editor } = entry;
+  let onlyText = true;
+  let onlyBlocks = true;
+  content.forEach((node) => {
+    node.check();
+    if (onlyText) onlyText = node.isText && node.marks.length === 0;
+    if (onlyBlocks) onlyBlocks = node.isBlock;
+  });
+
+  const tr = closeHistory(editor.state.tr);
+  let start = from;
+  let end = to;
+  // Inserting block content at the caret of an empty paragraph replaces that
+  // empty paragraph, the way pasting a paragraph does, rather than leaving it.
+  if (start === end && onlyBlocks) {
+    const { parent } = tr.doc.resolve(start);
+    if (parent.isTextblock && !parent.type.spec.code && parent.childCount === 0) {
+      start -= 1;
+      end += 1;
+    }
+  }
+  if (onlyText) {
+    let text = "";
+    content.forEach((node) => {
+      text += node.text ?? "";
+    });
+    tr.insertText(text, start, end);
+  } else {
+    tr.replaceWith(start, end, content);
+  }
+  selectionToInsertionEnd(tr, tr.steps.length - 1, -1);
+  editor.view.dispatch(tr);
+  editor.view.dispatch(closeHistory(editor.state.tr));
+}
+
+/** Inserts a fragment at the caret, replacing the selection, as one undoable step. */
+export function insertInFocusedEditor(fragment: PluginContentFragment): PluginEditorApplied {
+  const entry = resolveFocusedEditor();
+  if (!entry) return { status: "no-target" };
+  const { from, to } = entry.editor.state.selection;
+  applyEditorFragment(entry, from, to, fragmentContent(entry.editor, fragment));
+  return { status: "applied" };
+}
+
+/** Replaces a plain-text range with a fragment as one undoable step. */
+export function replaceInFocusedEditor(
+  range: PluginRevealRange,
+  fragment: PluginContentFragment
+): PluginEditorApplied {
+  const entry = resolveFocusedEditor();
+  if (!entry) return { status: "no-target" };
+  const { from, to } = resolvePluginRange(entry, range);
+  applyEditorFragment(entry, from, to, fragmentContent(entry.editor, fragment));
   return { status: "applied" };
 }
 

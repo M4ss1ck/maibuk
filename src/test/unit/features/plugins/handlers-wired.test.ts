@@ -139,6 +139,12 @@ describe("createPluginHandlers(): the wired rows", () => {
     expect(handlers["editor.reveal"]?.({ range: { from: 0, to: 1 } }, context)).toEqual({
       status: "no-target",
     });
+    expect(handlers["editor.insert"]?.({ content: { text: "x" } }, context)).toEqual({
+      status: "no-target",
+    });
+    expect(
+      handlers["editor.replace"]?.({ range: { from: 0, to: 1 }, content: { text: "x" } }, context)
+    ).toEqual({ status: "no-target" });
     expect(
       handlers["editor.setHighlights"]?.({ kind: "info", ranges: [] }, context)
     ).toEqual({ status: "no-target" });

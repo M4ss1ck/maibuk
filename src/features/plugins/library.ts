@@ -5,12 +5,21 @@
  * the API. Chapters report their containing Book as their Change entity, so a
  * reader that wants Chapter edits subscribes to `library.changed` and pulls.
  *
+ * Here too are the `library:write` rows (#452): a Chapter content update and
+ * Note create/update, each through the entity's own narrow write path (ADR
+ * 0005) with Origin "local", so the write Flushes open editors, normalizes,
+ * emits on the Change Feed, and refuses sample ids. No delete is exposed.
+ *
  * Timestamps are Unix seconds in the Library and milliseconds since the epoch
  * in the API, the one shape every Plugin sees.
  */
 
 import DOMPurify from "dompurify";
 import { htmlToPlainText } from "@/components/editor/html-to-text";
+import { plainTextToEditorHtml } from "@/components/editor/plain-text-html";
+import { updateChapterRow } from "@/features/chapters/write";
+import { countWords } from "@/features/metrics/word-count";
+import { createNoteRow, updateNoteRow } from "@/features/notes/write";
 import type {
   PluginBook,
   PluginCanvasSummary,
@@ -18,7 +27,10 @@ import type {
   PluginContent,
   PluginNoteSummary,
 } from "@/features/plugins/types";
+import { PendingEditsFlushError } from "@/features/sync/pending-edits";
+import { TutorialIdLeakError } from "@/features/tutorial/library-switch";
 import { getDatabase } from "@/lib/db";
+import { PluginApiError } from "@/plugin-sdk/protocol";
 
 type Row = Record<string, unknown>;
 
@@ -173,4 +185,120 @@ export async function getPluginCanvas(canvasId: string): Promise<PluginCanvasSum
   const db = await getDatabase();
   const rows = await db.select<Row[]>("SELECT * FROM canvases WHERE id = ?", [canvasId]);
   return rows.length > 0 ? toCanvasSummary(rows[0]) : null;
+}
+
+// Library writes (#452). A fragment is plain text or an HTML fragment the host
+// sanitizes; both become the HTML the entity's write path normalizes.
+
+/** A content fragment a Plugin writes: plain text, or HTML the host sanitizes. */
+export type PluginContentFragment = { text: string } | { html: string };
+
+/**
+ * The HTML a fragment becomes before a write path normalizes it. HTML passes
+ * through the same sanitizer every read uses; plain text is escaped into
+ * paragraphs, and an empty fragment becomes empty content.
+ */
+export function fragmentToHtml(fragment: PluginContentFragment): string {
+  if ("html" in fragment) return sanitizePluginHtml(fragment.html);
+  return fragment.text === "" ? "" : plainTextToEditorHtml(fragment.text);
+}
+
+/** A write against an id the Library does not hold; the Plugin sees a refusal. */
+function notFound(entity: "Chapter" | "Note", id: string): PluginApiError {
+  return new PluginApiError({ code: "invalid-params", message: `${entity} ${id} does not exist` });
+}
+
+/** The word count of a fragment's final HTML, counted the way the editor counts. */
+function contentWordCount(html: string): number {
+  return countWords(htmlToPlainText(html));
+}
+
+/**
+ * One `library:write` handler's shared refusal mapping. The write paths signal
+ * two recoverable failures with their own error types: a Flush that could not
+ * save an open editor (`PendingEditsFlushError`) means nothing was written and
+ * the author's edits are still open, and a Tutorial sample id means the write
+ * targets a read-only Library. Both become `library-unavailable` so a Plugin
+ * can retry or tell the author; every other error rethrows unchanged.
+ */
+async function libraryWrite<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof PendingEditsFlushError) {
+      throw new PluginApiError({
+        code: "library-unavailable",
+        message: "An open editor could not save; nothing was written. Try again.",
+      });
+    }
+    if (error instanceof TutorialIdLeakError) {
+      throw new PluginApiError({
+        code: "library-unavailable",
+        message: "The Tutorial Library is read-only; nothing was written.",
+      });
+    }
+    throw error;
+  }
+}
+
+/** Replaces a Chapter's content through the Chapter write path. */
+export async function updatePluginChapterContent(
+  chapterId: string,
+  fragment: PluginContentFragment
+): Promise<null> {
+  return libraryWrite(async () => {
+    const chapter = await updateChapterRow(chapterId, { content: fragmentToHtml(fragment) }, "local");
+    if (!chapter) throw notFound("Chapter", chapterId);
+    return null;
+  });
+}
+
+/** Creates a Note through the Note write path and returns its id. */
+export async function createPluginNote(input: {
+  title: string;
+  bookId?: string | null;
+  content?: PluginContentFragment;
+}): Promise<{ noteId: string }> {
+  return libraryWrite(async () => {
+    const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
+    const note = await createNoteRow(
+      {
+        title: input.title,
+        bookId: input.bookId ?? null,
+        ...(content === undefined
+          ? {}
+          : { content, wordCount: contentWordCount(content) }),
+      },
+      "local"
+    );
+    return { noteId: note.id };
+  });
+}
+
+/**
+ * Updates a Note's title or content through the Note write path. No "current"
+ * state is read before the write: `updateNoteRow` merges the given fields onto
+ * the stored row, so an omitted field (the title, or the bookId it derives) is
+ * left as stored, and a missing id comes back as null.
+ */
+export async function updatePluginNote(input: {
+  noteId: string;
+  title?: string;
+  content?: PluginContentFragment;
+}): Promise<null> {
+  return libraryWrite(async () => {
+    const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
+    const note = await updateNoteRow(
+      {
+        id: input.noteId,
+        ...(input.title === undefined ? {} : { title: input.title }),
+        ...(content === undefined
+          ? {}
+          : { content, wordCount: contentWordCount(content) }),
+      },
+      "local"
+    );
+    if (!note) throw notFound("Note", input.noteId);
+    return null;
+  });
 }

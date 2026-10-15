@@ -6,7 +6,10 @@
 //
 // `stamp` is the target Command: an Item Menu supplies the Book or Chapter it
 // acts on, the host captures that target, and the Plugin answers with a
-// notification naming it. The page draws the Remote UI kit; the settings row is
+// notification naming it. `writeChapter` appends a paragraph to the focused
+// Chapter through `library:write`, and `insertGreeting` inserts a line through
+// the optional `editor:write` (#452), so the E2E lanes can drive the write
+// paths. The page draws the Remote UI kit; the settings row is
 // host-rendered from the manifest. Built from this source into
 // e2e/.output/plugins/fixture-everything (persistent) and
 // .../fixture-everything-on-demand (on-demand) by the E2E global setup; the
@@ -46,7 +49,9 @@ function AboutRow() {
   );
 }
 
-/** The item a target Command was invoked on, as the host captured it. */
+/**
+ * The item a target Command was invoked on, as the host captured it.
+ */
 interface CommandTarget {
   kind: string;
   id: string;
@@ -81,15 +86,85 @@ async function targetTitle(
   }
 }
 
+/** The most useful label for a refusal: a broker code first, then an error name. */
+function errorLabel(error: unknown): string {
+  if (error !== null && typeof error === "object") {
+    const record = error as { code?: unknown; name?: unknown };
+    if (typeof record.code === "string" && record.code !== "") return record.code;
+    if (typeof record.name === "string" && record.name !== "") return record.name;
+  }
+  if (typeof error === "string" && error !== "") return error;
+  return "unknown";
+}
+
+/**
+ * The `writeChapter` Command (#452): appends one paragraph to the focused
+ * Chapter through `library:write`. It yields first so the author's in-flight
+ * typing has landed before it reads, the way a Plugin that does any work
+ * between the Command and its read would see it; it then reads the focused
+ * editor's live content, and the host flushes the open editor before it
+ * persists, so nothing the author typed is dropped. A refusal (no open
+ * Chapter, or a refused write) surfaces as a notification.
+ */
+async function writeChapter(client: PluginClient): Promise<void> {
+  // Stands in for a Plugin's own async work, so the author's in-flight typing
+  // lands before this read (ADR 0002/0026: newer typing wins over an outside write).
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const focused = await client.editor.getContent();
+  if (focused.status !== "ok" || focused.entity.kind !== "chapter") {
+    await client.notifications.show({
+      variant: "error",
+      message: "Fixture write chapter refused: no open Chapter",
+    });
+    return;
+  }
+  try {
+    await client.library.chapters.updateContent({
+      chapterId: focused.entity.id,
+      content: { html: `${focused.content.html}<p>Plugin wrote this.</p>` },
+    });
+  } catch (error) {
+    await client.notifications.show({
+      variant: "error",
+      message: `Fixture write chapter refused: ${errorLabel(error)}`,
+    });
+  }
+}
+
+/**
+ * The `insertGreeting` Command (#452): inserts one line at the caret through
+ * `editor:write`, which the fixture manifest declares optional. Without the
+ * grant the broker refuses it and the fixture reports the refusal.
+ */
+async function insertGreeting(client: PluginClient): Promise<void> {
+  try {
+    await client.editor.insert({ content: { text: "Hello from the Plugin" } });
+  } catch (error) {
+    await client.notifications.show({
+      variant: "error",
+      message: `Fixture insert greeting refused: ${errorLabel(error)}`,
+    });
+  }
+}
+
 /**
  * Answers the host's `command.run`. `stamp` names its target in a notification;
- * every other Command still replies, so the host reports that it ran.
+ * the write Commands act on the Library and the focused editor; every other
+ * Command still replies, so the host reports that it ran.
  */
 async function runCommand(client: PluginClient, params: unknown): Promise<null> {
   const { id, target } = (params ?? {}) as { id?: string; target?: CommandTarget };
   if (id === "stamp") {
     const title = await targetTitle(client, target);
     await client.notifications.show({ variant: "info", message: `Fixture stamped ${title}` });
+    return null;
+  }
+  if (id === "writeChapter") {
+    await writeChapter(client);
+    return null;
+  }
+  if (id === "insertGreeting") {
+    await insertGreeting(client);
     return null;
   }
   await client.notifications.show({ variant: "info", message: `Fixture ran ${id}` });

@@ -4,6 +4,8 @@
   "commands.openPage.label": "Open fixture page",
   "commands.stamp.label": "Stamp",
   "commands.englishOnly.label": "English only",
+  "commands.writeChapter.label": "Write chapter",
+  "commands.insertGreeting.label": "Insert greeting",
   "pages.panel.title": "Everything fixture",
   "settingsRows.about.label": "Fixture row",
   "settingsRows.about.description": "A deterministic Settings row."

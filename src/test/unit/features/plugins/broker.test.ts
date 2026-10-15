@@ -182,6 +182,110 @@ describe("Plugin Permission checks", () => {
   });
 });
 
+describe("Library write Plugin Permissions", () => {
+  const WRITE_HANDLERS: PluginApiHandlers = {
+    "library.chapters.updateContent": async () => null,
+    "library.notes.create": async () => ({ noteId: "n1" }),
+    "library.notes.update": async () => null,
+  };
+
+  it("refuses every library:write row without the Plugin Permission", async () => {
+    const { client } = setup({
+      declared: ["library:write"],
+      grantedAtStart: [],
+      handlers: WRITE_HANDLERS,
+    });
+
+    const chapter = await refusal(
+      client.library.chapters.updateContent({ chapterId: "c1", content: { text: "x" } })
+    );
+    expect(chapter.code).toBe("permission-denied");
+    expect(chapter.permission).toBe("library:write");
+    expect(chapter.method).toBe("library.chapters.updateContent");
+
+    const create = await refusal(client.library.notes.create({ title: "T" }));
+    expect(create.code).toBe("permission-denied");
+    expect(create.method).toBe("library.notes.create");
+
+    const update = await refusal(client.library.notes.update({ noteId: "n1", title: "T" }));
+    expect(update.code).toBe("permission-denied");
+    expect(update.method).toBe("library.notes.update");
+  });
+
+  it("applies a revoked library:write on the next call (T11)", async () => {
+    const { client, granted } = setup({ declared: ["library:write"], handlers: WRITE_HANDLERS });
+
+    await expect(
+      client.library.chapters.updateContent({ chapterId: "c1", content: { text: "x" } })
+    ).resolves.toBeNull();
+    await expect(client.library.notes.create({ title: "T" })).resolves.toEqual({ noteId: "n1" });
+    await expect(client.library.notes.update({ noteId: "n1", title: "T" })).resolves.toBeNull();
+
+    granted.delete("library:write");
+
+    expect(
+      (
+        await refusal(
+          client.library.chapters.updateContent({ chapterId: "c1", content: { text: "x" } })
+        )
+      ).code
+    ).toBe("permission-denied");
+    expect((await refusal(client.library.notes.create({ title: "T" }))).code).toBe(
+      "permission-denied"
+    );
+    expect((await refusal(client.library.notes.update({ noteId: "n1", title: "T" }))).code).toBe(
+      "permission-denied"
+    );
+  });
+});
+
+describe("Editor write Plugin Permissions", () => {
+  const WRITE_HANDLERS: PluginApiHandlers = {
+    "editor.insert": async () => ({ status: "applied" as const }),
+    "editor.replace": async () => ({ status: "applied" as const }),
+  };
+
+  it("refuses every editor:write row without the Plugin Permission", async () => {
+    const { client } = setup({
+      declared: ["editor:write"],
+      grantedAtStart: [],
+      handlers: WRITE_HANDLERS,
+    });
+
+    const insert = await refusal(client.editor.insert({ content: { text: "x" } }));
+    expect(insert.code).toBe("permission-denied");
+    expect(insert.permission).toBe("editor:write");
+    expect(insert.method).toBe("editor.insert");
+
+    const replace = await refusal(
+      client.editor.replace({ range: { from: 0, to: 1 }, content: { text: "x" } })
+    );
+    expect(replace.code).toBe("permission-denied");
+    expect(replace.method).toBe("editor.replace");
+  });
+
+  it("applies a revoked editor:write on the next call (T11)", async () => {
+    const { client, granted } = setup({ declared: ["editor:write"], handlers: WRITE_HANDLERS });
+
+    await expect(client.editor.insert({ content: { text: "x" } })).resolves.toEqual({
+      status: "applied",
+    });
+
+    granted.delete("editor:write");
+
+    expect((await refusal(client.editor.insert({ content: { text: "x" } }))).code).toBe(
+      "permission-denied"
+    );
+    expect(
+      (
+        await refusal(
+          client.editor.replace({ range: { from: 0, to: 1 }, content: { text: "x" } })
+        )
+      ).code
+    ).toBe("permission-denied");
+  });
+});
+
 describe("typed errors", () => {
   it("refuses an unknown method", async () => {
     const { port } = setup();

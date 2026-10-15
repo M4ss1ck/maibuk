@@ -1,7 +1,10 @@
 /**
  * The host-side Plugin API handlers this app wires (ADR 0022, #440):
  * `notifications.show` renders a toast naming the Plugin; the Library reads
- * serve Books, Chapters, Notes, and Canvas metadata; `storage.*` reads and
+ * serve Books, Chapters, Notes, and Canvas metadata; the Library writes
+ * (#452) update a Chapter's content and create or update a Note through the
+ * entity's own write path; the editor writes (`editor.insert` / `editor.replace`,
+ * #452) edit the focused editor as one undoable step; `storage.*` reads and
  * writes the Plugin's own Library namespace; `navigation.openEntity` opens an
  * entity through the app shell; `navigation.openPage` opens a Plugin page;
  * `language.get` reads the app language. The
@@ -13,11 +16,14 @@ import { toast } from "@/components/ui/Toast";
 import {
   getPluginEditorContent,
   getPluginEditorSelection,
+  insertInFocusedEditor,
+  replaceInFocusedEditor,
   revealInFocusedEditor,
   setPluginEditorHighlights,
 } from "@/features/plugins/editor-host";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
+  createPluginNote,
   getPluginBook,
   getPluginCanvas,
   getPluginChapter,
@@ -26,6 +32,8 @@ import {
   listPluginCanvases,
   listPluginChapters,
   listPluginNotes,
+  updatePluginChapterContent,
+  updatePluginNote,
 } from "@/features/plugins/library";
 import { openPluginEntity, openPluginPage } from "@/features/plugins/navigation";
 import {
@@ -51,11 +59,19 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "library.chapters.get": ({ chapterId }) => getPluginChapter(chapterId),
     "library.notes.list": ({ bookId }) => listPluginNotes(bookId),
     "library.notes.get": ({ noteId }) => getPluginNote(noteId),
+    "library.chapters.updateContent": ({ chapterId, content }) =>
+      updatePluginChapterContent(chapterId, content),
+    "library.notes.create": ({ title, bookId, content }) =>
+      createPluginNote({ title, bookId, content }),
+    "library.notes.update": ({ noteId, title, content }) =>
+      updatePluginNote({ noteId, title, content }),
     "library.canvases.list": ({ bookId }) => listPluginCanvases(bookId),
     "library.canvases.get": ({ canvasId }) => getPluginCanvas(canvasId),
     "editor.getContent": () => getPluginEditorContent(),
     "editor.getSelection": () => getPluginEditorSelection(),
     "editor.reveal": ({ range }) => revealInFocusedEditor(range),
+    "editor.insert": ({ content }) => insertInFocusedEditor(content),
+    "editor.replace": ({ range, content }) => replaceInFocusedEditor(range, content),
     "editor.setHighlights": ({ kind, ranges }, { pluginId }) =>
       setPluginEditorHighlights(pluginId, { kind, ranges }),
     "storage.get": async ({ key }, { pluginId }) => {
