@@ -5,7 +5,7 @@
  * `user-event` key presses over the real Remote UI renderer.
  */
 
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import "@/i18n";
@@ -260,6 +260,76 @@ describe("Echoes report page", () => {
       // Every occurrence's accessible name still tells it apart from the rest.
       const names = screen.getAllByRole("option").map((option) => option.textContent);
       expect(new Set(names).size).toBe(names.length);
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("keeps a row that echoes across many long-titled Chapters inside the host's limits", async () => {
+    // A word in 60 Chapters once listed every title in the row description,
+    // past the host's 1024-character cap: the host refused the declaration and
+    // stopped Echoes with "declared an interface Maibuk could not accept".
+    const many = Array.from({ length: 60 }, (_, index) =>
+      chapter(
+        `m${index}`,
+        "b3",
+        `A rather long working title for planning chapter number ${index + 1}`,
+        index,
+        "The lantern swung. The lantern dimmed. The lantern went out."
+      )
+    );
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: { books: [book("b3", "Notebook")], chapters: many },
+      storage: settingsStorage(),
+    });
+    startEchoes(createPluginClient(host.port), servePluginUi);
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+
+      const row = await screen.findByRole("option", { name: /lantern/ });
+      expect(page.violations).toEqual([]);
+      expect(row).toHaveTextContent("180 times · A rather long working title for planning chapter number 1,");
+      expect(row).toHaveTextContent(/, \+\d+ more$/);
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("lists every Chapter of a 250-Chapter Book in the scope picker", async () => {
+    // The host once capped option lists at 200, so the scope picker of a long
+    // Book was refused and Echoes stopped before drawing a row.
+    const long = Array.from({ length: 250 }, (_, index) =>
+      chapter(`d${index}`, "b4", `Day ${index + 1}`, index, "The kettle sang. The kettle cooled.")
+    );
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: { books: [book("b4", "Journal")], chapters: long },
+      storage: settingsStorage(),
+    });
+    startEchoes(createPluginClient(host.port), servePluginUi);
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      // Loading yields between Chapters, so 250 of them take a few frames; a
+      // slow poll keeps the role query from starving that loop.
+      expect(
+        await screen.findByRole("option", { name: /kettle/ }, { timeout: 20_000, interval: 500 })
+      ).toBeInTheDocument();
+      expect(page.violations).toEqual([]);
+
+      const trigger = screen.getByLabelText(en["report.scope"]);
+      await tabTo(user, trigger);
+      await user.keyboard("{Enter}");
+      const listbox = await screen.findByRole("listbox");
+      // Whole Book plus one entry per Chapter.
+      expect(within(listbox).getAllByRole("option")).toHaveLength(251);
+      expect(within(listbox).getByRole("option", { name: "Day 250" })).toBeInTheDocument();
 
       page.unmount();
     } finally {

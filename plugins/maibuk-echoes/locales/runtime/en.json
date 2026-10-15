@@ -38,6 +38,7 @@
   "report.computing": "Updating the report…",
   "report.summary_one": "{{count}} time · {{chapters}}",
   "report.summary_other": "{{count}} times · {{chapters}}",
+  "report.moreChapters": "+{{count}} more",
   "report.limitedSupport": "Limited support for {{language}}",
   "report.noBook": "No Book yet."
 }

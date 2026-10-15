@@ -21,6 +21,7 @@ import {
 } from "react";
 import {
   PLUGIN_COMMAND_RUN_REQUEST,
+  PLUGIN_UI_LIMITS,
   ui,
   type HostRequestHandler,
   type PluginClient,
@@ -37,9 +38,14 @@ import { type EchoKey, format, translate } from "./i18n";
 import { languageSupport } from "./language";
 import {
   computeReport,
+  clampText,
   ECHO_KINDS,
   EMPTY_REPORT,
+  fitChapterTitles,
+  fitOptions,
   occurrenceContext,
+  ROW_DESCRIPTION_MAX,
+  ROW_LABEL_MAX,
   type EchoReport,
   type EchoReportRow,
   type ReportChapter,
@@ -431,14 +437,23 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     const titleById = new Map(chapters.map((chapter) => [chapter.id, chapter.title]));
     // A row names its Chapters by title, in Chapter order; a Chapter without a
     // title (or one the list no longer carries) falls back to its number.
-    const chapterTitles = (indexes: readonly number[]): string =>
-      indexes
-        .map((index) => {
-          const id = chaptersRef.current[index]?.id;
-          const title = id === undefined ? undefined : titleById.get(id);
-          return title !== undefined && title.trim() !== "" ? title : String(index + 1);
-        })
-        .join(", ");
+    const chapterTitles = (indexes: readonly number[]): string[] =>
+      indexes.map((index) => {
+        const id = chaptersRef.current[index]?.id;
+        const title = id === undefined ? undefined : titleById.get(id);
+        return title !== undefined && title.trim() !== "" ? title : String(index + 1);
+      });
+    // A word echoed across many Chapters names only the titles that fit the
+    // host's description cap, then how many it left out.
+    const rowSummary = (row: EchoReportRow): string => {
+      const template = translate(language, "report.summary", row.count);
+      return fitChapterTitles(
+        chapterTitles(row.chapterIndexes),
+        (chapters) => format(template, { count: row.count, chapters }),
+        (hidden) => format(translate(language, "report.moreChapters"), { count: hidden }),
+        ROW_DESCRIPTION_MAX
+      );
+    };
     const scopeOptions = [
       { value: SCOPE_WHOLE, label: translate(language, "wholeBook") },
       ...chapters.map((chapter) => ({ value: chapter.id, label: chapter.title })),
@@ -463,11 +478,8 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
         <ui.CollectionRow
           key={rowId}
           id={rowId}
-          label={row.label}
-          description={format(translate(language, "report.summary", row.count), {
-            count: row.count,
-            chapters: chapterTitles(row.chapterIndexes),
-          })}
+          label={clampText(row.label, ROW_LABEL_MAX)}
+          description={rowSummary(row)}
           isExpandable
           isExpanded={isExpanded}
           onExpandedChange={(event) => toggleRow(rowId, event.detail)}
@@ -486,8 +498,12 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
             // The echoed word alone would repeat row after row; the context
             // around this occurrence is the label that tells them apart, and the
             // Chapter it sits in is the right-aligned description.
-            label={occurrenceContext(chapterText, occurrence)}
-            description={chapter === undefined ? "" : (titleById.get(chapter.id) ?? "")}
+            label={clampText(occurrenceContext(chapterText, occurrence), ROW_LABEL_MAX)}
+            description={
+              chapter === undefined
+                ? ""
+                : clampText(titleById.get(chapter.id) ?? "", ROW_DESCRIPTION_MAX)
+            }
             onAction={() => {
               if (chapter === undefined) return;
               void client.navigation.openEntity({
@@ -505,7 +521,11 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
         <ui.View direction="row" gap="md" align="end">
           <ui.Select
             label={translate(language, "report.book")}
-            options={books.map((book) => ({ value: book.id, label: book.title }))}
+            options={fitOptions(
+              books.map((book) => ({ value: book.id, label: book.title })),
+              bookId ?? "",
+              PLUGIN_UI_LIMITS.maxOptions
+            )}
             selectedKey={bookId ?? ""}
             onChange={(event) => {
               if (event.detail !== "") selectBook(event.detail);
@@ -513,7 +533,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           />
           <ui.Select
             label={translate(language, "report.scope")}
-            options={scopeOptions}
+            options={fitOptions(scopeOptions, scopeKey, PLUGIN_UI_LIMITS.maxOptions)}
             selectedKey={scopeKey}
             onChange={(event) => setScopeKey(event.detail)}
           />

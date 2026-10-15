@@ -64,7 +64,6 @@ export interface PluginUiValidatorOptions {
   now?: () => number;
 }
 
-const MAX_OPTIONS = 200;
 const MAX_STRING = 1_000_000;
 
 /** The sliding window the batch-rate cap is measured over: one second. */
@@ -141,7 +140,7 @@ function unindexSubtree(id: string, shadow: TreeShadow, tracking: BatchTracking)
   shadow.nodes -= 1;
 }
 
-function propertyProblem(prop: PluginUiProp, value: unknown): string | null {
+function propertyProblem(prop: PluginUiProp, value: unknown, maxOptions: number): string | null {
   if (value === null || value === undefined) return null;
   switch (prop.kind) {
     case "string": {
@@ -178,7 +177,8 @@ function propertyProblem(prop: PluginUiProp, value: unknown): string | null {
         ? null
         : "is not one of its allowed values";
     case "options": {
-      if (!Array.isArray(value) || value.length > MAX_OPTIONS) return "is not a valid option list";
+      if (!Array.isArray(value)) return "is not a valid option list";
+      if (value.length > maxOptions) return `has more than ${maxOptions} entries`;
       const valid = value.every(
         (option) =>
           isRecord(option) && typeof option.value === "string" && typeof option.label === "string"
@@ -186,7 +186,8 @@ function propertyProblem(prop: PluginUiProp, value: unknown): string | null {
       return valid ? null : "is not a valid option list";
     }
     case "keys": {
-      if (!Array.isArray(value) || value.length > MAX_OPTIONS) return "is not a valid key list";
+      if (!Array.isArray(value)) return "is not a valid key list";
+      if (value.length > maxOptions) return `has more than ${maxOptions} entries`;
       return value.every((key) => typeof key === "string") ? null : "is not a valid key list";
     }
     case "node":
@@ -249,7 +250,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
             prop: name,
           });
         }
-        const problem = propertyProblem(prop, value);
+        const problem = propertyProblem(prop, value, limits.maxOptions);
         if (problem !== null) {
           return refuse({
             code: "invalid-prop",
@@ -364,7 +365,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
               prop: name,
             });
           }
-          const problem = propertyProblem(prop, value);
+          const problem = propertyProblem(prop, value, limits.maxOptions);
           if (problem !== null) {
             return void refuse({
               code: "invalid-prop",

@@ -227,3 +227,78 @@ function tokenRange(
   while (end + 1 < tokens.length && tokens[end + 1].from < occurrence.to) end++;
   return { start, end };
 }
+
+/**
+ * The host's caps on a `CollectionRow`'s `label` and `description`, in UTF-16
+ * code units (`maibuk-collection-row` in the SDK's UI table). The host refuses a
+ * longer prop and stops the Plugin, so every row string is fitted to these.
+ */
+export const ROW_LABEL_MAX = 512;
+export const ROW_DESCRIPTION_MAX = 1024;
+
+/**
+ * `text` cut to at most `max` code units, ending in "…" when it was cut. A cut
+ * never splits a surrogate pair, so the result is always well-formed text.
+ */
+export function clampText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let end = max - ELLIPSIS.length;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end--;
+  return `${text.slice(0, end)}${ELLIPSIS}`;
+}
+
+/**
+ * A row summary that names as many of `titles` as fit in `max` code units. With
+ * every title it is `render(titles.join(", "))`; when that is too long, it names
+ * the longest leading run that fits and ends with `more(hidden)`, the count of
+ * the titles left out. A summary that cannot fit even with no titles is clamped.
+ */
+export function fitChapterTitles(
+  titles: readonly string[],
+  render: (chapters: string) => string,
+  more: (hidden: number) => string,
+  max: number
+): string {
+  const full = render(titles.join(", "));
+  if (full.length <= max) return full;
+  const withFirst = (shown: number): string => {
+    const hidden = more(titles.length - shown);
+    return render(shown === 0 ? hidden : `${titles.slice(0, shown).join(", ")}, ${hidden}`);
+  };
+  // Each extra title adds at least its ", " separator while the hidden count
+  // shrinks by at most a digit, so the length grows with `shown`: binary search.
+  let best = clampText(withFirst(0), max);
+  let low = 1;
+  let high = titles.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const candidate = withFirst(mid);
+    if (candidate.length <= max) {
+      best = candidate;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return best;
+}
+
+/**
+ * At most `max` of `options`, in order, always including the one whose value is
+ * `selected`: past the cap it takes the place of the last entry kept. The host
+ * refuses a longer option list and stops the Plugin, so a Library past the cap
+ * loses the tail of its picker, never the page.
+ */
+export function fitOptions<T extends { value: string }>(
+  options: readonly T[],
+  selected: string,
+  max: number
+): T[] {
+  if (options.length <= max) return [...options];
+  const kept = options.slice(0, max);
+  if (kept.some((option) => option.value === selected)) return kept;
+  const chosen = options.find((option) => option.value === selected);
+  if (chosen !== undefined) kept[max - 1] = chosen;
+  return kept;
+}

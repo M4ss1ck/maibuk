@@ -6,11 +6,17 @@
 
 import { describe, expect, it } from "vitest";
 import { DEFAULT_ECHO_SETTINGS, type Echo, type EchoOccurrence } from "./find-echoes";
+import { getPluginUiElement } from "@/plugin-sdk/ui-table";
 import {
   buildReport,
+  clampText,
   computeReport,
   ECHO_KINDS,
+  fitChapterTitles,
+  fitOptions,
   occurrenceContext,
+  ROW_DESCRIPTION_MAX,
+  ROW_LABEL_MAX,
   type ReportChapter,
   type ReportProgress,
   type ReportSource,
@@ -140,6 +146,84 @@ describe("occurrenceContext()", () => {
 
   it("returns the whole text when the occurrence is not found", () => {
     expect(occurrenceContext("nothing here", occurrence(0, 999, 1004))).toBe("nothing here");
+  });
+});
+
+describe("row text limits", () => {
+  it("match the host's CollectionRow caps", () => {
+    const props = getPluginUiElement("maibuk-collection-row")?.props;
+    expect(props?.label.maxLength).toBe(ROW_LABEL_MAX);
+    expect(props?.description.maxLength).toBe(ROW_DESCRIPTION_MAX);
+  });
+});
+
+describe("clampText()", () => {
+  it("returns text within the cap unchanged", () => {
+    expect(clampText("harbor", 6)).toBe("harbor");
+  });
+
+  it("cuts longer text to the cap, ending in an ellipsis", () => {
+    expect(clampText("harbor lights", 8)).toBe("harbor …");
+  });
+
+  it("never splits a surrogate pair", () => {
+    const clamped = clampText("ab😀cd", 4);
+    expect(clamped).toBe("ab…");
+    expect(clamped.charCodeAt(clamped.length - 2)).toBe("b".charCodeAt(0));
+  });
+});
+
+describe("fitChapterTitles()", () => {
+  const render = (chapters: string) => `3 times · ${chapters}`;
+  const more = (hidden: number) => `+${hidden} more`;
+
+  it("names every title when they fit", () => {
+    expect(fitChapterTitles(["One", "Two"], render, more, 100)).toBe("3 times · One, Two");
+  });
+
+  it("names the leading titles that fit and counts the rest", () => {
+    const titles = ["Alpha", "Bravo", "Charlie", "Delta"];
+    expect(fitChapterTitles(titles, render, more, 32)).toBe("3 times · Alpha, Bravo, +2 more");
+  });
+
+  it("names no title when even the first does not fit", () => {
+    expect(fitChapterTitles(["A very long title", "B"], render, more, 20)).toBe("3 times · +2 more");
+  });
+
+  it("clamps a summary that cannot fit at all", () => {
+    expect(fitChapterTitles(["A", "B"], render, more, 8)).toBe("3 times…");
+  });
+
+  it("always fits the cap, for any number and length of titles", () => {
+    for (const count of [1, 2, 5, 46, 300]) {
+      for (const length of [1, 20, 80, 2000]) {
+        const titles = Array.from({ length: count }, (_, i) => `${i}`.padEnd(length, "x"));
+        const summary = fitChapterTitles(titles, render, more, ROW_DESCRIPTION_MAX);
+        expect(summary.length).toBeLessThanOrEqual(ROW_DESCRIPTION_MAX);
+        expect(summary.startsWith("3 times · ")).toBe(true);
+      }
+    }
+  });
+});
+
+describe("fitOptions()", () => {
+  const options = ["whole", "a", "b", "c", "d"].map((value) => ({ value, label: value }));
+  const values = (list: readonly { value: string }[]) => list.map((option) => option.value);
+
+  it("keeps every option within the cap", () => {
+    expect(values(fitOptions(options, "c", 5))).toEqual(["whole", "a", "b", "c", "d"]);
+  });
+
+  it("keeps the leading options past the cap when the selection is among them", () => {
+    expect(values(fitOptions(options, "a", 3))).toEqual(["whole", "a", "b"]);
+  });
+
+  it("swaps the last kept option for a selection past the cap", () => {
+    expect(values(fitOptions(options, "d", 3))).toEqual(["whole", "a", "d"]);
+  });
+
+  it("keeps the leading options when nothing valid is selected", () => {
+    expect(values(fitOptions(options, "", 2))).toEqual(["whole", "a"]);
   });
 });
 

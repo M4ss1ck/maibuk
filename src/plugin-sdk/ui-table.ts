@@ -885,10 +885,18 @@ export interface PluginUiLimits {
    * most one flush per 16 ms window; the host allows 2x for message jitter).
    */
   maxBatchesPerSecond: number;
+  /**
+   * Most entries in one option or key list (a Select's `options`, a Tabs'
+   * `items`, a selection's keys). Sized for a scope picker over a long Book,
+   * one entry per Chapter. A list is one prop, not a node per entry, so this
+   * cap, not `maxNodes`, is what bounds it.
+   */
+  maxOptions: number;
 }
 
 export const PLUGIN_UI_LIMITS: PluginUiLimits = {
   maxNodes: 10_000,
   maxRecordsPerBatch: 2_000,
   maxBatchesPerSecond: 120,
+  maxOptions: 2_000,
 };

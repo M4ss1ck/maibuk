@@ -38,6 +38,7 @@
   "report.computing": "Actualizando el informe…",
   "report.summary_one": "{{count}} vez · {{chapters}}",
   "report.summary_other": "{{count}} veces · {{chapters}}",
+  "report.moreChapters": "+{{count}} más",
   "report.limitedSupport": "Compatibilidad limitada con {{language}}",
   "report.noBook": "Todavía no hay ningún libro."
 }
