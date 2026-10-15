@@ -8,7 +8,7 @@
  * boundary, keyed so a restarted Plugin (a fresh runtime) remounts everything.
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useInstalledPluginLifecycle,
@@ -50,15 +50,17 @@ function PluginRemoteUiRun({
   runtime,
   pageId,
   kind,
+  pending,
   onStop,
 }: {
   runtime: PluginRuntime;
   pageId: string;
   kind: PluginUiMountKind;
+  pending: ReactNode;
   onStop: () => void;
 }) {
   const { t } = useTranslation();
-  const { ui, failed } = usePluginRemoteUi(runtime, pageId, onStop, kind);
+  const { ui, mounted, failed } = usePluginRemoteUi(runtime, pageId, onStop, kind);
   if (failed) {
     return (
       <p role="alert" className="text-sm text-muted-foreground">
@@ -66,18 +68,26 @@ function PluginRemoteUiRun({
       </p>
     );
   }
-  return ui && <PluginRemoteUiSurface ui={ui} onError={onStop} />;
+  return (
+    <>
+      {!mounted && pending}
+      {ui && <PluginRemoteUiSurface ui={ui} onError={onStop} />}
+    </>
+  );
 }
 
 export function PluginRemoteUiBoundary({
   pluginId,
   pageId,
   kind = "page",
+  pending = null,
 }: {
   pluginId: string;
   pageId: string;
   /** The registry to mount from: a page (default) or a Settings row body. */
   kind?: PluginUiMountKind;
+  /** Shown while the Plugin starts and until it accepts the mount. */
+  pending?: ReactNode;
 }) {
   const lifecycle = useInstalledPluginLifecycle();
   // Re-render when the Plugin's state changes (start, ready, stop).
@@ -93,8 +103,16 @@ export function PluginRemoteUiBoundary({
   const status = lifecycle?.state(pluginId)?.status ?? null;
   // A mount before `ready` could reach a Plugin that has not installed its
   // handler yet; only a running or heartbeat-degraded Plugin renders.
+  if (status === "starting") return pending;
   if (runtime === null || (status !== "ready" && status !== "unavailable")) return null;
   return (
-    <PluginRemoteUiRun key={runKey(runtime)} runtime={runtime} pageId={pageId} kind={kind} onStop={stop} />
+    <PluginRemoteUiRun
+      key={runKey(runtime)}
+      runtime={runtime}
+      pageId={pageId}
+      kind={kind}
+      pending={pending}
+      onStop={stop}
+    />
   );
 }
