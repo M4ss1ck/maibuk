@@ -11,7 +11,9 @@
 // `maibuk.local.json` (machine-specific, GITIGNORED). A relative path in that
 // file resolves against the Plugin root. A checkout is valid when
 // `<path>/package.json` names `maibuk`, `<path>/scripts/plugin/cli.ts` and
-// `<path>/src/plugin-sdk/index.ts` exist, and `<path>/node_modules` exists.
+// `<path>/src/plugin-sdk/index.ts` exist, and the launcher this module spawns
+// (`<path>/node_modules/tsx/dist/cli.mjs`) exists, so an incomplete install is
+// refused with a message instead of a raw `MODULE_NOT_FOUND`.
 // Every refusal names the source used, the path tried, what is missing, and the
 // command that fixes it.
 
@@ -28,6 +30,15 @@ export const LOCAL_CONFIG_KEY = "maibukCheckout";
 
 /** The command that writes {@link LOCAL_CONFIG_FILE} for the author. */
 const SETUP_COMMAND = "node scripts/setup.mjs --maibuk <path/to/maibuk>";
+
+/**
+ * The checkout-relative entry the bootstrap spawns with `process.execPath`. A
+ * checkout can have a `node_modules` folder that exists but is incomplete (for
+ * example, only `.pnpm` after an interrupted install); requiring this exact
+ * file turns the raw `MODULE_NOT_FOUND` that follows into the same actionable
+ * message as a missing folder.
+ */
+const TSX_LAUNCHER = "node_modules/tsx/dist/cli.mjs";
 
 /** The usage block printed for a bad or missing command line. */
 const USAGE =
@@ -49,46 +60,91 @@ function isDirectory(path) {
   }
 }
 
-/** Everything a candidate checkout is missing or has wrong, in reading order. */
-function missingRequirements(root) {
-  const missing = [];
+/** The structural requirements a Maibuk checkout folder itself must satisfy. */
+function structuralProblems(root) {
+  const problems = [];
   const packagePath = join(root, "package.json");
   if (!existsSync(packagePath)) {
-    missing.push("package.json is missing");
+    problems.push("package.json is missing");
   } else {
     try {
       const parsed = JSON.parse(readFileSync(packagePath, "utf8"));
-      if (parsed.name !== "maibuk") missing.push('package.json does not name "maibuk"');
+      if (parsed.name !== "maibuk") problems.push('package.json does not name "maibuk"');
     } catch {
-      missing.push("package.json is not valid JSON");
+      problems.push("package.json is not valid JSON");
     }
   }
   if (!existsSync(join(root, "scripts/plugin/cli.ts"))) {
-    missing.push("scripts/plugin/cli.ts is missing");
+    problems.push("scripts/plugin/cli.ts is missing");
   }
   if (!existsSync(join(root, "src/plugin-sdk/index.ts"))) {
-    missing.push("src/plugin-sdk/index.ts is missing");
+    problems.push("src/plugin-sdk/index.ts is missing");
   }
-  if (!isDirectory(join(root, "node_modules"))) {
-    missing.push(`node_modules is missing; run "pnpm install" in ${root}`);
-  }
-  return missing;
+  return problems;
 }
 
-/** Returns the path when it is a usable checkout, otherwise throws with the detail. */
+/**
+ * What a structurally valid checkout is missing to run: its `node_modules`
+ * folder, or the exact launcher this module spawns inside it (which a
+ * half-finished install leaves out). `undefined` when a run has everything it
+ * needs.
+ */
+function dependencyProblem(root) {
+  if (!isDirectory(join(root, "node_modules"))) {
+    return "node_modules is missing; dependencies are not installed";
+  }
+  if (!existsSync(join(root, TSX_LAUNCHER))) {
+    return `${TSX_LAUNCHER} is missing; dependencies are not installed`;
+  }
+  return undefined;
+}
+
+/**
+ * The `Fix:` line for a `source` that did not name a Maibuk checkout: a path
+ * that is not a folder, or one missing the package name, the CLI, or the SDK
+ * entry. The line names only the fix for *that* source, so an author who passed
+ * `--maibuk` is never sent to `setup.mjs` and one whose `maibuk.local.json`
+ * points at the wrong checkout is sent back to `setup.mjs`.
+ */
+function sourceFix(source) {
+  if (source === "--maibuk") {
+    return "Fix: pass the path of a Maibuk checkout to --maibuk.";
+  }
+  if (source === "MAIBUK_CHECKOUT") {
+    return `Fix: correct or unset MAIBUK_CHECKOUT, or run ${SETUP_COMMAND}.`;
+  }
+  return `Fix: ${SETUP_COMMAND}.`;
+}
+
+/** The `Fix:` line when the checkout is valid and only its dependencies are missing. */
+function installFix(root) {
+  return `Fix: run "pnpm install" in ${root}.`;
+}
+
+/** Returns the path when it is a runnable checkout, otherwise throws with the detail. */
 function assertUsableCheckout(path, source) {
   if (!isDirectory(path)) {
     throw new MaibukCheckoutError(
-      `The Maibuk checkout named by ${source} is not a folder: ${path}\nFix: ${SETUP_COMMAND}`
+      `The Maibuk checkout named by ${source} is not a folder: ${path}\n${sourceFix(source)}`
     );
   }
-  const missing = missingRequirements(path);
-  if (missing.length > 0) {
+  const structural = structuralProblems(path);
+  if (structural.length > 0) {
     throw new MaibukCheckoutError(
       [
-        `The Maibuk checkout named by ${source} is not usable: ${path}`,
-        ...missing.map((entry) => `  - ${entry}`),
-        `Fix: ${SETUP_COMMAND}, or run "pnpm install" in the checkout.`,
+        `The Maibuk checkout named by ${source} is not a Maibuk checkout: ${path}`,
+        ...structural.map((entry) => `  - ${entry}`),
+        sourceFix(source),
+      ].join("\n")
+    );
+  }
+  const dependency = dependencyProblem(path);
+  if (dependency !== undefined) {
+    throw new MaibukCheckoutError(
+      [
+        `The Maibuk checkout named by ${source} is not ready to run: ${path}`,
+        `  - ${dependency}`,
+        installFix(path),
       ].join("\n")
     );
   }
@@ -160,7 +216,7 @@ export function runCli(command, pluginRoot, flag) {
     env: process.env.MAIBUK_CHECKOUT,
     pluginRoot,
   });
-  const tsx = join(checkout, "node_modules", "tsx", "dist", "cli.mjs");
+  const tsx = join(checkout, TSX_LAUNCHER);
   const cli = join(checkout, "scripts", "plugin", "cli.ts");
   return new Promise((settle) => {
     const child = spawn(process.execPath, [tsx, cli, command, pluginRoot], {

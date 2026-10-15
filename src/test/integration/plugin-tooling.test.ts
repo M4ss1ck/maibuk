@@ -12,6 +12,7 @@ import { spawn } from "node:child_process";
 import {
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -145,6 +146,39 @@ describe.skipIf(!process.env.MAIBUK_PLUGIN_TOOLING)(
       expect(check.code, check.stdout + check.stderr).not.toBe(0);
       expect(check.stdout).toContain("FAIL boundary");
       expect(check.stdout).toMatch(/index\.tsx:\d+ @\/features\/plugins\/relative-path/);
+    });
+
+    it("resolves react and react-dom to Maibuk's copy, never the Plugin's own", async () => {
+      const plugin = join(tempRoot("maibuk plugin one react "), "hello plugin");
+      copyTemplate(plugin);
+
+      // The Plugin's own `node_modules` holds a decoy react and react-dom: each
+      // re-exports a marker string and throws the moment it runs. React is
+      // pinned to Maibuk's copy (one React per renderer), so the build must not
+      // bundle the marker and the test run must not load the decoy: `check`
+      // still exits 0 and the marker never reaches `dist/<id>/index.js`.
+      const marker = "plugin-copy-react-marker-0.0.0";
+      for (const name of ["react", "react-dom"]) {
+        const dir = join(plugin, "node_modules", name);
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(
+          join(dir, "package.json"),
+          `${JSON.stringify({ name, version: "0.0.0-plugin-copy", type: "module", main: "index.js" })}\n`
+        );
+        writeFileSync(
+          join(dir, "index.js"),
+          `export const MARKER = ${JSON.stringify(marker)};\nthrow new Error(${JSON.stringify(
+            `the Plugin's own copy of ${name} must not be used`
+          )});\n`
+        );
+      }
+
+      await node("scripts/setup.mjs", ["--maibuk", REPO_ROOT], plugin);
+      const check = await node("scripts/maibuk.mjs", ["check"], plugin);
+      expect(check.code, check.stdout + check.stderr).toBe(0);
+
+      const bundle = readFileSync(join(plugin, "dist/hello-plugin/index.js"), "utf8");
+      expect(bundle).not.toContain(marker);
     });
 
     it("builds a built-in and the template to the same valid layout", async () => {
