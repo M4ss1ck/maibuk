@@ -2188,6 +2188,10 @@
       "couldNotDisplay": "No se pudo mostrar la interfaz de este Plugin.",
       "removeValue": "Quitar {{value}}"
     },
+    "frame": {
+      "customUiRequired": "Este Plugin no puede usar interfaz personalizada.",
+      "unavailable": "La interfaz personalizada no está disponible en esta plataforma."
+    },
     "management": {
       "add": "Añadir Plugin",
       "addHelp": "Instala un Plugin desde un archivo .zip, o abre y cambia la carpeta de Plugins.",

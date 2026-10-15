@@ -12,6 +12,7 @@ import type { RemoteConnection } from "@remote-dom/core";
 import { RemoteReceiver } from "@remote-dom/core/receivers";
 import type { RemoteComponentRendererMap } from "@remote-dom/react/host";
 import { release, retain } from "@quilted/threads";
+import type { PluginFrameHost } from "@/components/plugins/PluginFrame";
 import { createPluginUiComponents } from "@/features/plugins/remote-ui/components";
 import {
   createValidatedConnection,
@@ -34,6 +35,12 @@ export function createPluginRemoteUi(options: {
   onViolation: (violation: PluginUiViolation) => void;
   /** The manifest's `customUi`; a tree with a `Frame` is refused without it. */
   customUi?: boolean;
+  /**
+   * The owning run's Frame host (#454): the kit `Frame` renders its sandboxed
+   * iframe from it. Omitted by tests that mount a tree without a runtime, where
+   * a `Frame` renders nothing.
+   */
+  frameHost?: PluginFrameHost;
   /** Injectable clock in milliseconds; the default reads the real time. */
   now?: () => number;
 }): PluginRemoteUi {
@@ -50,7 +57,7 @@ export function createPluginRemoteUi(options: {
     ...(options.customUi === undefined ? {} : { customUi: options.customUi }),
     ...(options.now === undefined ? {} : { now: options.now }),
   });
-  const components = createPluginUiComponents();
+  const components = createPluginUiComponents(options.frameHost);
   return {
     receiver,
     connection,

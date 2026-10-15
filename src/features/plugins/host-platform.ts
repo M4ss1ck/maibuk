@@ -37,3 +37,32 @@ export const PLUGIN_HOST_UNSUPPORTED_PLATFORMS: readonly PluginHostPlatform[] = 
 export function pluginsRunOn(platform: PluginHostPlatform): boolean {
   return !PLUGIN_HOST_UNSUPPORTED_PLATFORMS.includes(platform);
 }
+
+/**
+ * The Tauri platform this build runs on, or null when there is none: the web
+ * build, and `scripts/build-builtin-plugins.ts` under `tsx`, which has no Vite
+ * `import.meta.env`. Read defensively so this leaf stays importable there.
+ */
+function tauriPlatform(): string | null {
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  return env?.TAURI_ENV_PLATFORM ?? null;
+}
+
+/**
+ * The Frame gate's rule, over one Tauri platform string (or null): the Frame is
+ * off on Android, where v1 runs no Plugin at all (#447), and on everywhere else
+ * today. A later slice adds Windows until a recorded WebView2 conformance run
+ * exists. Pure, so a test drives it without the build env.
+ */
+export function pluginFrameAvailableOn(platform: string | null): boolean {
+  return platform !== "android";
+}
+
+/**
+ * Whether the custom-UI `Frame` may mount on this build (#454, D6). The rest of
+ * the Plugin keeps working when this is false: only the Frame refuses and shows
+ * the not-available placeholder.
+ */
+export function isPluginFrameAvailable(): boolean {
+  return pluginFrameAvailableOn(tauriPlatform());
+}

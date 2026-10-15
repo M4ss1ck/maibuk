@@ -289,6 +289,8 @@ export function registerPluginContributions(source: PluginContributionsSource): 
         localId: page.id,
         id: `${PLUGIN_PREFIX}${manifest.id}.${page.id}` as PluginContributionId,
         title: page.title,
+        // A page that declares `frame` is a whole-page Frame (D2).
+        ...(page.frame !== undefined ? { frame: page.frame } : {}),
         commandId: `${PLUGIN_COMMAND_PREFIX}${manifest.id}.${page.command}` as PluginCommandId,
       }));
       const sidebarDefs: PluginSidebarEntryDef[] = [];

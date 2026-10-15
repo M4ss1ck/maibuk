@@ -1,6 +1,7 @@
 import { Suspense, lazy, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
+import { PluginFrameSurface } from "@/components/plugins/PluginFrame";
 import { pluginPageCommandBindings } from "@/features/plugins/commands";
 import { getPluginPage } from "@/features/plugins/contributions-registry";
 import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
@@ -70,6 +71,15 @@ export function PluginPage() {
       </h1>
       {page === undefined ? (
         <p className="mt-2 text-sm text-muted-foreground">{t("plugins.page.notFoundDescription")}</p>
+      ) : page.frame !== undefined ? (
+        // A page whose contribution declares `frame` is a whole-page Frame
+        // (#454, D2): the sandboxed surface replaces the Remote UI tree.
+        <PluginFrameSurface
+          pluginId={pluginId}
+          src={page.frame}
+          title={page.title}
+          variant="page"
+        />
       ) : (
         <Suspense fallback={null}>
           <PluginRemoteUiBoundary pluginId={pluginId} pageId={pageId} />

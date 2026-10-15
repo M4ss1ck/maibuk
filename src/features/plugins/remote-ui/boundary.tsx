@@ -14,6 +14,7 @@ import {
   useInstalledPluginLifecycle,
   usePluginLifecycleRevision,
 } from "@/hooks/usePluginSurface";
+import { pluginRunKey } from "@/components/plugins/plugin-run-key";
 import { PluginRemoteUiSurface } from "@/features/plugins/remote-ui/surface";
 import { usePluginRemoteUi } from "@/features/plugins/remote-ui/use-plugin-remote-ui";
 import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
@@ -25,24 +26,6 @@ import type { PluginUiMountKind } from "@/plugin-sdk/protocol";
  */
 export function stopRemoteUi(lifecycle: PluginLifecycle | null, pluginId: string): void {
   lifecycle?.stop(pluginId, "remote-ui-limit");
-}
-
-/**
- * A stable key per `PluginRuntime` object: its first run assigns the next
- * number, so a restart (a new runtime) gets a different key and remounts the
- * run instead of reusing the old connection.
- */
-const runKeys = new WeakMap<PluginRuntime, number>();
-let nextRunKey = 0;
-
-function runKey(runtime: PluginRuntime): number {
-  let key = runKeys.get(runtime);
-  if (key === undefined) {
-    nextRunKey += 1;
-    key = nextRunKey;
-    runKeys.set(runtime, key);
-  }
-  return key;
 }
 
 /** One run's host side: its remote UI and, when the mount is refused, the fallback. */
@@ -107,7 +90,7 @@ export function PluginRemoteUiBoundary({
   if (runtime === null || (status !== "ready" && status !== "unavailable")) return null;
   return (
     <PluginRemoteUiRun
-      key={runKey(runtime)}
+      key={pluginRunKey(runtime)}
       runtime={runtime}
       pageId={pageId}
       kind={kind}

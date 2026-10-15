@@ -19,7 +19,7 @@ import type { PluginRuntime } from "@/features/plugins/types";
 import type { PluginUiMountKind } from "@/plugin-sdk/protocol";
 
 export function usePluginRemoteUi(
-  runtime: Pick<PluginRuntime, "broker" | "manifest">,
+  runtime: Pick<PluginRuntime, "broker" | "manifest" | "files" | "sendFrame">,
   pageId: string,
   onViolation: (violation: PluginUiViolation) => void,
   kind: PluginUiMountKind = "page"
@@ -35,6 +35,9 @@ export function usePluginRemoteUi(
     const created = createPluginRemoteUi({
       onViolation: (violation) => handler.current(violation),
       customUi: runtime.manifest.customUi === true,
+      // A kit `Frame` inside this tree renders the sandboxed surface from the
+      // same run's verified folder and hands port B to this Worker (#454).
+      frameHost: runtime,
     });
     const mount = openPluginUiMount(runtime.broker, pageId, kind);
     // The thread listens through `addEventListener`, which a MessagePort only

@@ -14,7 +14,7 @@ const INSERTS = [
  * a broker to open the mount over (and a manifest for `customUi`), and every
  * reply is irrelevant here.
  */
-function fakeRuntime(): Pick<PluginRuntime, "broker" | "manifest"> {
+function fakeRuntime(): Pick<PluginRuntime, "broker" | "manifest" | "files" | "sendFrame"> {
   return {
     broker: {
       request: () => new Promise<unknown>(() => {}),
@@ -23,6 +23,8 @@ function fakeRuntime(): Pick<PluginRuntime, "broker" | "manifest"> {
       stopped: false,
     },
     manifest: { customUi: false } as unknown as PluginManifest,
+    files: [],
+    sendFrame: () => {},
   };
 }
 
@@ -53,7 +55,7 @@ describe("usePluginRemoteUi", () => {
 
   it("reports mounted only once the Plugin accepts the mount", async () => {
     let accept = (_value: unknown) => {};
-    const runtime: Pick<PluginRuntime, "broker" | "manifest"> = {
+    const runtime: Pick<PluginRuntime, "broker" | "manifest" | "files" | "sendFrame"> = {
       broker: {
         ...fakeRuntime().broker,
         request: () =>
@@ -62,6 +64,8 @@ describe("usePluginRemoteUi", () => {
           }),
       },
       manifest: { customUi: false } as unknown as PluginManifest,
+      files: [],
+      sendFrame: () => {},
     };
     const { result } = renderHook(() => usePluginRemoteUi(runtime, "page.one", () => {}));
     expect(result.current.mounted).toBe(false);

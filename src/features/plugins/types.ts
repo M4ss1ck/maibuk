@@ -119,6 +119,19 @@ export interface PluginRuntime {
   manifest: PluginManifest;
   /** The host end of the Plugin's port: requests, events, and stop. */
   broker: PluginBroker;
+  /**
+   * The verified Plugin-folder files, read-only (#454): a Frame is built from
+   * exactly the bytes the pinned `h1:` covered, never a fresh read. The Frame
+   * host keeps this on the runtime so a remount reuses the verified set.
+   */
+  readonly files: readonly PluginFolderFile[];
+  /**
+   * Hands one Frame's port to this Plugin's Worker over the Plugin's own
+   * MessagePort as a reserved envelope (#454, D1), keyed by the host's
+   * `frameId`. The SDK delivers it to the Plugin's `onFrame` before RPC
+   * dispatch; the host never parses Frame traffic afterwards.
+   */
+  sendFrame(frameId: string, src: string, port: MessagePort): void;
   /** Stops the broker and removes the sandbox frame (terminating its Worker). */
   stop(): void;
 }

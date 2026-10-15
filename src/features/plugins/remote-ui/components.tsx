@@ -50,6 +50,7 @@ import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
+import { PluginFrame, type PluginFrameHost } from "@/components/plugins/PluginFrame";
 import { scopePluginCss } from "@/features/plugins/remote-ui/css-scope";
 import { createEchoTracker, type PluginEchoTracker } from "@/features/plugins/remote-ui/echo";
 import { useItemContextMenu, useRestoreFocus } from "@/hooks";
@@ -1382,17 +1383,27 @@ function SurfaceHost({
 }
 
 /**
- * The custom-UI `Frame` (#454). Unit 1 ships only the contract, so the host
- * renders nothing yet. TODO(#454 U3): mount the sandboxed iframe for `src`,
- * refusing the frame and rendering the not-available/notice placeholder per the
- * platform gates (D5, D6).
+ * The custom-UI `Frame` (#454, U3): the kit tag renders the host `PluginFrame`
+ * for the mount's own run. Its `src` and `title` come from the Plugin's tree;
+ * the runtime comes from the mount, since only the host knows the verified
+ * folder and the Worker to hand the Frame port to. Without a runtime (a test
+ * tree, or a mount the host did not open) it renders nothing and refuses.
  */
-function FrameHost(_props: { src: string; title: string }): ReactNode {
-  return null;
+function FrameHost({
+  src,
+  title,
+  host,
+}: {
+  src: string;
+  title: string;
+  host?: PluginFrameHost;
+}): ReactNode {
+  if (host === undefined) return null;
+  return <PluginFrame runtime={host} src={src} title={title} variant="embedded" />;
 }
 
 /** Every table tag's host renderer, built once. */
-export function createPluginUiComponents(): RemoteComponentRendererMap {
+export function createPluginUiComponents(host?: PluginFrameHost): RemoteComponentRendererMap {
   const components: RemoteComponentRendererMap = new Map();
   const hosts: Record<string, ComponentType<any>> = {
     View: ViewHost,
@@ -1430,7 +1441,9 @@ export function createPluginUiComponents(): RemoteComponentRendererMap {
     Status: StatusHost,
     EmptyState: EmptyStateHost,
     Surface: SurfaceHost,
-    Frame: FrameHost,
+    // The Frame host closes over the mount's runtime: the Plugin tree carries
+    // only `src` and `title` (see FrameHost).
+    Frame: (props: { src: string; title: string }) => <FrameHost {...props} host={host} />,
   };
   for (const element of PLUGIN_UI_TABLE) {
     const Host = hosts[element.host];

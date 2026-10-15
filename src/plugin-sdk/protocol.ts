@@ -147,6 +147,37 @@ export const PLUGIN_READY_MESSAGE = { kind: "maibuk:plugin-ready" } as const;
 export const PLUGIN_ERROR_MESSAGE = { kind: "maibuk:plugin-error" } as const;
 
 /**
+ * The sandbox's Frame handoff with the Plugin's Worker (#454, D1). The host
+ * posts this to the bootstrap frame with one MessagePort (the Frame's port);
+ * the bootstrap forwards it to the Worker with the port transferred, exactly as
+ * it forwards the init port. The Worker's SDK exposes it through
+ * `client.onFrame`; the host never parses Frame traffic.
+ */
+export const PLUGIN_FRAME_MESSAGE = { kind: "maibuk:plugin-frame" } as const;
+
+/**
+ * The Frame message's shape: `frameId` is the host's mount id and `src` the
+ * Plugin-folder-relative path of the Frame's HTML. Delivered on the Worker's
+ * own message channel, with the Frame's port as `event.ports[0]`.
+ */
+export interface PluginFrameMessage {
+  kind: typeof PLUGIN_FRAME_MESSAGE.kind;
+  frameId: string;
+  src: string;
+}
+
+/**
+ * One mounted Frame the host hands the Plugin (#454): the port is the Frame's
+ * own MessagePort, which the Plugin talks over to relay messages between its
+ * Worker and the Frame.
+ */
+export interface PluginFrame {
+  id: string;
+  src: string;
+  port: MessagePort;
+}
+
+/**
  * Why the host activated a Plugin, delivered to the Worker on the init message
  * (#400, #445). The first seven are the manifest decision's; `warmStart` and
  * `restart` come from the performance decision (#401). A raw-wire Plugin reads

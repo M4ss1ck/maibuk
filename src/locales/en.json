@@ -2188,6 +2188,10 @@
       "couldNotDisplay": "This Plugin's interface could not be displayed.",
       "removeValue": "Remove {{value}}"
     },
+    "frame": {
+      "customUiRequired": "This Plugin cannot use custom UI.",
+      "unavailable": "Custom UI is not available on this platform."
+    },
     "management": {
       "add": "Add Plugin",
       "addHelp": "Install a Plugin from a .zip file, or open and change the Plugin Directory.",
