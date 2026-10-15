@@ -127,6 +127,9 @@ describe("tsconfigForCheck()", () => {
       "../**/*.ts",
       "../**/*.tsx",
       join(MAIBUK_ROOT, "src/**/*.d.ts"),
+      // The `@testing-library/jest-dom` Vitest matcher declarations Maibuk's own
+      // suite loads from `src/test/setup.ts`.
+      join(MAIBUK_ROOT, "node_modules/@testing-library/jest-dom/types/vitest.d.ts"),
     ]);
   });
 
@@ -154,16 +157,22 @@ describe("tsconfigForCheck()", () => {
 });
 
 describe("tsconfigPaths()", () => {
-  it("holds only paths and types for the editor", () => {
+  it("holds paths, types, and the jest-dom Vitest matcher declarations for the editor", () => {
     const config = tsconfigPaths(PLUGIN_ROOT, MAIBUK_ROOT) as {
       compilerOptions: Record<string, unknown>;
+      files: string[];
     };
 
-    expect(Object.keys(config)).toEqual(["compilerOptions"]);
+    expect(Object.keys(config)).toEqual(["compilerOptions", "files"]);
     expect(Object.keys(config.compilerOptions)).toEqual(["paths", "types"]);
     expect(config.compilerOptions.types).toEqual(["node", "react", "react-dom"]);
     expect((config.compilerOptions.paths as Record<string, string[]>)["@/*"]).toEqual([
       join(MAIBUK_ROOT, "src/*"),
+    ]);
+    // The editor's program includes the matcher declarations so a Plugin test may
+    // use `toBeInTheDocument` / `toHaveFocus`, like Maibuk's own suite does.
+    expect(config.files).toEqual([
+      join(MAIBUK_ROOT, "node_modules/@testing-library/jest-dom/types/vitest.d.ts"),
     ]);
   });
 });

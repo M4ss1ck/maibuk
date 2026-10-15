@@ -21,8 +21,8 @@ host-rendered UI kit. Copy the folder to start a Plugin of your own.
    pnpm check
    ```
 
-`pnpm check` runs every step in order — build, validate, typecheck, lint, test,
-import boundary, package, layout — and stops at the first failure.
+`pnpm check` runs every step in order (build, validate, typecheck, lint, test,
+import boundary, package, layout) and stops at the first failure.
 
 ## The import rule
 

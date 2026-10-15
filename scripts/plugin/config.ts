@@ -52,6 +52,17 @@ const TEST_FALLBACK_PACKAGES = ["vitest", "@testing-library/", "react", "react-d
 const PLUGIN_TYPES = ["node", "react", "react-dom"] as const;
 
 /**
+ * The `@testing-library/jest-dom` Vitest matcher declarations
+ * (`toBeInTheDocument`, `toHaveFocus`, ...). Maibuk's own suite loads them from
+ * `src/test/setup.ts` (`import "@testing-library/jest-dom/vitest"`), which the
+ * Plugin's program never includes, so the tooling points at the same
+ * declaration file directly. It is a path, not a `types` entry: a Plugin has no
+ * `node_modules` for `types` to resolve the package from, and `paths` does not
+ * apply to `types`.
+ */
+const JEST_DOM_VITEST_TYPES = "node_modules/@testing-library/jest-dom/types/vitest.d.ts";
+
+/**
  * The Vite aliases an external Plugin resolves through: the SDK and its public
  * subpaths, the test kit, `@` (so the SDK and kit's own `@/` imports resolve,
  * never the Plugin's own), and React. Ordered most specific first, because the
@@ -179,14 +190,22 @@ export function tsconfigForCheck(pluginRoot: string, maibukRoot: string): Record
       ...MIRRORED_COMPILER_OPTIONS,
       paths: pluginPaths(pluginRoot, maibukRoot),
     },
-    include: ["../**/*.ts", "../**/*.tsx", join(maibukRoot, "src", "**/*.d.ts")],
+    include: [
+      "../**/*.ts",
+      "../**/*.tsx",
+      join(maibukRoot, "src", "**/*.d.ts"),
+      join(maibukRoot, JEST_DOM_VITEST_TYPES),
+    ],
   };
 }
 
 /**
  * The `<plugin>/.maibuk/tsconfig.paths.json` object the Plugin's own
- * `tsconfig.json` extends for the editor: only `paths` and `types` (TypeScript
- * 7 removed `baseUrl`).
+ * `tsconfig.json` extends for the editor: `paths`, `types` (TypeScript 7
+ * removed `baseUrl`), and `files` naming the `@testing-library/jest-dom` Vitest
+ * matcher declarations the editor needs. `files` is not overridden when the
+ * Plugin's `tsconfig.json` sets its own `include`, so the matcher types stay in
+ * the editor's program.
  */
 export function tsconfigPaths(pluginRoot: string, maibukRoot: string): Record<string, unknown> {
   return {
@@ -194,6 +213,7 @@ export function tsconfigPaths(pluginRoot: string, maibukRoot: string): Record<st
       paths: pluginPaths(pluginRoot, maibukRoot),
       types: [...PLUGIN_TYPES],
     },
+    files: [join(maibukRoot, JEST_DOM_VITEST_TYPES)],
   };
 }
 

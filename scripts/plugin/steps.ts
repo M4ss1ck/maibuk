@@ -268,7 +268,7 @@ export async function boundaryStep(context: PluginStepContext): Promise<StepResu
     ok: false,
     details: violations.map(
       (violation) =>
-        `${violation.file}:${violation.line} ${violation.specifier} — ${violation.reason}`
+        `${violation.file}:${violation.line} ${violation.specifier}: ${violation.reason}`
     ),
   };
 }

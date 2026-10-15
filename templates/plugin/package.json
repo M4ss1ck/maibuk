@@ -4,7 +4,6 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "setup": "node scripts/maibuk.mjs setup",
     "check": "node scripts/maibuk.mjs check",
     "build": "node scripts/maibuk.mjs build",
     "test": "node scripts/maibuk.mjs test",

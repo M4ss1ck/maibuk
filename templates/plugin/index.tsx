@@ -1,7 +1,7 @@
 /**
  * The minimal host-rendered Plugin entry (issue #455). `manifest.json` declares
  * one page with a sidebar entry and one Command that opens it, and this module
- * draws that page with the SDK's host-rendered UI kit (`ui.*`) — never its own
+ * draws that page with the SDK's host-rendered UI kit (`ui.*`), never its own
  * HTML. A host-side test imports `start` directly over the polyfill-free
  * `@maibuk/plugin-sdk/ui-serve` entry; a real Worker imports this module, which
  * loads the Remote DOM polyfill from `@maibuk/plugin-sdk/worker-ui` and starts

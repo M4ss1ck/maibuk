@@ -65,4 +65,17 @@ describe("CI workflow", () => {
     expect(budget).toContain("run: node scripts/agents-word-budget.mjs AGENTS.md");
     expect(budget).not.toMatch(/needs:|if:|continue-on-error/);
   });
+
+  // The Plugin tooling lane spawns tsx, Vite, tsc, biome, and vitest and takes
+  // about 10 seconds: it runs once, after the tests, never in the shards
+  // (issue #455).
+  it("runs the Plugin tooling lane once, after the unit tests", () => {
+    expect(packageJson.scripts["test:plugin-tooling"]).toBe(
+      "MAIBUK_PLUGIN_TOOLING=1 vitest run src/test/integration/plugin-tooling.test.ts"
+    );
+    const tooling = job("plugin-tooling");
+    expect(tooling).toContain("needs: tests");
+    expect(tooling).toContain("run: pnpm test:plugin-tooling");
+    expect(tooling).not.toContain("matrix");
+  });
 });

@@ -119,6 +119,34 @@ jobs:
           include-hidden-files: true
           retention-days: 1
 
+  # The slow Plugin-tooling lane (issue #455): the template is copied into a path
+  # with spaces, set up, and checked end to end, plus the built-in layout
+  # equivalence. It spawns tsx, Vite, tsc, biome, and vitest, so it runs once,
+  # after the unit tests, never inside the sharded suite.
+  plugin-tooling:
+    name: Plugin tooling
+    needs: tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the Plugin tooling lane
+        run: pnpm test:plugin-tooling
+
   # Also runs when a shard failed: the merge prints the time budget report
   # (tests past half their timeout), which is what explains a timeout.
   coverage:

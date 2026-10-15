@@ -2,13 +2,9 @@
  * The template's own test (issue #455): the same suite a Plugin author edits.
  * It drives the page through the supported test kit with `user-event` key
  * presses and asserts behavior, never attributes. It imports only the two
- * public entries — `@maibuk/plugin-sdk` (and its public subpaths) and
- * `@maibuk/plugin-test-kit` — never a Maibuk-internal `@/...` module, which the
+ * public entries (`@maibuk/plugin-sdk`, its public subpaths, and
+ * `@maibuk/plugin-test-kit`), never a Maibuk-internal `@/...` module, which the
  * import-boundary step refuses.
- *
- * The test asserts through plain Vitest matchers, not `@testing-library/jest-dom`
- * matchers: the Plugin typecheck loads only the SDK's and the test kit's types,
- * so a `toBeInTheDocument` has no declaration to type-check against.
  */
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -54,13 +50,15 @@ describe("Hello Plugin", () => {
       const page = await host.renderPage(PAGE_ID);
       const user = userEvent.setup();
 
-      expect(await screen.findByRole("heading", { name: "Hello from your Plugin" })).toBeTruthy();
+      expect(
+        await screen.findByRole("heading", { name: "Hello from your Plugin" })
+      ).toBeInTheDocument();
       const greet = screen.getByRole("button", { name: "Greet" });
       await tabTo(user, greet);
-      expect(document.activeElement).toBe(greet);
+      expect(greet).toHaveFocus();
 
       await user.keyboard("{Enter}");
-      await waitFor(() => expect(screen.getByText("Greetings: 1")).toBeTruthy());
+      await waitFor(() => expect(screen.getByText("Greetings: 1")).toBeInTheDocument());
 
       page.unmount();
     } finally {
