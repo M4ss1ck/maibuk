@@ -2265,6 +2265,23 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-writes",
+    area: "plugins",
+    workflow:
+      "A Plugin's `library:write` and `editor:write` Commands act on the open Chapter: `Write chapter` appends a paragraph through the Chapter write path while the author keeps typing, so the Plugin's paragraph and the author's own text (before and after the Command) both remain and survive a reload; `Insert greeting` inserts one line at the caret as a single undoable step a single undo removes; without the optional `editor:write` Plugin Permission the insert is refused and changes nothing; asserts: the editor text, the refusal notification; persists: yes",
+    edges: [
+      "A Plugin Chapter write reaches an open editor while the author types",
+      "Undo restores a Plugin editor insert in one step",
+      "Without editor:write, a Plugin editor insert is refused and changes nothing",
+    ],
+    terms: ["Plugin", "Plugin Permission", "Chapter"],
+    shortcuts: [],
+    routes: ["/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["no-webkit"],
+    status: "accepted",
+  },
+  {
     id: "plugins-remote-ui",
     area: "plugins",
     workflow:

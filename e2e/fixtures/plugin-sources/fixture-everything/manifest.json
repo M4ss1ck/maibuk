@@ -41,6 +41,16 @@
         "label": "English only",
         "contexts": ["global"],
         "voice": { "phrases": { "es": ["sellar todo"] } }
+      },
+      {
+        "id": "writeChapter",
+        "label": "Write chapter",
+        "contexts": ["global"]
+      },
+      {
+        "id": "insertGreeting",
+        "label": "Insert greeting",
+        "contexts": ["global"]
       }
     ],
     "pages": [{ "id": "panel", "title": "Everything fixture", "command": "openPage" }],
