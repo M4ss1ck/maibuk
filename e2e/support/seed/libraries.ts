@@ -266,11 +266,46 @@ async function echoesBook(): Promise<void> {
   await updateBookRow(book.id, { status: "in-progress" }, "local");
 }
 
+// A large Book for the Echoes report's row caps: twelve Chapters of made-up
+// five-letter words, each said twice a few words apart, so the Nearby tab has
+// well over 200 rows, plus "harbor" said 450 times so one row has over 200
+// occurrences. The words are generated, so no real text is needed.
+async function echoesLargeBook(): Promise<void> {
+  const book = await createBookRow({ ...SEED_BOOK }, "local");
+  const consonants = "bdfgklmnprstvz";
+  const vowels = "aeiou";
+  const word = (n: number) =>
+    consonants[n % 14] +
+    vowels[Math.floor(n / 14) % 5] +
+    consonants[Math.floor(n / 70) % 14] +
+    vowels[Math.floor(n / 980) % 5] +
+    "r";
+  let words = 0;
+  for (let chapter = 0; chapter < 12; chapter++) {
+    const parts: string[] = [];
+    for (let i = 0; i < 150; i++) {
+      const w = word(chapter * 150 + i);
+      parts.push(`${w} sat by the ${w} wall.`);
+    }
+    if (chapter === 0) {
+      for (let i = 0; i < 450; i++) parts.push("The harbor was calm.");
+    }
+    const created = await createChapterRow(
+      { bookId: book.id, title: `Part ${chapter + 1}` },
+      "local"
+    );
+    const saved = await updateChapterRow(created.id, { content: `<p>${parts.join(" ")}</p>` }, "local");
+    words += saved?.wordCount ?? 0;
+  }
+  await updateBookWordCountRow(book.id, words);
+}
+
 export const SEED_LIBRARIES = {
   empty: async () => {},
   oneBookThreeChapters,
   oneBookTwoChapters,
   echoesBook,
+  echoesLargeBook,
   bookShelf,
   notesWithLinksAndTags,
   paletteLibrary,

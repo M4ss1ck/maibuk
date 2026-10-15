@@ -3229,6 +3229,7 @@ export const ROWS: MatrixRow[] = [
       "An edit to the Chapter marks the report out of date; it does not recompute itself, and Refresh updates the counts",
       "Settings toggles a kind off, narrows the nearby window, and adds an ignore word, each reflected in the report",
       "Touch opens Echoes from the navigation menu and expands a row by tap",
+      "A large Book draws 200 rows and 200 occurrences per expanded row; Show more adds the next 200 by keyboard; expand, collapse, and tab switch timings are logged",
     ],
     terms: ["Plugin", "Item Menu"],
     shortcuts: ["plugin.maibuk-echoes.openEchoes", "plugin.maibuk-echoes.findEchoes"],
@@ -3249,7 +3250,7 @@ export const ROWS: MatrixRow[] = [
       "The editor toolbar button toggles the same highlights from the keyboard",
       "A Note editor toggles highlights for its own content",
     ],
-    terms: ["Plugin"],
+    terms: ["Plugin", "Toggle Button"],
     shortcuts: [
       "plugin.maibuk-echoes.toggleHighlights",
       "plugin.maibuk-echoes.nextEcho",

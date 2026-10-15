@@ -644,8 +644,8 @@ describe("Echoes report page", () => {
     const harbor = WIDE_REPORT.nearby.find((row) => row.label === "harbor");
     expect(harbor).toBeDefined();
     const occurrences = harbor?.occurrences.length ?? 0;
-    // Past two pages, so the first press leaves a row behind for the second.
-    expect(occurrences).toBeGreaterThan(400);
+    // Past two pages, so the press leaves occurrences behind.
+    expect(occurrences).toBeGreaterThan(100);
     const host = wideHost();
     try {
       const page = await host.renderPage(REPORT_PAGE_ID);
@@ -662,28 +662,27 @@ describe("Echoes report page", () => {
       expect(row).toHaveFocus();
       await user.keyboard("{Enter}");
 
-      // The top 200 rows, the first 200 occurrences, and the Show more option.
+      // The top 200 rows, the first 50 occurrences, and the Show more option.
       const firstMore = format(en["report.showMoreOccurrences"], {
-        count: 200,
-        left: occurrences - 200,
+        count: 50,
+        left: occurrences - 50,
       });
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(401));
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(251));
       const more = screen.getByRole("option", { name: firstMore });
 
-      // Arrow keys walk the 200 occurrences to the Show more option.
-      for (let step = 0; step < 500 && document.activeElement !== more; step++) {
+      // Arrow keys walk the 50 occurrences to the Show more option.
+      for (let step = 0; step < 100 && document.activeElement !== more; step++) {
         await user.keyboard("{ArrowDown}");
       }
       expect(more).toHaveFocus();
       await user.keyboard("{Enter}");
 
-      // The second press shows 200 more: 400 occurrences, with the rest still left.
+      // The press shows 50 more: 100 occurrences, with the rest still left.
       const secondMore = format(en["report.showMoreOccurrences"], {
-        count: Math.min(200, occurrences - 400),
-        left: occurrences - 400,
+        count: 50,
+        left: occurrences - 100,
       });
-      const expectedAfter = 200 + Math.min(400, occurrences) + (occurrences > 400 ? 1 : 0);
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(expectedAfter));
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(301));
       expect(screen.getByRole("option", { name: secondMore })).toBeInTheDocument();
 
       page.unmount();

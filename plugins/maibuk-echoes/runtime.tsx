@@ -192,8 +192,14 @@ const SCOPE_WHOLE = "whole";
 /** The report row Item Menu's one action value. */
 const IGNORE_ACTION = "ignore";
 
-/** Rows, and occurrences of one row, drawn per page; the host draws every row it is given. */
+/** Rows each tab draws per page; the host draws every row it is given. */
 const ROW_PAGE = 200;
+
+/**
+ * Occurrences an expanded row draws per page. Smaller than ROW_PAGE: expanding
+ * rebuilds the host's whole list, so this keeps a toggle near 100 ms.
+ */
+const OCCURRENCE_PAGE = 50;
 
 /** The rows each kind draws before Show more is pressed. */
 const FIRST_PAGE: Readonly<Record<EchoKind, number>> = {
@@ -350,7 +356,7 @@ const EchoRowGroup = memo(function EchoRowGroup({
         <ui.CollectionRow
           id={`${rowId}:more`}
           label={format(translate(language, "report.showMoreOccurrences"), {
-            count: Math.min(ROW_PAGE, occurrencesLeft),
+            count: Math.min(OCCURRENCE_PAGE, occurrencesLeft),
             left: occurrencesLeft,
           })}
           onAction={() => onMoreOccurrences(rowId)}
@@ -578,7 +584,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     const showMoreOccurrences = useCallback((rowId: string) => {
       setOccurrenceLimits((current) => ({
         ...current,
-        [rowId]: (current[rowId] ?? ROW_PAGE) + ROW_PAGE,
+        [rowId]: (current[rowId] ?? OCCURRENCE_PAGE) + OCCURRENCE_PAGE,
       }));
     }, []);
 
@@ -638,7 +644,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     const activeChildren: ReactNode[] = rows.slice(0, shown[activeKind]).map((row) => {
       const rowId = `${activeKind}:${row.key}`;
       const isExpanded = expanded.has(rowId);
-      const occurrenceLimit = occurrenceLimits[rowId] ?? ROW_PAGE;
+      const occurrenceLimit = occurrenceLimits[rowId] ?? OCCURRENCE_PAGE;
       return (
         <EchoRowGroup
           key={rowId}
