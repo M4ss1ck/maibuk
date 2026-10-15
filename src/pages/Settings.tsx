@@ -39,6 +39,13 @@ const SECTION_COMPONENTS = {
   plugins: PluginsSection,
 } satisfies Record<(typeof SETTINGS_SECTIONS)[number]["id"], ComponentType>;
 
+/**
+ * How long a reveal waits on a Plugin row body: the Plugin startup budget
+ * (`STARTUP_TIMEOUT_MS`). Past it the Plugin failed to start or never answered
+ * its mount, and the row is revealed without a control to focus.
+ */
+const PLUGIN_ROW_WAIT_MS = 10_000;
+
 const FOCUSABLE_IN_ROW =
   'button:not([disabled]), input:not([disabled]), select, textarea, [role="switch"], [role="slider"], [tabindex]:not([tabindex="-1"])';
 
@@ -66,12 +73,19 @@ function usePendingSettingsRow() {
 
     let attempts = 0;
     let frame = 0;
+    const requestedAt = performance.now();
     const tryFocus = () => {
       // Initial loading above the target can move it after a native scroll.
       // Wait for that layout before spending the missing-row frame budget.
       const sectionHeading = document.querySelector(`[data-settings-section="${section.id}"]`);
       if (sectionHeading) {
-        const loadingAbove = [...document.querySelectorAll("[data-settings-loading]")].some(
+        // A Plugin row body loads on its own clock and may never finish, so it
+        // never holds a reveal of another row.
+        const loadingAbove = [
+          ...document.querySelectorAll(
+            '[data-settings-loading]:not([data-settings-loading="plugin"])'
+          ),
+        ].some(
           (marker) =>
             (marker.compareDocumentPosition(sectionHeading) & Node.DOCUMENT_POSITION_FOLLOWING) !==
             0
@@ -82,16 +96,28 @@ function usePendingSettingsRow() {
         }
       }
       const rowElement = document.querySelector(`[data-settings-row="${pendingRowId}"]`);
-      if (rowElement?.querySelector("[data-settings-loading]")) {
-        // The requested row itself (the Backup list) is still loading.
+      const loading = rowElement?.querySelector("[data-settings-loading]");
+      if (
+        loading &&
+        (loading.getAttribute("data-settings-loading") !== "plugin" ||
+          performance.now() - requestedAt < PLUGIN_ROW_WAIT_MS)
+      ) {
+        // The requested row itself (the Backup list, a Plugin body) is still loading.
         frame = requestAnimationFrame(tryFocus);
         return;
       }
       attempts += 1;
+      const control = rowElement?.querySelector<HTMLElement>(FOCUSABLE_IN_ROW);
+      if (rowElement && !control && row.reveal?.kind === "plugin" && attempts < 10) {
+        // A Plugin row's control arrives a few frames after its mount settles,
+        // over the Remote UI connection.
+        frame = requestAnimationFrame(tryFocus);
+        return;
+      }
       if (rowElement) {
         // jsdom has no layout; the call is a no-op guard there. Focus first
         // without scrolling, so the scroll is the only movement.
-        rowElement.querySelector<HTMLElement>(FOCUSABLE_IN_ROW)?.focus({ preventScroll: true });
+        control?.focus({ preventScroll: true });
         if (align === "section") {
           document
             .querySelector(`[data-settings-section="${section.id}"]`)

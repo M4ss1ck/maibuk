@@ -23,10 +23,11 @@ export function usePluginRemoteUi(
   pageId: string,
   onViolation: (violation: PluginUiViolation) => void,
   kind: PluginUiMountKind = "page"
-): { ui: PluginRemoteUi | null; failed: boolean } {
+): { ui: PluginRemoteUi | null; mounted: boolean; failed: boolean } {
   const handler = useRef(onViolation);
   handler.current = onViolation;
   const [ui, setUi] = useState<PluginRemoteUi | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -46,18 +47,24 @@ export function usePluginRemoteUi(
     setUi(created);
     // A refused mount (the Plugin never installed its handler) shows the
     // could-not-display text; it does not stop the Plugin.
-    mount.mounted.catch(() => {
-      if (!cancelled) setFailed(true);
-    });
+    mount.mounted.then(
+      () => {
+        if (!cancelled) setMounted(true);
+      },
+      () => {
+        if (!cancelled) setFailed(true);
+      }
+    );
     return () => {
       cancelled = true;
       mount.unmount();
       thread.close();
       created.dispose();
       setUi(null);
+      setMounted(false);
       setFailed(false);
     };
   }, [runtime, pageId, kind]);
 
-  return { ui, failed };
+  return { ui, mounted, failed };
 }

@@ -5,6 +5,11 @@
  * and it marks the row reachable so an on-demand Plugin warm-starts exactly as
  * a page route does. `kind: "settingsRow"` keeps the row's Plugin-local id in
  * its own registry, so it can never collide with a page id.
+ *
+ * Until the Plugin accepts the mount, the body carries a Plugin loading marker,
+ * so a reveal of this row (a search result, a deep link) waits for the Plugin's
+ * control instead of focusing an empty row. The page bounds that wait and never
+ * holds a reveal of another row for it: a hung Plugin cannot block Settings.
  */
 
 import { Suspense, lazy } from "react";
@@ -16,11 +21,18 @@ const PluginRemoteUiBoundary = lazy(() =>
   }))
 );
 
+const LOADING = <span hidden data-settings-loading="plugin" />;
+
 export function PluginSettingsRowBody({ pluginId, rowId }: { pluginId: string; rowId: string }) {
   usePluginSurface(pluginId, `settingsRow:${rowId}`);
   return (
-    <Suspense fallback={null}>
-      <PluginRemoteUiBoundary pluginId={pluginId} pageId={rowId} kind="settingsRow" />
+    <Suspense fallback={LOADING}>
+      <PluginRemoteUiBoundary
+        pluginId={pluginId}
+        pageId={rowId}
+        kind="settingsRow"
+        pending={LOADING}
+      />
     </Suspense>
   );
 }

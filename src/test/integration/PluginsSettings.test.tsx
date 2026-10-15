@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
@@ -15,6 +15,7 @@ import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
 import { createPluginClient } from "@/plugin-sdk";
 import { ui } from "@/plugin-sdk/ui";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
+import { PLUGIN_UI_MOUNT_REQUEST } from "@/plugin-sdk/protocol";
 import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
 
 const { platformState, mockT, syncState } = vi.hoisted(() => ({
@@ -142,6 +143,13 @@ const unregisters: Array<() => void> = [];
 afterEach(() => {
   while (unregisters.length > 0) unregisters.pop()?.();
 });
+
+/** The mounted row anchor; throws until it exists, so `waitFor` can poll it. */
+function settingsRow(id: string): HTMLElement {
+  const row = document.querySelector<HTMLElement>(`[data-settings-row="${id}"]`);
+  if (row === null) throw new Error(`Settings row ${id} is not mounted`);
+  return row;
+}
 
 function renderSettings() {
   return render(
@@ -280,13 +288,132 @@ describe("Plugins Settings section", () => {
       renderSettings();
       focusSettingsRow("plugin.echoes.threshold");
 
-      const control = await screen.findByRole("switch", { name: "Echo threshold" });
+      // Query inside the row: a name lookup over the whole Settings page costs
+      // most of a second per mutation and starves the mount it waits for.
+      const row = await waitFor(() => settingsRow("plugin.echoes.threshold"));
+      const control = await within(row).findByRole("switch", { name: "Echo threshold" });
       await waitFor(() => expect(document.activeElement).toBe(control));
       expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
     } finally {
       host.stop();
       resetPluginLifecycleForTests();
     }
+  });
+
+  it("keeps a reveal pending until a slow Plugin row body mounts its control", async () => {
+    unregisters.push(
+      registerPluginSettingsRows("echoes", {
+        displayName: "Echoes",
+        rows: [{ id: "threshold", label: "Echo threshold" }],
+      })
+    );
+
+    // The Plugin answers `ui.mount` only when the test says so: the row anchor
+    // is on screen long before its control, the way a cold or slow Plugin is.
+    const host = createTestHost({ manifest: PLUGIN_MANIFEST });
+    let answerMount = () => {};
+    const mountAnswered = new Promise<void>((resolve) => {
+      answerMount = resolve;
+    });
+    const client = createPluginClient(host.port);
+    try {
+      function ThresholdBody() {
+        return <ui.Switch label="Echo threshold" isSelected={false} onChange={() => {}} />;
+      }
+      servePluginUi(
+        {
+          onHostRequest: (handler) =>
+            client.onHostRequest(async (method, params) => {
+              if (method === PLUGIN_UI_MOUNT_REQUEST) await mountAnswered;
+              return handler(method, params);
+            }),
+        },
+        { pages: {}, settingsRows: { threshold: ThresholdBody } }
+      );
+      installReadyLifecycle("echoes", {
+        manifest: PLUGIN_MANIFEST,
+        broker: host.broker,
+        stop: () => {},
+      });
+
+      renderSettings();
+      focusSettingsRow("plugin.echoes.threshold");
+
+      const row = await waitFor(() => settingsRow("plugin.echoes.threshold"));
+      // Well past the reveal's missing-control frame budget.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(within(row).queryByRole("switch")).toBeNull();
+      expect(useSettingsRevealStore.getState().pendingRowId).toBe("plugin.echoes.threshold");
+
+      answerMount();
+      const control = await within(row).findByRole("switch", { name: "Echo threshold" });
+      await waitFor(() => expect(document.activeElement).toBe(control));
+      expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
+    } finally {
+      host.stop();
+      resetPluginLifecycleForTests();
+    }
+  });
+
+  describe("with a Plugin that never answers its row mount", () => {
+    let host: ReturnType<typeof createTestHost>;
+
+    beforeEach(() => {
+      unregisters.push(
+        registerPluginSettingsRows("echoes", {
+          displayName: "Echoes",
+          rows: [{ id: "threshold", label: "Echo threshold" }],
+        })
+      );
+      host = createTestHost({ manifest: PLUGIN_MANIFEST });
+      const client = createPluginClient(host.port);
+      servePluginUi(
+        {
+          onHostRequest: (handler) =>
+            client.onHostRequest((method, params) =>
+              method === PLUGIN_UI_MOUNT_REQUEST
+                ? new Promise<never>(() => {})
+                : handler(method, params)
+            ),
+        },
+        { pages: {}, settingsRows: { threshold: () => null } }
+      );
+      installReadyLifecycle("echoes", {
+        manifest: PLUGIN_MANIFEST,
+        broker: host.broker,
+        stop: () => {},
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      host.stop();
+      resetPluginLifecycleForTests();
+    });
+
+    it("still reveals a row in a later section", async () => {
+      useSettingsRevealStore.setState({ pluginOpen: { echoes: true } });
+      renderSettings();
+      await waitFor(() => settingsRow("plugin.echoes.threshold"));
+
+      focusSettingsRow("exportDatabase");
+
+      await waitFor(() => expect(useSettingsRevealStore.getState().pendingRowId).toBeNull());
+      expect(settingsRow("exportDatabase").contains(document.activeElement)).toBe(true);
+    });
+
+    it("gives up the wait on its own row once the start budget passes", async () => {
+      renderSettings();
+      focusSettingsRow("plugin.echoes.threshold");
+      await waitFor(() => settingsRow("plugin.echoes.threshold"));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(useSettingsRevealStore.getState().pendingRowId).toBe("plugin.echoes.threshold");
+
+      const start = performance.now();
+      vi.spyOn(performance, "now").mockImplementation(() => start + 60_000);
+
+      await waitFor(() => expect(useSettingsRevealStore.getState().pendingRowId).toBeNull());
+    });
   });
 });
 

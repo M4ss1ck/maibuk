@@ -49,6 +49,26 @@ describe("usePluginRemoteUi", () => {
     expect(onViolation.mock.calls[0][0].code).toBe("unknown-element");
   });
 
+  it("reports mounted only once the Plugin accepts the mount", async () => {
+    let accept = (_value: unknown) => {};
+    const runtime: Pick<PluginRuntime, "broker"> = {
+      broker: {
+        ...fakeRuntime().broker,
+        request: () =>
+          new Promise<unknown>((resolve) => {
+            accept = resolve;
+          }),
+      },
+    };
+    const { result } = renderHook(() => usePluginRemoteUi(runtime, "page.one", () => {}));
+    expect(result.current.mounted).toBe(false);
+    await act(async () => {
+      accept(null);
+    });
+    expect(result.current.mounted).toBe(true);
+    expect(result.current.failed).toBe(false);
+  });
+
   it("disposes the receiver on unmount", () => {
     const runtime = fakeRuntime();
     const { result, unmount } = renderHook(() =>

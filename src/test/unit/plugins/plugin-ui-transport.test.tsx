@@ -287,6 +287,42 @@ describe("the Plugin page's Remote UI transport", () => {
     expect(run.mounts).toHaveLength(0);
   });
 
+  it("shows its pending content while the Plugin starts and until the mount is accepted", async () => {
+    const run = createRun(sends(() => heading("Body")));
+    const lifecycle = fakeLifecycle({ runtime: runtimeOf(run.broker), status: "starting" });
+    install(lifecycle);
+    render(
+      <PluginRemoteUiBoundary
+        pluginId="sample"
+        pageId="report"
+        pending={<p role="status">waiting</p>}
+      />
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("waiting");
+
+    act(() => {
+      lifecycle.setRuntime(runtimeOf(run.broker), "ready");
+    });
+    expect(await screen.findByRole("heading", { name: "Body" })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("drops its pending content when the mount is refused", async () => {
+    const run = createRun(() => {
+      throw new Error("no servePluginUi");
+    });
+    install(fakeLifecycle({ runtime: runtimeOf(run.broker), status: "ready" }));
+    render(
+      <PluginRemoteUiBoundary
+        pluginId="sample"
+        pageId="report"
+        pending={<p role="status">waiting</p>}
+      />
+    );
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("sends ui.unmount once when the page unmounts", async () => {
     const run = createRun(sends(() => heading("Bye")));
     install(fakeLifecycle({ runtime: runtimeOf(run.broker), status: "ready" }));
