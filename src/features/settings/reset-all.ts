@@ -8,8 +8,8 @@
  * It stops every running Plugin first — with no approval left, a third-party
  * Plugin needs approval again and a modified Built-in copy needs review — then
  * refreshes the Plugin management store so an untouched Built-in is re-seeded
- * from its shipped defaults, and starts an untouched Built-in that was running
- * again. Plugin files and Library data are never touched: nothing here writes
+ * from its shipped defaults: pre-granted but off, so a Built-in that was running
+ * stays stopped until the author turns it on again. Plugin files and Library data are never touched: nothing here writes
  * to the Plugin Directory or the Library.
  *
  * The dependencies are injectable so the flow is testable without the app's
@@ -39,8 +39,6 @@ export interface ResetAllSettingsOptions {
   stopPlugins?: () => void;
   /** Re-reads the Plugin Directory and re-seeds untouched Built-ins. */
   refreshPlugins?: () => Promise<void>;
-  /** Starts an untouched Built-in again by the normal warm-start rules. */
-  restartBuiltIns?: (runningIds: readonly string[]) => Promise<void>;
 }
 
 /**
@@ -60,33 +58,6 @@ function stopRunningPlugins(): void {
   for (const installed of lifecycle.installed()) lifecycle.uninstall(installed.pluginId);
 }
 
-/** The Plugin ids the lifecycle is running now, before the reset stops them. */
-function runningPluginIds(): string[] {
-  const lifecycle = getPluginLifecycle();
-  if (lifecycle === null) return [];
-  return lifecycle
-    .installed()
-    .filter((plugin) => (lifecycle.state(plugin.pluginId)?.status ?? "stopped") !== "stopped")
-    .map((plugin) => plugin.pluginId);
-}
-
-/**
- * Starts an untouched Built-in that was running again, so Reset settings leaves
- * it working now instead of waiting for the next launch. A third-party copy, or
- * a modified Built-in, needs review and is not restarted; `install` applies the
- * normal warm-start rules.
- */
-async function restartRunningBuiltIns(ids: readonly string[]): Promise<void> {
-  const lifecycle = getPluginLifecycle();
-  if (lifecycle === null) return;
-  const entries = usePluginManagementStore.getState().plugins;
-  for (const id of ids) {
-    const entry = entries[id];
-    if (!entry?.builtIn || entry.modified || entry.review.status !== "approved") continue;
-    await lifecycle.install(id, "settingsReset");
-  }
-}
-
 export async function resetAllSettings(options: ResetAllSettingsOptions = {}): Promise<void> {
   const stopPlugins = options.stopPlugins ?? stopRunningPlugins;
   const resetSettingsStore =
@@ -98,11 +69,7 @@ export async function resetAllSettings(options: ResetAllSettingsOptions = {}): P
   const clearCredentials = options.clearCredentials ?? clearPluginCredentials;
   const refreshPlugins =
     options.refreshPlugins ?? (() => usePluginManagementStore.getState().refresh());
-  const restartBuiltIns = options.restartBuiltIns ?? restartRunningBuiltIns;
 
-  // Remember what is running before the reset stops it, so an untouched Built-in
-  // can be started again afterwards.
-  const running = runningPluginIds();
   // Stop first: a running frame must not outlive the approval it was given.
   stopPlugins();
   resetSettingsStore();
@@ -120,11 +87,9 @@ export async function resetAllSettings(options: ResetAllSettingsOptions = {}): P
     credentialsFailed = true;
     credentialsError = error;
   }
-  // Re-seed the store: untouched Built-ins get fresh approvals, modified copies
-  // stay review-required, and every third-party copy is not-approved again.
+  // Re-seed the store: untouched Built-ins get fresh approvals (pre-granted, off),
+  // modified copies stay review-required, and every third-party copy is
+  // not-approved again.
   await refreshPlugins();
-  // An untouched Built-in that was running keeps working; a changed or
-  // third-party copy waits for review.
-  await restartBuiltIns(running);
   if (credentialsFailed) throw credentialsError;
 }
