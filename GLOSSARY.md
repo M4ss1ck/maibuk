@@ -562,6 +562,10 @@ _Avoid_: extension UI, add-on UI, mod UI
 **Plugin Command**:
 A Command a Plugin declares, with the same identity, Shortcuts, Voice Commands, availability, and Command Palette behavior as a Maibuk Command. The host derives its id as `plugin.<pluginId>.<localId>`, so no Plugin can claim Maibuk's or another Plugin's ids. (ADR 0022)
 
+**Toggle Button**:
+A Plugin's editor toolbar button that shows whether what it switches is on or off. The Plugin sets that state; Maibuk shows it as off until the Plugin says otherwise and again once the Plugin stops.
+_Avoid_: switch button, stateful button, checkbox button
+
 **Inactive Binding**:
 A Plugin's Custom Shortcut or custom Voice Command whose Plugin is absent, or whose keys or phrase an existing active binding already owns. It is kept and shown in the Shortcut Editor, does not reserve what it asks for, and never stops the Command's other ways of running. (ADR 0024)
 

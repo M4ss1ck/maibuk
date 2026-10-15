@@ -250,6 +250,10 @@ describe("Echoes report page", () => {
         findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS),
         [HARBOR, SHORE]
       ).nearby[0].occurrences;
+      // The expanded rows arrive over the Remote UI connection, a tick later.
+      await waitFor(() =>
+        expect(screen.getAllByRole("option").length).toBeGreaterThan(occurrences.length)
+      );
       const options = screen.getAllByRole("option").slice(1, 1 + occurrences.length); // the harbor row's occurrences
       expect(options).toHaveLength(occurrences.length);
       occurrences.forEach((occurrence, index) => {
