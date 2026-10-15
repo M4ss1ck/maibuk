@@ -34,7 +34,6 @@ export function usePluginRemoteUi(
     let cancelled = false;
     const created = createPluginRemoteUi({
       onViolation: (violation) => handler.current(violation),
-      customUi: runtime.manifest.customUi === true,
       // A kit `Frame` inside this tree renders the sandboxed surface from the
       // same run's verified folder and hands port B to this Worker (#454).
       frameHost: runtime,

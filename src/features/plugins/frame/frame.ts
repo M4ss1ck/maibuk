@@ -13,6 +13,7 @@
 
 import { createSandboxElement } from "@/features/plugins/frame/host-document";
 import { FRAME_DOCUMENT, FRAME_LOAD_MESSAGE } from "@/features/plugins/frame/shim";
+import { normalizeRelativePath } from "@/features/plugins/relative-path";
 import type { PluginFolderFile } from "@/features/plugins/types";
 
 /** One file a Frame may load, with its bytes and the MIME type of its extension. */
@@ -44,7 +45,7 @@ export class FrameLoadError extends Error {
   }
 }
 
-/** The extension → MIME map of every file kind a Frame may load. */
+// The extension → MIME map of every file kind a Frame may load.
 const FRAME_MIME_TYPES: Record<string, string> = {
   html: "text/html",
   htm: "text/html",
@@ -79,7 +80,7 @@ const FRAME_MIME_TYPES: Record<string, string> = {
   mov: "video/quicktime",
 };
 
-/** The manifest is never loadable, whatever extension handling grows later. */
+// The manifest is never loadable, whatever extension handling grows later.
 const MANIFEST_BASENAME = "manifest.json";
 
 /**
@@ -104,16 +105,20 @@ export function buildFrameLoadMessage(
   framePath: string,
   tokens: Record<string, string> = {}
 ): FrameLoadMessage {
+  // The manifest validator accepts a leading `./` and checks the normalized
+  // path, so match the same normalized path here or a validating manifest
+  // renders broken. The shim looks the HTML up by this normalized path too.
+  const html = normalizeRelativePath(framePath);
   const payload: FrameLoadFile[] = [];
   let frameIncluded = false;
   for (const file of files) {
     const type = frameMimeType(file.path);
     if (type === null) continue;
-    if (file.path === framePath && type === "text/html") frameIncluded = true;
+    if (file.path === html && type === "text/html") frameIncluded = true;
     payload.push({ path: file.path, type, bytes: file.bytes });
   }
-  if (!frameIncluded) throw new FrameLoadError(framePath);
-  return { kind: FRAME_LOAD_MESSAGE.kind, html: framePath, files: payload, tokens };
+  if (!frameIncluded) throw new FrameLoadError(html);
+  return { kind: FRAME_LOAD_MESSAGE.kind, html, files: payload, tokens };
 }
 
 /**

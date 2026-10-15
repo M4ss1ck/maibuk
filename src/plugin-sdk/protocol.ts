@@ -148,10 +148,10 @@ export const PLUGIN_ERROR_MESSAGE = { kind: "maibuk:plugin-error" } as const;
 
 /**
  * The sandbox's Frame handoff with the Plugin's Worker (#454, D1). The host
- * posts this to the bootstrap frame with one MessagePort (the Frame's port);
- * the bootstrap forwards it to the Worker with the port transferred, exactly as
- * it forwards the init port. The Worker's SDK exposes it through
- * `client.onFrame`; the host never parses Frame traffic.
+ * posts this over the Plugin's own broker MessagePort (`runtime.ts`
+ * `sendFrame`) with the Frame's MessagePort transferred, so the Worker's SDK
+ * settles it before RPC dispatch and exposes it through `client.onFrame`. The
+ * host never parses Frame traffic.
  */
 export const PLUGIN_FRAME_MESSAGE = { kind: "maibuk:plugin-frame" } as const;
 

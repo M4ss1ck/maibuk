@@ -114,6 +114,14 @@ describe("buildFrameLoadMessage()", () => {
     ).toEqual({ "--maibuk-color-primary": "red" });
   });
 
+  it("normalizes a `./`-prefixed frame path to the verified file", () => {
+    // The manifest validator accepts a leading `./` and checks the normalized
+    // path, so the loader must match the same normalized path, not the raw one.
+    const message = buildFrameLoadMessage(files, "./ui/index.html");
+    expect(message.html).toBe("ui/index.html");
+    expect(message.files.some((entry) => entry.path === "ui/index.html")).toBe(true);
+  });
+
   it("refuses a frame path that is not an HTML file in the set", () => {
     expect(() => buildFrameLoadMessage(files, "ui/missing.html")).toThrow(FrameLoadError);
     expect(() => buildFrameLoadMessage(files, "ui/app.js")).toThrow(FrameLoadError);

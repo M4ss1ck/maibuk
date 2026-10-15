@@ -31,7 +31,7 @@ import type {
   RemoteReceiverRoot,
 } from "@remote-dom/core/receivers";
 import { relativeFileProblem } from "@/features/plugins/manifest-validate";
-import { getPluginUiElement, PLUGIN_UI_FRAME_TAG, PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
+import { getPluginUiElement, PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
 import type { PluginUiLimits, PluginUiProp } from "@/plugin-sdk/ui-table";
 
 export type PluginUiViolationCode =
@@ -40,7 +40,6 @@ export type PluginUiViolationCode =
   | "invalid-prop"
   | "unknown-event"
   | "unknown-method"
-  | "custom-ui-required"
   | "too-many-nodes"
   | "too-many-records"
   | "too-many-batches";
@@ -57,12 +56,6 @@ export interface PluginUiValidatorOptions {
   receiver: RemoteReceiver;
   onViolation: (violation: PluginUiViolation) => void;
   limits?: PluginUiLimits;
-  /**
-   * The Plugin manifest's `customUi`. A tree that declares the `Frame` element
-   * is refused unless this is true (ADR 0021): only a Plugin that opted into
-   * custom UI may embed one. Defaults to false.
-   */
-  customUi?: boolean;
   /**
    * The current time in milliseconds; the connection refuses a batch once the
    * limit is already met inside the last second. Injectable so tests control
@@ -204,7 +197,6 @@ function propertyProblem(prop: PluginUiProp, value: unknown): string | null {
 export function createValidatedConnection(options: PluginUiValidatorOptions): RemoteConnection {
   const { receiver, onViolation } = options;
   const limits = options.limits ?? PLUGIN_UI_LIMITS;
-  const customUi = options.customUi ?? false;
   const now = options.now ?? (() => performance.now());
   let tags = new Map<string, string>();
   const batchTimes: number[] = [];
@@ -229,13 +221,6 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
         return refuse({
           code: "unknown-element",
           message: `The element ${serialization.element} is not part of the Maibuk UI kit`,
-          tag: serialization.element,
-        });
-      }
-      if (element.tag === PLUGIN_UI_FRAME_TAG && !customUi) {
-        return refuse({
-          code: "custom-ui-required",
-          message: `The ${serialization.element} element needs customUi: true on the Plugin manifest`,
           tag: serialization.element,
         });
       }

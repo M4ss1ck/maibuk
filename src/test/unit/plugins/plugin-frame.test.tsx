@@ -113,6 +113,40 @@ describe("PluginFrame", () => {
     expect(port).not.toBe(transfer[0]);
   });
 
+  it("loads a frame whose src carries a `./` prefix, posting the normalized path", () => {
+    const host = frameHost();
+    const { container } = render(
+      <PluginFrame runtime={host} src="./ui/index.html" title="Custom report" variant="page" />
+    );
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+    const win = iframe.contentWindow as Window;
+    const postMessage = vi.spyOn(win, "postMessage").mockImplementation(() => {});
+
+    iframe.dispatchEvent(new Event("load"));
+
+    const [message] = postMessage.mock.calls[0] as unknown as [{ kind: string; html: string }];
+    expect(message.html).toBe("ui/index.html");
+    expect(host.sendFrame).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the previous channel before a second load opens a new one", () => {
+    const close = vi.spyOn(MessagePort.prototype, "close");
+    const host = frameHost();
+    const { container } = renderFrame(host);
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+    const win = iframe.contentWindow as Window;
+    vi.spyOn(win, "postMessage").mockImplementation(() => {});
+
+    iframe.dispatchEvent(new Event("load"));
+    iframe.dispatchEvent(new Event("load"));
+
+    // The first frame-load's MessageChannel is done once the Frame reloads: its
+    // two ports are closed before the second channel is created.
+    expect(close).toHaveBeenCalledTimes(2);
+    expect(host.sendFrame).toHaveBeenCalledTimes(2);
+    close.mockRestore();
+  });
+
   it("ignores a frame-ready from a foreign window and accepts its own", () => {
     const { container } = renderFrame(frameHost());
     const iframe = container.querySelector("iframe") as HTMLIFrameElement;

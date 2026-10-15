@@ -33,8 +33,6 @@ export interface PluginRemoteUi {
 
 export function createPluginRemoteUi(options: {
   onViolation: (violation: PluginUiViolation) => void;
-  /** The manifest's `customUi`; a tree with a `Frame` is refused without it. */
-  customUi?: boolean;
   /**
    * The owning run's Frame host (#454): the kit `Frame` renders its sandboxed
    * iframe from it. Omitted by tests that mount a tree without a runtime, where
@@ -54,7 +52,6 @@ export function createPluginRemoteUi(options: {
     onViolation: (violation) => {
       if (!disposed) report(violation);
     },
-    ...(options.customUi === undefined ? {} : { customUi: options.customUi }),
     ...(options.now === undefined ? {} : { now: options.now }),
   });
   const components = createPluginUiComponents(options.frameHost);

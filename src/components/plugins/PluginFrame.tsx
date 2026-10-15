@@ -103,6 +103,10 @@ export function PluginFrame({
     const onLoad = () => {
       try {
         const message = buildFrameLoadMessage(runtime.files, src, tokensRef.current);
+        // A Frame that reloads itself fires `load` again: close the previous
+        // channel's ports before opening a new one so its port is not leaked.
+        channel?.port1.close();
+        channel?.port2.close();
         channel = new MessageChannel();
         // Port A goes to the Frame (the shim exposes it as `window.maibuk.port`);
         // port B goes to the owning Worker (D1). The host parses neither.

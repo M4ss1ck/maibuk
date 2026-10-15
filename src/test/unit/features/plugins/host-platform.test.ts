@@ -76,3 +76,14 @@ describe("pluginFrameAvailableOn()", () => {
     expect(pluginFrameAvailableOn("windows", windowsRecord({ checks: [] }))).toBe(false);
   });
 });
+
+// The Windows desktop shell is read from the shared platform leaf (#454 D6), so
+// the gate no longer re-derives `TAURI_ENV_PLATFORM` on its own.
+describe("the shared Windows platform seam", () => {
+  it("exposes IS_WINDOWS from the platform leaf and re-exports it", async () => {
+    const windows = await import("@/lib/platform/windows");
+    const platform = await import("@/lib/platform");
+    expect(typeof windows.IS_WINDOWS).toBe("boolean");
+    expect(platform.IS_WINDOWS).toBe(windows.IS_WINDOWS);
+  });
+});

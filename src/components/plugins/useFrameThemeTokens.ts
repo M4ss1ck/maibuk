@@ -22,7 +22,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import { useThemeStore } from "@/features/theme";
 import { readFrameThemeTokens } from "@/features/plugins/frame";
 
-/** Whether two token maps carry exactly the same names and values. */
+// Whether two token maps carry exactly the same names and values.
 function tokensEqual(a: Record<string, string>, b: Record<string, string>): boolean {
   const names = Object.keys(a);
   if (names.length !== Object.keys(b).length) return false;

@@ -1,9 +1,10 @@
 // The custom-UI `Frame` component (ADR 0021, #454 unit 1: the declaration
-// contract). Unit 1 ships no renderer, so these tests prove the tree is
-// accepted only for a custom-UI Plugin and refused otherwise, and that `src`
-// obeys the same relative-`.html` rules as a page `frame`. `Frame` is
-// non-interactive ("Frames get no accessibility test", #402), so it carries a
-// `@ui:maibuk-frame` semantics test and no keyboard test.
+// contract). A tree that declares `Frame` is accepted whatever the manifest's
+// `customUi` (D2): the host renders the Frame surface, which itself refuses
+// with a localized placeholder when the manifest lacks `customUi`, so the rest
+// of the Plugin keeps running. `src` obeys the same relative-`.html` rules as a
+// page `frame`. `Frame` is non-interactive ("Frames get no accessibility test",
+// #402), so it carries a `@ui:maibuk-frame` semantics test and no keyboard test.
 
 import {
   MUTATION_TYPE_INSERT_CHILD,
@@ -11,12 +12,15 @@ import {
   type RemoteNodeSerialization,
 } from "@remote-dom/core";
 import { RemoteReceiver } from "@remote-dom/core/receivers";
+import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import "@/i18n";
+import type { PluginFrameHost } from "@/components/plugins/PluginFrame";
 import {
   createValidatedConnection,
   type PluginUiViolation,
 } from "@/features/plugins/remote-ui/validate";
+import type { PluginManifest } from "@/features/plugins/types";
 import { ui } from "@/plugin-sdk/ui";
 import { renderRemoteUi, type RemoteUiHarness } from "@/test/support/plugin-remote-ui";
 
@@ -32,12 +36,22 @@ function frameElement(extra: Partial<RemoteNodeSerialization> = {}): RemoteNodeS
   } as RemoteNodeSerialization;
 }
 
-function validate(customUi: boolean, child: RemoteNodeSerialization = frameElement()) {
+/** A run whose manifest may or may not declare `customUi`, with one Frame file. */
+function frameHost(customUi: boolean): PluginFrameHost {
+  return {
+    manifest: { customUi } as PluginManifest,
+    files: [
+      { path: "ui/report.html", bytes: new TextEncoder().encode("<html></html>") },
+    ],
+    sendFrame: () => {},
+  };
+}
+
+function validate(child: RemoteNodeSerialization = frameElement()) {
   const receiver = new RemoteReceiver();
   const violations: PluginUiViolation[] = [];
   const connection = createValidatedConnection({
     receiver,
-    customUi,
     onViolation: (violation) => violations.push(violation),
   });
   const record: RemoteMutationRecord = [MUTATION_TYPE_INSERT_CHILD, ROOT, child, 0];
@@ -54,23 +68,24 @@ describe("the Frame kit component", () => {
   });
 
   it("renders a Frame placeholder for a custom-UI Plugin @ui:maibuk-frame", async () => {
-    harness = renderRemoteUi({ customUi: true });
+    harness = renderRemoteUi({ frameHost: frameHost(true) });
     await harness.mount(<ui.Frame src="ui/report.html" title="Custom report" />);
     expect(harness.violations).toEqual([]);
   });
 
-  it("refuses a Frame tree when the Plugin manifest lacks customUi", () => {
-    const { receiver, violations } = validate(false);
-    expect(violations[0]?.code).toBe("custom-ui-required");
-    expect(violations[0]?.tag).toBe("maibuk-frame");
-    // Nothing was committed: Remote DOM does not roll a refused batch back, so
-    // the whole batch is refused before any record reaches the receiver.
-    expect(receiver.root.children).toHaveLength(0);
+  it("shows the customUi placeholder, and keeps the Plugin running, when the manifest lacks customUi", async () => {
+    harness = renderRemoteUi({ frameHost: frameHost(false) });
+    await harness.mount(<ui.Frame src="ui/report.html" title="Custom report" />);
+
+    // D2: the kit `Frame` renders a localized placeholder instead of the
+    // iframe; the tree is not refused, so the Plugin is not stopped.
+    expect(harness.violations).toEqual([]);
+    expect(harness.ui.receiver.root.children).toHaveLength(1);
+    expect(screen.getByText("This Plugin cannot use custom UI.")).toBeInTheDocument();
   });
 
   it("accepts a Frame tree when the Plugin manifest sets customUi", () => {
     const { receiver, violations } = validate(
-      true,
       frameElement({ properties: { src: "ui/report.html", title: "Custom report" } })
     );
     expect(violations).toEqual([]);
@@ -88,7 +103,6 @@ describe("the Frame kit component", () => {
       "ui/report.html?x=1",
     ]) {
       const { violations } = validate(
-        true,
         frameElement({ properties: { src, title: "Custom report" } })
       );
       expect(violations[0]?.code, src).toBe("invalid-prop");
@@ -98,7 +112,6 @@ describe("the Frame kit component", () => {
 
   it("refuses a Frame without its required title", () => {
     const { violations } = validate(
-      true,
       frameElement({ properties: { src: "ui/report.html" } })
     );
     expect(violations[0]?.code).toBe("invalid-prop");

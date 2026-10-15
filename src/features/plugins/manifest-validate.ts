@@ -17,6 +17,7 @@ import {
   collapseContributionRenames,
 } from "@/features/plugins/ids";
 import LUCIDE_ICON_NAMES from "@/features/plugins/lucide-icon-names.json";
+import { normalizeRelativePath } from "@/features/plugins/relative-path";
 import {
   MANIFEST_LANGUAGES,
   builtInPluginManifestSchema,
@@ -163,13 +164,7 @@ function frameProblem(frame: string): string | null {
   return problem === null ? null : `frame ${problem}`;
 }
 
-/** Strips `.` and empty segments, so `./ui/x.html` matches the file `ui/x.html`. */
-function normalizeRelativePath(value: string): string {
-  return value
-    .split("/")
-    .filter((segment) => segment !== "" && segment !== ".")
-    .join("/");
-}
+export { normalizeRelativePath };
 
 function entryProblem(entry: string): string | null {
   const pathProblem = relativePathProblem(entry, "entry");

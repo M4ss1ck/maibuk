@@ -10,9 +10,10 @@
  * exists no Plugin — Built-in or added — is listed as runnable, enabled,
  * started, or contributes Commands or panels on Android.
  *
- * This module stays a leaf — its one import is the build-time Windows Frame
- * record ({@link WINDOWS_FRAME_RECORD}) — so the Built-in build script (run
- * under `tsx`, without Vite's `import.meta.env`) can read {@link pluginsRunOn}
+ * This module stays a leaf — its imports are the build-time Windows Frame
+ * record ({@link WINDOWS_FRAME_RECORD}) and the build-time platform leaf
+ * (`src/lib/platform/windows.ts`) — so the Built-in build script (run under
+ * `tsx`, without Vite's `import.meta.env`) can read {@link pluginsRunOn}
  * without pulling in the Plugin Directory adapters or the management store.
  */
 
@@ -21,6 +22,7 @@ import {
   windowsFrameRecordPasses,
   type WindowsFrameRecord,
 } from "@/features/plugins/windows-frame-record";
+import { IS_WINDOWS, TAURI_PLATFORM } from "@/lib/platform/windows";
 
 /**
  * The device platforms a Plugin host serves; it mirrors the Plugin Directory
@@ -45,16 +47,6 @@ export function pluginsRunOn(platform: PluginHostPlatform): boolean {
 }
 
 /**
- * The Tauri platform this build runs on, or null when there is none: the web
- * build, and `scripts/build-builtin-plugins.ts` under `tsx`, which has no Vite
- * `import.meta.env`. Read defensively so this leaf stays importable there.
- */
-function tauriPlatform(): string | null {
-  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  return env?.TAURI_ENV_PLATFORM ?? null;
-}
-
-/**
  * The Frame gate's rule (#454, D6), over one Tauri platform string (or null)
  * and the committed Windows record: the Frame is off on Android, where v1 runs
  * no Plugin at all (#447), and off on Windows until a manual WebView2 Frame
@@ -76,8 +68,10 @@ export function pluginFrameAvailableOn(
 /**
  * Whether the custom-UI `Frame` may mount on this build (#454, D6). The rest of
  * the Plugin keeps working when this is false: only the Frame refuses and shows
- * the not-available placeholder.
+ * the not-available placeholder. The Windows desktop shell is the shared
+ * platform seam (`src/lib/platform/windows.ts`), so this does not re-derive
+ * `TAURI_ENV_PLATFORM` on its own.
  */
 export function isPluginFrameAvailable(): boolean {
-  return pluginFrameAvailableOn(tauriPlatform());
+  return pluginFrameAvailableOn(IS_WINDOWS ? "windows" : TAURI_PLATFORM);
 }

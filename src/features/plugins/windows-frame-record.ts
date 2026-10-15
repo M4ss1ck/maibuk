@@ -77,14 +77,21 @@ export const WINDOWS_FRAME_CHECK_IDS = [
 
 /**
  * True when a committed Windows record clears the Frame gate (D6): it exists,
- * lists at least one check, and every check passed. A `fail` or `unmeasured`
- * check, or no record at all, keeps the Frame off.
+ * lists every required Frame check id, and each one passed. A missing id, a
+ * `fail` or `unmeasured` check, or no record at all keeps the Frame off. The
+ * required ids are {@link WINDOWS_FRAME_CHECK_IDS}, the same list
+ * `scripts/plugin-conformance-gate.mjs` requires present, so a record that
+ * quietly drops a check cannot flip the gate.
  */
 export function windowsFrameRecordPasses(
   record: WindowsFrameRecord | null | undefined
 ): boolean {
   if (record == null) return false;
   if (!Array.isArray(record.checks) || record.checks.length === 0) return false;
+  const ids = new Set(record.checks.map((check) => check.id));
+  for (const id of WINDOWS_FRAME_CHECK_IDS) {
+    if (!ids.has(id)) return false;
+  }
   return record.checks.every((check) => check.status === "pass");
 }
 
