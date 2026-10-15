@@ -19,6 +19,7 @@ export const PLUGIN_API_ERROR_CODES = [
   "library-unavailable",
   "not-implemented",
   "message-too-large",
+  "network-error",
   "internal-error",
 ] as const;
 

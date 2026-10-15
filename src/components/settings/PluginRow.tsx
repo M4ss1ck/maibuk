@@ -33,6 +33,7 @@ import { SettingRow } from "@/components/settings/SettingRow";
 import { formatPluginDataSize } from "@/components/settings/plugin-data-size";
 import { asPluginTranslate } from "@/components/settings/plugin-translate";
 import { Button } from "@/components/ui/Button";
+import { Switch } from "@/components/ui/Switch";
 import { hasMissingRequired } from "@/features/plugins/approvals";
 import {
   PLUGIN_DATA_SIZE_WARNING_BYTES,
@@ -45,6 +46,7 @@ import {
   rowOnPlatform,
   type SettingsPlatform,
 } from "@/features/settings/rows";
+import { usePluginSecrets } from "@/hooks/usePluginSecrets";
 
 const BADGE_CLASS =
   "inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground";
@@ -83,6 +85,10 @@ export function PluginRow({
   // The data size lives in the store's `dataSizes`, filled by `refreshDataSize`;
   // subscribing here is what re-renders the row when the size arrives.
   const dataSize = usePluginManagementStore((state) => state.dataSizes[entry.pluginId] ?? 0);
+  // The saved-credential state comes from the registered store, not the grant:
+  // the row shows whether this Plugin really has credentials saved, and — where
+  // the store can persist them — the "remember on this device" switch.
+  const secrets = usePluginSecrets(entry.pluginId, open);
   const manifest = entry.manifest;
   const approval = entry.approval;
   const required = manifest.permissions.required;
@@ -95,6 +101,9 @@ export function PluginRow({
   const reviewApproved = entry.review.status === "approved";
   const rows = getPluginSettingsRows(entry.pluginId).filter((row) => rowOnPlatform(row, platform));
   const declared = [...required, ...optional.filter((permission) => !required.includes(permission))];
+  // Only a Plugin that declares the secrets permission has credentials to
+  // remember, and only a store that can persist them offers the switch.
+  const canRememberSecrets = declared.includes("secrets") && secrets.canRemember;
   const optionalGranted =
     approval?.granted.filter((permission) => optional.includes(permission)) ?? [];
   // A copy Settings can never enable: its files are gone, two folders claim its
@@ -123,12 +132,9 @@ export function PluginRow({
     },
     {
       label: t("plugins.management.credentials"),
+      // The real saved-credential state, read from the store, not the grant.
       value: t(
-        // No credentials store exists yet, so the secrets grant is the signal
-        // that this Plugin can carry saved credentials (#443 review).
-        approval?.granted.includes("secrets")
-          ? "plugins.management.yes"
-          : "plugins.management.none"
+        secrets.names.length > 0 ? "plugins.management.yes" : "plugins.management.none"
       ),
     },
     {
@@ -227,6 +233,23 @@ export function PluginRow({
             </div>
           ))}
         </dl>
+
+        {canRememberSecrets && (
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{t("plugins.management.remember")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("plugins.management.rememberDescription")}
+              </p>
+            </div>
+            <Switch
+              checked={secrets.remembered}
+              onChange={(next) => secrets.setRemembered(next)}
+              label={t("plugins.management.remember")}
+              className="pointer-coarse:min-h-12"
+            />
+          </div>
+        )}
 
         <div className="mt-2 flex flex-wrap gap-2">
           {!entry.installed ? null : enabled ? (

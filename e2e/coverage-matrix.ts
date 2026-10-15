@@ -2282,6 +2282,61 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-network-secret",
+    area: "plugins",
+    workflow:
+      "A Plugin's `network.fetch` on a granted host streams the response body back in 64 KB chunks and injects a stored secret into a header the Plugin declares by name: the saved `apiKey` value never reaches a chunk, the response head, or an error, and the Plugin never holds it; asserts: the header the host's request carried, the full streamed body and its status, that the body arrived in more than one chunk, and the Worker-side check that the secret is absent from everything the Worker observed; persists: no",
+    edges: [],
+    terms: ["Plugin", "Plugin Permission"],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["no-webkit", "sandbox"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-network-refused",
+    area: "plugins",
+    workflow:
+      "A Plugin's `network.fetch` to a host its manifest never declared, and the author never granted, is refused with the broker's `permission-denied` code and no request leaves the machine; asserts: the refusal code the Plugin renders, and an intercepted route to that host sees no request; persists: no",
+    edges: [],
+    terms: ["Plugin", "Plugin Permission"],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["no-webkit", "sandbox"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-clipboard",
+    area: "plugins",
+    workflow:
+      "A Plugin's `clipboard.writeText` then `clipboard.readText` round-trips through the platform clipboard adapter; where a browser cannot grant the clipboard permission the Plugin renders the broker's typed `internal-error` instead of the spec skipping; asserts: the text read back, or the refusal code; persists: no",
+    edges: [],
+    terms: ["Plugin", "Plugin Permission"],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["no-webkit", "sandbox"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-remember-switch",
+    area: "plugins",
+    workflow:
+      "Settings → Plugins → a Plugin that declares `secrets` offers “Remember credentials on this device”: the author toggles the switch from the keyboard, saves a secret, and reloads the page; a remembered secret name still lists through `secrets.listNames`, while an unremembered one is gone; asserts: the switch state, and the listed names after a reload in both cases; persists: yes (device-local)",
+    edges: [
+      "A remembered secret name still lists after a reload",
+      "An unremembered secret name is gone after a reload",
+    ],
+    terms: ["Plugin", "Plugin Permission"],
+    shortcuts: [],
+    routes: ["/settings", "/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["no-webkit", "sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-remote-ui",
     area: "plugins",
     workflow:

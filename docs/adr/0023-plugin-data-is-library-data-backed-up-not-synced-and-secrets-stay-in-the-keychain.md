@@ -22,3 +22,7 @@ Decided in [Plugins vs. the Tutorial Library, Backups, Restore, and Sync](https:
 - Reset settings is distinct from Reset Library. It clears grants, integrity approvals, Plugin Custom Shortcuts, and saved secrets, and leaves Plugin data alone.
 - The web Library writes the whole database on every save, so Settings shows each Plugin's data size and warns once at 50 MB. There is no hard cap.
 - Data written by a newer `dataVersion` is preserved and refuses activation. Data at an older version is migrated by the Plugin's own `migrateData`, never by the host.
+
+## Implementation notes (#453)
+
+Desktop `network.fetch` runs through `tauri-plugin-http` with an `http(s)://*` capability scope, because the broker host check (the declared and granted `network:<host>`) is the gate. Every redirect is refused, so a granted host cannot forward a request or an injected secret elsewhere. On the web, remembered secrets live unencrypted in `localStorage`, per Plugin, opt in, and labelled in the Plugin row. The desktop keychain is Linux Secret Service and Windows Credential Manager through `keyring-core`, with no Android store because Plugins do not run there in v1.

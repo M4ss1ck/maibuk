@@ -191,6 +191,8 @@ Shape: one Rust module (`src-tauri/src/secrets.rs`) with `set/get/delete(plugin_
 
 Recommendation: session memory by default, opt-in plain IndexedDB with the honest label. Keep secrets out of `localStorage` so they never ride along with persisted Zustand state.
 
+Update (#453): the store that shipped keeps a remembered Plugin's credentials in `localStorage` (`maibuk.pluginSecrets.v1`), per Plugin and off by default, not in IndexedDB as this section recommended.
+
 ### 4.3 Existing precedent to know about
 
 `src/features/sync/store.ts:401-409` persists the sync `passphrase` and `authToken` in localStorage through `partialize`, on every platform. That is the opposite of decision 9 for a Maibuk secret. Not in scope here; once a secrets module exists, moving them is a natural follow-up issue.

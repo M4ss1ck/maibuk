@@ -97,7 +97,7 @@ describe("pluginFoldersFor", () => {
       "editor:read",
       "editor:decorate",
       "secrets",
-      "network:fixture.invalid",
+      "network:api.fixture.test",
     ]);
 
     const [echo] = pluginFoldersFor({ kind: "remoteUiEcho" });

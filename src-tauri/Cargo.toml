@@ -26,6 +26,7 @@ tauri-plugin-os = "2.3.2"
 tauri-plugin-process = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-deep-link = "2"
+tauri-plugin-http = "2"
 base64 = "0.22"
 sha2 = "0.10"
 zip = { version = "9", default-features = false, features = ["deflate", "deflate64"] }
@@ -51,3 +52,10 @@ gdkx11 = "0.18"
 cpal = "0.18"
 libloading = "0.8"
 ureq = "2"
+dbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust", "vendored"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = "1"
+
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+keyring-core = "1"

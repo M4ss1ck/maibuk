@@ -23,6 +23,10 @@ import {
   PLUGIN_DATA_SIZE_WARNING_BYTES,
   createPluginManagementStore,
 } from "@/features/plugins/management";
+import {
+  createMemoryPluginSecretStore,
+  registerPluginSecretStore,
+} from "@/features/plugins/secret-store";
 import { clearPluginStorage, getPluginDataSize } from "@/features/plugins/storage";
 import type {
   BuiltInPlugin,
@@ -59,6 +63,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  registerPluginSecretStore(null);
   localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
   localStorage.removeItem(PLUGIN_KNOWN_STORAGE_KEY);
 });
@@ -339,6 +344,43 @@ describe("Plugin management actions: remove", () => {
     expect([...dir.removed].sort()).toEqual(["tracer-a", "tracer-b"]);
     expect(dir.map.has("tracer-a")).toBe(false);
     expect(dir.map.has("tracer-b")).toBe(false);
+  });
+
+  it("removal erases this Plugin's secrets and no other Plugin's", async () => {
+    const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
+    const dir = makeDirectory("web", [folder]);
+    const secrets = createMemoryPluginSecretStore();
+    await secrets.set("tracer", "token", "tracer-token");
+    await secrets.set("echoes", "token", "echoes-token");
+    registerPluginSecretStore(secrets);
+    const store = makeStore(dir.adapter);
+    await store.getState().refresh();
+
+    // deleteData is false: credentials go regardless of the Library-data box.
+    await store.getState().remove("tracer", { deleteData: false });
+
+    await expect(secrets.listNames("tracer")).resolves.toEqual([]);
+    await expect(secrets.read("tracer", "token")).resolves.toBeNull();
+    await expect(secrets.read("echoes", "token")).resolves.toBe("echoes-token");
+  });
+
+  it("lets a secret-store failure reject the removal, like the other removal steps", async () => {
+    const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
+    const dir = makeDirectory("web", [folder]);
+    registerPluginSecretStore({
+      ...createMemoryPluginSecretStore(),
+      clearPlugin: async () => {
+        throw new Error("keychain locked");
+      },
+    });
+    const store = makeStore(dir.adapter);
+    await store.getState().refresh();
+
+    await expect(store.getState().remove("tracer", { deleteData: false })).rejects.toThrow(
+      "keychain locked"
+    );
+    // The steps before it ran: the folder is already gone.
+    expect(dir.map.has("tracer")).toBe(false);
   });
 });
 

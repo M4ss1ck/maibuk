@@ -163,6 +163,7 @@ export default defineConfig(() => ({
         "src/features/theme/store.ts",
         "src/features/sync/store.ts",
         "src/hooks/useAutoSave.ts",
+        "src/hooks/usePluginSecrets.ts",
         "src/hooks/useItemContextMenu.ts",
         "src/hooks/useParkSelectionWhileDragging.ts",
         "src/lib/park-selection.ts",
@@ -215,6 +216,15 @@ export default defineConfig(() => ({
         // Plugin storage (ADR 0023)
         "src/features/plugins/tables.ts",
         "src/features/plugins/storage.ts",
+        // Plugin secrets and network (ADR 0023, #453)
+        "src/features/plugins/secret-store.ts",
+        "src/features/plugins/network.ts",
+        "src/lib/platform/web/secrets.ts",
+        "src/lib/platform/tauri/secrets.ts",
+        "src/lib/platform/web/network.ts",
+        "src/lib/platform/tauri/network.ts",
+        "src/lib/platform/web/clipboard.ts",
+        "src/lib/platform/tauri/clipboard.ts",
         // Plugin manifest (ADR 0022)
         "src/features/plugins/semver.ts",
         "src/features/plugins/manifest-schema.ts",

@@ -32,6 +32,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_clipboard_manager::init());
 
     #[cfg(desktop)]
@@ -75,6 +76,18 @@ pub fn run() {
             plugins::watch_plugin_directory,
             #[cfg(desktop)]
             plugins::unwatch_plugin_directory,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            plugins::secrets::plugin_secret_set,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            plugins::secrets::plugin_secret_delete,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            plugins::secrets::plugin_secret_list_names,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            plugins::secrets::plugin_secret_read,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            plugins::secrets::plugin_secret_clear_plugin,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            plugins::secrets::plugin_secret_clear_all,
             dictation::commands::dictation_is_supported,
             dictation::commands::dictation_load,
             dictation::commands::dictation_start,
@@ -100,6 +113,12 @@ pub fn run() {
             if let Err(error) = plugins::directory::protect(app.handle()) {
                 eprintln!("Plugin Directory protection failed: {error}");
             }
+
+            // The desktop keychain backs Plugin secrets (ADR 0023). Opening it
+            // is best-effort: a device whose keychain is missing keeps every
+            // secret command reporting that, and still launches.
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            plugins::secrets::init();
 
             #[cfg(desktop)]
             {

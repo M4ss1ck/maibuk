@@ -25,7 +25,7 @@ const REQUIRED_PERMISSIONS = [
   "editor:read",
   "editor:decorate",
   "secrets",
-  "network:fixture.invalid",
+  "network:api.fixture.test",
 ];
 const REQUIRED_READ = "Read your Library · Required to enable this Plugin";
 const OPTIONAL_LABELS = [

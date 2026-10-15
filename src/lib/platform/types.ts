@@ -58,6 +58,21 @@ export interface OSAdapter {
   locale(): Promise<string | null>;
 }
 
+export interface ClipboardAdapter {
+  /** The clipboard's plain text; `""` when it holds none. */
+  readText(): Promise<string>;
+  /** Replaces the clipboard with `text`. */
+  writeText(text: string): Promise<void>;
+}
+
+/**
+ * Fetches a URL on a host the broker already allowed. The web build uses the
+ * browser's own `fetch`, so its request is subject to CORS like any page; the
+ * desktop build uses the http plugin's `fetch`, which runs outside the webview
+ * and so has no CORS. The broker's host check, not this adapter, is the gate.
+ */
+export type PluginFetchAdapter = (url: string, init: RequestInit) => Promise<Response>;
+
 export interface BackupEntry {
   filename: string;
   trigger: "daily" | "pre-sync" | "pre-restore" | "manual" | "close" | "unknown";

@@ -6,7 +6,9 @@ import type {
   OSAdapter,
   WebDialogAdapter,
   BackupAdapter,
+  ClipboardAdapter,
   PluginDirectoryAdapter,
+  PluginFetchAdapter,
 } from "@/lib/platform/types";
 
 import type { DictationPlatform, ModelFiles, RecognizerHost } from "@/features/dictation/types";
@@ -38,7 +40,9 @@ export type {
   FileWithData,
   BackupAdapter,
   BackupEntry,
+  ClipboardAdapter,
   PluginDirectoryAdapter,
+  PluginFetchAdapter,
 } from "@/lib/platform/types";
 
 // Database factory
@@ -140,6 +144,30 @@ export async function getOS(): Promise<OSAdapter> {
     const { tauriOS } = await import("@/lib/platform/tauri/os");
     return tauriOS;
   }
+}
+
+// Clipboard factory. Desktop and Android go through the clipboard-manager
+// plugin; the web build uses the browser's `navigator.clipboard`, which may
+// refuse a call without focus or a user gesture.
+export async function getClipboard(): Promise<ClipboardAdapter> {
+  if (IS_WEB) {
+    const { webClipboard } = await import("@/lib/platform/web/clipboard");
+    return webClipboard;
+  }
+  const { tauriClipboard } = await import("@/lib/platform/tauri/clipboard");
+  return tauriClipboard;
+}
+
+// Plugin network factory. The web build uses the browser's `fetch` (subject to
+// CORS); desktop uses the http plugin's `fetch` (no CORS). Which hosts a Plugin
+// may reach is the broker's decision, not this adapter's.
+export async function getPluginFetch(): Promise<PluginFetchAdapter> {
+  if (IS_WEB) {
+    const { webPluginFetch } = await import("@/lib/platform/web/network");
+    return webPluginFetch;
+  }
+  const { tauriPluginFetch } = await import("@/lib/platform/tauri/network");
+  return tauriPluginFetch;
 }
 
 // Backup factory

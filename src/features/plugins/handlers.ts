@@ -7,9 +7,12 @@
  * #452) edit the focused editor as one undoable step; `storage.*` reads and
  * writes the Plugin's own Library namespace; `navigation.openEntity` opens an
  * entity through the app shell; `navigation.openPage` opens a Plugin page;
- * `language.get` reads the app language. The
- * broker already enforces each row's Plugin Permission, input schema, Library
- * availability, and rate limit, so a handler only does its work.
+ * `language.get` reads the app language; `secrets.*` writes the calling
+ * Plugin's credentials through the registered store; `network.fetch` fetches
+ * on a granted host and streams the body, injecting a named secret into a
+ * declared header; and `clipboard.*` reads and writes the platform clipboard.
+ * The broker already enforces each row's Plugin Permission, input schema,
+ * Library availability, and rate limit, so a handler only does its work.
  */
 
 import { toast } from "@/components/ui/Toast";
@@ -36,6 +39,8 @@ import {
   updatePluginNote,
 } from "@/features/plugins/library";
 import { openPluginEntity, openPluginPage } from "@/features/plugins/navigation";
+import { pluginFetch } from "@/features/plugins/network";
+import { getPluginSecretStore, type PluginSecretStore } from "@/features/plugins/secret-store";
 import {
   deletePluginStorageValue,
   getPluginStorageValue,
@@ -43,6 +48,45 @@ import {
   setPluginStorageValue,
 } from "@/features/plugins/storage";
 import type { PluginApiHandlers, PluginManifest } from "@/features/plugins/types";
+import { getClipboard, getPluginFetch } from "@/lib/platform";
+import type { ClipboardAdapter } from "@/lib/platform/types";
+import { PluginApiError } from "@/plugin-sdk/protocol";
+
+/**
+ * The registered credential store. Reset settings and removal delete through
+ * the same seam, so a running app always has one; without it a `secrets.*`
+ * call is a host failure, not a call the Plugin can retry.
+ */
+function pluginSecretStore(): PluginSecretStore {
+  const store = getPluginSecretStore();
+  if (!store) {
+    throw new PluginApiError({
+      code: "internal-error",
+      message: "No Plugin secret store is registered in Maibuk",
+    });
+  }
+  return store;
+}
+
+/**
+ * Runs one clipboard operation through the platform adapter. A browser
+ * clipboard call rejects when the page lacks permission or focus; the Plugin
+ * sees one typed refusal rather than the platform's own error.
+ */
+async function runClipboard<T>(
+  action: "read" | "written",
+  run: (clipboard: ClipboardAdapter) => Promise<T>
+): Promise<T> {
+  try {
+    return await run(await getClipboard());
+  } catch (error) {
+    if (error instanceof PluginApiError) throw error;
+    throw new PluginApiError({
+      code: "internal-error",
+      message: `The clipboard could not be ${action}.`,
+    });
+  }
+}
 
 export function createPluginHandlers(manifest: PluginManifest): PluginApiHandlers {
   return {
@@ -91,5 +135,24 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "navigation.openPage": ({ pageId, pluginId }, context) =>
       openPluginPage(pluginId ?? context.pluginId, pageId),
     "language.get": async () => ({ language: currentPluginLanguage() }),
+    "secrets.set": async ({ name, value }, { pluginId }) => {
+      await pluginSecretStore().set(pluginId, name, value);
+      return null;
+    },
+    "secrets.delete": async ({ name }, { pluginId }) => {
+      await pluginSecretStore().delete(pluginId, name);
+      return null;
+    },
+    // Names only: no handler in this app ever returns a secret value to a Plugin.
+    "secrets.listNames": async (_params, { pluginId }) => pluginSecretStore().listNames(pluginId),
+    "network.fetch": async (params, { pluginId }) =>
+      pluginFetch(params, {
+        pluginId,
+        store: pluginSecretStore(),
+        fetch: await getPluginFetch(),
+      }),
+    "clipboard.readText": () => runClipboard("read", (clipboard) => clipboard.readText()),
+    "clipboard.writeText": ({ text }) =>
+      runClipboard("written", (clipboard) => clipboard.writeText(text)).then(() => null),
   };
 }

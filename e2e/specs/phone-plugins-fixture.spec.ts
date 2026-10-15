@@ -17,7 +17,7 @@ const REQUIRED_PERMISSIONS = [
   "editor:read",
   "editor:decorate",
   "secrets",
-  "network:fixture.invalid",
+  "network:api.fixture.test",
 ];
 /** The two Chapters of the `oneBookTwoChapters` seed: A is opened, B is last. */
 const CHAPTER_A = SEED_CHAPTERS[0].title;

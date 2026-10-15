@@ -2206,6 +2206,8 @@
       "data": "Library data",
       "files": "Files",
       "credentials": "Saved credentials",
+      "remember": "Remember credentials on this device",
+      "rememberDescription": "Saved credentials stay in this browser after you close it. They are stored unencrypted; anyone using this browser profile can read them.",
       "approval": "Approved copy",
       "preferences": "Custom Shortcuts and Voice Commands",
       "kept": "Retained",

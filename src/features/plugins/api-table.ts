@@ -331,7 +331,7 @@ export const PLUGIN_API_TABLE = [
   defineApiRow({
     id: "network.fetch",
     description:
-      "Fetches a URL on a granted host. A header can name a stored secret the host injects.",
+      "Fetches a URL on a granted host. A header can name a stored secret the host injects. A redirect is refused, so a granted host cannot forward the request, or an injected secret, to another host.",
     input: z.strictObject({
       url: z.string().max(8192),
       method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]).optional(),

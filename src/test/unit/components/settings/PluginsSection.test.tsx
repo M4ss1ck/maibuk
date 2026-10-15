@@ -19,6 +19,7 @@ import {
   setPluginLifecycleInstance,
 } from "@/features/plugins/lifecycle-instance";
 import { createTestHost } from "@/features/plugins/test-kit";
+import { registerPluginSecretStore, type PluginSecretStore } from "@/features/plugins/secret-store";
 import { registerPluginSettingsRows } from "@/features/settings/rows";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
 import { useSettingsStore } from "@/features/settings/store";
@@ -131,6 +132,19 @@ function seed(...entries: PluginManagementEntry[]): void {
   });
 }
 
+/** A Plugin secret store whose overrides stand in for the registered one. */
+function secretStore(overrides: Partial<PluginSecretStore> = {}): PluginSecretStore {
+  return {
+    set: async () => {},
+    delete: async () => {},
+    listNames: async () => [],
+    read: async () => null,
+    clearPlugin: async () => {},
+    clearAll: async () => {},
+    ...overrides,
+  };
+}
+
 /** Tabs until `target` has focus, then asserts it. */
 async function tabTo(user: User, target: HTMLElement, max = 14): Promise<void> {
   for (let i = 0; i < max; i++) {
@@ -148,6 +162,7 @@ async function openRow(user: User, name = "Echoes"): Promise<void> {
 
 beforeEach(() => {
   localStorage.clear();
+  registerPluginSecretStore(null);
   platformState.kind = "web";
   platformState.supportsFolderPicker = false;
   directory.openDirectory.mockClear();
@@ -170,6 +185,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   while (unregisters.length > 0) unregisters.pop()?.();
+  registerPluginSecretStore(null);
   await i18n.changeLanguage("en");
 });
 
@@ -1078,6 +1094,7 @@ describe("Plugin management (#443)", () => {
 
   it("shows the expanded-row facts for an installed approved copy", async () => {
     const user = userEvent.setup();
+    registerPluginSecretStore(secretStore({ listNames: async () => ["token"] }));
     seed(
       entry({
         approval: approval({ granted: ["secrets"], enabled: true }),
@@ -1093,8 +1110,8 @@ describe("Plugin management (#443)", () => {
     expect(screen.getByText("Approved copy")).toBeInTheDocument();
     expect(screen.getByText("Custom Shortcuts and Voice Commands")).toBeInTheDocument();
     expect(screen.getByText("Retained")).toBeInTheDocument();
-    // Files, saved credentials (the secrets grant), and the approved copy.
-    expect(screen.getAllByText("Present")).toHaveLength(3);
+    // Files, saved credentials (read from the store), and the approved copy.
+    await waitFor(() => expect(screen.getAllByText("Present")).toHaveLength(3));
   });
 
   it("shows the absent facts and the manual-recovery line for a removed third-party row", async () => {
@@ -1205,6 +1222,107 @@ describe("Plugin management (#443)", () => {
     await user.click(within(dialog).getByText("Also delete this Plugin’s data"));
 
     expect(checkbox).toBeChecked();
+  });
+});
+
+describe("Plugin credential storage on web (#453 unit 5)", () => {
+  const REMEMBER = "Remember credentials on this device";
+
+  /** The value beside one expanded-row fact, read by its label. */
+  function factValue(label: string): string {
+    const dt = screen.getByText(label);
+    return dt.nextElementSibling?.textContent ?? "";
+  }
+
+  /** An approved entry whose manifest declares the secrets permission. */
+  function secretsEntry(): PluginManagementEntry {
+    return entry({
+      manifest: manifest({ permissions: { required: [], optional: ["secrets"] } }),
+      approval: approval({ granted: ["secrets"], enabled: true }),
+      review: review({ status: "approved" }),
+    });
+  }
+
+  it("offers the switch and turns remembering on by keyboard", async () => {
+    const user = userEvent.setup();
+    const setRemembered = vi.fn(async () => {});
+    registerPluginSecretStore(
+      secretStore({ isRemembered: () => false, setRemembered })
+    );
+    seed(secretsEntry());
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const toggle = await screen.findByRole("switch", { name: REMEMBER });
+    expect(toggle).not.toBeChecked();
+
+    await tabTo(user, toggle, 60);
+    await user.keyboard(" ");
+
+    expect(setRemembered).toHaveBeenCalledWith("echoes", true);
+    await waitFor(() => expect(toggle).toBeChecked());
+  });
+
+  it("reflects a Plugin already remembered on this device", async () => {
+    const user = userEvent.setup();
+    registerPluginSecretStore(
+      secretStore({ isRemembered: () => true, setRemembered: async () => {} })
+    );
+    seed(secretsEntry());
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    expect(await screen.findByRole("switch", { name: REMEMBER })).toBeChecked();
+  });
+
+  it("hides the switch when the registered store cannot remember", async () => {
+    const user = userEvent.setup();
+    registerPluginSecretStore(secretStore());
+    seed(secretsEntry());
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    expect(screen.queryByRole("switch", { name: REMEMBER })).toBeNull();
+    expect(screen.queryByText(REMEMBER)).toBeNull();
+  });
+
+  it("hides the switch when the Plugin does not declare secrets", async () => {
+    const user = userEvent.setup();
+    registerPluginSecretStore(
+      secretStore({ isRemembered: () => false, setRemembered: async () => {} })
+    );
+    seed(
+      entry({ approval: approval({ enabled: true }), review: review({ status: "approved" }) })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    expect(screen.queryByRole("switch", { name: REMEMBER })).toBeNull();
+  });
+
+  it("shows saved credentials only when the store holds a value", async () => {
+    const user = userEvent.setup();
+    registerPluginSecretStore(secretStore({ listNames: async () => [] }));
+    seed(secretsEntry());
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    await waitFor(() => expect(factValue("Saved credentials")).toBe("None"));
+  });
+
+  it("shows the saved credential a store reports", async () => {
+    const user = userEvent.setup();
+    registerPluginSecretStore(secretStore({ listNames: async () => ["token"] }));
+    seed(secretsEntry());
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    await waitFor(() => expect(factValue("Saved credentials")).toBe("Present"));
   });
 });
 
