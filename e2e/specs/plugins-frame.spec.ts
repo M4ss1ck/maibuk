@@ -20,6 +20,7 @@
 // WebKit by the wire harness (`plugins-sandbox.spec.ts`) and the T1 probe.
 
 import type { FrameLocator, Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { loggedRequests } from "../support/request-log";
 import { expect, test } from "../support/test";
@@ -114,6 +115,7 @@ test.describe("Frame custom UI @wf:plugins-frame @sandbox @no-webkit", () => {
     await expect(frame.getByTestId("css-applied")).toHaveCSS("color", "rgb(12, 34, 56)");
     // The naturalWidth > 0 the Frame writes once the hashed image loaded.
     await expect(frame.getByTestId("image")).toHaveText(/^[1-9]\d*$/);
+    await capture(page, "plugin-frame-page");
     await expectNoLeak(before);
   });
 
@@ -135,6 +137,7 @@ test.describe("Frame custom UI @wf:plugins-frame @sandbox @no-webkit", () => {
     await page.goto(`/plugin/${PLUGIN_ID}/embed`);
     await expect(page.getByText(NOTICE, { exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(embeddedFrame(page).getByTestId("pong")).toHaveText("pong", { timeout: 15_000 });
+    await capture(page, "plugin-frame-embedded");
   });
 
   test("the theme tokens change in the Frame live on a theme switch @sc:global.toggleTheme", async ({

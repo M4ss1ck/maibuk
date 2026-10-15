@@ -6,3 +6,12 @@
   color: rgb(12, 34, 56);
   font-size: 20px;
 }
+
+/* Styled with Maibuk's public theme tokens, as a Frame author would. */
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--maibuk-color-background);
+  color: var(--maibuk-color-foreground);
+  font-family: var(--maibuk-font-sans);
+}
