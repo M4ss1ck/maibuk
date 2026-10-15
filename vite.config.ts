@@ -1,15 +1,75 @@
 /// <reference types="vitest/config" />
 
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { resolve } from "node:path";
+import { createReadStream, statSync } from "node:fs";
+import { extname, join, normalize, resolve, sep } from "node:path";
 import { version } from "./package.json";
 import { TEST_TIMEOUT_MS } from "./src/test/time-budget";
 
 const host = process.env.TAURI_DEV_HOST;
 const buildTarget = process.env.VITE_BUILD_TARGET || "tauri";
 const isWeb = buildTarget === "web";
+
+/**
+ * Serves the Built-in Plugin build output (`dist/plugins/`) at `/plugins/`
+ * during development. The app fetches `plugins/index.json` and each shipped file
+ * relative to the app base (`src/features/plugins/builtin.ts`); a Release build
+ * serves them from `dist/`, but the dev server serves the project root, so
+ * without this the fetch falls through to the SPA fallback and the app ships no
+ * Built-ins. Both dev lanes build the Plugins into that folder before Vite
+ * starts (`pnpm tauri dev` and `pnpm dev:web`; see `plugins/README.md`
+ * "Building"), so the folder is current once per dev start, never per HMR change.
+ */
+function builtInPluginsDevServe(): Plugin {
+  const pluginsDir = resolve(__dirname, "dist/plugins");
+  const contentTypes: Record<string, string> = {
+    ".json": "application/json; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".wasm": "application/wasm",
+    ".txt": "text/plain; charset=utf-8",
+    ".map": "application/json; charset=utf-8",
+  };
+  return {
+    name: "maibuk-builtin-plugins-dev-serve",
+    apply: "serve",
+    configureServer(server) {
+      // Registered during `configureServer`, so it runs before Vite's internal
+      // middlewares and the SPA fallback.
+      server.middlewares.use((req, res, next) => {
+        if (req.method !== "GET" && req.method !== "HEAD") return next();
+        const path = decodeURIComponent((req.url ?? "").split("?")[0] ?? "");
+        if (!path.startsWith("/plugins/")) return next();
+        const file = join(pluginsDir, normalize(path.slice("/plugins/".length)));
+        // Confine to the build output: a path that escapes the folder is not ours.
+        if (file !== pluginsDir && !file.startsWith(pluginsDir + sep)) return next();
+        const stat = (() => {
+          try {
+            return statSync(file);
+          } catch {
+            return null;
+          }
+        })();
+        if (stat === null || !stat.isFile()) return next();
+        res.setHeader(
+          "Content-Type",
+          contentTypes[extname(file).toLowerCase()] ?? "application/octet-stream"
+        );
+        res.setHeader("Content-Length", stat.size);
+        if (req.method === "HEAD") {
+          res.end();
+          return;
+        }
+        createReadStream(file).pipe(res);
+      });
+    },
+  };
+}
 
 // Cross-origin isolation for threaded Dictation (SharedArrayBuffer). Matches
 // public/_headers in production; the E2E suite runs against `vite preview`, so
@@ -22,7 +82,7 @@ const isolation = {
 // https://vite.dev/config/
 export default defineConfig(() => ({
   envPrefix: ["VITE_", "TAURI_ENV_"],
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), builtInPluginsDevServe()],
   resolve: {
     alias: [
       { find: "@", replacement: resolve(__dirname, "src") },

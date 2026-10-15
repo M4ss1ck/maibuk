@@ -66,6 +66,11 @@ The build writes an installable folder per Plugin to `dist/plugins/<id>/`
 (manifest, bundled entry, copied assets and locales) plus `dist/plugins/index.json`,
 the shipped list the app installs from. `dist/` is not committed.
 
+Both dev lanes build the Plugins once before Vite starts, so the running app sees
+the current sources: `pnpm tauri dev` runs `pnpm build:plugins --target desktop`
+first, and `pnpm dev:web` runs `--target web`. Vite dev serves `dist/plugins/` at
+`/plugins/` (the desktop run also re-copies it into the app's resources).
+
 A Release build includes a Built-in only for the platforms its manifest declares:
 a Plugin whose `platforms` exclude the target is skipped with
 `omitted <id>: platforms exclude <target>`.
