@@ -2,8 +2,9 @@
  * The import boundary every third-party Plugin must respect (issues #450, #455).
  * One non-test `.ts`/`.tsx`/`.mts`/`.cts`/`.js`/`.mjs`/`.cjs`/`.jsx` under the
  * Plugin root may import only a relative file that stays inside the folder,
- * `@maibuk/plugin-sdk` and its subpaths, or a bare npm package; anything else is
- * a violation reported with its file, line, specifier, and reason.
+ * `@maibuk/plugin-sdk` and a single safe subpath segment, or a bare npm package;
+ * anything else is a violation reported with its file, line, specifier, and
+ * reason.
  * `@maibuk/plugin-test-kit` is allowed in test files (`*.test.*`,
  * `test-support.*`), and Node builtins are allowed only there, never in shipped
  * source. The bare `maibuk` package, and (when `maibukRoot` is given) a relative
@@ -15,12 +16,12 @@
  * (static `from`, side-effect `import`, dynamic `import()`, `export ... from`,
  * and `require()`), extended to track each specifier's line.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { listFiles, TEST_FILE_PATTERN } from "./files";
 
 const SOURCE_PATTERN = /\.(ts|tsx|mts|cts|js|mjs|cjs|jsx)$/;
-const TEST_FILE_PATTERN = /(\.test\.[cm]?[jt]sx?$)|((^|\/)test-support\.[cm]?[jt]sx?$)/;
 const SDK_PACKAGE = "@maibuk/plugin-sdk";
 const TEST_KIT_PACKAGE = "@maibuk/plugin-test-kit";
 const MAIBUK_CHECKOUT_REASON = "reaches into the Maibuk checkout";
@@ -113,6 +114,17 @@ function isInside(root: string, target: string): boolean {
   return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside));
 }
 
+/** Whether an SDK subpath is one safe segment: no `.`, `..`, empty, `/`, or `\`. */
+function isSafeSubpath(subpath: string): boolean {
+  return (
+    subpath !== "" &&
+    subpath !== "." &&
+    subpath !== ".." &&
+    !subpath.includes("/") &&
+    !subpath.includes("\\")
+  );
+}
+
 /** Why a specifier is refused, or null when it is allowed. */
 function refusalReason(
   specifier: string,
@@ -121,7 +133,13 @@ function refusalReason(
   pluginRoot: string,
   maibukRoot: string | undefined
 ): string | null {
-  if (specifier === SDK_PACKAGE || specifier.startsWith(`${SDK_PACKAGE}/`)) return null;
+  if (specifier === SDK_PACKAGE) return null;
+  if (specifier.startsWith(`${SDK_PACKAGE}/`)) {
+    const subpath = specifier.slice(SDK_PACKAGE.length + 1);
+    return isSafeSubpath(subpath)
+      ? null
+      : `${specifier} is not an allowed ${SDK_PACKAGE} subpath; import only ${SDK_PACKAGE} or a relative file inside the Plugin`;
+  }
   if (specifier === TEST_KIT_PACKAGE) {
     return isTestFile ? null : `${TEST_KIT_PACKAGE} is only allowed in test files`;
   }
@@ -154,25 +172,6 @@ function refusalReason(
   return null;
 }
 
-/** Every source file under `root`, as forward-slash relative paths; pruned dirs are skipped. */
-function listFiles(root: string): string[] {
-  const found: string[] = [];
-  const walk = (dir: string, relDir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const relPath = relDir === "" ? entry.name : `${relDir}/${entry.name}`;
-      if (entry.isDirectory()) {
-        if (PRUNED_DIRECTORIES.has(entry.name)) continue;
-        if (entry.name === "scripts" && relDir === "") continue;
-        walk(join(dir, entry.name), relPath);
-      } else if (entry.isFile()) {
-        found.push(relPath);
-      }
-    }
-  };
-  walk(root, "");
-  return found;
-}
-
 /**
  * Checks every import in the Plugin folder at `pluginRoot` against the
  * boundary, returning the refusals and the files it scanned. `node_modules`,
@@ -183,9 +182,9 @@ export function checkImportBoundary(
   options: ImportBoundaryOptions = {}
 ): ImportBoundaryResult {
   const { maibukRoot } = options;
-  const files = listFiles(pluginRoot)
-    .filter((relPath) => SOURCE_PATTERN.test(relPath))
-    .sort((left, right) => (left < right ? -1 : 1));
+  const files = listFiles(pluginRoot, { prune: PRUNED_DIRECTORIES, pruneRootScripts: true }).filter(
+    (relPath) => SOURCE_PATTERN.test(relPath)
+  );
 
   const violations: ImportViolation[] = [];
   for (const relPath of files) {

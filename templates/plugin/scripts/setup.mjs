@@ -1,4 +1,4 @@
-// The external Plugin repo's one-time setup (issue #455). It writes
+// The Plugin repo's one-time setup (issue #455). It writes
 // `maibuk.local.json` with the absolute Maibuk checkout path, generates the
 // editor's TypeScript configs through the checkout's `configs` command, and
 // links the Plugin authoring skill when the checkout carries it. Run it once

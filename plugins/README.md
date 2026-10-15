@@ -123,12 +123,11 @@ The build fails when any built entry exceeds **150 KB gzip**. The entry already
 contains the SDK from `src/plugin-sdk`, so the gate covers the SDK plus the
 Plugin together.
 
-## External Plugins
+## Plugins in their own repository
 
-A Plugin in its own repository is an External Plugin. It is the same Plugin as a
-Built-in: the same manifest, sandbox, and Plugin Permissions. Only the source
-location differs, and the tooling in `scripts/plugin/` builds, tests, and
-packages it.
+A Plugin in its own repository is the same Plugin as a Built-in: the same
+manifest, sandbox, and Plugin Permissions. Only the source location differs, and
+the tooling in `scripts/plugin/` builds, tests, and packages it.
 
 ### Starting a repo
 
@@ -158,13 +157,13 @@ usable when its `package.json` names `maibuk`, `scripts/plugin/cli.ts` and
 
 ### Imports
 
-An External Plugin imports `@maibuk/plugin-sdk` and its public subpaths, which
-resolve to the checkout's `src/plugin-sdk/`, and any package it installs in its
-own `node_modules` (a relative file inside the Plugin folder is fine too). Tests
-may also import `@maibuk/plugin-test-kit`, never shipped source. `react` and
-`react-dom` always resolve to Maibuk's own copy, in build, test, and typecheck,
-so one React runs per renderer. Maibuk's `@/...` modules are private and are
-refused.
+A Plugin in its own repository imports `@maibuk/plugin-sdk` and its public
+subpaths, which resolve to the checkout's `src/plugin-sdk/`, and any package it
+installs in its own `node_modules` (a relative file inside the Plugin folder is
+fine too). Tests may also import `@maibuk/plugin-test-kit`, never shipped
+source. `react` and `react-dom` always resolve to Maibuk's own copy, in build,
+test, and typecheck, so one React runs per renderer. Maibuk's `@/...` modules
+are private and are refused.
 
 ### Repository scripts
 
@@ -179,9 +178,9 @@ pnpm plugin:check <path>     # every step, stopping at the first failure
 ```
 
 `<path>` resolves against the folder the command was typed in, so
-`pnpm plugin:check ../my-plugin` works. An External Plugin repo wires the same
-commands to its own `pnpm build`, `pnpm test`, `pnpm validate`, `pnpm package`,
-and `pnpm check` through `scripts/maibuk.mjs`.
+`pnpm plugin:check ../my-plugin` works. A Plugin in its own repository wires the
+same commands to its own `pnpm build`, `pnpm test`, `pnpm validate`,
+`pnpm package`, and `pnpm check` through `scripts/maibuk.mjs`.
 
 `plugin:check` runs eight steps in order and stops at the first failure,
 printing `PASS <step>` or `FAIL <step>`:

@@ -5,10 +5,11 @@
  * same folder produce byte-identical bytes and a diff between releases means a
  * real change. The zip's parent directory is created when it does not exist.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import { zipSync } from "fflate";
+import { listFiles } from "./files";
 
 /**
  * The one modification time every packaged entry carries. A date before 1980
@@ -23,14 +24,6 @@ export interface PackageResult {
   zipPath: string;
   /** The packed files, Plugin-relative, sorted with forward slashes. */
   files: string[];
-}
-
-/** Every file under `dir`, as Plugin-relative POSIX paths, sorted. */
-function listFiles(dir: string): string[] {
-  return readdirSync(dir, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => relative(dir, join(entry.parentPath, entry.name)).replace(/\\/g, "/"))
-    .sort();
 }
 
 /**

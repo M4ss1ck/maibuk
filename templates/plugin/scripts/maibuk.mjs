@@ -1,4 +1,4 @@
-// The external Plugin repo's build bootstrap (issue #455). A Plugin author runs
+// The Plugin repo's build bootstrap (issue #455). A Plugin author runs
 // `node scripts/maibuk.mjs <cmd>` (through the package.json scripts) from the
 // Plugin folder; this module resolves the Maibuk checkout the repo points at
 // and launches the checkout's tooling CLI for one command. It is plain Node ESM
@@ -22,7 +22,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-/** The file an external Plugin repo writes its checkout path to. */
+/** The file a Plugin repo writes its checkout path to. */
 export const LOCAL_CONFIG_FILE = "maibuk.local.json";
 
 /** The key {@link LOCAL_CONFIG_FILE} holds the checkout path under. */

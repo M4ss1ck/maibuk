@@ -2,7 +2,7 @@
 // importers (the checkout-resolution test) without enabling `allowJs` and a
 // sibling `.d.mts` keeps the tooling dependency-free at runtime.
 
-/** The file an external Plugin repo writes its checkout path to. */
+/** The file a Plugin repo writes its checkout path to. */
 export const LOCAL_CONFIG_FILE: string;
 
 /** The key {@link LOCAL_CONFIG_FILE} holds the checkout path under. */
@@ -17,7 +17,7 @@ export interface ResolveMaibukCheckoutInput {
   flag?: string;
   /** The `MAIBUK_CHECKOUT` environment variable value, when given. */
   env?: string;
-  /** The external Plugin repo's root, where `maibuk.local.json` lives. */
+  /** The Plugin repo's root, where `maibuk.local.json` lives. */
   pluginRoot: string;
 }
 

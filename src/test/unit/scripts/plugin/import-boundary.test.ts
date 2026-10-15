@@ -98,6 +98,31 @@ describe("checkImportBoundary()", () => {
     expect(violations[0].reason).toMatch(/not an allowed package/);
   });
 
+  it("refuses an SDK subpath that is not one safe segment", () => {
+    const root = tempPluginRoot();
+    write(root, "entry.ts", 'import x from "@maibuk/plugin-sdk/../features/plugins/broker";\n');
+    write(root, "other.ts", 'import y from "@maibuk/plugin-sdk/ui/../../stores";\n');
+    write(root, "third.ts", 'import z from "@maibuk/plugin-sdk/ui\\..\\escape";\n');
+
+    const { violations } = checkImportBoundary(root, {});
+    expect(violations.map((violation) => violation.specifier)).toEqual([
+      "@maibuk/plugin-sdk/../features/plugins/broker",
+      "@maibuk/plugin-sdk/ui/../../stores",
+      "@maibuk/plugin-sdk/ui\\..\\escape",
+    ]);
+    for (const violation of violations) {
+      expect(violation.reason).toContain("@maibuk/plugin-sdk");
+    }
+  });
+
+  it("allows a single-segment SDK subpath", () => {
+    const root = tempPluginRoot();
+    write(root, "entry.ts", 'import { ui } from "@maibuk/plugin-sdk/ui";\n');
+    write(root, "other.ts", 'import { api } from "@maibuk/plugin-sdk/api.generated";\n');
+
+    expect(checkImportBoundary(root, {}).violations).toEqual([]);
+  });
+
   it("allows @maibuk/plugin-test-kit only in test files", () => {
     const root = tempPluginRoot();
     write(root, "entry.ts", 'import { host } from "@maibuk/plugin-test-kit";\n');

@@ -64,7 +64,7 @@ pnpm typecheck        # tsc over src/, test files included
 pnpm lint             # Biome
 pnpm test:e2e         # Playwright, local only (e2e/README.md)
 pnpm build:web        # Web static build
-pnpm plugin:check <path>  # External Plugin tooling (plugins/README.md)
+pnpm plugin:check <path>  # Plugin tooling for a Plugin in its own repo (plugins/README.md)
 ```
 
 Every other script is in `package.json`; each measurement lane (`bench:*`, `conformance:*`, `screenshots`, `test:e2e:sync`) is documented beside the tool it measures, in `docs/agents/utilities-and-components.md` or `e2e/README.md`.

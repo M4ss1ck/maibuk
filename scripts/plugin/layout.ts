@@ -10,20 +10,19 @@
  * page's `frame`, and a sidebar entry's or toolbar button's `icon` when it is a
  * relative `.svg` path rather than a Lucide icon name.
  */
-import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { unzipSync } from "fflate";
+import { normalizeRelativePath } from "@/features/plugins/relative-path";
+import { listFiles, TEST_FILE_PATTERN } from "./files";
 
 /** The `.ts`, `.tsx`, and `.map` files a package must never ship. */
 const FORBIDDEN_EXTENSION_PATTERN = /\.(ts|tsx|map)$/;
 
-/** Test files beside the source, never built and never shipped. */
-const TEST_FILE_PATTERN = /(\.test\.[cm]?[jt]sx?$)|((^|\/)test-support\.[cm]?[jt]sx?$)/;
-
 /**
  * The manifest fields the layout check reads. The full type is `PluginManifest`
- * (`src/features/plugins/types.ts`); this keeps the check a leaf with no `@/`
- * import while naming every relative-file field.
+ * (`src/features/plugins/types.ts`); naming every relative-file field here keeps
+ * the check from pulling the manifest schema.
  */
 interface LayoutManifest {
   entry?: unknown;
@@ -44,14 +43,6 @@ export interface LayoutCheckOptions {
 export interface LayoutCheckResult {
   /** One plain-language message per problem, in a stable order. */
   problems: string[];
-}
-
-/** Strips `.` and empty segments, like the shared `normalizeRelativePath`. */
-function normalizeRelativePath(value: string): string {
-  return value
-    .split("/")
-    .filter((segment) => segment !== "" && segment !== ".")
-    .join("/");
 }
 
 /** Every file the manifest declares relative to the Plugin folder. */
@@ -76,11 +67,7 @@ function declaredFiles(manifest: LayoutManifest): string[] {
 /** Every file under `dir`, keyed by its Plugin-relative POSIX path. */
 function readFolder(dir: string): Map<string, Uint8Array> {
   const files = new Map<string, Uint8Array>();
-  for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
-    if (!entry.isFile()) continue;
-    const absolute = join(entry.parentPath, entry.name);
-    files.set(relative(dir, absolute).replace(/\\/g, "/"), readFileSync(absolute));
-  }
+  for (const path of listFiles(dir)) files.set(path, readFileSync(join(dir, path)));
   return files;
 }
 

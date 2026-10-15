@@ -16,7 +16,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { cp } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { type Alias, type PluginOption, build } from "vite";
+import { type Alias, build } from "vite";
 
 /** The repo root, from this script's own location (`scripts/`). */
 const REPO_ROOT = resolve(import.meta.dirname, "..");
@@ -53,11 +53,6 @@ export interface BuildPluginOptions {
    * fixture builds pass none and keep the default resolution.
    */
   alias?: Alias[];
-  /**
-   * Extra Vite plugins. Empty for every current caller; the option exists so
-   * the external Plugin build can add a resolver without forking this module.
-   */
-  plugins?: PluginOption[];
 }
 
 /** The manifest fields `buildPlugin` reads; the caller validates the rest. */
@@ -73,7 +68,7 @@ interface BuildPluginManifest {
  * code-split, so the host module loader can read it.
  */
 export async function buildPlugin(options: BuildPluginOptions): Promise<void> {
-  const { sourceDir, manifestPath, outDir, minify = true, define = {}, alias, plugins } = options;
+  const { sourceDir, manifestPath, outDir, minify = true, define = {}, alias } = options;
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as BuildPluginManifest;
   if (typeof manifest.entry !== "string" || manifest.entry === "") {
     throw new Error(`${manifestPath} declares no entry`);
@@ -84,7 +79,6 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<void> {
     // No `public/` copy: the folder must hold only what the manifest declares,
     // or the app would hash assets the Plugin never lists.
     publicDir: false,
-    plugins: plugins ?? [],
     define: { "process.env.NODE_ENV": JSON.stringify("production"), ...define },
     resolve: {
       alias: [{ find: "@", replacement: join(REPO_ROOT, "src") }, ...(alias ?? [])],
