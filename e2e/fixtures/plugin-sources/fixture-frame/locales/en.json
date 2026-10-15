@@ -1,0 +1,10 @@
+{
+  "name": "Frame Fixture",
+  "description": "The E2E fixture-frame Plugin (issue #454 unit U6): one Plugin that declares customUi: true, a whole-page Frame (ui/page.html) that renders its own DOM, and a Remote UI page embedding a kit Frame (ui/embed.html). Its Worker relays a ping over the Frame's port and forwards the current UI language, so the @sandbox lane can prove the Frame's isolation, theme tokens, notice, and language forwarding on the real engines. Never shipped in a product bundle.",
+  "commands.openFrame.label": "Open frame page",
+  "commands.openEmbed.label": "Open embedded frame",
+  "commands.navigateData.label": "Frame navigate to data",
+  "commands.navigateBlob.label": "Frame navigate to blob",
+  "pages.frame.title": "Frame fixture",
+  "pages.embed.title": "Embedded frame"
+}

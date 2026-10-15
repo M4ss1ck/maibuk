@@ -29,7 +29,7 @@ import type {
   PluginStartRefusal,
   PluginStartResult,
 } from "@/features/plugins/types";
-import { PLUGIN_INIT_MESSAGE, PLUGIN_READY_MESSAGE } from "@/plugin-sdk/protocol";
+import { PLUGIN_FRAME_MESSAGE, PLUGIN_INIT_MESSAGE, PLUGIN_READY_MESSAGE } from "@/plugin-sdk/protocol";
 import { createPluginBroker } from "@/features/plugins/broker";
 
 /** The folder's manifest file name (ADR 0020). */
@@ -68,7 +68,10 @@ export function readPluginManifest(
       problems: [{ path: MANIFEST_FILE, message: `${MANIFEST_FILE} is not valid UTF-8` }],
     };
   }
-  return parsePluginManifest(text, options);
+  return parsePluginManifest(text, {
+    ...options,
+    files: folder.files.map((file) => file.path),
+  });
 }
 
 async function runStartup(
@@ -248,5 +251,23 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
   // From here on a Worker error means the running Plugin crashed or was
   // killed (an OOM included); startup errors were refusals above.
   frame.onWorkerError((message) => options.onWorkerError?.(message));
-  return { ok: true, plugin: { manifest, broker, stop } };
+  return {
+    ok: true,
+    // `folder.files` are the bytes the pinned `h1:` covered above, so a Frame
+    // built from them never re-reads an unverified folder (#454, D1).
+    plugin: {
+      manifest,
+      broker,
+      files: folder.files,
+      // The Frame port rides the Plugin's own MessagePort as a reserved
+      // envelope (D1, decision: broker port, not the Worker's self channel), so
+      // the SDK sees it before RPC dispatch and the host never parses the
+      // Frame<->Worker traffic that follows.
+      sendFrame: (frameId, src, port) => {
+        if (stopped) return;
+        channel.port1.postMessage({ kind: PLUGIN_FRAME_MESSAGE.kind, frameId, src }, [port]);
+      },
+      stop,
+    },
+  };
 }

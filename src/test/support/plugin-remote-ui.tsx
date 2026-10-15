@@ -18,6 +18,7 @@ import type { ComponentType, ReactNode } from "react";
 import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import type { PluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
+import type { PluginFrameHost } from "@/components/plugins/PluginFrame";
 
 export interface RemoteUiHarness {
   ui: PluginRemoteUi;
@@ -37,10 +38,16 @@ export interface RemoteUiHarness {
 
 export function renderRemoteUi(options?: {
   wrapper?: ComponentType<{ children: ReactNode }>;
+  /**
+   * The owning run's Frame host (#454): a kit `Frame` renders the sandboxed
+   * surface from it. Without it a `Frame` renders nothing.
+   */
+  frameHost?: PluginFrameHost;
 }): RemoteUiHarness {
   const violations: PluginUiViolation[] = [];
   const ui = createPluginRemoteUi({
     onViolation: (violation) => violations.push(violation),
+    ...(options?.frameHost === undefined ? {} : { frameHost: options.frameHost }),
   });
 
   // Kept out of the document so RTL queries see only the host tree; a

@@ -1,0 +1,17 @@
+/* The fixture Frame's own style sheet, loaded from the Plugin's verified hashed
+   set (the host shim rewrites the <link> to an in-Frame blob: URL). A spec
+   asserts the computed color below, so the file proves CSS from the set is
+   applied. */
+.frame-title {
+  color: rgb(12, 34, 56);
+  font-size: 20px;
+}
+
+/* Styled with Maibuk's public theme tokens, as a Frame author would. */
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--maibuk-color-background);
+  color: var(--maibuk-color-foreground);
+  font-family: var(--maibuk-font-sans);
+}

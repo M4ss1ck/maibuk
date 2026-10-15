@@ -2381,6 +2381,28 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-frame",
+    area: "plugins",
+    workflow:
+      "A custom-UI Frame (the second UI path, ADR 0021): a whole-page Frame and an embedded kit Frame render the Plugin's own verified HTML/CSS/JS from its hashed set inside a sandbox=\"allow-scripts\" iframe, carry the reused custom-UI notice, round-trip a message over window.maibuk.port, follow a live theme change through the --maibuk-* tokens, and cannot reach the network, Tauri IPC, or the host DOM; the Plugin's Worker forwards its UI language to the Frame; asserts: the notice, the Frame's pong, the CSS and image from the hashed set, every probe blocked, and an empty Node-side request log even after the Frame self-navigates to a data: or blob: document; persists: no",
+    edges: [
+      "the whole-page Frame renders from the hashed set and answers a ping",
+      "every probe from the Frame reports blocked and no request leaves",
+      "the embedded kit Frame renders with its notice and answers a ping",
+      "the theme tokens change in the Frame live on a theme switch",
+      "the UI language reaches the Frame",
+      "Tab from the preceding control reaches the Frame",
+      "the Frame self-navigates to a data: document and logs nothing",
+      "the Frame self-navigates to a blob: document and logs nothing",
+    ],
+    terms: ["Plugin", "Host-rendered UI"],
+    shortcuts: ["global.toggleTheme"],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["sandbox", "no-webkit"],
+    status: "accepted",
+  },
+  {
     id: "settings-reset-all",
     area: "settings",
     workflow:

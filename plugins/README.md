@@ -47,6 +47,42 @@ const client = createPluginClient(port);
 client.activation?.startReason; // "restore" after a Restore
 ```
 
+## Custom UI Frames
+
+Set `customUi: true` in the manifest and a page or the kit `Frame` may render
+your own HTML/CSS/JS in a sandboxed `Frame` (ADR 0021: host-rendered UI is the
+default, a Frame is the second path). A whole-page Frame declares
+`frame: "<relative path>.html"` on a page contribution; an embedded Frame uses
+`<Frame src="ui/report.html" title="Report" />`. Every file the Frame loads comes
+from your *verified hashed* folder, so keep the HTML, CSS, JS, images, and fonts
+inside it and reference them with relative paths. A Frame's only host channel is
+`window.maibuk.port`, the `MessagePort` that connects it to your Plugin's Worker;
+use it to talk to the Plugin (e.g. `createPluginClient(window.maibuk.port)` on
+the Plugin side is the Worker's port, and the Frame receives the other end).
+
+A Frame is styled with the host's semantic theme tokens: the host writes each
+public `--maibuk-*` property below onto the Frame's `<html>` on load and again
+whenever the theme, accent, or font changes, so use them instead of hard-coded
+colors. Names are a stable Plugin-facing contract; see
+`docs/agents/design.md` "Frame theme tokens" for meanings.
+
+```
+--maibuk-color-primary            --maibuk-color-card
+--maibuk-color-primary-hover      --maibuk-color-card-foreground
+--maibuk-color-primary-foreground --maibuk-color-destructive
+--maibuk-color-secondary          --maibuk-color-destructive-hover
+--maibuk-color-background         --maibuk-color-success
+--maibuk-color-foreground         --maibuk-color-info-bg
+--maibuk-color-muted              --maibuk-color-info-text
+--maibuk-color-muted-foreground   --maibuk-color-warning-bg
+--maibuk-color-border             --maibuk-color-warning-text
+--maibuk-color-error-bg           --maibuk-color-success-bg
+--maibuk-color-error-text         --maibuk-color-success-text
+--maibuk-color-scheme             --maibuk-font-sans
+--maibuk-font-serif               --maibuk-font-mono
+--maibuk-font-size                --maibuk-spacing-editor-max
+```
+
 ## Adding a Built-in
 
 1. Create `plugins/<id>/` with `manifest.json` and an `index.ts` or `index.tsx`.

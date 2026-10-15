@@ -317,6 +317,11 @@
                 "pattern": "^[a-z][a-zA-Z0-9]{0,47}$",
                 "description": "A Command that declares navigates: true."
               },
+              "frame": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A relative path to an .html file in the Plugin folder; renders this page as a Frame (requires customUi)."
+              },
               "platforms": {
                 "minItems": 1,
                 "type": "array",

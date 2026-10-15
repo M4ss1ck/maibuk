@@ -30,6 +30,7 @@ import type {
   RemoteReceiverNode,
   RemoteReceiverRoot,
 } from "@remote-dom/core/receivers";
+import { relativeFileProblem } from "@/features/plugins/manifest-validate";
 import { getPluginUiElement, PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
 import type { PluginUiLimits, PluginUiProp } from "@/plugin-sdk/ui-table";
 
@@ -156,6 +157,10 @@ function propertyProblem(prop: PluginUiProp, value: unknown): string | null {
         } catch {
           return "is not a valid URL";
         }
+      }
+      if (prop.format === "plugin-path") {
+        const problem = relativeFileProblem(value, ".html");
+        if (problem !== null) return problem;
       }
       return null;
     }

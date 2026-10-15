@@ -119,6 +119,19 @@ export interface PluginRuntime {
   manifest: PluginManifest;
   /** The host end of the Plugin's port: requests, events, and stop. */
   broker: PluginBroker;
+  /**
+   * The verified Plugin-folder files, read-only (#454): a Frame is built from
+   * exactly the bytes the pinned `h1:` covered, never a fresh read. The Frame
+   * host keeps this on the runtime so a remount reuses the verified set.
+   */
+  readonly files: readonly PluginFolderFile[];
+  /**
+   * Hands one Frame's port to this Plugin's Worker over the Plugin's own
+   * MessagePort as a reserved envelope (#454, D1), keyed by the host's
+   * `frameId`. The SDK delivers it to the Plugin's `onFrame` before RPC
+   * dispatch; the host never parses Frame traffic afterwards.
+   */
+  sendFrame(frameId: string, src: string, port: MessagePort): void;
   /** Stops the broker and removes the sandbox frame (terminating its Worker). */
   stop(): void;
 }
@@ -888,6 +901,13 @@ export type ManifestValidation =
 export interface ManifestValidationOptions {
   /** A Built-in Plugin may use the reserved `maibuk-` prefix; `tutorial-` stays refused. */
   builtIn?: boolean;
+  /**
+   * The Plugin folder's POSIX-relative file paths, when the caller has them
+   * (the runtime reads the folder before validating). A page's `frame` must
+   * name a file in this set; omitted, the existence check is skipped and only
+   * the path's shape is validated.
+   */
+  files?: readonly string[];
 }
 
 /** A Plugin's UI-string overrides for one language, by field path. */

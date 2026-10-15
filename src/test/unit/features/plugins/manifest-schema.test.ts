@@ -72,6 +72,14 @@ describe("manifest.schema.json", () => {
     expect(settingsRow.properties.keywords.items.minLength).toBe(1);
     expect(settingsRow.properties.description.minLength).toBe(1);
   });
+
+  it("allows an optional frame path on a page", () => {
+    const properties = committed.properties as Record<string, any>;
+    const page = properties.contributes.properties.pages.items;
+    expect(page.properties.frame.type).toBe("string");
+    expect(page.properties.frame.description).toMatch(/\.html/);
+    expect(page.required).toEqual(["id", "title", "command"]);
+  });
 });
 
 describe("manifest language and platform names", () => {

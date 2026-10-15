@@ -29,6 +29,12 @@ export interface PluginPageDef {
   localId: string;
   id: PluginContributionId;
   title: string;
+  /**
+   * A whole-page Frame's HTML path, relative to the Plugin folder (#454, D2):
+   * the page renders the sandboxed Frame instead of its Remote UI tree. Absent
+   * for a host-rendered page.
+   */
+  frame?: string;
   /** The navigating Command that opens the page. */
   commandId: PluginCommandId;
   icon?: string;

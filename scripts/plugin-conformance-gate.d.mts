@@ -3,6 +3,10 @@
 export const GATE_RESULTS_PATH: string;
 export const CARGO_LOCK_PATH: string;
 export const GATED_PACKAGES: readonly string[];
+/** The platform slot a human records the Windows WebView2 Frame run under (#454 D6). */
+export const WINDOWS_FRAME_PLATFORM: string;
+/** The Frame checks a Windows record must cover (#454 D6). */
+export const WINDOWS_FRAME_CHECK_IDS: readonly string[];
 
 export interface CargoLockVersions {
   tauri: string | null;
@@ -24,6 +28,9 @@ export interface ConformanceGateResult {
 }
 
 export function readCargoLockVersions(text: string): CargoLockVersions;
+
+/** Validates one committed `platforms.windows` slot; `[]` means well-formed (#454 D6). */
+export function checkWindowsFrameRecord(record: unknown): string[];
 
 export function checkConformanceGate(
   cargoLockText: string,

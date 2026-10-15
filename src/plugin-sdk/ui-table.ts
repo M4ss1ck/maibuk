@@ -35,8 +35,13 @@ export interface PluginUiProp {
   maximum?: number;
   /** A `number` prop that must be a whole number. */
   integer?: boolean;
-  /** A `string` prop that must use this format; `data-url` keeps images offline, `url` keeps links safe. */
-  format?: "data-url" | "url";
+  /**
+   * A `string` prop that must use this format; `data-url` keeps images offline,
+   * `url` keeps links safe, `plugin-path` keeps a Frame's `src` a relative
+   * `.html` file inside the Plugin folder (the same rules the manifest's `entry`
+   * and page `frame` paths obey).
+   */
+  format?: "data-url" | "url" | "plugin-path";
   /**
    * Set by the SDK, never by a Plugin; omitted from the generated public types.
    * The validator and the host still accept it, because the SDK sends it.
@@ -96,9 +101,12 @@ export interface PluginUiElement {
 const REOPEN_CONTRACT =
   "Fires when the host dismisses or opens the dialog. The host closes immediately, even with a stopped Worker. Once the Worker has handled this event, the Plugin's `isOpen` is authoritative again: set it from this handler. A Plugin that ignores this event and keeps `isOpen` true reopens the dialog.";
 
+/** The kit tag for the custom-UI `Frame`; only valid with manifest `customUi`. */
+export const PLUGIN_UI_FRAME_TAG = "maibuk-frame";
+
 /**
  * The v1 kit: structure, forms, and actions (#416, #438); organization,
- * overlays, feedback, and Plugin CSS (#439).
+ * overlays, feedback, and Plugin CSS (#439); the custom-UI `Frame` (#454).
  */
 export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
   // Structure
@@ -826,6 +834,31 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       },
       padding: { kind: "enum", values: ["none", "sm", "md", "lg"] },
       children: { kind: "node" },
+    },
+    events: [],
+    methods: [],
+  },
+  {
+    tag: PLUGIN_UI_FRAME_TAG,
+    component: "Frame",
+    category: "appearance",
+    host: "Frame",
+    interactive: false,
+    summary: "A sandboxed surface that runs the Plugin's own HTML from its folder (custom UI).",
+    props: {
+      src: {
+        kind: "string",
+        required: true,
+        maxLength: 1024,
+        format: "plugin-path",
+        description: "A relative path to an .html file in the Plugin folder.",
+      },
+      title: {
+        kind: "string",
+        required: true,
+        maxLength: 512,
+        description: "Accessible name of the Frame's iframe.",
+      },
     },
     events: [],
     methods: [],

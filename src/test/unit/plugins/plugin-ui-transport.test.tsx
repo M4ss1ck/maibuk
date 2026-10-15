@@ -96,7 +96,7 @@ function evil(): RemoteMutationRecord[] {
 }
 
 function runtimeOf(broker: PluginBroker): PluginRuntime {
-  return { broker } as unknown as PluginRuntime;
+  return { broker, manifest: { customUi: false } } as unknown as PluginRuntime;
 }
 
 /**

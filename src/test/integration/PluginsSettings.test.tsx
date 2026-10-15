@@ -282,6 +282,8 @@ describe("Plugins Settings section", () => {
       installReadyLifecycle("echoes", {
         manifest: PLUGIN_MANIFEST,
         broker: host.broker,
+        files: [],
+        sendFrame: () => {},
         stop: () => {},
       });
 
@@ -333,6 +335,8 @@ describe("Plugins Settings section", () => {
       installReadyLifecycle("echoes", {
         manifest: PLUGIN_MANIFEST,
         broker: host.broker,
+        files: [],
+        sendFrame: () => {},
         stop: () => {},
       });
 
@@ -381,6 +385,8 @@ describe("Plugins Settings section", () => {
       installReadyLifecycle("echoes", {
         manifest: PLUGIN_MANIFEST,
         broker: host.broker,
+        files: [],
+        sendFrame: () => {},
         stop: () => {},
       });
     });

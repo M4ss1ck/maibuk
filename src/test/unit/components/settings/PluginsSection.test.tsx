@@ -1391,6 +1391,8 @@ describe("Plugin Settings row body (#450)", () => {
     installReadyLifecycle("echoes", {
       manifest: manifest(),
       broker: host.broker,
+      files: [],
+      sendFrame: () => {},
       stop: () => {},
     });
 

@@ -37,8 +37,8 @@ export type TutorialProgressSeed = "dismissed" | "clean";
 /**
  * A fixture Plugin the seed can write into the web Plugin Directory (OPFS). The
  * `tracer` and `approvals` folders are committed and used as-is; `remote-ui`,
- * `fixture-hostile`, `fixture-everything`, `fixture-everything-on-demand`, and
- * `fixture-bench` are built from source at global setup.
+ * `fixture-hostile`, `fixture-everything`, `fixture-everything-on-demand`,
+ * `fixture-bench`, and `fixture-frame` are built from source at global setup.
  */
 export type PluginSeed =
   | "tracer"
@@ -48,6 +48,7 @@ export type PluginSeed =
   | "fixture-everything"
   | "fixture-everything-on-demand"
   | "fixture-bench"
+  | "fixture-frame"
   | "maibuk-echoes";
 
 /**
@@ -130,6 +131,7 @@ const BUILT_PLUGIN_SEEDS: ReadonlySet<PluginSeed> = new Set([
   "fixture-everything",
   "fixture-everything-on-demand",
   "fixture-bench",
+  "fixture-frame",
   "maibuk-echoes",
 ]);
 

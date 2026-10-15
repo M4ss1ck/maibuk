@@ -17,9 +17,12 @@ import {
 } from "@/plugin-sdk/api.generated";
 import {
   type HostToPluginMessage,
+  PLUGIN_FRAME_MESSAGE,
   PLUGIN_MESSAGE_MAX_BYTES,
   PluginApiError,
   type PluginApiErrorData,
+  type PluginFrame,
+  type PluginFrameMessage,
   type PluginMessagePort,
   type PluginStartReason,
   type PendingReplies,
@@ -59,6 +62,15 @@ export type PluginClient = PluginApi & {
     event: E,
     listener: (payload: PluginApiEvents[E]) => void
   ): Promise<() => Promise<void>>;
+  /**
+   * Subscribes to the Frames the host hands this Plugin (#454, D1): one call
+   * per mounted Frame, with the Frame's own MessagePort. The handoff arrives on
+   * the Plugin's MessagePort as a reserved envelope and is settled before RPC
+   * dispatch, so no RPC handler ever sees it. The Plugin relays messages
+   * between this Worker and that Frame over the port; the host never parses
+   * them. Returns the function that unsubscribes.
+   */
+  onFrame(handler: (frame: PluginFrame) => void): () => void;
 };
 
 function stoppedError(reason: string): PluginApiError {
@@ -73,6 +85,11 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
   const pending: PendingReplies = new Map();
   const streams = new Map<number, PluginStreamListener<unknown>>();
   const listeners = new Map<string, Set<(payload: unknown) => void>>();
+  // The Frames the host handed this Plugin (#454). Each arrives on the Plugin's
+  // own MessagePort as a reserved envelope carrying the Frame's port in the
+  // transfer list, handled before RPC dispatch so a Plugin RPC handler never
+  // sees it; the host never parses the Frame<->Worker traffic that follows.
+  const frameHandlers = new Set<(frame: PluginFrame) => void>();
   const streaming: ReadonlySet<string> = new Set(PLUGIN_API_STREAMING_METHODS);
 
   // `kind` and `id` lead, then `method` or `event`, so the broker can answer a
@@ -163,6 +180,25 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
     listener.onEnd?.(error);
   }
 
+  /** Delivers one host Frame handoff to every `onFrame` subscriber. */
+  function deliverFrame(event: MessageEvent): void {
+    const port = event.ports[0];
+    const handoff = event.data as PluginFrameMessage;
+    if (port === undefined) return;
+    const frame: PluginFrame = { id: handoff.frameId, src: handoff.src, port };
+    for (const handler of [...frameHandlers]) handler(frame);
+  }
+
+  function onFrame(handler: (frame: PluginFrame) => void): () => void {
+    frameHandlers.add(handler);
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      frameHandlers.delete(handler);
+    };
+  }
+
   port.onmessage = (event: MessageEvent) => {
     const message: unknown = event.data;
     if (typeof message !== "object" || message === null) return;
@@ -170,6 +206,12 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
       if (message.startReason !== undefined) {
         activationContext = { startReason: message.startReason };
       }
+      return;
+    }
+    // The reserved Frame handoff (#454) is settled here, before RPC dispatch,
+    // and never reaches a Plugin RPC handler or the `on` event map.
+    if ((message as { kind?: unknown }).kind === PLUGIN_FRAME_MESSAGE.kind) {
+      deliverFrame(event);
       return;
     }
     const hostMessage = message as HostToPluginMessage;
@@ -204,6 +246,7 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
         for (const id of [...streams.keys()]) endStream(id, stoppedError(hostMessage.reason));
         listeners.clear();
         hostSubscriptions.clear();
+        frameHandlers.clear();
         return;
       }
     }
@@ -220,6 +263,7 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
       hostRequestHandler = handler;
     },
     on: subscribe,
+    onFrame,
   };
   for (const method of PLUGIN_API_METHODS) {
     const parts = method.split(".");

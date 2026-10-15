@@ -14,8 +14,9 @@ import type {
 import type { DictationPlatform, ModelFiles, RecognizerHost } from "@/features/dictation/types";
 
 import { IS_WEB } from "@/lib/platform/target";
+import { IS_WINDOWS } from "@/lib/platform/windows";
 
-export { IS_WEB };
+export { IS_WEB, IS_WINDOWS };
 export const IS_TAURI = !IS_WEB;
 const TAURI_PLATFORM = import.meta.env.TAURI_ENV_PLATFORM;
 export const IS_ANDROID = IS_TAURI && TAURI_PLATFORM === "android";
