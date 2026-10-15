@@ -9,7 +9,7 @@ import { PluginReviewDialog } from "@/components/plugins/PluginReviewDialog";
 import { PluginSettingsRowBody } from "@/components/plugins/PluginSettingsRowBody";
 import { PluginSurface } from "@/components/plugins/PluginSurface";
 import { ReplaceBuiltInDialog } from "@/components/plugins/ReplaceBuiltInDialog";
-import { PluginRow } from "@/components/settings/PluginRow";
+import { PLUGIN_DISCLOSURE_PANEL_CLASS, PluginRow } from "@/components/settings/PluginRow";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 import { asPluginTranslate } from "@/components/settings/plugin-translate";
@@ -477,16 +477,14 @@ export function PluginsSection() {
                     />
                   </AriaButton>
                 </div>
-                {open && (
-                  <DisclosurePanel className="px-3 pb-3">
-                    <PluginSurface pluginId={owner.pluginId} surface="settings" />
-                    {rows.map((row) => (
-                      <SettingRow key={row.id} id={row.id} className={SETTINGS_ROW_CLASS}>
-                        <PluginSettingsRowBody pluginId={owner.pluginId} rowId={row.localId} />
-                      </SettingRow>
-                    ))}
-                  </DisclosurePanel>
-                )}
+                <DisclosurePanel className={`${PLUGIN_DISCLOSURE_PANEL_CLASS} px-3 pb-3`}>
+                  <PluginSurface pluginId={owner.pluginId} surface="settings" />
+                  {rows.map((row) => (
+                    <SettingRow key={row.id} id={row.id} className={SETTINGS_ROW_CLASS}>
+                      <PluginSettingsRowBody pluginId={owner.pluginId} rowId={row.localId} />
+                    </SettingRow>
+                  ))}
+                </DisclosurePanel>
               </Disclosure>
             );
           })}

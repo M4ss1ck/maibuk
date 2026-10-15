@@ -233,8 +233,9 @@ describe("Plugins Settings section", () => {
     const rowIn = () =>
       document.querySelector('[data-settings-row="plugin.echoes.threshold"]');
 
-    // The accordion starts closed: its row is not mounted.
-    expect(rowIn()).toBeNull();
+    // The accordion starts closed: its row is mounted but hidden, so it can
+    // animate open.
+    expect(rowIn()).not.toBeVisible();
 
     // Tab to the accordion trigger and open it with Enter alone.
     const trigger = screen.getByRole("button", { name: "Echoes" });
@@ -252,7 +253,7 @@ describe("Plugins Settings section", () => {
     // The trigger keeps focus; Enter closes the accordion again.
     expect(document.activeElement).toBe(trigger);
     await user.keyboard("{Enter}");
-    expect(rowIn()).toBeNull();
+    expect(rowIn()).not.toBeVisible();
 
     // Following a search result opens the accordion and mounts the row.
     focusSettingsRow("plugin.echoes.threshold");

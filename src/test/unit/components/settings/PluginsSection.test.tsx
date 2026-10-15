@@ -163,6 +163,13 @@ async function openRow(user: User, name = "Echoes"): Promise<void> {
   await user.keyboard("{Enter}");
 }
 
+/** Expands the nested Permissions accordion inside an open card. */
+async function openPermissions(user: User): Promise<void> {
+  const trigger = screen.getByRole("button", { name: /Plugin permissions/ });
+  await tabTo(user, trigger, 40);
+  await user.keyboard("{Enter}");
+}
+
 beforeEach(() => {
   localStorage.clear();
   registerPluginSecretStore(null);
@@ -318,6 +325,7 @@ describe("PluginsSection", () => {
     render(<PluginsSection />);
 
     await openRow(user);
+    await openPermissions(user);
     const optional = screen.getByRole("checkbox", {
       name: "Connect to api.example.com · Optional",
     });
@@ -346,6 +354,7 @@ describe("PluginsSection", () => {
     render(<PluginsSection />);
 
     await openRow(user);
+    await openPermissions(user);
     const optional = screen.getByRole("checkbox", {
       name: "Connect to api.example.com · Optional",
     });
@@ -387,6 +396,7 @@ describe("PluginsSection", () => {
     render(<PluginsSection />);
 
     await openRow(user);
+    await openPermissions(user);
     const revokeButton = screen.getByRole("button", {
       name: "Disable Plugin and revoke access",
     });
@@ -715,6 +725,191 @@ describe("Plugin card header (#442)", () => {
     } finally {
       await i18n.changeLanguage("en");
     }
+  });
+});
+
+describe("Plugin card body (#442)", () => {
+  it("opens the panel with the localized manifest description", async () => {
+    const user = userEvent.setup();
+    seed(entry({ manifest: manifest({ description: "Find repeated passages." }) }));
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    // The panel's first child is the description, so a reader meets what the
+    // Plugin is before its notices and controls.
+    const trigger = screen.getByRole("button", { name: /^Echoes/ });
+    const panel = document.getElementById(trigger.getAttribute("aria-controls") ?? "");
+    expect(panel).not.toBeNull();
+    expect(panel?.firstElementChild).toHaveTextContent("Find repeated passages.");
+    expect(screen.getByText("Find repeated passages.")).toBeInTheDocument();
+  });
+
+  it("animates the card panel", async () => {
+    seed(entry());
+    render(<PluginsSection />);
+
+    const trigger = screen.getByRole("button", { name: /^Echoes/ });
+    const panel = document.getElementById(trigger.getAttribute("aria-controls") ?? "");
+    expect(panel).not.toBeNull();
+    // jsdom cannot run the animation; the transition classes are the contract.
+    expect(panel).toHaveClass("motion-reduce:transition-none");
+    expect(panel?.className).toContain("transition-[height,opacity]");
+    expect(panel?.className).toContain("h-(--disclosure-panel-height)");
+  });
+
+  it("expands and collapses the Permissions accordion from the keyboard", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({ permissions: { required: ["library:read"], optional: [] } }),
+        approval: approval({ granted: ["library:read"], enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const trigger = screen.getByRole("button", { name: /Plugin permissions/ });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("checkbox", { name: /Read your Library/ })).toBeNull();
+
+    await tabTo(user, trigger, 40);
+    await user.keyboard("{Enter}");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByRole("checkbox", { name: /Read your Library/ })).toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await waitFor(() =>
+      expect(screen.queryByRole("checkbox", { name: /Read your Library/ })).toBeNull()
+    );
+  });
+
+  it("flags a changed copy and opens its review from the accordion", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({ permissions: { required: ["library:read"], optional: [] } }),
+        approval: approval({ granted: ["library:read"], enabled: false }),
+        review: review({ status: "review-required" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+
+    await openPermissions(user);
+    expect(
+      screen.getByText("This copy changed since you approved it. Review it to turn it on.")
+    ).toBeInTheDocument();
+
+    const reviewButton = screen.getByRole("button", { name: "Review" });
+    await tabTo(user, reviewButton, 40);
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("flags a missing required grant with its own explanation", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({ permissions: { required: ["library:read"], optional: [] } }),
+        approval: approval({ granted: [], enabled: false }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+
+    await openPermissions(user);
+    expect(screen.getByText("A permission this Plugin needs is not granted.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review" })).toBeInTheDocument();
+  });
+
+  it("flags a never-approved copy and keeps its permission list hidden", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({ permissions: { required: ["library:read"], optional: [] } }),
+        approval: null,
+        review: review({ status: "not-approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+
+    await openPermissions(user);
+    expect(
+      screen.getByText("Approve this Plugin's permissions to turn it on.")
+    ).toBeInTheDocument();
+    // Today's row hides the list without an approval record; only the trigger
+    // and the explanation remain.
+    expect(screen.queryByRole("checkbox", { name: /Read your Library/ })).toBeNull();
+  });
+
+  it("shows no issue for an approved copy with only optional permissions ungranted", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({
+          permissions: { required: ["library:read"], optional: ["network:api.example.com"] },
+        }),
+        approval: approval({ granted: ["library:read"], enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.queryByText("Needs attention")).toBeNull();
+
+    await openPermissions(user);
+    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
+  });
+
+  it("orders the panel: description, settings rows, permissions, details, footer", async () => {
+    const user = userEvent.setup();
+    unregisters.push(
+      registerPluginSettingsRows("echoes", {
+        displayName: "Echoes",
+        rows: [{ id: "threshold", label: "Echo threshold" }],
+      })
+    );
+    seed(
+      entry({
+        manifest: manifest({
+          description: "Find repeated passages.",
+          permissions: { required: ["library:read"], optional: [] },
+        }),
+        approval: approval({ granted: ["library:read"], enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    const description = screen.getByText("Find repeated passages.");
+    const settingsRow = document.querySelector('[data-settings-row="plugin.echoes.threshold"]');
+    const permissions = screen.getByRole("button", { name: /Plugin permissions/ });
+    const details = screen.getByText("Details");
+    const remove = screen.getByRole("button", { name: "Remove" });
+
+    const precedes = (first: Node | null, second: Node | null) =>
+      first !== null &&
+      second !== null &&
+      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    expect(precedes(description, settingsRow)).toBe(true);
+    expect(precedes(settingsRow, permissions)).toBe(true);
+    expect(precedes(permissions, details)).toBe(true);
+    expect(precedes(details, remove)).toBe(true);
   });
 });
 
@@ -1384,6 +1579,7 @@ describe("Plugin credential storage on web (#453 unit 5)", () => {
     render(<PluginsSection />);
 
     await openRow(user);
+    await openPermissions(user);
     const toggle = await screen.findByRole("switch", { name: REMEMBER });
     expect(toggle).not.toBeChecked();
 
@@ -1403,6 +1599,7 @@ describe("Plugin credential storage on web (#453 unit 5)", () => {
     render(<PluginsSection />);
 
     await openRow(user);
+    await openPermissions(user);
 
     expect(await screen.findByRole("switch", { name: REMEMBER })).toBeChecked();
   });
