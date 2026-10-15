@@ -16,7 +16,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { cp } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { build } from "vite";
+import { type Alias, type PluginOption, build } from "vite";
 
 /** The repo root, from this script's own location (`scripts/`). */
 const REPO_ROOT = resolve(import.meta.dirname, "..");
@@ -46,6 +46,18 @@ export interface BuildPluginOptions {
    * Built-in build passes none.
    */
   define?: Record<string, string>;
+  /**
+   * Extra resolve aliases, appended after the default `@` -> `<repo>/src`
+   * entry. The external Plugin build (`scripts/plugin/cli.ts`, issue #455)
+   * passes the SDK, test-kit, and React aliases here; the Built-in and E2E
+   * fixture builds pass none and keep the default resolution.
+   */
+  alias?: Alias[];
+  /**
+   * Extra Vite plugins. Empty for every current caller; the option exists so
+   * the external Plugin build can add a resolver without forking this module.
+   */
+  plugins?: PluginOption[];
 }
 
 /** The manifest fields `buildPlugin` reads; the caller validates the rest. */
@@ -61,7 +73,7 @@ interface BuildPluginManifest {
  * code-split, so the host module loader can read it.
  */
 export async function buildPlugin(options: BuildPluginOptions): Promise<void> {
-  const { sourceDir, manifestPath, outDir, minify = true, define = {} } = options;
+  const { sourceDir, manifestPath, outDir, minify = true, define = {}, alias, plugins } = options;
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as BuildPluginManifest;
   if (typeof manifest.entry !== "string" || manifest.entry === "") {
     throw new Error(`${manifestPath} declares no entry`);
@@ -72,8 +84,11 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<void> {
     // No `public/` copy: the folder must hold only what the manifest declares,
     // or the app would hash assets the Plugin never lists.
     publicDir: false,
+    plugins: plugins ?? [],
     define: { "process.env.NODE_ENV": JSON.stringify("production"), ...define },
-    resolve: { alias: [{ find: "@", replacement: join(REPO_ROOT, "src") }] },
+    resolve: {
+      alias: [{ find: "@", replacement: join(REPO_ROOT, "src") }, ...(alias ?? [])],
+    },
     // A Plugin bundle is React/JSX; esbuild's automatic runtime resolves
     // `react/jsx-runtime`. `jsxDev` is pinned off: this Node entry never sets
     // `NODE_ENV`, so the transform would otherwise emit `jsxDEV`, which React's
