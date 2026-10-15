@@ -26,6 +26,11 @@ export const TIMEOUT_EXCEPTIONS: Readonly<Record<string, { timeoutMs: number; re
     reason:
       "the first-launch run walks every Tutorial step to Finish in one test: 35 s on CI, so 60 s leaves no 2x margin",
   },
+  "src/test/integration/plugin-tooling.test.ts": {
+    timeoutMs: 300_000,
+    reason:
+      "the slow Plugin lane copies the template, runs setup and a full plugin:check (build, tsc, biome, vitest) as child processes, and builds a built-in for the layout equivalence",
+  },
 };
 
 /** The timeout a test in `file` (repo-relative) may run with. */

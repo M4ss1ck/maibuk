@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 1,
+  "id": "hello-plugin",
+  "name": "Hello Plugin",
+  "description": "A minimal host-rendered Plugin: one page with a sidebar entry and one Command that opens it.",
+  "author": "Your name",
+  "version": "0.1.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web", "desktop", "android"],
+  "lifecycle": "on-demand",
+  "defaultLanguage": "en",
+  "permissions": { "required": [], "optional": [] },
+  "contributes": {
+    "commands": [
+      {
+        "id": "openHello",
+        "label": "Open Hello",
+        "contexts": ["global"],
+        "navigates": true
+      }
+    ],
+    "pages": [{ "id": "hello", "title": "Hello", "command": "openHello" }],
+    "sidebarEntries": [{ "page": "hello", "icon": "hand" }]
+  }
+}

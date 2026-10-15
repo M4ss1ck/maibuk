@@ -122,3 +122,104 @@ valid and is ignored there, so a published manifest needs no change.
 The build fails when any built entry exceeds **150 KB gzip**. The entry already
 contains the SDK from `src/plugin-sdk`, so the gate covers the SDK plus the
 Plugin together.
+
+## Plugins in their own repository
+
+A Plugin in its own repository is the same Plugin as a Built-in: the same
+manifest, sandbox, and Plugin Permissions. Only the source location differs, and
+the tooling in `scripts/plugin/` builds, tests, and packages it.
+
+### Starting a repo
+
+Copy `templates/plugin/`, `git init` in the copy, and point it at your Maibuk
+checkout:
+
+```bash
+node scripts/setup.mjs --maibuk /path/to/maibuk
+```
+
+`templates/plugin/README.md` holds the quickstart. This section covers the
+tooling the copy wires up.
+
+### Pointing at a Maibuk checkout
+
+Every command needs the checkout the tooling runs from. The repo resolves it in
+this order:
+
+1. the `--maibuk <path>` flag,
+2. the `MAIBUK_CHECKOUT` environment variable,
+3. `maibuk.local.json` in the Plugin repo.
+
+`setup.mjs` writes `maibuk.local.json`, which is machine-specific and stays out
+of git, like the `.maibuk/` folder it generates for the editor. A checkout is
+usable when its `package.json` names `maibuk`, `scripts/plugin/cli.ts` and
+`src/plugin-sdk/index.ts` exist, and `node_modules` is installed.
+
+### Imports
+
+A Plugin in its own repository imports `@maibuk/plugin-sdk` and its public
+subpaths, which resolve to the checkout's `src/plugin-sdk/`, and any package it
+installs in its own `node_modules` (a relative file inside the Plugin folder is
+fine too). Tests may also import `@maibuk/plugin-test-kit`, never shipped
+source. `react` and `react-dom` always resolve to Maibuk's own copy, in build,
+test, and typecheck, so one React runs per renderer. Maibuk's `@/...` modules
+are private and are refused.
+
+### Repository scripts
+
+Maibuk's `package.json` exposes one script per command over a Plugin path:
+
+```bash
+pnpm plugin:build <path>     # bundle into <path>/dist/<id>/
+pnpm plugin:validate <path>  # validate manifest.json and locales/
+pnpm plugin:test <path>      # run the Plugin's tests through the kit
+pnpm plugin:package <path>   # zip dist/<id>/ into dist/<id>-<version>.zip
+pnpm plugin:check <path>     # every step, stopping at the first failure
+```
+
+`<path>` resolves against the folder the command was typed in, so
+`pnpm plugin:check ../my-plugin` works. A Plugin in its own repository wires the
+same commands to its own `pnpm build`, `pnpm test`, `pnpm validate`,
+`pnpm package`, and `pnpm check` through `scripts/maibuk.mjs`.
+
+`plugin:check` runs eight steps in order and stops at the first failure,
+printing `PASS <step>` or `FAIL <step>`:
+
+1. build
+2. validate: the host's manifest validator, as a third-party Plugin
+3. typecheck: `tsc` with a generated tsconfig
+4. lint: Maibuk's Biome over the Plugin folder
+5. test: the Plugin's tests through the kit
+6. boundary: the import boundary
+7. package: the zip
+8. layout: the packaged zip against the layout rules
+
+It exits `0` only when every step passed, and `1` on the first failure. The
+steps without their own script (typecheck, lint, boundary, layout) run through
+`tsx scripts/plugin/cli.ts <command> <path>`.
+
+### Output
+
+A build writes `dist/<id>/`: the manifest, the bundled entry, and the copied
+assets and locales. `package` zips that folder into `dist/<id>-<version>.zip`
+with the files at the zip root. This is the same installable layout as a
+Built-in Plugin, so Maibuk loads either one the same way, and no file in the
+output contains an absolute checkout path or a source path (the layout step
+fails the package when one leaks).
+
+There is no publish command, and building never installs anything into Maibuk.
+To run the Plugin, add its zip from Settings → Plugins.
+
+### Troubleshooting
+
+- **The checkout is refused.** The message names the source used (`--maibuk`,
+  `MAIBUK_CHECKOUT`, or `maibuk.local.json`), the path tried, and what is
+  missing. Point it at a real Maibuk checkout with
+  `node scripts/setup.mjs --maibuk /path/to/maibuk`.
+- **`node_modules is missing`.** The checkout has no installed dependencies.
+  Run `pnpm install` in the Maibuk checkout.
+- **The boundary refuses an import.** Each violation reads
+  `file:line specifier: reason`, for example
+  `index.tsx:3 @/features/plugins/relative-path: @/features/plugins/relative-path is private; import only @maibuk/plugin-sdk or a relative file inside the Plugin`.
+  Import only `@maibuk/plugin-sdk` (and its subpaths), `@maibuk/plugin-test-kit`
+  in tests, or a relative file inside the Plugin.

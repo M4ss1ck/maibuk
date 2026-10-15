@@ -1,0 +1,25 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
+  "files": {
+    "includes": ["**", "!!.maibuk", "!!dist", "!!node_modules"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "es5"
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "off"
+      }
+    }
+  }
+}

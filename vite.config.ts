@@ -363,6 +363,16 @@ export default defineConfig(() => ({
         // Built-in Plugin build lane (issue #444): the pure build, target, and
         // bundle-size logic.
         "scripts/build-builtin-plugins.ts",
+        // Plugin tooling (issue #455): the CLI, the generated configs, the
+        // shared file listing, and the boundary, layout, and package checks,
+        // each with a unit test. `steps.ts` is deliberately absent: only the
+        // slow lane exercises it.
+        "scripts/plugin/cli.ts",
+        "scripts/plugin/config.ts",
+        "scripts/plugin/files.ts",
+        "scripts/plugin/import-boundary.ts",
+        "scripts/plugin/layout.ts",
+        "scripts/plugin/package.ts",
         // Echoes Built-in Plugin (issue #449): the analyzer and the find logic.
         "plugins/maibuk-echoes/find-echoes.ts",
         "plugins/maibuk-echoes/language.ts",
