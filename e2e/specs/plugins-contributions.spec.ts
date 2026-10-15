@@ -117,7 +117,12 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
     await expect(accordion).toBeVisible();
     await tabTo(page, accordion, { max: 100 });
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("textbox", { name: "Report threshold" })).toBeVisible();
+    // The row expands and renders the Settings row the Plugin declares. A
+    // Plugin's row body is its own Remote UI, and the tracer is a raw-wire
+    // fixture that serves none, so its body is the host fallback; the declared
+    // row's label is what proves the accordion opened the row.
+    const row = page.getByRole("group", { name: "Tracer Fixture" });
+    await expect(row.getByText("Report threshold")).toBeVisible();
     await capture(page, "plugins-settings-accordion");
   });
 
