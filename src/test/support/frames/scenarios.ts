@@ -218,7 +218,7 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
     warmUp:
       "Install the Echoes Plugin, open the long Chapter, wait for Echoes' Commands to be live, toggle its nearby highlights on with Alt+F7, wait for the highlight decorations, and type one sentence.",
     measured:
-      "Type 120 characters at 12 per second while spell check and Echoes' nearby highlights both refresh 300 ms after each edit (Echoes recomputes findEchoes + echoHighlightRanges in its Worker and re-sends the ranges).",
+      "Type 120 characters at 12 per second while spell check and Echoes' nearby highlights both refresh 300 ms after each edit (Echoes recomputes in its Worker and re-sends at most 2,000 ranges around the caret).",
     repetitions: 3,
     recordsInput: true,
     plugins: [

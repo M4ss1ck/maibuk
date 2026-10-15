@@ -107,7 +107,7 @@ export function startEchoes(client: PluginClient, serve: EchoServe): void {
   const editor = createEchoEditor(client);
   serve(client, {
     pages: { [REPORT_PAGE_ID]: createReportPage(client, runtime) },
-    settingsRows: { [SETTINGS_ROW_ID]: createDetectionSettings(client) },
+    settingsRows: { [SETTINGS_ROW_ID]: createDetectionSettings(client, editor) },
     onHostRequest: (method, params) => handleHostRequest(client, runtime, editor, method, params),
   });
 }
@@ -615,9 +615,14 @@ function useEchoLanguage(client: PluginClient): string {
  * then the editor-highlight switches — the kinds the editor paints, nearby only
  * until the author turns the others on (#451, decision 3). Values load from the
  * Plugin's storage on mount and every change is written back, so the row
- * survives a reload; labels come from the runtime catalogs.
+ * survives a reload; a change to the editor kinds also asks the controller to
+ * recompute, so an open editor updates at once. Labels come from the runtime
+ * catalogs.
  */
-function createDetectionSettings(client: PluginClient): ComponentType {
+function createDetectionSettings(
+  client: PluginClient,
+  editor: Pick<EchoEditorController, "refresh">
+): ComponentType {
   function DetectionSettings() {
     const language = useEchoLanguage(client);
     const [settings, setSettings] = useState<EchoSettings>(() => ({
@@ -647,8 +652,15 @@ function createDetectionSettings(client: PluginClient): ComponentType {
     useEffect(() => {
       if (!hydrated.current) return;
       void writeEchoesSettings(client, settings);
-      void writeEditorKinds(client, editorKinds);
-    }, [client, settings, editorKinds]);
+    }, [client, settings]);
+
+    // The kinds the editor paints are stored, then applied to an open editor at
+    // once (#451): `refresh` recomputes when highlighting is on and is a no-op
+    // otherwise.
+    useEffect(() => {
+      if (!hydrated.current) return;
+      void writeEditorKinds(client, editorKinds).then(() => editor.refresh());
+    }, [client, editor, editorKinds]);
 
     const update = useCallback((patch: Partial<EchoSettings>) => {
       setSettings((current) => ({ ...current, ...patch }));

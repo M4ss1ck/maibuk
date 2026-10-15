@@ -235,20 +235,6 @@ export function echoHighlightSets(
 }
 
 /**
- * The labelled per-kind sets for a whole Echo list: `buildEchoList` followed by
- * `echoHighlightSets`. Kept as the combined, label-building entry point.
- */
-export function echoHighlightRanges(
-  echoes: readonly Echo[],
-  enabledKinds: readonly EchoKind[],
-  t: EchoTranslate,
-  text: string | readonly string[],
-  tokens?: readonly (readonly Token[])[]
-): EchoHighlightSets {
-  return echoHighlightSets(buildEchoList(echoes, enabledKinds, text, tokens), t);
-}
-
-/**
  * The `[start, end)` slice of a `from`-sorted list the editor paints (#451,
  * decision 7): `min(limit, list.length)` contiguous entries centered on the
  * caret, clamped at both ends. An empty list, or a non-positive limit, yields an
@@ -280,19 +266,40 @@ function lowerBoundFrom(list: readonly { from: number }[], caret: number): numbe
 }
 
 /**
- * The index Next/Previous echo moves to, wrapping at both ends. A null start
- * enters the list at the first entry going next, the last going previous; an
- * empty list stays null.
+ * The index Next/Previous echo moves to, wrapping at both ends (#451,
+ * decision 4). `caret` is the editor's caret offset when it can be read, else
+ * `null`; `index` is the entry the last step landed on, `null` before the first.
+ *
+ * A caret picks the neighbouring Echo by offset: the first entry past it going
+ * next, the last entry before it going previous. When the caret still sits on
+ * the entry just stepped to, the step goes by index instead, so two Echoes of
+ * different kinds that share an offset are each visited rather than skipped.
+ * Without a caret, the step goes from the remembered index, entering the list
+ * at the first entry going next and the last going previous. An empty list,
+ * and a null start with no entry, stay `null`.
  */
-export function stepEcho(
+export function stepFrom(
   list: readonly { from: number }[],
-  currentIndex: number | null,
-  direction: "next" | "previous"
+  caret: number | null,
+  direction: "next" | "previous",
+  index: number | null = null
 ): number | null {
-  if (list.length === 0) return null;
-  if (currentIndex === null) return direction === "next" ? 0 : list.length - 1;
+  const total = list.length;
+  if (total === 0) return null;
   const step = direction === "next" ? 1 : -1;
-  return (currentIndex + step + list.length) % list.length;
+  const fromIndex =
+    index === null ? (direction === "next" ? 0 : total - 1) : (index + step + total) % total;
+  // A readable caret that has moved off the last stepped entry picks by offset;
+  // otherwise (no caret, or the caret still on that entry) the step is by index.
+  if (caret === null || (index !== null && list[index]?.from === caret)) return fromIndex;
+  if (direction === "next") {
+    const found = list.findIndex((entry) => entry.from > caret);
+    return found === -1 ? 0 : found;
+  }
+  for (let current = total - 1; current >= 0; current--) {
+    if (list[current].from < caret) return current;
+  }
+  return total - 1;
 }
 
 /**

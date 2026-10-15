@@ -351,6 +351,32 @@ describe("contentChanged while on", () => {
   });
 });
 
+describe("refresh()", () => {
+  it("recomputes the open editor so a kind switch takes effect at once", async () => {
+    const fake = fakeClient();
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    expect(fake.getContentCalls()).toBe(1);
+
+    await controller.refresh();
+
+    // The non-empty kind is repainted; info and warning stay empty, so they are
+    // not re-sent.
+    expect(fake.getContentCalls()).toBe(2);
+    expect(fake.highlights.at(-1)?.kind).toBe("repetition");
+  });
+
+  it("does nothing while highlighting is off", async () => {
+    const fake = fakeClient();
+    const controller = createEchoEditor(fake.client);
+
+    await controller.refresh();
+
+    expect(fake.getContentCalls()).toBe(0);
+    expect(fake.highlights).toEqual([]);
+  });
+});
+
 describe("focusChanged while on", () => {
   it("turns off and clears every kind for a different entity", async () => {
     const fake = fakeClient();
@@ -369,18 +395,39 @@ describe("focusChanged while on", () => {
     expect(fake.highlights.length).toBe(6);
   });
 
-  it("keeps the state when focus goes to none", async () => {
+  it("turns off when the focused editor closes, without painting the gone editor", async () => {
     const fake = fakeClient();
     const controller = createEchoEditor(fake.client);
     await controller.toggleHighlights();
+    expect(fake.highlights.length).toBe(3);
 
+    // The host reports `null` only when the focused editor unmounts: there is no
+    // editor left to clear, so nothing more is painted.
     fake.emit("editor.focusChanged", { entity: null });
     await flush();
     expect(fake.highlights.length).toBe(3);
+  });
 
-    // Still on: a change for the highlighted entity still recomputes.
+  it("does not repaint when the same entity reopens, and Next says highlights are off", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+
+    // Close the editor, then reopen the same entity: highlighting starts off,
+    // so its content change repaints nothing.
+    fake.emit("editor.focusChanged", { entity: null });
+    await flush();
+    fake.emit("editor.focusChanged", { entity: fake.entity });
     fake.emit("editor.contentChanged", { entity: fake.entity });
-    await vi.waitFor(() => expect(fake.highlights.length).toBe(4));
+    await flush();
+    expect(fake.highlights.length).toBe(3);
+
+    await controller.nextEcho();
+    expect(fake.reveals).toEqual([]);
+    expect(fake.notifications.at(-1)).toEqual({
+      variant: "info",
+      message: "Echo highlights are off",
+    });
   });
 });
 

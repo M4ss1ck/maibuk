@@ -3,7 +3,8 @@
  * editor Commands. `Toggle echo highlights` turns highlighting on for the
  * focused editor and recomputes it after each coalesced typing burst;
  * `Next echo` and `Previous echo` step through the Plugin's own range list and
- * reveal the caret, wrapping at both ends.
+ * reveal the caret, wrapping at both ends. It also exposes `refresh`, the
+ * recompute the Settings row triggers after it changes a kind.
  *
  * It is created with the Plugin client and answers `command.run` through
  * `runtime.tsx`, so it is kept apart from the report page and Settings row: a
@@ -36,7 +37,7 @@ import {
   echoHighlightsOff,
   echoNoEchoes,
   paintWindow,
-  stepEcho,
+  stepFrom,
 } from "./highlights";
 import { readEchoesSettings, readEditorKinds, toEditorFindOptions } from "./settings";
 
@@ -98,11 +99,17 @@ type ContentResult = Awaited<ReturnType<EchoEditorClient["editor"]["getContent"]
 /** The entity a focused editor is bound to. */
 type EntityTarget = Extract<ContentResult, { status: "ok" }>["entity"];
 
-/** The three editor Commands the controller answers. */
+/** The three editor Commands the controller answers, plus its Settings refresh. */
 export interface EchoEditorController {
   toggleHighlights(): Promise<void>;
   nextEcho(): Promise<void>;
   previousEcho(): Promise<void>;
+  /**
+   * Recomputes the open editor after the Settings row changes a kind, so a
+   * switch takes effect on the editor at once, not on its next edit. A no-op
+   * while highlighting is off.
+   */
+  refresh(): Promise<void>;
 }
 
 /** The controller's own state; off until the author toggles it on. */
@@ -130,20 +137,6 @@ function sameEntity(a: EntityTarget, b: EntityTarget): boolean {
 /** A language tag, or null when it is missing or blank. */
 function languageOrNull(value: string | null | undefined): string | null {
   return typeof value === "string" && value.trim() !== "" ? value : null;
-}
-
-/** The index Next echo moves to: the first entry past the caret, else the first. */
-function nextFrom(list: readonly EchoNavigationEntry[], caret: number): number {
-  const index = list.findIndex((entry) => entry.from > caret);
-  return index === -1 ? 0 : index;
-}
-
-/** The index Previous echo moves to: the last entry before the caret, else the last. */
-function previousFrom(list: readonly EchoNavigationEntry[], caret: number): number {
-  for (let index = list.length - 1; index >= 0; index--) {
-    if (list[index].from < caret) return index;
-  }
-  return list.length - 1;
 }
 
 /**
@@ -318,12 +311,18 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     await paint({ repetition: [], info: [], warning: [] }, undefined, true);
   }
 
-  function turnOff(): Promise<void> {
+  /** Forgets the focused editor and switches off, without touching the host. */
+  function resetState(): void {
     state.on = false;
     state.entity = null;
     state.list = [];
     state.window = { start: 0, end: 0 };
     state.index = null;
+  }
+
+  /** Switches off and clears every kind from the still-focused editor. */
+  function turnOff(): Promise<void> {
+    resetState();
     return clear();
   }
 
@@ -352,19 +351,10 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     }
     const selection = await client.editor.getSelection();
     // A caret inside the editor picks the neighbouring Echo; when there is no
-    // selection to read, step from where the last one landed.
-    // A caret still on the last revealed Echo steps by index, so Echoes of two
-    // kinds that start at the same offset are each visited.
-    const onLast =
-      selection.status === "ok" &&
-      state.index !== null &&
-      state.list[state.index]?.from === selection.range.from;
-    const index =
-      selection.status === "ok" && !onLast
-        ? direction === "next"
-          ? nextFrom(state.list, selection.range.from)
-          : previousFrom(state.list, selection.range.from)
-        : stepEcho(state.list, state.index, direction);
+    // selection to read, or the caret still sits on the entry just stepped to,
+    // the step goes from the stored index (see `stepFrom`).
+    const caret = selection.status === "ok" ? selection.range.from : null;
+    const index = stepFrom(state.list, caret, direction, state.index);
     if (index === null) return;
     state.index = index;
     const entry = state.list[index];
@@ -387,9 +377,17 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
   });
 
   listen("editor.focusChanged", (payload) => {
-    // Losing focus to a toolbar button or a Plugin page keeps the target; only a
-    // different, non-null entity turns highlighting off.
-    if (payload.entity === null) return;
+    // The host reports `null` only when the focused editor unmounts (a mere
+    // blur to a toolbar button or a Plugin page keeps the target), so `null`
+    // means the editor closed: turn the state off without painting, since there
+    // is no editor left to clear and a later editor must never inherit this
+    // one's ranges (#451).
+    if (payload.entity === null) {
+      resetState();
+      return;
+    }
+    // A different, non-null entity turns highlighting off and clears the kinds
+    // from the editor that still has them.
     if (!state.on || state.entity === null || sameEntity(payload.entity, state.entity)) return;
     void turnOff();
   });
@@ -449,6 +447,10 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
       } catch {
         // A refused editor call is not worth failing the Command over.
       }
+    },
+
+    async refresh() {
+      await recompute();
     },
   };
 }

@@ -23,7 +23,7 @@ export const BUDGETS = Object.freeze({
   remoteUiBurstP95Ms: 50,
   /** Echoes highlight update p95, in ms (#451): the host's setHighlights dispatch and decoration build. */
   echoHighlightUpdateP95Ms: 10,
-  /** Echoes Worker recompute p95, in ms (#451): findEchoes + echoHighlightRanges. */
+  /** Echoes Worker recompute p95, in ms (#451): findEchoes + buildEchoList + echoHighlightSets. */
   echoWorkerRecomputeP95Ms: 50,
   /** Echoes refresh latency p95, in ms (#451): spell check's 300 ms debounce plus the 50 ms Worker budget. */
   echoRefreshLatencyP95Ms: 350,
