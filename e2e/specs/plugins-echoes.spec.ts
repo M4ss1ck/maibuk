@@ -10,6 +10,7 @@
 
 import type { Page } from "@playwright/test";
 import { caretText, pressUntilFocused, tabTo } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -266,6 +267,13 @@ test.describe("Echoes report @wf:plugins-echoes @sc:plugin.maibuk-echoes.openEch
     await expect(accordion).toBeVisible({ timeout: 20_000 });
     await tabTo(page, accordion, { max: 250 });
     await page.keyboard.press("Enter");
+
+    // The row now renders: its label and description stack above the Plugin's
+    // full-width body (captured before the assertions the fix targets).
+    const settingsRow = page.locator('[data-settings-row="plugin.maibuk-echoes.detection"]');
+    await expect(settingsRow).toBeVisible({ timeout: 20_000 });
+    await settingsRow.scrollIntoViewIfNeeded();
+    await capture(page, "plugin-settings-row");
 
     // Turn the repeated-phrase kind off. The exact name picks the detection
     // switch, not the editor-highlight "Highlight repeated phrases" one.

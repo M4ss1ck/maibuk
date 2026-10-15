@@ -104,8 +104,10 @@ export const ROWS: MatrixRow[] = [
     id: "shell-nav-sidebar",
     area: "shell",
     workflow:
-      "Tab into primary nav (nav.primary), Arrow/Tab through Books, Notes, Canvas, Ephemeral, Metrics, Settings; Enter navigates; asserts: Focused link; RouteAnnouncer live region text changes",
-    edges: [],
+      "Tab into primary nav (nav.primary), Arrow through Books, Notes, Canvas, Ephemeral and any Plugin sidebar entry in the scrolling list, then Tab onto the pinned Metrics and Settings; Enter navigates; asserts: Focused link; RouteAnnouncer live region text changes. A Plugin entry renders between the core destinations and the pinned Metrics and Settings, which stay the last two items",
+    edges: [
+      "Short viewport: the scrolling list scrolls while the pinned Metrics and Settings stay in view above the theme switcher",
+    ],
     terms: [],
     shortcuts: [],
     routes: ["/", "/notes", "/canvas", "/ephemeral", "/metrics", "/settings"],
