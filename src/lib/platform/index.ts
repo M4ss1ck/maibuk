@@ -19,6 +19,12 @@ export { IS_WEB };
 export const IS_TAURI = !IS_WEB;
 const TAURI_PLATFORM = import.meta.env.TAURI_ENV_PLATFORM;
 export const IS_ANDROID = IS_TAURI && TAURI_PLATFORM === "android";
+// The Windows *desktop shell* (WebView2), read by the Frame platform gate
+// (#454 D6): Windows is off until a recorded WebView2 run exists. This is the
+// Tauri build alone — a web build opened in a Windows browser has `IS_WEB`
+// true and `IS_WINDOWS` false, and its Frame stays on (the gate is about the
+// desktop shell, not the operating system).
+export const IS_WINDOWS = IS_TAURI && TAURI_PLATFORM === "windows";
 export const IS_MOBILE = IS_TAURI && (TAURI_PLATFORM === "android" || TAURI_PLATFORM === "ios");
 export const IS_DESKTOP = IS_TAURI && !IS_MOBILE;
 

@@ -10,11 +10,17 @@
  * exists no Plugin — Built-in or added — is listed as runnable, enabled,
  * started, or contributes Commands or panels on Android.
  *
- * This module is a leaf with no runtime imports, so the Built-in build script
- * (run under `tsx`, without Vite's `import.meta.env`) can read
- * {@link pluginsRunOn} without pulling in the Plugin Directory adapters or the
- * management store.
+ * This module stays a leaf — its one import is the build-time Windows Frame
+ * record ({@link WINDOWS_FRAME_RECORD}) — so the Built-in build script (run
+ * under `tsx`, without Vite's `import.meta.env`) can read {@link pluginsRunOn}
+ * without pulling in the Plugin Directory adapters or the management store.
  */
+
+import {
+  WINDOWS_FRAME_RECORD,
+  windowsFrameRecordPasses,
+  type WindowsFrameRecord,
+} from "@/features/plugins/windows-frame-record";
 
 /**
  * The device platforms a Plugin host serves; it mirrors the Plugin Directory
@@ -49,13 +55,22 @@ function tauriPlatform(): string | null {
 }
 
 /**
- * The Frame gate's rule, over one Tauri platform string (or null): the Frame is
- * off on Android, where v1 runs no Plugin at all (#447), and on everywhere else
- * today. A later slice adds Windows until a recorded WebView2 conformance run
- * exists. Pure, so a test drives it without the build env.
+ * The Frame gate's rule (#454, D6), over one Tauri platform string (or null)
+ * and the committed Windows record: the Frame is off on Android, where v1 runs
+ * no Plugin at all (#447), and off on Windows until a manual WebView2 Frame
+ * conformance run is recorded and every Frame check in it passed. Windows
+ * detection is the Tauri platform string, which is null on the web build: a web
+ * build opened in a Windows browser is not gated (the gate is about the WebView2
+ * desktop shell). The record is a parameter with a default so a test drives
+ * every combination without the build env.
  */
-export function pluginFrameAvailableOn(platform: string | null): boolean {
-  return platform !== "android";
+export function pluginFrameAvailableOn(
+  platform: string | null,
+  windowsRecord: WindowsFrameRecord | null | undefined = WINDOWS_FRAME_RECORD
+): boolean {
+  if (platform === "android") return false;
+  if (platform === "windows") return windowsFrameRecordPasses(windowsRecord);
+  return true;
 }
 
 /**

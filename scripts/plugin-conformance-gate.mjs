@@ -32,6 +32,92 @@ export const GATE_RESULTS_PATH = join(
 export const CARGO_LOCK_PATH = join(repoRoot, "src-tauri/Cargo.lock");
 
 /**
+ * The platform slot a human records the Windows WebView2 Frame run under
+ * (#454 unit U5, D6). It shares the results file's `platforms` map with the
+ * lane's own `linux`/`android` slots; its absence means "not run", which keeps
+ * the Frame off on Windows.
+ */
+export const WINDOWS_FRAME_PLATFORM = "windows";
+
+/**
+ * The Frame checks a Windows record must cover; the app's runtime gate
+ * (`src/features/plugins/windows-frame-record.ts`) requires the same ids to
+ * `pass`. Kept in step with that module by
+ * `src/test/unit/plugin-conformance-gate.test.ts`.
+ */
+export const WINDOWS_FRAME_CHECK_IDS = [
+  "frame-no-network",
+  "frame-no-tauri-ipc",
+  "frame-no-host-dom",
+  "frame-theme-tokens",
+  "frame-notice-visible",
+  "frame-keyboard",
+];
+
+/** The check statuses the conformance schema defines (D1). */
+const CONFORMANCE_CHECK_STATUSES = new Set(["pass", "fail", "unmeasured"]);
+
+/**
+ * Validates one committed `platforms.windows` slot (#454 D6). Returns the
+ * problems found; an empty array means the slot is well-formed. A record is
+ * "well-formed" whether it passed or failed — it carries `exit` 0 or 1, so a
+ * genuine failure is a valid record — but it must name every field the audit
+ * trail needs and list all {@link WINDOWS_FRAME_CHECK_IDS}.
+ */
+export function checkWindowsFrameRecord(record) {
+  const where = `platforms.${WINDOWS_FRAME_PLATFORM}`;
+  if (record === null || typeof record !== "object" || Array.isArray(record)) {
+    return [`${where} must be an object`];
+  }
+
+  const problems = [];
+  for (const field of ["ranAt", "appVersion", "commit", "ranBy"]) {
+    if (typeof record[field] !== "string" || record[field].trim() === "") {
+      problems.push(`${where}.${field} must be a non-empty string`);
+    }
+  }
+
+  const engine = record.engine;
+  if (engine === null || typeof engine !== "object" || Array.isArray(engine)) {
+    problems.push(`${where}.engine must be an object`);
+  } else {
+    for (const field of ["name", "version", "userAgent"]) {
+      if (typeof engine[field] !== "string") {
+        problems.push(`${where}.engine.${field} must be a string`);
+      }
+    }
+  }
+
+  if (record.exit !== 0 && record.exit !== 1) {
+    problems.push(`${where}.exit must be 0 or 1`);
+  }
+
+  if (!Array.isArray(record.checks)) {
+    problems.push(`${where}.checks must be an array`);
+    return problems;
+  }
+  const seen = new Set();
+  for (const check of record.checks) {
+    if (
+      check === null ||
+      typeof check !== "object" ||
+      Array.isArray(check) ||
+      typeof check.id !== "string" ||
+      typeof check.detail !== "string" ||
+      !CONFORMANCE_CHECK_STATUSES.has(check.status)
+    ) {
+      problems.push(`${where}.checks has a malformed check (needs id, status, detail)`);
+      continue;
+    }
+    seen.add(check.id);
+  }
+  for (const id of WINDOWS_FRAME_CHECK_IDS) {
+    if (!seen.has(id)) problems.push(`${where}.checks is missing "${id}"`);
+  }
+  return problems;
+}
+
+/**
  * The only `[[package]]` entries that count. `tauri-build`, `tauri-plugin-*` and
  * friends share the `tauri-` prefix but are not the Tauri runtime.
  */
@@ -107,6 +193,17 @@ export function checkConformanceGate(cargoLockText, resultsJson) {
       problems.push(`${pkg}: Cargo.lock has ${lockVersion} but the results recorded ${recorded}`);
     }
   }
+
+  // A committed Windows Frame record must be well-formed, or the gate teaches
+  // CI to trust a slot the app would then read (#454 D6). The slot's absence
+  // (not run yet) is fine and adds no problem.
+  const platforms = resultsJson?.platforms;
+  if (platforms !== null && typeof platforms === "object" && !Array.isArray(platforms)) {
+    if (Object.prototype.hasOwnProperty.call(platforms, WINDOWS_FRAME_PLATFORM)) {
+      problems.push(...checkWindowsFrameRecord(platforms[WINDOWS_FRAME_PLATFORM]));
+    }
+  }
+
   return { ok: problems.length === 0, problems };
 }
 

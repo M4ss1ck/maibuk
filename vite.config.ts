@@ -383,6 +383,7 @@ export default defineConfig(() => ({
         // them. `fixture.ts`, `run.ts`, and `index.ts` are on that same
         // native-only path.
         "src/features/plugins/host-platform.ts",
+        "src/features/plugins/windows-frame-record.ts",
         "src/features/plugins/conformance/checks.ts",
         "src/features/plugins/conformance/commands.ts",
         "src/features/plugins/conformance/host-bypass.ts",
