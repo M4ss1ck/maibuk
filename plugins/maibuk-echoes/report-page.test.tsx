@@ -15,12 +15,13 @@ import { createPluginClient } from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { DEFAULT_ECHO_SETTINGS, findEchoes } from "./find-echoes";
+import { format } from "./i18n";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { buildReport, occurrenceContext } from "./report";
 import { FIND_ECHOES, REPORT_PAGE_ID, startEchoes } from "./runtime";
 import { ECHOES_SETTINGS_KEY } from "./settings";
-import { echoesManifest, settingsStorage, tabTo, type User } from "./test-support";
+import { echoesManifest, settingsStorage, shiftTabTo, tabTo, type User } from "./test-support";
 
 const HARBOR =
   "The harbor was calm. The harbor was empty. The harbor was quiet. We left the harbor at dawn.";
@@ -39,7 +40,13 @@ function book(id: string, title: string) {
   };
 }
 
-function chapter(id: string, bookId: string, title: string, order: number, text: string): TestChapter {
+function chapter(
+  id: string,
+  bookId: string,
+  title: string,
+  order: number,
+  text: string
+): TestChapter {
   return {
     id,
     bookId,
@@ -80,6 +87,57 @@ async function pickOption(user: User, label: string, option: string): Promise<vo
   while (document.activeElement !== target) await user.keyboard("{ArrowDown}");
   await user.keyboard("{Enter}");
 }
+
+/**
+ * Consonant-only four-letter words, one per index: detection skips words under
+ * four letters, and with no vowels no stemmer folds two of them into one.
+ */
+const CODE_LETTERS = "bcdfghjklmnpqrtvwxz";
+function codeWord(index: number): string {
+  let rest = index;
+  let word = "";
+  for (let place = 0; place < 4; place++) {
+    word += CODE_LETTERS[rest % CODE_LETTERS.length];
+    rest = Math.floor(rest / CODE_LETTERS.length);
+  }
+  return word;
+}
+
+/** 250 words, each echoed within a few words: well past one page of nearby rows. */
+const SPREAD = Array.from({ length: 250 }, (_, index) => {
+  const word = codeWord(index);
+  return `${word} zq ${word} vk`;
+}).join(" ");
+/** One word echoed 450 times, so one expanded row has more occurrences than a page. */
+const HARBOR_RUN = Array.from({ length: 450 }, () => "harbor door").join(" ");
+
+/** A Book whose Nearby tab is past one page, and whose harbor row is past one page of occurrences. */
+function widePage(): { books: ReturnType<typeof book>[]; chapters: TestChapter[] } {
+  return {
+    books: [book("b5", "Atlas"), book("b2", "Emma")],
+    chapters: [
+      chapter("w1", "b5", "Chapter One", 0, SPREAD),
+      chapter("w2", "b5", "Chapter Two", 1, HARBOR_RUN),
+      CHAPTERS[2],
+    ],
+  };
+}
+
+function wideHost() {
+  const { books, chapters } = widePage();
+  const host = createTestHost({
+    manifest: echoesManifest(),
+    library: { books, chapters },
+    storage: settingsStorage(),
+  });
+  startEchoes(createPluginClient(host.port), servePluginUi);
+  return host;
+}
+
+const WIDE_REPORT = buildReport(findEchoes([SPREAD, HARBOR_RUN], "en", DEFAULT_ECHO_SETTINGS), [
+  SPREAD,
+  HARBOR_RUN,
+]);
 
 describe("Echoes report page", () => {
   it("opens on the first Book, Whole Book scope, with the detected rows", async () => {
@@ -215,10 +273,10 @@ describe("Echoes report page", () => {
       await user.keyboard("{ArrowDown}");
       await user.keyboard("{Enter}");
 
-      const expected = buildReport(
-        findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS),
-        [HARBOR, SHORE]
-      ).nearby[0].occurrences[0];
+      const expected = buildReport(findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS), [
+        HARBOR,
+        SHORE,
+      ]).nearby[0].occurrences[0];
       await waitFor(() =>
         expect(host.navigations).toEqual([
           {
@@ -246,10 +304,10 @@ describe("Echoes report page", () => {
 
       // The echoed word alone would repeat row after row, so the label is the
       // context around that occurrence and the description is its Chapter.
-      const occurrences = buildReport(
-        findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS),
-        [HARBOR, SHORE]
-      ).nearby[0].occurrences;
+      const occurrences = buildReport(findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS), [
+        HARBOR,
+        SHORE,
+      ]).nearby[0].occurrences;
       // The expanded rows arrive over the Remote UI connection, a tick later.
       await waitFor(() =>
         expect(screen.getAllByRole("option").length).toBeGreaterThan(occurrences.length)
@@ -295,7 +353,9 @@ describe("Echoes report page", () => {
 
       const row = await screen.findByRole("option", { name: /lantern/ });
       expect(page.violations).toEqual([]);
-      expect(row).toHaveTextContent("180 times · A rather long working title for planning chapter number 1,");
+      expect(row).toHaveTextContent(
+        "180 times · A rather long working title for planning chapter number 1,"
+      );
       expect(row).toHaveTextContent(/, \+\d+ more$/);
 
       page.unmount();
@@ -542,6 +602,127 @@ describe("Echoes report page", () => {
 
       await waitFor(() => host.setLanguage("es"));
       expect(await screen.findByRole("tab", { name: es["tab.nearby"] })).toBeInTheDocument();
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("shows the first 200 rows and adds 200 more with the keyboard", async () => {
+    // The fixture must actually pass one page, or the cap is never exercised.
+    const total = WIDE_REPORT.nearby.length;
+    expect(total).toBeGreaterThan(200);
+    const host = wideHost();
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
+      const left = total - 200;
+      const more = await screen.findByRole("button", {
+        name: format(en["report.showMore"], { count: Math.min(200, left), left }),
+      });
+      expect(more).toHaveTextContent(`(${left} left)`);
+
+      // Each row's Item Menu button is a Tab stop, so a forward walk to Show more
+      // passes the whole page; Shift+Tab from the body reaches it, the last stop.
+      await shiftTabTo(user, more, 2);
+      expect(more).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(Math.min(400, total)));
+      expect(screen.queryByRole("button", { name: /left\)$/ })).not.toBeInTheDocument();
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("caps an expanded row's occurrences and shows more with the keyboard", async () => {
+    const harbor = WIDE_REPORT.nearby.find((row) => row.label === "harbor");
+    expect(harbor).toBeDefined();
+    const occurrences = harbor?.occurrences.length ?? 0;
+    // Past two pages, so the first press leaves a row behind for the second.
+    expect(occurrences).toBeGreaterThan(400);
+    const host = wideHost();
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      // Tab reaches the list's first row; Arrow keys move along the list to harbor.
+      const options = await screen.findAllByRole("option");
+      const row = options.find((option) => /^harbor/.test(option.textContent ?? ""));
+      expect(row).toBeDefined();
+      await tabTo(user, options[0]);
+      for (let step = 0; step < 50 && document.activeElement !== row; step++) {
+        await user.keyboard("{ArrowDown}");
+      }
+      expect(row).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      // The top 200 rows, the first 200 occurrences, and the Show more option.
+      const firstMore = format(en["report.showMoreOccurrences"], {
+        count: 200,
+        left: occurrences - 200,
+      });
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(401));
+      const more = screen.getByRole("option", { name: firstMore });
+
+      // Arrow keys walk the 200 occurrences to the Show more option.
+      for (let step = 0; step < 500 && document.activeElement !== more; step++) {
+        await user.keyboard("{ArrowDown}");
+      }
+      expect(more).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      // The second press shows 200 more: 400 occurrences, with the rest still left.
+      const secondMore = format(en["report.showMoreOccurrences"], {
+        count: Math.min(200, occurrences - 400),
+        left: occurrences - 400,
+      });
+      const expectedAfter = 200 + Math.min(400, occurrences) + (occurrences > 400 ? 1 : 0);
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(expectedAfter));
+      expect(screen.getByRole("option", { name: secondMore })).toBeInTheDocument();
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("resets the shown rows when the Book changes", async () => {
+    const host = wideHost();
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
+      const more = await screen.findByRole("button", { name: /left\)$/ });
+      // Each row's Item Menu button is a Tab stop, so a forward walk to Show more
+      // passes the whole page; Shift+Tab from the body reaches it, the last stop.
+      await shiftTabTo(user, more, 2);
+      await user.keyboard("{Enter}");
+      await waitFor(() =>
+        expect(screen.getAllByRole("option")).toHaveLength(WIDE_REPORT.nearby.length)
+      );
+
+      // Switch to the other Book and back: the first tab starts at one page again.
+      await pickOption(user, en["report.book"], "Emma");
+      expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
+      // The list opens on Emma, which sits below Atlas, so Arrow Up walks back
+      // (pickOption only walks down).
+      await tabTo(user, screen.getByLabelText(en["report.book"]));
+      await user.keyboard("{Enter}");
+      const atlas = await screen.findByRole("option", { name: "Atlas" });
+      for (let step = 0; step < 5 && document.activeElement !== atlas; step++) {
+        await user.keyboard("{ArrowUp}");
+      }
+      expect(atlas).toHaveFocus();
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
+      expect(screen.getByRole("button", { name: /left\)$/ })).toBeInTheDocument();
 
       page.unmount();
     } finally {

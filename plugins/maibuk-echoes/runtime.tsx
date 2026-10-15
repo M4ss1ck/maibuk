@@ -12,8 +12,11 @@
  */
 
 import {
+  memo,
   useCallback,
+  useDeferredValue,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ComponentType,
@@ -189,6 +192,16 @@ const SCOPE_WHOLE = "whole";
 /** The report row Item Menu's one action value. */
 const IGNORE_ACTION = "ignore";
 
+/** Rows, and occurrences of one row, drawn per page; the host draws every row it is given. */
+const ROW_PAGE = 200;
+
+/** The rows each kind draws before Show more is pressed. */
+const FIRST_PAGE: Readonly<Record<EchoKind, number>> = {
+  nearby: ROW_PAGE,
+  overused: ROW_PAGE,
+  phrase: ROW_PAGE,
+};
+
 /** One kind's UI: its tab title, its empty line, and the settings switch that enables it. */
 const KIND_UI: Readonly<
   Record<EchoKind, { tab: EchoKey; empty: EchoKey; enabled: "nearby" | "overused" | "phrases" }>
@@ -226,10 +239,126 @@ async function loadChapter(client: PluginClient, chapterId: string): Promise<Rep
 }
 
 /** True when a `library.changed` payload touches the Book the report shows. */
-function touchesBook(payload: { scope: "all" } | { entity: string; id: string }, bookId: string): boolean {
+function touchesBook(
+  payload: { scope: "all" } | { entity: string; id: string },
+  bookId: string
+): boolean {
   if ("scope" in payload) return payload.scope === "all";
   return payload.entity === "book" && payload.id === bookId;
 }
+
+/** One occurrence row as the group draws it: its context label, Chapter title, and reveal range. */
+interface EchoOccurrenceRow {
+  key: string;
+  label: string;
+  description: string;
+  chapterId: string | null;
+  from: number;
+  to: number;
+}
+
+interface EchoRowGroupProps {
+  row: EchoReportRow;
+  rowId: string;
+  isExpanded: boolean;
+  /** How many of the row's occurrences the page draws once it is expanded. */
+  occurrenceLimit: number;
+  language: string;
+  summary: string;
+  /** The report's Chapters, which the occurrences index into; one array per report. */
+  chapters: readonly ReportChapter[];
+  titleById: ReadonlyMap<string, string>;
+  onToggle: (rowId: string, open: boolean) => void;
+  onIgnore: (row: EchoReportRow) => void;
+  onOpen: (chapterId: string, from: number, to: number) => void;
+  onMoreOccurrences: (rowId: string) => void;
+}
+
+/**
+ * One top-level row, its shown occurrences, and its Show more row. Memoized so a
+ * tab switch or a Show more press re-renders only the rows whose props changed:
+ * every callback it gets is stable, and its Item Menu is stable per language.
+ */
+const EchoRowGroup = memo(function EchoRowGroup({
+  row,
+  rowId,
+  isExpanded,
+  occurrenceLimit,
+  language,
+  summary,
+  chapters,
+  titleById,
+  onToggle,
+  onIgnore,
+  onOpen,
+  onMoreOccurrences,
+}: EchoRowGroupProps) {
+  const menuItems = useMemo(
+    () => [{ value: IGNORE_ACTION, label: translate(language, "ignore") }],
+    [language]
+  );
+  // An expanded row's occurrences: the first `occurrenceLimit` only, so the
+  // host draws at most that many rows for the one expansion. Built here, from
+  // inputs that only change with the report, so the memo holds while expanded.
+  const occurrences = useMemo((): EchoOccurrenceRow[] | undefined => {
+    if (!isExpanded) return undefined;
+    return row.occurrences.slice(0, occurrenceLimit).map((occurrence, index) => {
+      const chapter = chapters[occurrence.chapter];
+      return {
+        key: String(index),
+        label: clampText(occurrenceContext(chapter?.text ?? "", occurrence), ROW_LABEL_MAX),
+        description:
+          chapter === undefined
+            ? ""
+            : clampText(titleById.get(chapter.id) ?? "", ROW_DESCRIPTION_MAX),
+        chapterId: chapter?.id ?? null,
+        from: occurrence.from,
+        to: occurrence.to,
+      };
+    });
+  }, [isExpanded, row, occurrenceLimit, chapters, titleById]);
+  const occurrencesLeft = row.occurrences.length - occurrenceLimit;
+  return (
+    <>
+      <ui.CollectionRow
+        id={rowId}
+        label={clampText(row.label, ROW_LABEL_MAX)}
+        description={summary}
+        isExpandable
+        isExpanded={isExpanded}
+        onExpandedChange={(event) => onToggle(rowId, event.detail)}
+        menuItems={menuItems}
+        onMenuAction={() => onIgnore(row)}
+      />
+      {occurrences?.map((occurrence) => (
+        <ui.CollectionRow
+          key={`${rowId}:${occurrence.key}`}
+          id={`${rowId}:${occurrence.key}`}
+          // The echoed word alone would repeat row after row; the context
+          // around this occurrence is the label that tells them apart, and the
+          // Chapter it sits in is the right-aligned description.
+          label={occurrence.label}
+          description={occurrence.description}
+          onAction={() => {
+            if (occurrence.chapterId !== null) {
+              onOpen(occurrence.chapterId, occurrence.from, occurrence.to);
+            }
+          }}
+        />
+      ))}
+      {isExpanded && occurrencesLeft > 0 ? (
+        <ui.CollectionRow
+          id={`${rowId}:more`}
+          label={format(translate(language, "report.showMoreOccurrences"), {
+            count: Math.min(ROW_PAGE, occurrencesLeft),
+            left: occurrencesLeft,
+          })}
+          onAction={() => onMoreOccurrences(rowId)}
+        />
+      ) : null}
+    </>
+  );
+});
 
 /**
  * The report page (#450, unit 3): a Book and scope header, the three kind tabs,
@@ -257,6 +386,8 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     const [tab, setTab] = useState<EchoKind>("nearby");
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
     const [reloadToken, setReloadToken] = useState(0);
+    const [shown, setShown] = useState<Readonly<Record<EchoKind, number>>>(FIRST_PAGE);
+    const [occurrenceLimits, setOccurrenceLimits] = useState<Readonly<Record<string, number>>>({});
 
     // The latest values the async flows read, kept in refs so they never close
     // over a stale render (the event handler and the compute effect both need
@@ -273,9 +404,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       void (async () => {
         const [stored, list] = await Promise.all([
           readEchoesSettings(client),
-          client.library
-            .books.list()
-            .catch((): LibraryBook[] => []),
+          client.library.books.list().catch((): LibraryBook[] => []),
         ]);
         if (cancelled) return;
         settingsRef.current = stored;
@@ -308,8 +437,8 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
         return;
       }
       let cancelled = false;
-      void client.library
-        .chapters.list({ bookId })
+      void client.library.chapters
+        .list({ bookId })
         .then((list) => {
           if (!cancelled) setChapters(list);
         })
@@ -326,12 +455,13 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     useEffect(() => {
       if (!initialized || bookId === null) return;
       const scope: ReportScope = scopeKey === SCOPE_WHOLE ? "book" : "chapter";
-      const bookLanguage =
-        booksRef.current.find((book) => book.id === bookId)?.language ?? "en";
+      const bookLanguage = booksRef.current.find((book) => book.id === bookId)?.language ?? "en";
       let cancelled = false;
       setComputing(true);
       setStale(false);
       setExpanded(new Set());
+      setShown(FIRST_PAGE);
+      setOccurrenceLimits({});
       void (async () => {
         try {
           const source: ReportSource =
@@ -386,6 +516,8 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       setBookId(id);
       setScopeKey(SCOPE_WHOLE);
       setExpanded(new Set());
+      setShown(FIRST_PAGE);
+      setOccurrenceLimits({});
     }, []);
 
     const toggleRow = useCallback((rowId: string, open: boolean) => {
@@ -399,7 +531,10 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
 
     const ignoreRow = useCallback(
       (row: EchoReportRow) => {
-        const next = { ...settingsRef.current, ignore: withIgnored(settingsRef.current.ignore, row.label) };
+        const next = {
+          ...settingsRef.current,
+          ignore: withIgnored(settingsRef.current.ignore, row.label),
+        };
         settingsRef.current = next;
         setSettings(next);
         void writeEchoesSettings(client, next);
@@ -414,6 +549,38 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     );
 
     const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
+
+    // The rows follow the deferred tab: the urgent `tab` moves the selection at
+    // once, and the rows fill in on the next render, so a switch paints first.
+    const shownTab = useDeferredValue(tab);
+
+    // The loaded report Chapters carry only id and text; the Library list the
+    // page already read carries the titles, so map id to title for the rows.
+    const titleById = useMemo(
+      () => new Map(chapters.map((chapter) => [chapter.id, chapter.title])),
+      [chapters]
+    );
+
+    const openOccurrence = useCallback(
+      (chapterId: string, from: number, to: number) => {
+        void client.navigation.openEntity({
+          entity: { kind: "chapter", id: chapterId },
+          reveal: { from, to },
+        });
+      },
+      [client]
+    );
+
+    const showMoreRows = useCallback((kind: EchoKind) => {
+      setShown((current) => ({ ...current, [kind]: current[kind] + ROW_PAGE }));
+    }, []);
+
+    const showMoreOccurrences = useCallback((rowId: string) => {
+      setOccurrenceLimits((current) => ({
+        ...current,
+        [rowId]: (current[rowId] ?? ROW_PAGE) + ROW_PAGE,
+      }));
+    }, []);
 
     if (!initialized) {
       return (
@@ -431,10 +598,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       );
     }
 
-    const rows = report?.[tab] ?? [];
-    // The loaded report Chapters carry only id and text; the Library list the
-    // page already read carries the titles, so map id to title for the rows.
-    const titleById = new Map(chapters.map((chapter) => [chapter.id, chapter.title]));
+    const rows = report?.[shownTab] ?? [];
     // A row names its Chapters by title, in Chapter order; a Chapter without a
     // title (or one the list no longer carries) falls back to its number.
     const chapterTitles = (indexes: readonly number[]): string[] =>
@@ -467,54 +631,32 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     // other language runs without stop words or a stemmer, and the report says so.
     const bookLanguage = books.find((book) => book.id === bookId)?.language ?? "en";
     const limitedLanguage = languageSupport(bookLanguage) === "limited" ? bookLanguage : null;
-    const activeKind = tab;
+    const activeKind = shownTab;
     const kindEnabled = settings[KIND_UI[activeKind].enabled];
+    const rowsLeft = Math.max(0, rows.length - shown[activeKind]);
 
-    const activeChildren: ReactNode[] = [];
-    for (const row of rows) {
+    const activeChildren: ReactNode[] = rows.slice(0, shown[activeKind]).map((row) => {
       const rowId = `${activeKind}:${row.key}`;
       const isExpanded = expanded.has(rowId);
-      activeChildren.push(
-        <ui.CollectionRow
+      const occurrenceLimit = occurrenceLimits[rowId] ?? ROW_PAGE;
+      return (
+        <EchoRowGroup
           key={rowId}
-          id={rowId}
-          label={clampText(row.label, ROW_LABEL_MAX)}
-          description={rowSummary(row)}
-          isExpandable
+          row={row}
+          rowId={rowId}
           isExpanded={isExpanded}
-          onExpandedChange={(event) => toggleRow(rowId, event.detail)}
-          menuItems={[{ value: IGNORE_ACTION, label: translate(language, "ignore") }]}
-          onMenuAction={() => ignoreRow(row)}
+          occurrenceLimit={occurrenceLimit}
+          language={language}
+          summary={rowSummary(row)}
+          chapters={chaptersRef.current}
+          titleById={titleById}
+          onToggle={toggleRow}
+          onIgnore={ignoreRow}
+          onOpen={openOccurrence}
+          onMoreOccurrences={showMoreOccurrences}
         />
       );
-      if (!isExpanded) continue;
-      row.occurrences.forEach((occurrence, index) => {
-        const chapter = chaptersRef.current[occurrence.chapter];
-        const chapterText = chapter?.text ?? "";
-        activeChildren.push(
-          <ui.CollectionRow
-            key={`${rowId}:${index}`}
-            id={`${rowId}:${index}`}
-            // The echoed word alone would repeat row after row; the context
-            // around this occurrence is the label that tells them apart, and the
-            // Chapter it sits in is the right-aligned description.
-            label={clampText(occurrenceContext(chapterText, occurrence), ROW_LABEL_MAX)}
-            description={
-              chapter === undefined
-                ? ""
-                : clampText(titleById.get(chapter.id) ?? "", ROW_DESCRIPTION_MAX)
-            }
-            onAction={() => {
-              if (chapter === undefined) return;
-              void client.navigation.openEntity({
-                entity: { kind: "chapter", id: chapter.id },
-                reveal: { from: occurrence.from, to: occurrence.to },
-              });
-            }}
-          />
-        );
-      });
-    }
+    });
 
     return (
       <ui.View direction="column" gap="md">
@@ -568,7 +710,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           <ui.Tabs
             label={translate(language, "report.tabs")}
             items={tabItems}
-            selectedKey={activeKind}
+            selectedKey={tab}
             onChange={(event) => setTab(event.detail as EchoKind)}
           >
             {rows.length === 0 ? (
@@ -578,9 +720,22 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
                   : translate(language, "kind.off")}
               </ui.Text>
             ) : (
-              <ui.Collection label={translate(language, KIND_UI[activeKind].tab)} selectionMode="none">
-                {activeChildren}
-              </ui.Collection>
+              <ui.View direction="column" gap="sm">
+                <ui.Collection
+                  label={translate(language, KIND_UI[activeKind].tab)}
+                  selectionMode="none"
+                >
+                  {activeChildren}
+                </ui.Collection>
+                {rowsLeft > 0 ? (
+                  <ui.Button variant="secondary" onPress={() => showMoreRows(activeKind)}>
+                    {format(translate(language, "report.showMore"), {
+                      count: Math.min(ROW_PAGE, rowsLeft),
+                      left: rowsLeft,
+                    })}
+                  </ui.Button>
+                ) : null}
+              </ui.View>
             )}
           </ui.Tabs>
         )}
