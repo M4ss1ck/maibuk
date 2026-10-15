@@ -495,6 +495,82 @@ describe("validateManifestValue: a contribution runs only where its reference do
   });
 });
 
+describe("validateManifestValue: a page Frame", () => {
+  it("refuses a page frame without customUi: true", () => {
+    expectProblem(
+      problemsFor((m) => (m.contributes.pages[0].frame = "ui/report.html")),
+      "contributes.pages[0].frame",
+      /customUi/
+    );
+  });
+
+  it("accepts a page frame when customUi is true", () => {
+    const result = validateManifestValue(
+      baseManifestWith((m) => {
+        m.customUi = true;
+        m.contributes.pages[0].frame = "ui/report.html";
+      })
+    );
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+  });
+
+  it("refuses a frame that is not a relative .html path", () => {
+    for (const frame of [
+      "/ui/report.html",
+      "../ui/report.html",
+      "ui/../report.html",
+      "ui\\report.html",
+      "https://example.com/report.html",
+      "ui/report.js",
+      "ui/report.html?x=1",
+      "ui/report.html#top",
+      "ui//report.html",
+    ]) {
+      expectProblem(
+        problemsFor((m) => {
+          m.customUi = true;
+          m.contributes.pages[0].frame = frame;
+        }),
+        "contributes.pages[0].frame"
+      );
+    }
+  });
+
+  it("refuses a frame file that is not in the hashed set", () => {
+    expectProblem(
+      problemsFor(
+        (m) => {
+          m.customUi = true;
+          m.contributes.pages[0].frame = "ui/report.html";
+        },
+        { files: ["manifest.json", "dist/index.js"] }
+      ),
+      "contributes.pages[0].frame",
+      /not a file/
+    );
+  });
+
+  it("accepts a frame file that exists in the hashed set, ./ included", () => {
+    const withDotSlash = validateManifestValue(
+      baseManifestWith((m) => {
+        m.customUi = true;
+        m.contributes.pages[0].frame = "./ui/report.html";
+      }),
+      { files: ["manifest.json", "dist/index.js", "ui/report.html"] }
+    );
+    expect(withDotSlash.ok, JSON.stringify(withDotSlash)).toBe(true);
+
+    const plain = validateManifestValue(
+      baseManifestWith((m) => {
+        m.customUi = true;
+        m.contributes.pages[0].frame = "ui/report.html";
+      }),
+      { files: ["ui/report.html"] }
+    );
+    expect(plain.ok, JSON.stringify(plain)).toBe(true);
+  });
+});
+
 describe("validateManifestValue: permissions", () => {
   it("accepts every exact permission string", () => {
     for (const permission of [

@@ -120,23 +120,55 @@ function permissionProblem(permission: string): string | null {
   return `"${permission}" is not a known Plugin Permission`;
 }
 
-/** The rules a Plugin-folder-relative path must follow; `subject` names it. */
-function relativePathProblem(value: string, subject: string): string | null {
-  if (value.includes("\\")) return `${subject} must use forward slashes`;
-  if (value.includes("://")) return `${subject} must be a relative path, not a URL`;
-  if (value.startsWith("/")) return `${subject} must be relative to the Plugin folder`;
+/**
+ * The shape rules a Plugin-folder-relative path must follow, as a predicate
+ * phrase (`must be ...`), or null. One description for every Plugin path — the
+ * manifest's `entry`, `icon`, and page `frame` — so they agree.
+ */
+function relativePathShapeProblem(value: string): string | null {
+  if (value.includes("\\")) return "must use forward slashes";
+  if (value.includes("://")) return "must be a relative path, not a URL";
+  if (value.startsWith("/")) return "must be relative to the Plugin folder";
   if (value.split("/").some((segment) => segment === "..")) {
-    return `${subject} must not leave the Plugin folder`;
+    return "must not leave the Plugin folder";
+  }
+  if (value.split("/").some((segment, index) => segment === "" && index > 0)) {
+    return "must not have empty path segments";
   }
   return null;
 }
 
-/** An empty path segment anywhere after the first (`dist//index.js`). */
-function emptySegmentProblem(value: string, subject: string): string | null {
-  if (value.split("/").some((segment, index) => segment === "" && index > 0)) {
-    return `${subject} must not have empty path segments`;
-  }
+/** The rules a Plugin-folder-relative path must follow; `subject` names it. */
+function relativePathProblem(value: string, subject: string): string | null {
+  const problem = relativePathShapeProblem(value);
+  return problem === null ? null : `${subject} ${problem}`;
+}
+
+/**
+ * The rules a Plugin-folder-relative path to a file with `extension` (`.html`)
+ * must follow, as a predicate phrase, or null. Shared by a page's `frame` path
+ * and the kit's `Frame` `src` (`src/features/plugins/remote-ui/validate.ts`).
+ */
+export function relativeFileProblem(value: string, extension: string): string | null {
+  const shape = relativePathShapeProblem(value);
+  if (shape !== null) return shape;
+  if (value.includes("?") || value.includes("#")) return "must not carry a query or fragment";
+  if (!value.endsWith(extension)) return `must point to an ${extension} file`;
   return null;
+}
+
+/** A page's `frame`: a relative `.html` path inside the Plugin folder. */
+function frameProblem(frame: string): string | null {
+  const problem = relativeFileProblem(frame, ".html");
+  return problem === null ? null : `frame ${problem}`;
+}
+
+/** Strips `.` and empty segments, so `./ui/x.html` matches the file `ui/x.html`. */
+function normalizeRelativePath(value: string): string {
+  return value
+    .split("/")
+    .filter((segment) => segment !== "" && segment !== ".")
+    .join("/");
 }
 
 function entryProblem(entry: string): string | null {
@@ -145,8 +177,6 @@ function entryProblem(entry: string): string | null {
   if (entry.includes("?") || entry.includes("#")) {
     return "entry must not carry a query or fragment";
   }
-  const segmentProblem = emptySegmentProblem(entry, "entry");
-  if (segmentProblem !== null) return segmentProblem;
   if (!/\.(js|mjs)$/u.test(entry)) return "entry must point to a .js or .mjs ES module";
   return null;
 }
@@ -156,8 +186,6 @@ function iconProblem(icon: string): string | null {
     const subject = `the .svg icon "${icon}"`;
     const pathProblem = relativePathProblem(icon, subject);
     if (pathProblem !== null) return pathProblem;
-    const segmentProblem = emptySegmentProblem(icon, subject);
-    if (segmentProblem !== null) return segmentProblem;
     if (icon.slice(icon.lastIndexOf("/") + 1) === ".svg") {
       return `${subject} must have a file name, like "icons/echo.svg"`;
     }
@@ -297,7 +325,10 @@ function collapseRenames(
   }
 }
 
-function collectProblems(manifest: PluginManifest): ManifestProblem[] {
+function collectProblems(
+  manifest: PluginManifest,
+  options: ManifestValidationOptions
+): ManifestProblem[] {
   const problems: ManifestProblem[] = [];
   const add: AddProblem = (path, message) => {
     problems.push({ path, message });
@@ -445,6 +476,23 @@ function collectProblems(manifest: PluginManifest): ManifestProblem[] {
       );
     }
     checkContributionPlatforms(page.platforms, `${base}.platforms`, manifest, add);
+    if (page.frame !== undefined) {
+      const frameIssue = frameProblem(page.frame);
+      if (frameIssue !== null) {
+        add(`${base}.frame`, frameIssue);
+      } else {
+        if (manifest.customUi !== true) {
+          add(`${base}.frame`, "frame requires customUi: true on the manifest");
+        }
+        const files = options.files;
+        if (files !== undefined) {
+          const normalized = normalizeRelativePath(page.frame);
+          if (!files.includes(normalized)) {
+            add(`${base}.frame`, `frame "${page.frame}" is not a file in the Plugin folder`);
+          }
+        }
+      }
+    }
   });
 
   const seenSidebarPages = new Set<string>();
@@ -573,7 +621,7 @@ export function validateManifestValue(
     return { ok: false, problems: problemsFromZod(parsed.error) };
   }
   const manifest: PluginManifest = parsed.data;
-  const problems = collectProblems(manifest);
+  const problems = collectProblems(manifest, options);
   if (problems.length > 0) return { ok: false, problems };
   return { ok: true, manifest };
 }

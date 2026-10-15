@@ -1381,6 +1381,16 @@ function SurfaceHost({
   );
 }
 
+/**
+ * The custom-UI `Frame` (#454). Unit 1 ships only the contract, so the host
+ * renders nothing yet. TODO(#454 U3): mount the sandboxed iframe for `src`,
+ * refusing the frame and rendering the not-available/notice placeholder per the
+ * platform gates (D5, D6).
+ */
+function FrameHost(_props: { src: string; title: string }): ReactNode {
+  return null;
+}
+
 /** Every table tag's host renderer, built once. */
 export function createPluginUiComponents(): RemoteComponentRendererMap {
   const components: RemoteComponentRendererMap = new Map();
@@ -1420,6 +1430,7 @@ export function createPluginUiComponents(): RemoteComponentRendererMap {
     Status: StatusHost,
     EmptyState: EmptyStateHost,
     Surface: SurfaceHost,
+    Frame: FrameHost,
   };
   for (const element of PLUGIN_UI_TABLE) {
     const Host = hosts[element.host];

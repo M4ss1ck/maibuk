@@ -68,7 +68,10 @@ export function readPluginManifest(
       problems: [{ path: MANIFEST_FILE, message: `${MANIFEST_FILE} is not valid UTF-8` }],
     };
   }
-  return parsePluginManifest(text, options);
+  return parsePluginManifest(text, {
+    ...options,
+    files: folder.files.map((file) => file.path),
+  });
 }
 
 async function runStartup(

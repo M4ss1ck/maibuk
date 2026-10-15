@@ -3,7 +3,7 @@ import type { RemoteMutationRecord } from "@remote-dom/core";
 import { describe, expect, it, vi } from "vitest";
 import { stopRemoteUi } from "@/features/plugins/remote-ui/boundary";
 import { usePluginRemoteUi } from "@/features/plugins/remote-ui/use-plugin-remote-ui";
-import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
+import type { PluginLifecycle, PluginManifest, PluginRuntime } from "@/features/plugins/types";
 
 const INSERTS = [
   [0, "~", { id: "1", type: 1, element: "maibuk-evil", children: [] }, 0],
@@ -11,9 +11,10 @@ const INSERTS = [
 
 /**
  * A runtime whose broker never answers a mount: the hook under test only needs
- * a broker to open the mount over, and every reply is irrelevant here.
+ * a broker to open the mount over (and a manifest for `customUi`), and every
+ * reply is irrelevant here.
  */
-function fakeRuntime(): Pick<PluginRuntime, "broker"> {
+function fakeRuntime(): Pick<PluginRuntime, "broker" | "manifest"> {
   return {
     broker: {
       request: () => new Promise<unknown>(() => {}),
@@ -21,6 +22,7 @@ function fakeRuntime(): Pick<PluginRuntime, "broker"> {
       stop: () => {},
       stopped: false,
     },
+    manifest: { customUi: false } as unknown as PluginManifest,
   };
 }
 
@@ -51,7 +53,7 @@ describe("usePluginRemoteUi", () => {
 
   it("reports mounted only once the Plugin accepts the mount", async () => {
     let accept = (_value: unknown) => {};
-    const runtime: Pick<PluginRuntime, "broker"> = {
+    const runtime: Pick<PluginRuntime, "broker" | "manifest"> = {
       broker: {
         ...fakeRuntime().broker,
         request: () =>
@@ -59,6 +61,7 @@ describe("usePluginRemoteUi", () => {
             accept = resolve;
           }),
       },
+      manifest: { customUi: false } as unknown as PluginManifest,
     };
     const { result } = renderHook(() => usePluginRemoteUi(runtime, "page.one", () => {}));
     expect(result.current.mounted).toBe(false);

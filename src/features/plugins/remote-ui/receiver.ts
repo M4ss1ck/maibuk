@@ -32,6 +32,8 @@ export interface PluginRemoteUi {
 
 export function createPluginRemoteUi(options: {
   onViolation: (violation: PluginUiViolation) => void;
+  /** The manifest's `customUi`; a tree with a `Frame` is refused without it. */
+  customUi?: boolean;
   /** Injectable clock in milliseconds; the default reads the real time. */
   now?: () => number;
 }): PluginRemoteUi {
@@ -45,6 +47,7 @@ export function createPluginRemoteUi(options: {
     onViolation: (violation) => {
       if (!disposed) report(violation);
     },
+    ...(options.customUi === undefined ? {} : { customUi: options.customUi }),
     ...(options.now === undefined ? {} : { now: options.now }),
   });
   const components = createPluginUiComponents();

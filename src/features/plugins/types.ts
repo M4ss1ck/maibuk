@@ -888,6 +888,13 @@ export type ManifestValidation =
 export interface ManifestValidationOptions {
   /** A Built-in Plugin may use the reserved `maibuk-` prefix; `tutorial-` stays refused. */
   builtIn?: boolean;
+  /**
+   * The Plugin folder's POSIX-relative file paths, when the caller has them
+   * (the runtime reads the folder before validating). A page's `frame` must
+   * name a file in this set; omitted, the existence check is skipped and only
+   * the path's shape is validated.
+   */
+  files?: readonly string[];
 }
 
 /** A Plugin's UI-string overrides for one language, by field path. */

@@ -19,7 +19,7 @@ import type { PluginRuntime } from "@/features/plugins/types";
 import type { PluginUiMountKind } from "@/plugin-sdk/protocol";
 
 export function usePluginRemoteUi(
-  runtime: Pick<PluginRuntime, "broker">,
+  runtime: Pick<PluginRuntime, "broker" | "manifest">,
   pageId: string,
   onViolation: (violation: PluginUiViolation) => void,
   kind: PluginUiMountKind = "page"
@@ -32,7 +32,10 @@ export function usePluginRemoteUi(
 
   useEffect(() => {
     let cancelled = false;
-    const created = createPluginRemoteUi({ onViolation: (violation) => handler.current(violation) });
+    const created = createPluginRemoteUi({
+      onViolation: (violation) => handler.current(violation),
+      customUi: runtime.manifest.customUi === true,
+    });
     const mount = openPluginUiMount(runtime.broker, pageId, kind);
     // The thread listens through `addEventListener`, which a MessagePort only
     // dispatches after `start()`.

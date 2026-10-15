@@ -38,6 +38,7 @@ export const PLUGIN_UI_TAGS = [
   "maibuk-status",
   "maibuk-empty-state",
   "maibuk-surface",
+  "maibuk-frame",
 ] as const;
 
 export type PluginUiTag = (typeof PLUGIN_UI_TAGS)[number];
@@ -382,6 +383,13 @@ export interface PluginUiElementProps {
     padding?: "none" | "sm" | "md" | "lg";
     children?: ReactNode;
   };
+  /** A sandboxed surface that runs the Plugin's own HTML from its folder (custom UI). */
+  "maibuk-frame": {
+    /** A relative path to an .html file in the Plugin folder. */
+    src: string;
+    /** Accessible name of the Frame's iframe. */
+    title: string;
+  };
 }
 
 /** The SDK component name to component type, generated from the table. */
@@ -421,4 +429,5 @@ export interface PluginUiComponents {
   Status: ComponentType<PluginUiElementProps["maibuk-status"]>;
   EmptyState: ComponentType<PluginUiElementProps["maibuk-empty-state"]>;
   Surface: ComponentType<PluginUiElementProps["maibuk-surface"]>;
+  Frame: ComponentType<PluginUiElementProps["maibuk-frame"]>;
 }

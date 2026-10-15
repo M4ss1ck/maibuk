@@ -107,6 +107,13 @@ const pageContribution = strictObject({
   id: localId,
   title: z.string().min(1),
   command: localId.describe("A Command that declares navigates: true."),
+  frame: z
+    .string()
+    .min(1)
+    .describe(
+      "A relative path to an .html file in the Plugin folder; renders this page as a Frame (requires customUi)."
+    )
+    .optional(),
   platforms: contributionPlatforms.optional(),
 });
 

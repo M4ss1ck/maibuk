@@ -37,10 +37,13 @@ export interface RemoteUiHarness {
 
 export function renderRemoteUi(options?: {
   wrapper?: ComponentType<{ children: ReactNode }>;
+  /** The manifest's `customUi`; a tree with a `Frame` is refused without it. */
+  customUi?: boolean;
 }): RemoteUiHarness {
   const violations: PluginUiViolation[] = [];
   const ui = createPluginRemoteUi({
     onViolation: (violation) => violations.push(violation),
+    ...(options?.customUi === undefined ? {} : { customUi: options.customUi }),
   });
 
   // Kept out of the document so RTL queries see only the host tree; a
