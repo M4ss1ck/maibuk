@@ -787,6 +787,8 @@ export interface TestHost {
   locale: PluginLocale | null;
   /** Changes the granted Plugin Permissions; the next call reads them again. */
   setGranted(permissions: readonly PluginPermissionId[]): void;
+  /** Whether the Plugin last set this Toggle Button on with `toolbar.setPressed`; off until it does. */
+  toolbarPressed(button: string): boolean;
   /** Publishes a language change to every subscribed Plugin. */
   setLanguage(language: string): void;
   /** Makes the Library available or unavailable, as the Tutorial does. */

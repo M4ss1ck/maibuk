@@ -88,6 +88,7 @@ export interface EchoEditorClient {
     notes: Pick<PluginClient["library"]["notes"], "get">;
   };
   notifications: Pick<PluginClient["notifications"], "show">;
+  toolbar: Pick<PluginClient["toolbar"], "setPressed">;
   language: Pick<PluginClient["language"], "get">;
   storage: Pick<PluginClient["storage"], "get" | "set" | "delete" | "keys">;
   on: PluginClient["on"];
@@ -311,9 +312,18 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     await paint({ repetition: [], info: [], warning: [] }, undefined, true);
   }
 
+  /**
+   * Sets highlighting on or off and shows the Toggle Button to match. Every
+   * change to `state.on` goes through here, so the button never lags the state.
+   */
+  function setOn(value: boolean): void {
+    state.on = value;
+    void client.toolbar.setPressed({ button: "toggleHighlights", pressed: value }).catch(() => {});
+  }
+
   /** Forgets the focused editor and switches off, without touching the host. */
   function resetState(): void {
-    state.on = false;
+    setOn(false);
     state.entity = null;
     state.list = [];
     state.window = { start: 0, end: 0 };
@@ -418,7 +428,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
           client.editor.getSelection(),
         ]);
         if (content.status !== "ok") return;
-        state.on = true;
+        setOn(true);
         state.entity = content.entity;
         state.index = null;
         state.list = [];

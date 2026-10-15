@@ -215,6 +215,8 @@ export interface PluginToolbarButtonDeclaration {
   command?: string;
   /** A Lucide icon name or a relative `.svg` path; resolved by the wiring slice. */
   icon?: string;
+  /** A Toggle Button: shows on or off as the Plugin sets it with `toolbar.setPressed`. */
+  toggle?: boolean;
 }
 
 export interface PluginToolbarRegistration {
@@ -239,6 +241,8 @@ export interface PluginToolbarButtonDef {
   command?: string;
   /** A Lucide icon name or a relative `.svg` path; resolved by the wiring slice. */
   icon?: string;
+  /** A Toggle Button: its pressed state is the Plugin's, set with `toolbar.setPressed`. */
+  toggle?: boolean;
 }
 
 const toolbarPlugins = new Map<string, RegisteredToolbarPlugin>();
@@ -292,6 +296,7 @@ export function registerToolbarButtons(
       localId: declaration.id,
       ...(declaration.command !== undefined ? { command: declaration.command } : {}),
       ...(declaration.icon !== undefined ? { icon: declaration.icon } : {}),
+      ...(declaration.toggle !== undefined ? { toggle: declaration.toggle } : {}),
     });
   }
   const renames = collapseContributionRenames(registration.buttonRenames ?? {}, declared, "button");

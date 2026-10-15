@@ -50,7 +50,12 @@
     "pages": [{ "id": "report", "title": "Echoes", "command": "openEchoes" }],
     "sidebarEntries": [{ "page": "report", "icon": "waves" }],
     "toolbarButtons": [
-      { "id": "toggleHighlights", "command": "toggleHighlights", "icon": "highlighter" }
+      {
+        "id": "toggleHighlights",
+        "command": "toggleHighlights",
+        "icon": "highlighter",
+        "toggle": true
+      }
     ],
     "settingsRows": [
       {

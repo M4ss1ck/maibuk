@@ -136,6 +136,10 @@ const toolbarButtonContribution = strictObject({
   command: localId,
   icon,
   platforms: contributionPlatforms.optional(),
+  toggle: z
+    .boolean()
+    .optional()
+    .describe("A Toggle Button: shows on or off as the Plugin sets it with toolbar.setPressed."),
 });
 
 const itemMenuEntryContribution = strictObject({

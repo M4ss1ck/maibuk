@@ -813,6 +813,30 @@ Output:
 null
 ```
 
+## toolbar
+
+### `toolbar.setPressed`
+
+Sets whether one of this Plugin's Toggle Buttons shows as on. Only a toolbar button the manifest declares with toggle: true.
+
+- Plugin Permission: none (rate-limited instead)
+- Effect: write
+
+Input:
+
+```ts
+{
+  button: string;
+  pressed: boolean;
+}
+```
+
+Output:
+
+```ts
+null
+```
+
 ## storage
 
 ### `storage.get`

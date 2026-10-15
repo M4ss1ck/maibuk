@@ -28,6 +28,7 @@ import {
   resetPluginLifecycleForTests,
 } from "@/features/plugins/lifecycle";
 import { STARTUP_TIMEOUT_MS } from "@/features/plugins/runtime";
+import { isToolbarPressed, setToolbarPressed } from "@/features/plugins/toolbar-pressed";
 import { cancelBulkReplace, emitChange, prepareBulkReplace } from "@/features/sync/change-feed";
 import type {
   BuiltInPluginSource,
@@ -714,6 +715,32 @@ describe("Plugin lifecycle: stop reasons", () => {
       "slow took too long to start and was stopped."
     );
     await advanceUntilSettled(launching, "lifecycle.launch()");
+  });
+});
+
+describe("Plugin lifecycle: Toggle Button pressed state", () => {
+  it("clears a Plugin's pressed Toggle Buttons when it stops", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    setToolbarPressed("alpha", "toggle", true);
+    expect(isToolbarPressed("alpha", "toggle")).toBe(true);
+
+    h.lifecycle.stop("alpha");
+    await advance(0);
+
+    expect(isToolbarPressed("alpha", "toggle")).toBe(false);
+  });
+
+  it("clears the pressed state when the Plugin crashes, so a dead Plugin shows no button on", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    setToolbarPressed("alpha", "toggle", true);
+
+    h.lifecycle.stop("alpha", "crashed");
+    await advance(0);
+
+    expect(h.lifecycle.state("alpha")?.status).toBe("stopped");
+    expect(isToolbarPressed("alpha", "toggle")).toBe(false);
   });
 });
 

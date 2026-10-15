@@ -30,6 +30,7 @@ export const PLUGIN_API_NAMESPACES = [
   "clipboard",
   "notifications",
   "storage",
+  "toolbar",
 ] as const;
 
 /** Names held for a later effort; every call into one refuses with `not-implemented`. */
@@ -385,6 +386,18 @@ export const PLUGIN_API_TABLE = [
     permission: null,
     effect: "write",
     minIntervalMs: 5000,
+  }),
+  defineApiRow({
+    id: "toolbar.setPressed",
+    description:
+      "Sets whether one of this Plugin's Toggle Buttons shows as on. Only a toolbar button the manifest declares with toggle: true.",
+    input: z.strictObject({
+      button: z.string().min(1).max(64),
+      pressed: z.boolean(),
+    }),
+    output: ok,
+    permission: null,
+    effect: "write",
   }),
   defineApiRow({
     id: "storage.get",

@@ -5,7 +5,9 @@ import {
   MANIFEST_LANGUAGES,
   PLUGIN_PLATFORMS,
   buildPluginManifestJsonSchema,
+  pluginManifestSchema,
 } from "@/features/plugins/manifest-schema";
+import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
 
 const committed = JSON.parse(
   readFileSync("src/features/plugins/manifest.schema.json", "utf8")
@@ -89,5 +91,26 @@ describe("manifest language and platform names", () => {
 
   it("covers desktop, web, and android", () => {
     expect([...PLUGIN_PLATFORMS]).toEqual(["desktop", "web", "android"]);
+  });
+});
+
+describe("toolbar button Toggle Button flag", () => {
+  const withToolbarButton = (button: Record<string, unknown>) => ({
+    ...PLUGIN_MANIFEST,
+    contributes: {
+      toolbarButtons: [{ id: "toggleHighlights", command: "run", icon: "highlighter", ...button }],
+    },
+  });
+
+  it("accepts toggle: true on a toolbar button", () => {
+    expect(pluginManifestSchema.safeParse(withToolbarButton({ toggle: true })).success).toBe(true);
+  });
+
+  it("accepts a toolbar button without toggle, which is a plain button", () => {
+    expect(pluginManifestSchema.safeParse(withToolbarButton({})).success).toBe(true);
+  });
+
+  it("rejects a non-boolean toggle", () => {
+    expect(pluginManifestSchema.safeParse(withToolbarButton({ toggle: "yes" })).success).toBe(false);
   });
 });

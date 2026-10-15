@@ -51,6 +51,7 @@ import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { reviewPluginCopy } from "@/features/plugins/review";
 import { STARTUP_TIMEOUT_MS, readPluginManifest, startPlugin } from "@/features/plugins/runtime";
 import { pluginStopMessageKey } from "@/features/plugins/stop-messages";
+import { clearToolbarPressed } from "@/features/plugins/toolbar-pressed";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
 import { isTutorialLibraryActive, settleAuthorLibraryWork, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
@@ -297,6 +298,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
 
   function setState(entry: Entry, state: PluginLifecycleState): void {
     entry.state = state;
+    // A Plugin that is no longer ready cannot have its Toggle Buttons showing on.
+    if (state.status !== "ready") clearToolbarPressed(entry.installed.pluginId);
     notify(entry);
   }
 
@@ -1047,6 +1050,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         entry.unregisterContributions?.();
         entry.unregisterContributions = null;
         entry.state = { status: "stopped", reason: "requested", refusal: null };
+        clearToolbarPressed(entry.installed.pluginId);
       }
       entries.clear();
       reachable.clear();
