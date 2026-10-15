@@ -343,14 +343,19 @@ pub async fn plugin_secret_clear_all() -> Result<(), String> {
 mod tests {
     use super::*;
 
-    /// keyring-core holds its default store in one process-wide slot, so the
-    /// tests that set a mock store take turns. Each caller gets a fresh store.
-    fn mock_store() -> MutexGuard<'static, ()> {
+    /// keyring-core holds its default store in one process-wide slot, so every
+    /// test that installs a store — mock or real — takes turns through this one
+    /// lock. The caller keeps the guard for as long as it uses the store.
+    fn store_lock() -> MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        let guard = LOCK
-            .get_or_init(|| Mutex::new(()))
+        LOCK.get_or_init(|| Mutex::new(()))
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Takes the store lock and installs a fresh in-memory mock store.
+    fn mock_store() -> MutexGuard<'static, ()> {
+        let guard = store_lock();
         keyring_core::set_default_store(keyring_core::mock::Store::new().unwrap());
         guard
     }
@@ -589,5 +594,71 @@ mod tests {
         available.clear_plugin("tracer").unwrap();
         assert_eq!(available.list_names("tracer").unwrap(), Vec::<String>::new());
         available.clear_all().unwrap();
+    }
+
+    /// Clears the test Plugin on the way out, panic or not, so a failed
+    /// assertion never leaves the developer's real keychain polluted.
+    #[cfg(target_os = "linux")]
+    struct Cleanup<'a> {
+        secrets: &'a PluginSecrets,
+        plugin_id: String,
+    }
+
+    #[cfg(target_os = "linux")]
+    impl Drop for Cleanup<'_> {
+        fn drop(&mut self) {
+            let _ = self.secrets.clear_plugin(&self.plugin_id);
+        }
+    }
+
+    /// A real round trip through the desktop OS keychain (the dbus Secret
+    /// Service on Linux), against the same store `init()` installs. Ignored by
+    /// default because it touches the developer's real keychain; run it with:
+    ///
+    /// ```text
+    /// cargo test --manifest-path src-tauri/Cargo.toml \
+    ///     plugins::secrets -- --ignored --nocapture
+    /// ```
+    ///
+    /// To also run it beside the mock tests, add `--include-ignored`. It writes
+    /// a unique Plugin id derived from the process id and clears it on drop, so
+    /// a failure still cleans up. Values here are dummies; never a real secret.
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "touches the real OS keychain; run with --ignored"]
+    fn real_keychain_round_trip() {
+        let _guard = store_lock();
+        // Open the real store exactly as `init()` does, without touching the
+        // process-wide OnceLock.
+        keyring_core::set_default_store(native_store().expect("open the OS keychain"));
+
+        let plugin_id = format!("test.keychain-roundtrip-{}", std::process::id());
+        let secrets = PluginSecrets::new(Box::new(OsKeychain));
+        let _cleanup = Cleanup {
+            secrets: &secrets,
+            plugin_id: plugin_id.clone(),
+        };
+
+        secrets.set(&plugin_id, "alpha", "dummy-alpha-value").unwrap();
+        secrets.set(&plugin_id, "beta", "dummy-beta-value").unwrap();
+
+        assert_eq!(secrets.list_names(&plugin_id).unwrap(), vec!["alpha", "beta"]);
+        assert_eq!(
+            secrets.read(&plugin_id, "alpha").unwrap().as_deref(),
+            Some("dummy-alpha-value")
+        );
+        assert_eq!(
+            secrets.read(&plugin_id, "beta").unwrap().as_deref(),
+            Some("dummy-beta-value")
+        );
+
+        secrets.delete(&plugin_id, "alpha").unwrap();
+        assert_eq!(secrets.list_names(&plugin_id).unwrap(), vec!["beta"]);
+        assert_eq!(secrets.read(&plugin_id, "alpha").unwrap(), None);
+
+        secrets.clear_plugin(&plugin_id).unwrap();
+
+        assert_eq!(secrets.read(&plugin_id, "beta").unwrap(), None);
+        assert_eq!(secrets.list_names(&plugin_id).unwrap(), Vec::<String>::new());
     }
 }
