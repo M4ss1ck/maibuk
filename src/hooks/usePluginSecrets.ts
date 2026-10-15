@@ -32,6 +32,9 @@ export function usePluginSecrets(pluginId: string, active = true): PluginSecrets
   useEffect(() => {
     if (!active || !store) return;
     let live = true;
+    // Re-read the remember flag beside the names: a store registered after the
+    // first render, or a row reopened later, must show the true state.
+    setRememberedState(store.isRemembered?.(pluginId) === true);
     void Promise.resolve(store.listNames(pluginId))
       .then((next) => {
         if (live) setNames(next);

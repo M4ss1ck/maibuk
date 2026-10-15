@@ -246,6 +246,7 @@ export function PluginRow({
               checked={secrets.remembered}
               onChange={(next) => secrets.setRemembered(next)}
               label={t("plugins.management.remember")}
+              className="pointer-coarse:min-h-12"
             />
           </div>
         )}

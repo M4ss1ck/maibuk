@@ -15,6 +15,7 @@
 // Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
@@ -210,6 +211,7 @@ test.describe("fixture-everything remember switch @wf:plugins-remember-switch @s
 
   test("a remembered secret name survives a reload", async ({ page }) => {
     await setRemembered(page, true);
+    await capture(page, "plugins-remember-credentials");
 
     // Save the secret with remembering already on, so it persists to storage.
     await openFixturePage(page);
