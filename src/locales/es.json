@@ -2206,6 +2206,8 @@
       "data": "Datos de Biblioteca",
       "files": "Archivos",
       "credentials": "Credenciales guardadas",
+      "remember": "Recordar credenciales en este dispositivo",
+      "rememberDescription": "Las credenciales guardadas permanecen en este navegador después de cerrarlo. Se guardan sin cifrar; cualquiera que use este perfil del navegador puede leerlas.",
       "approval": "Copia aprobada",
       "preferences": "Atajos personalizados y Comandos de voz",
       "kept": "Conservados",

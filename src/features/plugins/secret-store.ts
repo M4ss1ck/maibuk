@@ -6,7 +6,7 @@
  *
  * The app registers `createMemoryPluginSecretStore()` at startup, so a store is
  * always present. The desktop keychain store and the web "remember on this
- * device" store land in later #453 units and register themselves here.
+ * device" store register themselves here instead.
  */
 
 export interface PluginSecretStore {
@@ -25,6 +25,18 @@ export interface PluginSecretStore {
   clearPlugin(pluginId: string): Promise<void>;
   /** Deletes every saved Plugin credential. */
   clearAll(): Promise<void>;
+  /**
+   * Whether this store can persist credentials on this device, and for this
+   * Plugin right now. Optional so the UI can detect the capability: the web
+   * "remember on this device" store implements it, the desktop keychain store
+   * and the memory store do not.
+   */
+  isRemembered?(pluginId: string): boolean;
+  /**
+   * Turns "remember on this device" on or off for one Plugin. Optional, paired
+   * with {@link isRemembered}; absent stores are session-only.
+   */
+  setRemembered?(pluginId: string, on: boolean): Promise<void>;
 }
 
 let installedStore: PluginSecretStore | null = null;
