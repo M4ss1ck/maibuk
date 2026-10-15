@@ -49,7 +49,7 @@ const EVERYTHING_PERMISSIONS = [
   "editor:read",
   "editor:decorate",
   "secrets",
-  "network:fixture.invalid",
+  "network:api.fixture.test",
 ];
 /** fixture-bench's required Plugin Permissions. */
 const BENCH_PERMISSIONS = ["editor:read", "editor:decorate"];

@@ -34,7 +34,7 @@ export const EVERYTHING_REQUIRED = [
   "editor:read",
   "editor:decorate",
   "secrets",
-  "network:fixture.invalid",
+  "network:api.fixture.test",
 ] as const;
 
 /** `fixture-bench`'s required Plugin Permissions. */

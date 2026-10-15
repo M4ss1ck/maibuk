@@ -34,7 +34,7 @@ const REQUIRED_PERMISSIONS = [
   "editor:read",
   "editor:decorate",
   "secrets",
-  "network:fixture.invalid",
+  "network:api.fixture.test",
 ];
 
 test.use({

@@ -20,7 +20,7 @@ const REQUIRED_PERMISSIONS = [
   "editor:read",
   "editor:decorate",
   "secrets",
-  "network:fixture.invalid",
+  "network:api.fixture.test",
 ];
 /** The one optional Plugin Permission the editor insert Command needs. */
 const EDITOR_WRITE = "editor:write";

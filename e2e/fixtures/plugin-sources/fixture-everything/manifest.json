@@ -17,7 +17,7 @@
       "editor:read",
       "editor:decorate",
       "secrets",
-      "network:fixture.invalid"
+      "network:api.fixture.test"
     ],
     "optional": ["editor:write", "clipboard", "process"]
   },
