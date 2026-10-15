@@ -181,6 +181,8 @@ export type {
 } from "@/features/plugins/contributions";
 export { createPluginHandlers } from "@/features/plugins/handlers";
 export {
+  createPluginNote,
+  fragmentToHtml,
   getPluginBook,
   getPluginCanvas,
   getPluginChapter,
@@ -191,7 +193,10 @@ export {
   listPluginChapters,
   listPluginNotes,
   sanitizePluginHtml,
+  updatePluginChapterContent,
+  updatePluginNote,
 } from "@/features/plugins/library";
+export type { PluginContentFragment } from "@/features/plugins/library";
 export {
   openPluginEntity,
   openPluginPage,
@@ -203,9 +208,11 @@ export {
   clearPluginHighlights,
   getPluginEditorContent,
   getPluginEditorSelection,
+  insertInFocusedEditor,
   onEditorContentChanged,
   onEditorFocusChanged,
   registerPluginEditor,
+  replaceInFocusedEditor,
   requestEditorReveal,
   resetPluginEditorHostForTests,
   revealInFocusedEditor,

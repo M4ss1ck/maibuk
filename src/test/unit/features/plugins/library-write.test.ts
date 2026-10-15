@@ -7,11 +7,7 @@ import {
   resetChangeFeedForTests,
   type Change,
 } from "@/features/sync/change-feed";
-import {
-  PendingEditsFlushError,
-  registerPendingEditsFlush,
-  resetPendingEditsForTests,
-} from "@/features/sync/pending-edits";
+import { registerPendingEditsFlush, resetPendingEditsForTests } from "@/features/sync/pending-edits";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
@@ -39,11 +35,10 @@ describe("Plugin Library writes", () => {
 
   async function noteRow(
     id: string
-  ): Promise<{ book_id: string | null; title: string; content: string } | null> {
-    const rows = await testDb.select<{ book_id: string | null; title: string; content: string }[]>(
-      "SELECT book_id, title, content FROM notes WHERE id = ?",
-      [id]
-    );
+  ): Promise<{ book_id: string | null; title: string; content: string; word_count: number } | null> {
+    const rows = await testDb.select<
+      { book_id: string | null; title: string; content: string; word_count: number }[]
+    >("SELECT book_id, title, content, word_count FROM notes WHERE id = ?", [id]);
     return rows.length > 0 ? rows[0] : null;
   }
 
@@ -106,9 +101,10 @@ describe("Plugin Library writes", () => {
   it("refuses and writes nothing when a pending-edits Flush fails", async () => {
     const off = registerPendingEditsFlush(() => Promise.reject(new Error("disk full")));
     try {
-      await expect(updatePluginChapterContent("c1", { text: "New" })).rejects.toBeInstanceOf(
-        PendingEditsFlushError
-      );
+      await expect(updatePluginChapterContent("c1", { text: "New" })).rejects.toMatchObject({
+        name: "PluginApiError",
+        code: "library-unavailable",
+      });
     } finally {
       off();
     }
@@ -186,10 +182,39 @@ describe("Plugin Library writes", () => {
   });
 
   it("refuses a Tutorial Library id without writing", async () => {
-    await expect(updatePluginChapterContent("tutorial-chapter", { text: "x" })).rejects.toThrow();
-    await expect(createPluginNote({ title: "x", bookId: "tutorial-book" })).rejects.toThrow();
+    await expect(updatePluginChapterContent("tutorial-chapter", { text: "x" })).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "library-unavailable",
+    });
+    await expect(createPluginNote({ title: "x", bookId: "tutorial-book" })).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "library-unavailable",
+    });
 
     expect(await chapterContent("tutorial-chapter")).toBeNull();
     expect(changes).toEqual([]);
+  });
+
+  it("counts a created Note's words from the content it writes", async () => {
+    const { noteId } = await createPluginNote({
+      title: "Counted",
+      content: { text: "one two three" },
+    });
+
+    expect((await noteRow(noteId))?.word_count).toBe(3);
+  });
+
+  it("recounts a Note's words when a Plugin writes new content", async () => {
+    await updatePluginNote({ noteId: "n1", content: { text: "one two three four" } });
+
+    expect((await noteRow("n1"))?.word_count).toBe(4);
+  });
+
+  it("leaves a Note's word count untouched on a title-only update", async () => {
+    await updatePluginNote({ noteId: "n1", title: "Renamed" });
+
+    const row = await noteRow("n1");
+    expect(row?.title).toBe("Renamed");
+    expect(row?.word_count).toBe(1);
   });
 });

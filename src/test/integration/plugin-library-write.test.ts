@@ -36,7 +36,6 @@ const { useBookStore } = await import("@/features/books/store");
 const { useChapterStore } = await import("@/features/chapters/store");
 const { useNoteStore } = await import("@/features/notes/store");
 const {
-  PendingEditsFlushError,
   flushPendingEdits,
   registerPendingEditsFlush,
   resetPendingEditsForTests,
@@ -260,7 +259,7 @@ describe("Plugin Library writes reach the open view", () => {
       session.update("<p>Precious</p>");
       await expect(
         writeChapterContent("ch-1", { html: "<p>Plugin content</p>" })
-      ).rejects.toBeInstanceOf(PendingEditsFlushError);
+      ).rejects.toMatchObject({ name: "PluginApiError", code: "library-unavailable" });
     } finally {
       off();
       offFeed();
@@ -269,6 +268,49 @@ describe("Plugin Library writes reach the open view", () => {
 
     // Nothing persisted, nothing emitted, and the editor still holds the text.
     expect(await chapterContent("ch-1")).toBe("<p>Original</p>");
+    expect(session.getContent()).toBe("<p>Precious</p>");
+    expect(session.hasUnsavedChanges()).toBe(true);
+    expect(changes).toEqual([]);
+  });
+
+  it("refuses a Note write end to end when the open editor's save fails", async () => {
+    await seedNote("note-1", "<p>Original</p>");
+    await useNoteStore.getState().loadNotes();
+    await useNoteStore.getState().loadNote("note-1");
+
+    const changes: Change[] = [];
+    const offFeed = onChange((signal) => {
+      if (isEntityChange(signal)) changes.push(signal);
+    });
+    const realUpdateNote = useNoteStore.getState().updateNote;
+    useNoteStore.setState({
+      updateNote: async () => {
+        throw new Error("disk full");
+      },
+    });
+    const session = createEditSession<string>({
+      initial: "<p>Original</p>",
+      saveDelayMs: 60_000,
+      save: async (content) => {
+        const stored = await useNoteStore.getState().updateNote({ id: "note-1", content });
+        return stored?.content ?? content;
+      },
+    });
+    const off = registerPendingEditsFlush(() => session.flush());
+
+    try {
+      session.update("<p>Precious</p>");
+      await expect(
+        writeNote({ noteId: "note-1", content: { html: "<p>Plugin note</p>" } })
+      ).rejects.toMatchObject({ name: "PluginApiError", code: "library-unavailable" });
+    } finally {
+      off();
+      offFeed();
+      useNoteStore.setState({ updateNote: realUpdateNote });
+    }
+
+    // Nothing persisted, nothing emitted, and the editor still holds the text.
+    expect(await noteContent("note-1")).toBe("<p>Original</p>");
     expect(session.getContent()).toBe("<p>Precious</p>");
     expect(session.hasUnsavedChanges()).toBe(true);
     expect(changes).toEqual([]);

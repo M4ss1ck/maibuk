@@ -18,6 +18,7 @@ import DOMPurify from "dompurify";
 import { htmlToPlainText } from "@/components/editor/html-to-text";
 import { plainTextToEditorHtml } from "@/components/editor/plain-text-html";
 import { updateChapterRow } from "@/features/chapters/write";
+import { countWords } from "@/features/metrics/word-count";
 import { createNoteRow, updateNoteRow } from "@/features/notes/write";
 import type {
   PluginBook,
@@ -26,6 +27,8 @@ import type {
   PluginContent,
   PluginNoteSummary,
 } from "@/features/plugins/types";
+import { PendingEditsFlushError } from "@/features/sync/pending-edits";
+import { TutorialIdLeakError } from "@/features/tutorial/library-switch";
 import { getDatabase } from "@/lib/db";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
@@ -205,14 +208,49 @@ function notFound(entity: "Chapter" | "Note", id: string): PluginApiError {
   return new PluginApiError({ code: "invalid-params", message: `${entity} ${id} does not exist` });
 }
 
+/** The word count of a fragment's final HTML, counted the way the editor counts. */
+function contentWordCount(html: string): number {
+  return countWords(htmlToPlainText(html));
+}
+
+/**
+ * One `library:write` handler's shared refusal mapping. The write paths signal
+ * two recoverable failures with their own error types: a Flush that could not
+ * save an open editor (`PendingEditsFlushError`) means nothing was written and
+ * the author's edits are still open, and a Tutorial sample id means the write
+ * targets a read-only Library. Both become `library-unavailable` so a Plugin
+ * can retry or tell the author; every other error rethrows unchanged.
+ */
+async function libraryWrite<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof PendingEditsFlushError) {
+      throw new PluginApiError({
+        code: "library-unavailable",
+        message: "An open editor could not save; nothing was written. Try again.",
+      });
+    }
+    if (error instanceof TutorialIdLeakError) {
+      throw new PluginApiError({
+        code: "library-unavailable",
+        message: "The Tutorial Library is read-only; nothing was written.",
+      });
+    }
+    throw error;
+  }
+}
+
 /** Replaces a Chapter's content through the Chapter write path. */
 export async function updatePluginChapterContent(
   chapterId: string,
   fragment: PluginContentFragment
 ): Promise<null> {
-  const chapter = await updateChapterRow(chapterId, { content: fragmentToHtml(fragment) }, "local");
-  if (!chapter) throw notFound("Chapter", chapterId);
-  return null;
+  return libraryWrite(async () => {
+    const chapter = await updateChapterRow(chapterId, { content: fragmentToHtml(fragment) }, "local");
+    if (!chapter) throw notFound("Chapter", chapterId);
+    return null;
+  });
 }
 
 /** Creates a Note through the Note write path and returns its id. */
@@ -221,42 +259,46 @@ export async function createPluginNote(input: {
   bookId?: string | null;
   content?: PluginContentFragment;
 }): Promise<{ noteId: string }> {
-  const note = await createNoteRow(
-    {
-      title: input.title,
-      bookId: input.bookId ?? null,
-      ...(input.content === undefined ? {} : { content: fragmentToHtml(input.content) }),
-    },
-    "local"
-  );
-  return { noteId: note.id };
+  return libraryWrite(async () => {
+    const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
+    const note = await createNoteRow(
+      {
+        title: input.title,
+        bookId: input.bookId ?? null,
+        ...(content === undefined
+          ? {}
+          : { content, wordCount: contentWordCount(content) }),
+      },
+      "local"
+    );
+    return { noteId: note.id };
+  });
 }
 
 /**
- * Updates a Note's title or content through the Note write path. The Note's
- * bookId is read first because the write path needs it, but the id captured at
- * call start is the one written: no "current" state is read after an await.
+ * Updates a Note's title or content through the Note write path. No "current"
+ * state is read before the write: `updateNoteRow` merges the given fields onto
+ * the stored row, so an omitted field (the title, or the bookId it derives) is
+ * left as stored, and a missing id comes back as null.
  */
 export async function updatePluginNote(input: {
   noteId: string;
   title?: string;
   content?: PluginContentFragment;
 }): Promise<null> {
-  const db = await getDatabase();
-  const rows = await db.select<{ book_id: string | null }[]>(
-    "SELECT book_id FROM notes WHERE id = ?",
-    [input.noteId]
-  );
-  if (rows.length === 0) throw notFound("Note", input.noteId);
-  const note = await updateNoteRow(
-    {
-      id: input.noteId,
-      bookId: rows[0].book_id,
-      ...(input.title === undefined ? {} : { title: input.title }),
-      ...(input.content === undefined ? {} : { content: fragmentToHtml(input.content) }),
-    },
-    "local"
-  );
-  if (!note) throw notFound("Note", input.noteId);
-  return null;
+  return libraryWrite(async () => {
+    const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
+    const note = await updateNoteRow(
+      {
+        id: input.noteId,
+        ...(input.title === undefined ? {} : { title: input.title }),
+        ...(content === undefined
+          ? {}
+          : { content, wordCount: contentWordCount(content) }),
+      },
+      "local"
+    );
+    if (!note) throw notFound("Note", input.noteId);
+    return null;
+  });
 }

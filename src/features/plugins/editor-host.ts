@@ -29,6 +29,7 @@
 
 import {
   type Content,
+  type CreateNodeFromContentOptions,
   type Editor,
   type JSONContent,
   createNodeFromContent,
@@ -436,8 +437,13 @@ function plainTextInlineContent(text: string): JSONContent[] {
   return nodes;
 }
 
-function fragmentFromJson(editor: Editor, content: Content): Fragment {
-  const parsed = createNodeFromContent(content, editor.schema);
+/** JSON, HTML, or a node as schema content; a node result is wrapped in a Fragment. */
+function fragmentFromContent(
+  editor: Editor,
+  content: Content,
+  options?: CreateNodeFromContentOptions
+): Fragment {
+  const parsed = createNodeFromContent(content, editor.schema, options);
   return parsed instanceof Fragment ? parsed : Fragment.from(parsed);
 }
 
@@ -449,8 +455,8 @@ function fragmentFromJson(editor: Editor, content: Content): Fragment {
  */
 function plainTextContent(editor: Editor, text: string): Fragment {
   const blocks = text.split(/\n{2,}/);
-  if (blocks.length <= 1) return fragmentFromJson(editor, plainTextInlineContent(blocks[0] ?? ""));
-  return fragmentFromJson(
+  if (blocks.length <= 1) return fragmentFromContent(editor, plainTextInlineContent(blocks[0] ?? ""));
+  return fragmentFromContent(
     editor,
     blocks.map((block) => ({ type: "paragraph", content: plainTextInlineContent(block) }))
   );
@@ -464,10 +470,9 @@ function plainTextContent(editor: Editor, text: string): Fragment {
  */
 function fragmentContent(editor: Editor, fragment: PluginContentFragment): Fragment {
   if ("html" in fragment) {
-    const parsed = createNodeFromContent(sanitizePluginHtml(fragment.html), editor.schema, {
+    return fragmentFromContent(editor, sanitizePluginHtml(fragment.html), {
       parseOptions: { preserveWhitespace: "full" },
     });
-    return parsed instanceof Fragment ? parsed : Fragment.from(parsed);
   }
   return plainTextContent(editor, fragment.text);
 }

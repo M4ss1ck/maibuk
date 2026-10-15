@@ -107,8 +107,8 @@ function errorLabel(error: unknown): string {
  * Chapter, or a refused write) surfaces as a notification.
  */
 async function writeChapter(client: PluginClient): Promise<void> {
-  // A Plugin Command is ordinary async work: give the author's keystrokes the
-  // beat they take to reach the editor before the Plugin reads it.
+  // Stands in for a Plugin's own async work, so the author's in-flight typing
+  // lands before this read (ADR 0002/0026: newer typing wins over an outside write).
   await new Promise((resolve) => setTimeout(resolve, 300));
   const focused = await client.editor.getContent();
   if (focused.status !== "ok" || focused.entity.kind !== "chapter") {
