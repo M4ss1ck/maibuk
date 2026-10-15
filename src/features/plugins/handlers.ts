@@ -1,10 +1,12 @@
 /**
  * The host-side Plugin API handlers this app wires (ADR 0022, #440):
  * `notifications.show` renders a toast naming the Plugin; the Library reads
- * serve Books, Chapters, Notes, and Canvas metadata; `storage.*` reads and
- * writes the Plugin's own Library namespace; `navigation.openEntity` opens an
- * entity through the app shell; `navigation.openPage` opens a Plugin page;
- * `language.get` reads the app language. The
+ * serve Books, Chapters, Notes, and Canvas metadata; the Library writes
+ * (#452) update a Chapter's content and create or update a Note through the
+ * entity's own write path; `storage.*` reads and writes the Plugin's own
+ * Library namespace; `navigation.openEntity` opens an entity through the app
+ * shell; `navigation.openPage` opens a Plugin page; `language.get` reads the
+ * app language. The
  * broker already enforces each row's Plugin Permission, input schema, Library
  * availability, and rate limit, so a handler only does its work.
  */
@@ -18,6 +20,7 @@ import {
 } from "@/features/plugins/editor-host";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
+  createPluginNote,
   getPluginBook,
   getPluginCanvas,
   getPluginChapter,
@@ -26,6 +29,8 @@ import {
   listPluginCanvases,
   listPluginChapters,
   listPluginNotes,
+  updatePluginChapterContent,
+  updatePluginNote,
 } from "@/features/plugins/library";
 import { openPluginEntity, openPluginPage } from "@/features/plugins/navigation";
 import {
@@ -51,6 +56,12 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "library.chapters.get": ({ chapterId }) => getPluginChapter(chapterId),
     "library.notes.list": ({ bookId }) => listPluginNotes(bookId),
     "library.notes.get": ({ noteId }) => getPluginNote(noteId),
+    "library.chapters.updateContent": ({ chapterId, content }) =>
+      updatePluginChapterContent(chapterId, content),
+    "library.notes.create": ({ title, bookId, content }) =>
+      createPluginNote({ title, bookId, content }),
+    "library.notes.update": ({ noteId, title, content }) =>
+      updatePluginNote({ noteId, title, content }),
     "library.canvases.list": ({ bookId }) => listPluginCanvases(bookId),
     "library.canvases.get": ({ canvasId }) => getPluginCanvas(canvasId),
     "editor.getContent": () => getPluginEditorContent(),

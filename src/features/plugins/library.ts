@@ -5,12 +5,20 @@
  * the API. Chapters report their containing Book as their Change entity, so a
  * reader that wants Chapter edits subscribes to `library.changed` and pulls.
  *
+ * Here too are the `library:write` rows (#452): a Chapter content update and
+ * Note create/update, each through the entity's own narrow write path (ADR
+ * 0005) with Origin "local", so the write Flushes open editors, normalizes,
+ * emits on the Change Feed, and refuses sample ids. No delete is exposed.
+ *
  * Timestamps are Unix seconds in the Library and milliseconds since the epoch
  * in the API, the one shape every Plugin sees.
  */
 
 import DOMPurify from "dompurify";
 import { htmlToPlainText } from "@/components/editor/html-to-text";
+import { plainTextToEditorHtml } from "@/components/editor/plain-text-html";
+import { updateChapterRow } from "@/features/chapters/write";
+import { createNoteRow, updateNoteRow } from "@/features/notes/write";
 import type {
   PluginBook,
   PluginCanvasSummary,
@@ -19,6 +27,7 @@ import type {
   PluginNoteSummary,
 } from "@/features/plugins/types";
 import { getDatabase } from "@/lib/db";
+import { PluginApiError } from "@/plugin-sdk/protocol";
 
 type Row = Record<string, unknown>;
 
@@ -173,4 +182,81 @@ export async function getPluginCanvas(canvasId: string): Promise<PluginCanvasSum
   const db = await getDatabase();
   const rows = await db.select<Row[]>("SELECT * FROM canvases WHERE id = ?", [canvasId]);
   return rows.length > 0 ? toCanvasSummary(rows[0]) : null;
+}
+
+// Library writes (#452). A fragment is plain text or an HTML fragment the host
+// sanitizes; both become the HTML the entity's write path normalizes.
+
+/** A content fragment a Plugin writes: plain text, or HTML the host sanitizes. */
+export type PluginContentFragment = { text: string } | { html: string };
+
+/**
+ * The HTML a fragment becomes before a write path normalizes it. HTML passes
+ * through the same sanitizer every read uses; plain text is escaped into
+ * paragraphs, and an empty fragment becomes empty content.
+ */
+export function fragmentToHtml(fragment: PluginContentFragment): string {
+  if ("html" in fragment) return sanitizePluginHtml(fragment.html);
+  return fragment.text === "" ? "" : plainTextToEditorHtml(fragment.text);
+}
+
+/** A write against an id the Library does not hold; the Plugin sees a refusal. */
+function notFound(entity: "Chapter" | "Note", id: string): PluginApiError {
+  return new PluginApiError({ code: "invalid-params", message: `${entity} ${id} does not exist` });
+}
+
+/** Replaces a Chapter's content through the Chapter write path. */
+export async function updatePluginChapterContent(
+  chapterId: string,
+  fragment: PluginContentFragment
+): Promise<null> {
+  const chapter = await updateChapterRow(chapterId, { content: fragmentToHtml(fragment) }, "local");
+  if (!chapter) throw notFound("Chapter", chapterId);
+  return null;
+}
+
+/** Creates a Note through the Note write path and returns its id. */
+export async function createPluginNote(input: {
+  title: string;
+  bookId?: string | null;
+  content?: PluginContentFragment;
+}): Promise<{ noteId: string }> {
+  const note = await createNoteRow(
+    {
+      title: input.title,
+      bookId: input.bookId ?? null,
+      ...(input.content === undefined ? {} : { content: fragmentToHtml(input.content) }),
+    },
+    "local"
+  );
+  return { noteId: note.id };
+}
+
+/**
+ * Updates a Note's title or content through the Note write path. The Note's
+ * bookId is read first because the write path needs it, but the id captured at
+ * call start is the one written: no "current" state is read after an await.
+ */
+export async function updatePluginNote(input: {
+  noteId: string;
+  title?: string;
+  content?: PluginContentFragment;
+}): Promise<null> {
+  const db = await getDatabase();
+  const rows = await db.select<{ book_id: string | null }[]>(
+    "SELECT book_id FROM notes WHERE id = ?",
+    [input.noteId]
+  );
+  if (rows.length === 0) throw notFound("Note", input.noteId);
+  const note = await updateNoteRow(
+    {
+      id: input.noteId,
+      bookId: rows[0].book_id,
+      ...(input.title === undefined ? {} : { title: input.title }),
+      ...(input.content === undefined ? {} : { content: fragmentToHtml(input.content) }),
+    },
+    "local"
+  );
+  if (!note) throw notFound("Note", input.noteId);
+  return null;
 }
