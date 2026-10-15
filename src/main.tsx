@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "@/App";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppSettingsProvider } from "@/features/settings";
+import { IS_DESKTOP } from "@/lib/platform";
 import "@/index.css";
 
 // Initialize i18n before app mounts
@@ -35,13 +36,18 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 const BENCH_DRIVER_ENABLED = import.meta.env.VITE_PLUGIN_BENCH_DRIVER === "1";
 
 const loadPlugins = async () => {
-  // A Plugin credential store is always present: the default is session-only,
-  // in memory (later #453 units swap in the desktop keychain and, on web, the
-  // opt-in "remember on this device" store).
+  // A Plugin credential store is always present: the OS keychain on desktop
+  // (ADR 0023), in memory on the web build and on Android, where no Plugin runs
+  // in v1.
   const { createMemoryPluginSecretStore, registerPluginSecretStore } = await import(
     "@/features/plugins/secret-store"
   );
-  registerPluginSecretStore(createMemoryPluginSecretStore());
+  if (IS_DESKTOP) {
+    const { createKeychainPluginSecretStore } = await import("@/lib/platform/tauri/secrets");
+    registerPluginSecretStore(createKeychainPluginSecretStore());
+  } else {
+    registerPluginSecretStore(createMemoryPluginSecretStore());
+  }
   if (BENCH_DRIVER_ENABLED) {
     const { preparePluginsBench } = await import("@/features/plugins/bench");
     await preparePluginsBench();

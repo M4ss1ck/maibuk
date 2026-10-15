@@ -7,6 +7,8 @@
 pub mod archive;
 pub mod directory;
 pub mod hash;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub mod secrets;
 #[cfg(desktop)]
 pub mod watch;
 
