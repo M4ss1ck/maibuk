@@ -13,8 +13,9 @@
  * works.
  */
 import { existsSync, statSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { writeGeneratedConfigs } from "./config";
 import { CHECK_ORDER, pluginSteps, type PluginStepName } from "./steps";
 
 export { CHECK_ORDER } from "./steps";
@@ -55,11 +56,11 @@ export interface CheckOutcome {
   steps: CheckStepOutcome[];
 }
 
-/** Every command the CLI accepts: the step names, plus `check`. */
-export const COMMANDS = [...CHECK_ORDER, "check"] as const;
+/** Every command the CLI accepts: the step names, plus `check` and `configs`. */
+export const COMMANDS = [...CHECK_ORDER, "check", "configs"] as const;
 
-/** A command name, or the whole check. */
-export type PluginCommand = PluginStepName | "check";
+/** A command name, the whole check, or the config generation `setup` runs. */
+export type PluginCommand = PluginStepName | "check" | "configs";
 
 /** A parsed command line. */
 export interface ParsedCommand {
@@ -87,6 +88,7 @@ export const USAGE = [
   "  package    Zip <plugin>/dist/<id>/ into <plugin>/dist/<id>-<version>.zip",
   "  layout     Check the packaged zip's layout",
   "  check      Run every step, stopping at the first failure",
+  "  configs    Write <plugin>/.maibuk/ with the generated TypeScript configs",
 ].join("\n");
 
 /**
@@ -168,6 +170,18 @@ async function main(): Promise<number> {
     console.error(`The Plugin path is not a folder: ${pluginRoot}\n\n${USAGE}`);
     return 2;
   }
+  const maibukRoot = resolve(import.meta.dirname, "../..");
+
+  // `configs` only generates the editor's TypeScript configs, so it runs before
+  // the manifest check: `setup` runs it right after writing `maibuk.local.json`.
+  if (parsed.command === "configs") {
+    const { checkConfigPath, pathsConfigPath } = await writeGeneratedConfigs(pluginRoot, maibukRoot);
+    console.log(
+      `wrote ${relative(pluginRoot, pathsConfigPath)} and ${relative(pluginRoot, checkConfigPath)}`
+    );
+    return 0;
+  }
+
   if (!existsSync(join(pluginRoot, "manifest.json"))) {
     console.error(
       `No manifest.json in ${pluginRoot}.\n` +
@@ -177,7 +191,6 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const maibukRoot = resolve(import.meta.dirname, "../..");
   const all = pluginSteps(pluginRoot, maibukRoot);
   const steps = parsed.command === "check" ? all : all.filter((s) => s.name === parsed.command);
   const outcome = await runCheck(steps);

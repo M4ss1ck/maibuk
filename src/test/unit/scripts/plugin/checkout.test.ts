@@ -1,8 +1,10 @@
 // @vitest-environment node
-// Checkout resolution for an external Plugin repo (issue #455): the flag wins
-// over the env var which wins over `maibuk.local.json`; a relative path there
-// resolves against the Plugin root; every refusal names its source, the path
-// tried, what is missing, and the setup command; a path with spaces works.
+// Checkout resolution for an external Plugin repo (issue #455). The logic lives
+// in the template's `scripts/maibuk.mjs` (the single source both the CLI launch
+// and `setup.mjs` share): the flag wins over the env var which wins over
+// `maibuk.local.json`; a relative path there resolves against the Plugin root;
+// every refusal names its source, the path tried, what is missing, and the setup
+// command; a path with spaces works.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +13,7 @@ import {
   LOCAL_CONFIG_FILE,
   MaibukCheckoutError,
   resolveMaibukCheckout,
-} from "../../../../../scripts/plugin/checkout";
+} from "../../../../../templates/plugin/scripts/maibuk.mjs";
 
 const roots: string[] = [];
 

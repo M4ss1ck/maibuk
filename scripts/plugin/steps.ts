@@ -111,6 +111,15 @@ function run(bin: string, args: readonly string[], cwd: string): Promise<RunResu
   });
 }
 
+/**
+ * Runs a package's JavaScript bin with `process.execPath <jsBin> args...`,
+ * rather than the `node_modules/.bin` shim: the shim is a shell script on POSIX
+ * and a `.cmd` on Windows, and going through it would reintroduce a shell.
+ */
+function runNode(jsBin: string, args: readonly string[], cwd: string): Promise<RunResult> {
+  return run(process.execPath, [jsBin, ...args], cwd);
+}
+
 /** The non-empty output lines of a finished program. */
 function outputLines(result: RunResult): string[] {
   return `${result.stdout}\n${result.stderr}`
@@ -180,8 +189,8 @@ function formatProblem(file: string, problem: { path: string; message: string })
 export async function typecheckStep(context: PluginStepContext): Promise<StepResult> {
   const { pluginRoot, maibukRoot } = context;
   const { checkConfigPath } = await writeGeneratedConfigs(pluginRoot, maibukRoot);
-  const tsc = join(maibukRoot, "node_modules", ".bin", "tsc");
-  const result = await run(tsc, ["-p", checkConfigPath, "--pretty", "false"], pluginRoot);
+  const tsc = join(maibukRoot, "node_modules", "typescript", "bin", "tsc");
+  const result = await runNode(tsc, ["-p", checkConfigPath, "--pretty", "false"], pluginRoot);
   if (result.code === 0) return { ok: true, details: ["tsc reported no type errors"] };
   return { ok: false, details: outputLines(result) };
 }
@@ -189,12 +198,12 @@ export async function typecheckStep(context: PluginStepContext): Promise<StepRes
 /** 3b lint: Maibuk's Biome over the Plugin folder, with its own config when it has one. */
 export async function lintStep(context: PluginStepContext): Promise<StepResult> {
   const { pluginRoot, maibukRoot } = context;
-  const biome = join(maibukRoot, "node_modules", ".bin", "biome");
+  const biome = join(maibukRoot, "node_modules", "@biomejs", "biome", "bin", "biome");
   const args = ["check", pluginRoot];
   if (!existsSync(join(pluginRoot, "biome.json"))) {
     args.push("--config-path", join(maibukRoot, "biome.json"));
   }
-  const result = await run(biome, args, pluginRoot);
+  const result = await runNode(biome, args, pluginRoot);
   if (result.code === 0) return { ok: true, details: ["biome reported no problems"] };
   return { ok: false, details: outputLines(result) };
 }
