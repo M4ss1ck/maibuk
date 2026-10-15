@@ -3,10 +3,11 @@
  * `notifications.show` renders a toast naming the Plugin; the Library reads
  * serve Books, Chapters, Notes, and Canvas metadata; the Library writes
  * (#452) update a Chapter's content and create or update a Note through the
- * entity's own write path; `storage.*` reads and writes the Plugin's own
- * Library namespace; `navigation.openEntity` opens an entity through the app
- * shell; `navigation.openPage` opens a Plugin page; `language.get` reads the
- * app language. The
+ * entity's own write path; the editor writes (`editor.insert` / `editor.replace`,
+ * #452) edit the focused editor as one undoable step; `storage.*` reads and
+ * writes the Plugin's own Library namespace; `navigation.openEntity` opens an
+ * entity through the app shell; `navigation.openPage` opens a Plugin page;
+ * `language.get` reads the app language. The
  * broker already enforces each row's Plugin Permission, input schema, Library
  * availability, and rate limit, so a handler only does its work.
  */
@@ -15,6 +16,8 @@ import { toast } from "@/components/ui/Toast";
 import {
   getPluginEditorContent,
   getPluginEditorSelection,
+  insertInFocusedEditor,
+  replaceInFocusedEditor,
   revealInFocusedEditor,
   setPluginEditorHighlights,
 } from "@/features/plugins/editor-host";
@@ -67,6 +70,8 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "editor.getContent": () => getPluginEditorContent(),
     "editor.getSelection": () => getPluginEditorSelection(),
     "editor.reveal": ({ range }) => revealInFocusedEditor(range),
+    "editor.insert": ({ content }) => insertInFocusedEditor(content),
+    "editor.replace": ({ range, content }) => replaceInFocusedEditor(range, content),
     "editor.setHighlights": ({ kind, ranges }, { pluginId }) =>
       setPluginEditorHighlights(pluginId, { kind, ranges }),
     "storage.get": async ({ key }, { pluginId }) => {

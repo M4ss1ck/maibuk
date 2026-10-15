@@ -239,6 +239,53 @@ describe("Library write Plugin Permissions", () => {
   });
 });
 
+describe("Editor write Plugin Permissions", () => {
+  const WRITE_HANDLERS: PluginApiHandlers = {
+    "editor.insert": async () => ({ status: "applied" as const }),
+    "editor.replace": async () => ({ status: "applied" as const }),
+  };
+
+  it("refuses every editor:write row without the Plugin Permission", async () => {
+    const { client } = setup({
+      declared: ["editor:write"],
+      grantedAtStart: [],
+      handlers: WRITE_HANDLERS,
+    });
+
+    const insert = await refusal(client.editor.insert({ content: { text: "x" } }));
+    expect(insert.code).toBe("permission-denied");
+    expect(insert.permission).toBe("editor:write");
+    expect(insert.method).toBe("editor.insert");
+
+    const replace = await refusal(
+      client.editor.replace({ range: { from: 0, to: 1 }, content: { text: "x" } })
+    );
+    expect(replace.code).toBe("permission-denied");
+    expect(replace.method).toBe("editor.replace");
+  });
+
+  it("applies a revoked editor:write on the next call (T11)", async () => {
+    const { client, granted } = setup({ declared: ["editor:write"], handlers: WRITE_HANDLERS });
+
+    await expect(client.editor.insert({ content: { text: "x" } })).resolves.toEqual({
+      status: "applied",
+    });
+
+    granted.delete("editor:write");
+
+    expect((await refusal(client.editor.insert({ content: { text: "x" } }))).code).toBe(
+      "permission-denied"
+    );
+    expect(
+      (
+        await refusal(
+          client.editor.replace({ range: { from: 0, to: 1 }, content: { text: "x" } })
+        )
+      ).code
+    ).toBe("permission-denied");
+  });
+});
+
 describe("typed errors", () => {
   it("refuses an unknown method", async () => {
     const { port } = setup();

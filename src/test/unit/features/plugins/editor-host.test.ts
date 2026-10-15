@@ -13,16 +13,19 @@ import {
   flushPendingEditorReveal,
   getPluginEditorContent,
   getPluginEditorSelection,
+  insertInFocusedEditor,
   invalidatePluginEditorWork,
   onEditorContentChanged,
   onEditorFocusChanged,
   registerPluginEditor,
+  replaceInFocusedEditor,
   requestEditorReveal,
   resetPluginEditorHostForTests,
   revealInFocusedEditor,
   setPluginEditorHighlights,
 } from "@/features/plugins/editor-host";
 import { longChapterHtml, spreadHighlightRanges } from "@/test/support/long-chapter";
+import { PluginApiError } from "@/plugin-sdk/protocol";
 
 const editors: Editor[] = [];
 let nextId = 0;
@@ -618,5 +621,186 @@ describe("invalidating editor work at a Library boundary", () => {
 
     expect(seen).not.toHaveBeenCalled();
     off();
+  });
+});
+
+describe("editor writes", () => {
+  let nextWriteId = 0;
+
+  function focusedEditor(content = "<p>Hello world</p>"): Editor {
+    const editor = mountEditor(content);
+    editor.view.dom.focus();
+    registerPluginEditor({
+      id: `write-editor-${nextWriteId++}`,
+      editor,
+      entity: { kind: "chapter", id: "c1" },
+    });
+    return editor;
+  }
+
+  function caretAtEnd(editor: Editor): void {
+    editor.commands.setTextSelection(editor.state.doc.content.size - 1);
+  }
+
+  function refusal(run: () => unknown): PluginApiError {
+    try {
+      run();
+    } catch (error) {
+      return error as PluginApiError;
+    }
+    throw new Error("expected the call to be refused");
+  }
+
+  it("inserts {text} at the caret", () => {
+    const editor = focusedEditor();
+    caretAtEnd(editor);
+
+    expect(insertInFocusedEditor({ text: "!" })).toEqual({ status: "applied" });
+    expect(editor.getText()).toBe("Hello world!");
+  });
+
+  it("inserts {text} over a non-empty selection", () => {
+    const editor = focusedEditor();
+    editor.commands.setTextSelection({ from: 1, to: 6 });
+
+    expect(insertInFocusedEditor({ text: "Goodbye" })).toEqual({ status: "applied" });
+    expect(editor.getText()).toBe("Goodbye world");
+  });
+
+  it("keeps newlines and blank lines when inserting {text}", () => {
+    const editor = focusedEditor("<p></p>");
+
+    insertInFocusedEditor({ text: "one\ntwo\n\nthree" });
+
+    // Round trip: the text reads back exactly as it went in.
+    expect(editor.getText()).toBe("one\ntwo\n\nthree");
+    expect(getPluginEditorContent()).toMatchObject({
+      status: "ok",
+      content: { text: "one\ntwo\n\nthree" },
+    });
+  });
+
+  it("replaces a plain-text range with {text}, exactly", () => {
+    const editor = focusedEditor();
+
+    expect(replaceInFocusedEditor({ from: 6, to: 11 }, { text: "there" })).toEqual({
+      status: "applied",
+    });
+    expect(editor.getText()).toBe("Hello there");
+  });
+
+  it("inserts {html} through the schema, keeping allowed formatting", () => {
+    const editor = focusedEditor("<p></p>");
+
+    expect(insertInFocusedEditor({ html: "<p>Hello <strong>bold</strong></p>" })).toEqual({
+      status: "applied",
+    });
+    expect(editor.getHTML()).toContain("<strong>bold</strong>");
+    expect(editor.getText()).toBe("Hello bold");
+  });
+
+  it("strips scripts, event handlers, and javascript: hrefs from {html}", () => {
+    const editor = focusedEditor("<p></p>");
+
+    insertInFocusedEditor({
+      html: '<p>ok<script>alert(1)</script><span onclick="x()">world</span><a href="javascript:alert(1)">link</a></p>',
+    });
+
+    const html = editor.getHTML();
+    expect(html).toContain("ok");
+    expect(html).toContain("world");
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain("onclick");
+    expect(html).not.toContain("javascript:");
+  });
+
+  it("undoes an insert in one step", () => {
+    const editor = focusedEditor();
+    const before = editor.getHTML();
+    caretAtEnd(editor);
+
+    insertInFocusedEditor({ text: "!" });
+    expect(editor.getText()).toBe("Hello world!");
+
+    editor.commands.undo();
+    expect(editor.getHTML()).toBe(before);
+    expect(editor.getText()).toBe("Hello world");
+  });
+
+  it("undoes a replace in one step", () => {
+    const editor = focusedEditor();
+    const before = editor.getHTML();
+
+    replaceInFocusedEditor({ from: 6, to: 11 }, { text: "there" });
+    expect(editor.getText()).toBe("Hello there");
+
+    editor.commands.undo();
+    expect(editor.getHTML()).toBe(before);
+    expect(editor.getText()).toBe("Hello world");
+  });
+
+  it("keeps a Plugin insert as its own undo step between the author's typing", async () => {
+    const user = userEvent.setup();
+    const editor = focusedEditor("<p>Hello</p>");
+    caretAtEnd(editor);
+
+    await user.keyboard("a");
+    expect(editor.getText()).toBe("Helloa");
+
+    insertInFocusedEditor({ text: "Z" });
+    expect(editor.getText()).toBe("HelloaZ");
+
+    await user.keyboard("b");
+    expect(editor.getText()).toBe("HelloaZb");
+
+    // The first undo removes only the second typing.
+    editor.commands.undo();
+    expect(editor.getText()).toBe("HelloaZ");
+    // The second undo removes exactly the Plugin insert.
+    editor.commands.undo();
+    expect(editor.getText()).toBe("Helloa");
+    // The third removes the author's first keystroke.
+    editor.commands.undo();
+    expect(editor.getText()).toBe("Hello");
+  });
+
+  it("reports no target, and changes nothing, with no focused editor", () => {
+    resetPluginEditorHostForTests();
+
+    expect(insertInFocusedEditor({ text: "x" })).toEqual({ status: "no-target" });
+    expect(replaceInFocusedEditor({ from: 0, to: 1 }, { text: "x" })).toEqual({
+      status: "no-target",
+    });
+  });
+
+  it("refuses an out-of-range replace, leaving the document unchanged", () => {
+    const editor = focusedEditor("<p>Hello</p>");
+    const before = editor.getHTML();
+
+    const pastEnd = refusal(() => replaceInFocusedEditor({ from: 3, to: 99 }, { text: "x" }));
+    expect(pastEnd).toBeInstanceOf(PluginApiError);
+    expect(pastEnd.code).toBe("invalid-params");
+
+    const reversed = refusal(() => replaceInFocusedEditor({ from: 4, to: 2 }, { text: "x" }));
+    expect(reversed.code).toBe("invalid-params");
+
+    expect(editor.getHTML()).toBe(before);
+  });
+
+  it("edits the editor it resolved even when focus moves to another during the call", () => {
+    const first = mountEditor("<p>Alpha</p>");
+    const second = mountEditor("<p>Beta</p>");
+    registerPluginEditor({ id: "a", editor: first, entity: { kind: "chapter", id: "c1" } });
+    registerPluginEditor({ id: "b", editor: second, entity: { kind: "chapter", id: "c2" } });
+    first.view.dom.focus();
+    const secondBefore = second.getHTML();
+    // The edit's own update moves focus to the other editor mid-call.
+    first.on("update", () => second.view.dom.focus());
+    caretAtEnd(first);
+
+    insertInFocusedEditor({ text: "!" });
+
+    expect(first.getText()).toBe("Alpha!");
+    expect(second.getHTML()).toBe(secondBefore);
   });
 });
