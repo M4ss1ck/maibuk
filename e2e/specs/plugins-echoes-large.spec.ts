@@ -1,7 +1,8 @@
-// Echoes on a large Book (#504): the report draws 200 rows per tab and 200
-// occurrences per expanded row, Show more adds the next 200 by keyboard, and
-// expanding, collapsing, and switching tabs stay quick. Each timing is logged
-// so a regression shows up as a number, not only a failure.
+// Echoes on a large Book (#504): the report draws 200 rows per tab, and the one
+// expanded row (only one is open at a time) draws its occurrences 50 per page.
+// Show more adds rows within a drawing budget, or the next 50 occurrences, by
+// keyboard, and expanding, collapsing, and switching tabs stay quick. Each
+// timing is logged so a regression shows up as a number, not only a failure.
 //
 // @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
 // Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).

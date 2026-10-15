@@ -19,7 +19,7 @@ import { format } from "./i18n";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { buildReport, occurrenceContext } from "./report";
-import { FIND_ECHOES, REPORT_PAGE_ID, startEchoes } from "./runtime";
+import { FIND_ECHOES, offeredMore, REPORT_PAGE_ID, startEchoes } from "./runtime";
 import { ECHOES_SETTINGS_KEY } from "./settings";
 import { echoesManifest, settingsStorage, shiftTabTo, tabTo, type User } from "./test-support";
 
@@ -302,6 +302,47 @@ describe("Echoes report page", () => {
             reveal: { from: expected.from, to: expected.to },
           },
         ])
+      );
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("keeps one row expanded: expanding another collapses the first", async () => {
+    const host = reportHost();
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+      const user = userEvent.setup();
+
+      const harbor = await screen.findByRole("option", { name: /^harbor/ });
+      await tabTo(user, harbor);
+      await user.keyboard("{Enter}");
+      // The open row's occurrences arrive over the Remote UI connection, a tick later.
+      await waitFor(() =>
+        expect(screen.getAllByRole("option", { name: /The harbor was/ }).length).toBeGreaterThan(0)
+      );
+
+      // Arrow moves through the open row's occurrences to the shore row below.
+      const shore = screen.getByRole("option", { name: /^shore/ });
+      for (let step = 0; step < 50 && document.activeElement !== shore; step++) {
+        await user.keyboard("{ArrowDown}");
+      }
+      expect(shore).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      const shoreOccurrences = buildReport(findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS), [
+        HARBOR,
+        SHORE,
+      ]).nearby[1].occurrences;
+      await waitFor(() =>
+        expect(screen.getAllByRole("option")).toHaveLength(2 + shoreOccurrences.length)
+      );
+      // The collapsed harbor row keeps no occurrences; the shore row's are listed.
+      expect(screen.queryByRole("option", { name: /The harbor was/ })).not.toBeInTheDocument();
+      expect(screen.getAllByRole("option", { name: /The shore was/ })).toHaveLength(
+        shoreOccurrences.length
       );
 
       page.unmount();
@@ -876,5 +917,21 @@ describe("Echoes report page", () => {
     } finally {
       host.stop();
     }
+  });
+});
+
+describe("offeredMore", () => {
+  it("offers a page, capped by what is left and by the room in the drawing budget", () => {
+    expect(offeredMore(200, 1000, 4000)).toBe(200);
+    expect(offeredMore(200, 30, 4000)).toBe(30);
+    expect(offeredMore(200, 1000, 45)).toBe(45);
+    expect(offeredMore(50, 500, 0)).toBe(0);
+  });
+
+  it("offers nothing when no room or nothing left is left, and never a negative count", () => {
+    expect(offeredMore(200, 0, 4000)).toBe(0);
+    expect(offeredMore(200, 1000, 0)).toBe(0);
+    expect(offeredMore(200, 1000, -7)).toBe(0);
+    expect(offeredMore(200, -3, 4000)).toBe(0);
   });
 });

@@ -273,6 +273,48 @@ describe("servePluginUi", () => {
     expect(host.violations).toEqual([]);
   });
 
+  it("calls only the newest handler after the Plugin swaps it, and none after it removes it", async () => {
+    const host = createValidatedHost();
+    const client = createClient();
+    const onA = vi.fn();
+    const onB = vi.fn();
+    let setMode: (mode: "a" | "b" | "none") => void = () => {};
+    function SwapPage() {
+      const [mode, update] = useState<"a" | "b" | "none">("a");
+      setMode = update;
+      return (
+        <>
+          <ui.Button {...(mode === "none" ? {} : { onPress: mode === "a" ? onA : onB })}>
+            Go
+          </ui.Button>
+          <ui.Text>{`mode:${mode}`}</ui.Text>
+        </>
+      );
+    }
+    servePluginUi(client.client, { pages: { main: SwapPage } });
+    client.request("ui.mount", { surface: "main#1", page: "main", port: host.port });
+
+    const button = () => element(host.receiver, "maibuk-button") as RemoteReceiverElement;
+    const press = () => (button().eventListeners.press as () => unknown)();
+
+    await vi.waitFor(() => expect(button().eventListeners.press).toBeDefined());
+    press();
+    await vi.waitFor(() => expect(onA).toHaveBeenCalledTimes(1));
+
+    setMode("b");
+    await vi.waitFor(() => expect(textOf(host.receiver, "maibuk-text")).toContain("mode:b"));
+    press();
+    await vi.waitFor(() => expect(onB).toHaveBeenCalledTimes(1));
+    expect(onA).toHaveBeenCalledTimes(1);
+
+    setMode("none");
+    await vi.waitFor(() => expect(textOf(host.receiver, "maibuk-text")).toContain("mode:none"));
+    expect(button().eventListeners.press).toBeUndefined();
+    expect(onA).toHaveBeenCalledTimes(1);
+    expect(onB).toHaveBeenCalledTimes(1);
+    expect(host.violations).toEqual([]);
+  });
+
   it("replaces 1,500 required-prop rows with 1,500 others in one commit without a violation", async () => {
     // The Echoes Book switch: the old rows are removed and the new ones inserted
     // in the same flush, which is well over maxRecordsPerBatch, and a later

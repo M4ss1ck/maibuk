@@ -223,6 +223,21 @@ const ROW_PAGE = 200;
  */
 const OCCURRENCE_PAGE = 50;
 
+/**
+ * Rows the page draws at most, well under the host's maxNodes (10,000 elements
+ * per Plugin UI): the top rows shown, plus the open row and its shown occurrences
+ * and its Show more row. Show more offers only what fits under it.
+ */
+const DRAW_BUDGET = 5_000;
+
+/**
+ * How many more rows or occurrences a Show more press offers: one page, capped
+ * by what is left and by the room the drawing budget still has. Never negative.
+ */
+export function offeredMore(page: number, left: number, room: number): number {
+  return Math.max(0, Math.min(page, left, room));
+}
+
 /** The rows each kind draws before Show more is pressed. */
 const FIRST_PAGE: Readonly<Record<EchoKind, number>> = {
   nearby: ROW_PAGE,
@@ -296,10 +311,12 @@ interface EchoRowGroupProps {
   /** The report's Chapters, which the occurrences index into; one array per report. */
   chapters: readonly ReportChapter[];
   titleById: ReadonlyMap<string, string>;
+  /** How many more occurrences the Show more row offers; 0 hides it. */
+  moreOccurrences: number;
   onToggle: (rowId: string, open: boolean) => void;
   onIgnore: (row: EchoReportRow) => void;
   onOpen: (chapterId: string, from: number, to: number) => void;
-  onMoreOccurrences: (rowId: string) => void;
+  onMoreOccurrences: (rowId: string, count: number) => void;
 }
 
 /**
@@ -312,6 +329,7 @@ const EchoRowGroup = memo(function EchoRowGroup({
   rowId,
   isExpanded,
   occurrenceLimit,
+  moreOccurrences,
   language,
   summary,
   chapters,
@@ -374,14 +392,14 @@ const EchoRowGroup = memo(function EchoRowGroup({
           }}
         />
       ))}
-      {isExpanded && occurrencesLeft > 0 ? (
+      {isExpanded && moreOccurrences > 0 ? (
         <ui.CollectionRow
           id={`${rowId}:more`}
           label={format(translate(language, "report.showMoreOccurrences"), {
-            count: Math.min(OCCURRENCE_PAGE, occurrencesLeft),
+            count: moreOccurrences,
             left: occurrencesLeft,
           })}
-          onAction={() => onMoreOccurrences(rowId)}
+          onAction={() => onMoreOccurrences(rowId, moreOccurrences)}
         />
       ) : null}
     </>
@@ -580,13 +598,17 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       setOccurrenceLimits({});
     }, []);
 
+    // One row open at a time: opening a row closes the rest, and their shown
+    // occurrence counts go with them, so the drawn rows stay inside the budget.
     const toggleRow = useCallback((rowId: string, open: boolean) => {
-      setExpanded((current) => {
-        const next = new Set(current);
-        if (open) next.add(rowId);
-        else next.delete(rowId);
-        return next;
-      });
+      setExpanded(open ? new Set([rowId]) : new Set());
+      if (open) {
+        setOccurrenceLimits((current) => {
+          const kept = current[rowId];
+          if (kept === undefined) return Object.keys(current).length === 0 ? current : {};
+          return { [rowId]: kept };
+        });
+      }
     }, []);
 
     const ignoreRow = useCallback(
@@ -645,14 +667,14 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       [client]
     );
 
-    const showMoreRows = useCallback((kind: EchoKind) => {
-      setShown((current) => ({ ...current, [kind]: current[kind] + ROW_PAGE }));
+    const showMoreRows = useCallback((kind: EchoKind, count: number) => {
+      setShown((current) => ({ ...current, [kind]: current[kind] + count }));
     }, []);
 
-    const showMoreOccurrences = useCallback((rowId: string) => {
+    const showMoreOccurrences = useCallback((rowId: string, count: number) => {
       setOccurrenceLimits((current) => ({
         ...current,
-        [rowId]: (current[rowId] ?? OCCURRENCE_PAGE) + OCCURRENCE_PAGE,
+        [rowId]: (current[rowId] ?? OCCURRENCE_PAGE) + count,
       }));
     }, []);
 
@@ -708,11 +730,27 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     const activeKind = shownTab;
     const kindEnabled = settings[KIND_UI[activeKind].enabled];
     const rowsLeft = Math.max(0, rows.length - shown[activeKind]);
+    // The rows the top Show more press may add: a page, within the budget left
+    // after the open row's occurrence page and its Show more row (one each).
+    const topMore = offeredMore(
+      ROW_PAGE,
+      rowsLeft,
+      DRAW_BUDGET - OCCURRENCE_PAGE - 1 - shown[activeKind]
+    );
 
     const activeChildren: ReactNode[] = rows.slice(0, shown[activeKind]).map((row) => {
       const rowId = `${activeKind}:${row.key}`;
       const isExpanded = expanded.has(rowId);
       const occurrenceLimit = occurrenceLimits[rowId] ?? OCCURRENCE_PAGE;
+      // The open row's Show more row: a page, within the budget left after the
+      // rows shown and the row's own shown occurrences and its Show more row.
+      const moreOccurrences = isExpanded
+        ? offeredMore(
+            OCCURRENCE_PAGE,
+            row.occurrences.length - occurrenceLimit,
+            DRAW_BUDGET - shown[activeKind] - 1 - occurrenceLimit
+          )
+        : 0;
       return (
         <EchoRowGroup
           key={rowId}
@@ -720,6 +758,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           rowId={rowId}
           isExpanded={isExpanded}
           occurrenceLimit={occurrenceLimit}
+          moreOccurrences={moreOccurrences}
           language={language}
           summary={rowSummary(row)}
           chapters={chaptersRef.current}
@@ -801,10 +840,10 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
                 >
                   {activeChildren}
                 </ui.Collection>
-                {rowsLeft > 0 ? (
-                  <ui.Button variant="secondary" onPress={() => showMoreRows(activeKind)}>
+                {topMore > 0 ? (
+                  <ui.Button variant="secondary" onPress={() => showMoreRows(activeKind, topMore)}>
                     {format(translate(language, "report.showMore"), {
-                      count: Math.min(ROW_PAGE, rowsLeft),
+                      count: topMore,
                       left: rowsLeft,
                     })}
                   </ui.Button>
