@@ -64,6 +64,7 @@ import {
 import { pluginsRunOn } from "@/features/plugins/host-platform";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { planPluginModules } from "@/features/plugins/modules";
+import { applyPluginLocale } from "@/features/plugins/manifest-constants";
 import { reviewPluginCopy } from "@/features/plugins/review";
 import { getPluginSecretStore } from "@/features/plugins/secret-store";
 import { clearPluginStorage, getPluginDataSize } from "@/features/plugins/storage";
@@ -71,7 +72,9 @@ import type {
   BuiltInPlugin,
   PluginActivationResult,
   PluginApproval,
+  PluginFolder,
   PluginLifecycleStopReason,
+  PluginLocale,
   PluginManagement,
   PluginManagementEntry,
   PluginManagementOptions,
@@ -80,6 +83,7 @@ import type {
   PluginPermissionId,
 } from "@/features/plugins/types";
 import { useSettingsStore } from "@/features/settings/store";
+import type { Language } from "@/features/settings/types";
 import { getPluginDirectory } from "@/lib/platform";
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
 
@@ -153,11 +157,46 @@ function loadRuntime(): Promise<typeof import("@/features/plugins/runtime")> {
   return runtimeModule;
 }
 
+/**
+ * The Plugin-locale reader, loaded on demand. It lives in the contributions
+ * write side with the manifest validator, which must stay out of the entry
+ * chunk the Settings screen sits in (#437), so the locale map is read through a
+ * dynamic import rather than a static one.
+ */
+let contributionsModule: Promise<typeof import("@/features/plugins/contributions")> | null = null;
+function loadContributions(): Promise<typeof import("@/features/plugins/contributions")> {
+  contributionsModule ??= import("@/features/plugins/contributions");
+  return contributionsModule;
+}
+
+/** Reads the `locales/<lang>.json` overrides of one Plugin folder (#442). */
+async function readFolderLocales(
+  folder: PluginFolder,
+  manifest: PluginManifest
+): Promise<Partial<Record<Language, PluginLocale>>> {
+  const { readPluginLocales } = await loadContributions();
+  return readPluginLocales(folder, manifest);
+}
+
+/**
+ * The Plugin's manifest with the UI-string overrides of `language` applied
+ * (#442): the Settings card shows the manifest name localized to the current UI
+ * language, falling back to the manifest's own literal when it has no locale.
+ */
+export function localizedPluginManifest(
+  entry: Pick<PluginManagementEntry, "manifest" | "locales">,
+  language: Language
+): PluginManifest {
+  return applyPluginLocale(entry.manifest, entry.locales[language] ?? {});
+}
+
 /** The current folder, manifest, digests, and hash for a Plugin id. */
 export interface CurrentCopy {
   manifest: PluginManagementEntry["manifest"];
   digests: Map<string, string>;
   hash: string;
+  /** The copy's UI-string overrides per language, read from its folder. */
+  locales?: Partial<Record<Language, PluginLocale>>;
 }
 
 /**
@@ -215,7 +254,8 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
     try {
       const digests = await pluginFileDigests(folder.files);
       const hash = await hashPluginDirectory(folder.files);
-      return { manifest: read.manifest, digests, hash };
+      const locales = await readFolderLocales(folder, read.manifest);
+      return { manifest: read.manifest, digests, hash, locales };
     } catch {
       // A folder the hash scheme refuses cannot be reviewed or approved.
       return null;
@@ -291,6 +331,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       unsupported: !isSupported(copy.manifest, platform),
       duplicateFolders: input.duplicateFolders,
       stopped: installed ? stoppedOf(pluginId) : null,
+      locales: copy.locales ?? {},
     };
   }
 
@@ -526,6 +567,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       const plan = await planPluginModules(second.files, read.manifest.entry);
       if (!plan.ok) return;
       const digests = await pluginFileDigests(second.files);
+      const locales = await readFolderLocales(second, read.manifest);
       // A new required Plugin Permission the author never granted blocks the
       // reload: review-required, and the previous build keeps running.
       const missing = read.manifest.permissions.required.filter(
@@ -534,7 +576,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       if (missing.length > 0) {
         const entry = await installedEntry(
           pluginId,
-          { manifest: read.manifest, digests, hash: secondHash },
+          { manifest: read.manifest, digests, hash: secondHash, locales },
           approval,
           builtIn
         );
@@ -565,7 +607,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       }
       const refreshed = await installedEntry(
         pluginId,
-        { manifest: read.manifest, digests, hash: secondHash },
+        { manifest: read.manifest, digests, hash: secondHash, locales },
         getPluginApproval(pluginId) ?? next,
         builtIn
       );
@@ -638,7 +680,15 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
             continue;
           }
           const copies = copiesById.get(read.manifest.id) ?? [];
-          copies.push({ name, copy: { manifest: read.manifest, digests, hash } });
+          copies.push({
+            name,
+            copy: {
+              manifest: read.manifest,
+              digests,
+              hash,
+              locales: await readFolderLocales(folder, read.manifest),
+            },
+          });
           copiesById.set(read.manifest.id, copies);
         }
 
@@ -710,7 +760,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           const builtIn = builtIns.get(known.pluginId);
           plugins[known.pluginId] = buildEntry({
             pluginId: known.pluginId,
-            copy: { manifest: known.manifest, digests: new Map(), hash: "" },
+            copy: { manifest: known.manifest, digests: new Map(), hash: "", locales: {} },
             approval: getPluginApproval(known.pluginId),
             builtIn,
             platform,
@@ -727,7 +777,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           if (plugins[id]) continue;
           plugins[id] = buildEntry({
             pluginId: id,
-            copy: { manifest: builtIn.manifest, digests: new Map(), hash: "" },
+            copy: { manifest: builtIn.manifest, digests: new Map(), hash: "", locales: {} },
             approval: getPluginApproval(id),
             builtIn,
             platform,

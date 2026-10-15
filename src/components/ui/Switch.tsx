@@ -8,6 +8,8 @@ interface SwitchProps {
   className?: string;
   id?: string;
   disabled?: boolean;
+  /** The Command this control stands for, for the Command coverage and help. */
+  "data-command"?: string;
 }
 
 export function Switch({
@@ -17,6 +19,7 @@ export function Switch({
   className = "",
   id,
   disabled = false,
+  "data-command": dataCommand,
 }: SwitchProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -32,6 +35,7 @@ export function Switch({
       onChange={onChange}
       isDisabled={disabled}
       aria-checked={checked}
+      data-command={dataCommand}
       className={({ isSelected, isFocusVisible, isDisabled }) =>
         `group relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent bg-muted transition-colors duration-200 ease-in-out focus:outline-none ${
           isSelected ? "bg-primary" : ""

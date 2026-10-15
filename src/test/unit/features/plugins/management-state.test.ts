@@ -168,6 +168,7 @@ function entry(overrides: Partial<PluginManagementEntry> & { name?: string } = {
     unsupported: false,
     duplicateFolders: [],
     stopped: null,
+    locales: {},
     ...rest,
   };
 }

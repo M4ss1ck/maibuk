@@ -122,6 +122,7 @@ function entry(overrides: Partial<PluginManagementEntry> = {}): PluginManagement
     unsupported: false,
     duplicateFolders: [],
     stopped: null,
+    locales: {},
     ...overrides,
   };
 }
@@ -155,7 +156,9 @@ async function tabTo(user: User, target: HTMLElement, max = 14): Promise<void> {
 }
 
 async function openRow(user: User, name = "Echoes"): Promise<void> {
-  const trigger = screen.getByRole("button", { name });
+  // The disclosure trigger's accessible name carries the badges too, so a
+  // substring match finds the row by its name alone.
+  const trigger = screen.getByRole("button", { name: new RegExp(name) });
   await tabTo(user, trigger);
   await user.keyboard("{Enter}");
 }
@@ -198,7 +201,7 @@ describe("PluginsSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the name, Built-in badge, Review required badge, and startup error", () => {
+  it("shows the name, Built-in badge, Review required badge, Failed to start, and no status badge", () => {
     seed(
       entry({
         builtIn: true,
@@ -207,11 +210,15 @@ describe("PluginsSection", () => {
       })
     );
     render(<PluginsSection />);
-    expect(screen.getByRole("button", { name: "Echoes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Echoes/ })).toBeInTheDocument();
     expect(screen.getByText("Built-in")).toBeInTheDocument();
     expect(screen.getByText("Review required")).toBeInTheDocument();
-    expect(screen.getByText("Off")).toBeInTheDocument();
+    // The startup error becomes an issue badge; the full text lives in the panel.
+    expect(screen.getByText("Failed to start")).toBeInTheDocument();
     expect(screen.getByText("Echoes failed to start.")).toBeInTheDocument();
+    // The old Enabled / Off status badge is gone.
+    expect(screen.queryByText("Off")).toBeNull();
+    expect(screen.queryByText("Enabled")).toBeNull();
   });
 
   it("approves a copy by keyboard and enables the Plugin", async () => {
@@ -253,10 +260,11 @@ describe("PluginsSection", () => {
     usePluginManagementStore.setState({ approve });
     render(<PluginsSection />);
 
-    await openRow(user);
-    const reviewButton = screen.getByRole("button", { name: "Review and enable" });
-    await tabTo(user, reviewButton);
-    await user.keyboard("{Enter}");
+    // Turning the header switch on for a copy that needs review opens the
+    // approval flow; the switch itself stays off until the store says enabled.
+    const toggle = screen.getByRole("switch", { name: "Enable Echoes" });
+    await tabTo(user, toggle);
+    await user.keyboard(" ");
 
     const approveButton = await screen.findByRole("button", {
       name: "Approve this copy and enable",
@@ -272,9 +280,8 @@ describe("PluginsSection", () => {
 
     expect(approve).toHaveBeenCalledWith("echoes", ["network:api.example.com"]);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Disable" })).toBeInTheDocument()
+      expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeChecked()
     );
-    expect(screen.getByText("Enabled")).toBeInTheDocument();
   });
 
   it("revoking an optional permission keeps the Plugin enabled", async () => {
@@ -320,7 +327,7 @@ describe("PluginsSection", () => {
     expect(revoke).toHaveBeenCalledWith("echoes", "network:api.example.com");
     expect(disable).not.toHaveBeenCalled();
     await waitFor(() => expect(optional).not.toBeChecked());
-    expect(screen.getByText("Enabled")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeChecked();
   });
 
   it("locks the inline permission toggles on a copy that needs review", async () => {
@@ -394,8 +401,7 @@ describe("PluginsSection", () => {
         )
       ).toBeInTheDocument()
     );
-    expect(screen.getByText("Off")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Review and enable" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).not.toBeChecked();
   });
 
   it("keeps a Plugin's declared Settings rows in its expanded row", async () => {
@@ -552,10 +558,10 @@ describe("PluginsSection", () => {
     usePluginManagementStore.setState({ markReviewed });
     render(<PluginsSection />);
 
-    await openRow(user);
-    const reviewButton = screen.getByRole("button", { name: "Review and enable" });
-    await tabTo(user, reviewButton);
-    await user.keyboard("{Enter}");
+    // The header switch opens the changed-files review for a review-required copy.
+    const toggle = screen.getByRole("switch", { name: "Enable Echoes" });
+    await tabTo(user, toggle);
+    await user.keyboard(" ");
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("fresh.js")).toBeInTheDocument();
@@ -588,6 +594,127 @@ describe("PluginsSection", () => {
 
     expect(useSettingsStore.getState().pluginDevelopmentMode).toBe(true);
     expect(refresh).toHaveBeenCalled();
+  });
+});
+
+describe("Plugin card header (#442)", () => {
+  it("expands and collapses the card from the keyboard", async () => {
+    const user = userEvent.setup();
+    seed(entry());
+    render(<PluginsSection />);
+
+    const trigger = screen.getByRole("button", { name: /^Echoes/ });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("Library data")).not.toBeVisible();
+
+    await tabTo(user, trigger);
+    await user.keyboard("{Enter}");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Library data")).toBeVisible();
+
+    await user.keyboard(" ");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("Library data")).not.toBeVisible();
+  });
+
+  it("tabs from the trigger to the switch and turns an approved copy on", async () => {
+    const user = userEvent.setup();
+    seed(entry({ approval: approval({ enabled: false }), review: review({ status: "approved" }) }));
+    const enable = vi.fn(async (pluginId: string) => {
+      usePluginManagementStore.setState((state) => ({
+        plugins: {
+          ...state.plugins,
+          [pluginId]: {
+            ...state.plugins[pluginId],
+            approval: approval({ enabled: true }),
+          },
+        },
+      }));
+    });
+    usePluginManagementStore.setState({ enable });
+    render(<PluginsSection />);
+
+    await tabTo(user, screen.getByRole("button", { name: /^Echoes/ }));
+    const toggle = screen.getByRole("switch", { name: "Enable Echoes" });
+    await user.tab();
+    expect(document.activeElement).toBe(toggle);
+    expect(toggle).not.toBeChecked();
+
+    await user.keyboard(" ");
+    expect(enable).toHaveBeenCalledWith("echoes");
+    await waitFor(() => expect(toggle).toBeChecked());
+  });
+
+  it("turns an enabled Plugin off with the switch", async () => {
+    const user = userEvent.setup();
+    seed(entry({ approval: approval({ enabled: true }), review: review({ status: "approved" }) }));
+    const disable = vi.fn();
+    usePluginManagementStore.setState({ disable });
+    render(<PluginsSection />);
+
+    const toggle = screen.getByRole("switch", { name: "Enable Echoes" });
+    expect(toggle).toBeChecked();
+    await tabTo(user, toggle);
+    await user.keyboard(" ");
+
+    expect(disable).toHaveBeenCalledWith("echoes");
+  });
+
+  it("opens the review dialog from the switch of a copy that needs review and stays off", async () => {
+    const user = userEvent.setup();
+    seed(entry({ review: review({ status: "review-required" }) }));
+    render(<PluginsSection />);
+
+    const toggle = screen.getByRole("switch", { name: "Enable Echoes" });
+    await tabTo(user, toggle);
+    await user.keyboard(" ");
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    // The switch follows the store, so it stays off until the copy is approved.
+    expect(toggle).not.toBeChecked();
+  });
+
+  it("disables the switch for an unsupported entry and hides it for a removed one", () => {
+    seed(
+      entry({
+        unsupported: true,
+        manifest: manifest({ platforms: ["desktop"] }),
+        approval: approval({ enabled: false }),
+        review: review({ status: "approved" }),
+      }),
+      entry({
+        pluginId: "gone",
+        manifest: manifest({ id: "gone", name: "Gone" }),
+        installed: false,
+        removed: true,
+      })
+    );
+    render(<PluginsSection />);
+
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeDisabled();
+    expect(screen.queryByRole("switch", { name: "Enable Gone" })).toBeNull();
+  });
+
+  it("shows the Failed to start badge when a startup error is recorded", () => {
+    seed(entry({ approval: approval({ enabled: false, startupError: "incompatible" }) }));
+    render(<PluginsSection />);
+
+    expect(screen.getByText("Failed to start")).toBeInTheDocument();
+    // The old status badge is gone and the switch replaces its role.
+    expect(screen.queryByText("Enabled")).toBeNull();
+    expect(screen.queryByText("Off")).toBeNull();
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeInTheDocument();
+  });
+
+  it("localizes the card name to the UI language", async () => {
+    seed(entry({ locales: { es: { name: "Ecos" } } }));
+    await i18n.changeLanguage("es");
+    try {
+      render(<PluginsSection />);
+      expect(screen.getByRole("button", { name: /^Ecos/ })).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 });
 
@@ -688,8 +815,8 @@ describe("Plugin management (#443)", () => {
     seed(installedOnly, available);
     render(<PluginsSection />);
 
-    expect(screen.getByRole("button", { name: "Alpha" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Beta" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Alpha/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Beta/ })).toBeInTheDocument();
 
     const trigger = screen.getByRole("button", { name: "Filter by status" });
     await tabTo(user, trigger, 20);
@@ -699,9 +826,9 @@ describe("Plugin management (#443)", () => {
     await user.keyboard(" ");
     await user.keyboard("{Escape}");
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Alpha" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^Alpha/ })).toBeNull());
     // Beta stays: ANY semantics, and it still matches Built-in / Available.
-    expect(screen.getByRole("button", { name: "Beta" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Beta/ })).toBeInTheDocument();
   });
 
   it("shows the empty-result copy when no category matches", async () => {
@@ -764,7 +891,7 @@ describe("Plugin management (#443)", () => {
     expect(
       screen.getByText("Unavailable on this device. This Plugin supports desktop only.")
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enable" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeDisabled();
     expect(enable).not.toHaveBeenCalled();
   });
 
@@ -785,7 +912,7 @@ describe("Plugin management (#443)", () => {
         "Two folders declare this Plugin id: echoes, echoes-copy. Remove one of them to enable it."
       )
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enable" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeDisabled();
   });
 
   it("keeps desktop-only directory buttons off web", () => {
@@ -1027,7 +1154,7 @@ describe("Plugin management (#443)", () => {
     await user.keyboard("{Enter}");
 
     expect(deleteData).toHaveBeenCalledWith("echoes");
-    expect(screen.getByRole("button", { name: "Echoes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Echoes/ })).toBeInTheDocument();
   });
 
   it("reinstalls a removed Built-in after confirming in the dialog", async () => {
@@ -1087,9 +1214,10 @@ describe("Plugin management (#443)", () => {
     render(<PluginsSection />);
 
     expect(screen.getByText("Removed")).toBeInTheDocument();
-    // A row whose files are gone has no enable state to report.
+    // A row whose files are gone has no enable state to report and no switch.
     expect(screen.queryByText("Off")).toBeNull();
     expect(screen.queryByText("Enabled")).toBeNull();
+    expect(screen.queryByRole("switch", { name: /Enable / })).toBeNull();
   });
 
   it("shows the expanded-row facts for an installed approved copy", async () => {
@@ -1187,6 +1315,9 @@ describe("Plugin management (#443)", () => {
     ).toBeGreaterThan(0);
     expect(
       useBoundShortcutStore.getState().counts["settings.restartPlugin"]
+    ).toBeGreaterThan(0);
+    expect(
+      useBoundShortcutStore.getState().counts["settings.togglePlugin"]
     ).toBeGreaterThan(0);
   });
 

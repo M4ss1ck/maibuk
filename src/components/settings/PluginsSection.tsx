@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useState, useSyncExternalStore } from "react";
+import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Button as AriaButton, Disclosure, DisclosurePanel } from "react-aria-components";
 import { PluginConfirmDialog } from "@/components/plugins/PluginConfirmDialog";
 import { PluginPermissionDialog } from "@/components/plugins/PluginPermissionDialog";
 import { PluginRemoveDialog } from "@/components/plugins/PluginRemoveDialog";
@@ -139,6 +141,13 @@ export function PluginsSection() {
   // The single target each destructive Command acts on, matching the button it
   // stands for: the first row that shows that button (#443).
   const removable = entries.find((entry) => entry.installed) ?? null;
+  // The first installed, enableable row (the same "first row that shows the
+  // control" rule as removable): the toggle Command acts on it, exactly as its
+  // header switch would.
+  const toggleable =
+    entries.find(
+      (entry) => entry.installed && entry.duplicateFolders.length === 0 && !entry.unsupported
+    ) ?? null;
   const reinstallable = entries.find((entry) => !entry.installed && entry.builtIn) ?? null;
   const restartable = entries.find((entry) => entry.stopped !== null) ?? null;
   const deletable =
@@ -258,6 +267,20 @@ export function PluginsSection() {
       onTrigger: () => {
         const first = reviewable[0];
         if (first) openReviewFor(first);
+      },
+    },
+    {
+      id: "settings.togglePlugin",
+      enabled: toggleable !== null,
+      onTrigger: () => {
+        if (!toggleable) return;
+        if (toggleable.approval?.enabled === true) {
+          usePluginManagementStore.getState().disable(toggleable.pluginId);
+        } else if (toggleable.review.status !== "approved" || hasMissingRequired(toggleable)) {
+          openReviewFor(toggleable);
+        } else {
+          void usePluginManagementStore.getState().enable(toggleable.pluginId);
+        }
       },
     },
     {
@@ -409,7 +432,7 @@ export function PluginsSection() {
           </div>
         </div>
       ) : (
-        <div className="divide-y divide-border">
+        <div className="flex flex-col gap-3">
           {entries.length > 0 && visible.length === 0 && (
             <p className="py-3 text-sm text-muted-foreground">{t("plugins.management.empty")}</p>
           )}
@@ -434,30 +457,37 @@ export function PluginsSection() {
             if (rows.length === 0) return null;
             const open = pluginOpen[owner.pluginId] ?? false;
             return (
-              <div key={owner.pluginId} className="py-2">
-                <button
-                  type="button"
-                  aria-expanded={open}
-                  aria-controls={`plugin-accordion-${owner.pluginId}`}
-                  onClick={() => setPluginOpen(owner.pluginId, !open)}
-                  className="flex w-full items-center justify-between rounded py-2 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  <span>{owner.displayName}</span>
-                  <span aria-hidden="true" className="text-muted-foreground">
-                    {open ? "−" : "+"}
-                  </span>
-                </button>
+              <Disclosure
+                key={owner.pluginId}
+                isExpanded={open}
+                onExpandedChange={(next) => setPluginOpen(owner.pluginId, next)}
+                className="rounded-lg border border-border bg-card"
+              >
+                <div className="flex w-full items-center gap-4 rounded-lg px-3 py-2 hover:bg-muted/40">
+                  <AriaButton
+                    slot="trigger"
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded py-1 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <span className="truncate">{owner.displayName}</span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${
+                        open ? "rotate-180" : ""
+                      }`}
+                    />
+                  </AriaButton>
+                </div>
                 {open && (
-                  <div id={`plugin-accordion-${owner.pluginId}`}>
+                  <DisclosurePanel className="px-3 pb-3">
                     <PluginSurface pluginId={owner.pluginId} surface="settings" />
                     {rows.map((row) => (
                       <SettingRow key={row.id} id={row.id} className={SETTINGS_ROW_CLASS}>
                         <PluginSettingsRowBody pluginId={owner.pluginId} rowId={row.localId} />
                       </SettingRow>
                     ))}
-                  </div>
+                  </DisclosurePanel>
                 )}
-              </div>
+              </Disclosure>
             );
           })}
         </div>

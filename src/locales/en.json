@@ -2198,6 +2198,8 @@
       "addError": "Could not add the Plugin.",
       "addFolder": "Add from folder",
       "all": "All statuses",
+      "enableSwitch": "Enable {{name}}",
+      "failedToStart": "Failed to start",
       "modified": "Modified",
       "stopped": "Stopped",
       "custom": "Custom UI: accessibility not verified by Maibuk",
@@ -2252,7 +2254,8 @@
         "removePlugin": "Remove Plugin",
         "reinstallBuiltIn": "Reinstall Plugin",
         "deletePluginData": "Delete Plugin data",
-        "restartPlugin": "Restart Plugin"
+        "restartPlugin": "Restart Plugin",
+        "togglePlugin": "Turn Plugin on or off"
       },
       "units": {
         "b": "{{value}} B",

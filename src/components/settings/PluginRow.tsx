@@ -1,10 +1,10 @@
 /**
- * One Plugin row in Settings (#442, #443): the name, its origin and state
- * badges, a startup error when one is recorded, and — expanded — the Plugin's
- * stored data size and expanded-row facts, its custom-UI disclosure, its
- * granted Plugin Permissions with their revoke controls, the enable/disable
- * action, the removal and reinstatement actions, and the Settings rows the
- * Plugin declares.
+ * One Plugin row in Settings (#442, #443): a bordered card whose header holds
+ * the name, its origin and state badges, the disclosure chevron, and — outside
+ * the disclosure trigger — the enable switch; expanding it shows the startup
+ * error, the Plugin's stored data size and expanded-row facts, its custom-UI
+ * disclosure, its granted Plugin Permissions with their revoke controls, the
+ * removal and reinstatement actions, and the Settings rows the Plugin declares.
  *
  * The row reads the management store's entry, so the enable state, review
  * state, and grants all come from one place. A required grant is revocable
@@ -20,6 +20,7 @@
  */
 
 import { useEffect } from "react";
+import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button as AriaButton, Disclosure, DisclosurePanel } from "react-aria-components";
 import { PluginPermissionList } from "@/components/plugins/PluginPermissionList";
@@ -35,8 +36,10 @@ import { asPluginTranslate } from "@/components/settings/plugin-translate";
 import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
 import { hasMissingRequired } from "@/features/plugins/approvals";
+import { currentUILanguage } from "@/features/plugins/contributions-registry";
 import {
   PLUGIN_DATA_SIZE_WARNING_BYTES,
+  localizedPluginManifest,
   usePluginManagementStore,
 } from "@/features/plugins/management";
 import { pluginStopMessageKey } from "@/features/plugins/stop-messages";
@@ -50,6 +53,10 @@ import { usePluginSecrets } from "@/hooks/usePluginSecrets";
 
 const BADGE_CLASS =
   "inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground";
+// Issue badges (a failure, a needed review, an unsupported or stopped copy) take
+// the destructive tone; the informational ones keep the neutral shell.
+const ISSUE_BADGE_CLASS =
+  "inline-flex items-center rounded-full border border-destructive/40 px-2 py-0.5 text-xs text-destructive";
 
 interface PluginRowProps {
   entry: PluginManagementEntry;
@@ -90,6 +97,8 @@ export function PluginRow({
   // the store can persist them — the "remember on this device" switch.
   const secrets = usePluginSecrets(entry.pluginId, open);
   const manifest = entry.manifest;
+  // The card shows the manifest name localized to the UI language (#442).
+  const name = localizedPluginManifest(entry, currentUILanguage()).name;
   const approval = entry.approval;
   const required = manifest.permissions.required;
   const optional = manifest.permissions.optional;
@@ -162,48 +171,78 @@ export function PluginRow({
   }, [open, entry.pluginId]);
 
   return (
-    <Disclosure isExpanded={open} onExpandedChange={onToggle} className="py-2">
-      <div className="flex w-full items-center justify-between gap-3">
+    <Disclosure
+      isExpanded={open}
+      onExpandedChange={onToggle}
+      className="rounded-lg border border-border bg-card"
+    >
+      <div className="flex w-full items-center gap-4 rounded-lg px-3 py-2 hover:bg-muted/40">
         <AriaButton
           slot="trigger"
-          className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded py-2 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded py-1 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <span className="truncate">{manifest.name}</span>
-          <span aria-hidden="true" className="text-muted-foreground">
-            {open ? "−" : "+"}
+          <span className="truncate">{name}</span>
+          <span className="flex flex-wrap items-center gap-2">
+            {entry.builtIn && <span className={BADGE_CLASS}>{t("plugins.builtInBadge")}</span>}
+            {entry.modified && (
+              <span className={BADGE_CLASS}>{t("plugins.management.modified")}</span>
+            )}
+            {entry.updateAvailable && <span className={BADGE_CLASS}>{t("plugins.available")}</span>}
+            {entry.removed && (
+              <span className={BADGE_CLASS}>{t("plugins.management.filters.removed")}</span>
+            )}
+            {entry.unsupported && (
+              <span className={ISSUE_BADGE_CLASS}>
+                {t("plugins.management.filters.unsupported")}
+              </span>
+            )}
+            {stopped && (
+              <span className={ISSUE_BADGE_CLASS}>{t("plugins.management.stopped")}</span>
+            )}
+            {approval?.startupError !== undefined && (
+              <span className={ISSUE_BADGE_CLASS}>{t("plugins.management.failedToStart")}</span>
+            )}
+            {entry.review.status === "review-required" && (
+              <span className={ISSUE_BADGE_CLASS}>{t("plugins.reviewRequired")}</span>
+            )}
           </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${
+              open ? "rotate-180" : ""
+            }`}
+          />
         </AriaButton>
-        <div className="flex shrink-0 items-center gap-2">
-          {entry.builtIn && <span className={BADGE_CLASS}>{t("plugins.builtInBadge")}</span>}
-          {entry.modified && (
-            <span className={BADGE_CLASS}>{t("plugins.management.modified")}</span>
-          )}
-          {entry.updateAvailable && <span className={BADGE_CLASS}>{t("plugins.available")}</span>}
-          {entry.removed && (
-            <span className={BADGE_CLASS}>{t("plugins.management.filters.removed")}</span>
-          )}
-          {entry.unsupported && (
-            <span className={BADGE_CLASS}>{t("plugins.management.filters.unsupported")}</span>
-          )}
-          {stopped && <span className={BADGE_CLASS}>{t("plugins.management.stopped")}</span>}
-          {entry.review.status === "review-required" && (
-            <span className={BADGE_CLASS}>{t("plugins.reviewRequired")}</span>
-          )}
-          {entry.installed && (
-            <span className={BADGE_CLASS}>
-              {enabled ? t("plugins.status.enabled") : t("plugins.status.off")}
-            </span>
-          )}
-        </div>
+        {entry.installed && (
+          <>
+            <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
+            <Switch
+              checked={enabled}
+              disabled={!enableable}
+              onChange={(next) => {
+                if (next) {
+                  // A copy that still needs review opens the review dialog; the
+                  // switch stays off because it reflects the store's state.
+                  if (needsApproval) onReview();
+                  else void store.enable(entry.pluginId);
+                } else {
+                  store.disable(entry.pluginId);
+                }
+              }}
+              label={t("plugins.management.enableSwitch", { name })}
+              data-command="settings.togglePlugin"
+              className="pointer-coarse:min-h-12 pointer-coarse:min-w-12"
+            />
+          </>
+        )}
       </div>
 
-      {approval?.startupError !== undefined && (
-        <p className="mt-1 text-sm text-destructive">
-          {pluginStartupErrorText(approval.startupError, t as unknown as StartupErrorTranslate)}
-        </p>
-      )}
-
-      <DisclosurePanel>
+      <DisclosurePanel className="px-3 pb-3">
+        {approval?.startupError !== undefined && (
+          <p className="mt-1 text-sm text-destructive">
+            {pluginStartupErrorText(approval.startupError, t as unknown as StartupErrorTranslate)}
+          </p>
+        )}
         {entry.unsupported && (
           <p className="mt-2 text-sm text-muted-foreground">
             {t("plugins.management.unsupportedText")}
@@ -251,54 +290,30 @@ export function PluginRow({
           </div>
         )}
 
-        <div className="mt-2 flex flex-wrap gap-2">
-          {!entry.installed ? null : enabled ? (
-            <Button
-              variant="secondary"
-              className="pointer-coarse:min-h-12"
-              onClick={() => store.disable(entry.pluginId)}
-            >
-              {t("plugins.disable")}
-            </Button>
-          ) : needsApproval ? (
-            <Button
-              className="pointer-coarse:min-h-12"
-              onClick={onReview}
-              disabled={!enableable}
-              data-command="settings.reviewPlugin"
-            >
-              {t("plugins.reviewEnable")}
-            </Button>
-          ) : (
-            <Button
-              className="pointer-coarse:min-h-12"
-              onClick={() => void store.enable(entry.pluginId)}
-              disabled={!enableable}
-            >
-              {t("plugins.enable")}
-            </Button>
-          )}
-          {stopped && (
-            <Button
-              variant="secondary"
-              className="pointer-coarse:min-h-12"
-              data-command="settings.restartPlugin"
-              onClick={() => void store.restart(entry.pluginId)}
-            >
-              {t("plugins.management.restart")}
-            </Button>
-          )}
-          {entry.installed && (
-            <Button
-              variant="destructive"
-              className="pointer-coarse:min-h-12"
-              data-command="settings.removePlugin"
-              onClick={onRemove}
-            >
-              {t("plugins.management.remove")}
-            </Button>
-          )}
-        </div>
+        {(stopped || entry.installed) && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {stopped && (
+              <Button
+                variant="secondary"
+                className="pointer-coarse:min-h-12"
+                data-command="settings.restartPlugin"
+                onClick={() => void store.restart(entry.pluginId)}
+              >
+                {t("plugins.management.restart")}
+              </Button>
+            )}
+            {entry.installed && (
+              <Button
+                variant="destructive"
+                className="pointer-coarse:min-h-12"
+                data-command="settings.removePlugin"
+                onClick={onRemove}
+              >
+                {t("plugins.management.remove")}
+              </Button>
+            )}
+          </div>
+        )}
 
         {!entry.installed && (canReinstall || canDeleteData) && (
           <div className="mt-2 flex flex-wrap gap-2">
