@@ -1,0 +1,214 @@
+/**
+ * The import boundary every third-party Plugin must respect (issues #450, #455).
+ * One non-test `.ts`/`.tsx`/`.mts`/`.cts`/`.js`/`.mjs`/`.cjs`/`.jsx` under the
+ * Plugin root may import only a relative file that stays inside the folder,
+ * `@maibuk/plugin-sdk` and its subpaths, or a bare npm package; anything else is
+ * a violation reported with its file, line, specifier, and reason.
+ * `@maibuk/plugin-test-kit` is allowed in test files (`*.test.*`,
+ * `test-support.*`), and Node builtins are allowed only there, never in shipped
+ * source. The bare `maibuk` package, and (when `maibukRoot` is given) a relative
+ * specifier that resolves inside the checkout, are refused as reaching into
+ * Maibuk. `node_modules`, `dist`, `.git`, `.maibuk`, and the root-level
+ * `scripts/` are never walked, so a repo with a large `node_modules` scans fast.
+ *
+ * The specifier extraction matches `plugins/maibuk-echoes/import-boundary.test.ts`
+ * (static `from`, side-effect `import`, dynamic `import()`, `export ... from`,
+ * and `require()`), extended to track each specifier's line.
+ */
+import { readdirSync, readFileSync } from "node:fs";
+import { builtinModules } from "node:module";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+
+const SOURCE_PATTERN = /\.(ts|tsx|mts|cts|js|mjs|cjs|jsx)$/;
+const TEST_FILE_PATTERN = /(\.test\.[cm]?[jt]sx?$)|((^|\/)test-support\.[cm]?[jt]sx?$)/;
+const SDK_PACKAGE = "@maibuk/plugin-sdk";
+const TEST_KIT_PACKAGE = "@maibuk/plugin-test-kit";
+const MAIBUK_CHECKOUT_REASON = "reaches into the Maibuk checkout";
+/** Directories the walk never descends into; `scripts/` is pruned at the root only. */
+const PRUNED_DIRECTORIES = new Set(["node_modules", "dist", ".git", ".maibuk"]);
+const BUILTINS: ReadonlySet<string> = new Set(builtinModules);
+
+/** The specifier patterns to scan for; the `from` one covers `export ... from`. */
+const SPECIFIER_PATTERNS = [
+  /\bfrom\s*["']([^"']+)["']/g,
+  /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
+  /\bimport\s*["']([^"']+)["']/g,
+  /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g,
+];
+
+/** One refused import in a Plugin source file. */
+export interface ImportViolation {
+  /** The file, relative to the Plugin root, with forward slashes. */
+  file: string;
+  /** The 1-based line the specifier sits on. */
+  line: number;
+  /** The specifier as written. */
+  specifier: string;
+  /** Why it is refused, in plain language. */
+  reason: string;
+}
+
+/** What {@link checkImportBoundary} found. */
+export interface ImportBoundaryResult {
+  /** Every refused import, ordered by file then line. */
+  violations: ImportViolation[];
+  /** The Plugin-relative paths that were scanned, sorted. */
+  scanned: string[];
+}
+
+/** What the caller may inject; reserved for a Maibuk root a later check needs. */
+export interface ImportBoundaryOptions {
+  /** The Maibuk checkout path, when known. */
+  maibukRoot?: string;
+}
+
+interface Specifier {
+  value: string;
+  index: number;
+}
+
+/** Every module specifier a source file imports or re-exports, with its offset. */
+function importSpecifiers(text: string): Specifier[] {
+  const found: Specifier[] = [];
+  for (const pattern of SPECIFIER_PATTERNS) {
+    pattern.lastIndex = 0;
+    let match = pattern.exec(text);
+    while (match !== null) {
+      found.push({ value: match[1], index: match.index });
+      match = pattern.exec(text);
+    }
+  }
+  return found.sort((left, right) => left.index - right.index);
+}
+
+/** The 1-based line an offset sits on. */
+function lineOf(text: string, index: number): number {
+  let line = 1;
+  for (let cursor = 0; cursor < index; cursor += 1) {
+    if (text.charCodeAt(cursor) === 10) line += 1;
+  }
+  return line;
+}
+
+/** Whether a specifier names a Node builtin (`node:fs` or a bare `fs`). */
+function isBuiltin(specifier: string): boolean {
+  if (specifier.startsWith("node:")) return true;
+  if (BUILTINS.has(specifier)) return true;
+  const base = specifier.startsWith("@")
+    ? specifier.split("/").slice(0, 2).join("/")
+    : specifier.split("/")[0];
+  return BUILTINS.has(base);
+}
+
+/** Whether a relative specifier stays inside the Plugin root. */
+function staysInside(fromFile: string, specifier: string, pluginRoot: string): boolean {
+  const target = resolve(dirname(fromFile), specifier);
+  const inside = relative(pluginRoot, target);
+  return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside));
+}
+
+/** Whether an absolute path sits inside `root`. */
+function isInside(root: string, target: string): boolean {
+  const inside = relative(root, target);
+  return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside));
+}
+
+/** Why a specifier is refused, or null when it is allowed. */
+function refusalReason(
+  specifier: string,
+  isTestFile: boolean,
+  fromFile: string,
+  pluginRoot: string,
+  maibukRoot: string | undefined
+): string | null {
+  if (specifier === SDK_PACKAGE || specifier.startsWith(`${SDK_PACKAGE}/`)) return null;
+  if (specifier === TEST_KIT_PACKAGE) {
+    return isTestFile ? null : `${TEST_KIT_PACKAGE} is only allowed in test files`;
+  }
+  if (specifier.startsWith("@maibuk/")) {
+    return `${specifier} is not an allowed package; only ${SDK_PACKAGE} and ${TEST_KIT_PACKAGE} resolve`;
+  }
+  if (specifier.startsWith("@/")) {
+    return `${specifier} is private; import only ${SDK_PACKAGE} or a relative file inside the Plugin`;
+  }
+  if (isAbsolute(specifier) || /^[a-zA-Z]:[\\/]/.test(specifier)) {
+    return `${specifier} is an absolute path; import only ${SDK_PACKAGE} or a relative file inside the Plugin`;
+  }
+  if (specifier === "maibuk" || specifier.startsWith("maibuk/")) {
+    return `${specifier} ${MAIBUK_CHECKOUT_REASON}`;
+  }
+  if (specifier.startsWith(".")) {
+    const target = resolve(dirname(fromFile), specifier);
+    if (maibukRoot !== undefined && isInside(maibukRoot, target)) {
+      return `${specifier} ${MAIBUK_CHECKOUT_REASON}`;
+    }
+    return staysInside(fromFile, specifier, pluginRoot)
+      ? null
+      : `${specifier} leaves the Plugin folder`;
+  }
+  if (isBuiltin(specifier)) {
+    return isTestFile
+      ? null
+      : `${specifier} is a Node builtin; Plugin source may not import Node builtins`;
+  }
+  return null;
+}
+
+/** Every source file under `root`, as forward-slash relative paths; pruned dirs are skipped. */
+function listFiles(root: string): string[] {
+  const found: string[] = [];
+  const walk = (dir: string, relDir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const relPath = relDir === "" ? entry.name : `${relDir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (PRUNED_DIRECTORIES.has(entry.name)) continue;
+        if (entry.name === "scripts" && relDir === "") continue;
+        walk(join(dir, entry.name), relPath);
+      } else if (entry.isFile()) {
+        found.push(relPath);
+      }
+    }
+  };
+  walk(root, "");
+  return found;
+}
+
+/**
+ * Checks every import in the Plugin folder at `pluginRoot` against the
+ * boundary, returning the refusals and the files it scanned. `node_modules`,
+ * `dist`, `.git`, `.maibuk`, and the root-level `scripts/` are never walked.
+ */
+export function checkImportBoundary(
+  pluginRoot: string,
+  options: ImportBoundaryOptions = {}
+): ImportBoundaryResult {
+  const { maibukRoot } = options;
+  const files = listFiles(pluginRoot)
+    .filter((relPath) => SOURCE_PATTERN.test(relPath))
+    .sort((left, right) => (left < right ? -1 : 1));
+
+  const violations: ImportViolation[] = [];
+  for (const relPath of files) {
+    const text = readFileSync(join(pluginRoot, relPath), "utf8");
+    const isTestFile = TEST_FILE_PATTERN.test(relPath);
+    for (const specifier of importSpecifiers(text)) {
+      const reason = refusalReason(
+        specifier.value,
+        isTestFile,
+        join(pluginRoot, relPath),
+        pluginRoot,
+        maibukRoot
+      );
+      if (reason !== null) {
+        violations.push({
+          file: relPath,
+          line: lineOf(text, specifier.index),
+          specifier: specifier.value,
+          reason,
+        });
+      }
+    }
+  }
+
+  return { violations, scanned: files };
+}
