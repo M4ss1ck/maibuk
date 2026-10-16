@@ -72,7 +72,9 @@ const ISSUE_BADGE_CLASS =
  * `aria-hidden` tracks the open state, so opacity fades with it and the
  * collapsed panel stays out of the accessibility tree and the tab order.
  * Reduced-motion turns both transitions off. Shared by the Plugin card, its
- * nested Permissions accordion, and the legacy Settings-owner rows.
+ * nested Permissions accordion, and the legacy Settings-owner rows. A closed
+ * panel keeps its box (`hidden="until-found"`), so padding goes on a wrapper
+ * inside it, never on the panel, or a band shows under every closed header.
  */
 export const PLUGIN_DISCLOSURE_PANEL_CLASS =
   "h-(--disclosure-panel-height) overflow-clip opacity-100 transition-[height,opacity] duration-200 ease-out motion-reduce:transition-none aria-hidden:opacity-0";
@@ -131,7 +133,10 @@ export function PluginRow({
   // through the review dialog.
   const reviewApproved = entry.review.status === "approved";
   const rows = getPluginSettingsRows(entry.pluginId).filter((row) => rowOnPlatform(row, platform));
-  const declared = [...required, ...optional.filter((permission) => !required.includes(permission))];
+  const declared = [
+    ...required,
+    ...optional.filter((permission) => !required.includes(permission)),
+  ];
   // The Permissions accordion is its own disclosure, collapsed by default and
   // independent of the card (#442). An installed copy is in issue when a
   // required grant is missing or the copy is not approved; ungranted optional
@@ -170,16 +175,12 @@ export function PluginRow({
     {
       label: t("plugins.management.credentials"),
       // The real saved-credential state, read from the store, not the grant.
-      value: t(
-        secrets.names.length > 0 ? "plugins.management.yes" : "plugins.management.none"
-      ),
+      value: t(secrets.names.length > 0 ? "plugins.management.yes" : "plugins.management.none"),
     },
     {
       label: t("plugins.management.approval"),
       value: t(
-        entry.review.status === "approved"
-          ? "plugins.management.yes"
-          : "plugins.management.none"
+        entry.review.status === "approved" ? "plugins.management.yes" : "plugins.management.none"
       ),
     },
     {
@@ -200,9 +201,9 @@ export function PluginRow({
   // re-run on every unrelated state change (the size write included).
   useEffect(() => {
     if (!open) return;
-    void Promise.resolve(
-      usePluginManagementStore.getState().refreshDataSize(entry.pluginId)
-    ).catch(() => {});
+    void Promise.resolve(usePluginManagementStore.getState().refreshDataSize(entry.pluginId)).catch(
+      () => {}
+    );
   }, [open, entry.pluginId]);
 
   return (
@@ -273,233 +274,243 @@ export function PluginRow({
         )}
       </div>
 
-      <DisclosurePanel className={`${PLUGIN_DISCLOSURE_PANEL_CLASS} px-3 pb-3`}>
-        {/* The manifest description, localized, opens the panel. */}
-        <p className="text-sm">{description}</p>
+      <DisclosurePanel className={PLUGIN_DISCLOSURE_PANEL_CLASS}>
+        <div className="px-3 pb-3">
+          {/* The manifest description, localized, opens the panel. */}
+          <p className="text-sm">{description}</p>
 
-        {approval?.startupError !== undefined && (
-          <p className="mt-3 text-sm text-destructive">
-            {pluginStartupErrorText(approval.startupError, t as unknown as StartupErrorTranslate)}
-          </p>
-        )}
-        {stopped && stoppedKey !== null && (
-          <div className="mt-3">
-            <p className="text-sm text-destructive">
-              {translate(stoppedKey, { name: manifest.name })}
+          {approval?.startupError !== undefined && (
+            <p className="mt-3 text-sm text-destructive">
+              {pluginStartupErrorText(approval.startupError, t as unknown as StartupErrorTranslate)}
             </p>
-            <div className="mt-2 flex flex-wrap gap-2">
+          )}
+          {stopped && stoppedKey !== null && (
+            <div className="mt-3">
+              <p className="text-sm text-destructive">
+                {translate(stoppedKey, { name: manifest.name })}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  className="pointer-coarse:min-h-12"
+                  data-command="settings.restartPlugin"
+                  onClick={() => void store.restart(entry.pluginId)}
+                >
+                  {t("plugins.management.restart")}
+                </Button>
+              </div>
+            </div>
+          )}
+          {entry.unsupported && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {t("plugins.management.unsupportedText")}
+            </p>
+          )}
+          {entry.duplicateFolders.length > 0 && (
+            <p className="mt-3 text-sm text-destructive">
+              {t("plugins.management.duplicateText", {
+                folders: entry.duplicateFolders.join(", "),
+              })}
+            </p>
+          )}
+          {dataSize >= PLUGIN_DATA_SIZE_WARNING_BYTES && (
+            <p className="mt-3 text-sm text-destructive">{t("plugins.management.sizeWarning")}</p>
+          )}
+          {entry.updateAvailable && (
+            <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 variant="secondary"
-                className="pointer-coarse:min-h-12"
-                data-command="settings.restartPlugin"
-                onClick={() => void store.restart(entry.pluginId)}
+                data-command="settings.keepMyCopy"
+                onClick={() => void store.keepMyCopy(entry.pluginId)}
               >
-                {t("plugins.management.restart")}
+                {t("plugins.keep")}
+              </Button>
+              <Button
+                variant="secondary"
+                data-command="settings.replaceBuiltIn"
+                onClick={onReplace}
+              >
+                {t("plugins.replace")}
               </Button>
             </div>
-          </div>
-        )}
-        {entry.unsupported && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            {t("plugins.management.unsupportedText")}
-          </p>
-        )}
-        {entry.duplicateFolders.length > 0 && (
-          <p className="mt-3 text-sm text-destructive">
-            {t("plugins.management.duplicateText", { folders: entry.duplicateFolders.join(", ") })}
-          </p>
-        )}
-        {dataSize >= PLUGIN_DATA_SIZE_WARNING_BYTES && (
-          <p className="mt-3 text-sm text-destructive">{t("plugins.management.sizeWarning")}</p>
-        )}
-        {entry.updateAvailable && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              data-command="settings.keepMyCopy"
-              onClick={() => void store.keepMyCopy(entry.pluginId)}
-            >
-              {t("plugins.keep")}
-            </Button>
-            <Button variant="secondary" data-command="settings.replaceBuiltIn" onClick={onReplace}>
-              {t("plugins.replace")}
-            </Button>
-          </div>
-        )}
-        {showCustomUi && (
-          <p className="mt-3 text-sm text-muted-foreground">{t("plugins.management.custom")}</p>
-        )}
-        {!entry.installed && !entry.builtIn && (
-          <p className="mt-3 text-sm text-muted-foreground">{t("plugins.management.manual")}</p>
-        )}
+          )}
+          {showCustomUi && (
+            <p className="mt-3 text-sm text-muted-foreground">{t("plugins.management.custom")}</p>
+          )}
+          {!entry.installed && !entry.builtIn && (
+            <p className="mt-3 text-sm text-muted-foreground">{t("plugins.management.manual")}</p>
+          )}
 
-        <PluginSurface pluginId={entry.pluginId} surface="settings" />
-        {rows.map((row) => (
-          // A Plugin Settings row holds the Plugin's own tall body (several
-          // controls, a heading, a list). It cannot sit in the label-left,
-          // control-right row shell the simple rows use: stacked like the
-          // Dictation model list and the Backups list, the label and description
-          // read at the top and the Plugin's controls take the full width below.
-          <SettingRow key={row.id} id={row.id} className="flex flex-col gap-2 py-3">
-            <PluginSettingsRowBody pluginId={entry.pluginId} rowId={row.localId} />
-          </SettingRow>
-        ))}
+          <PluginSurface pluginId={entry.pluginId} surface="settings" />
+          {rows.map((row) => (
+            // A Plugin Settings row holds the Plugin's own tall body (several
+            // controls, a heading, a list). It cannot sit in the label-left,
+            // control-right row shell the simple rows use: stacked like the
+            // Dictation model list and the Backups list, the label and description
+            // read at the top and the Plugin's controls take the full width below.
+            <SettingRow key={row.id} id={row.id} className="flex flex-col gap-2 py-3">
+              <PluginSettingsRowBody pluginId={entry.pluginId} rowId={row.localId} />
+            </SettingRow>
+          ))}
 
-        {declared.length > 0 && (
-          <Disclosure
-            isExpanded={permissionsOpen}
-            onExpandedChange={setPermissionsOpen}
-            className="mt-3 rounded-lg border border-border"
-          >
-            <AriaButton
-              slot="trigger"
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          {declared.length > 0 && (
+            <Disclosure
+              isExpanded={permissionsOpen}
+              onExpandedChange={setPermissionsOpen}
+              className="mt-3 rounded-lg border border-border"
             >
-              <span>{t("plugins.permissions.grantTitle")}</span>
-              {permissionsIssue && (
-                <span className={ISSUE_BADGE_CLASS}>
-                  {t("plugins.permissions.needsAttention")}
-                </span>
-              )}
-              <ChevronDown
-                aria-hidden="true"
-                className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${
-                  permissionsOpen ? "rotate-180" : ""
-                }`}
-              />
-            </AriaButton>
-            <DisclosurePanel className={`${PLUGIN_DISCLOSURE_PANEL_CLASS} px-3 pb-3`}>
-              {permissionsIssue && (
-                <p className="text-sm text-destructive">{issueExplanation}</p>
-              )}
-              {approval !== null && (
-                <>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {t("plugins.permissions.grantIntro")}
-                  </p>
-                  <PluginPermissionList
-                    declared={declared}
-                    required={required}
-                    checked={(permission) =>
-                      approval.granted.includes(permission as PluginPermissionId)
-                    }
-                    disabled={(permission) => required.includes(permission) || !reviewApproved}
-                    onToggle={(permission, next) => {
-                      if (next) {
-                        void store.approve(entry.pluginId, [
-                          ...optionalGranted,
-                          permission as PluginPermissionId,
-                        ]);
-                      } else {
-                        void store.revoke(entry.pluginId, permission as PluginPermissionId);
-                      }
-                    }}
-                    renderAction={(permission) =>
-                      required.includes(permission) &&
-                      approval.granted.includes(permission as PluginPermissionId) ? (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() =>
-                            void store.revoke(entry.pluginId, permission as PluginPermissionId)
+              <AriaButton
+                slot="trigger"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <span>{t("plugins.permissions.grantTitle")}</span>
+                {permissionsIssue && (
+                  <span className={ISSUE_BADGE_CLASS}>
+                    {t("plugins.permissions.needsAttention")}
+                  </span>
+                )}
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${
+                    permissionsOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </AriaButton>
+              <DisclosurePanel className={PLUGIN_DISCLOSURE_PANEL_CLASS}>
+                <div className="px-3 pb-3">
+                  {permissionsIssue && (
+                    <p className="text-sm text-destructive">{issueExplanation}</p>
+                  )}
+                  {approval !== null && (
+                    <>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {t("plugins.permissions.grantIntro")}
+                      </p>
+                      <PluginPermissionList
+                        declared={declared}
+                        required={required}
+                        checked={(permission) =>
+                          approval.granted.includes(permission as PluginPermissionId)
+                        }
+                        disabled={(permission) => required.includes(permission) || !reviewApproved}
+                        onToggle={(permission, next) => {
+                          if (next) {
+                            void store.approve(entry.pluginId, [
+                              ...optionalGranted,
+                              permission as PluginPermissionId,
+                            ]);
+                          } else {
+                            void store.revoke(entry.pluginId, permission as PluginPermissionId);
                           }
-                        >
-                          {t("plugins.permissions.revokeRequired")}
-                        </Button>
-                      ) : null
-                    }
-                    renderDetail={(_permission, info) =>
-                      info.isRequired && !info.checked ? (
-                        <p className="mt-1 pl-6 text-sm text-destructive">
-                          {t("plugins.permissions.requiredMissing")}
+                        }}
+                        renderAction={(permission) =>
+                          required.includes(permission) &&
+                          approval.granted.includes(permission as PluginPermissionId) ? (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() =>
+                                void store.revoke(entry.pluginId, permission as PluginPermissionId)
+                              }
+                            >
+                              {t("plugins.permissions.revokeRequired")}
+                            </Button>
+                          ) : null
+                        }
+                        renderDetail={(_permission, info) =>
+                          info.isRequired && !info.checked ? (
+                            <p className="mt-1 pl-6 text-sm text-destructive">
+                              {t("plugins.permissions.requiredMissing")}
+                            </p>
+                          ) : (
+                            <p className="mt-1 pl-6 text-sm text-muted-foreground">{info.detail}</p>
+                          )
+                        }
+                        rowClassName="border-b border-border py-2 last:border-b-0"
+                        rowFlexClassName="flex items-center gap-2"
+                      />
+                    </>
+                  )}
+                  {canRememberSecrets && (
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{t("plugins.management.remember")}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {t("plugins.management.rememberDescription")}
                         </p>
-                      ) : (
-                        <p className="mt-1 pl-6 text-sm text-muted-foreground">{info.detail}</p>
-                      )
-                    }
-                    rowClassName="border-b border-border py-2 last:border-b-0"
-                    rowFlexClassName="flex items-center gap-2"
-                  />
-                </>
-              )}
-              {canRememberSecrets && (
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{t("plugins.management.remember")}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {t("plugins.management.rememberDescription")}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={secrets.remembered}
-                    onChange={(next) => secrets.setRemembered(next)}
-                    label={t("plugins.management.remember")}
-                    className="pointer-coarse:min-h-12"
-                  />
+                      </div>
+                      <Switch
+                        checked={secrets.remembered}
+                        onChange={(next) => secrets.setRemembered(next)}
+                        label={t("plugins.management.remember")}
+                        className="pointer-coarse:min-h-12"
+                      />
+                    </div>
+                  )}
+                  {permissionsIssue && (
+                    <div className="mt-3">
+                      <Button
+                        className="pointer-coarse:min-h-12"
+                        data-command="settings.reviewPlugin"
+                        disabled={!enableable}
+                        onClick={onReview}
+                      >
+                        {t("plugins.permissions.review")}
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
-              {permissionsIssue && (
-                <div className="mt-3">
-                  <Button
-                    className="pointer-coarse:min-h-12"
-                    data-command="settings.reviewPlugin"
-                    disabled={!enableable}
-                    onClick={onReview}
-                  >
-                    {t("plugins.permissions.review")}
-                  </Button>
+              </DisclosurePanel>
+            </Disclosure>
+          )}
+
+          <div className="mt-3">
+            <h3 className="text-sm font-medium">{t("plugins.management.details")}</h3>
+            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground sm:grid-cols-3">
+              {facts.map((fact) => (
+                <div key={fact.label} className="flex flex-col">
+                  <dt>{fact.label}</dt>
+                  <dd className="font-medium text-foreground">{fact.value}</dd>
                 </div>
-              )}
-            </DisclosurePanel>
-          </Disclosure>
-        )}
-
-        <div className="mt-3">
-          <h3 className="text-sm font-medium">{t("plugins.management.details")}</h3>
-          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground sm:grid-cols-3">
-            {facts.map((fact) => (
-              <div key={fact.label} className="flex flex-col">
-                <dt>{fact.label}</dt>
-                <dd className="font-medium text-foreground">{fact.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-
-        {(entry.installed || canReinstall || canDeleteData) && (
-          <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
-            {entry.installed && (
-              <Button
-                variant="destructive"
-                className="pointer-coarse:min-h-12"
-                data-command="settings.removePlugin"
-                onClick={onRemove}
-              >
-                {t("plugins.management.remove")}
-              </Button>
-            )}
-            {canReinstall && (
-              <Button
-                variant="secondary"
-                className="pointer-coarse:min-h-12"
-                data-command="settings.reinstallBuiltIn"
-                onClick={onReinstall}
-              >
-                {t("plugins.management.reinstall")}
-              </Button>
-            )}
-            {canDeleteData && (
-              <Button
-                variant="destructive"
-                className="pointer-coarse:min-h-12"
-                data-command="settings.deletePluginData"
-                onClick={onDeleteData}
-              >
-                {t("plugins.management.delete")}
-              </Button>
-            )}
+              ))}
+            </dl>
           </div>
-        )}
+
+          {(entry.installed || canReinstall || canDeleteData) && (
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+              {entry.installed && (
+                <Button
+                  variant="destructive"
+                  className="pointer-coarse:min-h-12"
+                  data-command="settings.removePlugin"
+                  onClick={onRemove}
+                >
+                  {t("plugins.management.remove")}
+                </Button>
+              )}
+              {canReinstall && (
+                <Button
+                  variant="secondary"
+                  className="pointer-coarse:min-h-12"
+                  data-command="settings.reinstallBuiltIn"
+                  onClick={onReinstall}
+                >
+                  {t("plugins.management.reinstall")}
+                </Button>
+              )}
+              {canDeleteData && (
+                <Button
+                  variant="destructive"
+                  className="pointer-coarse:min-h-12"
+                  data-command="settings.deletePluginData"
+                  onClick={onDeleteData}
+                >
+                  {t("plugins.management.delete")}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </DisclosurePanel>
     </Disclosure>
   );

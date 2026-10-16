@@ -107,6 +107,10 @@ test.describe("Settings Plugin cards @wf:settings-plugin-cards @no-webkit", () =
     await expect(card(page)).toBeVisible();
     await expect(enableSwitch(page)).not.toBeChecked();
     await capture(page, "settings-plugin-cards-collapsed");
+    // Collapsed, the card is only its header row.
+    const cardBox = await card(page).boundingBox();
+    const headerBox = await cardTrigger(page).locator("xpath=..").boundingBox();
+    expect((cardBox?.height ?? 0) - (headerBox?.height ?? 0)).toBeLessThanOrEqual(2);
   });
 
   test("the switch turns Echoes on, and Open Echoes opens its report", async ({ page }) => {
@@ -153,6 +157,11 @@ test.describe("Settings Plugin cards @wf:settings-plugin-cards @no-webkit", () =
     // Plugin Permissions once opened.
     const permissions = permissionsTrigger(page);
     await expect(permissions).toHaveAttribute("aria-expanded", "false");
+    // Collapsed, the Permissions box is only its trigger: the closed panel
+    // leaves no band of padding below it.
+    const permissionsBox = await permissions.locator("xpath=..").boundingBox();
+    const permissionsTriggerBox = await permissions.boundingBox();
+    expect((permissionsBox?.height ?? 0) - (permissionsTriggerBox?.height ?? 0)).toBeLessThanOrEqual(2);
     await tabTo(page, permissions, { max: 40 });
     await page.keyboard.press("Enter");
     await expect(permissions).toHaveAttribute("aria-expanded", "true");

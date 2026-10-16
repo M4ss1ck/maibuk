@@ -494,13 +494,15 @@ export function PluginsSection() {
                     />
                   </AriaButton>
                 </div>
-                <DisclosurePanel className={`${PLUGIN_DISCLOSURE_PANEL_CLASS} px-3 pb-3`}>
-                  <PluginSurface pluginId={owner.pluginId} surface="settings" />
-                  {rows.map((row) => (
-                    <SettingRow key={row.id} id={row.id} className={SETTINGS_ROW_CLASS}>
-                      <PluginSettingsRowBody pluginId={owner.pluginId} rowId={row.localId} />
-                    </SettingRow>
-                  ))}
+                <DisclosurePanel className={PLUGIN_DISCLOSURE_PANEL_CLASS}>
+                  <div className="px-3 pb-3">
+                    <PluginSurface pluginId={owner.pluginId} surface="settings" />
+                    {rows.map((row) => (
+                      <SettingRow key={row.id} id={row.id} className={SETTINGS_ROW_CLASS}>
+                        <PluginSettingsRowBody pluginId={owner.pluginId} rowId={row.localId} />
+                      </SettingRow>
+                    ))}
+                  </div>
                 </DisclosurePanel>
               </Disclosure>
             );
