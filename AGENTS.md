@@ -24,6 +24,7 @@ This file holds only what every task needs. The rest sits behind these pointers;
 | Before calling work done, and when reviewing                                                                                               | `CODING_STANDARDS.md` in full (`/code-review` reads it)                                  |
 | Before picking up, filing, or labelling an issue                                                                                           | `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md`                           |
 | Before writing or running an E2E spec                                                                                                      | `e2e/README.md`, then `CODING_STANDARDS.md` "E2E"                                        |
+| Before writing Plugin docs, or changing the Plugin method table or the Plugin UI table                                                     | `docs/plugins/README.md`                                                                 |
 
 ## Done means
 

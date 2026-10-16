@@ -107,6 +107,20 @@ describe.skipIf(!process.env.MAIBUK_PLUGIN_TOOLING)(
       expect(existsSync(join(plugin, "dist/hello-plugin-0.1.0.zip"))).toBe(true);
     });
 
+    it("still checks after the quickstart renames the Plugin id", async () => {
+      const plugin = join(tempRoot("maibuk plugin renamed "), "my plugin");
+      copyTemplate(plugin);
+      const manifestFile = join(plugin, "manifest.json");
+      const manifest = readFileSync(manifestFile, "utf8");
+      writeFileSync(manifestFile, manifest.replace('"id": "hello-plugin"', '"id": "my-plugin"'));
+
+      const setup = await node("scripts/setup.mjs", ["--maibuk", REPO_ROOT], plugin);
+      expect(setup.code, setup.stdout + setup.stderr).toBe(0);
+      const check = await node("scripts/maibuk.mjs", ["check"], plugin);
+      expect(check.code, check.stdout + check.stderr).toBe(0);
+      expect(existsSync(join(plugin, "dist/my-plugin-0.1.0.zip"))).toBe(true);
+    });
+
     it("fails with an actionable message when maibuk.local.json is wrong", async () => {
       const plugin = join(tempRoot("maibuk plugin bad checkout "), "hello plugin");
       copyTemplate(plugin);

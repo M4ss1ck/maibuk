@@ -57,8 +57,8 @@ default, a Frame is the second path). A whole-page Frame declares
 from your *verified hashed* folder, so keep the HTML, CSS, JS, images, and fonts
 inside it and reference them with relative paths. A Frame's only host channel is
 `window.maibuk.port`, the `MessagePort` that connects it to your Plugin's Worker;
-use it to talk to the Plugin (e.g. `createPluginClient(window.maibuk.port)` on
-the Plugin side is the Worker's port, and the Frame receives the other end).
+the Worker receives the other end through `client.onFrame`, and the two exchange
+raw messages (see [Frame UI](../docs/plugins/frame-ui.md)).
 
 A Frame is styled with the host's semantic theme tokens: the host writes each
 public `--maibuk-*` property below onto the Frame's `<html>` on load and again
@@ -95,7 +95,7 @@ colors. Names are a stable Plugin-facing contract; see
 
 ```bash
 pnpm build:plugins                       # target inferred from the environment
-pnpm tsx scripts/build-builtin-plugins.ts --target web|desktop|android
+pnpm exec tsx scripts/build-builtin-plugins.ts --target web|desktop|android
 ```
 
 The build writes an installable folder per Plugin to `dist/plugins/<id>/`
@@ -132,14 +132,9 @@ the tooling in `scripts/plugin/` builds, tests, and packages it.
 ### Starting a repo
 
 Copy `templates/plugin/`, `git init` in the copy, and point it at your Maibuk
-checkout:
-
-```bash
-node scripts/setup.mjs --maibuk /path/to/maibuk
-```
-
-`templates/plugin/README.md` holds the quickstart. This section covers the
-tooling the copy wires up.
+checkout. The full walkthrough for a Plugin in its own repository is
+[docs/plugins/quickstart.md](../docs/plugins/quickstart.md). This section covers
+the tooling the copy wires up.
 
 ### Pointing at a Maibuk checkout
 
@@ -212,14 +207,5 @@ To run the Plugin, add its zip from Settings → Plugins.
 
 ### Troubleshooting
 
-- **The checkout is refused.** The message names the source used (`--maibuk`,
-  `MAIBUK_CHECKOUT`, or `maibuk.local.json`), the path tried, and what is
-  missing. Point it at a real Maibuk checkout with
-  `node scripts/setup.mjs --maibuk /path/to/maibuk`.
-- **`node_modules is missing`.** The checkout has no installed dependencies.
-  Run `pnpm install` in the Maibuk checkout.
-- **The boundary refuses an import.** Each violation reads
-  `file:line specifier: reason`, for example
-  `index.tsx:3 @/features/plugins/relative-path: @/features/plugins/relative-path is private; import only @maibuk/plugin-sdk or a relative file inside the Plugin`.
-  Import only `@maibuk/plugin-sdk` (and its subpaths), `@maibuk/plugin-test-kit`
-  in tests, or a relative file inside the Plugin.
+The common tooling failures, with the real messages and their fixes, live in
+[docs/plugins/development-mode.md](../docs/plugins/development-mode.md).
