@@ -297,6 +297,15 @@ export default defineConfig(() => ({
         "src/features/plugins/modules.ts",
         "src/features/plugins/sandbox.ts",
         "src/features/plugins/runtime.ts",
+        // Android QuickJS Plugin engine (issue #516): the runner, its global
+        // set, its port bridge, and its constants. `host-assets.ts` is reached only by the Android build.
+        // `worker-entry.ts` and `index.ts` are pure re-exports and
+        // `engine-flag.ts` is the compile-time platform flag, so none of the
+        // three is listed, like every other bare re-export and constant leaf.
+        "src/features/plugins/quickjs/constants.ts",
+        "src/features/plugins/quickjs/globals.ts",
+        "src/features/plugins/quickjs/bridge.ts",
+        "src/features/plugins/quickjs/runner.ts",
         "src/features/plugins/lifecycle.ts",
         "src/features/plugins/approvals.ts",
         "src/features/plugins/launch.ts",

@@ -34,3 +34,8 @@ The QuickJS shim provides a fixed set of globals: timers, `queueMicrotask`, `per
 Android is opt-in: a Plugin runs there only when its manifest's `platforms` lists `"android"`. A manifest without `platforms` means desktop and web. `pnpm plugin:check` loads a Plugin that lists `"android"` under the same QuickJS shim, so an author without a device learns what is missing before publishing. The Built-in `maibuk-echoes` opts in, so a Built-in proves the whole path on Android. Android has no latency or launch budget in v1; conformance measures and reports QuickJS start time and call latency without gating on them.
 
 Considered and rejected: native QuickJS in Rust (`rquickjs`), which needs a second broker transport over IPC and puts Rust in the trust boundary; QuickJS on every platform, which makes every desktop Plugin pay the interpreter cost; parity by hiding `Intl` and `WebAssembly` from desktop Workers, which takes working globals away from desktop Plugins for no gain; a separate Android WebView, because every WebView in an app shares one renderer process. An `onRenderProcessGone` handler that keeps the app alive when the renderer dies is defense in depth, tracked on its own, and does not lift the Android ban.
+
+## Amendment: the capped QuickJS engine ships in the sandbox Worker (2026-10-16)
+
+#516 ships the amendment above: on Android Plugins now run in a 64 MB capped QuickJS engine inside the same sandbox Worker, so the iframe, Worker, port, broker, Permissions, and limits are unchanged and a Plugin that reaches the cap stops with the existing `out-of-memory` reason while the renderer survives.
+
