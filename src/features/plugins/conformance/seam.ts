@@ -11,7 +11,9 @@
  * The in-memory directory adapter is the same shape the lifecycle suite uses
  * (`src/test/unit/features/plugins/lifecycle.test.tsx`): `kind`, `listFolders`,
  * and `readFolder` over a `Map`. The heartbeats, the stop policy, and the
- * dataVersion gate are all the lifecycle's.
+ * dataVersion gate are all the lifecycle's. A second, well-behaved fixture
+ * (`fixture-healthy`) runs beside the hostile one, so T8 can prove a memory
+ * death leaves a neighbour Plugin answering (#516).
  *
  * Every pass/fail rule still lives in `checks.ts`; this module only reports
  * facts. Only the T2 frame probe is built here (a raw sandboxed frame with the
@@ -22,7 +24,7 @@ import type { RemoteMutationRecord } from "@remote-dom/core";
 import { ThreadMessagePort } from "@quilted/threads";
 
 import { savePluginApproval } from "@/features/plugins/approvals";
-import { loadFixtureHostile } from "@/features/plugins/conformance/fixture";
+import { loadFixtureHealthy, loadFixtureHostile } from "@/features/plugins/conformance/fixture";
 import { conformanceDirectoryKind } from "@/features/plugins/conformance/host-bypass";
 import { waitForReasonWithinGrace } from "@/features/plugins/conformance/oom-grace";
 import {
@@ -32,10 +34,12 @@ import {
   type ConformanceSeam,
   type IpcObservation,
   type OomObservation,
+  type QuickJsTimings,
   type StopObservation,
   T8_ALLOCATION_CAP_MB,
 } from "@/features/plugins/conformance/types";
 import { createPluginLifecycle, HEARTBEAT_INTERVAL_MS } from "@/features/plugins/lifecycle";
+import { QUICKJS_ENGINE_ENABLED } from "@/features/plugins/quickjs/engine-flag";
 import { openPluginUiMount } from "@/features/plugins/remote-ui/mount";
 import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
@@ -54,6 +58,8 @@ import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
 
 /** The fixture Plugin's folder name and id (see `fixture.ts`). */
 const FIXTURE_HOSTILE_ID = "fixture-hostile";
+/** The healthy neighbour fixture's id (#516): it stays ready beside the hostile one. */
+const FIXTURE_HEALTHY_ID = "fixture-healthy";
 
 /** How long a UI Command's page may take to mount or be refused. */
 const PAGE_SETTLE_MS = 4_000;
@@ -66,6 +72,16 @@ const TERMINAL_BUDGET_MS = 20_000;
  * fixture's `escapeAllocateYielding`).
  */
 const YIELDING_ALLOCATION_COMMAND = "escapeAllocateYielding";
+/**
+ * The fixture Command the QuickJS call-latency measurement runs (#516): a single
+ * Plugin Permission call (`library.books.list()`) that reaches no network, so it
+ * is safe to run repeatedly before the escape checks. Its report is accepted
+ * without a rate limit because the host is awaiting this `command.run`
+ * (`broker.ts`), so the round-trip stays cheap.
+ */
+const LATENCY_COMMAND = "escapeAfterRevoke";
+/** How many latency round-trips are sampled; the median is reported. */
+const LATENCY_SAMPLES = 5;
 /** T8's time budget: no stop and the cap not reached by then is `unmeasured`. */
 const OOM_BUDGET_MS = 120_000;
 /**
@@ -186,6 +202,12 @@ export async function createRuntimeSeam(
   let launched = false;
   /** The MB the yielding allocation last reported (T8's detail reads it). */
   let allocatedMb = 0;
+  /** `performance.now()` when the hostile Plugin's first launch began (#516). */
+  let launchStartedAt = 0;
+  /** The QuickJS start time, measured once the hostile Plugin is first ready (#516). */
+  let quickjsStartMs: number | null = null;
+  /** The QuickJS call latency, measured once the hostile Plugin is first ready (#516). */
+  let quickjsCallLatencyMs: number | null = null;
 
   const { folder, pinnedHash } = await loadFixtureHostile();
   const read = readPluginManifest(folder);
@@ -195,6 +217,18 @@ export async function createRuntimeSeam(
     );
   }
   const manifest = read.manifest;
+
+  // The healthy neighbour (#516): the seam starts it beside the hostile Plugin,
+  // so T8 can prove a hostile memory death leaves a well-behaved Plugin beside
+  // it still answering a call.
+  const healthy = await loadFixtureHealthy();
+  const healthyRead = readPluginManifest(healthy.folder);
+  if (!healthyRead.ok) {
+    throw new Error(
+      `the fixture-healthy manifest is invalid: ${healthyRead.problems.map((p) => p.message).join("; ")}`
+    );
+  }
+  const healthyManifest = healthyRead.manifest;
 
   // The lifecycle only starts an enabled, approved copy; pin the hash of the
   // exact bytes the runtime will read, so the review gate passes.
@@ -210,19 +244,34 @@ export async function createRuntimeSeam(
     },
     approvedFiles: {},
   });
+  savePluginApproval({
+    pluginId: FIXTURE_HEALTHY_ID,
+    pinnedHash: healthy.pinnedHash,
+    granted: [],
+    enabled: true,
+    approvedVersion: healthyManifest.version,
+    approvedPermissions: {
+      required: [...healthyManifest.permissions.required],
+      optional: [...healthyManifest.permissions.optional],
+    },
+    approvedFiles: {},
+  });
 
   // The in-memory Plugin Directory: the shape the lifecycle suite uses. Its
   // kind comes from the conformance bypass (host-bypass.ts), not the device, so
-  // the real lifecycle scans the fixture on Android too — where the v1 host rule
+  // the real lifecycle scans the fixtures on Android too — where the v1 host rule
   // otherwise runs no Plugin (#447, #492). The seam still reports the true
   // platform to every check.
-  const folders = new Map<string, PluginFolder>([[FIXTURE_HOSTILE_ID, folder]]);
+  const folders = new Map<string, PluginFolder>([
+    [FIXTURE_HOSTILE_ID, folder],
+    [FIXTURE_HEALTHY_ID, healthy.folder],
+  ]);
   const directory: PluginDirectoryAdapter = {
     kind: conformanceDirectoryKind(platform),
-    listFolders: async () => [FIXTURE_HOSTILE_ID],
+    listFolders: async () => [FIXTURE_HOSTILE_ID, FIXTURE_HEALTHY_ID],
     readFolder: async (name: string) => folders.get(name) ?? null,
   };
-  // No shipped Built-ins to sync; the fixture is the only Plugin.
+  // No shipped Built-ins to sync; the two fixtures are the only Plugins.
   const builtInSource: BuiltInPluginSource = { list: async () => [] };
 
   // The fixture reports escapes through `notifications.show`; capturing it here
@@ -273,6 +322,7 @@ export async function createRuntimeSeam(
   async function ensureReady(): Promise<PluginRuntime> {
     if (!launched) {
       launched = true;
+      launchStartedAt = performance.now();
       await lifecycle.launch();
     }
     // A limit stop auto-restarts a persistent Plugin once per session, so a
@@ -282,6 +332,7 @@ export async function createRuntimeSeam(
       const runtime = lifecycle.runtime(FIXTURE_HOSTILE_ID);
       const status = lifecycle.state(FIXTURE_HOSTILE_ID)?.status;
       if (runtime && !runtime.broker.stopped && (status === "ready" || status === "unavailable")) {
+        await noteQuickJsReady(runtime);
         return runtime;
       }
       if (status === "stopped") {
@@ -293,6 +344,70 @@ export async function createRuntimeSeam(
       await sleep(150);
     }
     throw new Error("the fixture-hostile Plugin did not become ready");
+  }
+
+  /**
+   * Records the QuickJS engine's own timings (#516) the first time the hostile
+   * Plugin is ready: the start-to-ready time, and the round-trip of one fixture
+   * Command that makes one Plugin Permission call. Off the QuickJS engine this
+   * is a no-op, so desktop and web runs measure nothing.
+   */
+  async function noteQuickJsReady(runtime: PluginRuntime): Promise<void> {
+    if (!QUICKJS_ENGINE_ENABLED) return;
+    if (quickjsStartMs === null) {
+      quickjsStartMs = performance.now() - launchStartedAt;
+    }
+    if (quickjsCallLatencyMs === null) {
+      quickjsCallLatencyMs = await measureCallLatency(runtime);
+    }
+  }
+
+  /**
+   * The median round-trip of {@link LATENCY_SAMPLES} `command.run` calls that
+   * each make one Plugin Permission call. The host is awaiting these runs, so the
+   * fixture's own report is accepted without a rate limit and the sample is
+   * cheap; a stop reason is never read here, so it cannot be confused with T7/T8.
+   */
+  async function measureCallLatency(runtime: PluginRuntime): Promise<number> {
+    const samples: number[] = [];
+    for (let sample = 0; sample < LATENCY_SAMPLES; sample += 1) {
+      const started = performance.now();
+      try {
+        await runtime.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: LATENCY_COMMAND });
+      } catch {
+        // A refused or stopped attempt still round-tripped; the timing is valid.
+      }
+      samples.push(performance.now() - started);
+    }
+    samples.sort((a, b) => a - b);
+    return samples[Math.floor(samples.length / 2)] ?? 0;
+  }
+
+  /**
+   * Whether the healthy neighbour Plugin still answers a call (#516). The seam
+   * starts it beside the hostile one; once the hostile has stopped, this asks its
+   * `health.check` once more. A started-but-unready neighbour is polled first, so
+   * a slow start is not reported as a death.
+   */
+  async function neighbourAnswers(): Promise<boolean> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const runtime = lifecycle.runtime(FIXTURE_HEALTHY_ID);
+      const status = lifecycle.state(FIXTURE_HEALTHY_ID)?.status;
+      if (runtime && !runtime.broker.stopped && status === "ready") {
+        try {
+          await runtime.broker.request("health.check", {});
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      if (status === "stopped") {
+        const result = await lifecycle.start(FIXTURE_HEALTHY_ID, "restart");
+        if (!result.ok) return false;
+      }
+      await sleep(150);
+    }
+    return false;
   }
 
   /** Waits for the lifecycle to stop the Plugin and returns its reason. */
@@ -423,6 +538,15 @@ export async function createRuntimeSeam(
   }
 
   /**
+   * A stop observation, with the healthy-neighbour probe (#516): once the
+   * hostile Plugin has stopped, the seam asks the neighbour beside it a call, so
+   * T8 can require that a memory death did not take it down too.
+   */
+  async function stoppedOom(reason: string): Promise<OomObservation> {
+    return { stopped: true, reason, allocatedMb, neighbourAlive: await neighbourAnswers() };
+  }
+
+  /**
    * T8's yielding allocation. It resolves when the lifecycle stops the Plugin
    * (with the reason it recorded), or when the Plugin outran `OOM_BUDGET_MS` or
    * `T8_ALLOCATION_CAP_MB` without a stop — the honest `stopped: false` the
@@ -447,7 +571,7 @@ export async function createRuntimeSeam(
     const deadline = Date.now() + OOM_BUDGET_MS;
     while (Date.now() < deadline) {
       const reason = readStopReason();
-      if (reason !== null) return { stopped: true, reason, allocatedMb };
+      if (reason !== null) return stoppedOom(reason);
       if (settled) {
         // The request settling only means the Worker stopped answering: the
         // lifecycle records its reason just after. Wait a bounded grace for it
@@ -458,7 +582,7 @@ export async function createRuntimeSeam(
           now: () => Date.now(),
           sleep,
         });
-        if (lateReason !== null) return { stopped: true, reason: lateReason, allocatedMb };
+        if (lateReason !== null) return stoppedOom(lateReason);
         return { stopped: false, reason: "none", allocatedMb };
       }
       if (allocatedMb >= T8_ALLOCATION_CAP_MB) break;
@@ -524,6 +648,13 @@ export async function createRuntimeSeam(
   return {
     platform,
     engine: readEngine(platform),
+    get quickjs(): QuickJsTimings | undefined {
+      // Only the Android QuickJS engine measures these (#516); `undefined`
+      // everywhere else, and until `ensureReady` has measured them.
+      if (!QUICKJS_ENGINE_ENABLED) return undefined;
+      if (quickjsStartMs === null || quickjsCallLatencyMs === null) return undefined;
+      return { startMs: quickjsStartMs, callLatencyMs: quickjsCallLatencyMs };
+    },
     runCommand,
     probeFrameIpc,
     probeWorkerIpc,

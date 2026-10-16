@@ -17,14 +17,18 @@
  *     stopped with any reason and the host answered; it is the exhaustiveness
  *     test's owner for the old `escapeAllocate` Command.
  *   - T8 passes when the yielding allocation was stopped with a memory reason
- *     (`out-of-memory` or `crashed`) and the host answered a heartbeat
- *     afterwards. A stop as `unresponsive` means the collection loop never
- *     reached the memory limit, so the check is `unmeasured`, not a pass or a
- *     fail. Reaching `T8_ALLOCATION_CAP_MB` unstopped with the host answering
+ *     and the host answered a heartbeat afterwards AND a healthy Plugin running
+ *     beside the hostile one still answered a call (#516). A stop as
+ *     `unresponsive` means the collection loop never reached the memory limit,
+ *     so the check is `unmeasured`, not a pass or a fail. Reaching
+ *     `T8_ALLOCATION_CAP_MB` unstopped with the host answering
  *     passes: the engine set no per-Worker limit below the cap and the host
  *     survived. The time budget running out below the cap is `unmeasured`,
- *     naming the MB allocated. A missing heartbeat is `renderer-died` whatever the stop
- *     reason.
+ *     naming the MB allocated. A missing heartbeat is `renderer-died` whatever
+ *     the stop reason.
+ *   - On the Android QuickJS engine (#516) T8 requires exactly `out-of-memory`:
+ *     the cap is hard, so a `crashed` stop is a fail there, not the desktop
+ *     best-effort pass. Every other engine keeps `out-of-memory` or `crashed`.
  *   - A check whose setup throws (the runtime never produced an observation) is
  *     `unmeasured`, never a fail: the run could not tell.
  */
@@ -53,8 +57,15 @@ export const ESCAPE_ALLOCATE_CHECK_ID = "escape-allocate";
 /** T7's only acceptable stop: the heartbeat missed until the Plugin was closed. */
 export const T7_STOP_REASON = "unresponsive";
 
-/** The stop reasons T8 accepts as a real memory death. */
+/** The stop reasons T8 accepts as a real memory death on the native engines. */
 export const T8_MEMORY_STOP_REASONS: readonly string[] = ["out-of-memory", "crashed"];
+
+/**
+ * T8's only acceptable stop under the Android QuickJS engine (#516): the 64 MB
+ * cap is hard, so the stop is exactly `out-of-memory`, never the best-effort
+ * `crashed` a native Worker engine may report.
+ */
+export const T8_QUICKJS_MEMORY_STOP_REASONS: readonly string[] = ["out-of-memory"];
 
 /** The stop reason that means the heartbeat policy fired before memory ran out. */
 export const T8_UNRESPONSIVE_STOP_REASON = "unresponsive";
@@ -64,6 +75,17 @@ export const T8_UNRESPONSIVE_DETAIL = "stopped as unresponsive before reaching t
 
 /** T8's detail when the renderer did not survive the allocation. */
 export const RENDERER_DIED_DETAIL = "renderer-died";
+
+/** T8's detail when a healthy Plugin beside the hostile one stopped answering (#516). */
+export const T8_NEIGHBOUR_DIED_DETAIL = "the healthy Plugin beside it did not answer after the stop";
+
+/**
+ * The stop reasons T8 accepts. Under the Android QuickJS engine (#516) only
+ * `out-of-memory` passes; everywhere else `out-of-memory` or `crashed`.
+ */
+export function t8MemoryStopReasons(quickjs: boolean): readonly string[] {
+  return quickjs ? T8_QUICKJS_MEMORY_STOP_REASONS : T8_MEMORY_STOP_REASONS;
+}
 
 /**
  * The terminal fixture Commands, each its own probe rather than a `command.run`
@@ -172,11 +194,23 @@ function escapeCheck(
  * T7, the tight allocation, T8), and hands each result to `onCheck` as soon as
  * it is known, so the route can POST `/progress` before the run ends.
  */
+export interface RunConformanceOptions {
+  /**
+   * True when the run is under the Android QuickJS engine (#516). T8 then
+   * requires exactly `out-of-memory`: the 64 MB cap is hard, so any other stop
+   * is a fail. The route passes `QUICKJS_ENGINE_ENABLED`; the default keeps the
+   * desktop and web behavior.
+   */
+  quickjs?: boolean;
+}
+
 export async function runConformanceChecks(
   seam: ConformanceSeam,
-  onCheck?: (check: ConformanceCheck) => void | Promise<void>
+  onCheck?: (check: ConformanceCheck) => void | Promise<void>,
+  options: RunConformanceOptions = {}
 ): Promise<ConformanceCheck[]> {
   const checks: ConformanceCheck[] = [];
+  const t8Reasons = t8MemoryStopReasons(options.quickjs ?? false);
   const record = async (check: ConformanceCheck): Promise<void> => {
     checks.push(check);
     await onCheck?.(check);
@@ -245,6 +279,11 @@ export async function runConformanceChecks(
       const oom = await seam.probeOom();
       const alive = await seam.heartbeat();
       if (!alive) return fail(T8_CHECK_ID, RENDERER_DIED_DETAIL);
+      // A hostile Plugin's memory death must not take a healthy neighbour down
+      // with it (#516): the seam asks it a call once more after the stop.
+      if (oom.stopped && oom.neighbourAlive !== true) {
+        return fail(T8_CHECK_ID, T8_NEIGHBOUR_DIED_DETAIL);
+      }
       if (!oom.stopped) {
         return oom.allocatedMb >= T8_ALLOCATION_CAP_MB
           ? pass(
@@ -257,10 +296,10 @@ export async function runConformanceChecks(
       if (oom.reason === T8_UNRESPONSIVE_STOP_REASON) {
         return unmeasured(T8_CHECK_ID, `${T8_UNRESPONSIVE_DETAIL} (${facts})`);
       }
-      return T8_MEMORY_STOP_REASONS.includes(oom.reason)
+      return t8Reasons.includes(oom.reason)
         ? pass(
             T8_CHECK_ID,
-            `stopped with ${oom.reason} after ${oom.allocatedMb} MB and the host answered`
+            `stopped with ${oom.reason} after ${oom.allocatedMb} MB and the host answered, with a healthy Plugin beside it`
           )
         : fail(T8_CHECK_ID, `stopped with an unexpected reason; ${facts} and the host answered`);
     })

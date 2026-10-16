@@ -32,10 +32,30 @@ export interface ConformanceEngine {
   userAgent: string;
 }
 
+/**
+ * The QuickJS engine's own timings (#516, decision-401). Measured on the host
+ * only when the Android QuickJS engine is enabled (`QUICKJS_ENGINE_ENABLED`):
+ * the lane records them with **no gate** on them, so they are evidence, never a
+ * pass/fail rule. `startMs` runs from starting the fixture Plugin to its ready;
+ * `callLatencyMs` is the round-trip of one fixture Command that makes one Plugin
+ * Permission call.
+ */
+export interface QuickJsTimings {
+  /** Milliseconds from starting the fixture Plugin to its ready. */
+  startMs: number;
+  /** Milliseconds for one fixture Command's Plugin Permission call round-trip. */
+  callLatencyMs: number;
+}
+
 /** The `/result` payload: the engine and every check, in run order. */
 export interface ConformanceResult {
   engine: ConformanceEngine;
   checks: ConformanceCheck[];
+  /**
+   * The QuickJS timings (#516), present only when the run was measured under the
+   * Android QuickJS engine; there is no gate on them (decision-401).
+   */
+  quickjs?: QuickJsTimings;
 }
 
 /**
@@ -95,6 +115,14 @@ export interface OomObservation {
   reason: string;
   /** The MB the fixture reported allocating before the stop (0 when none). */
   allocatedMb: number;
+  /**
+   * Whether a second, well-behaved Plugin running beside the hostile one still
+   * answered a call after the hostile stop (#516). Present only when the hostile
+   * Plugin stopped: `true` is the proof the renderer and the broker survived the
+   * memory death with a neighbour live; `false` is a failure; `undefined` means
+   * the seam did not observe a neighbour (there was no stop to survive).
+   */
+  neighbourAlive?: boolean;
 }
 
 /**
@@ -105,6 +133,11 @@ export interface OomObservation {
 export interface ConformanceSeam {
   platform: ConformancePlatform;
   engine: ConformanceEngine;
+  /**
+   * The QuickJS timings (#516), present only when the seam measured them under
+   * the Android QuickJS engine; `undefined` on every other engine.
+   */
+  quickjs?: QuickJsTimings;
   /** Runs one fixture-hostile escape Command and reports what was observed. */
   runCommand(command: string): Promise<CommandObservation>;
   /** T2 from a sandboxed frame (desktop only; never called on Android). */

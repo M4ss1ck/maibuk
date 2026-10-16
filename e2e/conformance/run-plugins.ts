@@ -24,6 +24,7 @@ import {
 } from "@/test/support/plugin-conformance/args";
 import {
   CONFORMANCE_RESULTS_PATH,
+  CONFORMANCE_UNSUPPORTED_SUPPORT,
   type ConformanceResultsFile,
   type ConformanceStack,
   type PlatformOutcome,
@@ -33,7 +34,6 @@ import {
   canRecord,
   finalizeRun,
   formatConformanceTable,
-  isHostUnsupportedLanePlatform,
   laneExitCode,
   mergePlatformRun,
   mergeRunEngine,
@@ -226,6 +226,9 @@ async function measurePlatform(
       ranAt,
       exit: outcome.exitCode,
       device: started.device,
+      // The Android QuickJS timings (#516) arrive on `/result`; absent on every
+      // other engine and on a run that died before `/result`.
+      quickjs: state.result?.quickjs,
     }),
     stack: stackFromCargoLock(cargoLockText, started.stackExtra),
   };
@@ -302,6 +305,7 @@ async function main(): Promise<void> {
         outcome: result.outcome,
         leaks: result.leaks,
         engine: result.engine,
+        quickjs: result.run.quickjs,
       });
       console.log(`[conformance] ${platform}: report at ${outPath}`);
 
@@ -309,9 +313,10 @@ async function main(): Promise<void> {
         if (canRecord(result.outcome)) {
           results = mergePlatformRun(results, platform, result.run, result.stack, new Date().toISOString());
           writeFileSync(resultsPath, `${JSON.stringify(results, null, 2)}\n`);
-          const unsupported = isHostUnsupportedLanePlatform(platform)
-            ? " (unsupported-in-v1, follow-up #492)"
-            : "";
+          const unsupported =
+            result.run.support === CONFORMANCE_UNSUPPORTED_SUPPORT
+              ? " (unsupported-in-v1, follow-up #492)"
+              : "";
           console.log(
             `[conformance] recorded ${platform} (exit ${result.outcome.exitCode})${unsupported} into ${CONFORMANCE_RESULTS_PATH}`
           );

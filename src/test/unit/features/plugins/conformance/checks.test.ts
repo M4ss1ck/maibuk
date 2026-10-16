@@ -8,6 +8,7 @@ import {
   T7_CHECK_ID,
   T8_ALLOCATION_CAP_MB,
   T8_CHECK_ID,
+  T8_NEIGHBOUR_DIED_DETAIL,
   fixtureCommandCheckIds,
   runConformanceChecks,
 } from "@/features/plugins/conformance/checks";
@@ -63,7 +64,12 @@ function makeSeam(overrides: Partial<ConformanceSeam> = {}): ConformanceSeam {
     probeWorkerIpc: async () => ({ reached: false, detail: "no __TAURI_INTERNALS__" }),
     probeHang: async () => ({ reason: "unresponsive" }),
     probeAllocate: async () => ({ reason: "unresponsive" }),
-    probeOom: async () => ({ stopped: true, reason: "out-of-memory", allocatedMb: 2_048 }),
+    probeOom: async () => ({
+      stopped: true,
+      reason: "out-of-memory",
+      allocatedMb: 2_048,
+      neighbourAlive: true,
+    }),
     heartbeat: async () => true,
     leaks: async () => 0,
     ...overrides,
@@ -292,7 +298,14 @@ describe("runConformanceChecks terminal probes", () => {
 
   it("passes T8 for a crash too, and names the MB reached", async () => {
     const checks = await runConformanceChecks(
-      makeSeam({ probeOom: async () => ({ stopped: true, reason: "crashed", allocatedMb: 1_536 }) })
+      makeSeam({
+        probeOom: async () => ({
+          stopped: true,
+          reason: "crashed",
+          allocatedMb: 1_536,
+          neighbourAlive: true,
+        }),
+      })
     );
     const check = byId(checks, T8_CHECK_ID);
     expect(check.status).toBe("pass");
@@ -303,7 +316,12 @@ describe("runConformanceChecks terminal probes", () => {
   it("marks T8 unmeasured — never pass or fail — when it stopped as unresponsive first", async () => {
     const checks = await runConformanceChecks(
       makeSeam({
-        probeOom: async () => ({ stopped: true, reason: "unresponsive", allocatedMb: 640 }),
+        probeOom: async () => ({
+          stopped: true,
+          reason: "unresponsive",
+          allocatedMb: 640,
+          neighbourAlive: true,
+        }),
       })
     );
     const check = byId(checks, T8_CHECK_ID);
@@ -357,12 +375,48 @@ describe("runConformanceChecks terminal probes", () => {
   it("fails T8 when the Plugin stopped for a reason that is not a memory death", async () => {
     const checks = await runConformanceChecks(
       makeSeam({
-        probeOom: async () => ({ stopped: true, reason: "startup-timeout", allocatedMb: 128 }),
+        probeOom: async () => ({
+          stopped: true,
+          reason: "startup-timeout",
+          allocatedMb: 128,
+          neighbourAlive: true,
+        }),
       })
     );
     const check = byId(checks, T8_CHECK_ID);
     expect(check.status).toBe("fail");
     expect(check.detail).toContain("startup-timeout");
+  });
+
+  it("fails T8 when the healthy Plugin beside the hostile one did not answer", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeOom: async () => ({
+          stopped: true,
+          reason: "out-of-memory",
+          allocatedMb: 2_048,
+          neighbourAlive: false,
+        }),
+      })
+    );
+    const check = byId(checks, T8_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toBe(T8_NEIGHBOUR_DIED_DETAIL);
+  });
+
+  it("fails T8 with renderer-died when the host heartbeat is missing, before the neighbour rule", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeOom: async () => ({
+          stopped: true,
+          reason: "out-of-memory",
+          allocatedMb: 2_048,
+          neighbourAlive: false,
+        }),
+        heartbeat: async () => false,
+      })
+    );
+    expect(byId(checks, T8_CHECK_ID).detail).toBe(RENDERER_DIED_DETAIL);
   });
 
   it("fails T8 with renderer-died when the host heartbeat is missing", async () => {
@@ -386,6 +440,47 @@ describe("runConformanceChecks terminal probes", () => {
       })
     );
     expect(byId(checks, T8_CHECK_ID).status).toBe("unmeasured");
+  });
+});
+
+describe("runConformanceChecks T8 under the Android QuickJS engine (#516)", () => {
+  it("passes on exactly out-of-memory", async () => {
+    const checks = await runConformanceChecks(makeSeam(), undefined, { quickjs: true });
+    const check = byId(checks, T8_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(check.detail).toContain("out-of-memory");
+  });
+
+  it("fails a crashed stop the desktop engines would pass", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeOom: async () => ({
+          stopped: true,
+          reason: "crashed",
+          allocatedMb: 1_536,
+          neighbourAlive: true,
+        }),
+      }),
+      undefined,
+      { quickjs: true }
+    );
+    const check = byId(checks, T8_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toContain("crashed");
+  });
+
+  it("still accepts a crashed stop off the QuickJS engine by default", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeOom: async () => ({
+          stopped: true,
+          reason: "crashed",
+          allocatedMb: 1_536,
+          neighbourAlive: true,
+        }),
+      })
+    );
+    expect(byId(checks, T8_CHECK_ID).status).toBe("pass");
   });
 });
 
