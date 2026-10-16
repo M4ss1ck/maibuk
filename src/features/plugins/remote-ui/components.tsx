@@ -12,7 +12,7 @@
  * a type error, and the coverage gate fails when a table component has no test.
  */
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FieldError,
@@ -990,6 +990,95 @@ interface CollectionHostProps {
   onSelectionChange?: (keys: readonly string[]) => void;
 }
 
+/** The shortest a Collection may shrink to: 5 rows at 2.4rem ≈ 12rem. */
+const COLLECTION_MIN_HEIGHT_PX = 192;
+/** The Collection's height before the first measure, and wherever layout is
+ * unmeasurable (jsdom): 20rem, the height the old `max-h-80` gave the list. */
+const COLLECTION_FALLBACK_HEIGHT_PX = 320;
+
+/** The nearest ancestor that scrolls vertically, or null when there is none. */
+function findScrollableAncestor(start: HTMLElement): HTMLElement | null {
+  for (let node = start.parentElement; node; node = node.parentElement) {
+    const overflowY = getComputedStyle(node).overflowY;
+    if (overflowY === "auto" || overflowY === "scroll") return node;
+  }
+  return null;
+}
+
+/**
+ * The height of everything that renders after the list inside the scroller's
+ * content (e.g. the Echoes "Show 200 more" button): from the list's bottom to
+ * the bottom of the scroller's last child, so flex gaps, margins, and wrapper
+ * padding count too. Both edges move together when the list resizes, so the
+ * value does not depend on the list's own height and a re-measure converges
+ * instead of oscillating (as the scroller's overflow would).
+ */
+function trailingSpaceAfter(list: HTMLElement, scroller: HTMLElement): number {
+  const last = scroller.lastElementChild;
+  if (!last) return 0;
+  return Math.max(0, last.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom);
+}
+
+/**
+ * The tallest a Collection may be so it fills the vertical space its scroll
+ * container leaves it, while keeping room for the content that renders after it
+ * (e.g. the Echoes "Show 200 more" button). Re-measures on mount, on window
+ * resize, and when the scroller or the list's parent resizes (the trailing
+ * content can appear or disappear); never on the scroller's scroll, so the list
+ * does not resize while the page scrolls. Returns a pixel `max-height`.
+ */
+function useCollectionMaxHeight(listRef: RefObject<HTMLElement | null>): number {
+  const [maxHeight, setMaxHeight] = useState(COLLECTION_FALLBACK_HEIGHT_PX);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+
+    const measure = () => {
+      const scroller = findScrollableAncestor(list);
+      const listRect = list.getBoundingClientRect();
+      // With no scrollable ancestor the window is the bottom of the space.
+      const scrollerRect = scroller?.getBoundingClientRect() ?? {
+        top: 0,
+        bottom: window.innerHeight,
+      };
+      const scrollerHeight = scrollerRect.bottom - scrollerRect.top;
+      // jsdom and the first paint before layout report zeros: keep the
+      // fallback so the Collection never collapses.
+      if (listRect.bottom - listRect.top <= 0 || scrollerHeight <= 0) return;
+      const paddingBottom = scroller
+        ? Number.parseFloat(getComputedStyle(scroller).paddingBottom) || 0
+        : 0;
+      const trailing = scroller ? trailingSpaceAfter(list, scroller) : 0;
+      // Offset of the list's top inside the scroller's content, so the measure
+      // does not depend on where the scroller happens to be scrolled.
+      const listTop = listRect.top - scrollerRect.top + (scroller?.scrollTop ?? 0);
+      const available = scrollerHeight - listTop - paddingBottom - trailing;
+      setMaxHeight(Math.max(COLLECTION_MIN_HEIGHT_PX, available));
+    };
+
+    measure();
+
+    const observers: ResizeObserver[] = [];
+    if (typeof ResizeObserver !== "undefined") {
+      const scroller = findScrollableAncestor(list);
+      for (const target of [scroller, list.parentElement]) {
+        if (!target) continue;
+        const observer = new ResizeObserver(measure);
+        observer.observe(target);
+        observers.push(observer);
+      }
+    }
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      for (const observer of observers) observer.disconnect();
+    };
+  }, [listRef]);
+
+  return maxHeight;
+}
+
 function CollectionHost({
   label,
   selectionMode = "none",
@@ -997,16 +1086,21 @@ function CollectionHost({
   children,
   onSelectionChange,
 }: CollectionHostProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const maxHeight = useCollectionMaxHeight(listRef);
   // The host owns the collection: one Tab stop, arrow navigation, stable row
-  // identity by id, and a bounded scroll area. The Remote UI node cap (10,000)
-  // keeps a list the Plugin sends within the host's budget.
+  // identity by id, and a scroll area that fills the space its page leaves it.
+  // The Remote UI node cap (10,000) keeps a list the Plugin sends within the
+  // host's budget.
   return (
     <ListBox
+      ref={listRef}
       aria-label={label}
       selectionMode={selectionMode}
       selectedKeys={selectedKeys}
       onSelectionChange={(keys) => onSelectionChange?.([...keys].map(String))}
-      className="max-h-80 w-full overflow-auto rounded-lg border border-border py-1 outline-none"
+      style={{ maxHeight }}
+      className="w-full overflow-auto rounded-lg border border-border py-1 outline-none"
     >
       {children}
     </ListBox>

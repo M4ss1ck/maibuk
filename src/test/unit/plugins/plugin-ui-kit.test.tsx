@@ -6,8 +6,8 @@
 
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { useState, type ReactNode } from "react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import { installPointerEvent } from "@/test/support/pointer-events";
 import { ui } from "@/plugin-sdk/ui";
@@ -895,6 +895,178 @@ describe("the Remote UI kit, part 2", () => {
       } finally {
         warn.mockRestore();
       }
+    });
+  });
+
+  describe("collection sizing", () => {
+    // The list fills the vertical space its scroll container leaves it, keeping
+    // room for whatever renders after it (the Echoes "Show 200 more" button),
+    // with a floor. jsdom has no layout, so every value the hook reads is mocked.
+    const observerCallbacks: ResizeObserverCallback[] = [];
+    let originalResizeObserver: typeof ResizeObserver;
+
+    beforeEach(() => {
+      observerCallbacks.length = 0;
+      originalResizeObserver = globalThis.ResizeObserver;
+      globalThis.ResizeObserver = class {
+        callback: ResizeObserverCallback;
+        constructor(callback: ResizeObserverCallback) {
+          this.callback = callback;
+          observerCallbacks.push(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      } as unknown as typeof ResizeObserver;
+    });
+
+    afterEach(() => {
+      globalThis.ResizeObserver = originalResizeObserver;
+    });
+
+    /** Gives an element the layout jsdom never computes. */
+    function mockRect(element: Element, top: number, bottom: number) {
+      element.getBoundingClientRect = () =>
+        ({
+          top,
+          bottom,
+          height: bottom - top,
+          left: 0,
+          right: 0,
+          width: 0,
+          x: 0,
+          y: top,
+          toJSON: () => ({}),
+        }) as DOMRect;
+    }
+
+    /** The scroller a Plugin page gives a Collection, with a button after it. */
+    function scrollerWrapper({ children }: { children: ReactNode }) {
+      return (
+        <div data-testid="scroller" style={{ overflowY: "auto" }}>
+          <div data-testid="content">{children}</div>
+          <button type="button" data-testid="more">
+            Show 200 more
+          </button>
+        </div>
+      );
+    }
+
+    function manyRows(count: number) {
+      return Array.from({ length: count }, (_, index) => (
+        <ui.CollectionRow key={`r${index}`} id={`r${index}`} label={`Row ${index}`} />
+      ));
+    }
+
+    /** Runs the hook's own measure, as a resize or observer tick does. */
+    function remeasure() {
+      act(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+    }
+
+    it("fills the scroller, leaving room for the content after the list", async () => {
+      harness = renderRemoteUi({ wrapper: scrollerWrapper });
+      await harness.mount(
+        <ui.Collection label="Echoes" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      mockRect(screen.getByTestId("scroller"), 0, 800);
+      mockRect(list, 200, 520);
+      mockRect(screen.getByTestId("more"), 520, 580);
+      remeasure();
+
+      // 800 (scroller) - 200 (list top) - 60 (content after) = 540.
+      expect(list.style.maxHeight).toBe("540px");
+    });
+
+    it("counts the gap between the list and the content after it", async () => {
+      harness = renderRemoteUi({ wrapper: scrollerWrapper });
+      await harness.mount(
+        <ui.Collection label="Echoes" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      mockRect(screen.getByTestId("scroller"), 0, 800);
+      mockRect(list, 200, 520);
+      // An 8px flex gap, then the 60px button.
+      mockRect(screen.getByTestId("more"), 528, 588);
+      remeasure();
+
+      // 800 - 200 - (8 + 60) = 532: the page does not overflow by the gap.
+      expect(list.style.maxHeight).toBe("532px");
+    });
+
+    it("never shrinks below the 5-row floor", async () => {
+      harness = renderRemoteUi({ wrapper: scrollerWrapper });
+      await harness.mount(
+        <ui.Collection label="Echoes" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      mockRect(screen.getByTestId("scroller"), 0, 100);
+      mockRect(list, 0, 40);
+      remeasure();
+
+      expect(list.style.maxHeight).toBe("192px");
+    });
+
+    it("falls back to 20rem when there is no layout to measure", async () => {
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.Collection label="Echoes" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      // Every rect is zero in jsdom: the list stays at its old 20rem height.
+      expect(screen.getByRole("listbox").style.maxHeight).toBe("320px");
+    });
+
+    it("re-measures when a ResizeObserver reports a change", async () => {
+      harness = renderRemoteUi({ wrapper: scrollerWrapper });
+      await harness.mount(
+        <ui.Collection label="Echoes" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      mockRect(screen.getByTestId("scroller"), 0, 800);
+      mockRect(list, 200, 540);
+      act(() => {
+        for (const callback of observerCallbacks) callback([], {} as ResizeObserver);
+      });
+      expect(list.style.maxHeight).toBe("600px");
+
+      // The "Show 200 more" button appears: the observer re-measures and makes room.
+      mockRect(screen.getByTestId("more"), 540, 600);
+      act(() => {
+        for (const callback of observerCallbacks) callback([], {} as ResizeObserver);
+      });
+      expect(list.style.maxHeight).toBe("540px");
+    });
+
+    it("still navigates the rows with the arrow keys", async () => {
+      harness = renderRemoteUi({ wrapper: scrollerWrapper });
+      await harness.mount(
+        <ui.Collection label="Many rows" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      await userEvent.tab();
+      await userEvent.keyboard("{ArrowDown}");
+      await userEvent.keyboard("{ArrowDown}");
+
+      expect(document.activeElement).toHaveAttribute("data-key", "r2");
     });
   });
 });
