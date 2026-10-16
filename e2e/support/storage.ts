@@ -3,7 +3,7 @@
 // They prepare the device before the app boots; they never stand in for the
 // behavior a spec is testing.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
@@ -200,16 +200,26 @@ export function clonePluginSeeds(from: PluginSeed, count: number): Set<PluginSee
   }
   const sourceManifest = readFileSync(manifestPath, "utf8");
   const sourceName = (JSON.parse(sourceManifest) as { name: string }).name;
+  // A locale file's `name` overrides the manifest name on screen, so each clone
+  // renames it too; otherwise every clone would read as the source Plugin.
+  const localesDir = resolve(pluginSeedDir(from), "locales");
+  const sourceLocales = existsSync(localesDir)
+    ? readdirSync(localesDir)
+        .filter((file) => file.endsWith(".json"))
+        .map((file) => ({ file, text: readFileSync(resolve(localesDir, file), "utf8") }))
+    : [];
   const entries = new Set<PluginSeedEntry>();
   for (let index = 0; index < count; index++) {
     const id = clonePluginId(from, index + 1);
-    entries.add({
-      name: id,
-      from,
-      files: {
-        "manifest.json": clonePluginManifest(sourceManifest, id, `${sourceName} Clone ${index + 1}`),
-      },
-    });
+    const files: Record<string, string> = {
+      "manifest.json": clonePluginManifest(sourceManifest, id, `${sourceName} Clone ${index + 1}`),
+    };
+    for (const { file, text } of sourceLocales) {
+      const locale = JSON.parse(text) as Record<string, unknown>;
+      if (typeof locale.name === "string") locale.name = `${locale.name} Clone ${index + 1}`;
+      files[`locales/${file}`] = `${JSON.stringify(locale, null, 2)}\n`;
+    }
+    entries.add({ name: id, from, files });
   }
   return entries;
 }
