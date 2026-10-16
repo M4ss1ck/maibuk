@@ -2,6 +2,11 @@
 // host posts one reserved envelope carrying the Frame's port; the SDK settles
 // it before RPC dispatch and exposes it through `client.onFrame`. These tests
 // prove the delivery, the unsubscribe, and that no RPC handler ever sees it.
+//
+// A MessagePort delivers on its own schedule, not after one timer turn: on a
+// loaded runner a message can land several macrotasks later. Each test waits
+// for a delivery it can observe, and a "never called" check waits for a later
+// message on the same port first (a port delivers in order).
 
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -9,11 +14,6 @@ import {
   createPluginClient,
   type PluginFrame,
 } from "@/plugin-sdk";
-
-/** One macrotask, so a MessagePort delivery lands. */
-function tick(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
 
 function frameEnvelope(frameId: string, src: string): { message: unknown; transfer: MessagePort[] } {
   return {
@@ -34,9 +34,8 @@ describe("client.onFrame (#454)", () => {
       { kind: PLUGIN_FRAME_MESSAGE.kind, frameId: "frame:1", src: "ui/report.html" },
       [frameChannel.port1]
     );
-    await tick();
+    await vi.waitFor(() => expect(frames).toHaveLength(1));
 
-    expect(frames).toHaveLength(1);
     expect(frames[0].id).toBe("frame:1");
     expect(frames[0].src).toBe("ui/report.html");
     // The delivered port is the Frame's own port: a message posted on it
@@ -44,8 +43,7 @@ describe("client.onFrame (#454)", () => {
     const received: unknown[] = [];
     frameChannel.port2.onmessage = (event) => received.push(event.data);
     frames[0].port.postMessage("ping");
-    await tick();
-    expect(received).toEqual(["ping"]);
+    await vi.waitFor(() => expect(received).toEqual(["ping"]));
   });
 
   it("unsubscribes so a later Frame does not reach the handler", async () => {
@@ -54,10 +52,13 @@ describe("client.onFrame (#454)", () => {
     const handler = vi.fn();
     const off = client.onFrame(handler);
     off();
+    // Still subscribed: once it sees the Frame, the removed handler had its chance.
+    const witness = vi.fn();
+    client.onFrame(witness);
 
     const { message, transfer } = frameEnvelope("frame:2", "ui/x.html");
     channel.port1.postMessage(message, transfer);
-    await tick();
+    await vi.waitFor(() => expect(witness).toHaveBeenCalledTimes(1));
 
     expect(handler).not.toHaveBeenCalled();
   });
@@ -72,9 +73,8 @@ describe("client.onFrame (#454)", () => {
 
     const { message, transfer } = frameEnvelope("frame:3", "ui/y.html");
     channel.port1.postMessage(message, transfer);
-    await tick();
+    await vi.waitFor(() => expect(frameHandler).toHaveBeenCalledTimes(1));
 
     expect(hostRequest).not.toHaveBeenCalled();
-    expect(frameHandler).toHaveBeenCalledTimes(1);
   });
 });
