@@ -918,6 +918,188 @@ describe("Echoes report page", () => {
       host.stop();
     }
   });
+
+  it("paints the kept report on the first frame of a revisit, with no loading screen and no recompute", async () => {
+    const { host, reads } = countedReportHost();
+    let observer: MutationObserver | null = null;
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      const before = screen.getAllByRole("option").map((row) => row.textContent);
+      const computedReads = reads.mock.calls.length;
+      first.unmount();
+
+      // The host draws asynchronously, so the DOM is watched across the whole
+      // second mount: the loading screen and the compute bar must never appear,
+      // and the rows must be in the first frame the host draws.
+      const frames: string[] = [];
+      observer = new MutationObserver(() => {
+        const text = document.body.textContent ?? "";
+        if (text.trim() !== "") frames.push(text);
+      });
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      observer.disconnect();
+
+      expect(frames[0]).toContain("harbor");
+      expect(frames.some((frame) => frame.includes(en["report.loading"]))).toBe(false);
+      expect(frames.some((frame) => frame.includes(en["report.computing"]))).toBe(false);
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(before);
+      // No Chapter was read again: the kept report answered the page.
+      expect(reads.mock.calls.length).toBe(computedReads);
+
+      second.unmount();
+    } finally {
+      observer?.disconnect();
+      host.stop();
+    }
+  });
+
+  it("applies a Find echoes scope run since the last visit on the next mount", async () => {
+    const host = reportHost();
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      first.unmount();
+
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, {
+        id: FIND_ECHOES,
+        target: { kind: "chapter", id: "c1" },
+      });
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      await waitFor(() =>
+        expect(screen.getByLabelText(en["report.scope"])).toHaveTextContent("Chapter One")
+      );
+      expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: /shore/ })).not.toBeInTheDocument();
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("recomputes with settings changed while the page was away", async () => {
+    const storage = settingsStorage();
+    const { host, reads } = countedReportHost(storage);
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      const computedReads = reads.mock.calls.length;
+      first.unmount();
+
+      storage.set(ECHOES_SETTINGS_KEY, { ignore: ["harbor"] });
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      // The stored settings differ, so the report recomputes for the new cache
+      // key and the ignored row goes.
+      expect(await screen.findByRole("option", { name: /shore/ })).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument()
+      );
+      expect(reads.mock.calls.length).toBeGreaterThan(computedReads);
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("falls back to the first Book when the remembered Book is gone", async () => {
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: { books: BOOKS, chapters: CHAPTERS },
+      storage: settingsStorage(),
+    });
+    const client = createPluginClient(host.port);
+    const list = client.library.books.list.bind(client.library.books);
+    let calls = 0;
+    // The second mount's fresh list omits the Book the first visit remembered.
+    vi.spyOn(client.library.books, "list").mockImplementation(async () => {
+      calls += 1;
+      const books = await list();
+      return calls >= 2 ? books.filter((book) => book.id !== "b1") : books;
+    });
+    startEchoes(client, servePluginUi);
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Dune");
+      first.unmount();
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      await waitFor(() => expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Emma"));
+      expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("shows a Book renamed while the page was away under its new title", async () => {
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: { books: BOOKS, chapters: CHAPTERS },
+      storage: settingsStorage(),
+    });
+    const client = createPluginClient(host.port);
+    const list = client.library.books.list.bind(client.library.books);
+    let calls = 0;
+    // The second mount's fresh list carries the remembered Book under a new title.
+    vi.spyOn(client.library.books, "list").mockImplementation(async () => {
+      calls += 1;
+      const books = await list();
+      return calls >= 2
+        ? books.map((book) => (book.id === "b1" ? { ...book, title: "Dune Messiah" } : book))
+        : books;
+    });
+    startEchoes(client, servePluginUi);
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      first.unmount();
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      await waitFor(() =>
+        expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Dune Messiah")
+      );
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("draws the page with a determinate bar while the first report computes", async () => {
+    const { host, reads, read } = countedReportHost();
+    // Hold the first Chapter read, so the first compute is still running.
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    reads.mockImplementationOnce(async (...args) => {
+      await held;
+      return read(...args);
+    });
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+
+      // The initial load has resolved, so the header is drawn and the compute
+      // bar reports progress; the cold "Checking the Book…" screen is gone.
+      expect(await screen.findByText(en["report.computing"])).toBeInTheDocument();
+      expect(screen.getByLabelText(en["report.book"])).toBeInTheDocument();
+      expect(screen.queryByText(en["report.loading"])).not.toBeInTheDocument();
+
+      release();
+      await screen.findByRole("option", { name: /harbor/ });
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
 });
 
 describe("offeredMore", () => {
