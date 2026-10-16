@@ -16,15 +16,18 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { basename, dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { buildPlugin } from "../../../scripts/build-plugin";
 import { externalAliases, writeGeneratedConfigs } from "../../../scripts/plugin/config";
 import { checkFolderLayout } from "../../../scripts/plugin/layout";
+import { linkSkill } from "../../../templates/plugin/scripts/setup.mjs";
 
 const REPO_ROOT = resolve(__dirname, "../../..");
 const TEMPLATE_DIR = join(REPO_ROOT, "templates/plugin");
@@ -78,6 +81,19 @@ function node(script: string, args: readonly string[], cwd: string): Promise<Chi
   });
 }
 
+/**
+ * Imports a built entry the way the sandbox prelude does, in a scope with a
+ * Worker's `self` and no DOM, so an entry that touches `HTMLElement` before the
+ * Remote DOM polyfill is installed exits non-zero.
+ */
+function evaluateInWorkerScope(entry: string): Promise<ChildResult> {
+  const script = [
+    "globalThis.self = { addEventListener() {}, postMessage() {} };",
+    `await import(${JSON.stringify(pathToFileURL(entry).href)});`,
+  ].join("\n");
+  return node("--input-type=module", ["--eval", script], dirname(entry));
+}
+
 /** Every file under `dir`, with forward slashes, sorted. */
 function listFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true })
@@ -87,6 +103,40 @@ function listFiles(dir: string): string[] {
 
 /** The lane's timeout; `TIMEOUT_EXCEPTIONS` lists the file with the reason. */
 const SLOW_LANE_TIMEOUT_MS = 300_000;
+
+describe("linkSkill()", () => {
+  it("links both skill paths to the checkout's skill folder", () => {
+    const checkout = tempRoot("maibuk checkout ");
+    mkdirSync(join(checkout, "skills/maibuk-plugin"), { recursive: true });
+    writeFileSync(join(checkout, "skills/maibuk-plugin/SKILL.md"), "# skill\n");
+    const pluginRoot = tempRoot("maibuk plugin root ");
+
+    linkSkill(checkout, pluginRoot);
+
+    const source = join(checkout, "skills/maibuk-plugin");
+    for (const link of [".agents/skills/maibuk-plugin", ".claude/skills/maibuk-plugin"]) {
+      const target = join(pluginRoot, link);
+      expect(existsSync(target), link).toBe(true);
+      expect(existsSync(join(target, "SKILL.md")), link).toBe(true);
+      expect(realpathSync(target), link).toBe(realpathSync(source));
+    }
+  });
+
+  it("warns and links nothing when the checkout does not carry the skill", () => {
+    const checkout = tempRoot("maibuk checkout without skill ");
+    const pluginRoot = tempRoot("maibuk plugin root without skill ");
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    linkSkill(checkout, pluginRoot);
+    const calls = warn.mock.calls.map((call) => String(call[0]));
+    warn.mockRestore();
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain(join(checkout, "skills/maibuk-plugin"));
+    expect(existsSync(join(pluginRoot, ".agents/skills/maibuk-plugin"))).toBe(false);
+    expect(existsSync(join(pluginRoot, ".claude/skills/maibuk-plugin"))).toBe(false);
+  });
+});
 
 // time-budget: TIMEOUT_EXCEPTIONS lists this lane's child-process runs.
 describe.skipIf(!process.env.MAIBUK_PLUGIN_TOOLING)(
@@ -237,6 +287,9 @@ describe.skipIf(!process.env.MAIBUK_PLUGIN_TOOLING)(
           files.filter((file) => /\.(ts|tsx|map)$/.test(file)),
           dir
         ).toEqual([]);
+
+        const entry = await evaluateInWorkerScope(join(dir, "index.js"));
+        expect(entry.code, `${dir}: ${entry.stdout}${entry.stderr}`).toBe(0);
       }
     });
   }

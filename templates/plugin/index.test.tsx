@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import { createPluginClient, PLUGIN_COMMAND_RUN_REQUEST } from "@maibuk/plugin-sdk";
 import { servePluginUi } from "@maibuk/plugin-sdk/ui-serve";
 import { createTestHost } from "@maibuk/plugin-test-kit";
-import { OPEN_COMMAND, PAGE_ID, start } from "./index";
+import { OPEN_COMMAND, PAGE_ID, start } from "./plugin";
 import manifest from "./manifest.json";
 
 /** The host's manifest type; the JSON manifest itself is validated by `plugin:check`. */
