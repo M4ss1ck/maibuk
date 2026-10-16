@@ -68,7 +68,7 @@ test.describe("bench fixtures: twenty cloned Plugins @sandbox @no-webkit", () =>
 
   test("lists every clone in Settings → Plugins", async ({ page }) => {
     await openPluginsSection(page);
-    const rows = main(page).getByRole("button", { name: /^Fixture Everything Clone \d+$/ });
+    const rows = main(page).getByRole("button", { name: /^Fixture Everything Clone \d+\b/ });
     await expect(rows).toHaveCount(20);
     await expect(rows.first()).toBeVisible();
     await expect(rows.last()).toBeVisible();
