@@ -82,10 +82,39 @@ async function pickOption(user: User, label: string, option: string): Promise<vo
   const trigger = screen.getByLabelText(label);
   await tabTo(user, trigger);
   await user.keyboard("{Enter}");
-  await screen.findByRole("listbox");
-  const target = screen.getByRole("option", { name: option });
+  const listbox = await screen.findByRole("listbox");
+  const target = within(listbox).getByRole("option", { name: option });
   while (document.activeElement !== target) await user.keyboard("{ArrowDown}");
   await user.keyboard("{Enter}");
+}
+
+/**
+ * The list's options, found by their role attribute. A role query over a page
+ * of rows takes hundreds of milliseconds, and `waitFor` reruns it on every
+ * repaint the progress bar makes, so on a hosted runner the polling starves the
+ * report it waits for. React Aria sets the attribute on every row; the hidden
+ * native select's options carry none, as a role query excludes them too.
+ */
+function listOptions(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+}
+
+/**
+ * The option whose text is `text`, checked against its accessible name: one
+ * name computed instead of one per row, which on a long list costs seconds.
+ */
+function optionNamed(text: string): HTMLElement {
+  const option = listOptions().find((candidate) => candidate.textContent?.trim() === text);
+  if (option === undefined) throw new Error(`No option with the text ${text}`);
+  expect(option).toHaveAccessibleName(text);
+  return option;
+}
+
+/** The tab's Show more button, found by its text for the same reason as `listOptions`. */
+function showMoreButton(): HTMLElement | undefined {
+  return [...document.querySelectorAll<HTMLElement>("button")].find((button) =>
+    /left\)$/.test(button.textContent?.trim() ?? "")
+  );
 }
 
 /**
@@ -439,11 +468,13 @@ describe("Echoes report page", () => {
       const page = await host.renderPage(REPORT_PAGE_ID);
       const user = userEvent.setup();
 
-      // Loading yields between Chapters, so 250 of them take a few frames; a
-      // slow poll keeps the role query from starving that loop.
-      expect(
-        await screen.findByRole("option", { name: /kettle/ }, { timeout: 20_000, interval: 500 })
-      ).toBeInTheDocument();
+      // Loading yields between Chapters, so 250 of them take a few frames; the
+      // poll stays cheap so it never starves that loop, then one role query
+      // checks the row's name.
+      await waitFor(() =>
+        expect(listOptions().some((option) => /kettle/.test(option.textContent ?? ""))).toBe(true)
+      );
+      expect(screen.getByRole("option", { name: /kettle/ })).toBeInTheDocument();
       expect(page.violations).toEqual([]);
 
       const trigger = screen.getByLabelText(en["report.scope"]);
@@ -677,7 +708,7 @@ describe("Echoes report page", () => {
       const page = await host.renderPage(REPORT_PAGE_ID);
       const user = userEvent.setup();
 
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
+      await waitFor(() => expect(listOptions()).toHaveLength(200));
       const left = total - 200;
       const more = await screen.findByRole("button", {
         name: format(en["report.showMore"], { count: Math.min(200, left), left }),
@@ -690,7 +721,7 @@ describe("Echoes report page", () => {
       expect(more).toHaveFocus();
       await user.keyboard("{Enter}");
 
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(Math.min(400, total)));
+      await waitFor(() => expect(listOptions()).toHaveLength(Math.min(400, total)));
       expect(screen.queryByRole("button", { name: /left\)$/ })).not.toBeInTheDocument();
 
       page.unmount();
@@ -711,7 +742,8 @@ describe("Echoes report page", () => {
       const user = userEvent.setup();
 
       // Tab reaches the list's first row; Arrow keys move along the list to harbor.
-      const options = await screen.findAllByRole("option");
+      await waitFor(() => expect(listOptions()).not.toHaveLength(0));
+      const options = listOptions();
       const row = options.find((option) => /^harbor/.test(option.textContent ?? ""));
       expect(row).toBeDefined();
       await tabTo(user, options[0]);
@@ -726,8 +758,8 @@ describe("Echoes report page", () => {
         count: 50,
         left: occurrences - 50,
       });
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(251));
-      const more = screen.getByRole("option", { name: firstMore });
+      await waitFor(() => expect(listOptions()).toHaveLength(251));
+      const more = optionNamed(firstMore);
 
       // Arrow keys walk the 50 occurrences to the Show more option.
       for (let step = 0; step < 100 && document.activeElement !== more; step++) {
@@ -741,8 +773,8 @@ describe("Echoes report page", () => {
         count: 50,
         left: occurrences - 100,
       });
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(301));
-      expect(screen.getByRole("option", { name: secondMore })).toBeInTheDocument();
+      await waitFor(() => expect(listOptions()).toHaveLength(301));
+      expect(optionNamed(secondMore)).toBeInTheDocument();
 
       page.unmount();
     } finally {
@@ -756,19 +788,22 @@ describe("Echoes report page", () => {
       const page = await host.renderPage(REPORT_PAGE_ID);
       const user = userEvent.setup();
 
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
-      const more = await screen.findByRole("button", { name: /left\)$/ });
+      await waitFor(() => expect(listOptions()).toHaveLength(200));
+      const more = showMoreButton();
+      expect(more).toBeDefined();
       // Each row's Item Menu button is a Tab stop, so a forward walk to Show more
       // passes the whole page; Shift+Tab from the body reaches it, the last stop.
-      await shiftTabTo(user, more, 2);
+      if (more !== undefined) await shiftTabTo(user, more, 2);
+      expect(more).toHaveFocus();
       await user.keyboard("{Enter}");
-      await waitFor(() =>
-        expect(screen.getAllByRole("option")).toHaveLength(WIDE_REPORT.nearby.length)
-      );
+      await waitFor(() => expect(listOptions()).toHaveLength(WIDE_REPORT.nearby.length));
 
       // Switch to the other Book and back: the first tab starts at one page again.
       await pickOption(user, en["report.book"], "Emma");
-      expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
+      await waitFor(() =>
+        expect(listOptions().some((option) => /garden/.test(option.textContent ?? ""))).toBe(true)
+      );
+      expect(screen.getByRole("option", { name: /garden/ })).toBeInTheDocument();
       // The list opens on Emma, which sits below Atlas, so Arrow Up walks back
       // (pickOption only walks down).
       await tabTo(user, screen.getByLabelText(en["report.book"]));
@@ -779,8 +814,8 @@ describe("Echoes report page", () => {
       }
       expect(atlas).toHaveFocus();
       await user.keyboard("{Enter}");
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
-      expect(screen.getByRole("button", { name: /left\)$/ })).toBeInTheDocument();
+      await waitFor(() => expect(listOptions()).toHaveLength(200));
+      expect(showMoreButton()).toBeDefined();
 
       page.unmount();
     } finally {
