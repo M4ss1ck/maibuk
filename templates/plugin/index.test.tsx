@@ -38,7 +38,7 @@ describe("Hello Plugin", () => {
     const host = testHost();
     try {
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_COMMAND });
-      expect(host.pageNavigations).toEqual([{ pluginId: "hello-plugin", pageId: PAGE_ID }]);
+      expect(host.pageNavigations).toEqual([{ pluginId: manifest.id, pageId: PAGE_ID }]);
     } finally {
       host.stop();
     }
