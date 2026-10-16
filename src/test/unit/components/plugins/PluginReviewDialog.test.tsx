@@ -73,6 +73,7 @@ function entry(overrides: Partial<PluginManagementEntry> = {}): PluginManagement
     unsupported: false,
     duplicateFolders: [],
     stopped: null,
+    locales: {},
     ...overrides,
   };
 }

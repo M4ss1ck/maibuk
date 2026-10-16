@@ -1,10 +1,59 @@
 import { PLUGINS_SECTION } from "@/components/settings/PluginsSection.rows";
 import {
-  getAllPluginSettingsRows,
+  getPluginSettingsOwners,
+  pluginCardRowId,
   rowOnPlatform,
   type SettingsPlatform,
   type SettingsSectionDef,
 } from "@/features/settings/rows";
+import type { Language } from "@/features/settings/types";
+import {
+  localizedPluginManifest,
+  usePluginManagementStore,
+} from "@/features/plugins/management";
+
+/**
+ * One Plugin card the Plugins section renders, named for the outline and the
+ * Command Palette: its card row id, its localized name, and its localized
+ * description (empty for a legacy Settings owner, which declares none).
+ */
+export interface PluginCardEntry {
+  id: string;
+  label: string;
+  description: string;
+}
+
+/**
+ * The Plugin cards the Plugins section renders, in the order it renders them:
+ * the known Plugins by name, then any Plugin that only declares Settings rows
+ * (a legacy owner) by its display name. Read from the management store and the
+ * Settings-rows registry, so the outline and the palette name a card exactly
+ * as its row does.
+ */
+export function pluginCardEntries(language: Language): PluginCardEntry[] {
+  const plugins = usePluginManagementStore.getState().plugins;
+  const entries = Object.values(plugins).sort((a, b) =>
+    a.manifest.name.localeCompare(b.manifest.name)
+  );
+  const known = new Set(entries.map((entry) => entry.pluginId));
+  const cards: PluginCardEntry[] = entries.map((entry) => {
+    const localized = localizedPluginManifest(entry, language);
+    return {
+      id: pluginCardRowId(entry.pluginId),
+      label: localized.name,
+      description: localized.description,
+    };
+  });
+  for (const owner of getPluginSettingsOwners()) {
+    if (known.has(owner.pluginId)) continue;
+    cards.push({
+      id: pluginCardRowId(owner.pluginId),
+      label: owner.displayName,
+      description: "",
+    });
+  }
+  return cards;
+}
 
 /** One section of the Settings outline, with the rows it lists. */
 export interface OutlineSection {
@@ -35,6 +84,8 @@ export function buildOutline(
     translate: (key: string) => string;
     query: string;
     openSection: string | null;
+    /** The Plugins section's cards, in the order the screen renders them. */
+    pluginCards?: readonly PluginCardEntry[];
   }
 ): OutlineSection[] {
   const query = normalize(options.query);
@@ -45,15 +96,15 @@ export function buildOutline(
       const coreRows = section.rows
         .filter((row) => rowOnPlatform(row, options.platform))
         .map((row) => ({ id: row.id, label: options.translate(row.labelKey) }));
-      // Runtime Plugin rows live in the Plugins section; their metadata needs
-      // no Worker, so the outline and search see them like core rows.
-      const runtimeRows =
+      // The Plugins section lists one entry per card beside its core rows,
+      // instead of the runtime Plugin Settings rows (which the palette still
+      // finds). The cards arrive already localized and ordered by the caller,
+      // so the outline matches the screen without reading the store here.
+      const cardRows =
         section.id === PLUGINS_SECTION.id
-          ? getAllPluginSettingsRows()
-              .filter((row) => rowOnPlatform(row, options.platform))
-              .map((row) => ({ id: row.id, label: row.label }))
+          ? (options.pluginCards ?? []).map((card) => ({ id: card.id, label: card.label }))
           : [];
-      const rows = [...coreRows, ...runtimeRows];
+      const rows = [...coreRows, ...cardRows];
       if (!query)
         return [{ id: section.id, label, rows, open: section.id === options.openSection }];
       if (normalize(label).includes(query)) return [{ id: section.id, label, rows, open: true }];

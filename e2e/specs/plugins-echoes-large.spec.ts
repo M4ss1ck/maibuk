@@ -8,7 +8,9 @@
 // Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { watchForText } from "../support/layout";
 import { expect, test } from "../support/test";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
@@ -82,5 +84,48 @@ test.describe("Echoes report on a large Book @wf:plugins-echoes @no-webkit", () 
     await tabTo(page, more, { max: 400 });
     await page.keyboard.press("Enter");
     await expect(nearbyList(page).getByRole("option")).toHaveCount(400);
+  });
+
+  test("the list fills a tall window and keeps Show more on screen", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1100 });
+    await page.goto("/");
+    await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });
+    await tabTo(page, navOption(page, "Books"));
+    await pressUntilFocused(page, "ArrowDown", navOption(page, "Echoes"), { max: 12 });
+    await page.keyboard.press("Enter");
+    await expect(nearbyList(page).getByRole("option")).toHaveCount(200, { timeout: 60_000 });
+
+    // Taller than the old fixed 20rem (320px) cap, and the button after it still
+    // fits in the window without scrolling the page.
+    const more = page.getByRole("button", { name: /^Show 200 more/ });
+    await expect
+      .poll(async () => (await nearbyList(page).boundingBox())?.height ?? 0)
+      .toBeGreaterThan(320);
+    const button = await more.boundingBox();
+    expect(button).not.toBeNull();
+    expect((button?.y ?? 0) + (button?.height ?? 0)).toBeLessThanOrEqual(1100);
+    await capture(page, "echoes-report-tall-window");
+  });
+
+  test("a revisit paints the kept report without the loading screen", async ({ page }) => {
+    await page.goto("/");
+    await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });
+    await tabTo(page, navOption(page, "Books"));
+    await pressUntilFocused(page, "ArrowDown", navOption(page, "Echoes"), { max: 12 });
+    await page.keyboard.press("Enter");
+    await expect(nearbyList(page).getByRole("option")).toHaveCount(200, { timeout: 60_000 });
+
+    // Leave for Books and come back, by keyboard.
+    await tabTo(page, navOption(page, "Echoes"));
+    await pressUntilFocused(page, "ArrowUp", navOption(page, "Books"), { max: 12 });
+    await page.keyboard.press("Enter");
+    await expect(nearbyList(page)).toHaveCount(0);
+    // Watch for the loading screen from the moment the page is chosen again.
+    const sawLoading = await watchForText(page, "Checking the Book");
+    await tabTo(page, navOption(page, "Books"));
+    await pressUntilFocused(page, "ArrowDown", navOption(page, "Echoes"), { max: 12 });
+    await page.keyboard.press("Enter");
+    await expect(nearbyList(page).getByRole("option")).toHaveCount(200);
+    expect(await sawLoading()).toBe(false);
   });
 });

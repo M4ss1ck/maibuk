@@ -299,6 +299,11 @@ export const COMMANDS = {
     contexts: ["settings"],
     defaults: [],
   },
+  "settings.togglePlugin": {
+    labelKey: "plugins.management.commands.togglePlugin",
+    contexts: ["settings"],
+    defaults: [],
+  },
   "settings.keepMyCopy": {
     labelKey: "plugins.keep",
     contexts: ["settings"],

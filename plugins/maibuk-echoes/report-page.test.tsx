@@ -82,10 +82,39 @@ async function pickOption(user: User, label: string, option: string): Promise<vo
   const trigger = screen.getByLabelText(label);
   await tabTo(user, trigger);
   await user.keyboard("{Enter}");
-  await screen.findByRole("listbox");
-  const target = screen.getByRole("option", { name: option });
+  const listbox = await screen.findByRole("listbox");
+  const target = within(listbox).getByRole("option", { name: option });
   while (document.activeElement !== target) await user.keyboard("{ArrowDown}");
   await user.keyboard("{Enter}");
+}
+
+/**
+ * The list's options, found by their role attribute. A role query over a page
+ * of rows takes hundreds of milliseconds, and `waitFor` reruns it on every
+ * repaint the progress bar makes, so on a hosted runner the polling starves the
+ * report it waits for. React Aria sets the attribute on every row; the hidden
+ * native select's options carry none, as a role query excludes them too.
+ */
+function listOptions(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+}
+
+/**
+ * The option whose text is `text`, checked against its accessible name: one
+ * name computed instead of one per row, which on a long list costs seconds.
+ */
+function optionNamed(text: string): HTMLElement {
+  const option = listOptions().find((candidate) => candidate.textContent?.trim() === text);
+  if (option === undefined) throw new Error(`No option with the text ${text}`);
+  expect(option).toHaveAccessibleName(text);
+  return option;
+}
+
+/** The tab's Show more button, found by its text for the same reason as `listOptions`. */
+function showMoreButton(): HTMLElement | undefined {
+  return [...document.querySelectorAll<HTMLElement>("button")].find((button) =>
+    /left\)$/.test(button.textContent?.trim() ?? "")
+  );
 }
 
 /**
@@ -439,11 +468,13 @@ describe("Echoes report page", () => {
       const page = await host.renderPage(REPORT_PAGE_ID);
       const user = userEvent.setup();
 
-      // Loading yields between Chapters, so 250 of them take a few frames; a
-      // slow poll keeps the role query from starving that loop.
-      expect(
-        await screen.findByRole("option", { name: /kettle/ }, { timeout: 20_000, interval: 500 })
-      ).toBeInTheDocument();
+      // Loading yields between Chapters, so 250 of them take a few frames; the
+      // poll stays cheap so it never starves that loop, then one role query
+      // checks the row's name.
+      await waitFor(() =>
+        expect(listOptions().some((option) => /kettle/.test(option.textContent ?? ""))).toBe(true)
+      );
+      expect(screen.getByRole("option", { name: /kettle/ })).toBeInTheDocument();
       expect(page.violations).toEqual([]);
 
       const trigger = screen.getByLabelText(en["report.scope"]);
@@ -677,7 +708,7 @@ describe("Echoes report page", () => {
       const page = await host.renderPage(REPORT_PAGE_ID);
       const user = userEvent.setup();
 
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
+      await waitFor(() => expect(listOptions()).toHaveLength(200));
       const left = total - 200;
       const more = await screen.findByRole("button", {
         name: format(en["report.showMore"], { count: Math.min(200, left), left }),
@@ -690,7 +721,7 @@ describe("Echoes report page", () => {
       expect(more).toHaveFocus();
       await user.keyboard("{Enter}");
 
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(Math.min(400, total)));
+      await waitFor(() => expect(listOptions()).toHaveLength(Math.min(400, total)));
       expect(screen.queryByRole("button", { name: /left\)$/ })).not.toBeInTheDocument();
 
       page.unmount();
@@ -711,7 +742,8 @@ describe("Echoes report page", () => {
       const user = userEvent.setup();
 
       // Tab reaches the list's first row; Arrow keys move along the list to harbor.
-      const options = await screen.findAllByRole("option");
+      await waitFor(() => expect(listOptions()).not.toHaveLength(0));
+      const options = listOptions();
       const row = options.find((option) => /^harbor/.test(option.textContent ?? ""));
       expect(row).toBeDefined();
       await tabTo(user, options[0]);
@@ -726,8 +758,8 @@ describe("Echoes report page", () => {
         count: 50,
         left: occurrences - 50,
       });
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(251));
-      const more = screen.getByRole("option", { name: firstMore });
+      await waitFor(() => expect(listOptions()).toHaveLength(251));
+      const more = optionNamed(firstMore);
 
       // Arrow keys walk the 50 occurrences to the Show more option.
       for (let step = 0; step < 100 && document.activeElement !== more; step++) {
@@ -741,8 +773,8 @@ describe("Echoes report page", () => {
         count: 50,
         left: occurrences - 100,
       });
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(301));
-      expect(screen.getByRole("option", { name: secondMore })).toBeInTheDocument();
+      await waitFor(() => expect(listOptions()).toHaveLength(301));
+      expect(optionNamed(secondMore)).toBeInTheDocument();
 
       page.unmount();
     } finally {
@@ -756,19 +788,22 @@ describe("Echoes report page", () => {
       const page = await host.renderPage(REPORT_PAGE_ID);
       const user = userEvent.setup();
 
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
-      const more = await screen.findByRole("button", { name: /left\)$/ });
+      await waitFor(() => expect(listOptions()).toHaveLength(200));
+      const more = showMoreButton();
+      expect(more).toBeDefined();
       // Each row's Item Menu button is a Tab stop, so a forward walk to Show more
       // passes the whole page; Shift+Tab from the body reaches it, the last stop.
-      await shiftTabTo(user, more, 2);
+      if (more !== undefined) await shiftTabTo(user, more, 2);
+      expect(more).toHaveFocus();
       await user.keyboard("{Enter}");
-      await waitFor(() =>
-        expect(screen.getAllByRole("option")).toHaveLength(WIDE_REPORT.nearby.length)
-      );
+      await waitFor(() => expect(listOptions()).toHaveLength(WIDE_REPORT.nearby.length));
 
       // Switch to the other Book and back: the first tab starts at one page again.
       await pickOption(user, en["report.book"], "Emma");
-      expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
+      await waitFor(() =>
+        expect(listOptions().some((option) => /garden/.test(option.textContent ?? ""))).toBe(true)
+      );
+      expect(screen.getByRole("option", { name: /garden/ })).toBeInTheDocument();
       // The list opens on Emma, which sits below Atlas, so Arrow Up walks back
       // (pickOption only walks down).
       await tabTo(user, screen.getByLabelText(en["report.book"]));
@@ -779,8 +814,8 @@ describe("Echoes report page", () => {
       }
       expect(atlas).toHaveFocus();
       await user.keyboard("{Enter}");
-      await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(200));
-      expect(screen.getByRole("button", { name: /left\)$/ })).toBeInTheDocument();
+      await waitFor(() => expect(listOptions()).toHaveLength(200));
+      expect(showMoreButton()).toBeDefined();
 
       page.unmount();
     } finally {
@@ -914,6 +949,188 @@ describe("Echoes report page", () => {
       expect(reads.mock.calls.length).toBe(readsAfterIgnore);
 
       second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("paints the kept report on the first frame of a revisit, with no loading screen and no recompute", async () => {
+    const { host, reads } = countedReportHost();
+    let observer: MutationObserver | null = null;
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      const before = screen.getAllByRole("option").map((row) => row.textContent);
+      const computedReads = reads.mock.calls.length;
+      first.unmount();
+
+      // The host draws asynchronously, so the DOM is watched across the whole
+      // second mount: the loading screen and the compute bar must never appear,
+      // and the rows must be in the first frame the host draws.
+      const frames: string[] = [];
+      observer = new MutationObserver(() => {
+        const text = document.body.textContent ?? "";
+        if (text.trim() !== "") frames.push(text);
+      });
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      observer.disconnect();
+
+      expect(frames[0]).toContain("harbor");
+      expect(frames.some((frame) => frame.includes(en["report.loading"]))).toBe(false);
+      expect(frames.some((frame) => frame.includes(en["report.computing"]))).toBe(false);
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(before);
+      // No Chapter was read again: the kept report answered the page.
+      expect(reads.mock.calls.length).toBe(computedReads);
+
+      second.unmount();
+    } finally {
+      observer?.disconnect();
+      host.stop();
+    }
+  });
+
+  it("applies a Find echoes scope run since the last visit on the next mount", async () => {
+    const host = reportHost();
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      first.unmount();
+
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, {
+        id: FIND_ECHOES,
+        target: { kind: "chapter", id: "c1" },
+      });
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      await waitFor(() =>
+        expect(screen.getByLabelText(en["report.scope"])).toHaveTextContent("Chapter One")
+      );
+      expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: /shore/ })).not.toBeInTheDocument();
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("recomputes with settings changed while the page was away", async () => {
+    const storage = settingsStorage();
+    const { host, reads } = countedReportHost(storage);
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      const computedReads = reads.mock.calls.length;
+      first.unmount();
+
+      storage.set(ECHOES_SETTINGS_KEY, { ignore: ["harbor"] });
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      // The stored settings differ, so the report recomputes for the new cache
+      // key and the ignored row goes.
+      expect(await screen.findByRole("option", { name: /shore/ })).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument()
+      );
+      expect(reads.mock.calls.length).toBeGreaterThan(computedReads);
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("falls back to the first Book when the remembered Book is gone", async () => {
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: { books: BOOKS, chapters: CHAPTERS },
+      storage: settingsStorage(),
+    });
+    const client = createPluginClient(host.port);
+    const list = client.library.books.list.bind(client.library.books);
+    let calls = 0;
+    // The second mount's fresh list omits the Book the first visit remembered.
+    vi.spyOn(client.library.books, "list").mockImplementation(async () => {
+      calls += 1;
+      const books = await list();
+      return calls >= 2 ? books.filter((book) => book.id !== "b1") : books;
+    });
+    startEchoes(client, servePluginUi);
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Dune");
+      first.unmount();
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      await waitFor(() => expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Emma"));
+      expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
+
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("shows a Book renamed while the page was away under its new title", async () => {
+    const host = createTestHost({
+      manifest: echoesManifest(),
+      library: { books: BOOKS, chapters: CHAPTERS },
+      storage: settingsStorage(),
+    });
+    const client = createPluginClient(host.port);
+    const list = client.library.books.list.bind(client.library.books);
+    let calls = 0;
+    // The second mount's fresh list carries the remembered Book under a new title.
+    vi.spyOn(client.library.books, "list").mockImplementation(async () => {
+      calls += 1;
+      const books = await list();
+      return calls >= 2
+        ? books.map((book) => (book.id === "b1" ? { ...book, title: "Dune Messiah" } : book))
+        : books;
+    });
+    startEchoes(client, servePluginUi);
+    try {
+      const first = await host.renderPage(REPORT_PAGE_ID);
+      await screen.findByRole("option", { name: /harbor/ });
+      first.unmount();
+
+      const second = await host.renderPage(REPORT_PAGE_ID);
+      await waitFor(() =>
+        expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Dune Messiah")
+      );
+      second.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("draws the page with a determinate bar while the first report computes", async () => {
+    const { host, reads, read } = countedReportHost();
+    // Hold the first Chapter read, so the first compute is still running.
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    reads.mockImplementationOnce(async (...args) => {
+      await held;
+      return read(...args);
+    });
+    try {
+      const page = await host.renderPage(REPORT_PAGE_ID);
+
+      // The initial load has resolved, so the header is drawn and the compute
+      // bar reports progress; the cold "Checking the Book…" screen is gone.
+      expect(await screen.findByText(en["report.computing"])).toBeInTheDocument();
+      expect(screen.getByLabelText(en["report.book"])).toBeInTheDocument();
+      expect(screen.queryByText(en["report.loading"])).not.toBeInTheDocument();
+
+      release();
+      await screen.findByRole("option", { name: /harbor/ });
+      page.unmount();
     } finally {
       host.stop();
     }

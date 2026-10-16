@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   PLUGIN_APPROVALS_STORAGE_KEY,
   getPluginApproval,
+  savePluginApproval,
 } from "@/features/plugins/approvals";
 import { resetPluginContributionsForTests } from "@/features/plugins/contributions";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
@@ -138,7 +139,7 @@ describe("Built-in Plugins: first sight", () => {
 
     const approval = getPluginApproval(ID);
     expect(approval).toMatchObject({
-      enabled: true,
+      enabled: false,
       granted: ["library:read", "secrets"],
       builtIn: { shippedHash: await hashPluginDirectory(h.installed()!.files) },
     });
@@ -153,6 +154,9 @@ describe("Built-in Plugins: first sight", () => {
   it("starts a pre-granted Built-in through the normal lifecycle at launch", async () => {
     const h = await setup();
     await h.refresh();
+    // A Built-in starts off on first sight; turning it on needs no review, so
+    // the next launch runs it like any enabled Plugin.
+    savePluginApproval({ ...getPluginApproval(ID)!, enabled: true });
 
     await h.lifecycle.launch();
 
@@ -165,6 +169,7 @@ describe("Built-in Plugins: revoke", () => {
   it("keeps an optional revoke across a refresh instead of restoring it", async () => {
     const h = await setup();
     await h.refresh();
+    await h.store.getState().enable(ID);
     expect(getPluginApproval(ID)?.granted).toEqual(["library:read", "secrets"]);
 
     await h.store.getState().revoke(ID, "secrets");
@@ -181,6 +186,7 @@ describe("Built-in Plugins: revoke", () => {
   it("disables a Built-in when a required grant is revoked, across a refresh", async () => {
     const h = await setup();
     await h.refresh();
+    await h.store.getState().enable(ID);
 
     await h.store.getState().revoke(ID, "library:read");
 
@@ -198,7 +204,9 @@ describe("Built-in Plugins: modified copy", () => {
   it("is marked modified and review-required and never starts", async () => {
     const h = await setup();
     await h.refresh();
-    // The author edits the installed copy.
+    // The Built-in was turned on (no review needed), then the author edits the
+    // installed copy.
+    savePluginApproval({ ...getPluginApproval(ID)!, enabled: true });
     h.setInstalled(builtInFolder({ "index.js": "export const a = 2;" }));
 
     await h.lifecycle.launch();
@@ -288,7 +296,7 @@ describe("Built-in Plugins: reserved maibuk- ids", () => {
     await h.refresh();
 
     expect(getPluginApproval("maibuk-echoes")).toMatchObject({
-      enabled: true,
+      enabled: false,
       granted: ["library:read", "secrets"],
       builtIn: { shippedHash: await hashPluginDirectory(folder.files) },
     });
@@ -306,6 +314,8 @@ describe("Built-in Plugins: reserved maibuk- ids", () => {
     );
     const h = await setup({ installed: folder });
     await h.refresh();
+    // A Built-in starts off; turning it on needs no review.
+    savePluginApproval({ ...getPluginApproval("maibuk-echoes")!, enabled: true });
 
     await h.lifecycle.launch();
 

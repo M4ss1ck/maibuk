@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useState, useSyncExternalStore } from "react";
+import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Button as AriaButton, Disclosure, DisclosurePanel } from "react-aria-components";
 import { PluginConfirmDialog } from "@/components/plugins/PluginConfirmDialog";
 import { PluginPermissionDialog } from "@/components/plugins/PluginPermissionDialog";
 import { PluginRemoveDialog } from "@/components/plugins/PluginRemoveDialog";
@@ -7,7 +9,7 @@ import { PluginReviewDialog } from "@/components/plugins/PluginReviewDialog";
 import { PluginSettingsRowBody } from "@/components/plugins/PluginSettingsRowBody";
 import { PluginSurface } from "@/components/plugins/PluginSurface";
 import { ReplaceBuiltInDialog } from "@/components/plugins/ReplaceBuiltInDialog";
-import { PluginRow } from "@/components/settings/PluginRow";
+import { PLUGIN_DISCLOSURE_PANEL_CLASS, PluginRow } from "@/components/settings/PluginRow";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 import { asPluginTranslate } from "@/components/settings/plugin-translate";
@@ -31,6 +33,9 @@ import {
   getPluginSettingsOwners,
   getPluginSettingsRows,
   onSettingsRowsChange,
+  pluginCardRowId,
+  pluginIdOfCardRow,
+  pluginIdOfSettingsRow,
   rowOnPlatform,
 } from "@/features/settings/rows";
 import { getPluginDirectory } from "@/lib/platform";
@@ -62,6 +67,7 @@ export function PluginsSection() {
   const pluginOpen = useSettingsRevealStore((state) => state.pluginOpen);
   const setPluginOpen = useSettingsRevealStore((state) => state.setPluginOpen);
   const pendingReviewId = useSettingsRevealStore((state) => state.pendingPluginReviewId);
+  const pendingRowId = useSettingsRevealStore((state) => state.pendingRowId);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [diffId, setDiffId] = useState<string | null>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
@@ -123,6 +129,18 @@ export function PluginsSection() {
 
   const counts = countPluginsByCategory(entries);
   const visible = filterPluginsByCategories(entries, selected);
+
+  // A jump to a Plugin card, or to one of its Settings rows, must find the
+  // card on screen. When the current status filter hides that Plugin, reset
+  // the filter to every category so the card mounts and the reveal lands on
+  // its trigger instead of falling back to the section heading.
+  useEffect(() => {
+    if (pendingRowId === null) return;
+    const pluginId = pluginIdOfCardRow(pendingRowId) ?? pluginIdOfSettingsRow(pendingRowId);
+    if (pluginId === null || plugins[pluginId] === undefined) return;
+    const shown = visible.some((entry) => entry.pluginId === pluginId);
+    if (!shown) setSelected([...PLUGIN_FILTER_CATEGORIES]);
+  }, [pendingRowId, plugins, visible]);
   const filterOptions = useMemo(
     () =>
       PLUGIN_FILTER_CATEGORIES.map((category) => ({
@@ -139,6 +157,13 @@ export function PluginsSection() {
   // The single target each destructive Command acts on, matching the button it
   // stands for: the first row that shows that button (#443).
   const removable = entries.find((entry) => entry.installed) ?? null;
+  // The first installed, enableable row (the same "first row that shows the
+  // control" rule as removable): the toggle Command acts on it, exactly as its
+  // header switch would.
+  const toggleable =
+    entries.find(
+      (entry) => entry.installed && entry.duplicateFolders.length === 0 && !entry.unsupported
+    ) ?? null;
   const reinstallable = entries.find((entry) => !entry.installed && entry.builtIn) ?? null;
   const restartable = entries.find((entry) => entry.stopped !== null) ?? null;
   const deletable =
@@ -258,6 +283,20 @@ export function PluginsSection() {
       onTrigger: () => {
         const first = reviewable[0];
         if (first) openReviewFor(first);
+      },
+    },
+    {
+      id: "settings.togglePlugin",
+      enabled: toggleable !== null,
+      onTrigger: () => {
+        if (!toggleable) return;
+        if (toggleable.approval?.enabled === true) {
+          usePluginManagementStore.getState().disable(toggleable.pluginId);
+        } else if (toggleable.review.status !== "approved" || hasMissingRequired(toggleable)) {
+          openReviewFor(toggleable);
+        } else {
+          void usePluginManagementStore.getState().enable(toggleable.pluginId);
+        }
       },
     },
     {
@@ -409,7 +448,7 @@ export function PluginsSection() {
           </div>
         </div>
       ) : (
-        <div className="divide-y divide-border">
+        <div className="flex flex-col gap-3">
           {entries.length > 0 && visible.length === 0 && (
             <p className="py-3 text-sm text-muted-foreground">{t("plugins.management.empty")}</p>
           )}
@@ -434,21 +473,29 @@ export function PluginsSection() {
             if (rows.length === 0) return null;
             const open = pluginOpen[owner.pluginId] ?? false;
             return (
-              <div key={owner.pluginId} className="py-2">
-                <button
-                  type="button"
-                  aria-expanded={open}
-                  aria-controls={`plugin-accordion-${owner.pluginId}`}
-                  onClick={() => setPluginOpen(owner.pluginId, !open)}
-                  className="flex w-full items-center justify-between rounded py-2 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  <span>{owner.displayName}</span>
-                  <span aria-hidden="true" className="text-muted-foreground">
-                    {open ? "−" : "+"}
-                  </span>
-                </button>
-                {open && (
-                  <div id={`plugin-accordion-${owner.pluginId}`}>
+              <Disclosure
+                key={owner.pluginId}
+                isExpanded={open}
+                onExpandedChange={(next) => setPluginOpen(owner.pluginId, next)}
+                data-settings-row={pluginCardRowId(owner.pluginId)}
+                className="rounded-lg border border-border bg-card"
+              >
+                <div className="flex w-full items-center gap-4 rounded-lg px-3 py-2 hover:bg-muted/40">
+                  <AriaButton
+                    slot="trigger"
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded py-1 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <span className="truncate">{owner.displayName}</span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${
+                        open ? "rotate-180" : ""
+                      }`}
+                    />
+                  </AriaButton>
+                </div>
+                <DisclosurePanel className={PLUGIN_DISCLOSURE_PANEL_CLASS}>
+                  <div className="px-3 pb-3">
                     <PluginSurface pluginId={owner.pluginId} surface="settings" />
                     {rows.map((row) => (
                       <SettingRow key={row.id} id={row.id} className={SETTINGS_ROW_CLASS}>
@@ -456,8 +503,8 @@ export function PluginsSection() {
                       </SettingRow>
                     ))}
                   </div>
-                )}
-              </div>
+                </DisclosurePanel>
+              </Disclosure>
             );
           })}
         </div>

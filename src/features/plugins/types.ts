@@ -7,6 +7,7 @@ import type { z } from "zod";
 import type { PLUGIN_API_EVENTS, PLUGIN_API_TABLE } from "@/features/plugins/api-table";
 import type { pluginManifestSchema } from "@/features/plugins/manifest-schema";
 import type { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-validate";
+import type { Language } from "@/features/settings/types";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
@@ -391,6 +392,13 @@ export interface PluginManagementEntry {
    * Restart action; null while the Plugin has not been stopped this way (#443).
    */
   stopped: { reason: PluginLifecycleStopReason } | null;
+  /**
+   * The Plugin's UI-string overrides per language, read from its
+   * `locales/<lang>.json` files (#442). The card shows the manifest name
+   * localized to the current UI language; a row with no copy (a removed one)
+   * carries `{}`.
+   */
+  locales: Partial<Record<Language, PluginLocale>>;
 }
 
 /** The management store's dependencies; injected in tests. */

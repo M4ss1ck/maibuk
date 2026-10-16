@@ -97,14 +97,26 @@ async function openPluginsSection(page: Page): Promise<void> {
 
 /** Tabs to the Plugin's row and expands it. */
 async function expandPluginRow(page: Page): Promise<void> {
-  await tabTo(page, page.getByRole("button", { name: PLUGIN_NAME, exact: true }), { max: 30 });
+  await tabTo(page, page.getByRole("button", { name: new RegExp(`^${PLUGIN_NAME}`) }), {
+    max: 30,
+  });
   await page.keyboard.press("Enter");
+}
+
+/** Expands the nested Permissions accordion inside an open card. */
+async function openPermissions(page: Page): Promise<void> {
+  const trigger = page.getByRole("button", { name: /Plugin permissions/ });
+  await tabTo(page, trigger, { max: 40 });
+  await page.keyboard.press("Enter");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
 }
 
 /** Toggles the row's remember switch to `on` from Settings and returns it. */
 async function setRemembered(page: Page, on: boolean): Promise<void> {
   await openPluginsSection(page);
   await expandPluginRow(page);
+  // The remember switch lives in the nested Permissions accordion.
+  await openPermissions(page);
   const remember = page.getByRole("switch", { name: REMEMBER_LABEL });
   await expect(remember).toBeVisible({ timeout: 15_000 });
   await tabTo(page, remember, { max: 40 });

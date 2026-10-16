@@ -186,7 +186,7 @@ afterEach(() => {
 });
 
 describe("resetAllSettings", () => {
-  it("clears settings, shortcuts, approvals, and credentials, re-seeds Built-ins, and restarts an untouched one", async () => {
+  it("clears settings, shortcuts, approvals, and credentials, re-seeds Built-ins, and leaves an untouched one off", async () => {
     const harness = await setup();
     const { store } = harness;
     await store.getState().refresh();
@@ -202,8 +202,8 @@ describe("resetAllSettings", () => {
 
     await resetAllSettings({
       clearCredentials,
-      // The default restart reads the app's management singleton; mirror the
-      // refreshed entries into it so the real restart path runs.
+      // Mirror the refreshed entries into the app's management singleton, as
+      // the default refresh would.
       refreshPlugins: async () => {
         await store.getState().refresh();
         usePluginManagementStore.setState({ plugins: store.getState().plugins });
@@ -226,11 +226,12 @@ describe("resetAllSettings", () => {
     expect(harness.uninstalled).toEqual([TRACER, GUIDE]);
     expect(store.getState().plugins[TRACER].review.status).toBe("not-approved");
 
-    // The untouched Built-in re-seeds to shipped defaults and starts again now;
-    // the modified copy stays review-required and is not restarted.
-    expect(getPluginApproval(GUIDE)).toMatchObject({ enabled: true, granted: [] });
+    // The untouched Built-in re-seeds to its shipped default: pre-granted but
+    // off, so it is not started again even though it was running; the modified
+    // copy stays review-required.
+    expect(getPluginApproval(GUIDE)).toMatchObject({ enabled: false, granted: [] });
     expect(store.getState().plugins[GUIDE].review.status).toBe("approved");
-    expect(harness.installedAgain).toEqual([GUIDE]);
+    expect(harness.installedAgain).toEqual([]);
     const echoesApproval = getPluginApproval(ECHOES);
     expect(echoesApproval?.pinnedHash).toBe(harness.echoesShippedHash);
     expect(store.getState().plugins[ECHOES]).toMatchObject({
@@ -253,7 +254,6 @@ describe("resetAllSettings", () => {
     await resetAllSettings({
       stopPlugins: () => {},
       refreshPlugins: async () => {},
-      restartBuiltIns: async () => {},
     });
 
     // The store the app registered holds nothing after the reset.
@@ -302,7 +302,6 @@ describe("resetAllSettings", () => {
       // the keyring are the real ones.
       stopPlugins: () => {},
       refreshPlugins: async () => {},
-      restartBuiltIns: async () => {},
     });
 
     expect(getPluginApproval(TRACER)).toBeNull();
@@ -325,7 +324,6 @@ describe("resetAllSettings", () => {
     const known = vi.fn();
     const stopPlugins = vi.fn();
     const refreshPlugins = vi.fn(async () => {});
-    const restartBuiltIns = vi.fn(async () => {});
 
     await expect(
       resetAllSettings({
@@ -336,7 +334,6 @@ describe("resetAllSettings", () => {
         known,
         stopPlugins,
         refreshPlugins,
-        restartBuiltIns,
       })
     ).rejects.toBe(failure);
 
@@ -346,10 +343,9 @@ describe("resetAllSettings", () => {
     expect(approvals).toHaveBeenCalledTimes(1);
     expect(known).toHaveBeenCalledTimes(1);
     expect(refreshPlugins).toHaveBeenCalledTimes(1);
-    expect(restartBuiltIns).toHaveBeenCalledTimes(1);
   });
 
-  it("restarts a running Built-in with the settingsReset reason while the third-party Plugin needs approval again", async () => {
+  it("starts no Plugin again: a running Built-in returns to off and the third-party Plugin needs approval again", async () => {
     const harness = await setup();
     await harness.store.getState().refresh();
 
@@ -360,10 +356,11 @@ describe("resetAllSettings", () => {
       },
     });
 
-    // The untouched Built-in that was running restarts with the reset reason.
-    expect(harness.installReasons).toEqual([{ pluginId: GUIDE, reason: "settingsReset" }]);
-    // The third-party Plugin is not restarted and needs approval again.
-    expect(harness.installedAgain).toEqual([GUIDE]);
+    // Reset returns every Plugin to its default, and a Built-in's default is
+    // off, so nothing is started again.
+    expect(harness.installReasons).toEqual([]);
+    expect(harness.installedAgain).toEqual([]);
+    expect(getPluginApproval(GUIDE)?.enabled).toBe(false);
     expect(getPluginApproval(TRACER)).toBeNull();
   });
 
@@ -403,8 +400,7 @@ describe("resetAllSettings", () => {
       await resetAllSettings({
         stopPlugins: () => {},
         refreshPlugins: async () => {},
-        restartBuiltIns: async () => {},
-      });
+        });
 
       // The reset erased the grant; the broker re-reads it and refuses the call.
       const remaining = getPluginApproval(PLUGIN_MANIFEST.id)?.granted ?? [];

@@ -122,6 +122,7 @@ function entry(overrides: Partial<PluginManagementEntry> = {}): PluginManagement
     unsupported: false,
     duplicateFolders: [],
     stopped: null,
+    locales: {},
     ...overrides,
   };
 }
@@ -155,8 +156,17 @@ async function tabTo(user: User, target: HTMLElement, max = 14): Promise<void> {
 }
 
 async function openRow(user: User, name = "Echoes"): Promise<void> {
-  const trigger = screen.getByRole("button", { name });
+  // The disclosure trigger's accessible name carries the badges too, so a
+  // substring match finds the row by its name alone.
+  const trigger = screen.getByRole("button", { name: new RegExp(name) });
   await tabTo(user, trigger);
+  await user.keyboard("{Enter}");
+}
+
+/** Expands the nested Permissions accordion inside an open card. */
+async function openPermissions(user: User): Promise<void> {
+  const trigger = screen.getByRole("button", { name: /Plugin permissions/ });
+  await tabTo(user, trigger, 40);
   await user.keyboard("{Enter}");
 }
 
@@ -198,7 +208,7 @@ describe("PluginsSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the name, Built-in badge, Review required badge, and startup error", () => {
+  it("shows the name, Built-in badge, Review required badge, Failed to start, and no status badge", () => {
     seed(
       entry({
         builtIn: true,
@@ -207,11 +217,15 @@ describe("PluginsSection", () => {
       })
     );
     render(<PluginsSection />);
-    expect(screen.getByRole("button", { name: "Echoes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Echoes/ })).toBeInTheDocument();
     expect(screen.getByText("Built-in")).toBeInTheDocument();
     expect(screen.getByText("Review required")).toBeInTheDocument();
-    expect(screen.getByText("Off")).toBeInTheDocument();
+    // The startup error becomes an issue badge; the full text lives in the panel.
+    expect(screen.getByText("Failed to start")).toBeInTheDocument();
     expect(screen.getByText("Echoes failed to start.")).toBeInTheDocument();
+    // The old Enabled / Off status badge is gone.
+    expect(screen.queryByText("Off")).toBeNull();
+    expect(screen.queryByText("Enabled")).toBeNull();
   });
 
   it("approves a copy by keyboard and enables the Plugin", async () => {
@@ -253,10 +267,11 @@ describe("PluginsSection", () => {
     usePluginManagementStore.setState({ approve });
     render(<PluginsSection />);
 
-    await openRow(user);
-    const reviewButton = screen.getByRole("button", { name: "Review and enable" });
-    await tabTo(user, reviewButton);
-    await user.keyboard("{Enter}");
+    // Turning the header switch on for a copy that needs review opens the
+    // approval flow; the switch itself stays off until the store says enabled.
+    const toggle = screen.getByRole("switch", { name: "Enable Echoes" });
+    await tabTo(user, toggle);
+    await user.keyboard(" ");
 
     const approveButton = await screen.findByRole("button", {
       name: "Approve this copy and enable",
@@ -272,9 +287,8 @@ describe("PluginsSection", () => {
 
     expect(approve).toHaveBeenCalledWith("echoes", ["network:api.example.com"]);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Disable" })).toBeInTheDocument()
+      expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeChecked()
     );
-    expect(screen.getByText("Enabled")).toBeInTheDocument();
   });
 
   it("revoking an optional permission keeps the Plugin enabled", async () => {
@@ -311,6 +325,7 @@ describe("PluginsSection", () => {
     render(<PluginsSection />);
 
     await openRow(user);
+    await openPermissions(user);
     const optional = screen.getByRole("checkbox", {
       name: "Connect to api.example.com · Optional",
     });
@@ -320,7 +335,7 @@ describe("PluginsSection", () => {
     expect(revoke).toHaveBeenCalledWith("echoes", "network:api.example.com");
     expect(disable).not.toHaveBeenCalled();
     await waitFor(() => expect(optional).not.toBeChecked());
-    expect(screen.getByText("Enabled")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeChecked();
   });
 
   it("locks the inline permission toggles on a copy that needs review", async () => {
@@ -339,6 +354,7 @@ describe("PluginsSection", () => {
     render(<PluginsSection />);
 
     await openRow(user);
+    await openPermissions(user);
     const optional = screen.getByRole("checkbox", {
       name: "Connect to api.example.com · Optional",
     });
@@ -380,6 +396,7 @@ describe("PluginsSection", () => {
     render(<PluginsSection />);
 
     await openRow(user);
+    await openPermissions(user);
     const revokeButton = screen.getByRole("button", {
       name: "Disable Plugin and revoke access",
     });
@@ -394,8 +411,7 @@ describe("PluginsSection", () => {
         )
       ).toBeInTheDocument()
     );
-    expect(screen.getByText("Off")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Review and enable" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).not.toBeChecked();
   });
 
   it("keeps a Plugin's declared Settings rows in its expanded row", async () => {
@@ -552,10 +568,10 @@ describe("PluginsSection", () => {
     usePluginManagementStore.setState({ markReviewed });
     render(<PluginsSection />);
 
-    await openRow(user);
-    const reviewButton = screen.getByRole("button", { name: "Review and enable" });
-    await tabTo(user, reviewButton);
-    await user.keyboard("{Enter}");
+    // The header switch opens the changed-files review for a review-required copy.
+    const toggle = screen.getByRole("switch", { name: "Enable Echoes" });
+    await tabTo(user, toggle);
+    await user.keyboard(" ");
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("fresh.js")).toBeInTheDocument();
@@ -588,6 +604,312 @@ describe("PluginsSection", () => {
 
     expect(useSettingsStore.getState().pluginDevelopmentMode).toBe(true);
     expect(refresh).toHaveBeenCalled();
+  });
+});
+
+describe("Plugin card header (#442)", () => {
+  it("expands and collapses the card from the keyboard", async () => {
+    const user = userEvent.setup();
+    seed(entry());
+    render(<PluginsSection />);
+
+    const trigger = screen.getByRole("button", { name: /^Echoes/ });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("Library data")).not.toBeVisible();
+
+    await tabTo(user, trigger);
+    await user.keyboard("{Enter}");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Library data")).toBeVisible();
+
+    await user.keyboard(" ");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("Library data")).not.toBeVisible();
+  });
+
+  it("tabs from the trigger to the switch and turns an approved copy on", async () => {
+    const user = userEvent.setup();
+    seed(entry({ approval: approval({ enabled: false }), review: review({ status: "approved" }) }));
+    const enable = vi.fn(async (pluginId: string) => {
+      usePluginManagementStore.setState((state) => ({
+        plugins: {
+          ...state.plugins,
+          [pluginId]: {
+            ...state.plugins[pluginId],
+            approval: approval({ enabled: true }),
+          },
+        },
+      }));
+    });
+    usePluginManagementStore.setState({ enable });
+    render(<PluginsSection />);
+
+    await tabTo(user, screen.getByRole("button", { name: /^Echoes/ }));
+    const toggle = screen.getByRole("switch", { name: "Enable Echoes" });
+    await user.tab();
+    expect(document.activeElement).toBe(toggle);
+    expect(toggle).not.toBeChecked();
+
+    await user.keyboard(" ");
+    expect(enable).toHaveBeenCalledWith("echoes");
+    await waitFor(() => expect(toggle).toBeChecked());
+  });
+
+  it("turns an enabled Plugin off with the switch", async () => {
+    const user = userEvent.setup();
+    seed(entry({ approval: approval({ enabled: true }), review: review({ status: "approved" }) }));
+    const disable = vi.fn();
+    usePluginManagementStore.setState({ disable });
+    render(<PluginsSection />);
+
+    const toggle = screen.getByRole("switch", { name: "Enable Echoes" });
+    expect(toggle).toBeChecked();
+    await tabTo(user, toggle);
+    await user.keyboard(" ");
+
+    expect(disable).toHaveBeenCalledWith("echoes");
+  });
+
+  it("opens the review dialog from the switch of a copy that needs review and stays off", async () => {
+    const user = userEvent.setup();
+    seed(entry({ review: review({ status: "review-required" }) }));
+    render(<PluginsSection />);
+
+    const toggle = screen.getByRole("switch", { name: "Enable Echoes" });
+    await tabTo(user, toggle);
+    await user.keyboard(" ");
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    // The switch follows the store, so it stays off until the copy is approved.
+    expect(toggle).not.toBeChecked();
+  });
+
+  it("disables the switch for an unsupported entry and hides it for a removed one", () => {
+    seed(
+      entry({
+        unsupported: true,
+        manifest: manifest({ platforms: ["desktop"] }),
+        approval: approval({ enabled: false }),
+        review: review({ status: "approved" }),
+      }),
+      entry({
+        pluginId: "gone",
+        manifest: manifest({ id: "gone", name: "Gone" }),
+        installed: false,
+        removed: true,
+      })
+    );
+    render(<PluginsSection />);
+
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeDisabled();
+    expect(screen.queryByRole("switch", { name: "Enable Gone" })).toBeNull();
+  });
+
+  it("shows the Failed to start badge when a startup error is recorded", () => {
+    seed(entry({ approval: approval({ enabled: false, startupError: "incompatible" }) }));
+    render(<PluginsSection />);
+
+    expect(screen.getByText("Failed to start")).toBeInTheDocument();
+    // The old status badge is gone and the switch replaces its role.
+    expect(screen.queryByText("Enabled")).toBeNull();
+    expect(screen.queryByText("Off")).toBeNull();
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeInTheDocument();
+  });
+
+  it("localizes the card name to the UI language", async () => {
+    seed(entry({ locales: { es: { name: "Ecos" } } }));
+    await i18n.changeLanguage("es");
+    try {
+      render(<PluginsSection />);
+      expect(screen.getByRole("button", { name: /^Ecos/ })).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});
+
+describe("Plugin card body (#442)", () => {
+  it("opens the panel with the localized manifest description", async () => {
+    const user = userEvent.setup();
+    seed(entry({ manifest: manifest({ description: "Find repeated passages." }) }));
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    // The panel's first child is the description, so a reader meets what the
+    // Plugin is before its notices and controls.
+    const trigger = screen.getByRole("button", { name: /^Echoes/ });
+    const panel = document.getElementById(trigger.getAttribute("aria-controls") ?? "");
+    expect(panel).not.toBeNull();
+    expect(panel?.firstElementChild).toHaveTextContent("Find repeated passages.");
+    expect(screen.getByText("Find repeated passages.")).toBeInTheDocument();
+  });
+
+  it("animates the card panel", async () => {
+    seed(entry());
+    render(<PluginsSection />);
+
+    const trigger = screen.getByRole("button", { name: /^Echoes/ });
+    const panel = document.getElementById(trigger.getAttribute("aria-controls") ?? "");
+    expect(panel).not.toBeNull();
+    // jsdom cannot run the animation; the transition classes are the contract.
+    expect(panel).toHaveClass("motion-reduce:transition-none");
+    expect(panel?.className).toContain("transition-[height,opacity]");
+    expect(panel?.className).toContain("h-(--disclosure-panel-height)");
+  });
+
+  it("expands and collapses the Permissions accordion from the keyboard", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({ permissions: { required: ["library:read"], optional: [] } }),
+        approval: approval({ granted: ["library:read"], enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    const trigger = screen.getByRole("button", { name: /Plugin permissions/ });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("checkbox", { name: /Read your Library/ })).toBeNull();
+
+    await tabTo(user, trigger, 40);
+    await user.keyboard("{Enter}");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByRole("checkbox", { name: /Read your Library/ })).toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await waitFor(() =>
+      expect(screen.queryByRole("checkbox", { name: /Read your Library/ })).toBeNull()
+    );
+  });
+
+  it("flags a changed copy and opens its review from the accordion", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({ permissions: { required: ["library:read"], optional: [] } }),
+        approval: approval({ granted: ["library:read"], enabled: false }),
+        review: review({ status: "review-required" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+
+    await openPermissions(user);
+    expect(
+      screen.getByText("This copy changed since you approved it. Review it to turn it on.")
+    ).toBeInTheDocument();
+
+    const reviewButton = screen.getByRole("button", { name: "Review" });
+    await tabTo(user, reviewButton, 40);
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("flags a missing required grant with its own explanation", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({ permissions: { required: ["library:read"], optional: [] } }),
+        approval: approval({ granted: [], enabled: false }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+
+    await openPermissions(user);
+    expect(screen.getByText("A permission this Plugin needs is not granted.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review" })).toBeInTheDocument();
+  });
+
+  it("flags a never-approved copy and keeps its permission list hidden", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({ permissions: { required: ["library:read"], optional: [] } }),
+        approval: null,
+        review: review({ status: "not-approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+
+    await openPermissions(user);
+    expect(
+      screen.getByText("Approve this Plugin's permissions to turn it on.")
+    ).toBeInTheDocument();
+    // Today's row hides the list without an approval record; only the trigger
+    // and the explanation remain.
+    expect(screen.queryByRole("checkbox", { name: /Read your Library/ })).toBeNull();
+  });
+
+  it("shows no issue for an approved copy with only optional permissions ungranted", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({
+          permissions: { required: ["library:read"], optional: ["network:api.example.com"] },
+        }),
+        approval: approval({ granted: ["library:read"], enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.queryByText("Needs attention")).toBeNull();
+
+    await openPermissions(user);
+    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
+  });
+
+  it("orders the panel: description, settings rows, permissions, details, footer", async () => {
+    const user = userEvent.setup();
+    unregisters.push(
+      registerPluginSettingsRows("echoes", {
+        displayName: "Echoes",
+        rows: [{ id: "threshold", label: "Echo threshold" }],
+      })
+    );
+    seed(
+      entry({
+        manifest: manifest({
+          description: "Find repeated passages.",
+          permissions: { required: ["library:read"], optional: [] },
+        }),
+        approval: approval({ granted: ["library:read"], enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+
+    const description = screen.getByText("Find repeated passages.");
+    const settingsRow = document.querySelector('[data-settings-row="plugin.echoes.threshold"]');
+    const permissions = screen.getByRole("button", { name: /Plugin permissions/ });
+    const details = screen.getByText("Details");
+    const remove = screen.getByRole("button", { name: "Remove" });
+
+    const precedes = (first: Node | null, second: Node | null) =>
+      first !== null &&
+      second !== null &&
+      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    expect(precedes(description, settingsRow)).toBe(true);
+    expect(precedes(settingsRow, permissions)).toBe(true);
+    expect(precedes(permissions, details)).toBe(true);
+    expect(precedes(details, remove)).toBe(true);
   });
 });
 
@@ -688,8 +1010,8 @@ describe("Plugin management (#443)", () => {
     seed(installedOnly, available);
     render(<PluginsSection />);
 
-    expect(screen.getByRole("button", { name: "Alpha" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Beta" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Alpha/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Beta/ })).toBeInTheDocument();
 
     const trigger = screen.getByRole("button", { name: "Filter by status" });
     await tabTo(user, trigger, 20);
@@ -699,9 +1021,9 @@ describe("Plugin management (#443)", () => {
     await user.keyboard(" ");
     await user.keyboard("{Escape}");
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Alpha" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^Alpha/ })).toBeNull());
     // Beta stays: ANY semantics, and it still matches Built-in / Available.
-    expect(screen.getByRole("button", { name: "Beta" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Beta/ })).toBeInTheDocument();
   });
 
   it("shows the empty-result copy when no category matches", async () => {
@@ -764,7 +1086,7 @@ describe("Plugin management (#443)", () => {
     expect(
       screen.getByText("Unavailable on this device. This Plugin supports desktop only.")
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enable" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeDisabled();
     expect(enable).not.toHaveBeenCalled();
   });
 
@@ -785,7 +1107,7 @@ describe("Plugin management (#443)", () => {
         "Two folders declare this Plugin id: echoes, echoes-copy. Remove one of them to enable it."
       )
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enable" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Enable Echoes" })).toBeDisabled();
   });
 
   it("keeps desktop-only directory buttons off web", () => {
@@ -1027,7 +1349,7 @@ describe("Plugin management (#443)", () => {
     await user.keyboard("{Enter}");
 
     expect(deleteData).toHaveBeenCalledWith("echoes");
-    expect(screen.getByRole("button", { name: "Echoes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Echoes/ })).toBeInTheDocument();
   });
 
   it("reinstalls a removed Built-in after confirming in the dialog", async () => {
@@ -1087,9 +1409,10 @@ describe("Plugin management (#443)", () => {
     render(<PluginsSection />);
 
     expect(screen.getByText("Removed")).toBeInTheDocument();
-    // A row whose files are gone has no enable state to report.
+    // A row whose files are gone has no enable state to report and no switch.
     expect(screen.queryByText("Off")).toBeNull();
     expect(screen.queryByText("Enabled")).toBeNull();
+    expect(screen.queryByRole("switch", { name: /Enable / })).toBeNull();
   });
 
   it("shows the expanded-row facts for an installed approved copy", async () => {
@@ -1188,6 +1511,9 @@ describe("Plugin management (#443)", () => {
     expect(
       useBoundShortcutStore.getState().counts["settings.restartPlugin"]
     ).toBeGreaterThan(0);
+    expect(
+      useBoundShortcutStore.getState().counts["settings.togglePlugin"]
+    ).toBeGreaterThan(0);
   });
 
   it("opens the Remove dialog when its Command runs", async () => {
@@ -1253,6 +1579,7 @@ describe("Plugin credential storage on web (#453 unit 5)", () => {
     render(<PluginsSection />);
 
     await openRow(user);
+    await openPermissions(user);
     const toggle = await screen.findByRole("switch", { name: REMEMBER });
     expect(toggle).not.toBeChecked();
 
@@ -1272,6 +1599,7 @@ describe("Plugin credential storage on web (#453 unit 5)", () => {
     render(<PluginsSection />);
 
     await openRow(user);
+    await openPermissions(user);
 
     expect(await screen.findByRole("switch", { name: REMEMBER })).toBeChecked();
   });

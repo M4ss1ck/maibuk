@@ -434,8 +434,9 @@ describe("Plugin management actions: reinstall a Built-in", () => {
     expect(result).toBe(true);
     expect(dir.map.has(ID)).toBe(true);
     const approval = getPluginApproval(ID);
-    // A fresh pre-grant, not the old approval: every shipped grant is back.
-    expect(approval).toMatchObject({ granted: ["library:read", "secrets"], enabled: true });
+    // A fresh pre-grant, not the old approval: every shipped grant is back, and
+    // it starts off again (a later enable needs no review).
+    expect(approval).toMatchObject({ granted: ["library:read", "secrets"], enabled: false });
     expect(store.getState().plugins[ID]).toMatchObject({
       installed: true,
       removed: false,
@@ -497,7 +498,8 @@ describe("Plugin management actions: app updates respect removal", () => {
 
     await store.getState().refresh();
 
-    expect(getPluginApproval(ID)).toMatchObject({ enabled: true });
+    // Pre-granted, but off on first sight so a later enable needs no review.
+    expect(getPluginApproval(ID)).toMatchObject({ enabled: false });
   });
 
   it("stays removed across repeated refreshes until reinstalled or approved", async () => {

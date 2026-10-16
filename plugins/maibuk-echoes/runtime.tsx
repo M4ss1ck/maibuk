@@ -106,6 +106,23 @@ interface EchoCommandTarget {
   id?: string;
 }
 
+/**
+ * The report page's last-shown state, kept on the runtime so a revisit paints it
+ * at once instead of showing the loading screen again. `scopeSeen` is the
+ * `runtime.scope` object the selection was last derived from, by identity: a
+ * `Find echoes` run since then makes a new object, so the page knows to apply it
+ * the way a cold open would.
+ */
+interface RememberedPage {
+  settings: EchoSettings;
+  books: LibraryBook[];
+  /** The selected Book's Chapters, so the scope picker and row titles paint at once. */
+  chapters: LibraryChapter[];
+  bookId: string | null;
+  scopeKey: string;
+  scopeSeen: EchoScope | null;
+}
+
 /** The runtime's own state; one per activation, so tests never share it. */
 interface EchoRuntime {
   scope: EchoScope | null;
@@ -116,11 +133,18 @@ interface EchoRuntime {
    * and after, so a change that lands while it runs keeps its report out of date.
    */
   changes: Map<string, number>;
+  /** The report page's remembered state, or null before its first open. */
+  page: RememberedPage | null;
 }
 
 /** Wires the client to the report page, the Settings row, and the Command handlers. */
 export function startEchoes(client: PluginClient, serve: EchoServe): void {
-  const runtime: EchoRuntime = { scope: null, reports: createReportCache(), changes: new Map() };
+  const runtime: EchoRuntime = {
+    scope: null,
+    reports: createReportCache(),
+    changes: new Map(),
+    page: null,
+  };
   const editor = createEchoEditor(client);
   // Subscribed once for the runtime's life: a change marks every kept report of
   // the Book it touches out of date, whether or not its page is open.
@@ -231,6 +255,13 @@ const OCCURRENCE_PAGE = 50;
 const DRAW_BUDGET = 5_000;
 
 /**
+ * How many steps the determinate first-compute bar moves in. Every step repaints
+ * the whole page across the Remote UI connection, so a per-Chapter update would
+ * spend more time repainting than reading on a long Book.
+ */
+const PROGRESS_STEPS = 10;
+
+/**
  * How many more rows or occurrences a Show more press offers: one page, capped
  * by what is left and by the room the drawing budget still has. Never negative.
  */
@@ -288,6 +319,50 @@ function touchesBook(
 ): boolean {
   if ("scope" in payload) return payload.scope === "all";
   return payload.entity === "book" && payload.id === bookId;
+}
+
+/**
+ * The selection a Book list and a stored scope imply: the scoped Book when it is
+ * still present, else the first Book; the scope is that Chapter when one is set.
+ */
+function selectionFor(
+  books: readonly LibraryBook[],
+  scope: EchoScope | null
+): { bookId: string | null; scopeKey: string } {
+  const bookId =
+    scope !== null && books.some((book) => book.id === scope.bookId)
+      ? scope.bookId
+      : (books[0]?.id ?? null);
+  return {
+    bookId,
+    scopeKey:
+      scope !== null && scope.chapterId !== undefined && bookId === scope.bookId
+        ? scope.chapterId
+        : SCOPE_WHOLE,
+  };
+}
+
+/**
+ * True when two settings objects carry the same detection values: compared in
+ * the report cache key's canonical form, so a new setting is never missed.
+ */
+function sameSettings(a: EchoSettings, b: EchoSettings): boolean {
+  return reportCacheKey("", "", a) === reportCacheKey("", "", b);
+}
+
+/** True when two Book lists carry the same Books in the same order. */
+function sameBooks(a: readonly LibraryBook[], b: readonly LibraryBook[]): boolean {
+  // The title is what the Book select shows and the language drives detection,
+  // so a rename or a language change is a change too.
+  return (
+    a.length === b.length &&
+    a.every(
+      (book, index) =>
+        book.id === b[index].id &&
+        book.title === b[index].title &&
+        book.language === b[index].language
+    )
+  );
 }
 
 /** One occurrence row as the group draws it: its context label, Chapter title, and reveal range. */
@@ -416,21 +491,53 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
   function ReportPage() {
     const language = useEchoLanguage(client);
 
-    const [initialized, setInitialized] = useState(false);
-    const [books, setBooks] = useState<LibraryBook[]>([]);
-    const [bookId, setBookId] = useState<string | null>(null);
-    const [chapters, setChapters] = useState<LibraryChapter[]>([]);
-    const [scopeKey, setScopeKey] = useState<string>(SCOPE_WHOLE);
-    const [settings, setSettings] = useState<EchoSettings>(() => ({
-      ...DEFAULT_ECHO_SETTINGS,
-      ignore: [],
-    }));
-    const [report, setReport] = useState<EchoReport | null>(null);
+    // The page state a previous visit left on the runtime, read once at mount so
+    // this render starts from it rather than the loading screen. The remembered
+    // selection is reused only while the runtime's scope has not moved since it
+    // was derived; a `Find echoes` run since then wins and is applied here the
+    // way a cold open applies it. The kept report, when one exists for the
+    // resulting key, is painted on this first render with no compute.
+    const [initial] = useState(() => {
+      const remembered = runtime.page;
+      const books = remembered?.books ?? [];
+      const reuse = remembered !== null && runtime.scope === remembered.scopeSeen;
+      const selection = reuse
+        ? { bookId: remembered.bookId, scopeKey: remembered.scopeKey }
+        : selectionFor(books, runtime.scope);
+      const settings = remembered?.settings ?? { ...DEFAULT_ECHO_SETTINGS, ignore: [] };
+      const kept =
+        selection.bookId === null
+          ? undefined
+          : runtime.reports.get(reportCacheKey(selection.bookId, selection.scopeKey, settings));
+      return {
+        remembered: remembered !== null,
+        scopeSeen: runtime.scope,
+        books,
+        chapters: remembered?.chapters ?? [],
+        bookId: selection.bookId,
+        scopeKey: selection.scopeKey,
+        settings,
+        kept,
+      };
+    });
+
+    const [initialized, setInitialized] = useState(() => initial.remembered);
+    const [books, setBooks] = useState<LibraryBook[]>(() => initial.books);
+    const [bookId, setBookId] = useState<string | null>(() => initial.bookId);
+    const [chapters, setChapters] = useState<LibraryChapter[]>(() => initial.chapters);
+    const [scopeKey, setScopeKey] = useState<string>(() => initial.scopeKey);
+    const [settings, setSettings] = useState<EchoSettings>(() => initial.settings);
+    const [report, setReport] = useState<EchoReport | null>(() => initial.kept?.report ?? null);
     const [computing, setComputing] = useState(false);
     const [progress, setProgress] = useState<ReportProgress>({ done: 0, total: 0 });
-    const [stale, setStale] = useState(false);
+    const [stale, setStale] = useState(() => initial.kept?.stale ?? false);
     const [tab, setTab] = useState<EchoKind>("nearby");
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+    // Bumped when the background load finds settings that differ from the ones
+    // on screen, so the compute effect recomputes for the new cache key. An
+    // in-page Ignore word changes settings too, but handles its own report, so
+    // it must not bump this.
+    const [settingsVersion, setSettingsVersion] = useState(0);
     const [reloadToken, setReloadToken] = useState(0);
     const [shown, setShown] = useState<Readonly<Record<EchoKind, number>>>(FIRST_PAGE);
     const [occurrenceLimits, setOccurrenceLimits] = useState<Readonly<Record<string, number>>>({});
@@ -438,18 +545,36 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
     // The latest values the async flows read, kept in refs so they never close
     // over a stale render (the event handler and the compute effect both need
     // what the current selection is, not what it was when they were created).
-    const bookIdRef = useRef<string | null>(null);
-    const settingsRef = useRef<EchoSettings>(settings);
-    const booksRef = useRef<LibraryBook[]>([]);
-    const chaptersRef = useRef<readonly ReportChapter[]>([]);
+    const bookIdRef = useRef<string | null>(initial.bookId);
+    const scopeKeyRef = useRef<string>(initial.scopeKey);
+    const settingsRef = useRef<EchoSettings>(initial.settings);
+    const booksRef = useRef<LibraryBook[]>(initial.books);
+    const chapterListRef = useRef<LibraryChapter[]>(initial.chapters);
+    const chaptersRef = useRef<readonly ReportChapter[]>(initial.kept?.chapters ?? []);
     // The Refresh token the last compute saw: a new token is an author's Refresh,
     // which skips the cache; any other run (open, Book or scope change) may use it.
     const lastReloadToken = useRef(0);
     // The cache key and selection of the report on screen, for Ignore word.
     const displayed = useRef<{ key: string; bookId: string; scopeKey: string } | null>(null);
 
-    // Initial load: the stored settings, the Library's Books, and the scope the
-    // Find echoes Command stored (else the first Book, Whole Book).
+    // Records the page's current selection on the runtime, so the next mount
+    // starts from it. Callers keep the refs in step before calling.
+    const rememberPage = useCallback(() => {
+      runtime.page = {
+        settings: settingsRef.current,
+        books: booksRef.current,
+        chapters: chapterListRef.current,
+        bookId: bookIdRef.current,
+        scopeKey: scopeKeyRef.current,
+        scopeSeen: runtime.scope,
+      };
+    }, [runtime]);
+
+    // The initial load runs on every mount: the stored settings and the
+    // Library's Books. Over a revisit it never shows a loading screen; it only
+    // updates what actually changed, and the compute effect reacts to a settings
+    // change through the cache key. When the remembered Book is gone it falls
+    // back exactly as a cold open does; otherwise it keeps the selection.
     useEffect(() => {
       let cancelled = false;
       void (async () => {
@@ -458,28 +583,35 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           client.library.books.list().catch((): LibraryBook[] => []),
         ]);
         if (cancelled) return;
-        settingsRef.current = stored;
-        setSettings(stored);
-        booksRef.current = list;
-        setBooks(list);
+        if (!sameSettings(settingsRef.current, stored)) {
+          settingsRef.current = stored;
+          setSettings(stored);
+          setSettingsVersion((version) => version + 1);
+        }
+        if (!sameBooks(booksRef.current, list)) {
+          booksRef.current = list;
+          setBooks(list);
+        }
         const scope = runtime.scope;
-        const scopedBook =
-          scope !== null && list.some((book) => book.id === scope.bookId)
-            ? scope.bookId
-            : (list[0]?.id ?? null);
-        bookIdRef.current = scopedBook;
-        setBookId(scopedBook);
-        setScopeKey(
-          scope !== null && scope.chapterId !== undefined && scopedBook === scope.bookId
-            ? scope.chapterId
-            : SCOPE_WHOLE
-        );
+        const keep =
+          initial.remembered &&
+          scope === initial.scopeSeen &&
+          initial.bookId !== null &&
+          list.some((book) => book.id === initial.bookId);
+        if (!keep) {
+          const selection = selectionFor(list, scope);
+          bookIdRef.current = selection.bookId;
+          scopeKeyRef.current = selection.scopeKey;
+          setBookId(selection.bookId);
+          setScopeKey(selection.scopeKey);
+        }
+        rememberPage();
         setInitialized(true);
       })();
       return () => {
         cancelled = true;
       };
-    }, [client, runtime]);
+    }, [client, runtime, initial, rememberPage]);
 
     // The scope select's Chapters, read whenever the Book changes.
     useEffect(() => {
@@ -491,7 +623,12 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       void client.library.chapters
         .list({ bookId })
         .then((list) => {
-          if (!cancelled) setChapters(list);
+          if (cancelled) return;
+          chapterListRef.current = list;
+          setChapters(list);
+          // Keep the remembered Chapters in step, so a revisit paints the scope
+          // picker and the row titles from them.
+          rememberPage();
         })
         .catch(() => {
           if (!cancelled) setChapters([]);
@@ -499,7 +636,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       return () => {
         cancelled = true;
       };
-    }, [client, initialized, bookId]);
+    }, [client, initialized, bookId, rememberPage]);
 
     // Compute on open and whenever the Book, the scope, or a Refresh changes. A
     // kept report for the same Book, scope, and settings is shown as it is; only
@@ -538,10 +675,21 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
               ? await bookSource(client, bookId)
               : { count: 1, load: () => loadChapter(client, scopeKey) };
           if (cancelled) return;
+          // The bar repaints the whole page across the Remote UI connection, so
+          // on a long Book a per-Chapter update would spend more time repainting
+          // than reading. It moves in at most `PROGRESS_STEPS` steps, plus the
+          // final one.
+          const step = Math.max(1, Math.ceil(source.count / PROGRESS_STEPS));
+          let bucket = -1;
           const result = await computeReport(source, bookLanguage, settingsRef.current, {
             scope,
             onProgress: (next) => {
-              if (!cancelled) setProgress(next);
+              if (cancelled) return;
+              const nextBucket = Math.floor((next.done - 1) / step);
+              if (next.done >= next.total || nextBucket !== bucket) {
+                bucket = nextBucket;
+                setProgress(next);
+              }
             },
           });
           if (cancelled) return;
@@ -562,7 +710,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       return () => {
         cancelled = true;
       };
-    }, [client, runtime, initialized, bookId, scopeKey, reloadToken]);
+    }, [client, runtime, initialized, bookId, scopeKey, settingsVersion, reloadToken]);
 
     // A `library.changed` that touches the shown Book only marks the report out
     // of date; it never recomputes or reorders (a list that moves under the
@@ -589,14 +737,30 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
       };
     }, [client, runtime]);
 
-    const selectBook = useCallback((id: string) => {
-      bookIdRef.current = id;
-      setBookId(id);
-      setScopeKey(SCOPE_WHOLE);
-      setExpanded(new Set());
-      setShown(FIRST_PAGE);
-      setOccurrenceLimits({});
-    }, []);
+    const selectBook = useCallback(
+      (id: string) => {
+        bookIdRef.current = id;
+        scopeKeyRef.current = SCOPE_WHOLE;
+        setBookId(id);
+        setScopeKey(SCOPE_WHOLE);
+        setExpanded(new Set());
+        setShown(FIRST_PAGE);
+        setOccurrenceLimits({});
+        rememberPage();
+      },
+      [rememberPage]
+    );
+
+    // The scope select's own change: the Chapter (or Whole Book) is remembered
+    // too, so a revisit lands on it.
+    const selectScope = useCallback(
+      (key: string) => {
+        scopeKeyRef.current = key;
+        setScopeKey(key);
+        rememberPage();
+      },
+      [rememberPage]
+    );
 
     // One row open at a time: opening a row closes the rest, and their shown
     // occurrence counts go with them, so the drawn rows stay inside the budget.
@@ -621,6 +785,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
         const kept = shown === null ? undefined : runtime.reports.get(shown.key);
         settingsRef.current = next;
         setSettings(next);
+        rememberPage();
         void writeEchoesSettings(client, next);
         // Remove the row now; the report is not recomputed for an ignore. The
         // kept report moves to the key the new settings give, so a revisit still
@@ -641,7 +806,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
           setReport((current) => (current === null ? current : filter(current)));
         }
       },
-      [client, runtime]
+      [client, runtime, rememberPage]
     );
 
     const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
@@ -790,7 +955,7 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
             label={translate(language, "report.scope")}
             options={fitOptions(scopeOptions, scopeKey, PLUGIN_UI_LIMITS.maxOptions)}
             selectedKey={scopeKey}
-            onChange={(event) => setScopeKey(event.detail)}
+            onChange={(event) => selectScope(event.detail)}
           />
         </ui.View>
 
@@ -818,7 +983,15 @@ function createReportPage(client: PluginClient, runtime: EchoRuntime): Component
         ) : null}
 
         {report === null ? (
-          <ui.ProgressBar label={translate(language, "report.loading")} isIndeterminate />
+          // The first compute runs with the page's header already drawn; the
+          // determinate bar reports its progress instead of hiding the page.
+          computing ? (
+            <ui.ProgressBar
+              label={translate(language, "report.computing")}
+              value={progress.done}
+              maxValue={Math.max(1, progress.total)}
+            />
+          ) : null
         ) : (
           <ui.Tabs
             label={translate(language, "report.tabs")}

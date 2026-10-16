@@ -2080,6 +2080,26 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "settings-plugin-cards",
+    area: "settings",
+    workflow:
+      "Settings → Plugins renders each Plugin as a card: a header with the localized name, its state badges, a disclosure chevron, and — outside the trigger — a switch named Enable <name>; open it to read the description, the Plugin Settings rows, a nested Permissions accordion (collapsed by default; a Needs attention badge and Review when the copy needs it), Details, and a Remove footer; a Built-in starts off on first sight with its Plugin Permissions pre-granted, so its card shows no Needs attention; turning its switch on starts it and its sidebar entry and Open Echoes Command appear, and Open Echoes from the Command Palette opens the report; the Settings outline lists the card by name and choosing it expands the card and focuses its trigger; the name and the switch follow the UI language and the card expands under reduced motion; asserts: the switch state before and after, the entry and Command absent then present, the description as the first panel text, the pre-granted permission list and no Needs attention, the outline reveal, the Spanish names; persists: yes (device-local approvals)",
+    edges: [
+      "First sight: the Built-in's switch is off and its sidebar entry and Open Echoes Command are not available",
+      "The switch turns the Built-in on and Open Echoes from the Command Palette opens its report",
+      "The card expands to the description, and its nested Permissions accordion lists the pre-granted permissions with no Needs attention badge",
+      "The Settings outline lists the card by name; choosing it expands the card and focuses its trigger",
+      "The card name and the switch name follow the UI language",
+      "With reduced motion the card still expands",
+    ],
+    terms: ["Plugin", "Built-in Plugin"],
+    shortcuts: [],
+    routes: ["/settings", "/plugin/:pluginId/:pageId"],
+    fixture: "echoesBook",
+    tags: ["no-webkit"],
+    status: "accepted",
+  },
+  {
     id: "plugins-approvals",
     area: "plugins",
     workflow:

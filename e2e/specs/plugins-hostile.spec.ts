@@ -114,10 +114,18 @@ async function openPluginsSection(page: Page): Promise<void> {
 
 /** Tabs to the Plugin's row and expands it. */
 async function expandPluginRow(page: Page): Promise<Locator> {
-  const row = page.getByRole("button", { name: "Fixture Hostile", exact: true });
+  const row = page.getByRole("button", { name: /^Fixture Hostile/ });
   await tabTo(page, row, { max: 30 });
   await page.keyboard.press("Enter");
   return row;
+}
+
+/** Expands the nested Permissions accordion inside an open card. */
+async function openPermissions(page: Page): Promise<void> {
+  const trigger = page.getByRole("button", { name: /Plugin permissions/ });
+  await tabTo(page, trigger, { max: 40 });
+  await page.keyboard.press("Enter");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
 }
 
 test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit", () => {
@@ -218,6 +226,7 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit",
     // Revoke the optional grant in Settings; the Plugin stays enabled.
     await openPluginsSection(page);
     await expandPluginRow(page);
+    await openPermissions(page);
     const read = page.getByRole("checkbox", {
       name: "Read your Library · Optional",
       exact: true,
@@ -225,7 +234,9 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit",
     await tabTo(page, read, { max: 20 });
     await page.keyboard.press("Space");
     await expect(read).not.toBeChecked();
-    await expect(page.getByText("Enabled", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("switch", { name: "Enable Fixture Hostile" })
+    ).toBeChecked();
 
     // Reload with the revoked grant and run the Command: the read is refused.
     await waitForReady(page);

@@ -81,9 +81,13 @@ async function openPluginsSection(page: Page): Promise<void> {
   await jumpToPlugins(page);
 }
 
-/** Tabs to a Plugin's row trigger and expands it, leaving the trigger focused. */
+/**
+ * Tabs to a Plugin's row trigger and expands it, leaving the trigger focused.
+ * The card header's accessible name carries its state badges (Built-in, Removed,
+ * Stopped…), so the row is matched by its name prefix.
+ */
 async function expandRow(page: Page, name: string): Promise<Locator> {
-  const row = main(page).getByRole("button", { name, exact: true });
+  const row = main(page).getByRole("button", { name: new RegExp(`^${name}`) });
   await tabTo(page, row, { max: 30 });
   await page.keyboard.press("Enter");
   return row;
@@ -211,7 +215,9 @@ test.describe("Plugin management: remove @wf:plugin-management-remove @no-webkit
 
     // The row stays, now Removed, still holding its Library data: the size
     // shows and Delete data is offered.
-    await expect(main(page).getByRole("button", { name: "Tracer Fixture", exact: true })).toBeVisible();
+    await expect(
+      main(page).getByRole("button", { name: /^Tracer Fixture/ })
+    ).toBeVisible();
     await expect(main(page).getByText("Removed", { exact: true })).toBeVisible();
     await expect(main(page).getByText("Library data")).toBeVisible();
     await expect(main(page).getByRole("button", { name: "Delete data", exact: true })).toBeVisible();
@@ -237,7 +243,9 @@ test.describe("Plugin management: remove @wf:plugin-management-remove @no-webkit
     await expect(dialog).toBeHidden();
 
     // The row stays Removed, its data gone: no Delete data is offered.
-    await expect(main(page).getByRole("button", { name: "Tracer Fixture", exact: true })).toBeVisible();
+    await expect(
+      main(page).getByRole("button", { name: /^Tracer Fixture/ })
+    ).toBeVisible();
     await expect(main(page).getByText("Removed", { exact: true })).toBeVisible();
     await expect(main(page).getByRole("button", { name: "Delete data", exact: true })).toHaveCount(0);
   });
@@ -245,15 +253,19 @@ test.describe("Plugin management: remove @wf:plugin-management-remove @no-webkit
 
 test.describe("Plugin management: reinstall a Built-in @wf:plugin-management-reinstall @no-webkit", () => {
   // The seeded folder is also the shipped copy (the hash defaults to the
-  // folder's own), so the untouched Built-in starts installed and enabled and a
-  // Reinstall restores exactly it.
+  // folder's own), so the untouched Built-in starts installed with its first
+  // sight (off, its Plugin Permissions pre-granted) and a Reinstall restores
+  // exactly it.
   test.use({ library: "empty", plugins: ["approvals"], builtInPlugins: [{ id: "approvals" }] });
 
   test("removes a Built-in and reinstalls the bundled copy", async ({ page }) => {
     await openPluginsSection(page);
     await expandRow(page, "Approvals Fixture");
     await expect(main(page).getByText("Built-in", { exact: true })).toBeVisible();
-    await expect(main(page).getByText("Enabled", { exact: true })).toBeVisible();
+    // First sight: pre-granted, so off with no review needed.
+    await expect(
+      main(page).getByRole("switch", { name: "Enable Approvals Fixture" })
+    ).not.toBeChecked();
 
     const remove = main(page).getByRole("button", { name: "Remove", exact: true });
     await tabTo(page, remove, { max: 12 });
@@ -284,9 +296,12 @@ test.describe("Plugin management: reinstall a Built-in @wf:plugin-management-rei
     await tabTo(page, confirmReinstall, { max: 12 });
     await page.keyboard.press("Enter");
 
-    // The shipped copy is written again: the row is installed and enabled.
+    // The shipped copy is written again: the row is installed with a fresh
+    // first sight again (off, pre-granted).
     await expect(main(page).getByText("Removed", { exact: true })).toHaveCount(0);
-    await expect(main(page).getByText("Enabled", { exact: true })).toBeVisible();
+    await expect(
+      main(page).getByRole("switch", { name: "Enable Approvals Fixture" })
+    ).not.toBeChecked();
     await expect(main(page).getByRole("button", { name: "Reinstall", exact: true })).toHaveCount(0);
     await capture(page, "plugin-management-reinstalled");
   });
@@ -336,7 +351,9 @@ test.describe("Plugin management: restart a stopped Plugin @wf:plugin-management
     await tabTo(page, restart, { max: 20 });
     await page.keyboard.press("Enter");
     await expect(main(page).getByText("Stopped", { exact: true })).toHaveCount(0);
-    await expect(main(page).getByText("Enabled", { exact: true })).toBeVisible();
+    await expect(
+      main(page).getByRole("switch", { name: "Enable Remote UI Fixture" })
+    ).toBeChecked();
     await expect(row).toBeVisible();
   });
 });
@@ -436,7 +453,9 @@ test.describe("Plugin management by touch @touch", () => {
       page,
     }) => {
       await tapPluginsSection(page);
-      await main(page).getByRole("button", { name: "Approvals Fixture", exact: true }).tap();
+      await main(page)
+        .getByRole("button", { name: /^Approvals Fixture/ })
+        .tap();
       await main(page).getByRole("button", { name: "Remove", exact: true }).tap();
       const dialog = page.getByRole("alertdialog", { name: "Remove Approvals Fixture?" });
       await expect(dialog).toBeVisible();
@@ -449,8 +468,11 @@ test.describe("Plugin management by touch @touch", () => {
       await expect(reinstallDialog).toBeVisible();
       await reinstallDialog.getByRole("button", { name: "Reinstall", exact: true }).tap();
 
+      // The shipped copy is written again: installed with a fresh first sight.
       await expect(main(page).getByText("Removed", { exact: true })).toHaveCount(0);
-      await expect(main(page).getByText("Enabled", { exact: true })).toBeVisible();
+      await expect(
+        main(page).getByRole("switch", { name: "Enable Approvals Fixture" })
+      ).not.toBeChecked();
     });
   });
 
@@ -485,7 +507,9 @@ test.describe("Plugin management by touch @touch", () => {
       await expect(menu).toBeVisible();
       await menu.getByRole("menuitem", { name: "Plugins" }).tap();
 
-      await main(page).getByRole("button", { name: "Remote UI Fixture", exact: true }).tap();
+      await main(page)
+        .getByRole("button", { name: /^Remote UI Fixture/ })
+        .tap();
       await expect(main(page).getByText("Stopped", { exact: true })).toBeVisible();
       await main(page).getByRole("button", { name: "Restart", exact: true }).tap();
       await expect(main(page).getByText("Stopped", { exact: true })).toHaveCount(0);

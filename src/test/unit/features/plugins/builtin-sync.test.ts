@@ -128,7 +128,7 @@ describe("syncBuiltInPlugins(): install a missing Built-in", () => {
     expect(dir.map.has(ID)).toBe(true);
     const approval = getPluginApproval(ID);
     expect(approval).toMatchObject({
-      enabled: true,
+      enabled: false,
       pinnedHash: built.hash,
       builtIn: { shippedHash: built.hash },
     });
