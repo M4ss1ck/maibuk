@@ -57,8 +57,8 @@ default, a Frame is the second path). A whole-page Frame declares
 from your *verified hashed* folder, so keep the HTML, CSS, JS, images, and fonts
 inside it and reference them with relative paths. A Frame's only host channel is
 `window.maibuk.port`, the `MessagePort` that connects it to your Plugin's Worker;
-use it to talk to the Plugin (e.g. `createPluginClient(window.maibuk.port)` on
-the Plugin side is the Worker's port, and the Frame receives the other end).
+the Worker receives the other end through `client.onFrame`, and the two exchange
+raw messages (see [Frame UI](../docs/plugins/frame-ui.md)).
 
 A Frame is styled with the host's semantic theme tokens: the host writes each
 public `--maibuk-*` property below onto the Frame's `<html>` on load and again

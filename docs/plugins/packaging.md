@@ -40,3 +40,16 @@ The manifest carries the Plugin's own `version`, the `apiVersion` range it needs
 A Plugin the host cannot run stays listed and off with that explanation; its data is kept. The permission diff between an old and a new manifest compares the required and optional sets per string, so a Plugin Permission that moves from optional to required is flagged even though its name is unchanged.
 
 The optional `dataVersion` is the Plugin's data format version, defaulting to 1. Data written by a newer version is preserved and activation is refused rather than downgraded.
+
+When you raise `dataVersion`, the host asks the Plugin to migrate its stored data once, before it is ready, by sending the `migrateData` host request (`PLUGIN_MIGRATE_DATA_REQUEST`, src/plugin-sdk/protocol.ts) with `{ from }`, the version that wrote the data; src/features/plugins/lifecycle.ts runs this gate before ready. Answer it in the `client.onHostRequest` handler (src/plugin-sdk/index.ts); a throw leaves the data and its version record untouched and refuses activation.
+
+```ts
+client.onHostRequest((method, params) => {
+  if (method === PLUGIN_MIGRATE_DATA_REQUEST) {
+    const { from } = params as { from: number };
+    // Read the namespace through the API, rewrite it for the current dataVersion, then:
+    return null;
+  }
+  throw new Error(`No handler for ${method}`);
+});
+```

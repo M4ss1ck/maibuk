@@ -20,7 +20,7 @@ An embedded Frame uses the kit's `Frame` component inside a host-rendered tree, 
 <ui.Frame src="ui/report.html" title="Report" />
 ```
 
-The page's `frame` and the component's `src` are relative paths to an .html file inside your Plugin folder, at most 1024 characters. The `title` is the iframe's accessible name; it is required and at most 512 characters.
+The page's `frame` and the component's `src` both name a relative path to an .html file inside your Plugin folder. The page `frame` field carries no length cap of its own; the manifest as a whole is capped at 64 KB (src/features/plugins/manifest-validate.ts, `MAX_MANIFEST_BYTES`). The kit `Frame` component is stricter: its `src` prop is capped at 1024 characters, and its `title` prop, the iframe's accessible name, is required and capped at 512 characters (src/plugin-sdk/ui-table.ts).
 
 ## Theme tokens
 
@@ -58,18 +58,30 @@ When the author reviews or manages a Plugin that uses a Frame, Maibuk shows this
 
 ## Messaging with the host
 
-A Frame's only host channel is `window.maibuk.port`, the MessagePort that connects it to your Plugin's Worker. The host hands the Frame's port to the Plugin through `client.onFrame`, once per mounted Frame, so the Plugin relays messages between the Worker and the Frame. The host never parses that traffic. On the Plugin side:
+A Frame's only channel is `window.maibuk.port`, the MessagePort that connects it to your Plugin's Worker. The host hands the Frame's port to the Plugin through `client.onFrame`, once per mounted Frame; the Plugin and the Frame then exchange raw messages over that port, and the host never parses them. Raw messages are the supported path: the Frame's port speaks to your Worker, not to the host broker, so the SDK client is not available inside a Frame.
+
+On the Plugin side, keep each port and answer what the Frame sends:
 
 ```ts
 client.onFrame((frame) => {
-  frame.port.postMessage({ kind: "hello" });
+  frame.port.onmessage = (event) => {
+    const data = event.data as { kind?: unknown } | null;
+    if (data && data.kind === "ping") frame.port.postMessage({ kind: "pong" });
+  };
+  frame.port.start();
 });
 ```
 
-Inside the Frame, use the same port with the SDK client, or post raw messages to it:
+Inside the Frame, use the port the shim exposes with plain MessagePort calls:
 
 ```ts
-const client = createPluginClient(window.maibuk.port);
+const port = window.maibuk.port;
+port.onmessage = (event) => {
+  const data = event.data as { kind?: unknown } | null;
+  if (data && data.kind === "pong") console.log("pong");
+};
+port.start();
+port.postMessage({ kind: "ping" });
 ```
 
 ## Restrictions

@@ -2,11 +2,32 @@
 
 Host-rendered UI is the default Plugin path (ADR 0021): you write React/JSX against the SDK's `ui.*` components, Remote DOM serializes the resulting tree to the host, and Maibuk draws it with its own React Aria components. Maibuk owns focus, keyboard behavior, and typing, so the page behaves like the rest of the app. The other path, where the Plugin draws its own document, is a custom [Frame](frame-ui.md).
 
+## Manifest fields
+
+Every Plugin ships a `manifest.json` at its root. Its required top-level fields, read by the schema in src/features/plugins/manifest-schema.ts, are:
+
+| Field | Value |
+| --- | --- |
+| `manifestVersion` | `1`, the manifest file format version |
+| `id` | a lowercase slug of 3 to 64 characters, without the reserved `maibuk-` or `tutorial-` prefixes |
+| `name` | the Plugin's display name |
+| `description` | one sentence describing the Plugin |
+| `author` | the author's name |
+| `version` | the Plugin's own semver version |
+| `apiVersion` | a semver range against the Plugin API, like `^0.3` |
+| `entry` | a relative path to the Plugin's ES module entry file |
+| `platforms` | one or more of `desktop`, `web`, `android` |
+| `lifecycle` | `persistent`, which starts with the app, or `on-demand`, which starts when a surface becomes reachable |
+| `defaultLanguage` | `en` or `es` |
+| `permissions` | an object with a `required` list and an `optional` list of Plugin Permission names |
+
+The optional top-level fields are `$schema`, `minAppVersion`, `homepage`, `dataVersion`, `customUi`, `contributes`, `commandRenames`, `rowRenames`, and `buttonRenames`. The `entry` must point to a `.js` or `.mjs` ES module (src/features/plugins/manifest-validate.ts). `manifestVersion` 1 accepts only these fields plus your own `x-*` keys, so a misspelled `permisions` cannot ship a Plugin with no Plugin Permissions. The complete schema, which your editor reads through `$schema`, is src/features/plugins/manifest.schema.json.
+
 ## Manifest contributions
 
 A Plugin declares what it adds under `contributes` in manifest.json. The validator and the registries read the same fields (src/features/plugins/manifest-schema.ts and src/features/plugins/contributions.ts):
 
-- `commands`: a Command with a Plugin-local `id`, a `label` in the Plugin's default language, a `contexts` list (core Shortcut Context names plus this Plugin's own page ids), optional `keywords`, optional `defaults` and `web` Shortcuts, an optional `voice` block, optional `targets`, and the `navigates` or `opensDialog` flags.
+- `commands`: a Command with a Plugin-local `id`, a `label` in the Plugin's default language, a `contexts` list, optional `keywords`, optional `defaults` and `web` Shortcuts, an optional `voice` block, optional `targets`, and the `navigates` or `opensDialog` flags. A `contexts` entry is a core Shortcut Context name (`global`, `bookList`, `bookEditor`, `coverDesigner`, `notes`, `canvas`, `ephemeral`, `editor`, `noteItem`, `chapterItem`, `canvasNode`, `image`, `footnoteItem`, `commandPalette`, `settings`; `CORE_CONTEXTS` in src/lib/shortcut-registry.ts) or this Plugin's own page id. A `targets` entry is one of `book`, `chapter`, `note`, `canvas`, and `canvasNode` (`PLUGIN_TARGETS` in src/features/plugins/manifest-constants.ts).
 - `pages`: a page with a Plugin-local `id`, a `title`, the `command` that opens it (a Command that declares `navigates: true`), and an optional `frame` path.
 - `sidebarEntries`: a `page` id and an `icon`. An icon is a Lucide icon name (kebab-case) or a relative .svg path inside the Plugin folder.
 - `settingsRows`: an `id`, a `label`, an optional `description`, and optional `keywords`.
