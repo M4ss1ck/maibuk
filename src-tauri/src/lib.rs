@@ -4,6 +4,7 @@ mod dictation;
 mod library_db;
 mod plugins;
 mod tray;
+mod tray_host;
 mod trusted;
 #[cfg(desktop)]
 mod window_restore;
@@ -125,7 +126,14 @@ pub fn run() {
                 use tauri::Manager;
 
                 #[cfg(any(target_os = "linux", target_os = "windows"))]
-                tray::setup_tray(app.handle())?;
+                {
+                    let handle = app.handle().clone();
+                    tray_host::when_ready(move || {
+                        if let Err(error) = tray::setup_tray(&handle) {
+                            eprintln!("Tray icon unavailable: {error}");
+                        }
+                    });
+                }
 
                 // The window is created hidden (visible:false in tauri.conf.json).
                 // Show it unless this is an autostart/login launch (--minimized).
