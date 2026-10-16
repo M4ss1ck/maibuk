@@ -38,25 +38,24 @@ function maibukArg(argv) {
 }
 
 /**
- * Links the Plugin authoring skill from the checkout into this repo when the
- * checkout carries it. #457 ships that skill; until then this is a clearly
- * marked placeholder that prints one line and does nothing. Replace the
- * existence check and the message when the skill lands.
+ * Links the Plugin authoring skill from the checkout into this repo. The skill
+ * ships with the checkout (#457); when an older checkout lacks it, this prints
+ * one warning naming the expected path and links nothing, so setup still
+ * succeeds. `root` is the Plugin repo the links are created under.
  */
-function linkSkill(checkout) {
+export function linkSkill(checkout, root = process.cwd()) {
   const source = join(checkout, SKILL_PATH, "SKILL.md");
+  const skillDir = join(checkout, SKILL_PATH);
   if (!existsSync(source)) {
-    console.log(
-      "The Maibuk Plugin authoring skill is not in this checkout yet (issue #457); nothing to link."
-    );
+    console.warn(`warning: ${skillDir} is missing; the Plugin authoring skill was not linked.`);
     return;
   }
   for (const link of SKILL_LINKS) {
-    const target = resolve(link);
+    const target = resolve(root, link);
     mkdirSync(dirname(target), { recursive: true });
     rmSync(target, { recursive: true, force: true });
-    symlinkSync(join(checkout, SKILL_PATH), target, "dir");
-    console.log(`linked ${link} -> ${join(checkout, SKILL_PATH)}`);
+    symlinkSync(skillDir, target, "dir");
+    console.log(`linked ${link} -> ${skillDir}`);
   }
 }
 

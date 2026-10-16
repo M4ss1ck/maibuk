@@ -36,8 +36,12 @@ const REQUIRED_DOCS = [
   "ui-reference.md",
 ] as const;
 
-/** README files outside docs/plugins/ the same rules cover. */
-const EXTRA_DOCS = ["templates/plugin/README.md", "plugins/README.md"];
+/** Docs outside docs/plugins/ the same rules cover. */
+const EXTRA_DOCS = [
+  "templates/plugin/README.md",
+  "plugins/README.md",
+  "skills/maibuk-plugin/SKILL.md",
+];
 
 /** Whole words the glossary avoids for a Plugin, case-insensitive. */
 const AVOIDED_TERMS = /\b(extensions?|add-ons?|addon|mods?)\b/gi;
