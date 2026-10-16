@@ -1051,7 +1051,15 @@ describe("Plugin lifecycle: compatibility gate", () => {
 
     await h.lifecycle.launch();
     h.lifecycle.surfaceReached("warm-page", "page:report");
-    await advance(0);
+    // The start hashes the folder on the real event loop before the
+    // compatibility check; wait for the refusal, not a fixed number of passes.
+    await advanceUntil(
+      () => {
+        const state = h.lifecycle.state("warm-page");
+        return state?.status === "stopped" && state.refusal !== null;
+      },
+      "the compatibility refusal"
+    );
 
     expect(h.frameCount()).toBe(0);
     expect(h.dataVersions.get("warm-page")).toBe(1);
