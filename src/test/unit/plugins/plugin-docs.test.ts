@@ -1,13 +1,15 @@
 // @vitest-environment node
 //
-// The Plugin authoring docs (docs/plugins/) are written in a later task. This
-// gate fails until every required page exists, and then holds every page to the
-// rules the code keeps: links resolve, commands name real scripts and files,
-// and the prose avoids the words the glossary bans for a Plugin.
+// Holds the Plugin authoring docs (docs/plugins/) to the rules the code keeps:
+// every required page exists, links resolve, commands name real scripts and
+// files, apiVersion examples match the shipped Plugin API, and the prose avoids
+// the words the glossary bans for a Plugin.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
+import { parseSemver, satisfiesRange } from "@/features/plugins/semver";
 import {
   extractCommands,
   extractLinks,
@@ -173,6 +175,24 @@ describe("extractCommands()", () => {
 });
 
 describe("Plugin authoring docs", () => {
+  it("shows only apiVersion ranges the shipped Plugin API satisfies", () => {
+    const api = parseSemver(PLUGIN_API_VERSION);
+    if (api === null) throw new Error(`PLUGIN_API_VERSION ${PLUGIN_API_VERSION} is not semver`);
+    const stale: string[] = [];
+    for (const file of docFilePaths()) {
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          for (const [, range] of line.matchAll(/`(\^\d+\.\d+(?:\.\d+)?)`/g)) {
+            if (!satisfiesRange(range, api)) {
+              stale.push(`${relative(root, file)}:${index + 1} ${range}`);
+            }
+          }
+        });
+    }
+    expect(stale, `the Plugin API is ${PLUGIN_API_VERSION}`).toEqual([]);
+  });
+
   it("ships every required page", () => {
     const missing = REQUIRED_DOCS.map((name) => join("docs", "plugins", name)).filter(
       (doc) => !existsSync(join(root, doc))

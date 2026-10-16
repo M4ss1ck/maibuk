@@ -14,7 +14,7 @@ Every Plugin ships a `manifest.json` at its root. Its required top-level fields,
 | `description` | one sentence describing the Plugin |
 | `author` | the author's name |
 | `version` | the Plugin's own semver version |
-| `apiVersion` | a semver range against the Plugin API, like `^0.3` |
+| `apiVersion` | a semver range against the Plugin API, like `^0.1` |
 | `entry` | a relative path to the Plugin's ES module entry file |
 | `platforms` | one or more of `desktop`, `web`, `android` |
 | `lifecycle` | `persistent`, which starts with the app, or `on-demand`, which starts when a surface becomes reachable |
