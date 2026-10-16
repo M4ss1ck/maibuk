@@ -16,7 +16,7 @@ import {
   scanMarkdown,
   slugifyHeading,
   stripInlineCode,
-} from "./plugin-docs-helpers";
+} from "../../support/plugin-docs";
 
 const root = process.cwd();
 const docsDir = join(root, "docs", "plugins");

@@ -33,7 +33,7 @@ The first test runs the Command and asserts the page navigation the host recorde
 ```ts
 const host = testHost();
 await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_COMMAND });
-expect(host.pageNavigations).toEqual([{ pluginId: "hello-plugin", pageId: PAGE_ID }]);
+expect(host.pageNavigations).toEqual([{ pluginId: manifest.id, pageId: PAGE_ID }]);
 ```
 
 The second test renders the page, finds the heading and the button by role, tabs to the button, presses Enter, and asserts the greeting changed. It ends each test in `host.stop()` so no mount is left behind:
