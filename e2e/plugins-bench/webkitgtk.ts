@@ -1,8 +1,8 @@
 // The Plugins bench's WebKitGTK lane (issue #448): the process and
 // socket shell around `webkitgtk-plan.ts`.
 //
-// Playwright's WebKit cannot measure this lane (it has no OPFS, so Plugins
-// cannot be seeded there), so the lane drives the **real Tauri Linux binary**:
+// Playwright's WebKit is not the WebKitGTK build the shell ships, so it cannot
+// measure this lane, and the lane drives the **real Tauri Linux binary**:
 // it builds the app once with `VITE_PLUGIN_BENCH=1` and
 // `VITE_PLUGIN_BENCH_DRIVER=1`, then, per measurement, gives a fresh temporary
 // HOME/XDG tree, seeds the Plugin Directory and the approval records the

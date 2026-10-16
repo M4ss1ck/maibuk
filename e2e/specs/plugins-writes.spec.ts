@@ -3,9 +3,6 @@
 // keyboard alone. The Chapter write reaches the open editor and the author's
 // own typing survives; the editor insert lands as one undoable step; without
 // the optional grant the insert is refused and changes nothing.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Locator, Page } from "@playwright/test";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
@@ -104,7 +101,7 @@ async function runPaletteCommand(page: Page, label: string): Promise<void> {
   await page.keyboard.press("Enter");
 }
 
-test.describe("Plugin writes @wf:plugins-writes @sandbox @no-webkit", () => {
+test.describe("Plugin writes @wf:plugins-writes @sandbox", () => {
   test.describe("a Chapter write while the author types", () => {
     test.use({
       library: "oneBookThreeChapters",

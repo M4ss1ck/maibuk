@@ -3,9 +3,6 @@
 // into the web Plugin Directory (OPFS) with the approval records the runtime
 // reads, so the spec proves approve, revoke, the changed-files review, a
 // permission that became required, and the Built-in Keep my copy path.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -107,7 +104,7 @@ const REQUIRED_LABEL = "Read your Library · Required to enable this Plugin";
 const OPTIONAL_LABEL = "Read the focused editor · Optional";
 const APPROVE = "Approve this copy and enable";
 
-test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
+test.describe("Plugin approvals @wf:plugins-approvals", () => {
   test.describe("an installed but unapproved Plugin", () => {
     test.use({ unapprovedPlugins: ["approvals"] });
 

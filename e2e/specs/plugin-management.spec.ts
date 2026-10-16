@@ -2,9 +2,6 @@
 // Plugin from a .zip, removal with and without data, reinstalling a Built-in,
 // and restarting a Plugin stopped by a lifecycle limit. Keyboard only, plus the
 // touch paths on the phone project (tap).
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -103,7 +100,7 @@ async function openFilter(page: Page): Promise<Locator> {
   return listbox;
 }
 
-test.describe("Plugin management: empty list @wf:plugin-management-empty @no-webkit", () => {
+test.describe("Plugin management: empty list @wf:plugin-management-empty", () => {
   test.use({ library: "empty" });
 
   test("zero Plugins renders the empty state copy", async ({ page }) => {
@@ -116,7 +113,7 @@ test.describe("Plugin management: empty list @wf:plugin-management-empty @no-web
   });
 });
 
-test.describe("Plugin management: list and filters @wf:plugin-management-list-filters @no-webkit", () => {
+test.describe("Plugin management: list and filters @wf:plugin-management-list-filters", () => {
   test.use({
     library: "oneBookThreeChapters",
     plugins: ["tracer", "approvals"],
@@ -172,8 +169,8 @@ test.describe("Plugin management: list and filters @wf:plugin-management-list-fi
   });
 });
 
-test.describe("Plugin management: add zip @wf:plugin-management-add-zip @no-webkit", () => {
-  test.use({ library: "empty" });
+test.describe("Plugin management: add zip @wf:plugin-management-add-zip", () => {
+  test.use({ library: "empty", usesPluginDirectory: true });
 
   test("adds a Plugin from a .zip and opens its approval dialog", async ({ page }) => {
     await openPluginsSection(page);
@@ -195,7 +192,7 @@ test.describe("Plugin management: add zip @wf:plugin-management-add-zip @no-webk
   });
 });
 
-test.describe("Plugin management: remove @wf:plugin-management-remove @no-webkit", () => {
+test.describe("Plugin management: remove @wf:plugin-management-remove", () => {
   test.use({ library: "pluginData", plugins: ["tracer"] });
 
   test("keeps the row and its data when Also delete is not ticked", async ({ page }) => {
@@ -251,7 +248,7 @@ test.describe("Plugin management: remove @wf:plugin-management-remove @no-webkit
   });
 });
 
-test.describe("Plugin management: reinstall a Built-in @wf:plugin-management-reinstall @no-webkit", () => {
+test.describe("Plugin management: reinstall a Built-in @wf:plugin-management-reinstall", () => {
   // The seeded folder is also the shipped copy (the hash defaults to the
   // folder's own), so the untouched Built-in starts installed with its first
   // sight (off, its Plugin Permissions pre-granted) and a Reinstall restores
@@ -307,7 +304,7 @@ test.describe("Plugin management: reinstall a Built-in @wf:plugin-management-rei
   });
 });
 
-test.describe("Plugin management: restart a stopped Plugin @wf:plugin-management-restart @no-webkit", () => {
+test.describe("Plugin management: restart a stopped Plugin @wf:plugin-management-restart", () => {
   test.use({ library: "empty", plugins: ["remote-ui"] });
 
   test("shows Stopped with its reason and restarts it", async ({ page }) => {
@@ -379,7 +376,7 @@ test.describe("Plugin management by touch @touch", () => {
       pluginApprovals: [{ pluginId: "approvals", enabled: false }],
     });
 
-    test("taps through the list and a filter @wf:plugin-management-list-filters @no-webkit", async ({
+    test("taps through the list and a filter @wf:plugin-management-list-filters", async ({
       page,
     }) => {
       await tapPluginsSection(page);
@@ -404,9 +401,9 @@ test.describe("Plugin management by touch @touch", () => {
   });
 
   test.describe("add zip", () => {
-    test.use({ library: "empty" });
+    test.use({ library: "empty", usesPluginDirectory: true });
 
-    test("taps Add Plugin and picks a .zip @wf:plugin-management-add-zip @no-webkit", async ({
+    test("taps Add Plugin and picks a .zip @wf:plugin-management-add-zip", async ({
       page,
     }) => {
       await tapPluginsSection(page);
@@ -424,7 +421,7 @@ test.describe("Plugin management by touch @touch", () => {
   test.describe("remove", () => {
     test.use({ library: "pluginData", plugins: ["tracer"] });
 
-    test("taps Remove and erases the retained data @wf:plugin-management-remove @no-webkit", async ({
+    test("taps Remove and erases the retained data @wf:plugin-management-remove", async ({
       page,
     }) => {
       await tapPluginsSection(page);
@@ -449,7 +446,7 @@ test.describe("Plugin management by touch @touch", () => {
   test.describe("reinstall a Built-in", () => {
     test.use({ library: "empty", plugins: ["approvals"], builtInPlugins: [{ id: "approvals" }] });
 
-    test("taps Remove then Reinstall @wf:plugin-management-reinstall @no-webkit", async ({
+    test("taps Remove then Reinstall @wf:plugin-management-reinstall", async ({
       page,
     }) => {
       await tapPluginsSection(page);
@@ -479,7 +476,7 @@ test.describe("Plugin management by touch @touch", () => {
   test.describe("restart a stopped Plugin", () => {
     test.use({ library: "empty", plugins: ["remote-ui"] });
 
-    test("taps Restart on a stopped Plugin @wf:plugin-management-restart @no-webkit", async ({
+    test("taps Restart on a stopped Plugin @wf:plugin-management-restart", async ({
       page,
     }) => {
       await page.goto("/");

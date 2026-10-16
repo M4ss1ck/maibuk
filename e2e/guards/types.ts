@@ -30,7 +30,6 @@ export type RowStatus = "planned" | "accepted" | "not-accepted";
 
 export type RowTag =
   | "chromium-only"
-  | "no-webkit"
   | "mac-platform"
   | "touch"
   | "sandbox"

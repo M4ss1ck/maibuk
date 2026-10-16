@@ -3,7 +3,6 @@
 // runs the Plugin's targeted `stamp` Command on that Chapter (naming it), and
 // the Plugin's page opens from the sidebar and renders its deterministic
 // content. Runs only in the `phone` project (every test is @touch).
-// @no-webkit: seeding the Plugin Directory needs OPFS.
 
 import type { Page } from "@playwright/test";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
@@ -45,7 +44,7 @@ async function openChapters(page: Page) {
   return grid;
 }
 
-test.describe("phone fixture-everything Item Menu @touch @wf:plugins-contributions @no-webkit", () => {
+test.describe("phone fixture-everything Item Menu @touch @wf:plugins-contributions", () => {
   test("a long-press on a Chapter opens its Item Menu and Stamp names that Chapter", async ({
     page,
   }) => {
@@ -66,7 +65,7 @@ test.describe("phone fixture-everything Item Menu @touch @wf:plugins-contributio
   });
 });
 
-test.describe("phone fixture-everything page @touch @wf:plugins-contributions @no-webkit", () => {
+test.describe("phone fixture-everything page @touch @wf:plugins-contributions", () => {
   test("a tap on the sidebar entry opens the Plugin page with its content", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("iframe")).toHaveCount(1, { timeout: 15_000 });

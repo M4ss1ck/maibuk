@@ -335,8 +335,7 @@ sandbox, broker, or remote UI renderer (`src/features/plugins/sandbox.ts`,
 `src/features/plugins/broker.ts`, `src/features/plugins/remote-ui/**`,
 `src/plugin-sdk/protocol.ts`) is not done until `pnpm test:e2e --grep @sandbox`
 passes locally on Chromium, WebKit, and Firefox, and the PR body says it ran.
-Playwright never runs in CI. Seeded fixture specs stay `@no-webkit` until the
-Playwright bump ([#479](https://github.com/M4ss1ck/maibuk/issues/479)) lands.
+Playwright never runs in CI.
 
 The frame-rate lane (`pnpm bench:frames`, `e2e/frames/`) is a measurement, not
 a spec: its drivers use the wheel and mouse drags where the measured gesture

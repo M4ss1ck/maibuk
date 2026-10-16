@@ -4,7 +4,6 @@
 // text field stays host-owned, its button runs from the keyboard, and a
 // declaration the UI kit never carries stops the Plugin with the
 // remote-ui-limit copy. Each matrix edge gets its own test.
-// @no-webkit: the seed needs OPFS, which the webkit project does not carry.
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -31,7 +30,7 @@ async function openPanel(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: PAGE_TITLE, level: 1 })).toBeVisible();
 }
 
-test.describe("Host-rendered Plugin UI @wf:plugins-remote-ui @no-webkit", () => {
+test.describe("Host-rendered Plugin UI @wf:plugins-remote-ui", () => {
   test.use({ plugins: ["remote-ui"] });
 
   test("the Plugin page renders the tree its Worker sends", async ({ page }) => {

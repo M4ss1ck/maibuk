@@ -275,7 +275,9 @@ function errorLabel(error: unknown): string {
 async function writeChapter(client: PluginClient): Promise<void> {
   // Stands in for a Plugin's own async work, so the author's in-flight typing
   // lands before this read (ADR 0002/0026: newer typing wins over an outside write).
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  // Playwright WebKit types the spec's 21 characters in about 560 ms after the
+  // palette closes (#479), so the wait keeps a wide margin over that.
+  await new Promise((resolve) => setTimeout(resolve, 1500));
   const focused = await client.editor.getContent();
   if (focused.status !== "ok" || focused.entity.kind !== "chapter") {
     await client.notifications.show({

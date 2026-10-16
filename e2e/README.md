@@ -36,6 +36,7 @@ the missing one when it cannot launch a browser. Install the whole set with:
 pnpm exec playwright install-deps chromium webkit
 ```
 
+The WebKit build also needs `libavif16` (`sudo apt-get install libavif16`).
 `install-deps` runs the package manager and asks for sudo, so run it in a
 terminal you control. A slim container often also needs `libnss3`, `libnspr4`,
 `libasound2`, `libatk1.0-0`, `libatk-bridge2.0-0`, `libcups2`, `libdrm2`,
@@ -106,7 +107,7 @@ run at once and a leftover never blocks a run. Running
 | --- | --- | --- |
 | `chromium` | Chromium | every spec except the audio specs |
 | `voice` | Chromium with the fake microphone, one worker | the audio specs: `voice-*.spec.ts` and `dictation*.spec.ts` |
-| `webkit` | WebKit (the engine of the Linux and macOS desktop shells) | every spec except `@chromium-only` and `@no-webkit` |
+| `webkit` | WebKit (the engine of the Linux and macOS desktop shells) | every spec except `@chromium-only`; a test that seeds or installs Plugins gets a persistent context (see Troubleshooting) |
 | `firefox` | Firefox | only tests tagged `@sandbox` (the Plugin sandbox's engine coverage) |
 | `mac-platform` | Chromium reporting a Mac `navigator.platform` | only tests tagged `@mac-platform` |
 | `phone` | Chromium as a Pixel 7: 412x839 viewport, touch, `isMobile` | only tests tagged `@touch` |
@@ -131,8 +132,7 @@ over CDP. Desktop projects never run `@touch` tests.
 `firefox` is limited to the `@sandbox` group, so `pnpm test:e2e --grep @sandbox`
 runs the Plugin sandbox lane on Chromium, WebKit, and Firefox. A change to the
 Plugin sandbox, broker, or remote UI renderer runs that lane locally and says so
-in the PR (`CODING_STANDARDS.md`, E2E). Seeded fixture specs stay `@no-webkit`
-until the Playwright bump ([#479](https://github.com/M4ss1ck/maibuk/issues/479)).
+in the PR (`CODING_STANDARDS.md`, E2E).
 
 All projects use en-US and UTC; the desktop ones use a 1280x800 viewport. Workers default to CPU
 cores / 2, retries are 0, and a test times out after 30 s.
@@ -181,10 +181,8 @@ else (a comment, a variable, an annotation) covers nothing:
 - `@sc:<registry id>` marks the shortcuts they press. Every shortcut a row
   lists must be tagged in a spec file that carries that row.
 - `@mac-platform` also runs the test in the `mac-platform` project, and
-  `@chromium-only` keeps it out of WebKit (clipboard rows only).
-- `@no-webkit` keeps a test out of WebKit when the pinned Playwright WebKit
-  build lacks an API the row needs (today: OPFS, microsoft/playwright#18235);
-  the matrix records the gap as an exclusion.
+  `@chromium-only` keeps it out of WebKit (clipboard rows, and tests that need a
+  CDP-only helper such as `withCpuThrottle`).
 - `@touch` runs the test only in the `phone` project, and lets it use touch
   input (see "Driving the app by touch").
 
@@ -435,7 +433,8 @@ that does not exist.
 
 Two scenarios render a `fixture-bench` Plugin, so they run on the `chromium`
 source only: the `probe` (Playwright WebKit) and `android` sources seed no
-Plugin Directory (WebKit has no OPFS, and the Android WebView seeds no web one),
+Plugin Directory (the probe's ephemeral WebKit context has no OPFS, and the
+Android WebView seeds no web one),
 and each carries that `skip` reason. `plugin-remote-ui` wheels the Plugin's
 1,000-row Remote UI table while scrolling, on the default budget, and records no
 keystrokes: keystroke echo belongs to `bench:plugins`, not here.
@@ -546,7 +545,7 @@ milliseconds:
 directory of its own (`e2e/.output/plugins-bench-web`, so the flag never leaks
 into the E2E build) and runs the Playwright bench specs in `e2e/plugins-bench/`.
 `webkitgtk` measures the real engine of the Linux desktop shell. Playwright's
-WebKit has no OPFS, so it cannot seed a Plugin Directory, and the lane drives
+WebKit is a different build from the WebKitGTK the shell ships, so the lane drives
 the **real Tauri Linux debug binary** instead: built once with
 `VITE_PLUGIN_BENCH=1` and `VITE_PLUGIN_BENCH_DRIVER=1` under its own app
 identifier and product name (`com.massick.maibuk.bench`), so it never touches
@@ -717,11 +716,13 @@ presses can pass in Chromium and fail in WebKit. Prefer `tabTo(page, target)`
 when it never does) over a fixed number of `Tab` presses, and assert the
 focused element rather than a step count.
 
-**WebKit has no OPFS on the pinned Playwright.** `navigator.storage` is
-undefined in the WebKit build that ships with Playwright 1.62.1
-(microsoft/playwright#18235, fixed by the WebKit r2339 roll in a later
-Playwright), so specs that seed the web Plugin Directory cannot run there.
-They carry `@no-webkit` and the matrix records the exclusion; the row returns
-to WebKit with the Playwright bump
-([#479](https://github.com/M4ss1ck/maibuk/issues/479)). The sandbox wire
-harness (`specs/plugins-sandbox.spec.ts`) needs no OPFS and runs on WebKit.
+**WebKit has OPFS only in a persistent context.** In Playwright's default
+ephemeral context, WebKit treats the session as private browsing and
+`navigator.storage.getDirectory()` throws `UnknownError`, as in a Safari
+Private window ([#479](https://github.com/M4ss1ck/maibuk/issues/479)). So on
+the `webkit` project a test that seeds Plugins (`plugins` or
+`unapprovedPlugins`), or installs one with none seeded
+(`usesPluginDirectory: true`), runs in a persistent context on a fresh temporary profile
+(`needsPersistentContext` in `support/storage.ts`, wired in `support/test.ts`);
+every other test keeps the default context. A spec that builds its own context
+(`browser.newContext()`) gets no OPFS on WebKit.

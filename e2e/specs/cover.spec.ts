@@ -284,23 +284,29 @@ test.describe("Cover export @wf:cover-export", () => {
     }
   });
 
-  test("PNG, JPG, and PDF downloads carry the Cover at the document size", async ({ page }) => {
+  test("PNG, JPG, and PDF downloads carry the Cover at the document size", async ({
+    page,
+    browserName,
+  }) => {
     await openCover(page);
+    // The app names the file after the Book title. WebKit (Playwright 1.64's
+    // build) saves a download name's spaces as underscores; Chromium keeps them.
+    const savedName = (name: string) => (browserName === "webkit" ? name.replaceAll(" ", "_") : name);
 
     const png = await exportCover(page, "Export as PNG");
-    expect(png.suggestedFilename()).toBe(`${SEED_BOOK.title}.png`);
+    expect(png.suggestedFilename()).toBe(savedName(`${SEED_BOOK.title}.png`));
     const pngBytes = await readFile((await png.path()) as string);
     expect([...pngBytes.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
     expect(pngSize(pngBytes)).toEqual({ width: 1800, height: 2700 });
 
     const jpg = await exportCover(page, "Export as JPG");
-    expect(jpg.suggestedFilename()).toBe(`${SEED_BOOK.title}.jpg`);
+    expect(jpg.suggestedFilename()).toBe(savedName(`${SEED_BOOK.title}.jpg`));
     const jpgBytes = await readFile((await jpg.path()) as string);
     expect(jpgBytes.subarray(0, 2).toString("hex")).toBe("ffd8");
     expect(jpegSize(jpgBytes)).toEqual({ width: 1800, height: 2700 });
 
     const pdf = await exportCover(page, "Export as PDF (print)");
-    expect(pdf.suggestedFilename()).toBe(`${SEED_BOOK.title}.pdf`);
+    expect(pdf.suggestedFilename()).toBe(savedName(`${SEED_BOOK.title}.pdf`));
     const pdfBytes = await readFile((await pdf.path()) as string);
     expect(pdfBytes.subarray(0, 5).toString()).toBe("%PDF-");
     const document = await PDFDocument.load(pdfBytes);

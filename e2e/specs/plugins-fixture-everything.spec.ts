@@ -6,9 +6,6 @@
 // that same record and drives every surface it contributes, in English and in
 // Spanish. The third seeds the on-demand sibling and reaches it from the
 // Command Palette.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -173,7 +170,7 @@ async function openChapterA(page: Page): Promise<void> {
   await expect(page.getByRole("textbox", { name: `Text of ${CHAPTER_A}` })).toBeVisible();
 }
 
-test.describe("fixture-everything approval @wf:plugins-contributions @no-webkit", () => {
+test.describe("fixture-everything approval @wf:plugins-contributions", () => {
   test.use({ library: "empty", unapprovedPlugins: ["fixture-everything"] });
 
   test("approves it from the permission dialog by keyboard and it starts", async ({ page }) => {
@@ -205,6 +202,10 @@ test.describe("fixture-everything approval @wf:plugins-contributions @no-webkit"
     await tabTo(page, approve, { max: 20 });
     await page.keyboard.press("Enter");
     await expect(dialog).toBeHidden();
+    // The dialog closes before the approval is saved: approving first reads and
+    // hashes the copy. Wait for the switch the author sees turn on, or the
+    // reload below can land first and drop the approval (#479, WebKit).
+    await expect(enableSwitch(page)).toBeChecked();
 
     // It became ready: its page renders the Plugin's own Remote UI tree.
     await page.goto("/plugin/fixture-everything/panel");
@@ -225,7 +226,7 @@ test.describe("fixture-everything approval @wf:plugins-contributions @no-webkit"
   });
 });
 
-test.describe("fixture-everything contributions @wf:plugins-contributions @no-webkit", () => {
+test.describe("fixture-everything contributions @wf:plugins-contributions", () => {
   test.use({
     library: "oneBookThreeChapters",
     plugins: ["fixture-everything"],
@@ -371,7 +372,7 @@ test.describe("fixture-everything contributions @wf:plugins-contributions @no-we
   });
 });
 
-test.describe("fixture-everything target Command, four ways @wf:plugins-contributions @no-webkit @sandbox", () => {
+test.describe("fixture-everything target Command, four ways @wf:plugins-contributions @sandbox", () => {
   test.use({
     library: "oneBookTwoChapters",
     plugins: ["fixture-everything"],
@@ -494,7 +495,7 @@ test.describe("fixture-everything target Command, four ways @wf:plugins-contribu
   });
 });
 
-test.describe("fixture-everything on demand @wf:plugins-contributions @no-webkit", () => {
+test.describe("fixture-everything on demand @wf:plugins-contributions", () => {
   test.use({
     library: "empty",
     plugins: ["fixture-everything-on-demand"],

@@ -113,9 +113,7 @@ test.describe("primary navigation @wf:shell-nav-sidebar", () => {
   // same path) must not displace Metrics and Settings: the core destinations come
   // first, the Plugin entry next, then the pinned pair, which stays at the bottom
   // of the nav even when the list is taller than the sidebar.
-  //
-  // @no-webkit: seeding the Plugin Directory needs OPFS (e2e/README.md).
-  test.describe("with a Plugin sidebar entry @no-webkit", () => {
+  test.describe("with a Plugin sidebar entry", () => {
     test.use({
       plugins: ["maibuk-echoes"],
       pluginApprovals: [
@@ -154,7 +152,7 @@ test.describe("primary navigation @wf:shell-nav-sidebar", () => {
     });
   });
 
-  test.describe("with a Plugin sidebar entry at a short viewport @no-webkit", () => {
+  test.describe("with a Plugin sidebar entry at a short viewport", () => {
     // Short enough that the seven nav rows outgrow the sidebar: the list must
     // scroll and the pinned pair must stay put at the bottom.
     test.use({

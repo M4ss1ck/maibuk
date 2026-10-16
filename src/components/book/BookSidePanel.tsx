@@ -103,16 +103,17 @@ export function BookSidePanel({
   }, [isMobile, isOpen, onClose]);
 
   // Opening the panel must land focus inside it, not on <body>: the trigger
-  // that opened it disables itself while its tab is active. The mobile overlay
-  // already autofocuses through FocusScope, so the desktop panel focuses its
-  // active tab. React Aria mounts its collection items after the first commit,
-  // so the ref callback, not an effect, is what focuses the tab when it lands.
+  // that opened it disables itself while its tab is active, and on a phone the
+  // More menu item that opened it unmounts in the same render (#479). React
+  // Aria mounts its collection items after the first commit, so the mobile
+  // FocusScope's autoFocus can find nothing to focus yet; the ref callback, not
+  // an effect, is what focuses the active tab when it lands, on every screen.
   useEffect(() => {
-    if (isOpen && !wasOpenRef.current && !isMobile) {
+    if (isOpen && !wasOpenRef.current) {
       focusActiveTabRef.current = true;
     }
     wasOpenRef.current = isOpen;
-  }, [isOpen, isMobile]);
+  }, [isOpen]);
 
   const setActiveTabRef = useCallback((node: HTMLDivElement | null) => {
     activeTabRef.current = node;

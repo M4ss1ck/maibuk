@@ -519,6 +519,9 @@ async function openFootnotesTabFromMore(page: Page) {
   await page.keyboard.press("Enter");
   await tabTo(page, page.getByRole("button", { name: "Book Notes" }), { max: 10 });
   await page.keyboard.press("Enter");
+  const panel = page.getByRole("complementary", { name: "Book side panel" });
+  await expect(panel.getByRole("tab", { name: "Notes", exact: true })).toBeVisible();
+  await capture(page, "book-side-panel-phone-open", { around: [panel] });
   return switchSidePanelToFootnotes(page);
 }
 

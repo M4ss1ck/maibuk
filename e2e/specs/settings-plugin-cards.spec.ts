@@ -6,9 +6,6 @@
 // spec proves the first sight, the enable switch, the expanding panel order,
 // the pre-granted Permissions accordion, the outline reveal, the UI-language
 // names, and that the card still expands under reduced motion, all by keyboard.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -84,7 +81,7 @@ test.use({
   builtInPlugins: [{ id: "maibuk-echoes" }],
 });
 
-test.describe("Settings Plugin cards @wf:settings-plugin-cards @no-webkit", () => {
+test.describe("Settings Plugin cards @wf:settings-plugin-cards", () => {
   test("first sight: the Echoes switch is off and its entry is not available", async ({
     page,
   }) => {

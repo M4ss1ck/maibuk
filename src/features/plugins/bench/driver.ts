@@ -1,8 +1,8 @@
 /**
  * The Plugins bench in-app driver (issue #448).
  *
- * The WebKitGTK half of `bench:plugins` cannot use Playwright (its WebKit has
- * no OPFS, so Plugins cannot be seeded there), so it drives the **real Tauri
+ * The WebKitGTK half of `bench:plugins` cannot use Playwright (its WebKit is
+ * not the WebKitGTK build the shell ships), so it drives the **real Tauri
  * Linux binary** instead. `main.tsx` imports this module dynamically only in a
  * build made with `VITE_PLUGIN_BENCH_DRIVER=1`, after the seed was read and its
  * approvals written (`seed.ts`) and after the Plugin lifecycle was installed.

@@ -5,9 +5,6 @@
 // approved third-party Plugin's approval: the Plugin needs review again and
 // stops (its contributed surfaces are gone), while a changed setting returns to
 // its default.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -88,7 +85,7 @@ async function openAdvanced(page: Page): Promise<Locator> {
 const RESET_SETTINGS = "Reset settings";
 const CONFIRM = "Reset settings and delete credentials";
 
-test.describe("Reset settings @wf:settings-reset-all @no-webkit", () => {
+test.describe("Reset settings @wf:settings-reset-all", () => {
   test.use({
     plugins: ["approvals"],
     pluginApprovals: [{ pluginId: "approvals", granted: ["library:read", "editor:read"] }],

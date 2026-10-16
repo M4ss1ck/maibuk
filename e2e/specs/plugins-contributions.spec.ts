@@ -2,7 +2,6 @@
 // every surface. A sidebar entry opens its page (announced by the title), and
 // a global Command it declares runs from its Shortcut and reaches the
 // Plugin's Worker, whose notification proves the round trip. Keyboard only.
-// @no-webkit: the seed needs OPFS, which the webkit project does not carry.
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -36,7 +35,7 @@ async function openNoteFromGallery(page: Page, title: string): Promise<void> {
   await expect(page).toHaveURL(/\/notes\/.+/);
 }
 
-test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () => {
+test.describe("Plugin contributions @wf:plugins-contributions", () => {
   test("the sidebar entry opens the Plugin page and announces its title", async ({ page }) => {
     await page.goto("/");
     // The Plugin is scanned after the first render; its entry appears then.
@@ -106,7 +105,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
     });
   });
 
-  test("the Settings Plugins accordion opens its rows from the keyboard @wf:plugins-contributions @no-webkit", async ({
+  test("the Settings Plugins accordion opens its rows from the keyboard @wf:plugins-contributions", async ({
     page,
   }) => {
     await page.goto("/settings");
@@ -129,7 +128,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
   test.describe("with a Book", () => {
     test.use({ library: "oneBookThreeChapters", plugins: ["tracer"] });
 
-    test("a Chapter Item Menu entry runs with its item as the target @wf:plugins-contributions @no-webkit", async ({
+    test("a Chapter Item Menu entry runs with its item as the target @wf:plugins-contributions", async ({
       page,
     }) => {
       await page.goto("/");
@@ -177,7 +176,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       ).toBeVisible({ timeout: 5_000 });
     });
 
-    test("a target Command runs from its Shortcut while the Chapter row has focus @wf:plugins-contributions @no-webkit", async ({
+    test("a target Command runs from its Shortcut while the Chapter row has focus @wf:plugins-contributions", async ({
       page,
     }) => {
       await page.goto("/");
@@ -211,7 +210,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       ).toBeVisible({ timeout: 5_000 });
     });
 
-    test("an editor toolbar button runs its Command from the keyboard @wf:plugins-contributions @no-webkit", async ({
+    test("an editor toolbar button runs its Command from the keyboard @wf:plugins-contributions", async ({
       page,
     }) => {
       await seedSettings(page, { toolbarExpanded: true });
@@ -254,7 +253,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
   test.describe("with a seeded Note", () => {
     test.use({ library: "notesWithLinksAndTags", plugins: ["tracer"] });
 
-    test("a Note list Item Menu entry runs with its item as the target @wf:plugins-contributions @no-webkit", async ({
+    test("a Note list Item Menu entry runs with its item as the target @wf:plugins-contributions", async ({
       page,
     }) => {
       await page.goto("/");
@@ -291,7 +290,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
   test.describe("touch", () => {
     test.use({ library: "oneBookThreeChapters", plugins: ["tracer"] });
 
-    test("a tap on the sidebar entry opens the Plugin page @wf:plugins-contributions @no-webkit @touch", async ({
+    test("a tap on the sidebar entry opens the Plugin page @wf:plugins-contributions @touch", async ({
       page,
     }) => {
       await page.goto("/");
@@ -312,7 +311,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       await expect(page.getByRole("heading", { name: "Tracer report", level: 1 })).toBeVisible();
     });
 
-    test("a tap on a Chapter Item Menu entry runs with its item @wf:plugins-contributions @no-webkit @touch", async ({
+    test("a tap on a Chapter Item Menu entry runs with its item @wf:plugins-contributions @touch", async ({
       page,
     }) => {
       await page.goto("/");
@@ -341,7 +340,7 @@ test.describe("Plugin contributions @wf:plugins-contributions @no-webkit", () =>
       ).toBeVisible({ timeout: 5_000 });
     });
 
-    test("a tap on the editor toolbar button runs its Command @wf:plugins-contributions @no-webkit @touch", async ({
+    test("a tap on the editor toolbar button runs its Command @wf:plugins-contributions @touch", async ({
       page,
     }) => {
       await seedSettings(page, { toolbarExpanded: true });

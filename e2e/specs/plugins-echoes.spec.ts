@@ -4,9 +4,6 @@
 // Chapter editor. The Chapter Item Menu's Find echoes scopes the report, a row
 // Item Menu ignores a word, a Chapter edit marks the report out of date, the
 // Settings row changes what is detected, and touch opens and expands by tap.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Page } from "@playwright/test";
 import { caretText, pressUntilFocused, tabTo } from "../support/keyboard";
@@ -85,7 +82,7 @@ test.use({
 // Open Echoes and Find echoes carry no Default Shortcut: the report spec proves
 // them through the Command Palette, the sidebar entry, and the Chapter Item
 // Menu, so its `@sc:` tags name those Commands for the coverage guard.
-test.describe("Echoes report @wf:plugins-echoes @sc:plugin.maibuk-echoes.openEchoes @sc:plugin.maibuk-echoes.findEchoes @no-webkit", () => {
+test.describe("Echoes report @wf:plugins-echoes @sc:plugin.maibuk-echoes.openEchoes @sc:plugin.maibuk-echoes.findEchoes", () => {
   test("opens from the Command Palette and shows rows for the Book", async ({ page }) => {
     await page.goto("/");
     await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });

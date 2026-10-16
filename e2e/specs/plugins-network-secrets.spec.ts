@@ -10,9 +10,6 @@
 // secret value never reaches the Plugin: the fixture writes it only in its save
 // call, and the spec mirrors that literal only to assert the header the route
 // received.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -124,7 +121,7 @@ async function setRemembered(page: Page, on: boolean): Promise<void> {
   await expect(remember).toHaveAttribute("aria-checked", String(on));
 }
 
-test.describe("fixture-everything secret header injection @wf:plugins-network-secret @sandbox @no-webkit", () => {
+test.describe("fixture-everything secret header injection @wf:plugins-network-secret @sandbox", () => {
   test.use({
     library: "empty",
     plugins: ["fixture-everything"],
@@ -161,7 +158,7 @@ test.describe("fixture-everything secret header injection @wf:plugins-network-se
   });
 });
 
-test.describe("fixture-everything ungranted host @wf:plugins-network-refused @sandbox @no-webkit", () => {
+test.describe("fixture-everything ungranted host @wf:plugins-network-refused @sandbox", () => {
   test.use({
     library: "empty",
     plugins: ["fixture-everything"],
@@ -183,7 +180,7 @@ test.describe("fixture-everything ungranted host @wf:plugins-network-refused @sa
   });
 });
 
-test.describe("fixture-everything clipboard @wf:plugins-clipboard @sandbox @no-webkit", () => {
+test.describe("fixture-everything clipboard @wf:plugins-clipboard @sandbox", () => {
   test.use({
     library: "empty",
     plugins: ["fixture-everything"],
@@ -214,7 +211,7 @@ test.describe("fixture-everything clipboard @wf:plugins-clipboard @sandbox @no-w
   });
 });
 
-test.describe("fixture-everything remember switch @wf:plugins-remember-switch @sandbox @no-webkit", () => {
+test.describe("fixture-everything remember switch @wf:plugins-remember-switch @sandbox", () => {
   test.use({
     library: "empty",
     plugins: ["fixture-everything"],

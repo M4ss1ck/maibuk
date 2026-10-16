@@ -8,8 +8,8 @@
 // CI: browser timing on a shared runner is noise.
 //
 // Unit 4a measures Chromium. Unit 4b measures the real Tauri Linux binary
-// (`webkitgtk`), because Playwright's WebKit has no OPFS and cannot seed
-// Plugins there; its plan lives in `e2e/plugins-bench/webkitgtk-plan.ts` and its
+// (`webkitgtk`), because Playwright's WebKit is not the WebKitGTK build the
+// shell ships; its plan lives in `e2e/plugins-bench/webkitgtk-plan.ts` and its
 // process shell in `e2e/plugins-bench/webkitgtk.ts`.
 
 import { execFileSync } from "node:child_process";
