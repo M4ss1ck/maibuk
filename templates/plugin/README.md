@@ -40,3 +40,5 @@ packs that folder into `dist/<id>-<version>.zip`, with the files at the zip root
 
 Building never installs anything into Maibuk. To run your Plugin, add the zip
 from Settings → Plugins.
+
+The full authoring guide is in the Maibuk checkout, at `docs/plugins/README.md`.
