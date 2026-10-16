@@ -302,6 +302,133 @@ describe("runQuickJsPlugin()", () => {
     }
   });
 
+  it("runs queueMicrotask callbacks in FIFO order before a setTimeout(0)", async () => {
+    const endpoint = new EndpointDouble();
+    const run = runQuickJsPlugin({
+      sources: {
+        "index.js": `queueMicrotask(() => self.postMessage("micro-1"));
+          queueMicrotask(() => self.postMessage("micro-2"));
+          queueMicrotask(() => self.postMessage("micro-3"));
+          setTimeout(() => self.postMessage("timeout"), 0);`,
+      },
+      entry: "index.js",
+      endpoint,
+    });
+    try {
+      await expect(run.outcome).resolves.toEqual({ kind: "ready" });
+      await vi.waitFor(() => {
+        expect(endpoint.messages).toContain("timeout");
+      });
+      expect(endpoint.messages).toEqual(["micro-1", "micro-2", "micro-3", "timeout"]);
+    } finally {
+      run.dispose();
+    }
+  });
+
+  it("repeats a setInterval until clearInterval stops it", async () => {
+    const endpoint = new EndpointDouble();
+    const run = runQuickJsPlugin({
+      sources: {
+        "index.js": `let count = 0;
+          const id = setInterval(() => {
+            count += 1;
+            self.postMessage("interval:" + count);
+            if (count >= 3) clearInterval(id);
+          }, 1);
+          setTimeout(() => self.postMessage("settled"), 30);`,
+      },
+      entry: "index.js",
+      endpoint,
+    });
+    try {
+      await expect(run.outcome).resolves.toEqual({ kind: "ready" });
+      await vi.waitFor(() => {
+        expect(endpoint.messages).toContain("settled");
+      });
+      // No interval:4: clearInterval stopped the repeat the tick it was called.
+      expect(endpoint.messages).toEqual(["interval:1", "interval:2", "interval:3", "settled"]);
+    } finally {
+      run.dispose();
+    }
+  });
+
+  it("cancels a pending timeout with clearTimeout", async () => {
+    const endpoint = new EndpointDouble();
+    const run = runQuickJsPlugin({
+      sources: {
+        "index.js": `const cancelled = setTimeout(() => self.postMessage("cancelled"), 10);
+          clearTimeout(cancelled);
+          setTimeout(() => self.postMessage("kept"), 30);`,
+      },
+      entry: "index.js",
+      endpoint,
+    });
+    try {
+      await expect(run.outcome).resolves.toEqual({ kind: "ready" });
+      await vi.waitFor(() => {
+        expect(endpoint.messages).toContain("kept");
+      });
+      expect(endpoint.messages).toEqual(["kept"]);
+    } finally {
+      run.dispose();
+    }
+  });
+
+  it("provides the pure-JS VM shims the Remote DOM SDK loads before a Plugin graph", async () => {
+    const endpoint = new EndpointDouble();
+    // The Android host global set is exactly the plan's list; these are VM-side
+    // shims, not host globals. QuickJS has no DOM, so Remote DOM's elements
+    // (`RemoteElement extends HTMLElement`, `RemoteEvent extends CustomEvent`,
+    // `RemoteMutationObserver extends MutationObserver`) and `@quilted/threads`
+    // (`AbortController`, `crypto.getRandomValues`) fail to evaluate without
+    // them. The UI path's polyfill replaces the DOM ones; crypto and
+    // AbortController stay ours.
+    const shims = [
+      "EventTarget",
+      "Event",
+      "CustomEvent",
+      "HTMLElement",
+      "MutationObserver",
+      "AbortSignal",
+      "AbortController",
+      "crypto",
+    ];
+    const run = runQuickJsPlugin({
+      sources: {
+        "index.js": `(() => {
+          const types = {};
+          for (const name of ${JSON.stringify(shims)}) types[name] = typeof globalThis[name];
+          const bytes = globalThis.crypto.getRandomValues(new Uint8Array(4));
+          self.postMessage({ types, randomLength: bytes.length });
+        })();`,
+      },
+      entry: "index.js",
+      endpoint,
+    });
+    try {
+      await expect(run.outcome).resolves.toEqual({ kind: "ready" });
+      const report = endpoint.messages[0] as {
+        types: Record<string, string>;
+        randomLength: number;
+      };
+      for (const name of [
+        "EventTarget",
+        "Event",
+        "CustomEvent",
+        "HTMLElement",
+        "MutationObserver",
+        "AbortSignal",
+        "AbortController",
+      ]) {
+        expect(report.types[name], name).toBe("function");
+      }
+      expect(report.types.crypto).toBe("object");
+      expect(report.randomLength).toBe(4);
+    } finally {
+      run.dispose();
+    }
+  });
+
   /** Run one OOM source under a 2 MB cap and assert a clean memory death. */
   async function expectMemoryDeath(source: string): Promise<void> {
     const endpoint = new EndpointDouble();

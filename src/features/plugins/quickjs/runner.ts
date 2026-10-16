@@ -288,41 +288,82 @@ export function runQuickJsPlugin(options: QuickJsRunOptions): QuickJsPluginRun {
     hostPorts.set(portId, port);
     port.onmessage = (event) => {
       if (disposed || context === null || bridge === null) return;
-      const dataHandle = toVmValue(context, (event as MessageEvent).data);
+      const activeContext = context;
+      const activeBridge = bridge;
+      const messageEvent = event as MessageEvent;
+      const handles = new Map<MessagePort, QuickJSHandle>();
+      let dataHandle: QuickJSHandle | null = null;
+      let portsHandle: QuickJSHandle | null = null;
       try {
-        bridge.deliverPortMessage(portId, dataHandle);
+        portsHandle = bridgePortList(activeContext, activeBridge, messageEvent.ports ?? [], handles);
+        dataHandle = toVmValue(activeContext, messageEvent.data, (port) =>
+          bridgedPortHandle(activeBridge, port, handles)
+        );
+        activeBridge.deliverPortMessage(portId, dataHandle, portsHandle);
       } catch (error) {
         if (isMemoryDeathError(error)) dieOfMemory();
         else reportError(error instanceof Error ? error.message : String(error));
       } finally {
-        if (dataHandle.alive) dataHandle.dispose();
+        if (dataHandle !== null && dataHandle.alive) dataHandle.dispose();
+        if (portsHandle !== null && portsHandle.alive) portsHandle.dispose();
+        for (const handle of handles.values()) if (handle.alive) handle.dispose();
       }
       drainJobs();
     };
     port.start();
   }
 
+  /** The VM port for one host port, created once per message and reused. */
+  function bridgedPortHandle(
+    activeBridge: QuickJsPortBridge,
+    port: MessagePort,
+    handles: Map<MessagePort, QuickJSHandle>
+  ): QuickJSHandle {
+    const existing = handles.get(port);
+    if (existing !== undefined) return existing;
+    const portId = nextPortId++;
+    registerHostPort(portId, port);
+    const handle = activeBridge.createPort(portId);
+    handles.set(port, handle);
+    return handle;
+  }
+
+  /** A VM array of the bridged VM ports for one host message's `ports`. */
+  function bridgePortList(
+    activeContext: QuickJSContext,
+    activeBridge: QuickJsPortBridge,
+    ports: readonly MessagePort[],
+    handles: Map<MessagePort, QuickJSHandle>
+  ): QuickJSHandle {
+    const array = activeContext.newArray();
+    ports.forEach((port, index) => {
+      activeContext.setProp(array, index, bridgedPortHandle(activeBridge, port, handles));
+    });
+    return array;
+  }
+
   function deliverScopeMessage(event: QuickJsScopeEvent): void {
     if (disposed || context === null || scopeDispatch === null || bridge === null) return;
-    const dataHandle = toVmValue(context, event.data);
-    const portsHandle = context.newArray();
-    for (let index = 0; index < event.ports.length; index++) {
-      const portId = nextPortId++;
-      registerHostPort(portId, event.ports[index]);
-      const vmPort = bridge.createPort(portId);
-      context.setProp(portsHandle, index, vmPort);
-      if (vmPort.alive) vmPort.dispose();
-    }
+    const activeContext = context;
+    const activeBridge = bridge;
+    const handles = new Map<MessagePort, QuickJSHandle>();
+    let dataHandle: QuickJSHandle | null = null;
+    let portsHandle: QuickJSHandle | null = null;
     let result: ReturnType<QuickJSContext["callFunction"]> | null = null;
     try {
-      result = context.callFunction(scopeDispatch, context.undefined, dataHandle, portsHandle);
+      portsHandle = bridgePortList(activeContext, activeBridge, event.ports, handles);
+      dataHandle = toVmValue(activeContext, event.data, (port) =>
+        bridgedPortHandle(activeBridge, port, handles)
+      );
+      result = activeContext.callFunction(scopeDispatch, activeContext.undefined, dataHandle, portsHandle);
     } catch (error) {
       if (isMemoryDeathError(error)) dieOfMemory();
       else reportError(error instanceof Error ? error.message : String(error));
       return;
     } finally {
-      if (dataHandle.alive) dataHandle.dispose();
-      if (portsHandle.alive) portsHandle.dispose();
+      if (dataHandle !== null && dataHandle.alive) dataHandle.dispose();
+      if (portsHandle !== null && portsHandle.alive) portsHandle.dispose();
+      for (const handle of handles.values()) if (handle.alive) handle.dispose();
     }
     if (result === null) return;
     if (result.error) {

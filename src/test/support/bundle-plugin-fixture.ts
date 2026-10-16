@@ -9,9 +9,36 @@
  */
 
 import { resolve } from "node:path";
-import { build } from "vite";
 
 const cache = new Map<string, Promise<string>>();
+
+let viteModule: Promise<typeof import("vite")> | null = null;
+let esbuildRealmRepaired = false;
+
+/**
+ * Load Vite exactly once, repairing the jsdom realm first. The jsdom suite
+ * (`renderPage`) bundles fixtures too, and vitest's jsdom environment replaces
+ * `globalThis.Uint8Array` with jsdom's own realm's class. esbuild's load-time
+ * invariant (`new TextEncoder().encode("") instanceof Uint8Array`) and its
+ * binary IPC both fail on that mismatch, so the host intrinsic the host
+ * `TextEncoder` produces is put back for the process. A `// @vitest-environment
+ * node` suite already matches and is left untouched.
+ */
+function loadVite(): Promise<typeof import("vite")> {
+  if (viteModule === null) {
+    repairUint8ArrayRealm();
+    viteModule = import("vite");
+  }
+  return viteModule;
+}
+
+function repairUint8ArrayRealm(): void {
+  if (esbuildRealmRepaired) return;
+  esbuildRealmRepaired = true;
+  const globals = globalThis as { Uint8Array: Uint8ArrayConstructor };
+  const hostUint8Array = new TextEncoder().encode("").constructor as Uint8ArrayConstructor;
+  if (hostUint8Array !== globals.Uint8Array) globals.Uint8Array = hostUint8Array;
+}
 
 /** One Rollup output chunk; the only shape this helper reads. */
 interface BundleChunk {
@@ -40,6 +67,7 @@ export function bundlePluginFixture(entry: string): Promise<string> {
 }
 
 async function bundle(entry: string): Promise<string> {
+  const { build } = await loadVite();
   const raw = await build({
     configFile: false,
     logLevel: "warn",
@@ -56,12 +84,6 @@ async function bundle(entry: string): Promise<string> {
       lib: { entry, formats: ["es"], fileName: () => "fixture.js" },
       rollupOptions: {
         external: [],
-        // A UI-free Plugin must not carry the SDK's Remote UI modules, which
-        // extend DOM classes at module scope (`CustomEvent`) and cannot even
-        // evaluate in QuickJS. Treating modules as side-effect-free lets Rollup
-        // drop every SDK module the fixture does not use; the entry's own
-        // top-level code is always kept.
-        treeshake: { moduleSideEffects: false },
         output: { inlineDynamicImports: true },
       },
     },

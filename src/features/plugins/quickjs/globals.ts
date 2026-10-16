@@ -209,6 +209,7 @@ function buildGlobalsSource(): string {
 
 ${URL_SOURCE}
 ${TEXT_SOURCE}
+${DOM_SOURCE}
 
   globalThis.__maibukQuickJsScope = {
     dispatch: function (data, ports) {
@@ -445,4 +446,124 @@ const TEXT_SOURCE = `  function TextEncoder() { this.encoding = "utf-8"; }
 
   globalThis.TextEncoder = TextEncoder;
   globalThis.TextDecoder = TextDecoder;
+`;
+
+/**
+ * The DOM-like classes Remote DOM and `@quilted/threads` touch at module scope,
+ * and the `crypto` they reach for at call time. A Worker provides these
+ * natively; QuickJS does not. They are pure-JS shims evaluated inside the VM
+ * with no host callbacks, so the plan's host global set stays exactly its list.
+ *
+ * Remote DOM's element base classes extend these at module scope
+ * (`RemoteElement extends HTMLElement`, `RemoteEvent extends CustomEvent`,
+ * `RemoteMutationObserver extends MutationObserver`), which a Plugin built from
+ * the real build always pulls in once the SDK is imported, even when the Plugin
+ * declares no UI. The UI path additionally loads `@/plugin-sdk/worker-ui`, whose
+ * Remote DOM polyfill replaces the DOM shims with its own implementation before
+ * any element is created; `AbortController`/`AbortSignal` (used by
+ * `@quilted/threads`) and `crypto.getRandomValues` (used by its call ids) are
+ * not part of that polyfill and stay as these shims.
+ */
+const DOM_SOURCE = `  function EventTarget() { this.__listeners = new Map(); }
+  EventTarget.prototype.addEventListener = function (type, listener) {
+    if (typeof listener !== "function" && !(listener && typeof listener.handleEvent === "function")) return;
+    var set = this.__listeners.get(type);
+    if (set === undefined) { set = new Set(); this.__listeners.set(type, set); }
+    set.add(listener);
+  };
+  EventTarget.prototype.removeEventListener = function (type, listener) {
+    var set = this.__listeners.get(type);
+    if (set !== undefined) set.delete(listener);
+  };
+  EventTarget.prototype.dispatchEvent = function (event) {
+    var set = event === null || event === undefined ? undefined : this.__listeners.get(event.type);
+    if (event !== null && event !== undefined) {
+      event.target = this;
+      event.currentTarget = this;
+    }
+    if (set === undefined) return true;
+    var listeners = Array.from(set);
+    for (var i = 0; i < listeners.length; i++) {
+      var listener = listeners[i];
+      if (typeof listener === "function") listener.call(this, event);
+      else listener.handleEvent(event);
+    }
+    return true;
+  };
+
+  function Event(type, init) {
+    var options = init || {};
+    this.type = String(type);
+    this.bubbles = !!options.bubbles;
+    this.cancelable = !!options.cancelable;
+    this.composed = !!options.composed;
+    this.defaultPrevented = false;
+    this.target = null;
+    this.currentTarget = null;
+    this.timeStamp = 0;
+  }
+  Event.prototype.preventDefault = function () { this.defaultPrevented = true; };
+  Event.prototype.stopPropagation = function () {};
+  Event.prototype.stopImmediatePropagation = function () {};
+
+  function CustomEvent(type, init) {
+    var options = init || {};
+    Event.call(this, type, options);
+    this.detail = options.detail === undefined ? null : options.detail;
+  }
+  CustomEvent.prototype = Object.create(Event.prototype);
+  CustomEvent.prototype.constructor = CustomEvent;
+
+  function HTMLElement() {}
+  HTMLElement.prototype = Object.create(EventTarget.prototype);
+  HTMLElement.prototype.constructor = HTMLElement;
+
+  function MutationObserver(callback) { this.__callback = callback; }
+  MutationObserver.prototype.observe = function () {};
+  MutationObserver.prototype.disconnect = function () {};
+  MutationObserver.prototype.takeRecords = function () { return []; };
+
+  function AbortSignal() {
+    EventTarget.call(this);
+    this.aborted = false;
+    this.reason = undefined;
+    this.onabort = null;
+  }
+  AbortSignal.prototype = Object.create(EventTarget.prototype);
+  AbortSignal.prototype.constructor = AbortSignal;
+  AbortSignal.prototype.throwIfAborted = function () {
+    if (!this.aborted) return;
+    throw this.reason === undefined ? new Error("AbortError") : this.reason;
+  };
+
+  function AbortController() { this.signal = new AbortSignal(); }
+  AbortController.prototype.abort = function (reason) {
+    var signal = this.signal;
+    if (signal.aborted) return;
+    signal.aborted = true;
+    signal.reason = reason === undefined ? new Error("AbortError") : reason;
+    var event = new Event("abort");
+    event.target = signal;
+    if (typeof signal.onabort === "function") signal.onabort.call(signal, event);
+    signal.dispatchEvent(event);
+  };
+
+  if (typeof globalThis.crypto === "undefined") {
+    globalThis.crypto = {
+      getRandomValues: function (array) {
+        for (var index = 0; index < array.length; index++) {
+          array[index] = Math.floor(Math.random() * 256);
+        }
+        return array;
+      },
+    };
+  }
+
+  globalThis.EventTarget = EventTarget;
+  globalThis.Event = Event;
+  globalThis.CustomEvent = CustomEvent;
+  globalThis.HTMLElement = HTMLElement;
+  globalThis.MutationObserver = MutationObserver;
+  globalThis.AbortSignal = AbortSignal;
+  globalThis.AbortController = AbortController;
 `;
