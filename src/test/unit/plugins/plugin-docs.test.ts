@@ -16,6 +16,7 @@ import {
   headingsOf,
   isExternalLink,
   scanMarkdown,
+  scriptNames,
   slugifyHeading,
   stripInlineCode,
 } from "../../support/plugin-docs";
@@ -56,19 +57,6 @@ function docFilePaths(): string[] {
   return [...inDocs, ...EXTRA_DOCS.map((doc) => join(root, doc))];
 }
 
-function scriptNames(): Set<string> {
-  const names = new Set<string>();
-  for (const manifest of [
-    join(root, "package.json"),
-    join(root, "templates/plugin/package.json"),
-  ]) {
-    const parsed = JSON.parse(readFileSync(manifest, "utf8")) as {
-      scripts?: Record<string, string>;
-    };
-    for (const name of Object.keys(parsed.scripts ?? {})) names.add(name);
-  }
-  return names;
-}
 
 /** A command path resolves at the repo root or inside templates/plugin/. */
 function commandPathExists(commandPath: string): boolean {
@@ -264,7 +252,7 @@ describe("Plugin authoring docs", () => {
   });
 
   it("runs only real scripts and existing files", () => {
-    const scripts = scriptNames();
+    const scripts = scriptNames(root);
     const failures: string[] = [];
 
     for (const file of docFilePaths()) {

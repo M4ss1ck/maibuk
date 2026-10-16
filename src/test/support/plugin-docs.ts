@@ -4,6 +4,9 @@
 // are proven against inline fixtures in the gate's own suite, independently of
 // the real docs.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 const FENCE = /^\s*(`{3,}|~{3,})\s*(\S*)/;
 const LINK = /(!?)\[([^\]]*)\]\(([^)]+)\)/g;
 const HEADING = /^#{1,6}\s+(.*)$/;
@@ -160,4 +163,19 @@ function parseCommand(raw: string): ParsedCommand | null {
   }
 
   return null;
+}
+
+/** Every script name the root and the Plugin template's package.json declare. */
+export function scriptNames(repoRoot: string): Set<string> {
+  const names = new Set<string>();
+  for (const manifest of [
+    join(repoRoot, "package.json"),
+    join(repoRoot, "templates/plugin/package.json"),
+  ]) {
+    const parsed = JSON.parse(readFileSync(manifest, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    for (const name of Object.keys(parsed.scripts ?? {})) names.add(name);
+  }
+  return names;
 }

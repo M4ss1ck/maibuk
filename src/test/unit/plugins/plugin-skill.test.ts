@@ -38,6 +38,13 @@ describe("skillReferenceProblems()", () => {
     expect(skillReferenceProblems(broken, root).length).toBeGreaterThan(0);
   });
 
+  it("reports a renamed doc the skill names without its folder", () => {
+    const broken = markdown.split("`frame-ui.md`").join("`frames.md`");
+    expect(skillReferenceProblems(broken, root)).toContainEqual(
+      expect.stringContaining("frames.md")
+    );
+  });
+
   it("reports an unknown SDK subpath", () => {
     const broken = markdown.replace("@maibuk/plugin-sdk/ui-serve", "@maibuk/plugin-sdk/nope");
     expect(skillReferenceProblems(broken, root).some((problem) => problem.includes("nope"))).toBe(

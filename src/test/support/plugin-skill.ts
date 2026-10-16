@@ -7,16 +7,20 @@
 // who follows it. The SDK's public surface is read from `scripts/plugin/config`
 // (the same source the build and typecheck use), never duplicated here.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   externalAliases,
   SDK_PACKAGE,
   TEST_KIT_PACKAGE,
 } from "../../../scripts/plugin/config";
+import { scriptNames } from "./plugin-docs";
 
 /** The repo-relative prefixes an inline-code reference can name. */
 const REPO_PREFIXES = ["docs/", "src/", "plugins/", "templates/", "scripts/", "skills/"];
+
+/** A doc named without its folder, such as `testing.md`; it lives in docs/plugins/. */
+const BARE_DOC = /^[A-Za-z0-9_-]+\.md$/;
 
 /** Inline-code spans: the backticked tokens in the prose. */
 const INLINE_CODE = /`([^`\n]+)`/g;
@@ -48,20 +52,6 @@ export function skillFrontmatter(markdown: string): SkillFrontmatter {
   return { name, description };
 }
 
-/** Every script name the root and the Plugin template declare. */
-function scriptNames(repoRoot: string): Set<string> {
-  const names = new Set<string>();
-  for (const manifest of [
-    join(repoRoot, "package.json"),
-    join(repoRoot, "templates/plugin/package.json"),
-  ]) {
-    const parsed = JSON.parse(readFileSync(manifest, "utf8")) as {
-      scripts?: Record<string, string>;
-    };
-    for (const name of Object.keys(parsed.scripts ?? {})) names.add(name);
-  }
-  return names;
-}
 
 /**
  * The SDK's public subpath names, read from the aliases `scripts/plugin/config`
@@ -79,7 +69,8 @@ function sdkSubpathNames(repoRoot: string): Set<string> {
 
 /**
  * Every broken reference in a Plugin authoring skill, one human-readable
- * problem each: an inline-code repo path that does not exist, a `pnpm` script
+ * problem each: an inline-code repo path that does not exist, a bare doc name
+ * that is not a page in docs/plugins/, a `pnpm` script
  * that is not declared, a `node scripts/<file>` under templates/plugin/ that is
  * missing, or an `@maibuk/...` specifier that is neither the SDK, the test kit,
  * nor one of the SDK's public subpaths.
@@ -91,6 +82,12 @@ export function skillReferenceProblems(markdown: string, repoRoot: string): stri
 
   for (const [, token] of markdown.matchAll(INLINE_CODE)) {
     if (token.includes("<")) continue;
+    if (BARE_DOC.test(token)) {
+      if (!existsSync(join(repoRoot, "docs", "plugins", token))) {
+        problems.push(`inline code \`${token}\` is not a page in docs/plugins/`);
+      }
+      continue;
+    }
     if (!REPO_PREFIXES.some((prefix) => token.startsWith(prefix))) continue;
     const path = token.replace(/\/$/, "");
     if (!existsSync(join(repoRoot, path))) {

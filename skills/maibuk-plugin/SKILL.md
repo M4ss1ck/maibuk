@@ -42,7 +42,7 @@ Your code imports only `@maibuk/plugin-sdk` and its public subpaths (`@maibuk/pl
 Choose a **Frame** only when the component table cannot express the surface: a canvas, a chart, a DOM-dependent third-party library, a rich widget that already exists as web code. A Frame Plugin:
 
 - sets `customUi: true` and leaves `android` out of manifest `platforms`;
-- bundles the library inside the Plugin folder, so it ships in the zip, and adds a vendored copy to `biome.json`'s ignore list, since lint covers the whole folder;
+- bundles the library inside the Plugin folder, so it ships in the zip, and excludes a vendored copy with a `!!` entry in `biome.json` `files.includes`, since lint covers the whole folder;
 - styles with the host's `--maibuk-*` theme tokens from `frame-ui.md`;
 - owns its own accessibility, which the handoff states.
 
@@ -62,7 +62,7 @@ Tests run through `@maibuk/plugin-test-kit`, the same host Maibuk runs, per `tes
 
 ### 6. Check
 
-Run `pnpm check` in the Plugin repo, or `pnpm plugin:check <path>` from the checkout. It builds, validates the manifest, typechecks, lints, tests, checks the import boundary, packages the zip, and checks its layout, stopping at the first `FAIL`. Fix the cause and rerun. Done when the final line reads `plugin check passed` and the command exits 0.
+Run `pnpm check` in the Plugin repo, or `pnpm plugin:check <path>` from the checkout. It builds, validates the manifest, typechecks, lints, tests, checks the import boundary, packages the zip, and checks its layout, stopping at the first `FAIL`. Fix the cause and rerun. Done when the final line starts with `plugin check passed` and the command exits 0.
 
 ### 7. Hand off
 
