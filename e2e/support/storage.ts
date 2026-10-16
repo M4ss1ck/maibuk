@@ -6,7 +6,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { Page } from "@playwright/test";
+import type { Page, PlaywrightWorkerOptions } from "@playwright/test";
 import { WEB_PLUGIN_DIRECTORY_NAME } from "@/lib/platform/web/plugins";
 import {
   PLUGIN_APPROVALS_STORAGE_KEY,
@@ -329,6 +329,28 @@ export async function buildApproval(seed: PluginSeedData, overrides: PluginAppro
       ? { notifiedBuiltInHash: overrides.notifiedBuiltInHash }
       : {}),
   };
+}
+
+/**
+ * Whether a test needs a persistent browser context to use the web Plugin
+ * Directory: it seeds Plugins, or (`usesPluginDirectory`) installs one through
+ * the app. WebKit has OPFS only there: in Playwright's default ephemeral
+ * context `navigator.storage.getDirectory()` throws UnknownError, as in a
+ * Safari Private window (#479). Chromium and Firefox have OPFS in either.
+ */
+export function needsPersistentContext({
+  browserName,
+  plugins,
+  unapprovedPlugins,
+  usesPluginDirectory = false,
+}: {
+  browserName: PlaywrightWorkerOptions["browserName"];
+  plugins: Iterable<PluginSeed | PluginSeedEntry>;
+  unapprovedPlugins: Iterable<PluginSeed>;
+  usesPluginDirectory?: boolean;
+}): boolean {
+  if (browserName !== "webkit") return false;
+  return usesPluginDirectory || [...plugins, ...unapprovedPlugins].length > 0;
 }
 
 /**

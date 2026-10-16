@@ -8,16 +8,11 @@
 // global setup starts (`e2e/support/request-log.ts`), and `loggedRequests()` —
 // read with Node fs, never `evaluate` — must stay empty, including after the
 // Frame navigates itself to a `data:` and to a `blob:` document. Tagged
-// @sandbox so the lane runs on Chromium and Firefox.
+// @sandbox so the lane runs on Chromium, WebKit, and Firefox.
 //
 // Frames get no accessibility test of their contents (#402): this spec never
 // runs axe on the Frame (the suite has no axe helper at all) and asserts only
 // that Tab reaches the Frame element, never anything inside it.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md and
-// the matrix exclusion naming #479). The sandbox itself is engine-verified on
-// WebKit by the wire harness (`plugins-sandbox.spec.ts`) and the T1 probe.
 
 import type { FrameLocator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -99,7 +94,7 @@ async function chooseFromSelect(page: Page, trigger: ReturnType<Page["getByRole"
   await page.keyboard.press("Enter");
 }
 
-test.describe("Frame custom UI @wf:plugins-frame @sandbox @no-webkit", () => {
+test.describe("Frame custom UI @wf:plugins-frame @sandbox", () => {
   // The leak assertion reads one shared log, so the tests in this file run one
   // at a time: a concurrent test's recorder traffic would otherwise look like
   // this test's leak.

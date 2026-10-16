@@ -5,10 +5,7 @@
 // echo page, types into its host-owned field, and reads the echoed text and the
 // last of 1,000 rows; the third opens a Chapter and proves the Plugin's editor
 // highlights land as view-only decorations.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
-// @sandbox: the lane runs it on Chromium and Firefox.
+// @sandbox: the lane runs it on Chromium, WebKit, and Firefox.
 
 import type { Locator, Page } from "@playwright/test";
 import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
@@ -58,7 +55,7 @@ async function openPluginPage(page: Page, pluginId: string, ready: Locator): Pro
   await expect(ready).toBeVisible({ timeout: 15_000 });
 }
 
-test.describe("bench fixtures: twenty cloned Plugins @sandbox @no-webkit", () => {
+test.describe("bench fixtures: twenty cloned Plugins @sandbox", () => {
   test.use({
     library: "empty",
     // Twenty copies of the on-demand fixture, each under its own id, manifest
@@ -75,7 +72,7 @@ test.describe("bench fixtures: twenty cloned Plugins @sandbox @no-webkit", () =>
   });
 });
 
-test.describe("bench fixture: the echo page @sandbox @no-webkit", () => {
+test.describe("bench fixture: the echo page @sandbox", () => {
   test.use({
     library: "empty",
     plugins: ["fixture-bench"],
@@ -99,7 +96,7 @@ test.describe("bench fixture: the echo page @sandbox @no-webkit", () => {
   });
 });
 
-test.describe("bench fixture: editor highlights @sandbox @no-webkit", () => {
+test.describe("bench fixture: editor highlights @sandbox", () => {
   test.use({
     library: "oneBookThreeChapters",
     plugins: ["fixture-bench"],

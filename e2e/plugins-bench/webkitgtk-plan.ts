@@ -1,8 +1,8 @@
 /**
  * The pure half of the Plugins bench's WebKitGTK lane (issue #448).
  *
- * The lane drives the real Tauri Linux binary because its WebKit has no OPFS,
- * so Plugins cannot be seeded the Playwright way. Everything the lane decides
+ * The lane drives the real Tauri Linux binary because Playwright's WebKit is
+ * not the WebKitGTK build the shell ships. Everything the lane decides
  * before it touches a process — which scenarios there are, how many app
  * launches each needs, which fixture folders seed the Plugin Directory, and
  * which Plugin Permissions their approval records grant — lives here, with no

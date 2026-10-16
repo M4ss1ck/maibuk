@@ -85,9 +85,9 @@ export default defineConfig<{ macPlatform: boolean }>({
     {
       name: "webkit",
       // WebKit cannot grant clipboard permissions; clipboard rows are chromium-only.
-      // @no-webkit rows need an API the pinned Playwright WebKit build lacks
-      // (today: OPFS, microsoft/playwright#18235).
-      grepInvert: /@chromium-only|@touch|@no-webkit/,
+      // WebKit has OPFS only in a persistent context, so a test that seeds the
+      // Plugin Directory gets one (`needsPersistentContext`, support/test.ts).
+      grepInvert: /@chromium-only|@touch/,
       use: { ...devices["Desktop Safari"], ...shared },
     },
     {

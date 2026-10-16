@@ -10,8 +10,8 @@ export const FRAME_SOURCES: readonly FrameSource[] = ["chromium", "probe", "andr
 /**
  * A fixture Plugin the scenario's device seeds before the app boots, and the
  * Plugin Permissions its approval record grants. Seeding a Plugin writes the web
- * Plugin Directory (OPFS), which the `probe` (Playwright WebKit) and `android`
- * sources lack, so every scenario with `plugins` skips both (see `skip`).
+ * Plugin Directory (OPFS), which the `probe` (Playwright WebKit in an ephemeral
+ * context) and `android` sources lack, so every scenario with `plugins` skips both (see `skip`).
  */
 export interface FrameScenarioPlugin {
   /** The Plugin fixture id (a `PluginSeed` in e2e/support/storage.ts). */

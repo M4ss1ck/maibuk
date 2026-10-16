@@ -8,9 +8,6 @@
 // otherwise allows at most once every 5 seconds (`api-table.ts`). A step
 // announcement answers the author's own Command run, so the broker exempts it
 // from that limit and back-to-back Next/Previous assertions need no wait.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Page } from "@playwright/test";
 import {
@@ -80,7 +77,7 @@ async function openChapter(page: Page, title: string): Promise<void> {
 }
 
 test.describe(
-  "Echoes editor Commands @wf:plugins-echoes-editor @sc:plugin.maibuk-echoes.toggleHighlights @sc:plugin.maibuk-echoes.nextEcho @sc:plugin.maibuk-echoes.previousEcho @no-webkit",
+  "Echoes editor Commands @wf:plugins-echoes-editor @sc:plugin.maibuk-echoes.toggleHighlights @sc:plugin.maibuk-echoes.nextEcho @sc:plugin.maibuk-echoes.previousEcho",
   () => {
     test.describe("Chapter editor", () => {
       test.use({

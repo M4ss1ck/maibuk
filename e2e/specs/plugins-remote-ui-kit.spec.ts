@@ -5,7 +5,6 @@
 // row's Item Menu runs from the keyboard, Escape dismisses the modal and the
 // popover and focus returns to the trigger, and Plugin CSS reaches the surface's
 // own elements but not Maibuk chrome. Each matrix edge gets its own test.
-// @no-webkit: the seed needs OPFS, which the webkit project does not carry.
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -32,7 +31,7 @@ async function openGallery(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: PAGE_TITLE, level: 1 })).toBeVisible();
 }
 
-test.describe("Host-rendered Plugin UI kit @wf:plugins-remote-ui-kit @no-webkit", () => {
+test.describe("Host-rendered Plugin UI kit @wf:plugins-remote-ui-kit", () => {
   test.use({ plugins: ["remote-ui"] });
 
   test("the gallery page renders the organization kit", async ({ page }) => {
@@ -155,7 +154,9 @@ test.describe("Host-rendered Plugin UI kit @wf:plugins-remote-ui-kit @no-webkit"
     await expect(dialog).toBeVisible();
   });
 
-  test("the confirmation dialog reopens on Escape then Enter pressed back to back", async ({
+  // @chromium-only: the CPU throttle that makes the race deterministic is a CDP
+  // call, which only Chromium has.
+  test("the confirmation dialog reopens on Escape then Enter pressed back to back @chromium-only", async ({
     page,
   }) => {
     await openGallery(page);

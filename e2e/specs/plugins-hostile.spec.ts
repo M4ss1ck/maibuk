@@ -5,12 +5,7 @@
 // Node-side: the escape targets the recording server the E2E global setup
 // starts (`e2e/support/request-log.ts`), and `loggedRequests()` — read with
 // Node fs, never `evaluate` — must stay empty. Tagged @sandbox so the lane runs
-// on Chromium and Firefox.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md). The
-// sandbox itself is engine-verified on WebKit by the wire harness
-// (`plugins-sandbox.spec.ts`) and the T1 probe.
+// on Chromium, WebKit, and Firefox.
 
 import type { Locator, Page } from "@playwright/test";
 import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
@@ -128,7 +123,7 @@ async function openPermissions(page: Page): Promise<void> {
   await expect(trigger).toHaveAttribute("aria-expanded", "true");
 }
 
-test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox @no-webkit", () => {
+test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox", () => {
   // The leak assertion reads one shared log, so the tests in this file run one
   // at a time: a concurrent test's recorder traffic would otherwise look like
   // this test's leak.

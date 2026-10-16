@@ -83,6 +83,22 @@ describe("BookSidePanel mobile sheet", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("focuses its active tab when the menu item that opened it unmounts in the same render", async () => {
+    // The title bar's More menu opens the panel and closes itself in one
+    // render: the focused menu item is removed while the sheet mounts (#479).
+    const { rerender } = render(
+      <>
+        <button type="button">Book Notes</button>
+        <BookSidePanel {...baseProps} isOpen={false} activeTab="notes" />
+      </>
+    );
+    screen.getByRole("button", { name: "Book Notes" }).focus();
+
+    rerender(<BookSidePanel {...baseProps} isOpen activeTab="notes" />);
+
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Notes" })).toHaveFocus());
+  });
+
   it("keeps Tab inside the sheet and dismisses via the backdrop", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

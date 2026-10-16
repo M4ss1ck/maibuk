@@ -9,7 +9,7 @@ import { expect, test } from "../support/test";
 
 const LEAK_URL = "https://tracer.invalid/leak";
 
-test.describe("Plugin sandbox tracer @wf:plugins-sandbox-tracer @sandbox @no-webkit", () => {
+test.describe("Plugin sandbox tracer @wf:plugins-sandbox-tracer @sandbox", () => {
   test.use({ plugins: ["tracer"] });
 
   test("starts the seeded Plugin and observes a broker round trip", async ({ page }) => {

@@ -3,9 +3,6 @@
 // Show more adds rows within a drawing budget, or the next 50 occurrences, by
 // keyboard, and expanding, collapsing, and switching tabs stay quick. Each
 // timing is logged so a regression shows up as a number, not only a failure.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -43,7 +40,7 @@ test.use({
   builtInPlugins: [{ id: "maibuk-echoes" }],
 });
 
-test.describe("Echoes report on a large Book @wf:plugins-echoes @no-webkit", () => {
+test.describe("Echoes report on a large Book @wf:plugins-echoes", () => {
   test("draws 200 rows, shows more by keyboard, and toggles a row quickly", async ({ page }) => {
     await page.goto("/");
     await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });

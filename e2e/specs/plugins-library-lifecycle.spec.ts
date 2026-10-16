@@ -4,9 +4,6 @@
 // report it toasts at start, and reports every `library.availabilityChanged`,
 // so the spec sees the Plugin live through the Tutorial boundary and restart
 // with `startReason` `restore` on a Restore.
-//
-// @no-webkit: seeding the Plugin Directory needs OPFS, which the pinned
-// Playwright WebKit build lacks (microsoft/playwright#18235; e2e/README.md).
 
 import type { Locator, Page } from "@playwright/test";
 import { tabTo } from "../support/keyboard";
@@ -84,7 +81,7 @@ async function createBackups(page: Page, count: number, start: Date): Promise<vo
   }
 }
 
-test.describe("Plugin Library lifecycle @wf:plugins-tutorial-boundary @no-webkit", () => {
+test.describe("Plugin Library lifecycle @wf:plugins-tutorial-boundary", () => {
   test.use({
     library: "oneBookThreeChapters",
     plugins: ["approvals"],
@@ -122,7 +119,7 @@ test.describe("Plugin Library lifecycle @wf:plugins-tutorial-boundary @no-webkit
   });
 });
 
-test.describe("Plugin across a Restore @wf:plugins-restore-indication @no-webkit", () => {
+test.describe("Plugin across a Restore @wf:plugins-restore-indication", () => {
   test.use({
     library: "backupsPresent",
     plugins: ["approvals"],

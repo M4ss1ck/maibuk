@@ -20,14 +20,6 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "none: nothing to test",
   },
   {
-    kind: "behavior",
-    items: ["Plugin tracer on Playwright WebKit", "fixture Plugins on Playwright WebKit"],
-    reason:
-      "The pinned Playwright 1.62.1 WebKit build has no OPFS (navigator.storage is undefined; microsoft/playwright#18235, fixed by the WebKit r2339 roll in a later Playwright), so the web Plugin Directory cannot be seeded there. The rows are tagged @no-webkit and run on chromium and firefox; the sandbox itself is engine-verified on WebKit by the T1 probe (docs/research/plugins-engine-verification.md), and the prelude/bootstrap wire harness (e2e/specs/plugins-sandbox.spec.ts) runs on WebKit because it needs no OPFS",
-    owner:
-      "Playwright version bump (https://github.com/M4ss1ck/maibuk/issues/479); the rows return to WebKit with it",
-  },
-  {
     kind: "shortcut",
     items: ["global.toggleAlwaysOnTop"],
     reason: "Tauri-only window behavior; the web build has no always-on-top",
@@ -2096,7 +2088,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings", "/plugin/:pluginId/:pageId"],
     fixture: "echoesBook",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
   {
@@ -2116,7 +2108,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "empty",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
   {
@@ -2129,7 +2121,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
   {
@@ -2142,7 +2134,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "backupsPresent",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
   {
@@ -2155,7 +2147,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "empty",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
   {
@@ -2171,7 +2163,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
-    tags: ["no-webkit", "touch"],
+    tags: ["touch"],
     status: "accepted",
   },
   {
@@ -2184,7 +2176,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "empty",
-    tags: ["no-webkit", "filechooser", "touch"],
+    tags: ["filechooser", "touch"],
     status: "accepted",
   },
   {
@@ -2200,7 +2192,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "pluginData",
-    tags: ["no-webkit", "touch"],
+    tags: ["touch"],
     status: "accepted",
   },
   {
@@ -2213,7 +2205,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "empty",
-    tags: ["no-webkit", "touch"],
+    tags: ["touch"],
     status: "accepted",
   },
   {
@@ -2226,7 +2218,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "empty",
-    tags: ["no-webkit", "touch"],
+    tags: ["touch"],
     status: "accepted",
   },
   {
@@ -2239,7 +2231,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/"],
     fixture: "empty",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
   {
@@ -2281,7 +2273,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/plugin/:pluginId/:pageId", "/book/:bookId", "/notes/:noteId", "/settings"],
     fixture: "empty",
-    tags: ["no-webkit", "touch"],
+    tags: ["touch"],
     status: "accepted",
   },
   {
@@ -2298,7 +2290,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
   {
@@ -2311,7 +2303,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/plugin/:pluginId/:pageId"],
     fixture: "empty",
-    tags: ["no-webkit", "sandbox"],
+    tags: ["sandbox"],
     status: "accepted",
   },
   {
@@ -2324,7 +2316,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/plugin/:pluginId/:pageId"],
     fixture: "empty",
-    tags: ["no-webkit", "sandbox"],
+    tags: ["sandbox"],
     status: "accepted",
   },
   {
@@ -2337,7 +2329,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/plugin/:pluginId/:pageId"],
     fixture: "empty",
-    tags: ["no-webkit", "sandbox"],
+    tags: ["sandbox"],
     status: "accepted",
   },
   {
@@ -2353,7 +2345,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings", "/plugin/:pluginId/:pageId"],
     fixture: "empty",
-    tags: ["no-webkit", "sandbox"],
+    tags: ["sandbox"],
     status: "accepted",
   },
   {
@@ -2371,7 +2363,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/plugin/:pluginId/:pageId"],
     fixture: "empty",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
   {
@@ -2397,7 +2389,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/plugin/:pluginId/:pageId"],
     fixture: "empty",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
   {
@@ -2419,7 +2411,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: ["global.toggleTheme"],
     routes: ["/plugin/:pluginId/:pageId"],
     fixture: "empty",
-    tags: ["sandbox", "no-webkit"],
+    tags: ["sandbox"],
     status: "accepted",
   },
   {
@@ -2432,7 +2424,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: [],
     routes: ["/settings"],
     fixture: "empty",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
   {
@@ -3255,7 +3247,7 @@ export const ROWS: MatrixRow[] = [
     shortcuts: ["plugin.maibuk-echoes.openEchoes", "plugin.maibuk-echoes.findEchoes"],
     routes: ["/plugin/:pluginId/:pageId", "/book/:bookId", "/", "/settings"],
     fixture: "echoesBook",
-    tags: ["no-webkit", "touch"],
+    tags: ["touch"],
     status: "accepted",
   },
   {
@@ -3279,7 +3271,7 @@ export const ROWS: MatrixRow[] = [
     ],
     routes: ["/book/:bookId", "/notes/:noteId"],
     fixture: "echoesBook",
-    tags: ["no-webkit"],
+    tags: [],
     status: "accepted",
   },
 ];
