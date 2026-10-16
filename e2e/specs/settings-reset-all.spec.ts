@@ -27,6 +27,9 @@ const ran = (page: Page) =>
 /** The Development mode switch: a changed setting the reset must return to default. */
 const devMode = (page: Page) => page.getByRole("switch", { name: "Development mode" });
 const pluginRow = (page: Page) => page.getByRole("button", { name: ROW_NAME, exact: true });
+/** The Plugin card's enable switch, whose state the reset changes. */
+const enableSwitch = (page: Page) =>
+  page.getByRole("switch", { name: `Enable ${ROW_NAME}`, exact: true });
 
 /** Jumps to the Plugins section through the Settings outline, leaving its heading focused. */
 async function openPluginsSection(page: Page): Promise<void> {
@@ -59,6 +62,14 @@ async function expandPluginRow(page: Page): Promise<Locator> {
   return row;
 }
 
+/** Expands the nested Permissions accordion inside an open card. */
+async function openPermissions(page: Page): Promise<void> {
+  const trigger = page.getByRole("button", { name: /Plugin permissions/ });
+  await tabTo(page, trigger, { max: 40 });
+  await page.keyboard.press("Enter");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+}
+
 /** Expands the Advanced section and returns it; its buttons are now visible. */
 async function openAdvanced(page: Page): Promise<Locator> {
   // Exact: the Settings outline's chevron is "Expand Advanced". `last()` skips
@@ -89,7 +100,7 @@ test.describe("Reset settings @wf:settings-reset-all @no-webkit", () => {
     // An approved third-party Plugin is running.
     await openPluginsSection(page);
     await expect(ran(page)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Enabled", { exact: true })).toBeVisible();
+    await expect(enableSwitch(page)).toBeChecked();
 
     // Change a setting the reset must return to its default.
     await tabTo(page, devMode(page), { max: 12 });
@@ -115,7 +126,7 @@ test.describe("Reset settings @wf:settings-reset-all @no-webkit", () => {
 
     await openPluginsSection(page);
     await expect(ran(page)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Enabled", { exact: true })).toBeVisible();
+    await expect(enableSwitch(page)).toBeChecked();
     await expect(devMode(page)).toBeChecked();
 
     // Reopen and confirm.
@@ -132,12 +143,13 @@ test.describe("Reset settings @wf:settings-reset-all @no-webkit", () => {
 
     // The third-party Plugin needs approval again and does not run.
     await openPluginsSection(page);
-    await expect(page.getByText("Off", { exact: true })).toBeVisible();
+    await expect(enableSwitch(page)).not.toBeChecked();
     await expandPluginRow(page);
-    await expect(
-      page.getByRole("button", { name: "Review and enable", exact: true })
-    ).toBeVisible();
-    await expect(page.getByText("Enabled", { exact: true })).toHaveCount(0);
+    // The open card flags the never-approved copy; its Permissions accordion
+    // (collapsed by default) offers the Review action.
+    await expect(page.getByText("Needs attention", { exact: true })).toBeVisible();
+    await openPermissions(page);
+    await expect(page.getByRole("button", { name: "Review", exact: true })).toBeVisible();
     // Its contributed Settings row is unregistered.
     await expect(page.getByRole("textbox", { name: "Approvals kept data" })).toHaveCount(0);
     // It did not start: no run report.

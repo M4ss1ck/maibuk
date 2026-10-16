@@ -37,8 +37,8 @@ const OPTIONAL_LABELS = [
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
   primaryNav(page).getByRole("option", { name: new RegExp(`^${name}`) });
-const main = (page: Page) => page.getByRole("main");
-const pluginRow = (page: Page) => page.getByRole("button", { name: PLUGIN_NAME, exact: true });
+const pluginRow = (page: Page) =>
+  page.getByRole("button", { name: new RegExp(`^${PLUGIN_NAME}`) });
 
 /** Jumps to the Plugins section through the Settings outline, leaving its heading focused. */
 async function openPluginsSection(page: Page): Promise<void> {
@@ -64,6 +64,18 @@ async function openPluginsSection(page: Page): Promise<void> {
 async function expandPluginRow(page: Page): Promise<void> {
   await tabTo(page, pluginRow(page), { max: 30 });
   await page.keyboard.press("Enter");
+}
+
+/** The card's enable switch, which opens the review for a copy that needs it. */
+const enableSwitch = (page: Page) =>
+  page.getByRole("switch", { name: `Enable ${PLUGIN_NAME}`, exact: true });
+
+/** Expands the nested Permissions accordion inside an open card. */
+async function openPermissions(page: Page): Promise<void> {
+  const trigger = page.getByRole("button", { name: /Plugin permissions/ });
+  await tabTo(page, trigger, { max: 40 });
+  await page.keyboard.press("Enter");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
 }
 
 /** Opens the Command Palette and returns its dialog. */
@@ -168,9 +180,10 @@ test.describe("fixture-everything approval @wf:plugins-contributions @no-webkit"
     await openPluginsSection(page);
     await expandPluginRow(page);
 
-    const review = page.getByRole("button", { name: "Review and enable", exact: true });
-    await tabTo(page, review, { max: 12 });
-    await page.keyboard.press("Enter");
+    // An unapproved copy opens its permission dialog from the enable switch.
+    const enable = enableSwitch(page);
+    await tabTo(page, enable, { max: 20 });
+    await page.keyboard.press("Space");
 
     const dialog = page.getByRole("dialog", { name: "Review access" });
     await expect(dialog).toBeVisible();
@@ -204,7 +217,8 @@ test.describe("fixture-everything approval @wf:plugins-contributions @no-webkit"
     await expect(page.getByText("Deterministic content")).toBeVisible({ timeout: 15_000 });
     await openPluginsSection(page);
     await expandPluginRow(page);
-    await expect(main(page).getByText("Enabled", { exact: true })).toBeVisible();
+    await expect(enableSwitch(page)).toBeChecked();
+    await openPermissions(page);
     await expect(
       page.getByRole("checkbox", { name: OPTIONAL_LABELS[0], exact: true })
     ).not.toBeChecked();

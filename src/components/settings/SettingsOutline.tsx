@@ -51,7 +51,7 @@ function prefersReducedMotion() {
  * field holds its cursor effect off around it (`data-ascii-quiet`).
  */
 export function SettingsOutline({ present, selection, onJump }: SettingsOutlineProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const translate = t as unknown as (key: string) => string;
   const [query, setQuery] = useState("");
   // Sections the author opened from the keyboard (Right arrow). They close
@@ -82,10 +82,13 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
     getPluginSettingsOwners,
     getPluginSettingsOwners
   );
+  // The cards carry localized names, so a language change renames them too.
+  const language = i18n.resolvedLanguage ?? i18n.language;
   const pluginCards = useMemo(
     () => pluginCardEntries(currentUILanguage()),
-    // `plugins` and `owners` are the store snapshots pluginCardEntries reads.
-    [plugins, owners]
+    // `plugins` and `owners` are the store snapshots pluginCardEntries reads;
+    // `language` is what currentUILanguage() reads.
+    [plugins, owners, language]
   );
 
   const outline = useMemo(

@@ -359,6 +359,7 @@ export async function prepareDevice(
   const byId = new Map(seeds.map((seed) => [seed.name, seed]));
   const custom = new Map(pluginApprovals.map((approval) => [approval.pluginId, approval]));
   const unapproved = new Set<string>(unapprovedPlugins);
+  const builtInIds = new Set(builtInPlugins.map((entry) => entry.id as string));
 
   const approvals: PluginApproval[] = [];
   for (const seed of seeds) {
@@ -369,6 +370,11 @@ export async function prepareDevice(
       custom.delete(seed.name);
       continue;
     }
+    // A Built-in starts disabled with its Plugin Permissions pre-granted
+    // (`approveBuiltInCopy`), so a spec that seeds one without an explicit
+    // approval leaves it to the app's own first-sight path instead of the
+    // third-party default below (which is enabled but grants nothing).
+    if (builtInIds.has(seed.name)) continue;
     // A folder seeded without a spec record keeps the historic shape: enabled
     // and pinned to the current bytes, no grants (`plugins: ["tracer"]`).
     approvals.push({

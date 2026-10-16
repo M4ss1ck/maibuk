@@ -28,7 +28,8 @@ const changedNotice = (page: Page) =>
 const updateNotice = (page: Page) =>
   page.getByRole("status").filter({ hasText: "Update available" });
 
-const pluginRow = (page: Page) => page.getByRole("button", { name: ROW_NAME, exact: true });
+const pluginRow = (page: Page) =>
+  page.getByRole("button", { name: new RegExp(`^${ROW_NAME}`) });
 
 /** Jumps to the Plugins section through the Settings outline, leaving its heading focused. */
 async function openPluginsSection(page: Page): Promise<void> {
@@ -62,6 +63,18 @@ async function expandPluginRow(page: Page): Promise<Locator> {
   await tabTo(page, row, { max: 30 });
   await page.keyboard.press("Enter");
   return row;
+}
+
+/** The card's enable switch, which opens the review for a copy that needs it. */
+const enableSwitch = (page: Page) =>
+  page.getByRole("switch", { name: `Enable ${ROW_NAME}`, exact: true });
+
+/** Expands the nested Permissions accordion inside an open card. */
+async function openPermissions(page: Page): Promise<void> {
+  const trigger = page.getByRole("button", { name: /Plugin permissions/ });
+  await tabTo(page, trigger, { max: 40 });
+  await page.keyboard.press("Enter");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
 }
 
 const nowRequiredManifest = JSON.stringify({
@@ -102,9 +115,11 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
       await openPluginsSection(page);
       await expandPluginRow(page);
 
-      const review = page.getByRole("button", { name: "Review and enable", exact: true });
-      await tabTo(page, review, { max: 12 });
-      await page.keyboard.press("Enter");
+      // A copy that needs review opens the permission dialog from its enable
+      // switch instead of turning on (the switch reflects the store's state).
+      const enable = enableSwitch(page);
+      await tabTo(page, enable, { max: 12 });
+      await page.keyboard.press("Space");
 
       const dialog = page.getByRole("dialog", { name: "Review access" });
       await expect(dialog).toBeVisible();
@@ -123,9 +138,9 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
       await expectTabContained(page, dialog);
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
-      await expect(review).toBeFocused();
+      await expect(enable).toBeFocused();
 
-      await page.keyboard.press("Enter");
+      await page.keyboard.press("Space");
       await expect(dialog).toBeVisible();
       const approve = dialog.getByRole("button", { name: APPROVE, exact: true });
       await tabTo(page, approve, { max: 12 });
@@ -152,12 +167,14 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
       // The Worker is up: its start report landed.
       await expect(ran(page)).toBeVisible({ timeout: 15_000 });
 
+      // The grants live in the nested Permissions accordion.
+      await openPermissions(page);
       const optional = page.getByRole("checkbox", { name: OPTIONAL_LABEL, exact: true });
       await tabTo(page, optional, { max: 12 });
       await page.keyboard.press("Space");
       await expect(optional).not.toBeChecked();
       // Revoking an optional grant leaves the Plugin enabled.
-      await expect(page.getByText("Enabled", { exact: true })).toBeVisible();
+      await expect(enableSwitch(page)).toBeChecked();
 
       // The next call to that permission is refused (the fixture reports it).
       // Leave the checkbox (a typing target suppresses global Commands), and let
@@ -178,6 +195,7 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
       // Its contributed Settings row is present while it is installed.
       await expect(page.getByRole("switch", { name: "Approvals kept data" })).toBeVisible();
 
+      await openPermissions(page);
       const revoke = page.getByRole("button", {
         name: "Disable Plugin and revoke access",
         exact: true,
@@ -186,12 +204,13 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
       await page.keyboard.press("Enter");
 
       // The required grant is gone: the Plugin is off, needs review again, and
-      // its contributed surfaces are unregistered.
-      await expect(page.getByText("Off", { exact: true })).toBeVisible();
+      // its contributed surfaces are unregistered. The open Permissions
+      // accordion explains the issue and offers its Review action.
+      await expect(enableSwitch(page)).not.toBeChecked();
       await expect(
         page.getByText("Required access is missing. Review and approve it to enable this Plugin.")
       ).toBeVisible();
-      await expect(page.getByRole("button", { name: "Review and enable", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Review", exact: true })).toBeVisible();
       await expect(page.getByRole("switch", { name: "Approvals kept data" })).toHaveCount(0);
     });
   });
@@ -221,9 +240,10 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
       await expect(ran(page)).toHaveCount(0);
 
       const row = await expandPluginRow(page);
-      const review = page.getByRole("button", { name: "Review and enable", exact: true });
-      await tabTo(page, review, { max: 12 });
-      await page.keyboard.press("Enter");
+      // A changed copy opens its diff from the enable switch, which needs review.
+      const enable = enableSwitch(page);
+      await tabTo(page, enable, { max: 12 });
+      await page.keyboard.press("Space");
 
       const dialog = page.getByRole("dialog", { name: "Review required" });
       await expect(dialog).toBeVisible();
@@ -233,12 +253,12 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
       await expect(dialog.getByText("index.js", { exact: true })).toBeVisible();
       await capture(page, "plugins-approvals-diff");
 
-      // Escape closes it and returns focus to the row's action.
+      // Escape closes it and returns focus to the switch.
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
-      await expect(review).toBeFocused();
+      await expect(enable).toBeFocused();
 
-      await page.keyboard.press("Enter");
+      await page.keyboard.press("Space");
       await expect(dialog).toBeVisible();
       const approve = dialog.getByRole("button", { name: APPROVE, exact: true });
       await tabTo(page, approve, { max: 12 });
@@ -267,9 +287,9 @@ test.describe("Plugin approvals @wf:plugins-approvals @no-webkit", () => {
     test("shows Now required, locked", async ({ page }) => {
       await openPluginsSection(page);
       await expandPluginRow(page);
-      const review = page.getByRole("button", { name: "Review and enable", exact: true });
-      await tabTo(page, review, { max: 12 });
-      await page.keyboard.press("Enter");
+      const enable = enableSwitch(page);
+      await tabTo(page, enable, { max: 12 });
+      await page.keyboard.press("Space");
 
       const dialog = page.getByRole("dialog", { name: "Review required" });
       await expect(dialog).toBeVisible();

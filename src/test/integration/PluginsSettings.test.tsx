@@ -26,8 +26,10 @@ import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { PLUGIN_UI_MOUNT_REQUEST } from "@/plugin-sdk/protocol";
 import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
 
-const { platformState, mockT, syncState } = vi.hoisted(() => ({
+const { platformState, mockT, syncState, languageState } = vi.hoisted(() => ({
   platformState: { isWeb: true, isDesktop: false, isAndroid: false },
+  // The UI language both the hook mock and the i18n singleton mock report.
+  languageState: { language: "en" },
   mockT: (key: string) => key,
   syncState: {
     apiUrl: "",
@@ -46,14 +48,19 @@ const { platformState, mockT, syncState } = vi.hoisted(() => ({
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: mockT,
-    i18n: { language: "en", resolvedLanguage: "en" },
+    i18n: { language: languageState.language, resolvedLanguage: languageState.language },
   }),
   initReactI18next: { type: "3rdParty", init: vi.fn() },
 }));
 
 vi.mock("@/i18n", () => ({
   default: {
-    language: "en",
+    get language() {
+      return languageState.language;
+    },
+    get resolvedLanguage() {
+      return languageState.language;
+    },
     changeLanguage: vi.fn(),
     use: vi.fn().mockReturnThis(),
     init: vi.fn(),
@@ -501,6 +508,7 @@ describe("Plugin cards in the Settings outline", () => {
 
   afterEach(() => {
     usePluginManagementStore.setState({ plugins: {}, refresh: originalRefresh });
+    languageState.language = "en";
   });
 
   /** The card's disclosure trigger, matched by its name substring. */
@@ -525,6 +533,26 @@ describe("Plugin cards in the Settings outline", () => {
 
     await waitFor(() => expect(cardTrigger()).toHaveAttribute("aria-expanded", "true"));
     await waitFor(() => expect(document.activeElement).toBe(cardTrigger()));
+  });
+
+  it("renames the outline entry when the UI language changes", async () => {
+    usePluginManagementStore.setState({
+      plugins: { echoes: entry({ locales: { es: { name: "Ecos" } } }) },
+    });
+    const user = userEvent.setup();
+    const { rerender } = renderSettings();
+    await waitFor(() => expect(cardTrigger()).not.toBeNull());
+
+    // The author switches the app to Spanish; the page re-renders in it.
+    languageState.language = "es";
+    rerender(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <Settings />
+      </MemoryRouter>
+    );
+
+    await user.type(screen.getByRole("searchbox"), "ecos");
+    expect(await screen.findByRole("row", { name: "Ecos" })).toBeInTheDocument();
   });
 
   it("resets the filter that hid the card and still reveals it", async () => {
