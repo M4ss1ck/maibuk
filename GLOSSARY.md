@@ -551,6 +551,10 @@ A Plugin that ships with Maibuk. It is copied into the Plugin Directory and star
 The folder on this device that Maibuk loads Plugins from, chosen in Settings (ADR 0020).
 _Avoid_: plugins folder, extensions folder
 
+**Plugin Platforms**:
+The devices a Plugin says it runs on. A Plugin that names none runs on desktop and the web; it runs on Android only when it names Android, because there it runs in a slower, memory-capped engine that its author must have tried.
+_Avoid_: targets, supported OS
+
 **Plugin Permission**:
 One kind of access a Plugin declares, such as reading the Library or reaching a named web host, and that the author grants or revokes.
 _Avoid_: grant, scope, capability (Tauri's word in code)
