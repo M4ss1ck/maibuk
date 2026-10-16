@@ -21,7 +21,8 @@
  */
 
 import { createSandboxElement, hostDocument } from "@/features/plugins/frame/host-document";
-import type { PluginSandboxFrame } from "@/features/plugins/types";
+import { QUICKJS_MEMORY_DEATH_MESSAGE } from "@/features/plugins/quickjs/constants";
+import type { PluginFrameQuickJsBoot, PluginSandboxFrame } from "@/features/plugins/types";
 import {
   PLUGIN_BOOT_MESSAGE,
   PLUGIN_ERROR_MESSAGE,
@@ -34,9 +35,12 @@ const PLUGIN_ERROR_KIND = PLUGIN_ERROR_MESSAGE.kind;
 
 /**
  * The fixed host prelude every sandbox Worker runs. It holds the boot and init
- * messages until it has both, imports the host-verified entry module, and
- * hands the init message — its MessagePort included — to the Plugin's own
- * handler (or dispatches a fresh one for a Plugin that used
+ * messages until it has both, then runs the Plugin: on the native engines it
+ * imports the host-verified entry module, and on the Android QuickJS engine
+ * (#516) it imports the boot-named runner module and hands the verified sources
+ * to it as data — it never imports or evaluates Plugin bytes on that branch.
+ * Either way it then hands the init message — its MessagePort included — to the
+ * Plugin's own handler (or dispatches a fresh one for a Plugin that used
  * `addEventListener`). The first boot detaches the prelude for good: a Plugin
  * that used `addEventListener` keeps the prelude as its `onmessage`, so
  * replaying the init through a dispatch would otherwise re-enter `boot()`
@@ -46,6 +50,7 @@ export const PRELUDE_SOURCE = `"use strict";
 (() => {
   let entry = null;
   let initEvent = null;
+  let quickjs = null;
   let booted = false;
   const preludeHandler = (event) => {
     if (booted) return;
@@ -53,6 +58,13 @@ export const PRELUDE_SOURCE = `"use strict";
     if (typeof message !== "object" || message === null) return;
     if (message.kind === "${PLUGIN_BOOT_MESSAGE.kind}" && typeof message.entry === "string") {
       entry = message.entry;
+      if (message.engine === "quickjs") {
+        quickjs = {
+          runner: message.runner,
+          sources: message.sources,
+          wasmModule: message.wasmModule,
+        };
+      }
     } else if (message.kind === "${PLUGIN_INIT_MESSAGE.kind}") {
       initEvent = event;
     } else {
@@ -70,6 +82,10 @@ export const PRELUDE_SOURCE = `"use strict";
     // Hand the message path to the Plugin before its code runs and never take
     // it back: from here on the replay is the only init the Plugin sees.
     self.onmessage = null;
+    if (quickjs !== null) {
+      await bootQuickJs(event);
+      return;
+    }
     try {
       await import(entry);
     } catch (error) {
@@ -84,6 +100,52 @@ export const PRELUDE_SOURCE = `"use strict";
       pluginHandler.call(self, event);
     } else {
       self.dispatchEvent(new MessageEvent("message", { data: event.data, ports: event.ports }));
+    }
+  }
+
+  /**
+   * The Android QuickJS branch. The runner module is the only thing imported;
+   * the Plugin's sources cross as data and are never turned into code, blob
+   * URLs, or a fetch. An error outcome reports exactly like the native catch; a
+   * memory death throws from a fresh task, so the frame's worker.onerror fires
+   * and the lifecycle maps the message to out-of-memory.
+   */
+  async function bootQuickJs(event) {
+    const runner = quickjs.runner;
+    let runnerModule;
+    try {
+      runnerModule = await import(runner);
+    } catch (error) {
+      self.postMessage({
+        kind: "${PLUGIN_ERROR_KIND}",
+        message: String((error && error.message) || error),
+      });
+      return;
+    }
+    let outcome;
+    try {
+      outcome = await runnerModule.runQuickJsPlugin({
+        sources: quickjs.sources,
+        entry: entry,
+        endpoint: self,
+        wasmModule: quickjs.wasmModule,
+        initEvent: { data: event.data, ports: event.ports },
+      }).outcome;
+    } catch (error) {
+      self.postMessage({
+        kind: "${PLUGIN_ERROR_KIND}",
+        message: String((error && error.message) || error),
+      });
+      return;
+    }
+    if (outcome.kind === "error") {
+      self.postMessage({ kind: "${PLUGIN_ERROR_KIND}", message: outcome.message });
+      return;
+    }
+    if (outcome.kind === "memory-death") {
+      queueMicrotask(() => {
+        throw new Error("${QUICKJS_MEMORY_DEATH_MESSAGE}");
+      });
     }
   }
 })();
@@ -111,6 +173,19 @@ const BOOTSTRAP_SCRIPT = `<script>
   const host = window.parent;
   const send = (message) => host.postMessage(message, "*");
   const preludeSource = ${JSON.stringify(PRELUDE_SOURCE)};
+  // The boot message the Worker consumes. The Android QuickJS fields are only
+  // relayed when the host set them; the Wasm Module crosses as a structured
+  // clone, with no new evaluation or HTML sink here.
+  const bootMessage = (entry, message) => {
+    const boot = { kind: "${PLUGIN_BOOT_MESSAGE.kind}", entry: entry };
+    if (message.engine === "quickjs") {
+      boot.engine = "quickjs";
+      boot.runner = message.runner;
+      boot.sources = message.sources;
+      boot.wasmModule = message.wasmModule;
+    }
+    return boot;
+  };
   window.addEventListener("message", (event) => {
     // Only the host window may talk to this frame, and only with data.
     if (event.source !== host) return;
@@ -156,7 +231,7 @@ const BOOTSTRAP_SCRIPT = `<script>
             filename: String((workerEvent && workerEvent.filename) || ""),
             lineno: Number((workerEvent && workerEvent.lineno) || 0),
           });
-        worker.postMessage({ kind: "${PLUGIN_BOOT_MESSAGE.kind}", entry: message.url });
+        worker.postMessage(bootMessage(message.url, message));
         worker.postMessage({ kind: "${PLUGIN_INIT_MESSAGE.kind}" }, [port]);
       }
     } catch (error) {
@@ -276,8 +351,19 @@ export function createPluginFrame(doc: Document): PluginSandboxFrame {
         post({ kind: "create-module", id, source });
       });
     },
-    async startWorker(entryUrl: string, port: MessagePort): Promise<void> {
-      post({ kind: "start-worker", url: entryUrl }, [port]);
+    async startWorker(
+      entryUrl: string,
+      port: MessagePort,
+      quickJs?: PluginFrameQuickJsBoot
+    ): Promise<void> {
+      const message: Record<string, unknown> = { kind: "start-worker", url: entryUrl };
+      if (quickJs) {
+        message.engine = "quickjs";
+        message.runner = quickJs.runner;
+        message.sources = quickJs.sources;
+        message.wasmModule = quickJs.wasmModule;
+      }
+      post(message, [port]);
     },
     onWorkerMessage(handler) {
       workerMessage = handler;
