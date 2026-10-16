@@ -62,7 +62,8 @@ Each line names the step, in the order build, validate, typecheck, lint, test, b
 ## Tour of the template
 
 - manifest.json: the Plugin manifest. It declares the id `hello-plugin`, one Command `openHello`, one page `hello`, and a sidebar entry for that page.
-- index.tsx: the entry. It draws the `hello` page with the SDK's host-rendered `ui.*` components and answers the host's requests, including the Command run.
+- index.tsx: the Worker entry. It installs the Remote DOM polyfill, then starts plugin.tsx on the host's init message.
+- plugin.tsx: the Plugin. It draws the `hello` page with the SDK's host-rendered `ui.*` components and answers the host's requests, including the Command run.
 - index.test.tsx: the Plugin's own test, which drives the page with the test kit. See [Testing](testing.md).
 - package.json: the scripts that call the Maibuk tooling for this repository (`pnpm check`, `pnpm build`, `pnpm test`, `pnpm validate`, `pnpm package`).
 - scripts/: setup.mjs and maibuk.mjs, the two plain-Node scripts that resolve the checkout and launch its CLI. They run before any dependency is installed.

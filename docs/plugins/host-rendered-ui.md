@@ -55,7 +55,7 @@ The template's manifest declares one Command, one page, and one sidebar entry:
 
 ## Drawing a page
 
-Import `ui` from `@maibuk/plugin-sdk` and write the page as an ordinary React component. The host renders every element; an element, prop, event, or method outside the table is rejected by the connection validator. Every component and its props is in [ui-reference.md](ui-reference.md). The template's page, from templates/plugin/index.tsx:
+Import `ui` from `@maibuk/plugin-sdk` and write the page as an ordinary React component. The host renders every element; an element, prop, event, or method outside the table is rejected by the connection validator. Every component and its props is in [ui-reference.md](ui-reference.md). The template's page, from templates/plugin/plugin.tsx:
 
 ```ts
 import { useState } from "react";
@@ -75,7 +75,7 @@ function HelloPage() {
 
 ## Wiring the page and answering the host
 
-`start()` hands the host renderer the pages by id and, through `onHostRequest`, the handlers for the host's requests: the health check and this Plugin's Command run. From templates/plugin/index.tsx:
+`start()` hands the host renderer the pages by id and, through `onHostRequest`, the handlers for the host's requests: the health check and this Plugin's Command run. From templates/plugin/plugin.tsx:
 
 ```ts
 export function start(client: PluginClient, serve: HelloServe): void {
@@ -98,7 +98,7 @@ async function runCommand(client: PluginClient, params: unknown): Promise<null> 
 }
 ```
 
-In a Worker, the entry imports `@maibuk/plugin-sdk/worker-ui` and starts itself on the host's init message; a host-side test imports the polyfill-free `@maibuk/plugin-sdk/ui-serve` entry instead, so the Remote DOM polyfill stays out of jsdom. See [Testing](testing.md).
+The Worker entry, templates/plugin/index.tsx, is the only file that imports `@maibuk/plugin-sdk/worker-ui`, and it imports it before anything else from the SDK. `@maibuk/plugin-sdk` touches `HTMLElement` when it is evaluated, and a Worker has no DOM until that Remote DOM polyfill runs, so an entry that imports the SDK first fails to start. The entry creates the client on the host's init message and calls `start()`. A host-side test imports plugin.tsx with the polyfill-free `@maibuk/plugin-sdk/ui-serve` entry instead, so the polyfill stays out of jsdom. See [Testing](testing.md).
 
 ## Events
 

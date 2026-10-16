@@ -21,7 +21,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { buildPlugin } from "../../../scripts/build-plugin";
 import { externalAliases, writeGeneratedConfigs } from "../../../scripts/plugin/config";
@@ -78,6 +79,19 @@ function node(script: string, args: readonly string[], cwd: string): Promise<Chi
     child.on("error", (error) => settle({ code: 1, stdout, stderr: `${stderr}${error.message}` }));
     child.on("close", (code) => settle({ code: code ?? 1, stdout, stderr }));
   });
+}
+
+/**
+ * Imports a built entry the way the sandbox prelude does, in a scope with a
+ * Worker's `self` and no DOM, so an entry that touches `HTMLElement` before the
+ * Remote DOM polyfill is installed exits non-zero.
+ */
+function evaluateInWorkerScope(entry: string): Promise<ChildResult> {
+  const script = [
+    "globalThis.self = { addEventListener() {}, postMessage() {} };",
+    `await import(${JSON.stringify(pathToFileURL(entry).href)});`,
+  ].join("\n");
+  return node("--input-type=module", ["--eval", script], dirname(entry));
 }
 
 /** Every file under `dir`, with forward slashes, sorted. */
@@ -273,6 +287,9 @@ describe.skipIf(!process.env.MAIBUK_PLUGIN_TOOLING)(
           files.filter((file) => /\.(ts|tsx|map)$/.test(file)),
           dir
         ).toEqual([]);
+
+        const entry = await evaluateInWorkerScope(join(dir, "index.js"));
+        expect(entry.code, `${dir}: ${entry.stdout}${entry.stderr}`).toBe(0);
       }
     });
   }

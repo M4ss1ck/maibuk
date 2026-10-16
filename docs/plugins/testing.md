@@ -18,7 +18,7 @@ templates/plugin/index.test.tsx is the suite a Plugin author edits. It imports t
 import { createPluginClient, PLUGIN_COMMAND_RUN_REQUEST } from "@maibuk/plugin-sdk";
 import { servePluginUi } from "@maibuk/plugin-sdk/ui-serve";
 import { createTestHost } from "@maibuk/plugin-test-kit";
-import { OPEN_COMMAND, PAGE_ID, start } from "./index";
+import { OPEN_COMMAND, PAGE_ID, start } from "./plugin";
 import manifest from "./manifest.json";
 
 function testHost() {

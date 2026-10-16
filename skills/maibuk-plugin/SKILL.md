@@ -54,7 +54,7 @@ For each API method you call, look up the Plugin Permission it needs in `api-ref
 
 ### 4. Implement
 
-Model the code on `plugins/maibuk-echoes/` and the template: contributions in `manifest.json`, pages drawn with `ui.*`, host requests answered through the SDK client. User-visible strings start in the manifest's `defaultLanguage` and get `locales/<lang>.json` overrides when the Plugin is translated. When a release changes the shape of stored Plugin data, raise `dataVersion` and migrate it as `packaging.md` describes. Done when every requested surface exists and the code imports only what "Where things are" allows.
+Model the code on `plugins/maibuk-echoes/` and the template: contributions in `manifest.json`, pages drawn with `ui.*`, host requests answered through the SDK client. Keep the template's split: `index.tsx` is the Worker entry and imports `@maibuk/plugin-sdk/worker-ui` first, and everything else lives in modules the tests import (`host-rendered-ui.md` says why). User-visible strings start in the manifest's `defaultLanguage` and get `locales/<lang>.json` overrides when the Plugin is translated. When a release changes the shape of stored Plugin data, raise `dataVersion` and migrate it as `packaging.md` describes. Done when every requested surface exists and the code imports only what "Where things are" allows.
 
 ### 5. Test
 

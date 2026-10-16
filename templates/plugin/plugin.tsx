@@ -1,20 +1,17 @@
 /**
- * The minimal host-rendered Plugin entry (issue #455). `manifest.json` declares
- * one page with a sidebar entry and one Command that opens it, and this module
- * draws that page with the SDK's host-rendered UI kit (`ui.*`), never its own
- * HTML. A host-side test imports `start` directly over the polyfill-free
- * `@maibuk/plugin-sdk/ui-serve` entry; a real Worker imports this module, which
- * loads the Remote DOM polyfill from `@maibuk/plugin-sdk/worker-ui` and starts
- * itself on the host's init message.
+ * The minimal host-rendered Plugin (issue #455). `manifest.json` declares one
+ * page with a sidebar entry and one Command that opens it, and this module draws
+ * that page with the SDK's host-rendered UI kit (`ui.*`), never its own HTML.
+ * It never loads the Worker's Remote DOM polyfill: `index.tsx` does that and
+ * then calls `start`, and a host-side test calls `start` directly over the
+ * polyfill-free `@maibuk/plugin-sdk/ui-serve` entry.
  *
  * It imports only `@maibuk/plugin-sdk`, its public subpaths, and `react`; all of
  * them resolve to Maibuk's copies in build, test, and typecheck.
  */
 import { useState, type ComponentType } from "react";
 import {
-  createPluginClient,
   PLUGIN_COMMAND_RUN_REQUEST,
-  PLUGIN_READY_MESSAGE,
   type HostRequestHandler,
   type PluginClient,
   ui,
@@ -72,28 +69,3 @@ async function runCommand(client: PluginClient, params: unknown): Promise<null> 
   if (id === OPEN_COMMAND) await client.navigation.openPage({ pageId: PAGE_ID });
   return null;
 }
-
-/** The Worker global surface this entry uses, without the DOM's Window types. */
-interface WorkerScope {
-  addEventListener(type: "message", listener: (event: MessageEvent) => void): void;
-  postMessage(message: unknown): void;
-}
-
-/**
- * Starts as a Worker: the host prelude imports this module in a Worker and
- * replays its init message, so the page and the Command handlers come up. A
- * host-side test has a `window`, so this never runs there and the Remote DOM
- * polyfill `worker-ui` installs stays out of jsdom.
- */
-async function startWorker(): Promise<void> {
-  const { servePluginUi } = await import("@maibuk/plugin-sdk/worker-ui");
-  const scope = self as unknown as WorkerScope;
-  scope.addEventListener("message", (event) => {
-    const port = event.ports[0];
-    if (port === undefined) return;
-    start(createPluginClient(port), servePluginUi);
-    scope.postMessage({ kind: PLUGIN_READY_MESSAGE.kind });
-  });
-}
-
-if (typeof window === "undefined" && typeof self !== "undefined") void startWorker();
