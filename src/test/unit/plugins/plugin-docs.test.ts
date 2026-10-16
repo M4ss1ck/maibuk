@@ -175,6 +175,24 @@ describe("extractCommands()", () => {
 });
 
 describe("Plugin authoring docs", () => {
+  it("quotes the template test in testing.md exactly as it stands", () => {
+    const squash = (text: string) => text.replace(/\s+/g, "");
+    const template = squash(readFileSync(join(root, "templates/plugin/index.test.tsx"), "utf8"));
+    const lines = readFileSync(join(docsDir, "testing.md"), "utf8").split("\n");
+    const drifted: string[] = [];
+    let inFence = false;
+    lines.forEach((line, index) => {
+      if (line.trimStart().startsWith("```")) {
+        inFence = !inFence;
+        return;
+      }
+      if (inFence && line.trim() !== "" && !template.includes(squash(line))) {
+        drifted.push(`docs/plugins/testing.md:${index + 1} ${line.trim()}`);
+      }
+    });
+    expect(drifted, "update the quote to match templates/plugin/index.test.tsx").toEqual([]);
+  });
+
   it("shows only apiVersion ranges the shipped Plugin API satisfies", () => {
     const api = parseSemver(PLUGIN_API_VERSION);
     if (api === null) throw new Error(`PLUGIN_API_VERSION ${PLUGIN_API_VERSION} is not semver`);
