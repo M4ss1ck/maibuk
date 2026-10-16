@@ -384,17 +384,28 @@ never errors out. Configure it via a local `.env` file (git-ignored; copy
 Both providers are OpenAI-compatible HTTP APIs and require an API key, plus
 `curl` and `jq` installed locally.
 
-| Variable                | Purpose                                                                                  |
-| ----------------------- | ---------------------------------------------------------------------------------------- |
-| `CHANGELOG_AI_PROVIDER` | `opencode`, `openai`, or empty to disable AI                                             |
-| `CHANGELOG_AI_MODEL`    | Model id. opencode: required (e.g. `deepseek-v4-pro`); openai: defaults to `gpt-4o-mini` |
-| `OPENCODE_API_KEY`      | Required for `opencode` (from [opencode.ai/auth](https://opencode.ai/auth))              |
-| `OPENCODE_BASE_URL`     | Optional; defaults to `https://opencode.ai/zen/go/v1`                                    |
-| `OPENAI_API_KEY`        | Required for `openai`                                                                    |
-| `OPENAI_BASE_URL`       | Optional; any OpenAI-compatible endpoint (defaults to `https://api.openai.com/v1`)       |
+| Variable                | Purpose                                                                                      |
+| ----------------------- | -------------------------------------------------------------------------------------------- |
+| `CHANGELOG_AI_PROVIDER` | `opencode`, `openai`, or empty to disable AI                                                 |
+| `CHANGELOG_AI_MODEL`    | Model id. opencode: required (e.g. `deepseek-v4.1-flash`); openai: defaults to `gpt-4o-mini` |
+| `OPENCODE_API_KEY`      | Required for `opencode` (from [opencode.ai/auth](https://opencode.ai/auth))                  |
+| `OPENCODE_BASE_URL`     | Optional; defaults to `https://opencode.ai/zen/go/v1`                                        |
+| `OPENAI_API_KEY`        | Required for `openai`                                                                        |
+| `OPENAI_BASE_URL`       | Optional; any OpenAI-compatible endpoint (defaults to `https://api.openai.com/v1`)           |
 
 - **opencode** targets [opencode Go](https://opencode.ai/docs/go/), an
   OpenAI-compatible API at `https://opencode.ai/zen/go/v1`.
+  When the Go call fails for any reason (usage limit, outage, a reply with no
+  changelog section), the script retries on OpenCode Zen's free models: it
+  lists `https://opencode.ai/zen/v1/models`, keeps the ids ending in `-free`,
+  and tries the free variant of `CHANGELOG_AI_MODEL` first, then the rest in
+  list order, up to 5 attempts. Zen's free tier only answers the
+  [opencode CLI](https://opencode.ai), so this step runs `opencode run` in an
+  empty temp directory, with its shell, write, network, and code tools denied
+  (commit messages are untrusted input). It needs `opencode` on your `PATH`, signed in with
+  `opencode auth login`; it ignores `OPENCODE_API_KEY` from `.env`. Free models can be
+  slow and there is no time limit; each attempt logs when it starts and how
+  long it took. If every attempt fails, the grouped commit list is used.
 - **openai** targets OpenAI or any other OpenAI-compatible `/chat/completions`
   endpoint via `OPENAI_BASE_URL` (OpenRouter, Groq, local, ...).
 
