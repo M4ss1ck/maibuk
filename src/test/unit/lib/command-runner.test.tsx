@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef, useState } from "react";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -230,7 +230,9 @@ describe("runCommand()", () => {
     // the way it does in production; act would batch it past the wait loop.
     const outcome = await runCommand("global.gotoNotes", { source: "palette" });
     expect(outcome).toBe("ran");
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    // The navigation commits in its own render, after the dialog's: wait for it.
+    await screen.findByRole("heading", { name: "Notes" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(path).toBe("/notes");
     // Focus is back on the trigger that opened the dialog.
     expect(document.activeElement).toBe(trigger);
@@ -303,7 +305,8 @@ describe("runCommand()", () => {
     const outcome = await runCommand("global.gotoNotes", { source: "palette" });
     expect(outcome).toBe("ran");
     expect(onCloseCalls).toEqual(["inner", "outer"]);
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await screen.findByRole("heading", { name: "Notes" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(path).toBe("/notes");
   });
 

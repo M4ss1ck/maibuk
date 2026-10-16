@@ -10,6 +10,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:stress": "node scripts/test-stress.mjs",
     "test:release": "bash scripts/test-changelog.sh",
     "test:e2e": "node e2e/run.mjs",
     "test:e2e:sync": "node e2e/run-sync.mjs",

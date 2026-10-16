@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { relative } from "node:path";
 import { cleanup, configure } from "@testing-library/react";
-import { afterEach, beforeEach, expect } from "vitest";
+import { afterEach, beforeEach, expect, vi } from "vitest";
 // vitest-axe exports toHaveNoViolations via export type* in the .d.ts
 // barrel but as a value in the dist .js; import from the dist path
 // to satisfy both runtime and type-check.
@@ -11,6 +11,16 @@ import { ASYNC_UTIL_TIMEOUT_MS, allowedTimeouts, TEST_TIMEOUT_MS } from "@/test/
 expect.extend({ toHaveNoViolations });
 
 configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS });
+
+// `vi.waitFor` and `vi.waitUntil` give up after 1 s by default, a limit a busy
+// CI runner crosses while the condition is still on its way. They get the same
+// limit as `waitFor` / `findBy*`; a wait that passes its own options keeps them.
+const viWaitFor = vi.waitFor;
+const viWaitUntil = vi.waitUntil;
+vi.waitFor = ((callback, options) =>
+  viWaitFor(callback, options ?? { timeout: ASYNC_UTIL_TIMEOUT_MS })) as typeof vi.waitFor;
+vi.waitUntil = ((callback, options) =>
+  viWaitUntil(callback, options ?? { timeout: ASYNC_UTIL_TIMEOUT_MS })) as typeof vi.waitUntil;
 
 // A test picks no timeout of its own: a raise for one slow file is how the
 // suite ended up at the edge of every limit (src/test/time-budget.ts).

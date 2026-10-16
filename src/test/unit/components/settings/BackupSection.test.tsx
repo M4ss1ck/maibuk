@@ -580,8 +580,11 @@ describe("BackupSection", () => {
       render(<BackupSection />);
 
       const created = new Date(2026, 2, 14, 9, 5, 3);
-      expect(await screen.findByText(formatBackupDate(created, "es"))).toBeInTheDocument();
-      expect(screen.queryByText(formatBackupDate(created, "en"))).not.toBeInTheDocument();
+      // Some ICU versions put a no-break space in "a. m."; the text matcher
+      // collapses the page's whitespace but not ours, so collapse it here too.
+      const shown = (language: string) => formatBackupDate(created, language).replace(/\s+/g, " ");
+      expect(await screen.findByText(shown("es"))).toBeInTheDocument();
+      expect(screen.queryByText(shown("en"))).not.toBeInTheDocument();
     });
   });
 
