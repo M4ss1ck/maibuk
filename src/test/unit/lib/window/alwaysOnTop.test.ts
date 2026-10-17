@@ -39,7 +39,6 @@ describe("installAlwaysOnTopReapply", () => {
   async function installFresh(): Promise<void> {
     const { installAlwaysOnTopReapply } = await import("@/lib/window/alwaysOnTop");
     await installAlwaysOnTopReapply();
-    await new Promise((r) => setTimeout(r, 0));
   }
 
   it("re-applies always-on-top when the window regains focus", async () => {
@@ -48,7 +47,6 @@ describe("installAlwaysOnTopReapply", () => {
 
     expect(captured).not.toBeNull();
     captured!({ payload: true });
-    await new Promise((r) => setTimeout(r, 0));
 
     expect(mockSetAlwaysOnTop).toHaveBeenCalledWith(true);
   });
@@ -58,9 +56,13 @@ describe("installAlwaysOnTopReapply", () => {
     await installFresh();
 
     captured!({ payload: true });
-    await new Promise((r) => setTimeout(r, 0));
-
     expect(mockSetAlwaysOnTop).not.toHaveBeenCalled();
+
+    // Witness: the same listener re-applies once the setting is on. It runs
+    // after the ignored focus event, so the negative above is settled.
+    alwaysOnTopRef.value = true;
+    captured!({ payload: true });
+    expect(mockSetAlwaysOnTop).toHaveBeenCalledTimes(1);
   });
 
   it("does nothing when the window loses focus", async () => {
@@ -68,9 +70,11 @@ describe("installAlwaysOnTopReapply", () => {
     await installFresh();
 
     captured!({ payload: false });
-    await new Promise((r) => setTimeout(r, 0));
-
     expect(mockSetAlwaysOnTop).not.toHaveBeenCalled();
+
+    // Witness: a later focus event on the same listener does re-apply.
+    captured!({ payload: true });
+    expect(mockSetAlwaysOnTop).toHaveBeenCalledTimes(1);
   });
 
   it("does not install on Android", async () => {
