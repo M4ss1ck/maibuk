@@ -108,6 +108,8 @@ describe("Link Preview", () => {
       renderEditor("maibuk://chapter/c1");
 
       await user.keyboard("{ArrowRight}");
+      // Kept: proves a debounce does not show after LINK_PREVIEW_DELAY_MS. Fake timers
+      // break user-event and RTL's async wrapper here, and no event follows a suppressed show.
       await new Promise((resolve) => setTimeout(resolve, 700));
 
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
@@ -133,6 +135,8 @@ describe("Link Preview", () => {
       await screen.findByRole("tooltip", { name: "linkPreview.label" });
 
       await user.keyboard("x");
+      // Kept: proves a debounce does not show after LINK_PREVIEW_DELAY_MS. Fake timers
+      // break user-event and RTL's async wrapper here, and no event follows a suppressed show.
       await new Promise((resolve) => setTimeout(resolve, 700));
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
 
@@ -154,6 +158,8 @@ describe("Link Preview", () => {
       expect(onEscape).not.toHaveBeenCalled();
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
       expect(document.activeElement).toBe(editor.view.dom);
+      // Kept: proves a debounce does not show after LINK_PREVIEW_DELAY_MS. Fake timers
+      // break user-event and RTL's async wrapper here, and no event follows a suppressed show.
       await new Promise((resolve) => setTimeout(resolve, 700));
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
     });
@@ -170,6 +176,8 @@ describe("Link Preview", () => {
     document.removeEventListener("keydown", onEscape);
 
     expect(onEscape).toHaveReturnedWith(false);
+    // Kept: proves a debounce does not show after LINK_PREVIEW_DELAY_MS. Fake timers
+    // break user-event and RTL's async wrapper here, and no event follows a suppressed show.
     await new Promise((resolve) => setTimeout(resolve, 700));
     expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
   });
@@ -196,6 +204,8 @@ describe("Link Preview", () => {
       renderEditor("maibuk://chapter/c1");
 
       await user.pointer({ keys: "[TouchA]", target: screen.getByText("Target") });
+      // Kept: proves a debounce does not show after LINK_PREVIEW_DELAY_MS. Fake timers
+      // break user-event and RTL's async wrapper here, and no event follows a suppressed show.
       await new Promise((resolve) => setTimeout(resolve, 700));
 
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
