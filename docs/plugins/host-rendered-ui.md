@@ -16,12 +16,29 @@ Every Plugin ships a `manifest.json` at its root. Its required top-level fields,
 | `version` | the Plugin's own semver version |
 | `apiVersion` | a semver range against the Plugin API, like `^0.1` |
 | `entry` | a relative path to the Plugin's ES module entry file |
-| `platforms` | one or more of `desktop`, `web`, `android` |
+| `platforms` | one or more of `desktop`, `web`, `android`; omitted means desktop and web, and Android runs the Plugin only when `android` is listed (see [Platforms](#platforms)) |
 | `lifecycle` | `persistent`, which starts with the app, or `on-demand`, which starts when a surface becomes reachable |
 | `defaultLanguage` | `en` or `es` |
 | `permissions` | an object with a `required` list and an `optional` list of Plugin Permission names |
 
 The optional top-level fields are `$schema`, `minAppVersion`, `homepage`, `dataVersion`, `customUi`, `contributes`, `commandRenames`, `rowRenames`, and `buttonRenames`. The `entry` must point to a `.js` or `.mjs` ES module (src/features/plugins/manifest-validate.ts). `manifestVersion` 1 accepts only these fields plus your own `x-*` keys, so a misspelled `permisions` cannot ship a Plugin with no Plugin Permissions. The complete schema, which your editor reads through `$schema`, is src/features/plugins/manifest.schema.json.
+
+## Platforms
+
+`platforms` lists the devices a Plugin runs on. Android is opt-in:
+
+- No `platforms` field: the Plugin runs on desktop and the web, and it does not run on Android.
+- A `platforms` list that includes `"android"`: the Plugin also runs on Android. A list without `"android"`, such as `["desktop", "web"]`, keeps it off Android.
+
+The schema accepts `"android"` in every case, so a published manifest that already lists it runs on Android with no change.
+
+On Android a Plugin runs in a memory-capped QuickJS engine inside the same sandbox Worker, not in the WebView's own engine. Three things differ from desktop and web:
+
+- **Globals.** The Plugin sees exactly `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`, `queueMicrotask`, `performance.now`, `URL`, `TextEncoder`, `TextDecoder`, and `console` (every method a Worker has: `log`, `info`, `warn`, `error`, and `debug` reach the host console, `assert` logs a failed assertion as an error, and the counters and timers do nothing), plus the worker scope bridge: `self`, `globalThis`, `postMessage`, `onmessage`, `addEventListener`, and `removeEventListener`. `Intl` and `WebAssembly` are absent. A Plugin that needs either one bundles its own implementation into its entry.
+- **Memory.** Each Plugin gets a 64 MB heap. A Plugin that allocates past it stops with the stop reason `out-of-memory`, and the app keeps running.
+- **Custom UI.** Custom Frame UI is off on Android. A Frame shows a placeholder instead of mounting, and the rest of the Plugin still works.
+
+Check Android without a device with `pnpm plugin:check <path>`. When the manifest lists `"android"`, its Android step evaluates the built entry in the same engine and fails with a readable message on a missing global, a module that does not evaluate, or a setup error. Without `"android"` the step is skipped.
 
 ## Manifest contributions
 

@@ -1,7 +1,6 @@
 /**
- * Contributions on Android (#447, T8): the host runs no Plugin there, so
- * registering an otherwise-everywhere manifest must add nothing to any shared
- * registry — no Command, page, sidebar entry, Settings row, toolbar button, or
+ * Contributions on Android (#517): a manifest that does not list android must add
+ * nothing to any shared registry: no Command, page, sidebar entry, Settings row, toolbar button, or
  * Item Menu entry. The platform is forced through the platform flags the way the
  * Settings section test forces it.
  */
@@ -51,11 +50,11 @@ afterEach(async () => {
 });
 
 describe("registerPluginContributions on Android", () => {
-  it("registers nothing for a manifest that runs everywhere", () => {
+  it("registers nothing for a manifest that does not list android (#517)", () => {
     const folder = pluginFolder({}, {
       id: "sample",
       name: "Sample",
-      platforms: ["web", "desktop", "android"],
+      platforms: ["web", "desktop"],
       lifecycle: "persistent",
       contributes: {
         commands: [
@@ -82,5 +81,25 @@ describe("registerPluginContributions on Android", () => {
     expect(registeredToolbarButtons()).toEqual([]);
     expect(getPluginSettingsOwners()).toEqual([]);
     expect(getPluginSettingsRows("sample")).toEqual([]);
+  });
+
+  it("registers a manifest that lists android as on desktop (#517)", () => {
+    const folder = pluginFolder({}, {
+      id: "sample",
+      name: "Sample",
+      platforms: ["web", "desktop", "android"],
+      lifecycle: "persistent",
+      contributes: {
+        commands: [{ id: "open", label: "Open report", contexts: ["global"], navigates: true }],
+        pages: [{ id: "report", title: "Report", command: "open" }],
+      },
+    });
+    const read = readPluginManifest(folder);
+    if (!read.ok) throw new Error(`fixture manifest is invalid: ${JSON.stringify(read.problems)}`);
+
+    cleanups.push(registerPluginContributions({ manifest: read.manifest, folder }));
+
+    expect(isCommandId("plugin.sample.open")).toBe(true);
+    expect(getPluginPages().map((page) => page.pluginId)).toEqual(["sample"]);
   });
 });

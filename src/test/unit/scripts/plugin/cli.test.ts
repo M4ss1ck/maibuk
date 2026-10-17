@@ -62,6 +62,7 @@ describe("CHECK_ORDER", () => {
       "lint",
       "test",
       "boundary",
+      "android",
       "package",
       "layout",
     ]);
@@ -105,6 +106,29 @@ describe("runCheck()", () => {
     expect(lines).toContain("  two problems");
     expect(lines).toContain("  and one more");
     expect(lines[lines.length - 1]).toContain("failed at typecheck");
+  });
+
+  it("reports a skipped step as SKIP, keeps going, and still exits 0", async () => {
+    const ran: string[] = [];
+    const lines: string[] = [];
+    const steps: CheckStep[] = [
+      stubStep("build", ran),
+      stubStep("android", ran, {
+        ok: true,
+        skipped: true,
+        details: ["manifest.json platforms does not list android"],
+      }),
+      stubStep("package", ran),
+    ];
+
+    const outcome = await runCheck(steps, (line) => lines.push(line));
+
+    expect(ran).toEqual(["build", "android", "package"]);
+    expect(outcome.code).toBe(0);
+    expect(outcome.steps.find((step) => step.name === "android")?.skipped).toBe(true);
+    expect(lines).toContain("SKIP android");
+    expect(lines).toContain("  manifest.json platforms does not list android");
+    expect(lines).not.toContain("PASS android (0ms)");
   });
 
   it("treats a step that throws as a failure at that step", async () => {

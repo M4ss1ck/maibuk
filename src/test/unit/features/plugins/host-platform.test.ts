@@ -1,4 +1,4 @@
-// The Frame platform gate (#454, D6): the Frame is off on Android in v1, on
+// The Frame platform gate (#454, D6): Custom Frame UI is off on Android (#517), on
 // Windows until a manual WebView2 Frame conformance run is recorded (and every
 // Frame check in it passed), and on everywhere else. The rule is pure, so it is
 // proven over each platform string and an injected record, without the build env

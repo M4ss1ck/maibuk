@@ -499,10 +499,10 @@ display, no device, a build failure, a timeout before any result, or an
 `--record`, a *measured* run (exit 0 or 1) merges into
 `docs/research/plugins-conformance.results.json`; an exit-2 run never does, and
 a failure while the host is supported still records, keeping exit 1, so the file
-shows it. An Android run that did not measure the QuickJS engine records
-`exit: 1`, `support: "unsupported-in-v1"`, and `followUp: "#492"` (see below);
-one that did measure it records the QuickJS `startMs` and `callLatencyMs` timings
-instead, with no marker and no gate on them.
+shows it. Android is judged on the same checks as Linux, T1 to T8, so an Android
+run records its exit like any other platform. A run that measured the QuickJS
+engine also records its `startMs` and `callLatencyMs` timings, with no gate on
+them.
 
 **Version gate.** The recorded results pin the Tauri and wry versions read from
 `src-tauri/Cargo.lock` (`scripts/plugin-conformance-gate.mjs`, run by its vitest
@@ -510,17 +510,17 @@ gate). A bump to either version fails the gate until a fresh `pnpm
 conformance:plugins --record` refreshes the file: a result is only valid on the
 engine it was measured on, so rerun on any Tauri or wry bump.
 
-**Android runs no Plugin in the product yet (#447, #492, #516).** On the Android
-emulator the T8 allocation grew the WebView renderer until lowmemorykiller killed
-it, and Chromium then killed the whole app, so the product still runs no Plugin
-on Android (`src/features/plugins/host-platform.ts`). The lane still *measures*
-Android: its seam bypasses the host rule
-(`src/features/plugins/conformance/host-bypass.ts`) and drives the capped QuickJS
-engine (#516), whose 64 MB cap is hard, so T8 stops with exactly `out-of-memory`
-and proves a healthy Plugin beside the hostile one keeps answering. A measured
-Android run records the engine's start time and call latency (no gate on them,
-decision-401) and drops the unsupported-in-v1 marker; it kept that marker and the
-#492 follow-up only while no QuickJS engine was measured there.
+**Android runs Plugins that list "android" in `platforms` (#517).** The product
+runs a Plugin on Android only when its manifest lists "android"
+(`manifestRunsOn` in `src/features/plugins/host-platform.ts`), in the memory-capped
+QuickJS engine (#492, #516): the 64 MB cap is hard, so a Plugin that exhausts its
+heap stops with `out-of-memory` and the WebView renderer survives. Custom Frame UI
+stays off on Android. The Android conformance run is judged on T1 to T8 like
+Linux: T8 must stop the hostile Plugin with exactly `out-of-memory` while a healthy
+Plugin beside it keeps answering. The lane's seam reports the true Android directory
+kind, and the hostile and healthy fixtures list `"android"` in their manifest
+`platforms`, so the real launch scan starts them. A measured Android run records the engine's start time and call latency (no
+gate on them, decision-401).
 
 ## Plugins bench lane
 

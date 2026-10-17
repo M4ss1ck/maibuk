@@ -84,10 +84,10 @@ export function PluginsSection() {
 
   const platform = currentSettingsPlatform();
   const isDesktop = platform === "desktop";
-  // The host runs no Plugin on a platform it does not support (Android in v1,
-  // #447): the Add Plugin action stays visible but disabled so the section
-  // explains itself instead of offering a Plugin that can never run, matching
-  // the row's disabled enable control (#443).
+  // The host can refuse a platform it runs no Plugin on (PLUGIN_HOST_UNSUPPORTED_PLATFORMS,
+  // empty today). Then the Add Plugin action stays visible but disabled, so the section
+  // explains itself instead of offering a Plugin that can never run (#443). Android runs
+  // Plugins that list "android" (#517), so Add Plugin is enabled there too.
   const hostRunsPlugins = pluginsRunOn(platform);
   // The explanation paragraph below the actions is the disabled Add Plugin
   // button's accessible description, so a screen reader hears why it is off.

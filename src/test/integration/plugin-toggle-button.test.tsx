@@ -79,7 +79,7 @@ async function launchSample(): Promise<PluginLifecycle> {
   });
   const created = createPluginLifecycle({
     directory: {
-      kind: "web",
+      kind: "desktop",
       listFolders: async () => ["sample"],
       readFolder: async () => folder,
     },

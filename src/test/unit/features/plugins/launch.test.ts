@@ -116,7 +116,7 @@ describe("scanApprovedPlugins()", () => {
     expect(result.refusals[0].refusal.code).toBe("manifest-invalid");
   });
 
-  it("scans nothing on android, whatever the author approved (#447)", async () => {
+  it("scans a Plugin that lists android on android (#517)", async () => {
     const folder = pluginFolder(
       {},
       { lifecycle: "on-demand", platforms: ["web", "desktop", "android"] }
@@ -129,10 +129,24 @@ describe("scanApprovedPlugins()", () => {
       directory: { kind: "android", listFolders, readFolder },
     });
 
-    // No Plugin is scanned, so no contribution registers and no Worker starts.
-    expect(result).toEqual({ plugins: [], refusals: [] });
-    expect(listFolders).not.toHaveBeenCalled();
-    expect(readFolder).not.toHaveBeenCalled();
+    expect(result.refusals).toEqual([]);
+    expect(result.plugins.map((plugin) => plugin.pluginId)).toEqual(["tracer"]);
+  });
+
+  it("skips an approved Plugin that does not list android on android (#517)", async () => {
+    const folder = pluginFolder(
+      {},
+      { lifecycle: "on-demand", platforms: ["web", "desktop"] }
+    );
+    await approve(folder);
+
+    const result = await scanApprovedPlugins({
+      directory: { kind: "android", listFolders: async () => [folder.name], readFolder: async () => folder },
+    });
+
+    // Not scanned, so no contribution registers and no Worker is queued.
+    expect(result.plugins).toEqual([]);
+    expect(result.refusals).toEqual([]);
   });
 });
 

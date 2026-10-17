@@ -111,11 +111,10 @@ A Release build includes a Built-in only for the platforms its manifest declares
 a Plugin whose `platforms` exclude the target is skipped with
 `omitted <id>: platforms exclude <target>`.
 
-Android is unsupported in v1: Maibuk runs no Plugin on Android (ADR 0019
-amendment, #447), so the `--target android` build ships no Built-in at all and
-skips every Plugin with `omitted <id>: Plugins do not run on android in this
-version`. A manifest may still list `android` in `platforms`; the value stays
-valid and is ignored there, so a published manifest needs no change.
+Android runs a Plugin only when its manifest lists `android` in `platforms`
+(ADR 0019 amendment, 2026-10-16, #517). The `--target android` build ships a
+Built-in only when its manifest lists `android`, and skips the rest with
+`omitted <id>: platforms exclude android`.
 
 ## Bundle-size gate
 
@@ -177,7 +176,7 @@ pnpm plugin:check <path>     # every step, stopping at the first failure
 same commands to its own `pnpm build`, `pnpm test`, `pnpm validate`,
 `pnpm package`, and `pnpm check` through `scripts/maibuk.mjs`.
 
-`plugin:check` runs eight steps in order and stops at the first failure,
+`plugin:check` runs nine steps in order and stops at the first failure,
 printing `PASS <step>` or `FAIL <step>`:
 
 1. build
@@ -186,8 +185,10 @@ printing `PASS <step>` or `FAIL <step>`:
 4. lint: Maibuk's Biome over the Plugin folder
 5. test: the Plugin's tests through the kit
 6. boundary: the import boundary
-7. package: the zip
-8. layout: the packaged zip against the layout rules
+7. android: when `platforms` lists `android`, the built entry evaluates and sets
+   up in the Android QuickJS engine; otherwise it prints `SKIP android`
+8. package: the zip
+9. layout: the packaged zip against the layout rules
 
 It exits `0` only when every step passed, and `1` on the first failure. The
 steps without their own script (typecheck, lint, boundary, layout) run through

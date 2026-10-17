@@ -1162,28 +1162,22 @@ describe("Plugin management (#443)", () => {
     ).toBeUndefined();
   });
 
-  it("disables Add Plugin on Android and explains why (#447)", async () => {
+  it("keeps Add Plugin available on Android (#517)", async () => {
     platformState.kind = "android";
     render(<PluginsSection />);
 
-    // The action stays visible but disabled, like the row's enable control, so
-    // the section explains itself instead of offering a Plugin that cannot run.
+    // Android runs Plugins that list "android", so Add Plugin is enabled and
+    // explains where those Plugins live.
     const addButton = screen.getByRole("button", { name: "Add Plugin" });
-    expect(addButton).toBeDisabled();
+    expect(addButton).toBeEnabled();
     expect(
       screen.getByText(
-        "Plugins are not available on Android in this version. Maibuk does not run Plugins here yet, so there is nothing to add or change."
+        "Plugins are stored in the app's private folder on this device. Add a zip file; only Plugins that list Android run here."
       )
     ).toBeInTheDocument();
-    // The disabled action is tied to that explanation, so a screen reader hears
-    // why it is off, not just that it is.
-    expect(addButton).toHaveAccessibleDescription(
-      "Plugins are not available on Android in this version. Maibuk does not run Plugins here yet, so there is nothing to add or change."
-    );
 
-    // Its Command is not bound either, so the keyboard cannot reach it.
     await waitFor(() =>
-      expect(useBoundShortcutStore.getState().counts["settings.addPlugin"]).toBeUndefined()
+      expect(useBoundShortcutStore.getState().counts["settings.addPlugin"]).toBeGreaterThan(0)
     );
   });
 

@@ -38,7 +38,7 @@ const BENCH_DRIVER_ENABLED = import.meta.env.VITE_PLUGIN_BENCH_DRIVER === "1";
 const loadPlugins = async () => {
   // A Plugin credential store is always present: the OS keychain on desktop
   // (ADR 0023), the browser store with an opt-in "remember on this device" on
-  // the web build, and in memory on Android, where no Plugin runs in v1.
+  // the web build, and in memory on Android.
   const { createMemoryPluginSecretStore, registerPluginSecretStore } = await import(
     "@/features/plugins/secret-store"
   );

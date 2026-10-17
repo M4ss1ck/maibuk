@@ -23,8 +23,10 @@ export type { PluginStepName } from "./steps";
 
 /** What one step found: whether it passed and the lines to print. */
 export interface StepResult {
-  /** True when the step passed. */
+  /** True when the step passed (a skipped step passes). */
   ok: boolean;
+  /** True when the step did not apply to this Plugin and ran no check. */
+  skipped?: boolean;
   /** One line per problem (or per fact) the step wants to report. */
   details: string[];
 }
@@ -41,6 +43,8 @@ export interface CheckStep {
 export interface CheckStepOutcome {
   name: string;
   ok: boolean;
+  /** True when the step was skipped for this Plugin. */
+  skipped: boolean;
   details: string[];
   /** How long the step took, in milliseconds. */
   ms: number;
@@ -85,7 +89,8 @@ export const USAGE = [
   "  lint       Lint the Plugin with Maibuk's Biome",
   "  test       Run the Plugin's tests through the test kit",
   "  boundary   Check the Plugin's imports against the boundary",
-  "  package    Zip <plugin>/dist/<id>/ into <plugin>/dist/<id>-<version>.zip",
+  "  android    Evaluate the built entry in the Android QuickJS engine (when platforms lists android)",
+  "  package   Zip <plugin>/dist/<id>/ into <plugin>/dist/<id>-<version>.zip",
   "  layout     Check the packaged zip's layout",
   "  check      Run every step, stopping at the first failure",
   "  configs    Write <plugin>/.maibuk/ with the generated TypeScript configs",
@@ -108,8 +113,9 @@ export function parseCommand(argv: readonly string[]): ParsedCommand | ParseErro
 }
 
 /**
- * Runs `steps` in order, printing `PASS <name> (<ms>ms)` or `FAIL <name>` plus
- * the failing step's details, and stops at the first failure. Prints one final
+ * Runs `steps` in order, printing `PASS <name> (<ms>ms)`, `SKIP <name>` for a
+ * step that did not apply, or `FAIL <name>` plus the failing step's details, and
+ * stops at the first failure. Prints one final
  * line and returns exit code `0` only when every step passed.
  */
 export async function runCheck(
@@ -127,8 +133,12 @@ export async function runCheck(
       result = { ok: false, details: [error instanceof Error ? error.message : String(error)] };
     }
     const ms = Math.round(performance.now() - started);
-    outcomes.push({ name: step.name, ok: result.ok, details: result.details, ms });
-    if (result.ok) {
+    const skipped = result.skipped === true;
+    outcomes.push({ name: step.name, ok: result.ok, skipped, details: result.details, ms });
+    if (skipped) {
+      log(`SKIP ${step.name}`);
+      for (const detail of result.details) log(`  ${detail}`);
+    } else if (result.ok) {
       log(`PASS ${step.name} (${ms}ms)`);
     } else {
       log(`FAIL ${step.name}`);

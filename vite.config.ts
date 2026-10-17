@@ -465,7 +465,6 @@ export default defineConfig(() => ({
         "src/features/plugins/windows-frame-record.ts",
         "src/features/plugins/conformance/checks.ts",
         "src/features/plugins/conformance/commands.ts",
-        "src/features/plugins/conformance/host-bypass.ts",
         "src/features/plugins/conformance/oom-grace.ts",
         "src/features/plugins/conformance/reporter.ts",
         "src/features/plugins/conformance/types.ts",

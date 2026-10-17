@@ -13,6 +13,8 @@ A **Plugin** is a packaged addition to Maibuk that adds its own Commands, pages,
 7. [Plugin API reference](api-reference.md): every method, generated from the code.
 8. [Plugin UI component reference](ui-reference.md): every host-rendered component, generated from the code.
 
+Which devices run a Plugin is set by its `platforms` list: omit it for desktop and the web, or list `"android"` to run on Android too. See [Platforms](host-rendered-ui.md#platforms).
+
 ## Generated references
 
 api-reference.md and ui-reference.md are generated; do not edit them by hand.

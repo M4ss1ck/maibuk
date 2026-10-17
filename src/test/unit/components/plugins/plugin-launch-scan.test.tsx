@@ -89,7 +89,7 @@ describe("PluginPage while the launch scan is pending", () => {
       {
         id: "sample",
         name: "Sample",
-        platforms: ["desktop"],
+        platforms: ["web", "desktop"],
         contributes: {
           commands: [{ id: "open", label: "Open report", contexts: ["global"], navigates: true }],
           pages: [{ id: "report", title: "Sample report", command: "open" }],

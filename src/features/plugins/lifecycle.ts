@@ -40,7 +40,7 @@ import {
   onEditorFocusChanged,
 } from "@/features/plugins/editor-host";
 import { createPluginHandlers } from "@/features/plugins/handlers";
-import { pluginsRunOn } from "@/features/plugins/host-platform";
+import { manifestRunsOn, pluginsRunOn } from "@/features/plugins/host-platform";
 import { currentPluginLanguage, onPluginLanguageChange } from "@/features/plugins/language";
 import {
   getPluginLifecycle,
@@ -932,8 +932,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         return { ok: false, refusal: { code: "not-installed" } };
       }
       const directory = options.directory ?? (await getPluginDirectory());
-      // The host runs no Plugin on a platform it does not support (Android in
-      // v1, #447): an explicit enable can never start a Worker there.
+      // The host runs no Plugin on a platform it does not support (none today,
+      // see PLUGIN_HOST_UNSUPPORTED_PLATFORMS): an explicit enable can never start
+      // a Worker there.
       if (!pluginsRunOn(directory.kind)) return { ok: false, refusal: { code: "not-installed" } };
       const folder = await directory.readFolder(pluginId);
       if (!folder) return { ok: false, refusal: { code: "not-installed" } };
@@ -944,6 +945,11 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       const read = readPluginManifest(folder, { builtIn: builtInIds.has(pluginId) });
       if (!read.ok) {
         return { ok: false, refusal: { code: "manifest-invalid", problems: read.problems } };
+      }
+      // The Plugin Platforms rule (#517): a manifest that does not list this
+      // device's platform never starts here, whatever the explicit enable says.
+      if (!manifestRunsOn(read.manifest.platforms as readonly string[] | undefined, directory.kind)) {
+        return { ok: false, refusal: { code: "not-installed" } };
       }
       const installed: InstalledPlugin = {
         pluginId,

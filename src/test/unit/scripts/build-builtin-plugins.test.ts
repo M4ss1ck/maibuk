@@ -75,20 +75,18 @@ describe("buildBuiltInPlugins()", () => {
     expect(readdirSync(outRoot)).toEqual(["index.json"]);
   });
 
-  it("ships no Built-in for the android target, whatever a manifest declares (#447)", async () => {
+  it("ships a Built-in for the android target when its platforms list android (#517)", async () => {
     const outRoot = tempOutRoot();
-    // sample-builtin declares android in its platforms, so only the host rule
-    // can exclude it from the Android build.
+    // sample-builtin lists android; desktop-only does not.
     const index = await buildBuiltInPlugins({
       sourceRoot: FIXTURE_ROOT,
-      ids: ["sample-builtin"],
+      ids: ["sample-builtin", "desktop-only"],
       outRoot,
       target: "android",
     });
 
-    expect(index.plugins).toEqual([]);
-    expect(readdirSync(outRoot)).toEqual(["index.json"]);
-    expect(() => readdirSync(join(outRoot, "sample-builtin"))).toThrow();
+    expect(index.plugins.map((p) => p.id)).toEqual(["sample-builtin"]);
+    expect(() => readdirSync(join(outRoot, "desktop-only"))).toThrow();
   });
 
   // Issue #444: an id a previous target shipped must not survive into this

@@ -15,6 +15,25 @@
 import type { QuickJSContext, QuickJSHandle } from "quickjs-emscripten-core";
 import { toVmValue } from "@/features/plugins/quickjs/bridge";
 
+/**
+ * The globals the Android engine provides to a Plugin, by name. The Android
+ * step of `plugin:check` reads this list for its missing-global message, and
+ * `quickjs/android-globals.test.ts` proves each name is defined after
+ * {@link installQuickJsGlobals}, so the list cannot drift from the install.
+ */
+export const QUICKJS_ANDROID_GLOBALS = [
+  "setTimeout",
+  "clearTimeout",
+  "setInterval",
+  "clearInterval",
+  "queueMicrotask",
+  "performance",
+  "URL",
+  "TextEncoder",
+  "TextDecoder",
+  "console",
+] as const;
+
 /** The console methods a Plugin may call. */
 export type QuickJsConsoleLevel = "log" | "info" | "warn" | "error" | "debug";
 
@@ -230,12 +249,33 @@ function buildGlobalsSource(): string {
   function consoleMethod(level) {
     return function () { host.consoleLog(level, Array.prototype.slice.call(arguments)); };
   }
+  // Every method a Worker's console has, so a bundled library that calls one
+  // (the Snowball stemmer calls console.assert) does not throw on Android
+  // (#517). The extras forward to the five host levels or do nothing.
+  function ignored() {}
   globalThis.console = {
     log: consoleMethod("log"),
     info: consoleMethod("info"),
     warn: consoleMethod("warn"),
     error: consoleMethod("error"),
     debug: consoleMethod("debug"),
+    assert: function (condition) {
+      if (condition) return;
+      host.consoleLog("error", ["Assertion failed:"].concat(Array.prototype.slice.call(arguments, 1)));
+    },
+    trace: consoleMethod("debug"),
+    dir: consoleMethod("log"),
+    dirxml: consoleMethod("log"),
+    table: consoleMethod("log"),
+    group: consoleMethod("log"),
+    groupCollapsed: consoleMethod("log"),
+    groupEnd: ignored,
+    clear: ignored,
+    count: ignored,
+    countReset: ignored,
+    time: ignored,
+    timeEnd: ignored,
+    timeLog: ignored,
   };
 
 ${URL_SOURCE}

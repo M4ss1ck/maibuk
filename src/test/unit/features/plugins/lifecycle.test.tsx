@@ -150,6 +150,8 @@ interface HarnessOptions {
   granted?: PluginPermissionId[];
   /** Overrides the shipped Built-in source; unspecified ships none. */
   builtInSource?: BuiltInPluginSource;
+  /** The device the Plugin Directory serves; unspecified is the web host. */
+  directoryKind?: PluginDirectoryAdapter["kind"];
 }
 
 async function createHarness(options: HarnessOptions = {}) {
@@ -199,7 +201,7 @@ async function createHarness(options: HarnessOptions = {}) {
     listFolders: ReturnType<typeof vi.fn>;
     readFolder: ReturnType<typeof vi.fn>;
   } = {
-    kind: "web",
+    kind: options.directoryKind ?? "web",
     listFolders: vi.fn(async () => [...folders.keys()]),
     readFolder: vi.fn(async (name: string) => folders.get(name) ?? null),
   };
@@ -1210,6 +1212,35 @@ describe("Plugin lifecycle: activation start reason", () => {
     expect(result).toEqual({ ok: true, startReason: "restore" });
     expect(h.framesFor("alpha")).toHaveLength(2);
     expect(h.framesFor("alpha")[1].receivedStartReason).toBe("restore");
+  });
+});
+
+describe("Plugin lifecycle: Plugin Platforms gate on an explicit start", () => {
+  it("refuses an explicit start on Android when the manifest does not list android, and starts no Worker", async () => {
+    const h = await createHarness({
+      directoryKind: "android",
+      approved: [makePlugin("desktop-only", { platforms: ["desktop", "web"] })],
+    });
+
+    const result = await h.lifecycle.install("desktop-only", "enable");
+    await advance(0);
+
+    expect(result).toEqual({ ok: false, refusal: { code: "not-installed" } });
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.state("desktop-only")).toBeNull();
+  });
+
+  it("starts an explicit enable on Android when the manifest lists android", async () => {
+    const h = await createHarness({
+      directoryKind: "android",
+      approved: [makePlugin("android-ok", { platforms: ["desktop", "android"] })],
+    });
+
+    const result = await h.lifecycle.install("android-ok", "enable");
+    await advance(0);
+
+    expect(result).toEqual({ ok: true, startReason: "enable" });
+    expect(h.framesFor("android-ok")).toHaveLength(1);
   });
 });
 

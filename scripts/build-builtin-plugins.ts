@@ -14,7 +14,7 @@
  * A Built-in ships only for the platforms its manifest declares. A Plugin whose
  * `platforms` exclude the build target is skipped with a log line, the way a
  * Release build drops it silently for the platforms it does not cover. The
- * Android target ships nothing: the host runs no Plugin there in v1 (#447).
+ * Android target ships only the Built-ins whose manifest lists "android" (#517).
  *
  *   tsx scripts/build-builtin-plugins.ts [--target web|desktop|android]
  */
@@ -24,7 +24,7 @@ import { join, relative, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { pathToFileURL } from "node:url";
 import { compareUtf8, hashPluginDirectory } from "@/features/plugins/directory-hash";
-import { pluginsRunOn } from "@/features/plugins/host-platform";
+import { manifestRunsOn } from "@/features/plugins/host-platform";
 import { PLUGIN_PLATFORMS } from "@/features/plugins/manifest-schema";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import type {
@@ -111,15 +111,9 @@ export async function buildBuiltInPlugins(
     const manifestPath = join(sourceDir, "manifest.json");
     const manifest = validateManifestFile(manifestPath, true);
 
-    // The host runs no Plugin on a platform it does not support (Android in v1,
-    // #447): the Android build ships no Built-in Plugin at all, whatever a
-    // manifest declares.
-    if (!pluginsRunOn(target)) {
-      console.log(`omitted ${id}: Plugins do not run on ${target} in this version`);
-      continue;
-    }
-
-    if (!manifest.platforms.includes(target)) {
+    // The Plugin Platforms rule (#517): the host rule first, then the
+    // manifest's list, so Android needs "android" listed explicitly.
+    if (!manifestRunsOn(manifest.platforms, target)) {
       console.log(`omitted ${id}: platforms exclude ${target}`);
       continue;
     }

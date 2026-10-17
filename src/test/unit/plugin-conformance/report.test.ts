@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { CARGO_LOCK_PATH } from "../../../../scripts/plugin-conformance-gate.mjs";
 import {
   CONFORMANCE_RESULTS_SCHEMA,
-  CONFORMANCE_UNSUPPORTED_FOLLOW_UP,
   type ConformanceStack,
   type PlatformOutcome,
   buildPlatformRun,
@@ -14,7 +13,6 @@ import {
   exitCodeForChecks,
   finalizeRun,
   formatConformanceTable,
-  isHostUnsupportedLanePlatform,
   laneExitCode,
   mergePlatformRun,
   mergeRunEngine,
@@ -129,13 +127,6 @@ describe("canRecord()", () => {
   });
 });
 
-describe("isHostUnsupportedLanePlatform()", () => {
-  it("is true for Android (the v1 rule) and false for Linux", () => {
-    expect(isHostUnsupportedLanePlatform("android")).toBe(true);
-    expect(isHostUnsupportedLanePlatform("linux")).toBe(false);
-  });
-});
-
 describe("stackFromCargoLock()", () => {
   const cargoLock = readFileSync(CARGO_LOCK_PATH, "utf8");
 
@@ -186,17 +177,14 @@ describe("buildPlatformRun()", () => {
     expect("device" in run).toBe(false);
   });
 
-  it("marks an Android run unsupported-in-v1 with the #492 follow-up, keeping its exit", () => {
+  it("judges an Android run as supported like Linux: no marker, no follow-up, its exit kept (#517)", () => {
     const run = buildPlatformRun({ platform: "android", engine: ENGINE, checks: [T7], ranAt: "t", exit: 1 });
-    expect(run).toMatchObject({
-      exit: 1,
-      support: "unsupported-in-v1",
-      followUp: CONFORMANCE_UNSUPPORTED_FOLLOW_UP,
-    });
-    expect(run.followUp).toBe("#492");
+    expect(run).toEqual({ ranAt: "t", engine: ENGINE, exit: 1, checks: [T7] });
+    expect("support" in run).toBe(false);
+    expect("followUp" in run).toBe(false);
   });
 
-  it("drops the unsupported marker for an Android run that measured QuickJS (#516)", () => {
+  it("carries the QuickJS timings of an Android run that measured QuickJS (#516)", () => {
     const quickjs = { startMs: 12, callLatencyMs: 3 };
     const run = buildPlatformRun({
       platform: "android",
@@ -211,7 +199,7 @@ describe("buildPlatformRun()", () => {
     expect("followUp" in run).toBe(false);
   });
 
-  it("carries QuickJS timings on a host-supported run too, without a support marker", () => {
+  it("carries QuickJS timings on a Linux run too, without a support marker", () => {
     const run = buildPlatformRun({
       platform: "linux",
       engine: ENGINE,
@@ -224,7 +212,7 @@ describe("buildPlatformRun()", () => {
     expect("support" in run).toBe(false);
   });
 
-  it("leaves a host-supported run without a support marker", () => {
+  it("leaves a Linux run without a support marker", () => {
     const run = buildPlatformRun({ platform: "linux", engine: ENGINE, checks: [T7], ranAt: "t", exit: 0 });
     expect("support" in run).toBe(false);
     expect("followUp" in run).toBe(false);

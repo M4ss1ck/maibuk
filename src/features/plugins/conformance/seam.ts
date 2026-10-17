@@ -25,7 +25,6 @@ import { ThreadMessagePort } from "@quilted/threads";
 
 import { savePluginApproval } from "@/features/plugins/approvals";
 import { loadFixtureHealthy, loadFixtureHostile } from "@/features/plugins/conformance/fixture";
-import { conformanceDirectoryKind } from "@/features/plugins/conformance/host-bypass";
 import { waitForReasonWithinGrace } from "@/features/plugins/conformance/oom-grace";
 import {
   type CommandObservation,
@@ -258,16 +257,14 @@ export async function createRuntimeSeam(
   });
 
   // The in-memory Plugin Directory: the shape the lifecycle suite uses. Its
-  // kind comes from the conformance bypass (host-bypass.ts), not the device, so
-  // the real lifecycle scans the fixtures on Android too — where the v1 host rule
-  // otherwise runs no Plugin (#447, #492). The seam still reports the true
-  // platform to every check.
+  // kind is the true device platform, so the real lifecycle's launch scan runs
+  // the fixtures that list that platform in their manifest (#517).
   const folders = new Map<string, PluginFolder>([
     [FIXTURE_HOSTILE_ID, folder],
     [FIXTURE_HEALTHY_ID, healthy.folder],
   ]);
   const directory: PluginDirectoryAdapter = {
-    kind: conformanceDirectoryKind(platform),
+    kind: platform,
     listFolders: async () => [FIXTURE_HOSTILE_ID, FIXTURE_HEALTHY_ID],
     readFolder: async (name: string) => folders.get(name) ?? null,
   };

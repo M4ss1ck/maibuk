@@ -16,7 +16,7 @@ When development mode is on, the management store subscribes to a watch on the P
 - Stored data is kept. The reload re-pins the hash, digests, version, and approved Plugin Permissions, but leaves the author's grants and the Plugin's stored Library data untouched.
 - A new required Plugin Permission blocks the reload. If the author never granted it, the reload is refused as review-required and the previous build keeps running.
 - Startup errors stay visible until the next good build. A failed startup is recorded on the approval record and shown in Settings; a successful start clears it.
-- Android has no hot reload. Maibuk runs no Plugin on Android in this version, so there is no watched reload there.
+- Android has no hot reload. The Plugin Directory watch runs on desktop only, so on Android install the new build from Settings → Plugins to pick up a change.
 
 At launch, development mode also subscribes the watch and routes a copy that changed while the app was closed through the same reload policy, instead of a change notification.
 
