@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { PluginToolbarButton } from "@/components/plugins/PluginToolbarButton";
@@ -7,6 +7,7 @@ import {
   registerPluginContributions,
   resetPluginContributionsForTests,
 } from "@/features/plugins/contributions";
+import { clearToolbarPressed, setToolbarPressed } from "@/features/plugins/toolbar-pressed";
 import { readPluginManifest } from "@/features/plugins/runtime";
 import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
 import type { Chapter } from "@/features/chapters/types";
@@ -60,6 +61,12 @@ function registerSample(): void {
             id: "inlineButton",
             command: "plain",
             icon: { elements: [["path", { d: "M4 20h16" }]] },
+          },
+          {
+            id: "inlineToggle",
+            command: "plain",
+            icon: { elements: [["path", { d: "M4 20h16" }]] },
+            toggle: true,
           },
         ],
       },
@@ -118,6 +125,31 @@ describe("PluginToolbarButton with an inline icon (#531)", () => {
     lifecycleStatus = "ready";
     renderButton("plugin.sample.inlineButton");
     expect(screen.getByRole("button", { name: "Plain" })).toBeEnabled();
+  });
+});
+
+describe("PluginToolbarButton inline icon with a Toggle Button (#531)", () => {
+  it("follows the pressed state the Plugin sets, alongside the disabled state", () => {
+    registerSample();
+    lifecycleStatus = "ready";
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/book/b1"]}>
+        <PluginToolbarButton id={"plugin.sample.inlineToggle" as never} iconSize="md" />
+      </MemoryRouter>
+    );
+    const button = screen.getByRole("button", { name: "Plain" });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(button.querySelector("svg path")?.getAttribute("d")).toBe("M4 20h16");
+    act(() => setToolbarPressed("sample", "inlineToggle", true));
+    expect(screen.getByRole("button", { name: "Plain" })).toHaveAttribute("aria-pressed", "true");
+    unmount();
+    lifecycleStatus = "stopped";
+    renderButton("plugin.sample.inlineToggle");
+    const stopped = screen.getByRole("button", { name: "Plain" });
+    expect(stopped).toBeDisabled();
+    expect(stopped).not.toHaveAttribute("aria-pressed", "true");
+    clearToolbarPressed("sample");
+    lifecycleStatus = "ready";
   });
 });
 
