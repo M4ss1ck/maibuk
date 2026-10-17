@@ -22,7 +22,6 @@ interface SelectOption<T> {
   swatches?: readonly string[];
 }
 
-/** The decorative color chips of an option, before its label. */
 function SwatchChips({ swatches }: { swatches: readonly string[] }) {
   return (
     <span aria-hidden="true" className="inline-flex shrink-0 items-center gap-0.5">

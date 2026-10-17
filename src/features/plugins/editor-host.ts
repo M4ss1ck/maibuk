@@ -199,12 +199,10 @@ function notifyContentChanged(entry: EditorEntry): void {
   }, EDITOR_CONTENT_EVENT_MS);
 }
 
-/** The inline style a colored range paints with: a low-alpha tint and an underline color. */
 function highlightColorStyle(color: string): string {
   return `background-color: color-mix(in srgb, ${color} 22%, transparent); text-decoration-color: ${color};`;
 }
 
-/** Builds every Plugin's decorations against one document walk. */
 function buildHighlightDecorations(
   doc: ProseMirrorNode,
   sets: Map<string, PluginHighlightEntry>
