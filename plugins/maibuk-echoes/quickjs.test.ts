@@ -70,4 +70,22 @@ describe("Echoes on the QuickJS runner (Android, #517)", () => {
       host.stop();
     }
   });
+
+  // Detection, not just startup: the stemmer calls console.assert, which the
+  // Android console lacked, so every stem threw and Echoes found nothing on a
+  // real device while ready still fired (#517).
+  it("finds the echoes in a Chapter's text inside the QuickJS engine", async () => {
+    const endpoint = new ScopeDouble();
+    const probe = join(ECHOES_DIR, "fixtures", "quickjs-detect.ts");
+    const source = await bundlePluginFixture(probe);
+    const run = runQuickJsPlugin({ sources: { "index.js": source }, entry: "index.js", endpoint });
+    try {
+      await expect(run.outcome).resolves.toEqual({ kind: "ready" });
+      expect(endpoint.messages[0]).toEqual({
+        kinds: ["nearby:rain", "overused:rain"],
+      });
+    } finally {
+      run.dispose();
+    }
+  });
 });

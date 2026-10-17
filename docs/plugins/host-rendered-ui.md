@@ -34,7 +34,7 @@ The schema accepts `"android"` in every case, so a published manifest that alrea
 
 On Android a Plugin runs in a memory-capped QuickJS engine inside the same sandbox Worker, not in the WebView's own engine. Three things differ from desktop and web:
 
-- **Globals.** The Plugin sees exactly `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`, `queueMicrotask`, `performance.now`, `URL`, `TextEncoder`, `TextDecoder`, and `console`, plus the worker scope bridge: `self`, `globalThis`, `postMessage`, `onmessage`, `addEventListener`, and `removeEventListener`. `Intl` and `WebAssembly` are absent. A Plugin that needs either one bundles its own implementation into its entry.
+- **Globals.** The Plugin sees exactly `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`, `queueMicrotask`, `performance.now`, `URL`, `TextEncoder`, `TextDecoder`, and `console` (every method a Worker has: `log`, `info`, `warn`, `error`, and `debug` reach the host console, `assert` logs a failed assertion as an error, and the counters and timers do nothing), plus the worker scope bridge: `self`, `globalThis`, `postMessage`, `onmessage`, `addEventListener`, and `removeEventListener`. `Intl` and `WebAssembly` are absent. A Plugin that needs either one bundles its own implementation into its entry.
 - **Memory.** Each Plugin gets a 64 MB heap. A Plugin that allocates past it stops with the stop reason `out-of-memory`, and the app keeps running.
 - **Custom UI.** Custom Frame UI is off on Android. A Frame shows a placeholder instead of mounting, and the rest of the Plugin still works.
 

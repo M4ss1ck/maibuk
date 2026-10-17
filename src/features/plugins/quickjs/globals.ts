@@ -249,12 +249,33 @@ function buildGlobalsSource(): string {
   function consoleMethod(level) {
     return function () { host.consoleLog(level, Array.prototype.slice.call(arguments)); };
   }
+  // Every method a Worker's console has, so a bundled library that calls one
+  // (the Snowball stemmer calls console.assert) does not throw on Android
+  // (#517). The extras forward to the five host levels or do nothing.
+  function ignored() {}
   globalThis.console = {
     log: consoleMethod("log"),
     info: consoleMethod("info"),
     warn: consoleMethod("warn"),
     error: consoleMethod("error"),
     debug: consoleMethod("debug"),
+    assert: function (condition) {
+      if (condition) return;
+      host.consoleLog("error", ["Assertion failed:"].concat(Array.prototype.slice.call(arguments, 1)));
+    },
+    trace: consoleMethod("debug"),
+    dir: consoleMethod("log"),
+    dirxml: consoleMethod("log"),
+    table: consoleMethod("log"),
+    group: consoleMethod("log"),
+    groupCollapsed: consoleMethod("log"),
+    groupEnd: ignored,
+    clear: ignored,
+    count: ignored,
+    countReset: ignored,
+    time: ignored,
+    timeEnd: ignored,
+    timeLog: ignored,
   };
 
 ${URL_SOURCE}
