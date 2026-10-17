@@ -21,8 +21,9 @@ import android.net.http.SslError
  * (aw_browser_terminator). Every other callback is forwarded verbatim to
  * [delegate], so wry's request handling is unchanged.
  *
- * Defense in depth for #518 (see also #492): the activity recreates its
- * WebView when [onGone] fires.
+ * Defense in depth for #518 (see also #492): when [onGone] fires, the activity
+ * restarts the process via ProcessPhoenix, because recreating the activity
+ * crashes wry's native state.
  */
 class RenderProcessGoneClient(
     private val delegate: WebViewClient,
