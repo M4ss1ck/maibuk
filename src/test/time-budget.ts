@@ -43,7 +43,6 @@ export function allowedTimeouts(file: string): number[] {
  * It only shrinks: new code waits for the condition it asserts instead
  * (src/test/unit/test-fixed-waits.test.ts). */
 export const FIXED_WAIT_BASELINE: Readonly<Record<string, number>> = {
-  "src/test/integration/CommandPalette.test.tsx": 1,
   "src/test/integration/navigating-commands.test.tsx": 1,
   "src/test/integration/tutorial-app.test.tsx": 2,
   "src/test/integration/tutorial-library.test.ts": 1,
