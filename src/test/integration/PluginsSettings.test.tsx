@@ -356,12 +356,15 @@ describe("Plugins Settings section", () => {
         stop: () => {},
       });
 
+      const frames = vi.spyOn(window, "requestAnimationFrame");
       renderSettings();
       focusSettingsRow("plugin.echoes.threshold");
 
       const row = await waitFor(() => settingsRow("plugin.echoes.threshold"));
-      // Well past the reveal's missing-control frame budget.
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Well past the reveal's missing-control frame budget (10 frames): the
+      // reveal's own frame loop has run that long on this row.
+      await waitFor(() => expect(frames.mock.calls.length).toBeGreaterThan(10));
+      frames.mockRestore();
       expect(within(row).queryByRole("switch")).toBeNull();
       expect(useSettingsRevealStore.getState().pendingRowId).toBe("plugin.echoes.threshold");
 
@@ -428,7 +431,10 @@ describe("Plugins Settings section", () => {
       renderSettings();
       focusSettingsRow("plugin.echoes.threshold");
       await waitFor(() => settingsRow("plugin.echoes.threshold"));
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Let the reveal's frame loop run for a while before the budget passes.
+      const frames = vi.spyOn(window, "requestAnimationFrame");
+      await waitFor(() => expect(frames.mock.calls.length).toBeGreaterThan(10));
+      frames.mockRestore();
       expect(useSettingsRevealStore.getState().pendingRowId).toBe("plugin.echoes.threshold");
 
       const start = performance.now();
