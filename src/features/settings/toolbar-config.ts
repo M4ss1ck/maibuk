@@ -1,3 +1,4 @@
+import type { PluginIconSpec } from "@/features/plugins/inline-icon";
 import {
   LOCAL_ID_PATTERN,
   PLUGIN_ID_PATTERN,
@@ -213,8 +214,8 @@ export interface PluginToolbarButtonDeclaration {
   id: string;
   /** The local Command id this button runs; resolved by the wiring slice. */
   command?: string;
-  /** A Lucide icon name or a relative `.svg` path; resolved by the wiring slice. */
-  icon?: string;
+  /** A Lucide icon name, a relative `.svg` path, or inline elements (#531); resolved by the wiring slice. */
+  icon?: PluginIconSpec;
   /** A Toggle Button: shows on or off as the Plugin sets it with `toolbar.setPressed`. */
   toggle?: boolean;
 }
@@ -239,8 +240,8 @@ export interface PluginToolbarButtonDef {
   localId: string;
   /** The local Command id this button runs; labels resolve through the Command registry. */
   command?: string;
-  /** A Lucide icon name or a relative `.svg` path; resolved by the wiring slice. */
-  icon?: string;
+  /** A Lucide icon name, a relative `.svg` path, or inline elements (#531). */
+  icon?: PluginIconSpec;
   /** A Toggle Button: its pressed state is the Plugin's, set with `toolbar.setPressed`. */
   toggle?: boolean;
 }

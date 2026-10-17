@@ -12,6 +12,8 @@
  * decision, #395).
  */
 
+import type { PluginIconSpec } from "@/features/plugins/inline-icon";
+
 import i18n from "@/i18n";
 import { PLUGIN_TARGETS } from "@/features/plugins/manifest-constants";
 import type { PluginContributionId } from "@/features/plugins/types";
@@ -37,7 +39,7 @@ export interface PluginPageDef {
   frame?: string;
   /** The navigating Command that opens the page. */
   commandId: PluginCommandId;
-  icon?: string;
+  icon?: PluginIconSpec;
 }
 
 /** An optional sidebar entry that navigates to a page. */
@@ -47,7 +49,7 @@ export interface PluginSidebarEntryDef {
   pageId: string;
   pageRoute: string;
   title: string;
-  icon?: string;
+  icon?: PluginIconSpec;
   commandId: PluginCommandId;
 }
 

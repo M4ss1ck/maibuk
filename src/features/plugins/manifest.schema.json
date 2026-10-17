@@ -357,9 +357,51 @@
                 "description": "A declared page id; its title is the entry's label."
               },
               "icon": {
-                "type": "string",
-                "minLength": 1,
-                "description": "A Lucide icon name (kebab-case) or a relative .svg path inside the Plugin folder."
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "elements": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "description": "SVG elements on a 24x24 grid: [tag, attributes] pairs. The validator sets the allowed tags, attributes, and count."
+                      }
+                    },
+                    "required": [
+                      "elements"
+                    ],
+                    "additionalProperties": false,
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  }
+                ],
+                "description": "A Lucide icon name (kebab-case), a relative .svg path inside the Plugin folder, or an inline icon { elements: [[tag, attrs], ...] } on a 24x24 grid."
               },
               "platforms": {
                 "minItems": 1,
@@ -448,9 +490,51 @@
                 "description": "A camelCase id, unique within its contribution kind for this Plugin."
               },
               "icon": {
-                "type": "string",
-                "minLength": 1,
-                "description": "A Lucide icon name (kebab-case) or a relative .svg path inside the Plugin folder."
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "elements": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "description": "SVG elements on a 24x24 grid: [tag, attributes] pairs. The validator sets the allowed tags, attributes, and count."
+                      }
+                    },
+                    "required": [
+                      "elements"
+                    ],
+                    "additionalProperties": false,
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  }
+                ],
+                "description": "A Lucide icon name (kebab-case), a relative .svg path inside the Plugin folder, or an inline icon { elements: [[tag, attrs], ...] } on a 24x24 grid."
               },
               "platforms": {
                 "minItems": 1,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ManifestProblem } from "@/features/plugins/types";
 import {
   CONTRIBUTION_LIMITS,
+  MAX_INLINE_ICON_ELEMENTS,
   MAX_LOCALE_BYTES,
   MAX_MANIFEST_BYTES,
   applyPluginLocale,
@@ -1184,5 +1185,96 @@ describe("applyPluginLocale", () => {
     expect(result.name).toBe("Ecos");
     expect(result).not.toHaveProperty("x-tool");
     expect(result.contributes?.commands?.[0].label).toBe("Show report");
+  });
+});
+
+describe("validateManifestValue: inline icon elements (#531)", () => {
+  const inline = (elements: unknown) => ({ elements });
+
+  it("accepts every allowed tag with every allowed attribute", () => {
+    const elements = [
+      ["path", { d: "M4 4h16" }],
+      ["circle", { cx: "12", cy: "12", r: "3" }],
+      ["rect", { x: "1", y: "2", width: "3", height: "4", rx: "1", ry: "1" }],
+      ["line", { x1: "1", y1: "2", x2: "3", y2: "4" }],
+      ["polyline", { points: "1,2 3,4" }],
+      ["polygon", { points: "1,2 3,4 5,6" }],
+      ["ellipse", { cx: "1", cy: "2", rx: "3", ry: "4" }],
+    ];
+    expect(
+      validateManifestValue(
+        baseManifestWith((m) => (m.contributes.toolbarButtons[0].icon = inline(elements)))
+      ).ok
+    ).toBe(true);
+  });
+
+  it("refuses each forbidden attribute, naming it", () => {
+    for (const attr of [
+      "style",
+      "fill",
+      "stroke",
+      "stroke-width",
+      "class",
+      "href",
+      "xlink:href",
+      "onclick",
+      "transform",
+    ]) {
+      expectProblem(
+        problemsFor(
+          (m) =>
+            (m.contributes.toolbarButtons[0].icon = inline([["path", { d: "M0 0", [attr]: "x" }]]))
+        ),
+        "contributes.toolbarButtons[0].icon",
+        new RegExp(`"${attr.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}"`, "u")
+      );
+    }
+  });
+
+  it("refuses each tag outside the allowlist, naming it", () => {
+    for (const tag of ["script", "image", "foreignObject", "use", "a", "g", "style"]) {
+      expectProblem(
+        problemsFor((m) => (m.contributes.toolbarButtons[0].icon = inline([[tag, {}]]))),
+        "contributes.toolbarButtons[0].icon",
+        new RegExp(`"${tag}"`, "u")
+      );
+    }
+  });
+
+  it("accepts exactly the element cap and refuses one more", () => {
+    const at = Array.from({ length: MAX_INLINE_ICON_ELEMENTS }, () => ["path", { d: "M0 0" }]);
+    expect(
+      validateManifestValue(
+        baseManifestWith((m) => (m.contributes.toolbarButtons[0].icon = inline(at)))
+      ).ok
+    ).toBe(true);
+    expectProblem(
+      problemsFor(
+        (m) =>
+          (m.contributes.toolbarButtons[0].icon = inline([...at, ["path", { d: "M0 0" }]]))
+      ),
+      "contributes.toolbarButtons[0].icon",
+      new RegExp(`${MAX_INLINE_ICON_ELEMENTS}`, "u")
+    );
+  });
+
+  it("refuses an empty element list and a non-string attribute value", () => {
+    // Zod reports structural errors at the exact field, so the path starts at the icon.
+    for (const elements of [[], [["circle", { r: 3 }]]]) {
+      const problems = problemsFor((m) => (m.contributes.toolbarButtons[0].icon = inline(elements)));
+      expect(problems.some((p) => p.path.startsWith("contributes.toolbarButtons[0].icon"))).toBe(
+        true
+      );
+    }
+  });
+
+  it("refuses an inline icon on a sidebar entry too", () => {
+    expectProblem(
+      problemsFor(
+        (m) => (m.contributes.sidebarEntries[0].icon = inline([["script", {}]]))
+      ),
+      "contributes.sidebarEntries[0].icon",
+      /"script"/u
+    );
   });
 });
