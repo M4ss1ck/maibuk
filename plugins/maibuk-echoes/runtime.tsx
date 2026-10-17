@@ -1098,7 +1098,6 @@ const PALETTE_LABEL: Readonly<Record<EchoPaletteId, EchoKey>> = {
  * recompute, so an open editor updates at once. Labels come from the runtime
  * catalogs.
  */
-
 function createDetectionSettings(
   client: PluginClient,
   editor: Pick<EchoEditorController, "refresh">
