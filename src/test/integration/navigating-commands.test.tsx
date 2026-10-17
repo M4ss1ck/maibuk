@@ -174,7 +174,10 @@ async function settleOn(screenPath: string) {
   await waitFor(() => expect(path).toBe(screenPath));
   // Let bindings mount and stores load from the Library.
   await waitFor(() => expect(document.querySelector("[data-route-heading]")).not.toBeNull());
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  // A screen binds its Commands once it has mounted and loaded.
+  await waitFor(() =>
+    expect(Object.keys(useBoundShortcutStore.getState().counts).length).toBeGreaterThan(0)
+  );
 }
 
 async function closeLeftoverDialogs() {
@@ -185,7 +188,7 @@ async function closeLeftoverDialogs() {
     const close = closers[topmost];
     if (!close) break;
     close();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await waitFor(() => expect(useModalStore.getState().modalIds).not.toContain(topmost));
   }
   const { modalIds } = useModalStore.getState();
   if (modalIds.length > 0) {
@@ -303,7 +306,9 @@ describe.sequential("navigating Commands (issue #319)", () => {
     // The Ephemeral create binding only exists with text in the buffer.
     if (screen === "/ephemeral") {
       useEphemeralStore.setState({ content: "<p>draft</p>", wordCount: 1 });
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await waitFor(() =>
+        expect(useBoundShortcutStore.getState().counts["ephemeral.createNote"]).toBeGreaterThan(0)
+      );
     }
     const bound = Object.keys(useBoundShortcutStore.getState().counts) as CommandId[];
 
@@ -314,7 +319,9 @@ describe.sequential("navigating Commands (issue #319)", () => {
       if (GOTO_TARGET[id] === path) continue;
       if (id === "ephemeral.createNote") {
         useEphemeralStore.setState({ content: "<p>draft</p>", wordCount: 1 });
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await waitFor(() =>
+          expect(useBoundShortcutStore.getState().counts["ephemeral.createNote"]).toBeGreaterThan(0)
+        );
       }
       // A previous run may have unbound this id (clearing the buffer
       // unbinds createNote); only judge live bindings.
@@ -329,6 +336,8 @@ describe.sequential("navigating Commands (issue #319)", () => {
         // time-budget: a Command that wrongly stays put must not wait 10 s per id.
         await waitFor(() => expect(path).not.toBe(before), { timeout: 5_000 }).catch(() => {});
       } else {
+        // Negative: the route must not move. No event marks a run that stays
+        // put, so this is the one counted wait; the fixed-wait guard keeps it.
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
       const after = path;
