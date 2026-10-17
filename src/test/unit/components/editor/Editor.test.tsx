@@ -1090,10 +1090,23 @@ describe("Editor", () => {
     expect(onUpdate).toHaveBeenCalledTimes(1);
     expect(onUpdate.mock.calls[0][0]).toContain("HelloW");
 
+    // Nothing is pending, so this flush must not save. The witness is a later
+    // change and flush on the same path: its save arrives after the no-op
+    // flush, so the exact call list proves the no-op flush saved nothing.
     act(() => {
       handle.current!.flush();
     });
-    expect(onUpdate).toHaveBeenCalledTimes(1);
+    act(() => {
+      editor!.chain().focus("end").insertContent("X").run();
+    });
+    act(() => {
+      handle.current!.flush();
+    });
+    expect(onUpdate).toHaveBeenCalledTimes(2);
+    expect(onUpdate.mock.calls.map(([html]) => html)).toEqual([
+      expect.stringContaining("HelloW"),
+      expect.stringContaining("HelloWX"),
+    ]);
   });
 
   it("flushes the pending burst when the editor unmounts", async () => {
