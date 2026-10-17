@@ -18,7 +18,7 @@
  */
 
 import type { PluginClient } from "@/plugin-sdk";
-import { type EchoPaletteId, parseEchoPalette } from "./colors";
+import { parseEchoPalette } from "./colors";
 import {
   DEFAULT_ECHO_SETTINGS,
   type EchoKind,
