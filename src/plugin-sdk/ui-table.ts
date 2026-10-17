@@ -600,8 +600,8 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     summary: "One row of a `Collection`, with an optional Item Menu and expanded panel.",
     props: {
       id: { kind: "string", required: true, maxLength: 512, description: "Stable row identity." },
-      label: { kind: "string", required: true, maxLength: 512, description: "The row's primary text." },
-      description: { kind: "string", maxLength: 1024 },
+      label: { kind: "string", required: true, maxLength: 512, description: "The row's primary text. It keeps its width; the description truncates first." },
+      description: { kind: "string", maxLength: 1024, description: "Secondary text. When the label or description is cut off, hovering or focusing the row shows both in full; an expanded row shows it wrapped." },
       isExpandable: { kind: "boolean", description: "Shows a toggle that reveals the row's panel." },
       isExpanded: { kind: "boolean" },
       isDisabled: { kind: "boolean" },

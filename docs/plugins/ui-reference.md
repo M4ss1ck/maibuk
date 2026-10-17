@@ -695,8 +695,8 @@ Props:
 | Name | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `id` | `string` | yes | At most 512 characters. Stable row identity. |
-| `label` | `string` | yes | At most 512 characters. The row's primary text. |
-| `description` | `string` | no | At most 1024 characters. |
+| `label` | `string` | yes | At most 512 characters. The row's primary text. It keeps its width; the description truncates first. |
+| `description` | `string` | no | At most 1024 characters. Secondary text. When the label or description is cut off, hovering or focusing the row shows both in full; an expanded row shows it wrapped. |
 | `isExpandable` | `boolean` | no | Shows a toggle that reveals the row's panel. |
 | `isExpanded` | `boolean` | no |  |
 | `isDisabled` | `boolean` | no |  |

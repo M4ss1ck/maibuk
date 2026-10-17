@@ -1069,4 +1069,139 @@ describe("the Remote UI kit, part 2", () => {
       expect(document.activeElement).toHaveAttribute("data-key", "r2");
     });
   });
+
+// Row labels (#527): the label keeps its natural width and the description
+// truncates first. jsdom has no layout, so the test marks which texts overflow.
+describe("collection row labels", () => {
+  const LONG_LABEL = "The Long Harbor Chronicles of the Northern Coast";
+  const LONG_DESCRIPTION = "Chapter 1 Opening, Chapter 4 Storm, Chapter 9 The Long Return, Chapter 12 Coda";
+  let overflowing = new Set<string>();
+
+  beforeEach(() => {
+    overflowing = new Set();
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return overflowing.has(this.textContent ?? "") ? 500 : 100;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get() {
+        return 100;
+      },
+    });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollWidth");
+    Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+  });
+
+  it("keeps a row's label visible when its description is long @ui:maibuk-collection-row", async () => {
+    harness = renderRemoteUi();
+    overflowing.add(LONG_DESCRIPTION);
+    await harness.mount(
+      <ui.Collection label="Echoes" selectionMode="none">
+        <ui.CollectionRow id="book" label={LONG_LABEL} description={LONG_DESCRIPTION} />
+      </ui.Collection>
+    );
+
+    const label = screen.getByText(LONG_LABEL);
+    expect(label).toBeVisible();
+    expect(label.className).toContain("shrink-0");
+    expect(label.className).toContain("max-w-[60%]");
+  });
+
+  it("shows the full label and description in a tooltip on hover when something is cut off @ui-kbd:maibuk-collection-row", async () => {
+    harness = renderRemoteUi();
+    overflowing.add(LONG_DESCRIPTION);
+    await harness.mount(
+      <ui.Collection label="Echoes" selectionMode="none">
+        <ui.CollectionRow id="book" label={LONG_LABEL} description={LONG_DESCRIPTION} />
+      </ui.Collection>
+    );
+
+    await userEvent.hover(screen.getByRole("option"));
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent(LONG_LABEL);
+    expect(tooltip).toHaveTextContent(LONG_DESCRIPTION);
+  });
+
+  it("shows the same tooltip on keyboard focus @ui-kbd:maibuk-collection-row", async () => {
+    harness = renderRemoteUi();
+    overflowing.add(LONG_LABEL);
+    await harness.mount(
+      <ui.Collection label="Echoes" selectionMode="none">
+        <ui.CollectionRow id="book" label={LONG_LABEL} description="Short" />
+      </ui.Collection>
+    );
+
+    await userEvent.tab();
+    expect(document.activeElement).toHaveAttribute("data-key", "book");
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent(LONG_LABEL);
+    expect(tooltip).toHaveTextContent("Short");
+  });
+
+  it("shows no tooltip when nothing is truncated @ui-kbd:maibuk-collection-row", async () => {
+    harness = renderRemoteUi();
+    await harness.mount(
+      <ui.Collection label="Echoes" selectionMode="none">
+        <ui.CollectionRow id="book" label="Short" description="Also short" />
+      </ui.Collection>
+    );
+
+    await userEvent.tab();
+    // The row tooltip opens without a delay on focus and hover, so once both
+    // have settled a fitting row has shown none.
+    await userEvent.hover(screen.getByRole("option"));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("wraps the full description when the row is expanded @ui-kbd:maibuk-collection-row", async () => {
+    harness = renderRemoteUi();
+    overflowing.add(LONG_DESCRIPTION);
+    function Plugin() {
+      const [expanded, setExpanded] = useState(false);
+      return (
+        <ui.Collection label="Echoes" selectionMode="none">
+          <ui.CollectionRow
+            id="book"
+            label={LONG_LABEL}
+            description={LONG_DESCRIPTION}
+            isExpandable
+            isExpanded={expanded}
+            onExpandedChange={(event) => setExpanded(event.detail)}
+          >
+            <ui.Text>Detail</ui.Text>
+          </ui.CollectionRow>
+        </ui.Collection>
+      );
+    }
+    await harness.mount(<Plugin />);
+
+    await userEvent.tab();
+    await userEvent.keyboard("{Enter}");
+
+    const description = await screen.findByText(LONG_DESCRIPTION);
+    expect(description).toBeVisible();
+    expect(description.className).toContain("whitespace-normal");
+    expect(description.className).not.toContain("truncate");
+  });
+
+  it("gives screen readers the full label and description @ui:maibuk-collection-row", async () => {
+    harness = renderRemoteUi();
+    overflowing.add(LONG_DESCRIPTION);
+    await harness.mount(
+      <ui.Collection label="Echoes" selectionMode="none">
+        <ui.CollectionRow id="book" label={LONG_LABEL} description={LONG_DESCRIPTION} />
+      </ui.Collection>
+    );
+
+    const option = screen.getByRole("option");
+    expect(option).toHaveAccessibleName(expect.stringContaining(LONG_LABEL));
+    expect(option).toHaveAccessibleName(expect.stringContaining(LONG_DESCRIPTION));
+  });
+});
 });

@@ -12,7 +12,7 @@
  * a type error, and the coverage gate fails when a table component has no test.
  */
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FieldError,
@@ -34,6 +34,18 @@ import { Button as AriaButton } from "react-aria-components/Button";
 import { Heading as AriaHeading } from "react-aria-components/Heading";
 import { ProgressBar as AriaProgressBar } from "react-aria-components/ProgressBar";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
+import {
+  FloatingPortal,
+  autoUpdate,
+  flip,
+  offset,
+  shift,
+  useDismiss,
+  useFloating,
+  useInteractions,
+  useMergeRefs,
+  useRole,
+} from "@floating-ui/react";
 import { DialogTrigger, Dialog, Popover as AriaPopover } from "react-aria-components/Popover";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
@@ -1137,6 +1149,36 @@ function CollectionRowHost({
   const { t } = useTranslation();
   const [expanded, setExpanded] = useMirroredOpen(isExpanded, onExpandedChange);
   const [menuOpen, setMenuOpen] = useState(false);
+  // The label keeps its natural width and the description truncates first
+  // (#527). Callback refs into state: React Aria renders a row's children into
+  // its collection before they reach the DOM, so a ref object read in an effect
+  // would still be null when the DOM attaches.
+  const [labelEl, setLabelEl] = useState<HTMLSpanElement | null>(null);
+  const [descriptionEl, setDescriptionEl] = useState<HTMLSpanElement | null>(null);
+  const [truncated, setTruncated] = useState(false);
+  useLayoutEffect(() => {
+    const measure = () => setTruncated(isTextOverflowing(labelEl) || isTextOverflowing(descriptionEl));
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    if (labelEl) observer.observe(labelEl);
+    if (descriptionEl) observer.observe(descriptionEl);
+    return () => observer.disconnect();
+  }, [labelEl, descriptionEl, label, description, expanded]);
+  // The tooltip is the row's own floating layer. The shared Tooltip wraps its
+  // child with click, key and pointer handlers that React Aria's listbox
+  // navigation does not tolerate. Hover and focus come from the option's props.
+  const [tipOpen, setTipOpen] = useState(false);
+  const tip = useFloating({
+    open: tipOpen && truncated,
+    onOpenChange: setTipOpen,
+    placement: "top",
+    whileElementsMounted: autoUpdate,
+    middleware: [offset(8), flip(), shift({ padding: 4 })],
+  });
+  const tipDismiss = useDismiss(tip.context);
+  const tipRole = useRole(tip.context, { role: "tooltip" });
+  const { getFloatingProps } = useInteractions([tipDismiss, tipRole]);
   const actions = (menuItems ?? []).map(
     // command-exempt: a Plugin row action runs the Plugin's own event, not a Maibuk Command (ADR 0019).
     (item) => ({
@@ -1153,16 +1195,21 @@ function CollectionRowHost({
     onOpen: () => setMenuOpen(true),
     isDisabled: actions.length === 0,
   });
+  const setRowRef = useMergeRefs([setOwnerRef, tip.refs.setReference]);
   return (
     <ListBoxItem
       // Key by the remote `id`: React Aria refuses to mutate an item's id in place, so a new id remounts the row.
       key={id}
-      ref={setOwnerRef}
+      ref={setRowRef}
       {...itemProps}
       id={id}
       textValue={label}
       isDisabled={isDisabled}
       aria-expanded={isExpandable ? expanded : undefined}
+      onHoverStart={() => setTipOpen(true)}
+      onHoverEnd={() => setTipOpen(false)}
+      onFocus={() => setTipOpen(true)}
+      onBlur={() => setTipOpen(false)}
       onAction={() => {
         if (isExpandable) {
           setExpanded(!expanded);
@@ -1180,9 +1227,16 @@ function CollectionRowHost({
     >
       <div className="flex items-center gap-2">
         {isExpandable ? <Chevron expanded={expanded} /> : null}
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        {description ? (
-          <span className="min-w-0 truncate text-sm text-muted-foreground">{description}</span>
+        <span
+          ref={setLabelEl}
+          className={description ? "min-w-0 max-w-[60%] shrink-0 truncate" : "min-w-0 flex-1 truncate"}
+        >
+          {label}
+        </span>
+        {description && !expanded ? (
+          <span ref={setDescriptionEl} className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+            {description}
+          </span>
         ) : null}
         {actions.length > 0 ? (
           <ItemActionsMenu
@@ -1193,9 +1247,29 @@ function CollectionRowHost({
           />
         ) : null}
       </div>
+      {expanded && description ? (
+        <div className="pl-7">
+          <span className="whitespace-normal break-words text-sm text-muted-foreground">{description}</span>
+        </div>
+      ) : null}
       {expanded && children ? <div className="pl-7 text-muted-foreground">{children}</div> : null}
+      {tipOpen && truncated ? (
+        <FloatingPortal>
+          <div ref={tip.refs.setFloating} className="z-60" style={tip.floatingStyles} {...getFloatingProps()}>
+            <div className="flex max-w-xs flex-col gap-0.5 whitespace-normal break-words rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-foreground shadow-lg">
+              <span>{label}</span>
+              {description ? <span className="text-muted-foreground">{description}</span> : null}
+            </div>
+          </div>
+        </FloatingPortal>
+      ) : null}
     </ListBoxItem>
   );
+}
+
+/** True when the element's text is cut off by its own `truncate` box. */
+function isTextOverflowing(element: HTMLElement | null): boolean {
+  return !!element && element.scrollWidth > element.clientWidth;
 }
 
 interface TableHostProps {
