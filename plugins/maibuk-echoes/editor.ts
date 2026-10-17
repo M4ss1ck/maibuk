@@ -374,6 +374,26 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     await notify(echoAnnouncement(state.list, index, t));
   }
 
+  /**
+   * A null focus is not proof the editor closed: a stale null can arrive after
+   * a cold-start toggle while the same editor is still focused (#529). So the
+   * controller resets only when the host confirms no editor is focused on its
+   * entity. A state that is already off has nothing to reset on the host side.
+   */
+  async function closeIfNoEditor(): Promise<void> {
+    if (!state.on && state.entity === null) return;
+    const content = await client.editor.getContent().catch(() => null);
+    if (
+      content !== null &&
+      content.status === "ok" &&
+      state.entity !== null &&
+      sameEntity(content.entity, state.entity)
+    ) {
+      return;
+    }
+    resetState();
+  }
+
   function listen<E extends PluginApiEventId>(
     event: E,
     handler: (payload: PluginApiEvents[E]) => void
@@ -393,7 +413,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     // is no editor left to clear and a later editor must never inherit this
     // one's ranges (#451).
     if (payload.entity === null) {
-      resetState();
+      void closeIfNoEditor();
       return;
     }
     // A different, non-null entity turns highlighting off and clears the kinds

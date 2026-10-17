@@ -93,15 +93,20 @@ function fakeClient(options: FakeOptions = {}) {
   let selection = options.selection === undefined ? { from: 0, to: 0 } : options.selection;
   let getContentCalls = 0;
   let gate: Promise<void> | null = null;
+  // Whether an editor is focused. Off models the editor having unmounted, which
+  // is what the host reports as `editor.focusChanged` with a null entity.
+  let focused = true;
 
   const client: EchoEditorClient = {
     editor: {
       async getContent() {
         getContentCalls++;
         if (gate !== null) await gate;
+        if (!focused) return { status: "no-target" };
         return { status: "ok", entity, content: { text, html: `<p>${text}</p>` } };
       },
       async getSelection() {
+        if (!focused) return { status: "no-target" };
         return selection === null
           ? { status: "no-target" }
           : { status: "ok", entity, range: selection, text: "" };
@@ -220,6 +225,9 @@ function fakeClient(options: FakeOptions = {}) {
     /** Every `toolbar.setPressed` value the controller sent, in order. */
     pressed,
     getContentCalls: () => getContentCalls,
+    setFocused(next: boolean) {
+      focused = next;
+    },
     setSelection(next: { from: number; to: number } | null) {
       selection = next;
     },
@@ -408,6 +416,25 @@ describe("refresh()", () => {
 });
 
 describe("focusChanged while on", () => {
+  it("keeps highlights on when a cold-start toggle is followed by a null focus while the editor is still focused", async () => {
+    // Echoes starts on demand, so the first toggle runs on a fresh controller.
+    // A stale null focus that arrives after the toggle set highlights on must
+    // not reset them: the editor is still focused, so nothing has closed.
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    expect(fake.pressed).toEqual([true]);
+    expect(fake.highlights.length).toBe(3);
+
+    fake.emit("editor.focusChanged", { entity: null });
+    await vi.waitFor(() => expect(fake.pressed).toEqual([true]));
+    expect(fake.pressed.at(-1)).toBe(true);
+    expect(fake.highlights.length).toBe(3);
+
+    await controller.nextEcho();
+    expect(fake.reveals.length).toBe(1);
+  });
+
   it("turns off and clears every kind for a different entity", async () => {
     const fake = fakeClient();
     const controller = createEchoEditor(fake.client);
@@ -434,6 +461,7 @@ describe("focusChanged while on", () => {
     // The host reports `null` only when the focused editor unmounts: there is no
     // editor left to clear, so nothing more is painted.
     // Synchronous, as above: the null focus only resets state, and paints nothing.
+    fake.setFocused(false);
     fake.emit("editor.focusChanged", { entity: null });
     expect(fake.highlights.length).toBe(3);
   });
@@ -445,9 +473,14 @@ describe("focusChanged while on", () => {
 
     // Close the editor, then reopen the same entity: highlighting starts off,
     // so its content change repaints nothing.
+    fake.setFocused(false);
     fake.emit("editor.focusChanged", { entity: null });
+    fake.setFocused(true);
     fake.emit("editor.focusChanged", { entity: fake.entity });
     fake.emit("editor.contentChanged", { entity: fake.entity });
+    // The null focus confirms the closed editor asynchronously; wait for its reset.
+    await vi.waitFor(() => expect(fake.pressed.at(-1)).toBe(false));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fake.highlights.length).toBe(3);
 
     await controller.nextEcho();
