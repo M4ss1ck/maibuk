@@ -80,6 +80,7 @@ function setup({ grantedAtStart, ...options }: SetupOptions = {}) {
     granted,
     onStop,
     port: channel.port2,
+    hostPort: channel.port1,
     advance(ms: number) {
       time += ms;
     },
@@ -95,6 +96,21 @@ function raw(port: MessagePort, data: unknown): Promise<HostToPluginMessage> {
       resolve(event.data as HostToPluginMessage);
     };
     port.postMessage(data);
+  });
+}
+
+/**
+ * Resolves once `data`, posted from the Plugin end, reaches the host end. Ports
+ * deliver in order, so every message posted before it has been dispatched by then.
+ */
+function reachesHost(hostPort: MessagePort, data: string): Promise<void> {
+  return new Promise((resolve) => {
+    hostPort.addEventListener("message", function onWitness(event: MessageEvent) {
+      if (event.data !== data) return;
+      hostPort.removeEventListener("message", onWitness);
+      resolve();
+    });
+    hostPort.start();
   });
 }
 
@@ -552,7 +568,6 @@ describe("call rate", () => {
     port.postMessage('{"kind":"reply","id":1,not json');
     // The same head again: no longer awaited, so it spends the last token.
     port.postMessage('{"kind":"reply","id":1,not json');
-    await new Promise((resolve) => setTimeout(resolve, 10));
     expect((await request).code).toBe("internal-error");
     const fresh = createPluginClient(port);
     expect((await refusal(fresh.storage.keys())).code).toBe("rate-limited");
@@ -886,16 +901,22 @@ describe("host requests", () => {
 describe("stopping", () => {
   it("rejects calls in flight and every later call with plugin-stopped", async () => {
     let release: () => void = () => {};
+    let entered: () => void = () => {};
+    const handlerEntered = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
     const { broker, client, onStop } = setup({
       handlers: {
-        "storage.keys": () =>
-          new Promise<string[]>((resolve) => {
+        "storage.keys": () => {
+          entered();
+          return new Promise<string[]>((resolve) => {
             release = () => resolve(["late"]);
-          }),
+          });
+        },
       },
     });
     const inFlight = client.storage.keys();
-    await new Promise((r) => setTimeout(r, 0));
+    await handlerEntered;
     broker.stop("requested");
     release();
     expect((await refusal(inFlight)).code).toBe("plugin-stopped");
@@ -914,10 +935,12 @@ describe("stopping", () => {
 
   it("stops handling messages once stopped", async () => {
     const keys = vi.fn(async () => ["a"]);
-    const { broker, port } = setup({ handlers: { "storage.keys": keys } });
+    const { broker, port, hostPort } = setup({ handlers: { "storage.keys": keys } });
     broker.stop("requested");
+    const witnessed = reachesHost(hostPort, "witness");
     port.postMessage(JSON.stringify({ kind: "call", id: 1, method: "storage.keys", params: {} }));
-    await new Promise((r) => setTimeout(r, 10));
+    port.postMessage("witness");
+    await witnessed;
     expect(keys).not.toHaveBeenCalled();
     expect(broker.stopped).toBe(true);
   });
@@ -926,21 +949,12 @@ describe("stopping", () => {
 describe("events", () => {
   const CHANGE = { entity: "book", id: "b1", origin: "local", kind: "content" } as const;
 
-  /** Resolves once the next event reaches the Plugin, or with null after a short wait. */
-  function nextEvent(listen: (fn: (payload: unknown) => void) => void): Promise<unknown> {
-    return new Promise((resolve) => {
-      listen(resolve);
-      setTimeout(() => resolve(null), 20);
-    });
-  }
-
   it("delivers an event the Plugin subscribed to and holds the Plugin Permission for", async () => {
     const { broker, client } = setup({ declared: ["library:read"] });
     const received: unknown[] = [];
     await client.on("library.changed", (payload) => received.push(payload));
     expect(broker.emit("library.changed", CHANGE)).toBe(true);
-    await expect(nextEvent(() => {})).resolves.toBe(null);
-    expect(received).toEqual([CHANGE]);
+    await vi.waitFor(() => expect(received).toEqual([CHANGE]));
   });
 
   it("delivers nothing the Plugin did not subscribe to", () => {
@@ -969,8 +983,8 @@ describe("events", () => {
 
   it("lets any Plugin subscribe to Library availability", async () => {
     const { broker, client } = setup();
-    const payload = nextEvent((fn) => {
-      void client.on("library.availabilityChanged", fn).then(() => {
+    const payload = new Promise((resolve) => {
+      void client.on("library.availabilityChanged", resolve).then(() => {
         broker.emit("library.availabilityChanged", { available: false });
       });
     });
@@ -992,16 +1006,16 @@ describe("events", () => {
     expect(seen).toEqual(["en"]);
 
     broker.emit("language.changed", { language: "es" });
-    await nextEvent(() => {});
-    expect(seen).toEqual(["en", "es"]);
+    await vi.waitFor(() => expect(seen).toEqual(["en", "es"]));
   });
 
   it("does not replay an event without a snapshot", async () => {
-    const { client } = setup();
+    const { broker, client } = setup();
     const seen: unknown[] = [];
     await client.on("library.availabilityChanged", (payload) => seen.push(payload));
-    await nextEvent(() => {});
-    expect(seen).toEqual([]);
+    expect(broker.emit("library.availabilityChanged", { available: false })).toBe(true);
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen).toEqual([{ available: false }]);
   });
 
   it("refuses an unknown event with unknown-method", async () => {
@@ -1020,9 +1034,9 @@ describe("events", () => {
     const offSecond = await client.on("library.changed", second);
     await offFirst();
     expect(broker.emit("library.changed", CHANGE)).toBe(true);
-    await nextEvent(() => {});
+    // second's call is the witness: the shared delivery reached every listener, first's included.
+    await vi.waitFor(() => expect(second).toHaveBeenCalledTimes(1));
     expect(first).not.toHaveBeenCalled();
-    expect(second).toHaveBeenCalledTimes(1);
     await offSecond();
     expect(broker.emit("library.changed", CHANGE)).toBe(false);
   });

@@ -51,7 +51,6 @@ export const FIXED_WAIT_BASELINE: Readonly<Record<string, number>> = {
   "src/test/unit/features/backup/backup-concurrency.test.ts": 2,
   "src/test/unit/features/dictation/session.test.ts": 2,
   "src/test/unit/features/metrics/metrics-sync.test.ts": 1,
-  "src/test/unit/features/plugins/broker.test.ts": 3,
   "src/test/unit/features/releases/release-check.test.ts": 1,
   "src/test/unit/features/sync/change-feed.test.ts": 1,
   "src/test/unit/features/sync/sync-concurrency.test.ts": 2,
