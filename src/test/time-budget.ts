@@ -53,7 +53,6 @@ export const FIXED_WAIT_BASELINE: Readonly<Record<string, number>> = {
   "src/test/unit/components/editor/LinkClickHandler.test.tsx": 1,
   "src/test/unit/components/editor/LinkPreviewLayer.test.tsx": 5,
   "src/test/unit/features/backup/backup-concurrency.test.ts": 2,
-  "src/test/unit/features/deep-link/bridge.test.ts": 25,
   "src/test/unit/features/dictation/session.test.ts": 2,
   "src/test/unit/features/metrics/metrics-sync.test.ts": 1,
   "src/test/unit/features/plugins/broker.test.ts": 3,

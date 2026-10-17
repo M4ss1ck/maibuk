@@ -41,12 +41,34 @@ vi.mock("@tauri-apps/api/window", () => ({
   }),
 }));
 
+/** A promise the test settles by hand, so the bridge's pending state is exact, not timed. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+/** Listeners the bridge registered through onOpenUrl, in registration order. */
+let openUrlListeners: Array<(urls: string[]) => void> = [];
+
+/** Waits until the bridge has registered its onOpenUrl listener, then returns it. */
+async function openUrlListener(): Promise<(urls: string[]) => void> {
+  await vi.waitFor(() => expect(openUrlListeners).toHaveLength(1));
+  return openUrlListeners[0];
+}
+
 describe("deep-link bridge", () => {
   beforeEach(async () => {
     vi.resetModules();
     platformState.isTauri = true;
     platformState.isDesktop = false;
-    tauriMocks.onOpenUrl.mockReset().mockImplementation(async () => async () => {});
+    openUrlListeners = [];
+    tauriMocks.onOpenUrl.mockReset().mockImplementation(async (cb: (urls: string[]) => void) => {
+      openUrlListeners.push(cb);
+      return async () => {};
+    });
     tauriMocks.getCurrent.mockReset().mockResolvedValue(null);
     tauriMocks.show.mockReset().mockResolvedValue(undefined);
     tauriMocks.setFocus.mockReset().mockResolvedValue(undefined);
@@ -69,252 +91,214 @@ describe("deep-link bridge", () => {
   });
 
   it("suppresses only the buffered replay, not future identical", async () => {
-    let captured: (urls: string[]) => void = () => {};
-    tauriMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
-      captured = cb;
-      return async () => {};
-    });
-    tauriMocks.getCurrent.mockImplementation(
-      () => new Promise<string[] | null>((res) => setTimeout(() => res(["maibuk://note/n1"]), 30))
-    );
+    const current = deferred<string[] | null>();
+    tauriMocks.getCurrent.mockImplementation(() => current.promise);
     const { installDeepLinkBridge, getDeepLinkBootstrap, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    const handler = vi.fn(async () => {});
+    const handler = vi.fn(async (_urls: string[]) => {});
     const bootstrapPromise = getDeepLinkBootstrap();
-    await new Promise((r) => setTimeout(r, 5));
-    await captured(["maibuk://note/n1"]);
+    const emit = await openUrlListener();
+    // Arrives while bootstrap is pending: buffered, then replayed once and suppressed.
+    await emit(["maibuk://note/n1"]);
+    current.resolve(["maibuk://note/n1"]);
     await bootstrapPromise;
     await installDeepLinkBridge(handler);
     releaseDeepLinkQueue();
-    await new Promise((r) => setTimeout(r, 10));
-    expect(handler).not.toHaveBeenCalled();
-    await captured(["maibuk://note/n1"]);
-    await new Promise((r) => setTimeout(r, 10));
-    expect(handler).toHaveBeenCalledTimes(1);
+    // A future identical batch must be delivered. The FIFO queue runs any
+    // replayed batch before this one, so the exact call list below also proves
+    // the replay was never delivered.
+    await emit(["maibuk://note/n1"]);
+    await emit(["maibuk://note/n2"]);
+    await vi.waitFor(() => expect(handler).toHaveBeenLastCalledWith(["maibuk://note/n2"]));
+    expect(handler.mock.calls).toEqual([[["maibuk://note/n1"]], [["maibuk://note/n2"]]]);
   });
 
   it("FIFO ordering", async () => {
-    let captured: (urls: string[]) => void = () => {};
-    tauriMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
-      captured = cb;
-      return async () => {};
+    const events: string[] = [];
+    const firstGate = deferred<void>();
+    const handler = vi.fn(async (urls: string[]) => {
+      const label = urls[0].endsWith("first") ? "first" : "second";
+      events.push(`start:${label}`);
+      if (label === "first") await firstGate.promise;
+      events.push(`end:${label}`);
     });
-    tauriMocks.getCurrent.mockResolvedValue(null);
     const { installDeepLinkBridge, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    const order: string[] = [];
-    const handler = vi.fn(async (urls: string[]) => {
-      const delay = urls[0].includes("first") ? 30 : 10;
-      await new Promise((r) => setTimeout(r, delay));
-      order.push(urls[0]);
-    });
     await installDeepLinkBridge(handler);
-    // Need to release to allow processing
     releaseDeepLinkQueue();
-    await captured(["maibuk://note/first"]);
-    await captured(["maibuk://note/second"]);
-    await new Promise((r) => setTimeout(r, 120));
-    expect(order).toEqual(["maibuk://note/first", "maibuk://note/second"]);
+    const emit = await openUrlListener();
+    await emit(["maibuk://note/first"]);
+    await emit(["maibuk://note/second"]);
+    await vi.waitFor(() => expect(events).toEqual(["start:first"]));
+    firstGate.resolve();
+    // Exact sequence: second must not start until first has ended.
+    await vi.waitFor(() =>
+      expect(events).toEqual(["start:first", "end:first", "start:second", "end:second"])
+    );
   });
 
   it("never permanently deduplicates", async () => {
-    let captured: (urls: string[]) => void = () => {};
-    tauriMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
-      captured = cb;
-      return async () => {};
-    });
-    tauriMocks.getCurrent.mockImplementation(
-      () => new Promise<string[] | null>((res) => setTimeout(() => res(["maibuk://book/b1"]), 30))
-    );
+    const current = deferred<string[] | null>();
+    tauriMocks.getCurrent.mockImplementation(() => current.promise);
     const { installDeepLinkBridge, getDeepLinkBootstrap, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    const handler = vi.fn(async () => {});
-    const p = getDeepLinkBootstrap();
-    await new Promise((r) => setTimeout(r, 5));
-    await captured(["maibuk://book/b1"]);
-    await p;
+    const handler = vi.fn(async (_urls: string[]) => {});
+    const bootstrapPromise = getDeepLinkBootstrap();
+    const emit = await openUrlListener();
+    await emit(["maibuk://book/b1"]);
+    current.resolve(["maibuk://book/b1"]);
+    await bootstrapPromise;
     await installDeepLinkBridge(handler);
     releaseDeepLinkQueue();
-    await new Promise((r) => setTimeout(r, 10));
-    expect(handler).not.toHaveBeenCalled();
-    await captured(["maibuk://book/b1"]);
-    await new Promise((r) => setTimeout(r, 10));
-    expect(handler).toHaveBeenCalledTimes(1);
-    await captured(["maibuk://book/b1"]);
-    await new Promise((r) => setTimeout(r, 10));
-    expect(handler).toHaveBeenCalledTimes(2);
+    // Three identical batches must all be delivered; the witness is FIFO-ordered
+    // after them, so the exact list shows the replay was dropped and nothing was deduplicated.
+    await emit(["maibuk://book/b1"]);
+    await emit(["maibuk://book/b1"]);
+    await emit(["maibuk://book/b1"]);
+    await emit(["maibuk://book/b2"]);
+    await vi.waitFor(() => expect(handler).toHaveBeenLastCalledWith(["maibuk://book/b2"]));
+    expect(handler.mock.calls).toEqual([
+      [["maibuk://book/b1"]],
+      [["maibuk://book/b1"]],
+      [["maibuk://book/b1"]],
+      [["maibuk://book/b2"]],
+    ]);
   });
 
   it("event arriving while getCurrent pending is buffered until release", async () => {
-    let captured: (urls: string[]) => void = () => {};
-    tauriMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
-      captured = cb;
-      return async () => {};
-    });
-    tauriMocks.getCurrent.mockImplementation(
-      () =>
-        new Promise<string[] | null>((res) =>
-          setTimeout(() => res(["maibuk://note/bootstrap"]), 50)
-        )
-    );
+    const current = deferred<string[] | null>();
+    tauriMocks.getCurrent.mockImplementation(() => current.promise);
     const { getDeepLinkBootstrap, installDeepLinkBridge, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    const handler = vi.fn(async () => {});
+    const handler = vi.fn(async (_urls: string[]) => {});
     const bootstrapPromise = getDeepLinkBootstrap();
-    await new Promise((r) => setTimeout(r, 10));
-    await captured(["maibuk://note/warm-while-pending"]);
-    expect(handler).not.toHaveBeenCalled();
+    const emit = await openUrlListener();
+    await emit(["maibuk://note/warm-while-pending"]);
+    current.resolve(["maibuk://note/bootstrap"]);
     await bootstrapPromise;
+    expect(handler).not.toHaveBeenCalled();
     await installDeepLinkBridge(handler);
-    // Before release, handler should not have been called
-    await new Promise((r) => setTimeout(r, 10));
+    // Install resolves after the bridge's synchronous drain step, so a delivery
+    // without release would already have happened.
     expect(handler).not.toHaveBeenCalled();
     releaseDeepLinkQueue();
-    await new Promise((r) => setTimeout(r, 20));
-    expect(handler).toHaveBeenCalledWith(["maibuk://note/warm-while-pending"]);
+    await vi.waitFor(() =>
+      expect(handler).toHaveBeenCalledWith(["maibuk://note/warm-while-pending"])
+    );
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 
   it("StrictMode remount delivers to current handler exactly once", async () => {
-    let captured: (urls: string[]) => void = () => {};
-    tauriMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
-      captured = cb;
-      return async () => {};
-    });
     const { installDeepLinkBridge, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    const handlerA = vi.fn(async () => {});
-    const handlerB = vi.fn(async () => {});
+    const handlerA = vi.fn(async (_urls: string[]) => {});
+    const handlerB = vi.fn(async (_urls: string[]) => {});
     await installDeepLinkBridge(handlerA);
     await installDeepLinkBridge(handlerB);
     releaseDeepLinkQueue();
     expect(tauriMocks.onOpenUrl).toHaveBeenCalledTimes(1);
-    await captured(["maibuk://note/n1"]);
-    await new Promise((r) => setTimeout(r, 10));
+    const emit = await openUrlListener();
+    await emit(["maibuk://note/n1"]);
+    await vi.waitFor(() => expect(handlerB).toHaveBeenCalledTimes(1));
     expect(handlerA).not.toHaveBeenCalled();
-    expect(handlerB).toHaveBeenCalledTimes(1);
   });
 
   it("cold A pending, warm B buffered, B not called before release and is final after release", async () => {
-    let captured: (urls: string[]) => void = () => {};
-    tauriMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
-      captured = cb;
-      return async () => {};
-    });
-    tauriMocks.getCurrent.mockImplementation(
-      () =>
-        new Promise<string[] | null>((res) => setTimeout(() => res(["maibuk://note/coldA"]), 40))
-    );
+    const current = deferred<string[] | null>();
+    tauriMocks.getCurrent.mockImplementation(() => current.promise);
     const { getDeepLinkBootstrap, installDeepLinkBridge, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    const handler = vi.fn(async () => {});
+    const handler = vi.fn(async (_urls: string[]) => {});
     const bootstrapPromise = getDeepLinkBootstrap();
-    await new Promise((r) => setTimeout(r, 10));
-    await captured(["maibuk://note/warmB"]);
-    await installDeepLinkBridge(handler);
-    // Before release, handler should not be called even after bootstrap
+    const emit = await openUrlListener();
+    await emit(["maibuk://note/warmB"]);
+    const installPromise = installDeepLinkBridge(handler);
+    current.resolve(["maibuk://note/coldA"]);
+    await installPromise;
     await bootstrapPromise;
-    await new Promise((r) => setTimeout(r, 10));
+    // Install and bootstrap have both settled; the gate is still closed.
     expect(handler).not.toHaveBeenCalled();
-    // Simulate StartupRedirect handling cold A then releasing
+    // StartupRedirect consumes cold A, then the queue is released.
     const coldBootstrap = await getDeepLinkBootstrap();
     expect(coldBootstrap).toEqual(["maibuk://note/coldA"]);
-    // Release now
     releaseDeepLinkQueue();
-    await new Promise((r) => setTimeout(r, 20));
-    expect(handler).toHaveBeenCalledWith(["maibuk://note/warmB"]);
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledWith(["maibuk://note/warmB"]));
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
   it("unconsumed bootstrap is delivered via queue when gate released without getDeepLinkBootstrap", async () => {
-    let captured: (urls: string[]) => void = () => {};
-    tauriMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
-      captured = cb;
-      return async () => {};
-    });
     tauriMocks.getCurrent.mockResolvedValue(["maibuk://note/coldUnconsumed"]);
     const { installDeepLinkBridge, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    const handler = vi.fn(async () => {});
+    const handler = vi.fn(async (_urls: string[]) => {});
     await installDeepLinkBridge(handler);
-    // bootstrap settled but never consumed via getDeepLinkBootstrap
-    await new Promise((r) => setTimeout(r, 10));
+    // Bootstrap has settled but was never consumed; the gate is still closed.
     expect(handler).not.toHaveBeenCalled();
     releaseDeepLinkQueue();
-    await new Promise((r) => setTimeout(r, 20));
-    expect(handler).toHaveBeenCalledWith(["maibuk://note/coldUnconsumed"]);
-    // second release does not deliver again
+    await vi.waitFor(() =>
+      expect(handler).toHaveBeenCalledWith(["maibuk://note/coldUnconsumed"])
+    );
+    // Second release must not deliver the bootstrap again. The witness batch is
+    // sent after it, so the exact call list shows nothing was redelivered.
     handler.mockClear();
     releaseDeepLinkQueue();
-    await new Promise((r) => setTimeout(r, 10));
-    expect(handler).not.toHaveBeenCalled();
-    void captured;
+    const emit = await openUrlListener();
+    await emit(["maibuk://note/witness"]);
+    await vi.waitFor(() => expect(handler).toHaveBeenLastCalledWith(["maibuk://note/witness"]));
+    expect(handler.mock.calls).toEqual([[["maibuk://note/witness"]]]);
   });
 
   it("uninstalled handler leaves batches buffered until reinstall", async () => {
-    let captured: (urls: string[]) => void = () => {};
-    tauriMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
-      captured = cb;
-      return async () => {};
-    });
     tauriMocks.getCurrent.mockResolvedValue(null);
     const { installDeepLinkBridge, uninstallDeepLinkBridge, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    const handlerA = vi.fn(async () => {});
+    const handlerA = vi.fn(async (_urls: string[]) => {});
     await installDeepLinkBridge(handlerA);
     releaseDeepLinkQueue();
-    await new Promise((r) => setTimeout(r, 10));
     // uninstall simulates DeepLinkHandler unmount
     uninstallDeepLinkBridge();
-    await captured(["maibuk://note/buffered"]);
-    await new Promise((r) => setTimeout(r, 10));
-    expect(handlerA).not.toHaveBeenCalled();
+    const emit = await openUrlListener();
+    await emit(["maibuk://note/buffered"]);
     // reinstall with new handler should receive buffered batch
-    const handlerB = vi.fn(async () => {});
+    const handlerB = vi.fn(async (_urls: string[]) => {});
     await installDeepLinkBridge(handlerB);
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => expect(handlerB).toHaveBeenCalledTimes(1));
     expect(handlerB).toHaveBeenCalledWith(["maibuk://note/buffered"]);
-    expect(handlerB).toHaveBeenCalledTimes(1);
+    expect(handlerA).not.toHaveBeenCalled();
   });
 
   it("uninstall clears handlerRef so processQueue stops draining", async () => {
-    let captured: (urls: string[]) => void = () => {};
-    tauriMocks.onOpenUrl.mockImplementation(async (cb: (urls: string[]) => void) => {
-      captured = cb;
-      return async () => {};
-    });
     tauriMocks.getCurrent.mockResolvedValue(null);
     const { installDeepLinkBridge, uninstallDeepLinkBridge, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    let resolveFirst: () => void = () => {};
-    const handlerA = vi.fn(
-      () =>
-        new Promise<void>((res) => {
-          resolveFirst = res;
-        })
-    );
+    const firstDone = deferred<void>();
+    const handlerA = vi.fn((_urls: string[]) => firstDone.promise);
     await installDeepLinkBridge(handlerA);
     releaseDeepLinkQueue();
-    await captured(["maibuk://note/first"]);
-    // handlerA now processing, uninstall during processing
-    await new Promise((r) => setTimeout(r, 5));
+    const emit = await openUrlListener();
+    await emit(["maibuk://note/first"]);
+    await vi.waitFor(() => expect(handlerA).toHaveBeenCalledTimes(1));
+    // handlerA is still processing when the handler is uninstalled.
     uninstallDeepLinkBridge();
-    await captured(["maibuk://note/second"]);
-    resolveFirst();
-    await new Promise((r) => setTimeout(r, 20));
-    expect(handlerA).toHaveBeenCalledTimes(1);
+    await emit(["maibuk://note/second"]);
+    firstDone.resolve();
+    // The drain loop registered its continuation on this promise before the
+    // test did, so the loop has checked handlerRef (now null) before we go on.
+    await firstDone.promise;
     // second batch should remain buffered
-    const handlerB = vi.fn(async () => {});
+    const handlerB = vi.fn(async (_urls: string[]) => {});
     await installDeepLinkBridge(handlerB);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(handlerB).toHaveBeenCalledWith(["maibuk://note/second"]);
+    await vi.waitFor(() => expect(handlerB).toHaveBeenCalledWith(["maibuk://note/second"]));
+    expect(handlerB).toHaveBeenCalledTimes(1);
+    expect(handlerA).toHaveBeenCalledTimes(1);
   });
 });
