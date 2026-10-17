@@ -41,3 +41,16 @@ export function quickJsWasmMaximumPages(heapCapBytes: number): number {
  * contain "out of memory".
  */
 export const QUICKJS_MEMORY_DEATH_MESSAGE = "QuickJS out of memory";
+
+/**
+ * How close to the heap cap a turn may end before the run is declared dead
+ * (#516, decision 1a). QuickJS fails an allocation only when `used + size`
+ * passes the cap, and an out-of-memory raised inside an async function becomes
+ * a rejected promise that nothing reports: quickjs-emscripten 0.32 has no
+ * promise rejection tracker. Reading the heap after every turn catches that
+ * case. The margin is sized above a typical single-turn allocation (a 10,000
+ * element array is about 80 KiB), so the check fires before the allocation that
+ * would have failed, and it is 1/256 of the default 64 MB cap, so a Plugin using
+ * the heap normally never sits inside it.
+ */
+export const QUICKJS_MEMORY_DEATH_MARGIN_BYTES = 256 * 1024;

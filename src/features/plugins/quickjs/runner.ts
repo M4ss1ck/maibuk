@@ -24,6 +24,7 @@ import {
 } from "@/features/plugins/quickjs/bridge";
 import {
   QUICKJS_HEAP_CAP_BYTES,
+  QUICKJS_MEMORY_DEATH_MARGIN_BYTES,
   QUICKJS_WASM_INITIAL_PAGES,
   quickJsWasmMaximumPages,
 } from "@/features/plugins/quickjs/constants";
@@ -245,10 +246,44 @@ export function runQuickJsPlugin(options: QuickJsRunOptions): QuickJsPluginRun {
     return { message, memoryDeath };
   }
 
+  /**
+   * Runs every pending job, one at a time, checking the heap before each one.
+   * An out-of-memory raised inside an async function rejects that function's
+   * promise, which nothing reports, and the rejection frees the function's locals
+   * in the same job: the heap reads low again once the turn ends. The check must
+   * run between jobs, while the allocations that exhausted the cap still count.
+   */
   function drainJobs(): void {
+    runPendingJobs();
+  }
+
+  /** The heap usage the engine reports, or null when the run is gone. */
+  function heapUsedBytes(): number | null {
+    if (runtime === null || context === null) return null;
+    const usage = runtime.computeMemoryUsage();
+    try {
+      const dumped = context.dump(usage);
+      if (typeof dumped !== "object" || dumped === null) return null;
+      const used = (dumped as { memory_used_size?: unknown }).memory_used_size;
+      return typeof used === "number" ? used : null;
+    } finally {
+      if (usage.alive) usage.dispose();
+    }
+  }
+
+  function checkHeapWatermark(): void {
+    if (disposed || memoryDeathHandled) return;
+    const used = heapUsedBytes();
+    if (used === null) return;
+    if (used >= memoryCapBytes - QUICKJS_MEMORY_DEATH_MARGIN_BYTES) dieOfMemory();
+  }
+
+  function runPendingJobs(): void {
     if (disposed || runtime === null || context === null) return;
     for (;;) {
-      const result = runtime.executePendingJobs();
+      checkHeapWatermark();
+      if (disposed || memoryDeathHandled || runtime === null) return;
+      const result = runtime.executePendingJobs(1);
       if (result.error) {
         const { message, memoryDeath } = readError(result.error);
         result.error.dispose();

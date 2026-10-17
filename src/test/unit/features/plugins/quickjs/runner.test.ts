@@ -527,6 +527,45 @@ describe("runQuickJsPlugin()", () => {
       self.postMessage(text.length);`);
   });
 
+  it("ends as memory-death, once, when an async allocation loop exhausts the cap", async () => {
+    // The out-of-memory is raised inside an async function, so QuickJS turns it
+    // into a rejected promise nothing reports. The per-turn heap check is what
+    // ends the run (#516, decision 1a).
+    await expectMemoryDeath(`async function grow() {
+        const held = [];
+        for (;;) { held.push(new Array(10000).fill(1)); await 0; }
+      }
+      // The rejection is never awaited, as in the conformance T8 Plugin, so
+      // only the per-turn heap check can end the run.
+      grow().catch(() => {});`);
+  });
+
+  it("never kills a Plugin that allocates well under the cap", async () => {
+    const endpoint = new EndpointDouble();
+    const onMemoryDeath = vi.fn();
+    const run = runQuickJsPlugin({
+      sources: {
+        "index.js": `async function grow() {
+            const held = [];
+            for (let i = 0; i < 10; i++) { held.push(new Array(10000).fill(1)); await 0; }
+            self.postMessage(held.length);
+          }
+          await grow();`,
+      },
+      entry: "index.js",
+      endpoint,
+      memoryCapBytes: 2 * 1024 * 1024,
+      onMemoryDeath,
+    });
+    try {
+      await expect(run.outcome).resolves.toEqual({ kind: "ready" });
+      expect(endpoint.messages).toEqual([10]);
+      expect(onMemoryDeath).not.toHaveBeenCalled();
+    } finally {
+      run.dispose();
+    }
+  });
+
   it("reports a top-level throw as an error, never as memory death", async () => {
     const endpoint = new EndpointDouble();
     const onMemoryDeath = vi.fn();
