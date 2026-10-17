@@ -1098,7 +1098,6 @@ const PALETTE_LABEL: Readonly<Record<EchoPaletteId, EchoKey>> = {
  * recompute, so an open editor updates at once. Labels come from the runtime
  * catalogs.
  */
-
 function createDetectionSettings(
   client: PluginClient,
   editor: Pick<EchoEditorController, "refresh">
@@ -1159,17 +1158,15 @@ function createDetectionSettings(
       setEditorKinds((current) => toggledEditorKind(current, kind));
     }, []);
 
-    // The color switch is stored and repaints an open editor at once (#532).
+    // The color switch and the Palette are stored and repaint an open editor at
+    // once (#532, #533). Both are written together: each write is idempotent.
     useEffect(() => {
       if (!hydrated.current) return;
-      void writeColorByEcho(client, colorByEcho).then(() => editor.refresh());
-    }, [client, editor, colorByEcho]);
-
-    // The Palette is stored and repaints an open editor at once (#533).
-    useEffect(() => {
-      if (!hydrated.current) return;
-      void writeEchoPalette(client, palette).then(() => editor.refresh());
-    }, [client, editor, palette]);
+      void Promise.all([
+        writeColorByEcho(client, colorByEcho),
+        writeEchoPalette(client, palette),
+      ]).then(() => editor.refresh());
+    }, [client, editor, colorByEcho, palette]);
 
     return (
       <ui.View direction="column" gap="md">

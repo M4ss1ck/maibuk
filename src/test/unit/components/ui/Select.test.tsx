@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Select } from "@/components/ui/Select";
 
@@ -142,6 +142,27 @@ describe("Select", () => {
     it("keeps the label as the name when no accessible name is given", () => {
       render(<Select value="apple" onChange={() => {}} options={options} ariaLabel="Fruit" />);
       expect(screen.getByRole("button")).toHaveAccessibleName(/apple/i);
+    });
+
+    it("names the selected value in full when it also has swatches", () => {
+      const swatchedOptions = [
+        {
+          value: "okabe",
+          label: "Okabe-Ito",
+          accessibleName: "Okabe-Ito colorblind-safe palette",
+          swatches: ["#e69f00", "#56b4e9"],
+        },
+      ];
+      render(
+        <Select value="okabe" onChange={() => {}} options={swatchedOptions} ariaLabel="Palette" />
+      );
+
+      const trigger = screen.getByRole("button");
+      expect(trigger).toHaveAccessibleName(/Okabe-Ito colorblind-safe palette/);
+      expect(within(trigger).getByText("Okabe-Ito colorblind-safe palette")).toHaveClass("sr-only");
+      expect(
+        within(trigger).getByText("Okabe-Ito", { selector: '[aria-hidden="true"]' })
+      ).toBeInTheDocument();
     });
   });
 

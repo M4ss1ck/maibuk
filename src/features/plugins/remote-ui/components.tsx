@@ -1179,6 +1179,15 @@ function CollectionRowHost({
   const tipDismiss = useDismiss(tip.context);
   const tipRole = useRole(tip.context, { role: "tooltip" });
   const { getFloatingProps } = useInteractions([tipDismiss, tipRole]);
+  const tipId = useId();
+  // React Aria's option props own `aria-describedby` and drop a prop passed to
+  // ListBoxItem, so the link is set on the row element while the tooltip shows.
+  useLayoutEffect(() => {
+    const row = tip.refs.domReference.current;
+    if (!(row instanceof HTMLElement) || !tipOpen || !truncated) return;
+    row.setAttribute("aria-describedby", tipId);
+    return () => row.removeAttribute("aria-describedby");
+  }, [tip.refs.domReference, tipOpen, truncated, tipId]);
   const actions = (menuItems ?? []).map(
     // command-exempt: a Plugin row action runs the Plugin's own event, not a Maibuk Command (ADR 0019).
     (item) => ({
@@ -1255,7 +1264,13 @@ function CollectionRowHost({
       {expanded && children ? <div className="pl-7 text-muted-foreground">{children}</div> : null}
       {tipOpen && truncated ? (
         <FloatingPortal>
-          <div ref={tip.refs.setFloating} className="z-60" style={tip.floatingStyles} {...getFloatingProps()}>
+          <div
+            ref={tip.refs.setFloating}
+            className="z-60"
+            style={tip.floatingStyles}
+            {...getFloatingProps()}
+            id={tipId}
+          >
             <div className="flex max-w-xs flex-col gap-0.5 whitespace-normal break-words rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-foreground shadow-lg">
               <span>{label}</span>
               {description ? <span className="text-muted-foreground">{description}</span> : null}

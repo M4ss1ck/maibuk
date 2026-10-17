@@ -1128,6 +1128,28 @@ describe("collection row labels", () => {
     expect(tooltip).toHaveTextContent(LONG_DESCRIPTION);
   });
 
+  it("describes the row by its tooltip while the tooltip is shown @ui-kbd:maibuk-collection-row", async () => {
+    harness = renderRemoteUi();
+    overflowing.add(LONG_LABEL);
+    await harness.mount(
+      <ui.Collection label="Echoes" selectionMode="none">
+        <ui.CollectionRow id="book" label={LONG_LABEL} description="Short" />
+      </ui.Collection>
+    );
+
+    const row = screen.getByRole("option");
+    expect(row).not.toHaveAttribute("aria-describedby");
+    await userEvent.hover(row);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveAttribute("id");
+    expect(row).toHaveAttribute("aria-describedby", tooltip.id);
+    expect(row).toHaveAccessibleDescription(expect.stringContaining(LONG_LABEL));
+
+    await userEvent.unhover(row);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+    expect(row).not.toHaveAttribute("aria-describedby");
+  });
+
   it("shows the same tooltip on keyboard focus @ui-kbd:maibuk-collection-row", async () => {
     harness = renderRemoteUi();
     overflowing.add(LONG_LABEL);

@@ -18,7 +18,7 @@
  */
 
 import type { PluginClient } from "@/plugin-sdk";
-import { type EchoPaletteId, parseEchoPalette } from "./colors";
+import { parseEchoPalette } from "./colors";
 import {
   DEFAULT_ECHO_SETTINGS,
   type EchoKind,
@@ -202,41 +202,34 @@ export function parseColorByEcho(value: unknown): boolean {
   return value === true;
 }
 
-/** Reads the color switch, off when the key is unset or the read fails (#532). */
-export async function readColorByEcho(client: EchoesStorage): Promise<boolean> {
-  try {
-    return parseColorByEcho(await client.storage.get({ key: ECHOES_COLOR_KEY }));
-  } catch {
-    return false;
-  }
+/**
+ * One value stored under its own key: read with the parser's default when the
+ * key is unset or the read fails, written best-effort so a refused write never
+ * breaks the Settings row.
+ */
+function keyedSetting<T>(key: string, parse: (value: unknown) => T) {
+  return {
+    async read(client: EchoesStorage): Promise<T> {
+      try {
+        return parse(await client.storage.get({ key }));
+      } catch {
+        return parse(undefined);
+      }
+    },
+    async write(client: EchoesStorage, value: T): Promise<void> {
+      try {
+        await client.storage.set({ key, value });
+      } catch {
+        // Storage is best-effort: a refused write must not break the Settings row.
+      }
+    },
+  };
 }
 
-/** Stores the color switch under its own key; a refused write is ignored (#532). */
-export async function writeColorByEcho(client: EchoesStorage, on: boolean): Promise<void> {
-  try {
-    await client.storage.set({ key: ECHOES_COLOR_KEY, value: on });
-  } catch {
-    // Storage is best-effort: a refused write must not break the Settings row.
-  }
-}
+const colorByEchoSetting = keyedSetting(ECHOES_COLOR_KEY, parseColorByEcho);
+const echoPaletteSetting = keyedSetting(ECHOES_PALETTE_KEY, parseEchoPalette);
 
-/** Reads the Echo color Palette, the default when unset, unknown, or the read fails (#533). */
-export async function readEchoPalette(client: EchoesStorage): Promise<EchoPaletteId> {
-  try {
-    return parseEchoPalette(await client.storage.get({ key: ECHOES_PALETTE_KEY }));
-  } catch {
-    return parseEchoPalette(undefined);
-  }
-}
-
-/** Stores the Echo color Palette under its own key; a refused write is ignored (#533). */
-export async function writeEchoPalette(
-  client: EchoesStorage,
-  palette: EchoPaletteId
-): Promise<void> {
-  try {
-    await client.storage.set({ key: ECHOES_PALETTE_KEY, value: palette });
-  } catch {
-    // Storage is best-effort: a refused write must not break the Settings row.
-  }
-}
+export const readColorByEcho = colorByEchoSetting.read;
+export const writeColorByEcho = colorByEchoSetting.write;
+export const readEchoPalette = echoPaletteSetting.read;
+export const writeEchoPalette = echoPaletteSetting.write;

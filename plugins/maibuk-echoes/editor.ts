@@ -400,12 +400,8 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     await notify(echoAnnouncement(state.list, index, t));
   }
 
-  /**
-   * A null focus is not proof the editor closed: a stale null can arrive after
-   * a cold-start toggle while the same editor is still focused (#529). So the
-   * controller resets only when the host confirms no editor is focused on its
-   * entity. A state that is already off has nothing to reset on the host side.
-   */
+  // A stale null can arrive while the same editor is still focused (#529), so
+  // reset only when the host confirms no editor has focus on this entity.
   async function closeIfNoEditor(): Promise<void> {
     if (!state.on && state.entity === null) return;
     const epoch = focusEpoch;

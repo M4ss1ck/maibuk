@@ -34,7 +34,7 @@ export function PluginIcon({ icon, className }: { icon?: PluginIconSpec; classNa
   return <Puzzle className={className} />;
 }
 
-/** The app icon attributes: currentColor stroke, width 2, round caps and joins, no fill. */
+// Stroke attributes match the app's own icons, so an inline icon is drawn the same way.
 function InlineIconSvg({ icon, className }: { icon: InlineIcon; className?: string }) {
   return (
     <svg
