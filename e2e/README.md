@@ -458,14 +458,15 @@ input a parser fixture is refreshed from.
 `pnpm conformance:plugins` measures the real Plugin sandbox on the native
 engines (issue #447). It builds the app with the test-only flag
 `VITE_PLUGIN_CONFORMANCE=1`, whose route drives the *real* runtime, sandbox,
-Worker, broker, and lifecycle against the `fixture-hostile` Plugin and posts
-every check to a local collector. It proves T2 (no Tauri IPC from the sandboxed
-frame or the Worker), T7 (the busy loop is stopped as unresponsive), T8 (the
-yielding allocation stops the Worker with a memory reason while the host
-renderer survives), and every escape (the Plugin gets a typed refusal, a stop,
-or an ignored forged reply, and the collector logs no request from it). It sits
-beside the other periodic lanes (`bench:frames`, `bench:palette`): run it before
-a release and whenever Tauri or wry moves, never in CI.
+Worker, broker, and lifecycle against the `fixture-hostile` Plugin and a healthy
+`fixture-healthy` neighbour, and posts every check to a local collector. It
+proves T2 (no Tauri IPC from the sandboxed frame or the Worker), T7 (the busy
+loop is stopped as unresponsive), T8 (the yielding allocation stops the Worker
+with a memory reason while the host renderer and the healthy neighbour survive),
+and every escape (the Plugin gets a typed refusal, a stop, or an ignored forged
+reply, and the collector logs no request from it). It sits beside the other
+periodic lanes (`bench:frames`, `bench:palette`): run it before a release and
+whenever Tauri or wry moves, never in CI.
 
 It needs a display and WebKitGTK (`libwebkit2gtk-4.1-dev`, `pkg-config
 webkit2gtk-4.1`) for the Linux half, and one adb device (or `ANDROID_SERIAL`)
@@ -477,7 +478,7 @@ clear com.massick.maibuk`.
 
 ```bash
 pnpm conformance:plugins --platform linux --record    # Linux (WebKitGTK)
-pnpm conformance:plugins --platform android --record  # the adb device (System WebView)
+pnpm conformance:plugins --platform android --record  # the adb device (Android QuickJS)
 pnpm conformance:plugins --platform all               # every available platform
 pnpm conformance:plugins --platform linux --skip-build --out .bench
 pnpm conformance:plugins --help
@@ -498,8 +499,10 @@ display, no device, a build failure, a timeout before any result, or an
 `--record`, a *measured* run (exit 0 or 1) merges into
 `docs/research/plugins-conformance.results.json`; an exit-2 run never does, and
 a failure while the host is supported still records, keeping exit 1, so the file
-shows it. An Android run records `exit: 1`, `support: "unsupported-in-v1"`, and
-`followUp: "#492"` (see below).
+shows it. An Android run that did not measure the QuickJS engine records
+`exit: 1`, `support: "unsupported-in-v1"`, and `followUp: "#492"` (see below);
+one that did measure it records the QuickJS `startMs` and `callLatencyMs` timings
+instead, with no marker and no gate on them.
 
 **Version gate.** The recorded results pin the Tauri and wry versions read from
 `src-tauri/Cargo.lock` (`scripts/plugin-conformance-gate.mjs`, run by its vitest
@@ -507,14 +510,17 @@ gate). A bump to either version fails the gate until a fresh `pnpm
 conformance:plugins --record` refreshes the file: a result is only valid on the
 engine it was measured on, so rerun on any Tauri or wry bump.
 
-**Android is unsupported in v1 (#447, #492).** On the Android emulator the T8
-allocation grew the WebView renderer until lowmemorykiller killed it, and
-Chromium then killed the whole app, so the product runs no Plugin on Android
-(`src/features/plugins/host-platform.ts`). The lane still *measures* Android —
-its seam bypasses the host rule (`src/features/plugins/conformance/host-bypass.ts`)
-so a rerun can prove #492's hard memory cap once it exists — and the T8 run
-records the renderer death. Android runs are recorded as unsupported-in-v1 with
-the #492 follow-up rather than dropped.
+**Android runs no Plugin in the product yet (#447, #492, #516).** On the Android
+emulator the T8 allocation grew the WebView renderer until lowmemorykiller killed
+it, and Chromium then killed the whole app, so the product still runs no Plugin
+on Android (`src/features/plugins/host-platform.ts`). The lane still *measures*
+Android: its seam bypasses the host rule
+(`src/features/plugins/conformance/host-bypass.ts`) and drives the capped QuickJS
+engine (#516), whose 64 MB cap is hard, so T8 stops with exactly `out-of-memory`
+and proves a healthy Plugin beside the hostile one keeps answering. A measured
+Android run records the engine's start time and call latency (no gate on them,
+decision-401) and drops the unsupported-in-v1 marker; it kept that marker and the
+#492 follow-up only while no QuickJS engine was measured there.
 
 ## Plugins bench lane
 

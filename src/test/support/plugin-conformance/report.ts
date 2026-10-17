@@ -5,8 +5,9 @@
 //
 // D1 recording rule: a MEASURED run (exit 0 or 1) is recorded; an exit-2 run is
 // never. A run on a host-unsupported platform (v1 Android) records exit 1 with
-// `support: "unsupported-in-v1"` and `followUp: "#492"`, and the engine records
-// the engine's own version (`mergeRunEngine`), never the app version.
+// `support: "unsupported-in-v1"` and `followUp: "#492"`, unless the run measured
+// under the Android QuickJS engine (#516), which removes the marker; the engine
+// records the engine's own version (`mergeRunEngine`), never the app version.
 
 import { RENDERER_DIED_DETAIL, T7_CHECK_ID, T8_CHECK_ID } from "@/features/plugins/conformance/checks";
 import {
@@ -16,6 +17,7 @@ import {
 import type {
   ConformanceCheck,
   ConformanceEngine,
+  QuickJsTimings,
 } from "@/features/plugins/conformance/types";
 import { readCargoLockVersions } from "../../../../scripts/plugin-conformance-gate.mjs";
 import type { CollectorState } from "@/test/support/plugin-conformance/collector-state";
@@ -71,6 +73,11 @@ export interface PlatformRun {
   support?: "unsupported-in-v1";
   /** The issue that lifts `support`, when present. */
   followUp?: string;
+  /**
+   * The QuickJS engine's own timings (#516), recorded only when the run measured
+   * under it; there is no gate on them (decision-401).
+   */
+  quickjs?: QuickJsTimings;
   checks: ConformanceCheck[];
 }
 
@@ -161,7 +168,7 @@ export function finalizeRun(
  * The gate is about versions, not pass/fail: a genuine failure while the host is
  * supported still records, keeping exit 1, so the file shows it. An Android run
  * records exit 1 with `support: "unsupported-in-v1"` because the host runs no
- * Plugin there (#447, #492).
+ * Plugin there (#447, #492), unless it measured under the QuickJS engine (#516).
  */
 export function canRecord(outcome: PlatformOutcome): boolean {
   return outcome.exitCode === 0 || outcome.exitCode === 1;
@@ -204,7 +211,15 @@ export function mergeRunEngine(input: {
   };
 }
 
-/** The run a platform writes to `.bench/` and, on a measured run, merges in. */
+/**
+ * The run a platform writes to `.bench/` and, on a measured run, merges in.
+ *
+ * The v1 unsupported marker (#447, #492) is for a platform whose host runs no
+ * Plugin. A run that measured under the Android QuickJS engine (#516) is no
+ * longer that case: the lane proves the capped engine there, so only a run that
+ * did not measure QuickJS (`quickjs` absent) keeps the marker and its #492
+ * follow-up.
+ */
 export function buildPlatformRun(input: {
   platform: ConformancePlatformName;
   engine: ConformanceEngine;
@@ -213,13 +228,17 @@ export function buildPlatformRun(input: {
   /** The lane exit code the run settled on (0 or 1). */
   exit: ExitCode;
   device?: string;
+  /** The measured QuickJS timings (#516); absent off the QuickJS engine. */
+  quickjs?: QuickJsTimings;
 }): PlatformRun {
-  const unsupported = isHostUnsupportedLanePlatform(input.platform);
+  const unsupported =
+    isHostUnsupportedLanePlatform(input.platform) && input.quickjs === undefined;
   return {
     ranAt: input.ranAt,
     engine: input.engine,
     ...(input.device === undefined ? {} : { device: input.device }),
     exit: input.exit,
+    ...(input.quickjs === undefined ? {} : { quickjs: input.quickjs }),
     ...(unsupported
       ? { support: CONFORMANCE_UNSUPPORTED_SUPPORT, followUp: CONFORMANCE_UNSUPPORTED_FOLLOW_UP }
       : {}),
@@ -259,6 +278,8 @@ export interface PlatformSummary {
   outcome: PlatformOutcome;
   leaks: number;
   engine: ConformanceEngine | null;
+  /** The QuickJS timings to print, when the run measured them (#516). */
+  quickjs?: QuickJsTimings;
 }
 
 function counts(checks: ConformanceCheck[]): { pass: number; fail: number; unmeasured: number } {
@@ -296,6 +317,13 @@ export function formatConformanceTable(summaries: PlatformSummary[]): string {
     );
   }
   for (const summary of summaries) {
+    // The QuickJS timings (#516) are evidence, not a gate: print them so a
+    // reader sees what the Android engine measured.
+    if (summary.quickjs !== undefined) {
+      out.push(
+        `${summary.platform}: QuickJS start ${summary.quickjs.startMs} ms, call latency ${summary.quickjs.callLatencyMs} ms`
+      );
+    }
     for (const check of summary.outcome.checks) {
       if (check.status !== "pass") {
         out.push(`${summary.platform}: ${check.id} ${check.status}: ${check.detail}`);

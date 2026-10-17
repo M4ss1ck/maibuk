@@ -15,6 +15,7 @@
 import { PluginDirectoryHashError, hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { planPluginModules, rewritePluginImports } from "@/features/plugins/modules";
+import { QUICKJS_ENGINE_ENABLED } from "@/features/plugins/quickjs/engine-flag";
 import { createPluginFrame } from "@/features/plugins/sandbox";
 import type {
   ManifestProblem,
@@ -29,7 +30,11 @@ import type {
   PluginStartRefusal,
   PluginStartResult,
 } from "@/features/plugins/types";
-import { PLUGIN_FRAME_MESSAGE, PLUGIN_INIT_MESSAGE, PLUGIN_READY_MESSAGE } from "@/plugin-sdk/protocol";
+import {
+  PLUGIN_FRAME_MESSAGE,
+  PLUGIN_INIT_MESSAGE,
+  PLUGIN_READY_MESSAGE,
+} from "@/plugin-sdk/protocol";
 import { createPluginBroker } from "@/features/plugins/broker";
 
 /** The folder's manifest file name (ADR 0020). */
@@ -95,25 +100,40 @@ async function runStartup(
 
   await frame.ready;
 
-  const urls = new Map<string, string>();
-  for (const module of modules) {
-    const source = rewritePluginImports(module.source, module.imports, (path) => {
-      const url = urls.get(path);
-      if (!url) throw new Error(`The module ${path} was not loaded before ${module.path}`);
-      return url;
-    });
-    urls.set(module.path, await frame.createModule(source));
-  }
   const entry = modules[modules.length - 1];
-  const entryUrl = urls.get(entry.path);
-  if (!entryUrl) {
-    return {
-      ok: false,
-      refusal: { code: "worker-error", message: "The entry module was not loaded" },
-    };
-  }
+  if (QUICKJS_ENGINE_ENABLED) {
+    // Android (#516): the Plugin runs in the QuickJS engine, not by importing
+    // its bytes. The host compiles the Wasm and bundles the runner once, then
+    // hands the runner module URL, the verified sources as data, and the Wasm
+    // module to the Worker; nothing on this path fetches, so the frame keeps
+    // `connect-src 'none'`. The dynamic imports behind the compile-time flag are
+    // dropped from every web and desktop bundle.
+    const { loadQuickJsEngineAssets } = await import("@/features/plugins/quickjs/host-assets");
+    const { runnerSource, wasmBinary } = await loadQuickJsEngineAssets();
+    const runner = await frame.createModule(runnerSource);
+    const sources: Record<string, string> = {};
+    for (const module of modules) sources[module.path] = module.source;
+    await frame.startWorker(entry.path, port, { runner, sources, wasmBinary });
+  } else {
+    const urls = new Map<string, string>();
+    for (const module of modules) {
+      const source = rewritePluginImports(module.source, module.imports, (path) => {
+        const url = urls.get(path);
+        if (!url) throw new Error(`The module ${path} was not loaded before ${module.path}`);
+        return url;
+      });
+      urls.set(module.path, await frame.createModule(source));
+    }
+    const entryUrl = urls.get(entry.path);
+    if (!entryUrl) {
+      return {
+        ok: false,
+        refusal: { code: "worker-error", message: "The entry module was not loaded" },
+      };
+    }
 
-  await frame.startWorker(entryUrl, port);
+    await frame.startWorker(entryUrl, port);
+  }
   const readyOutcome = await ready;
   if (readyOutcome !== "ready") {
     return { ok: false, refusal: { code: "worker-error", message: readyOutcome.error } };

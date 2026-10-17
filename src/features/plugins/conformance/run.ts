@@ -12,6 +12,7 @@ import { runConformanceChecks } from "@/features/plugins/conformance/checks";
 import { createReporter } from "@/features/plugins/conformance/reporter";
 import { createRuntimeSeam } from "@/features/plugins/conformance/seam";
 import type { ConformanceResult } from "@/features/plugins/conformance/types";
+import { QUICKJS_ENGINE_ENABLED } from "@/features/plugins/quickjs/engine-flag";
 
 export async function runConformance(): Promise<ConformanceResult> {
   const reporter = createReporter();
@@ -20,8 +21,16 @@ export async function runConformance(): Promise<ConformanceResult> {
     leaks: () => reporter.leaks(),
   });
   try {
-    const checks = await runConformanceChecks(seam, (check) => reporter.progress(check));
-    const result: ConformanceResult = { engine: seam.engine, checks };
+    // T8's reason rule is stricter under the Android QuickJS engine (#516): its
+    // cap is hard, so only `out-of-memory` is accepted there.
+    const checks = await runConformanceChecks(seam, (check) => reporter.progress(check), {
+      quickjs: QUICKJS_ENGINE_ENABLED,
+    });
+    const result: ConformanceResult = {
+      engine: seam.engine,
+      checks,
+      ...(seam.quickjs === undefined ? {} : { quickjs: seam.quickjs }),
+    };
     await reporter.result(result);
     await reporter.done();
     return result;

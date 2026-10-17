@@ -196,10 +196,39 @@ describe("buildPlatformRun()", () => {
     expect(run.followUp).toBe("#492");
   });
 
+  it("drops the unsupported marker for an Android run that measured QuickJS (#516)", () => {
+    const quickjs = { startMs: 12, callLatencyMs: 3 };
+    const run = buildPlatformRun({
+      platform: "android",
+      engine: ENGINE,
+      checks: [T7],
+      ranAt: "t",
+      exit: 0,
+      quickjs,
+    });
+    expect(run.quickjs).toEqual(quickjs);
+    expect("support" in run).toBe(false);
+    expect("followUp" in run).toBe(false);
+  });
+
+  it("carries QuickJS timings on a host-supported run too, without a support marker", () => {
+    const run = buildPlatformRun({
+      platform: "linux",
+      engine: ENGINE,
+      checks: [T7],
+      ranAt: "t",
+      exit: 0,
+      quickjs: { startMs: 5, callLatencyMs: 1 },
+    });
+    expect(run.quickjs).toEqual({ startMs: 5, callLatencyMs: 1 });
+    expect("support" in run).toBe(false);
+  });
+
   it("leaves a host-supported run without a support marker", () => {
     const run = buildPlatformRun({ platform: "linux", engine: ENGINE, checks: [T7], ranAt: "t", exit: 0 });
     expect("support" in run).toBe(false);
     expect("followUp" in run).toBe(false);
+    expect("quickjs" in run).toBe(false);
   });
 });
 
@@ -313,5 +342,30 @@ describe("formatConformanceTable()", () => {
 
   it("says so when nothing ran", () => {
     expect(formatConformanceTable([])).toContain("no platform ran");
+  });
+
+  it("prints the QuickJS timings when the run measured them (#516)", () => {
+    const table = formatConformanceTable([
+      {
+        platform: "android",
+        outcome: { checks: [check("T8-oom", "pass")], exitCode: 0, note: "all checks passed" },
+        leaks: 0,
+        engine: ENGINE,
+        quickjs: { startMs: 42, callLatencyMs: 1.5 },
+      },
+    ]);
+    expect(table).toContain("android: QuickJS start 42 ms, call latency 1.5 ms");
+  });
+
+  it("prints no QuickJS line when the run measured none", () => {
+    const table = formatConformanceTable([
+      {
+        platform: "linux",
+        outcome: { checks: [check("T8-oom", "pass")], exitCode: 0, note: "all checks passed" },
+        leaks: 0,
+        engine: ENGINE,
+      },
+    ]);
+    expect(table).not.toContain("QuickJS");
   });
 });

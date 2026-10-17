@@ -1,0 +1,17 @@
+{
+  "manifestVersion": 1,
+  "id": "fixture-healthy",
+  "name": "Fixture Healthy",
+  "description": "The conformance lane's well-behaved neighbour Plugin (#516): it declares no contributions and only answers the host's health check, so T8 can prove the renderer and the broker survive a hostile Plugin's memory death while a healthy Plugin beside it keeps answering a call. It is never shipped in a product bundle.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web"],
+  "lifecycle": "persistent",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": [],
+    "optional": []
+  }
+}

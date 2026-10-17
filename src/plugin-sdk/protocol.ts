@@ -147,6 +147,49 @@ export const PLUGIN_READY_MESSAGE = { kind: "maibuk:plugin-ready" } as const;
 export const PLUGIN_ERROR_MESSAGE = { kind: "maibuk:plugin-error" } as const;
 
 /**
+ * The boot message's shape. On every engine it carries `entry`: on the native
+ * engines that is the entry module's `blob:` URL; on the Android QuickJS engine
+ * (#516) it is the Plugin-relative path that keys {@link PluginBootMessage.sources}.
+ *
+ * The four Android-only fields are present only when the build selected the
+ * QuickJS engine, and are named so the `queueMicrotask` prelude can read them
+ * without evaluating any Plugin bytes:
+ *
+ * - `engine` is `"quickjs"`; omitted means the native `import(entry)` path.
+ * - `runner` is the frame-created `blob:` URL of the bundled QuickJS runner
+ *   module (`host-assets.ts`), which the prelude imports.
+ * - `sources` is the verified Plugin module graph as data, keyed by
+ *   Plugin-relative path — never turned into `blob:` URLs on this path.
+ * - `wasmBinary` is the raw QuickJS Wasm bytes. They cross the frame as a copied
+ *   `ArrayBuffer` and the runner compiles them inside the Worker; a compiled
+ *   `WebAssembly.Module` cannot cross the frame (the message is dropped), so the
+ *   bytes stay bytes until the Worker has them.
+ */
+export interface PluginBootMessage {
+  kind: typeof PLUGIN_BOOT_MESSAGE.kind;
+  /** The entry module's `blob:` URL, or its `sources` key on the QuickJS engine. */
+  entry: string;
+  /** The engine the prelude must run the module graph in; omitted is the native import. */
+  engine?: "quickjs";
+  /** The frame-created URL of the bundled QuickJS runner module. */
+  runner?: string;
+  /** The verified Plugin module sources, keyed by Plugin-relative path. */
+  sources?: Record<string, string>;
+  /** The raw QuickJS Wasm bytes the Worker compiles before instantiating. */
+  wasmBinary?: ArrayBuffer;
+}
+
+/** True for the boot message's shape, so the sandbox and a test share one check. */
+export function isPluginBootMessage(value: unknown): value is PluginBootMessage {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === PLUGIN_BOOT_MESSAGE.kind &&
+    typeof (value as { entry?: unknown }).entry === "string"
+  );
+}
+
+/**
  * The sandbox's Frame handoff with the Plugin's Worker (#454, D1). The host
  * posts this over the Plugin's own broker MessagePort (`runtime.ts`
  * `sendFrame`) with the Frame's MessagePort transferred, so the Worker's SDK

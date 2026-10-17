@@ -58,6 +58,7 @@ interface FixturePlugin {
 const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
   { source: "remote-ui", manifest: "manifest.json", output: "remote-ui" },
   { source: "fixture-hostile", manifest: "manifest.json", output: "fixture-hostile" },
+  { source: "fixture-healthy", manifest: "manifest.json", output: "fixture-healthy" },
   { source: "fixture-everything", manifest: "manifest.json", output: "fixture-everything" },
   {
     source: "fixture-everything",

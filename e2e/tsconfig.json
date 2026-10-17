@@ -9,6 +9,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
     "paths": { "@/*": ["../src/*"] }
   },
   "include": ["**/*.ts", "../src/types/**/*.d.ts"],

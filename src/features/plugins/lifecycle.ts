@@ -28,6 +28,7 @@ import {
   type BulkReason,
 } from "@/features/sync/change-feed";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
+import { PLUGIN_UI_NODE_LIMIT_MARKER } from "@/plugin-sdk/ui-node-limit";
 import { clearStartupError, getPluginApproval, recordStartupError } from "@/features/plugins/approvals";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { registerPluginContributions } from "@/features/plugins/contributions";
@@ -110,6 +111,9 @@ function isLimitStop(reason: PluginLifecycleStopReason): boolean {
 
 /** An OOM reaches the host as a plain Worker error; the message is the only signal. */
 function workerStopReason(message: string): PluginLifecycleStopReason {
+  // The Worker's own element limit (#516): the same stop the host raises for an
+  // oversized interface, matched on the fixed marker, never on loose text.
+  if (message.includes(PLUGIN_UI_NODE_LIMIT_MARKER)) return "remote-ui-limit";
   return /out[- ]of[- ]memory|allocation failed|not enough memory/i.test(message)
     ? "out-of-memory"
     : "crashed";
