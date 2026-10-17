@@ -49,19 +49,10 @@ A Plugin declares what it adds under `contributes` in manifest.json. The validat
 - `sidebarEntries`: a `page` id and an `icon`. An icon is a Lucide icon name (kebab-case), a relative .svg path inside the Plugin folder, or inline elements (see [Inline icons](#inline-icons)).
 - `settingsRows`: an `id`, a `label`, an optional `description`, and optional `keywords`.
 - `toolbarButtons`: an `id`, the `command` it runs, an `icon`, and an optional `toggle`. A `toggle` button shows whether what it switches is on or off as the Plugin sets it with `toolbar.setPressed`.
-
-### Inline icons
-
-An `icon` may also be `{ "elements": [[tag, attrs], ...] }`, a list of SVG elements drawn on a 24x24 grid (Plugin API 0.1.1). The host draws them with the same attributes as its own icons: `currentColor` stroke, width 2, round caps and joins, no fill, so size, color, hover, pressed, and disabled styles apply unchanged.
-
-- Allowed tags: `path`, `circle`, `rect`, `line`, `polyline`, `polygon`, `ellipse`.
-- Allowed attributes: `d`, `cx`, `cy`, `r`, `rx`, `ry`, `x`, `y`, `width`, `height`, `x1`, `y1`, `x2`, `y2`, `points`. Geometry only.
-- At most 16 elements.
-
-The validator refuses anything else and names the offender, such as `style`, `fill`, `stroke`, `href`, an `on*` handler, or an unknown tag. A `.svg` path keeps its existing behavior.
 - `itemMenuEntries`: a `command` that declares `targets`.
 
 Every contribution may carry its own `platforms` list, and the host filters each surface by the device platform. Maibuk derives a Command's full id as `plugin.<pluginId>.<localId>`, so a Plugin never claims Maibuk's or another Plugin's ids. Registering is metadata only, so the Command Palette, Settings search, the toolbar, and the sidebar find an installed Plugin before its Worker is ready.
+
 
 The template's manifest declares one Command, one page, and one sidebar entry:
 
@@ -79,6 +70,16 @@ The template's manifest declares one Command, one page, and one sidebar entry:
   "sidebarEntries": [{ "page": "hello", "icon": "hand" }]
 }
 ```
+
+### Inline icons
+
+An `icon` may also be `{ "elements": [[tag, attrs], ...] }`, a list of SVG elements drawn on a 24x24 grid (Plugin API 0.1.1). The host draws them with the same attributes as its own icons: `currentColor` stroke, width 2, round caps and joins, no fill, so size, color, hover, pressed, and disabled styles apply unchanged.
+
+- Allowed tags: `path`, `circle`, `rect`, `line`, `polyline`, `polygon`, `ellipse`.
+- Allowed attributes: `d`, `cx`, `cy`, `r`, `rx`, `ry`, `x`, `y`, `width`, `height`, `x1`, `y1`, `x2`, `y2`, `points`. Geometry only.
+- At most 16 elements.
+
+The validator refuses anything else and names the offender, such as `style`, `fill`, `stroke`, `href`, an `on*` handler, or an unknown tag. A `.svg` path keeps its existing behavior.
 
 ## Drawing a page
 
