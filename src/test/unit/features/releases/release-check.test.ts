@@ -156,7 +156,9 @@ describe("installReleaseCheck()", () => {
     const fetchImpl = vi.fn(async () => okResponse([]));
     uninstall = installReleaseCheck({ fetchImpl, now: () => clock, isWeb: false });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    // Let the first check settle, so it is no longer in flight.
+    // Kept: the first check must settle before the next visibility change, and
+    // the in-flight flag clears in a finally inside checkForNewerReleases, which
+    // installReleaseCheck does not expose. No observable effect marks that moment.
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     clock = RELEASE_CHECK_INTERVAL_MS - 1;
