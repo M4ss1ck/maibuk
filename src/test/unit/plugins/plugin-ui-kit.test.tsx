@@ -1153,8 +1153,9 @@ describe("collection row labels", () => {
     );
 
     await userEvent.tab();
+    // The row tooltip opens without a delay on focus and hover, so once both
+    // have settled a fitting row has shown none.
     await userEvent.hover(screen.getByRole("option"));
-    await new Promise((resolve) => setTimeout(resolve, 700));
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
