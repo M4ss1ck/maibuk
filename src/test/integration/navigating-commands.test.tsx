@@ -362,14 +362,16 @@ describe.sequential("navigating Commands (issue #319)", () => {
       // Note and canvas creation navigate once the write lands. An in-place
       // run never moves, so waiting for a move would only burn the timeout.
       if (getCommand(id).navigates === true && !inPlaceReason) {
-        // time-budget: a Command that wrongly stays put must not wait 10 s per id.
-        await waitFor(() => expect(path).not.toBe(before), { timeout: 5_000 }).catch(() => {});
+        // The flagged move is the condition: wait for it, and on a Command that
+        // wrongly stays put the wait fails with the route it saw.
+        await waitFor(() =>
+          expect(
+            path,
+            `${id} on ${screen}: route stayed ${before}, navigates=true, outcome=${outcome}`
+          ).not.toBe(before)
+        );
         const after = path;
-        if (outcome === "ran" && after !== before) exercised.add(id);
-        expect(
-          after !== before,
-          `${id} on ${screen}: route ${before} -> ${after}, navigates=true, outcome=${outcome}`
-        ).toBe(true);
+        if (outcome === "ran") exercised.add(id);
         if (after !== before) {
           navigateTo(screen);
           await settleOn(screen);
