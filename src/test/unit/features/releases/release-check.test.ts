@@ -144,6 +144,17 @@ describe("installReleaseCheck()", () => {
     document.dispatchEvent(new Event("visibilitychange"));
   }
 
+  /**
+   * Resolves once the next check that starts after this call has stored its
+   * result. Call it right after installing, before the fetch can settle.
+   */
+  function nextCheckStored(): Promise<void> {
+    const before = useReleaseStore.getState().newerReleases;
+    return vi.waitFor(() =>
+      expect(useReleaseStore.getState().newerReleases).not.toBe(before)
+    );
+  }
+
   it("never checks on the web build", () => {
     const fetchImpl = vi.fn(async () => okResponse([]));
     uninstall = installReleaseCheck({ fetchImpl, isWeb: true });
@@ -154,12 +165,12 @@ describe("installReleaseCheck()", () => {
   it("checks at launch and again on return only after 30 minutes", async () => {
     let clock = 0;
     const fetchImpl = vi.fn(async () => okResponse([]));
+    const launchCheckStored = nextCheckStored();
     uninstall = installReleaseCheck({ fetchImpl, now: () => clock, isWeb: false });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    // Kept: the first check must settle before the next visibility change, and
-    // the in-flight flag clears in a finally inside checkForNewerReleases, which
-    // installReleaseCheck does not expose. No observable effect marks that moment.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The in-flight flag clears a microtask after the result is stored, so the
+    // timing checks below run with no check in flight.
+    await launchCheckStored;
 
     clock = RELEASE_CHECK_INTERVAL_MS - 1;
     setVisibility("hidden");
