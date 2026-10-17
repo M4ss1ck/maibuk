@@ -28,7 +28,7 @@ import {
   type PluginUiUnmountParams,
 } from "@/plugin-sdk/protocol";
 import { installPluginUiElements } from "@/plugin-sdk/ui";
-import { createPluginNodeBudget } from "@/plugin-sdk/ui-node-budget";
+import { createRemovalWatch, resetRemoteElementCount } from "@/plugin-sdk/ui-node-budget";
 import { PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
 
 /**
@@ -171,25 +171,16 @@ export function servePluginUi(
   const mounted = new Map<string, MountedSurface>();
 
   /**
-   * Counts live nodes as each mutation is made, so an oversized interface stops
-   * the render before the rest of its work (#516, decision 2a). The batch that
-   * crosses the limit, and everything queued before it, is flushed to the host
-   * now: the host raises the same `too-many-nodes` violation it raises for any
-   * oversized tree and stops the Plugin with `remote-ui-limit`. The render is
-   * then aborted by the throw. The host's check is unchanged and stays
-   * authoritative.
+   * Releases the live element count as this mount's removals are made, so a
+   * Plugin that churns under the limit never trips it (#516, decision 2a). The
+   * count itself runs in the UI kit's element constructor.
    */
-  function guardNodeBudget(connection: BatchingRemoteConnection): void {
-    const budget = createPluginNodeBudget(PLUGIN_UI_LIMITS.maxNodes);
+  function watchRemovals(connection: BatchingRemoteConnection): void {
+    const watch = createRemovalWatch();
     const queue = connection.mutate.bind(connection);
     connection.mutate = (records) => {
-      if (budget.apply(records)) {
-        queue(records);
-        return;
-      }
+      watch.observe(records);
       queue(records);
-      connection.flush();
-      throw new Error(`The interface has more than ${PLUGIN_UI_LIMITS.maxNodes} elements`);
     };
   }
 
@@ -235,7 +226,7 @@ export function servePluginUi(
     };
 
     const connection = new BatchingRemoteConnection(hostConnection, { batch: frameBatch() });
-    guardNodeBudget(connection);
+    watchRemovals(connection);
     const { container, detach } = attach(connection);
     const reactRoot = createRoot(container);
     reactRoot.render(<Page />);
@@ -281,6 +272,8 @@ export function servePluginUi(
     const entry = mounted.get(surface);
     if (entry === undefined) return null;
     mounted.delete(surface);
+    // The last mount gone resets the Plugin's live element count (#516).
+    if (mounted.size === 0) resetRemoteElementCount();
     return teardown(entry);
   }
 

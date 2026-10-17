@@ -21,6 +21,10 @@
 
 import "@remote-dom/core/polyfill";
 import "@remote-dom/react/polyfill";
+import { enableRemoteElementCount } from "@/plugin-sdk/ui-node-budget";
+
+// Only a Plugin Worker counts its live elements; the host never imports this file.
+enableRemoteElementCount();
 
 export * from "@/plugin-sdk/ui-serve";
 

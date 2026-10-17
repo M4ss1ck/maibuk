@@ -1,68 +1,110 @@
 /**
- * The Plugin-side node budget (#516, decision 2a). It mirrors the host's counting
- * rules, so the Plugin trips at the same node the host would refuse. Only the
- * native lane's tree shapes are asserted here; the host check is tested in
- * `plugin-ui-validate.test.ts`.
+ * The Plugin-side element counter (#516, decision 2a). The count is live
+ * elements, made in the UI kit's constructor and released by removal records.
+ * It is enabled only in a Plugin Worker, so these tests turn it on explicitly.
  */
-import { MUTATION_TYPE_INSERT_CHILD, MUTATION_TYPE_REMOVE_CHILD, type RemoteMutationRecord } from "@remote-dom/core";
-import { describe, expect, it } from "vitest";
-import { createPluginNodeBudget } from "@/plugin-sdk/ui-node-budget";
+import {
+  MUTATION_TYPE_INSERT_CHILD,
+  MUTATION_TYPE_REMOVE_CHILD,
+  NODE_TYPE_ELEMENT,
+  NODE_TYPE_TEXT,
+  type RemoteMutationRecord,
+} from "@remote-dom/core";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  countRemoteElement,
+  createRemovalWatch,
+  disableRemoteElementCount,
+  enableRemoteElementCount,
+  remoteElementCount,
+  resetRemoteElementCount,
+} from "@/plugin-sdk/ui-node-budget";
+import {
+  PLUGIN_UI_NODE_LIMIT,
+  PLUGIN_UI_NODE_LIMIT_MARKER,
+} from "@/plugin-sdk/ui-node-limit";
+import { PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
 
 const ROOT = "~";
 
-/** An element serialization with its children, the shape an insert carries. */
 function element(id: string, children: unknown[] = []): unknown {
-  return { id, type: 1, element: "ui-view", children };
+  return { id, type: NODE_TYPE_ELEMENT, element: "ui-view", children };
 }
 
-function insert(parent: string, child: unknown, index?: number): RemoteMutationRecord {
-  return index === undefined
-    ? ([MUTATION_TYPE_INSERT_CHILD, parent, child] as unknown as RemoteMutationRecord)
-    : ([MUTATION_TYPE_INSERT_CHILD, parent, child, index] as unknown as RemoteMutationRecord);
+function text(id: string): unknown {
+  return { id, type: NODE_TYPE_TEXT, data: "x" };
+}
+
+function insert(parent: string, child: unknown): RemoteMutationRecord {
+  return [MUTATION_TYPE_INSERT_CHILD, parent, child] as unknown as RemoteMutationRecord;
 }
 
 function remove(parent: string, index: number): RemoteMutationRecord {
   return [MUTATION_TYPE_REMOVE_CHILD, parent, index] as unknown as RemoteMutationRecord;
 }
 
-describe("the Plugin-side node budget", () => {
-  it("counts an insert as its whole serialized subtree", () => {
-    const budget = createPluginNodeBudget(100);
-    expect(budget.apply([insert(ROOT, element("a", [element("b", [{ id: "t", type: 3, data: "x" }])]))])).toBe(true);
-    expect(budget.nodes).toBe(3);
+/** Makes `count` elements, the way the UI kit's constructor does. */
+function make(count: number): void {
+  for (let index = 0; index < count; index += 1) countRemoteElement();
+}
+
+beforeEach(() => {
+  enableRemoteElementCount();
+  resetRemoteElementCount();
+});
+
+afterEach(() => {
+  resetRemoteElementCount();
+});
+
+describe("the Plugin-side element counter", () => {
+  it("shares the host's limit, not a second number", () => {
+    expect(PLUGIN_UI_NODE_LIMIT).toBe(PLUGIN_UI_LIMITS.maxNodes);
   });
 
-  it("takes a removed subtree away, so churn under the limit never trips it", () => {
-    const budget = createPluginNodeBudget(3);
-    expect(budget.apply([insert(ROOT, element("a", [element("b")]))])).toBe(true);
-    expect(budget.nodes).toBe(2);
-    expect(budget.apply([remove(ROOT, 0)])).toBe(true);
-    expect(budget.nodes).toBe(0);
-    // Re-inserting the same shape later is fine: the live count is what counts.
-    expect(budget.apply([insert(ROOT, element("c", [element("d")]))])).toBe(true);
-    expect(budget.nodes).toBe(2);
+  it("trips at the (limit + 1)th live element, with the marker", () => {
+    make(PLUGIN_UI_NODE_LIMIT);
+    expect(remoteElementCount()).toBe(PLUGIN_UI_NODE_LIMIT);
+    let thrown: unknown;
+    try {
+      countRemoteElement();
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe(PLUGIN_UI_NODE_LIMIT_MARKER);
   });
 
-  it("trips at the first record past the limit, and stays tripped", () => {
-    const budget = createPluginNodeBudget(2);
-    expect(budget.apply([insert(ROOT, element("a"))])).toBe(true);
-    expect(budget.apply([insert(ROOT, element("b"))])).toBe(true);
-    expect(budget.apply([insert(ROOT, element("c"))])).toBe(false);
-    expect(budget.apply([remove(ROOT, 0)])).toBe(false);
+  it("counts nothing outside a Plugin Worker", () => {
+    disableRemoteElementCount();
+    // A host renderer that never enabled the count: constructing elements is free.
+    make(PLUGIN_UI_NODE_LIMIT + 5);
+    expect(remoteElementCount()).toBe(0);
   });
 
-  it("honours an insert index", () => {
-    const budget = createPluginNodeBudget(10);
-    budget.apply([insert(ROOT, element("a")), insert(ROOT, element("b")), insert(ROOT, element("c"), 0)]);
-    expect(budget.nodes).toBe(3);
-    budget.apply([remove(ROOT, 0)]);
-    expect(budget.nodes).toBe(2);
+  it("releases the elements a removal takes away, so churn under the limit never trips", () => {
+    const watch = createRemovalWatch();
+    // Five rounds of a 3,000-element subtree: under the limit at every step.
+    for (let round = 0; round < 5; round += 1) {
+      make(3_000);
+      const subtree = element(`r${round}`, Array.from({ length: 2_999 }, (_, i) => element(`r${round}-${i}`)));
+      watch.observe([insert(ROOT, subtree)]);
+      watch.observe([remove(ROOT, 0)]);
+      expect(remoteElementCount()).toBe(0);
+    }
   });
 
-  it("refuses a 12,000-node flood at the limit, not after it", () => {
-    const budget = createPluginNodeBudget(10_000);
-    const flood = Array.from({ length: 12_000 }, (_, index) => insert(ROOT, element(`n${index}`)));
-    expect(budget.apply(flood.slice(0, 10_000))).toBe(true);
-    expect(budget.apply(flood.slice(10_000))).toBe(false);
+  it("releases only elements, never text nodes", () => {
+    const watch = createRemovalWatch();
+    make(2);
+    watch.observe([insert(ROOT, element("a", [text("t1"), element("b")]))]);
+    watch.observe([remove(ROOT, 0)]);
+    expect(remoteElementCount()).toBe(0);
+  });
+
+  it("resets to zero when the last mount is gone", () => {
+    make(500);
+    resetRemoteElementCount();
+    expect(remoteElementCount()).toBe(0);
   });
 });

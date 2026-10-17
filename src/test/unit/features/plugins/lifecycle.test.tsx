@@ -1,3 +1,4 @@
+import { PLUGIN_UI_NODE_LIMIT_MARKER } from "@/plugin-sdk/ui-node-limit";
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
@@ -939,6 +940,64 @@ describe("Plugin lifecycle: dataVersion gate", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "alpha took too long to start and was stopped."
     );
+    await advanceUntilSettled(launching, "lifecycle.launch()");
+  });
+
+  it("maps the Worker's element-limit marker to remote-ui-limit", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { dataVersion: 2 })],
+      data: { alpha: 1 },
+      configureFrame: (frame) => {
+        frame.hostRequestAnswer = async (method) => {
+          if (method === "migrateData") return new Promise(() => {});
+          return "pong";
+        };
+      },
+    });
+
+    const launching = h.lifecycle.launch();
+    await advanceUntil(
+      () => h.framesFor("alpha")[0]?.requests.includes("migrateData") ?? false,
+      "alpha's migrateData request"
+    );
+
+    h.framesFor("alpha")[0].signalError(PLUGIN_UI_NODE_LIMIT_MARKER);
+    await advance(0);
+
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: "remote-ui-limit",
+      refusal: null,
+    });
+    await advanceUntilSettled(launching, "lifecycle.launch()");
+  });
+
+  it("keeps an unrelated Worker error a crash, even one that mentions elements", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("alpha", { dataVersion: 2 })],
+      data: { alpha: 1 },
+      configureFrame: (frame) => {
+        frame.hostRequestAnswer = async (method) => {
+          if (method === "migrateData") return new Promise(() => {});
+          return "pong";
+        };
+      },
+    });
+
+    const launching = h.lifecycle.launch();
+    await advanceUntil(
+      () => h.framesFor("alpha")[0]?.requests.includes("migrateData") ?? false,
+      "alpha's migrateData request"
+    );
+
+    h.framesFor("alpha")[0].signalError("Cannot read properties of undefined (reading 'element')");
+    await advance(0);
+
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "stopped",
+      reason: "crashed",
+      refusal: null,
+    });
     await advanceUntilSettled(launching, "lifecycle.launch()");
   });
 
