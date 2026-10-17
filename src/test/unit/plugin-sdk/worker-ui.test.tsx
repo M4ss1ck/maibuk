@@ -10,6 +10,15 @@
  * DOM polyfill, which replaces the DOM globals with its own.
  */
 import { PLUGIN_UI_BATCH_MS, frameBatch, servePluginUi } from "@/plugin-sdk/worker-ui";
+import {
+  countRemoteElement,
+  resetRemoteElementCount,
+} from "@/plugin-sdk/ui-node-budget";
+import { PLUGIN_ERROR_MESSAGE } from "@/plugin-sdk/protocol";
+import {
+  PLUGIN_UI_NODE_LIMIT,
+  PLUGIN_UI_NODE_LIMIT_MARKER,
+} from "@/plugin-sdk/ui-node-limit";
 import { servePluginUi as serveSharedPluginUi, splitMutationRecords } from "@/plugin-sdk/ui-serve";
 import { ui } from "@/plugin-sdk/ui";
 import {
@@ -563,5 +572,24 @@ describe("splitMutationRecords", () => {
     const result = splitMutationRecords(records, 2);
     expect(result.map((batch) => batch.length)).toEqual([2, 2, 1]);
     expect(result.flat()).toEqual(records);
+  });
+});
+
+describe("the Worker's element-limit report", () => {
+  it("posts the limit marker through the Worker scope once, as a Plugin error", () => {
+    const post = vi.fn();
+    resetRemoteElementCount();
+    vi.stubGlobal("self", { postMessage: post });
+    try {
+      for (let index = 0; index <= PLUGIN_UI_NODE_LIMIT + 3; index += 1) countRemoteElement();
+    } finally {
+      vi.unstubAllGlobals();
+      resetRemoteElementCount();
+    }
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith({
+      kind: PLUGIN_ERROR_MESSAGE.kind,
+      message: PLUGIN_UI_NODE_LIMIT_MARKER,
+    });
   });
 });

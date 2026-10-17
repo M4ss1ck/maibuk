@@ -25,13 +25,22 @@ import {
   type RemoteMutationRecord,
   type RemoteNodeSerialization,
 } from "@remote-dom/core";
-import {
-  PLUGIN_UI_NODE_LIMIT,
-  PLUGIN_UI_NODE_LIMIT_MARKER,
-} from "@/plugin-sdk/ui-node-limit";
+import { PLUGIN_UI_NODE_LIMIT } from "@/plugin-sdk/ui-node-limit";
 
 let enabled = false;
 let live = 0;
+let onLimit: (() => void) | null = null;
+let limitReported = false;
+
+/**
+ * Registers what happens at the limit. The Worker entry (`worker-ui.tsx`) posts
+ * the limit's error through its own scope. The counter never throws: a throw
+ * from a custom element constructor is swallowed by the element machinery (the
+ * jsdom probe showed it), so the signal goes out as a message instead.
+ */
+export function setRemoteElementLimitHandler(handler: (() => void) | null): void {
+  onLimit = handler;
+}
 
 /** Turns the counter on. Only the Plugin Worker entry calls this. */
 export function enableRemoteElementCount(): void {
@@ -51,16 +60,21 @@ export function remoteElementCount(): number {
 /** Forgets every count; called when the last mount is torn down. */
 export function resetRemoteElementCount(): void {
   live = 0;
+  limitReported = false;
 }
 
 /**
- * Counts one constructed UI kit element. Throws the limit marker at the
- * (limit + 1)th live element, before the render builds the rest of the tree.
+ * Counts one constructed UI kit element. At the (limit + 1)th live element it
+ * calls the limit handler once; the Worker reports the marker from there, so the
+ * host stops the Plugin without an exception in the constructor.
  */
 export function countRemoteElement(): void {
   if (!enabled) return;
   live += 1;
-  if (live > PLUGIN_UI_NODE_LIMIT) throw new Error(PLUGIN_UI_NODE_LIMIT_MARKER);
+  if (live > PLUGIN_UI_NODE_LIMIT && !limitReported) {
+    limitReported = true;
+    onLimit?.();
+  }
 }
 
 function releaseElements(count: number): void {

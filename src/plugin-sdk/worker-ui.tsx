@@ -21,10 +21,24 @@
 
 import "@remote-dom/core/polyfill";
 import "@remote-dom/react/polyfill";
-import { enableRemoteElementCount } from "@/plugin-sdk/ui-node-budget";
+import {
+  enableRemoteElementCount,
+  setRemoteElementLimitHandler,
+} from "@/plugin-sdk/ui-node-budget";
+import { PLUGIN_UI_NODE_LIMIT_MARKER } from "@/plugin-sdk/ui-node-limit";
+import { PLUGIN_ERROR_MESSAGE } from "@/plugin-sdk/protocol";
 
 // Only a Plugin Worker counts its live elements; the host never imports this file.
 enableRemoteElementCount();
+// At the limit the Worker reports the marker through its own scope, the channel
+// every Plugin error uses; the frame relays it and the lifecycle maps the marker
+// to remote-ui-limit.
+setRemoteElementLimitHandler(() => {
+  (self as unknown as { postMessage(data: unknown): void }).postMessage({
+    kind: PLUGIN_ERROR_MESSAGE.kind,
+    message: PLUGIN_UI_NODE_LIMIT_MARKER,
+  });
+});
 
 export * from "@/plugin-sdk/ui-serve";
 

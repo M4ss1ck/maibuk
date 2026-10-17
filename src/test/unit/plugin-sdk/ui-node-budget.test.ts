@@ -1,7 +1,8 @@
 /**
  * The Plugin-side element counter (#516, decision 2a). The count is live
  * elements, made in the UI kit's constructor and released by removal records.
- * It is enabled only in a Plugin Worker, so these tests turn it on explicitly.
+ * At the limit it calls the limit handler once and never throws: a throw from a
+ * custom element constructor is swallowed by the element machinery.
  */
 import {
   MUTATION_TYPE_INSERT_CHILD,
@@ -10,7 +11,8 @@ import {
   NODE_TYPE_TEXT,
   type RemoteMutationRecord,
 } from "@remote-dom/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { installPluginUiElements } from "@/plugin-sdk/ui";
 import {
   countRemoteElement,
   createRemovalWatch,
@@ -18,11 +20,9 @@ import {
   enableRemoteElementCount,
   remoteElementCount,
   resetRemoteElementCount,
+  setRemoteElementLimitHandler,
 } from "@/plugin-sdk/ui-node-budget";
-import {
-  PLUGIN_UI_NODE_LIMIT,
-  PLUGIN_UI_NODE_LIMIT_MARKER,
-} from "@/plugin-sdk/ui-node-limit";
+import { PLUGIN_UI_NODE_LIMIT } from "@/plugin-sdk/ui-node-limit";
 import { PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
 
 const ROOT = "~";
@@ -48,12 +48,18 @@ function make(count: number): void {
   for (let index = 0; index < count; index += 1) countRemoteElement();
 }
 
+let onLimit: ReturnType<typeof vi.fn<() => void>>;
+
 beforeEach(() => {
+  onLimit = vi.fn();
+  setRemoteElementLimitHandler(onLimit);
   enableRemoteElementCount();
   resetRemoteElementCount();
 });
 
 afterEach(() => {
+  setRemoteElementLimitHandler(null);
+  disableRemoteElementCount();
   resetRemoteElementCount();
 });
 
@@ -62,29 +68,33 @@ describe("the Plugin-side element counter", () => {
     expect(PLUGIN_UI_NODE_LIMIT).toBe(PLUGIN_UI_LIMITS.maxNodes);
   });
 
-  it("trips at the (limit + 1)th live element, with the marker", () => {
+  it("calls the limit handler once, at the (limit + 1)th element, and never throws", () => {
     make(PLUGIN_UI_NODE_LIMIT);
-    expect(remoteElementCount()).toBe(PLUGIN_UI_NODE_LIMIT);
-    let thrown: unknown;
-    try {
-      countRemoteElement();
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBeInstanceOf(Error);
-    expect((thrown as Error).message).toBe(PLUGIN_UI_NODE_LIMIT_MARKER);
+    expect(onLimit).not.toHaveBeenCalled();
+    expect(() => countRemoteElement()).not.toThrow();
+    expect(onLimit).toHaveBeenCalledTimes(1);
+    expect(() => make(50)).not.toThrow();
+    expect(onLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts the real kit tags a page renders, and reports at the limit before the render finishes", () => {
+    installPluginUiElements();
+    let made = 0;
+    for (; made < PLUGIN_UI_NODE_LIMIT + 5; made += 1) document.createElement("maibuk-text");
+    expect(made).toBe(PLUGIN_UI_NODE_LIMIT + 5);
+    expect(remoteElementCount()).toBe(PLUGIN_UI_NODE_LIMIT + 5);
+    expect(onLimit).toHaveBeenCalledTimes(1);
   });
 
   it("counts nothing outside a Plugin Worker", () => {
     disableRemoteElementCount();
-    // A host renderer that never enabled the count: constructing elements is free.
     make(PLUGIN_UI_NODE_LIMIT + 5);
     expect(remoteElementCount()).toBe(0);
+    expect(onLimit).not.toHaveBeenCalled();
   });
 
-  it("releases the elements a removal takes away, so churn under the limit never trips", () => {
+  it("releases the elements a removal takes away, so churn under the limit never reports", () => {
     const watch = createRemovalWatch();
-    // Five rounds of a 3,000-element subtree: under the limit at every step.
     for (let round = 0; round < 5; round += 1) {
       make(3_000);
       const subtree = element(`r${round}`, Array.from({ length: 2_999 }, (_, i) => element(`r${round}-${i}`)));
@@ -92,6 +102,7 @@ describe("the Plugin-side element counter", () => {
       watch.observe([remove(ROOT, 0)]);
       expect(remoteElementCount()).toBe(0);
     }
+    expect(onLimit).not.toHaveBeenCalled();
   });
 
   it("releases only elements, never text nodes", () => {
@@ -102,9 +113,12 @@ describe("the Plugin-side element counter", () => {
     expect(remoteElementCount()).toBe(0);
   });
 
-  it("resets to zero when the last mount is gone", () => {
-    make(500);
+  it("resets the count and re-arms the handler once the last mount is gone", () => {
+    make(PLUGIN_UI_NODE_LIMIT + 1);
+    expect(onLimit).toHaveBeenCalledTimes(1);
     resetRemoteElementCount();
     expect(remoteElementCount()).toBe(0);
+    make(PLUGIN_UI_NODE_LIMIT + 1);
+    expect(onLimit).toHaveBeenCalledTimes(2);
   });
 });

@@ -508,6 +508,13 @@ export async function createRuntimeSeam(
         outcome: { kind: "stopped", reason, detail: "the host refused the declared interface" },
       };
     }
+    // The Worker stopped itself at its element limit (#516): the same stop the
+    // host raises for an oversized tree, reported by the lifecycle.
+    if (stopReason !== null) {
+      return {
+        outcome: { kind: "stopped", reason: stopReason, detail: "the Worker reported its element limit" },
+      };
+    }
     if (!accepted) {
       return {
         outcome: { kind: "escaped", detail: "the Plugin did not accept the mount" },
