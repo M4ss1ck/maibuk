@@ -156,9 +156,10 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     detectionLanguage: "en",
   };
 
-  // Bumped on every focus event. A toggle that awaited the focused editor
-  // checks it again before turning on, so a focus move during the read wins.
+  // Bumped on every focus event, with the entity it reported last. A toggle
+  // that awaited the focused editor checks both after its read (#529).
   let focusEpoch = 0;
+  let lastFocused: EntityTarget | null = null;
 
   // Coalescing: one recompute runs at a time; a change that arrives while one
   // is in flight is remembered and runs exactly one more time afterwards.
@@ -386,7 +387,10 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
    */
   async function closeIfNoEditor(): Promise<void> {
     if (!state.on && state.entity === null) return;
+    const epoch = focusEpoch;
     const content = await client.editor.getContent().catch(() => null);
+    // Any focus event since the null arrived supersedes its answer.
+    if (focusEpoch !== epoch) return;
     if (
       content !== null &&
       content.status === "ok" &&
@@ -412,11 +416,13 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
 
   listen("editor.focusChanged", (payload) => {
     focusEpoch++;
-    // The host reports `null` only when the focused editor unmounts (a mere
-    // blur to a toolbar button or a Plugin page keeps the target), so `null`
-    // means the editor closed: turn the state off without painting, since there
-    // is no editor left to clear and a later editor must never inherit this
-    // one's ranges (#451).
+    lastFocused = payload.entity;
+    // The host reports `null` when the focused editor unmounts or a stale null
+    // arrives after a toggle (a mere blur to a toolbar button or a Plugin page
+    // keeps the target). A null only asks for a check: `closeIfNoEditor` resets
+    // the state when the host confirms no editor is focused on this entity, and
+    // resets without painting, since an unmounted editor has nothing left to
+    // clear and a later editor must never inherit this one's ranges (#451, #529).
     if (payload.entity === null) {
       void closeIfNoEditor();
       return;
@@ -454,9 +460,14 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
           client.editor.getSelection(),
         ]);
         if (content.status !== "ok") return;
-        // Focus moved while the content was read: that editor is no longer the
-        // one focused, so turning on would paint it (#529).
-        if (focusEpoch !== epoch) return;
+        // A focus event during the read aborts only when it moved focus away
+        // from the editor read: the same entity re-announced is not a move (#529).
+        if (
+          focusEpoch !== epoch &&
+          (lastFocused === null || !sameEntity(lastFocused, content.entity))
+        ) {
+          return;
+        }
         setOn(true);
         state.entity = content.entity;
         state.index = null;
