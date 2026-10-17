@@ -202,10 +202,16 @@ describe("sync concurrency — FIFO serialization", () => {
     mockListRemoteNotes.mockResolvedValue([]);
 
     let resolveConflict: ((choice: "push" | "pull" | "cancel") => void) | null = null;
-    const blockedConflict = () =>
-      new Promise<"push" | "pull" | "cancel">((resolve) => {
-        resolveConflict = resolve;
-      });
+    const blockedConflict = vi.fn(
+      () =>
+        new Promise<"push" | "pull" | "cancel">((resolve) => {
+          resolveConflict = resolve;
+        })
+    );
+    // Records the release's place in the call order, for the ordering check below.
+    const releaseConflict = vi.fn((choice: "push" | "pull" | "cancel") => {
+      (resolveConflict as unknown as (c: "push" | "pull" | "cancel") => void)(choice);
+    });
     const bookLog: { event: string }[] = [];
     const noteLog: { event: string }[] = [];
     const noteConflict = vi.fn().mockResolvedValue("cancel");
@@ -215,21 +221,23 @@ describe("sync concurrency — FIFO serialization", () => {
         bookLog.push(entry);
       },
     });
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => expect(blockedConflict).toHaveBeenCalledTimes(1));
 
     const secondSync = syncSingleNote("note-1", "pass-two", noteConflict, {
       onLog: (entry) => {
         noteLog.push(entry);
       },
     });
-    await new Promise((r) => setTimeout(r, 10));
-    // The queued note sync has not started while the book sync is blocked.
-    expect(mockPushNoteBlob).not.toHaveBeenCalled();
 
-    if (resolveConflict) {
-      (resolveConflict as (choice: "push" | "pull" | "cancel") => void)("cancel");
-    }
+    // The queued note sync must not push while the book sync is blocked. The
+    // release is the witness that comes after that window: the note push has to
+    // be ordered after it, and an unqueued push would land before it.
+    expect(releaseConflict).not.toHaveBeenCalled();
+    releaseConflict("cancel");
     const [firstResult, secondResult] = await Promise.all([firstSync, secondSync]);
+    expect(releaseConflict.mock.invocationCallOrder[0]).toBeLessThan(
+      mockPushNoteBlob.mock.invocationCallOrder[0]
+    );
 
     expect(firstResult).toEqual({ outcome: "cancelled", action: "cancelled" });
     expect(secondResult).toEqual({ outcome: "success", action: "pushed" });
