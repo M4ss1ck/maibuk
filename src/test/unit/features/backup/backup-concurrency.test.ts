@@ -130,23 +130,35 @@ describe("BackupService concurrency — shared write queue", () => {
   });
 
   it("serializes concurrent createBackup calls across service instances", async () => {
-    let active = 0;
-    let maxActive = 0;
+    const events: string[] = [];
+    let openDumpGate!: () => void;
+    const dumpGate = new Promise<void>((resolve) => {
+      openDumpGate = resolve;
+    });
     mockGenerateSqlDump.mockImplementation(async () => {
-      active += 1;
-      maxActive = Math.max(maxActive, active);
-      await new Promise((r) => setTimeout(r, 10));
-      active -= 1;
+      events.push("dump-start");
+      await dumpGate;
+      events.push("dump-end");
       return new TextEncoder().encode("INSERT INTO books ...");
+    });
+    const rawSave = mockAdapter.saveBackup;
+    mockAdapter.saveBackup = vi.fn(async (filename: string, sql: Uint8Array) => {
+      events.push("save");
+      return rawSave(filename, sql);
     });
 
     // A background backup and a pre-sync backup racing from separate
-    // instances must not interleave their dump-and-save work.
+    // instances must not interleave their dump-and-save work. The gate holds
+    // the first dump open until it has started; the second dump, if it were
+    // not queued, would start during that hold and show in the event log.
     const background = new BackupService(mockAdapter);
     const preSync = new BackupService(mockAdapter);
-    await Promise.all([background.createBackup("close"), preSync.createBackup("pre-sync")]);
+    const run = Promise.all([background.createBackup("close"), preSync.createBackup("pre-sync")]);
+    await vi.waitFor(() => expect(events).toContain("dump-start"));
+    openDumpGate();
+    await run;
 
-    expect(maxActive).toBe(1);
+    expect(events).toEqual(["dump-start", "dump-end", "save", "dump-start", "dump-end", "save"]);
     expect(mockAdapter.saveBackup).toHaveBeenCalledTimes(2);
   });
 
@@ -157,8 +169,14 @@ describe("BackupService concurrency — shared write queue", () => {
       if (sql === "TARGET SQL") return [`INSERT INTO "books" (id) VALUES ('x')`];
       return [sql];
     });
+    let openDumpGate!: () => void;
+    const dumpGate = new Promise<void>((resolve) => {
+      openDumpGate = resolve;
+    });
+    let dumpsStarted = 0;
     mockGenerateSqlDump.mockImplementation(async () => {
-      await new Promise((r) => setTimeout(r, 10));
+      dumpsStarted += 1;
+      await dumpGate;
       return new TextEncoder().encode("INSERT INTO books ...");
     });
 
@@ -176,7 +194,10 @@ describe("BackupService concurrency — shared write queue", () => {
 
     const creator = new BackupService(mockAdapter);
     const restorer = new BackupService(mockAdapter);
-    await Promise.all([creator.createBackup("daily"), restorer.restoreBackup(target)]);
+    const run = Promise.all([creator.createBackup("daily"), restorer.restoreBackup(target)]);
+    await vi.waitFor(() => expect(dumpsStarted).toBe(1));
+    openDumpGate();
+    await run;
 
     // The create finished before the restore's pre-restore backup, which
     // precedes the restore's read of the target.
