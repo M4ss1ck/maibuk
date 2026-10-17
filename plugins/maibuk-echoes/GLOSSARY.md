@@ -20,3 +20,10 @@ Words the author told Echoes never to report. One list for the whole Library.
 
 **Limited support**:
 How Echoes runs for a language it has no stop words or stemmer for: words match only when spelled the same, and short common words are not filtered out.
+
+**Echo color**:
+The one color every occurrence of an Echo shares in the editor when the author colors highlights by Echo, so the words that belong together read as a group. An Echo keeps its color across Chapters and while the author types.
+_Avoid_: group color, tone
+
+**Palette**:
+A preset set of Echo colors the author picks from. Two Echoes can share a color when there are more Echoes than colors.
