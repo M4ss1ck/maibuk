@@ -1,7 +1,14 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/** useSettingsOutline's JUMP_SETTLE_MS. The hook does not export it. */
+const JUMP_SETTLE_MS = 150;
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { resolvedLanguage: "en" } }),
@@ -244,7 +251,8 @@ describe("Settings outline", () => {
   });
 
   it("keeps a clicked section current through its jump, until the author scrolls", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderSettings();
     const scroller = layOutSections({ appearance: -900, general: -400, shortcuts: 200, sync: 600 });
 
@@ -253,19 +261,15 @@ describe("Settings outline", () => {
     act(() => {
       scroller.dispatchEvent(new Event("scroll"));
     });
-    // Kept: proves the jump lock holds through the jump's scroll. The lock is
-    // the JUMP_SETTLE_MS / JUMP_START_MS timer in useSettingsOutline, and the
-    // selection it guards is set in a requestAnimationFrame measure, so no
-    // asserted event follows the ignored scroll.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The jump lock holds for JUMP_SETTLE_MS after the last jump scroll. Fake time
+    // runs the scroll's requestAnimationFrame measure, then stops just short of the settle.
+    await act(() => vi.advanceTimersByTimeAsync(JUMP_SETTLE_MS - 1));
     expect(
       within(outlineTree()).getByRole("row", { name: "sync.title, settings.outline.current" })
     ).toBeInTheDocument();
 
-    // Once the jump settles, the author's scroll hands back to the spy. Kept:
-    // waits out JUMP_START_MS (useSettingsOutline) so the settle timer has fired.
-    // No observable event marks that timer, and fake timers hang user-event here.
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    // Once the jump settles, the author's scroll hands back to the spy.
+    await act(() => vi.advanceTimersByTimeAsync(1));
     act(() => {
       scroller.dispatchEvent(new Event("scroll"));
     });
