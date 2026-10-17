@@ -46,7 +46,11 @@ interface BehaviorStore {
   recorded: RecordedRun | null;
   /** The outcome promise the boot awaits; set once the runner has been called. */
   pending: Promise<unknown> | null;
-  outcome: { kind: "ready" } | { kind: "error"; message: string } | { kind: "memory-death" };
+  outcome:
+    | { kind: "ready" }
+    | { kind: "error"; message: string }
+    | { kind: "memory-death" }
+    | { kind: "ready-then-memory-death" };
 }
 
 /** The runner module the prelude imports: it records its options and answers. */
@@ -58,7 +62,12 @@ const RUNNER_STUB = `export const runQuickJsPlugin = (options) => {
     wasmBinary: options.wasmBinary,
     initEvent: options.initEvent,
   };
-  const outcome = Promise.resolve(globalThis.__preludeBehavior.outcome);
+  const kind = globalThis.__preludeBehavior.outcome.kind;
+  // The runner calls onMemoryDeath once per death, before or after the outcome.
+  if (kind === "memory-death" || kind === "ready-then-memory-death") options.onMemoryDeath?.();
+  const outcome = Promise.resolve(
+    kind === "ready-then-memory-death" ? { kind: "ready" } : globalThis.__preludeBehavior.outcome
+  );
   globalThis.__preludeBehavior.pending = outcome;
   return { outcome, startMs: 0, dispose() {} };
 };`;
@@ -199,6 +208,27 @@ describe("the sandbox prelude on the QuickJS branch", () => {
       kind: PLUGIN_ERROR_MESSAGE.kind,
       message: "boom",
     });
+  });
+
+  it("reports a death that comes after the run settled ready, so the Worker error path fires", async () => {
+    const run = await runPrelude({
+      outcome: { kind: "ready-then-memory-death" },
+      sources: { "index.js": "1" },
+      entry: "index.js",
+      initData: { kind: PLUGIN_INIT_MESSAGE.kind },
+      captureMicrotasks: true,
+    });
+
+    expect(run.posted).toEqual([]);
+    expect(run.microtasks).toHaveLength(1);
+    const thrower = run.microtasks[0];
+    let thrown: unknown;
+    try {
+      thrower?.();
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown instanceof Error ? thrown.message : "").toBe(QUICKJS_MEMORY_DEATH_MESSAGE);
   });
 
   it("throws from a fresh task on memory death so the Worker error path fires", async () => {

@@ -130,6 +130,14 @@ export const PRELUDE_SOURCE = `"use strict";
         endpoint: self,
         wasmBinary: quickjs.wasmBinary,
         initEvent: { data: event.data, ports: event.ports },
+        // A death can come after the run settled ready (a timer or a message
+        // allocates past the cap), when the outcome can no longer report it. The
+        // runner calls this exactly once per death, so the Worker reports it here.
+        onMemoryDeath: () => {
+          queueMicrotask(() => {
+            throw new Error("${QUICKJS_MEMORY_DEATH_MESSAGE}");
+          });
+        },
       }).outcome;
     } catch (error) {
       self.postMessage({
@@ -141,11 +149,6 @@ export const PRELUDE_SOURCE = `"use strict";
     if (outcome.kind === "error") {
       self.postMessage({ kind: "${PLUGIN_ERROR_KIND}", message: outcome.message });
       return;
-    }
-    if (outcome.kind === "memory-death") {
-      queueMicrotask(() => {
-        throw new Error("${QUICKJS_MEMORY_DEATH_MESSAGE}");
-      });
     }
   }
 })();
