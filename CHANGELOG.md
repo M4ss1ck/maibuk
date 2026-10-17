@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-10-17
+
+### Added
+- Plugin system: install, enable, and manage plugins from Settings, with filters, add, remove, reinstall, delete data, and per-plugin status
+- Permission approval with pinned file hashes, a review step for changed files, and a development mode with watched reloads
+- Plugin contributions across commands, pages, sidebar entries, Settings rows, toolbar buttons, and item menus
+- Plugin API spanning Library reads and writes, focused-editor access and highlights, storage, navigation, notifications, network, secrets, clipboard, and language
+- Host-rendered Remote UI component kit plus sandboxed Frames with live theme tokens and a custom-UI notice
+- Echoes built-in plugin for finding repeated words and phrases, with a report page, editor highlights, and next/previous echo navigation
+- Plugin execution on Android through a memory-capped QuickJS engine, opt-in per plugin through its manifest platforms
+- Toggle Buttons for plugin toolbar controls, with pressed state reflecting plugin readiness
+- Plugin template, authoring guide, and authoring Agent Skill for external plugin development
+
+### Changed
+- Built-in plugins now start disabled and pre-granted, with Echoes off by default
+- Plugin Settings rows show header badges, an enable switch, localized names, and a permissions accordion
+- Plugin sidebar entries sit after core destinations while Metrics and Settings stay pinned at the bottom
+- Views refresh when rows change through plugin writes, imports, or version restores
+
+### Fixed
+- Android keeps the app alive and restarts it when the WebView renderer dies
+- Linux login no longer shows a duplicate tray icon
+- Settings reveals wait for a plugin row's control to mount before moving focus
+- Echoes keeps its report within Remote UI limits and stays responsive on large books
+- Plugin writes flush open editors first and refuse cleanly when a save fails
+
 ## [0.11.0] - 2026-10-09
 
 ### Added
