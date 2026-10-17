@@ -19,6 +19,7 @@ import { BatchingRemoteConnection, RemoteMutationObserver } from "@remote-dom/co
 import type { RemoteConnection, RemoteMutationRecord } from "@remote-dom/core";
 import { ThreadMessagePort } from "@quilted/threads";
 import type { ComponentType } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { HostRequestHandler, PluginClient } from "@/plugin-sdk/index";
 import {
@@ -28,7 +29,12 @@ import {
   type PluginUiUnmountParams,
 } from "@/plugin-sdk/protocol";
 import { installPluginUiElements } from "@/plugin-sdk/ui";
-import { createRemovalWatch, resetRemoteElementCount } from "@/plugin-sdk/ui-node-budget";
+import {
+  createMountBudget,
+  createRemovalWatch,
+  renderingWithin,
+  type MountBudget,
+} from "@/plugin-sdk/ui-node-budget";
 import { PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
 
 /**
@@ -125,6 +131,7 @@ interface HostConnectionImports {
 /** One live mount, keyed by its host-chosen surface id. */
 interface MountedSurface {
   reactRoot: Root;
+  budget: MountBudget;
   connection: BatchingRemoteConnection;
   thread: ThreadMessagePort<HostConnectionImports>;
   port: MessagePort;
@@ -175,8 +182,8 @@ export function servePluginUi(
    * Plugin that churns under the limit never trips it (#516, decision 2a). The
    * count itself runs in the UI kit's element constructor.
    */
-  function watchRemovals(connection: BatchingRemoteConnection): void {
-    const watch = createRemovalWatch();
+  function watchRemovals(connection: BatchingRemoteConnection, budget: MountBudget): void {
+    const watch = createRemovalWatch(budget);
     const queue = connection.mutate.bind(connection);
     connection.mutate = (records) => {
       watch.observe(records);
@@ -226,13 +233,17 @@ export function servePluginUi(
     };
 
     const connection = new BatchingRemoteConnection(hostConnection, { batch: frameBatch() });
-    watchRemovals(connection);
+    const budget = createMountBudget();
+    watchRemovals(connection, budget);
     const { container, detach } = attach(connection);
     const reactRoot = createRoot(container);
-    reactRoot.render(<Page />);
+    // The first render is synchronous and attributed to this mount, so every
+    // node it makes counts against this mount's budget (#516, decision 2a).
+    renderingWithin(budget, () => flushSync(() => reactRoot.render(<Page />)));
 
     mounted.set(surface, {
       reactRoot,
+      budget,
       connection,
       thread,
       port,
@@ -272,8 +283,8 @@ export function servePluginUi(
     const entry = mounted.get(surface);
     if (entry === undefined) return null;
     mounted.delete(surface);
-    // The last mount gone resets the Plugin's live element count (#516).
-    if (mounted.size === 0) resetRemoteElementCount();
+    // The mount's nodes stop counting now; its budget is gone with it (#516).
+    entry.budget.dispose();
     return teardown(entry);
   }
 

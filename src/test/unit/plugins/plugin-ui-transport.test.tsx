@@ -304,7 +304,9 @@ describe("the Plugin page's Remote UI transport", () => {
       lifecycle.setRuntime(runtimeOf(run.broker), "ready");
     });
     expect(await screen.findByRole("heading", { name: "Body" })).toBeInTheDocument();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    // The content can paint before the mount's `then` clears the pending status,
+    // so the status removal is awaited, not read at the instant the heading appears.
+    await vi.waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
   });
 
   it("drops its pending content when the mount is refused", async () => {

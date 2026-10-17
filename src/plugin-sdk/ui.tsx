@@ -24,7 +24,7 @@
  */
 
 import { createRemoteElement } from "@remote-dom/core/elements";
-import { countRemoteElement } from "@/plugin-sdk/ui-node-budget";
+import { countRemoteNode } from "@/plugin-sdk/ui-node-budget";
 import {
   createElement,
   forwardRef,
@@ -87,7 +87,7 @@ function kitElement(definition: Omit<RuntimeElement, "tag">) {
       super();
       // Counts every live element as it is made, so a Plugin past the limit
       // stops before its render finishes (#516, decision 2a).
-      countRemoteElement();
+      countRemoteNode();
     }
 
     get [KIT_PROPS](): KitProps {

@@ -11,8 +11,9 @@
  */
 import { PLUGIN_UI_BATCH_MS, frameBatch, servePluginUi } from "@/plugin-sdk/worker-ui";
 import {
-  countRemoteElement,
-  resetRemoteElementCount,
+  countRemoteNode,
+  createMountBudget,
+  renderingWithin,
 } from "@/plugin-sdk/ui-node-budget";
 import { PLUGIN_ERROR_MESSAGE } from "@/plugin-sdk/protocol";
 import {
@@ -578,13 +579,14 @@ describe("splitMutationRecords", () => {
 describe("the Worker's element-limit report", () => {
   it("posts the limit marker through the Worker scope once, as a Plugin error", () => {
     const post = vi.fn();
-    resetRemoteElementCount();
     vi.stubGlobal("self", { postMessage: post });
     try {
-      for (let index = 0; index <= PLUGIN_UI_NODE_LIMIT + 3; index += 1) countRemoteElement();
+      const budget = createMountBudget();
+      renderingWithin(budget, () => {
+        for (let index = 0; index <= PLUGIN_UI_NODE_LIMIT + 3; index += 1) countRemoteNode();
+      });
     } finally {
       vi.unstubAllGlobals();
-      resetRemoteElementCount();
     }
     expect(post).toHaveBeenCalledTimes(1);
     expect(post).toHaveBeenCalledWith({

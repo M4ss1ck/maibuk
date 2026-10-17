@@ -1,103 +1,138 @@
 /**
- * The Plugin-side element counter (#516, decision 2a). The host stops a Plugin
- * whose interface holds more than `PLUGIN_UI_NODE_LIMIT` elements, but on the
- * Android QuickJS engine a 12,000-element render blocks the Worker long before
- * any mutation reaches the host: React builds a new subtree detached and inserts
- * it in one record at the end. So the count runs where each element is made.
+ * The Plugin-side node budget (#516, decision 2a), per mount. The host checks
+ * `PLUGIN_UI_NODE_LIMIT` per mount: one shadow tree per receiver (validate.ts).
+ * This budget is the same measure, taken where each node is made, so the render
+ * stops before the rest of the tree is built on the QuickJS engine.
  *
- * The count is live elements: every UI kit element adds one when it is
- * constructed, and every element a removal record takes out of a mount's tree
- * subtracts one. It runs only inside a Plugin Worker (`worker-ui.tsx` enables
- * it), so the host's own tests and renderer never count. At the limit's
- * (limit + 1)th live element the constructor throws `PLUGIN_UI_NODE_LIMIT_MARKER`.
+ * What counts. The host's shadow counts every node it replays: elements and text
+ * nodes (validate.ts `checkSerialization`: an element adds one, and so does each
+ * text or comment node). So the Plugin counts elements (the UI kit's constructor)
+ * and text nodes (the polyfilled `document.createTextNode`, hooked by
+ * `worker-ui.tsx`). Comments are never made by the kit.
  *
- * Known over-count: React's concurrent renderer can discard work-in-progress
- * elements that were constructed but never attached. Nothing removes them, so
- * the count runs high for each discarded tree. The counter resets when every
- * mount is torn down, which bounds the drift to one Plugin session's renders.
- * The host's check, which counts the attached tree, stays authoritative.
+ * Attribution. Nodes count against the mount that is rendering when they are
+ * made: `renderingWithin(budget, ...)` runs a mount's first render, and the
+ * mount renders synchronously (`flushSync`), so every node made in that render is
+ * that mount's. Re-renders after the first are not attributed: React schedules
+ * them, and this module cannot tell which mount they belong to. The host's
+ * per-mount check still sees every update's mutations; only the early trip is
+ * limited to the initial render. Documented, not papered over.
+ *
+ * Release. A removal record releases the nodes it takes out of the mount's
+ * attached tree (`createRemovalWatch`). Nodes made and never attached (React
+ * discarding work-in-progress) are never released; they count until the mount is
+ * disposed, which bounds the drift to one mount's life.
+ *
+ * Only a Plugin Worker counts: `worker-ui.tsx` enables the count.
  */
 
 import {
   MUTATION_TYPE_INSERT_CHILD,
   MUTATION_TYPE_REMOVE_CHILD,
-  NODE_TYPE_ELEMENT,
   type RemoteMutationRecord,
   type RemoteNodeSerialization,
 } from "@remote-dom/core";
 import { PLUGIN_UI_NODE_LIMIT } from "@/plugin-sdk/ui-node-limit";
 
 let enabled = false;
-let live = 0;
+let active: MountBudget | null = null;
 let onLimit: (() => void) | null = null;
-let limitReported = false;
+
+/** One mount's count against the limit. */
+export class MountBudget {
+  #live = 0;
+  #reported = false;
+  #disposed = false;
+
+  /** Nodes this mount holds live: made, less released. */
+  get live(): number {
+    return this.#live;
+  }
+
+  /** Counts one node made for this mount; reports the limit once, at limit + 1. */
+  add(): void {
+    if (this.#disposed) return;
+    this.#live += 1;
+    if (this.#live > PLUGIN_UI_NODE_LIMIT && !this.#reported) {
+      this.#reported = true;
+      onLimit?.();
+    }
+  }
+
+  /** Releases nodes a removal took out of the mount's attached tree. */
+  release(count: number): void {
+    this.#live = Math.max(0, this.#live - count);
+  }
+
+  /** Stops counting for this mount, on unmount. Its nodes no longer count. */
+  dispose(): void {
+    this.#disposed = true;
+    this.#live = 0;
+  }
+}
+
+/** A new mount's budget, live at zero. */
+export function createMountBudget(): MountBudget {
+  return new MountBudget();
+}
+
+/** Turns the count on. Only the Plugin Worker entry calls this. */
+export function enableRemoteElementCount(): void {
+  enabled = true;
+}
+
+/** Turns the count off again (tests). */
+export function disableRemoteElementCount(): void {
+  enabled = false;
+}
 
 /**
- * Registers what happens at the limit. The Worker entry (`worker-ui.tsx`) posts
- * the limit's error through its own scope. The counter never throws: a throw
- * from a custom element constructor is swallowed by the element machinery (the
- * jsdom probe showed it), so the signal goes out as a message instead.
+ * Registers what happens when a mount passes the limit. The Worker entry posts
+ * the limit's error through its own scope. Nothing here throws: a throw from a
+ * custom element constructor is swallowed by the element machinery.
  */
 export function setRemoteElementLimitHandler(handler: (() => void) | null): void {
   onLimit = handler;
 }
 
-/** Turns the counter on. Only the Plugin Worker entry calls this. */
-export function enableRemoteElementCount(): void {
-  enabled = true;
-}
-
-/** Turns the counter off again (tests, and a Worker that never ran the entry). */
-export function disableRemoteElementCount(): void {
-  enabled = false;
-}
-
-/** The live element count. */
-export function remoteElementCount(): number {
-  return live;
-}
-
-/** Forgets every count; called when the last mount is torn down. */
-export function resetRemoteElementCount(): void {
-  live = 0;
-  limitReported = false;
-}
-
 /**
- * Counts one constructed UI kit element. At the (limit + 1)th live element it
- * calls the limit handler once; the Worker reports the marker from there, so the
- * host stops the Plugin without an exception in the constructor.
+ * Runs `render` with `budget` as the mount that owns every node made inside it.
+ * The mount's first render is the only one attributed (see the module comment).
  */
-export function countRemoteElement(): void {
-  if (!enabled) return;
-  live += 1;
-  if (live > PLUGIN_UI_NODE_LIMIT && !limitReported) {
-    limitReported = true;
-    onLimit?.();
+export function renderingWithin<T>(budget: MountBudget, render: () => T): T {
+  const previous = active;
+  active = budget;
+  try {
+    return render();
+  } finally {
+    active = previous;
   }
 }
 
-function releaseElements(count: number): void {
-  live = Math.max(0, live - count);
+/**
+ * Counts one node the Plugin made (a UI kit element, or a text node). Counts only
+ * inside a Plugin Worker, and only for the mount rendering it.
+ */
+export function countRemoteNode(): void {
+  if (!enabled || active === null) return;
+  active.add();
 }
 
 /**
- * A per-mount mirror of the attached tree's elements, so a removal record can
- * say how many live elements it takes away. It reads only the records the
- * connection already carries, with the host's shape: an insert carries the
- * whole serialized subtree, a remove names a parent and an index.
+ * A per-mount mirror of the attached tree, so a removal record says how many
+ * nodes it takes out of this mount's count. It reads the records the connection
+ * already carries, with the host's shape: an insert carries its whole serialized
+ * subtree; a remove names a parent and an index.
  */
 export interface RemovalWatch {
-  /** Observes one batch in order, releasing the elements each removal takes out. */
+  /** Observes one batch in order, releasing each removal's nodes from `budget`. */
   observe(records: readonly RemoteMutationRecord[]): void;
 }
 
-export function createRemovalWatch(): RemovalWatch {
+export function createRemovalWatch(budget: MountBudget): RemovalWatch {
   const children = new Map<string, string[]>();
-  const isElement = new Map<string, boolean>();
 
   function index(serialization: RemoteNodeSerialization): void {
-    isElement.set(serialization.id, serialization.type === NODE_TYPE_ELEMENT);
     const ids: string[] = [];
     children.set(serialization.id, ids);
     if ("children" in serialization && Array.isArray(serialization.children)) {
@@ -108,12 +143,11 @@ export function createRemovalWatch(): RemovalWatch {
     }
   }
 
-  /** Forgets a removed subtree and returns how many elements it held. */
+  /** Forgets a removed subtree and returns how many nodes it held. */
   function forget(id: string): number {
-    let count = isElement.get(id) ? 1 : 0;
+    let count = 1;
     for (const child of children.get(id) ?? []) count += forget(child);
     children.delete(id);
-    isElement.delete(id);
     return count;
   }
 
@@ -123,18 +157,18 @@ export function createRemovalWatch(): RemovalWatch {
         if (record[0] === MUTATION_TYPE_INSERT_CHILD) {
           const parentId = record[1];
           const serialization = record[2];
-          const index_ = record[3];
+          const at = record[3];
           const siblings = children.get(parentId) ?? [];
           children.set(parentId, siblings);
           index(serialization);
-          const at = Math.max(0, Math.min(index_ ?? siblings.length, siblings.length));
-          siblings.splice(at, 0, serialization.id);
+          const position = Math.max(0, Math.min(at ?? siblings.length, siblings.length));
+          siblings.splice(position, 0, serialization.id);
         } else if (record[0] === MUTATION_TYPE_REMOVE_CHILD) {
           const siblings = children.get(record[1]);
           const childId = siblings?.[record[2]];
           if (siblings !== undefined && childId !== undefined) {
             siblings.splice(record[2], 1);
-            releaseElements(forget(childId));
+            budget.release(forget(childId));
           }
         }
       }

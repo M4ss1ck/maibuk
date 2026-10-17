@@ -22,6 +22,7 @@
 import "@remote-dom/core/polyfill";
 import "@remote-dom/react/polyfill";
 import {
+  countRemoteNode,
   enableRemoteElementCount,
   setRemoteElementLimitHandler,
 } from "@/plugin-sdk/ui-node-budget";
@@ -30,6 +31,13 @@ import { PLUGIN_ERROR_MESSAGE } from "@/plugin-sdk/protocol";
 
 // Only a Plugin Worker counts its live elements; the host never imports this file.
 enableRemoteElementCount();
+// The host counts text nodes too (validate.ts checkSerialization), so the
+// Plugin's text nodes count where they are made, against the mount rendering them.
+const makeTextNode = document.createTextNode.bind(document);
+document.createTextNode = (data: string) => {
+  countRemoteNode();
+  return makeTextNode(data);
+};
 // At the limit the Worker reports the marker through its own scope, the channel
 // every Plugin error uses; the frame relays it and the lifecycle maps the marker
 // to remote-ui-limit.

@@ -1,8 +1,7 @@
 /**
- * The Plugin-side element counter (#516, decision 2a). The count is live
- * elements, made in the UI kit's constructor and released by removal records.
- * At the limit it calls the limit handler once and never throws: a throw from a
- * custom element constructor is swallowed by the element machinery.
+ * The Plugin-side node budget, per mount (#516, decision 2a). The host checks
+ * the limit per mount, and counts text nodes as well as elements; these tests pin
+ * the same measure. The count is enabled here, as the Worker entry enables it.
  */
 import {
   MUTATION_TYPE_INSERT_CHILD,
@@ -14,12 +13,13 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installPluginUiElements } from "@/plugin-sdk/ui";
 import {
-  countRemoteElement,
+  countRemoteNode,
+  createMountBudget,
   createRemovalWatch,
   disableRemoteElementCount,
   enableRemoteElementCount,
-  remoteElementCount,
-  resetRemoteElementCount,
+  type MountBudget,
+  renderingWithin,
   setRemoteElementLimitHandler,
 } from "@/plugin-sdk/ui-node-budget";
 import { PLUGIN_UI_NODE_LIMIT } from "@/plugin-sdk/ui-node-limit";
@@ -43,82 +43,106 @@ function remove(parent: string, index: number): RemoteMutationRecord {
   return [MUTATION_TYPE_REMOVE_CHILD, parent, index] as unknown as RemoteMutationRecord;
 }
 
-/** Makes `count` elements, the way the UI kit's constructor does. */
-function make(count: number): void {
-  for (let index = 0; index < count; index += 1) countRemoteElement();
+/** Makes `count` nodes while `budget` is the mount rendering them. */
+function render(budget: MountBudget, count: number): void {
+  renderingWithin(budget, () => {
+    for (let index = 0; index < count; index += 1) countRemoteNode();
+  });
 }
 
 let onLimit: ReturnType<typeof vi.fn<() => void>>;
 
 beforeEach(() => {
-  onLimit = vi.fn();
+  onLimit = vi.fn<() => void>();
   setRemoteElementLimitHandler(onLimit);
   enableRemoteElementCount();
-  resetRemoteElementCount();
 });
 
 afterEach(() => {
   setRemoteElementLimitHandler(null);
   disableRemoteElementCount();
-  resetRemoteElementCount();
 });
 
-describe("the Plugin-side element counter", () => {
+describe("the Plugin-side node budget, per mount", () => {
   it("shares the host's limit, not a second number", () => {
     expect(PLUGIN_UI_NODE_LIMIT).toBe(PLUGIN_UI_LIMITS.maxNodes);
   });
 
-  it("calls the limit handler once, at the (limit + 1)th element, and never throws", () => {
-    make(PLUGIN_UI_NODE_LIMIT);
-    expect(onLimit).not.toHaveBeenCalled();
-    expect(() => countRemoteElement()).not.toThrow();
-    expect(onLimit).toHaveBeenCalledTimes(1);
-    expect(() => make(50)).not.toThrow();
-    expect(onLimit).toHaveBeenCalledTimes(1);
-  });
-
-  it("counts the real kit tags a page renders, and reports at the limit before the render finishes", () => {
-    installPluginUiElements();
-    let made = 0;
-    for (; made < PLUGIN_UI_NODE_LIMIT + 5; made += 1) document.createElement("maibuk-text");
-    expect(made).toBe(PLUGIN_UI_NODE_LIMIT + 5);
-    expect(remoteElementCount()).toBe(PLUGIN_UI_NODE_LIMIT + 5);
-    expect(onLimit).toHaveBeenCalledTimes(1);
-  });
-
-  it("counts nothing outside a Plugin Worker", () => {
-    disableRemoteElementCount();
-    make(PLUGIN_UI_NODE_LIMIT + 5);
-    expect(remoteElementCount()).toBe(0);
+  it("two mounts at 6,000 nodes each never trip, because the host counts each mount alone", () => {
+    const first = createMountBudget();
+    const second = createMountBudget();
+    render(first, 6_000);
+    render(second, 6_000);
+    expect(first.live).toBe(6_000);
+    expect(second.live).toBe(6_000);
     expect(onLimit).not.toHaveBeenCalled();
   });
 
-  it("releases the elements a removal takes away, so churn under the limit never reports", () => {
-    const watch = createRemovalWatch();
-    for (let round = 0; round < 5; round += 1) {
-      make(3_000);
-      const subtree = element(`r${round}`, Array.from({ length: 2_999 }, (_, i) => element(`r${round}-${i}`)));
+  it("one page re-rendering 200 times at 500 nodes never trips", () => {
+    const budget = createMountBudget();
+    const watch = createRemovalWatch(budget);
+    for (let round = 0; round < 200; round += 1) {
+      render(budget, 500);
+      const subtree = element(`r${round}`, Array.from({ length: 499 }, (_, i) => element(`r${round}-${i}`)));
       watch.observe([insert(ROOT, subtree)]);
       watch.observe([remove(ROOT, 0)]);
-      expect(remoteElementCount()).toBe(0);
+      expect(budget.live).toBe(0);
     }
     expect(onLimit).not.toHaveBeenCalled();
   });
 
-  it("releases only elements, never text nodes", () => {
-    const watch = createRemovalWatch();
-    make(2);
-    watch.observe([insert(ROOT, element("a", [text("t1"), element("b")]))]);
-    watch.observe([remove(ROOT, 0)]);
-    expect(remoteElementCount()).toBe(0);
+  it("the flood trips the limit once, at the (limit + 1)th node, and stays quiet after", () => {
+    const budget = createMountBudget();
+    render(budget, PLUGIN_UI_NODE_LIMIT);
+    expect(onLimit).not.toHaveBeenCalled();
+    render(budget, 1);
+    expect(onLimit).toHaveBeenCalledTimes(1);
+    render(budget, 500);
+    expect(onLimit).toHaveBeenCalledTimes(1);
   });
 
-  it("resets the count and re-arms the handler once the last mount is gone", () => {
-    make(PLUGIN_UI_NODE_LIMIT + 1);
+  it("counts the real kit tags made during a mount's first render", () => {
+    installPluginUiElements();
+    const budget = createMountBudget();
+    renderingWithin(budget, () => {
+      for (let index = 0; index < PLUGIN_UI_NODE_LIMIT + 5; index += 1) {
+        document.createElement("maibuk-text");
+      }
+    });
+    expect(budget.live).toBe(PLUGIN_UI_NODE_LIMIT + 5);
     expect(onLimit).toHaveBeenCalledTimes(1);
-    resetRemoteElementCount();
-    expect(remoteElementCount()).toBe(0);
-    make(PLUGIN_UI_NODE_LIMIT + 1);
-    expect(onLimit).toHaveBeenCalledTimes(2);
+  });
+
+  it("an unmounted mount's nodes no longer count", () => {
+    const budget = createMountBudget();
+    render(budget, 100);
+    budget.dispose();
+    render(budget, PLUGIN_UI_NODE_LIMIT + 5);
+    expect(budget.live).toBe(0);
+    expect(onLimit).not.toHaveBeenCalled();
+  });
+
+  it("nodes made outside any mount's render do not count", () => {
+    const budget = createMountBudget();
+    countRemoteNode();
+    expect(budget.live).toBe(0);
+  });
+
+  it("counts nothing outside a Plugin Worker", () => {
+    disableRemoteElementCount();
+    const budget = createMountBudget();
+    render(budget, PLUGIN_UI_NODE_LIMIT + 5);
+    expect(budget.live).toBe(0);
+    expect(onLimit).not.toHaveBeenCalled();
+  });
+
+  it("a removal releases the elements and text nodes it takes out, and only those", () => {
+    const budget = createMountBudget();
+    const watch = createRemovalWatch(budget);
+    render(budget, 3);
+    watch.observe([insert(ROOT, element("a", [text("t1"), element("b")]))]);
+    expect(budget.live).toBe(3);
+    watch.observe([remove(ROOT, 0)]);
+    expect(budget.live).toBe(0);
   });
 });
