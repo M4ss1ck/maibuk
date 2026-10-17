@@ -174,22 +174,29 @@ describe("deep-link bridge", () => {
     const { getDeepLinkBootstrap, installDeepLinkBridge, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    const handler = vi.fn(async (_urls: string[]) => {});
+    // Any delivery made before release is recorded as early; the witness below proves none happened.
+    let released = false;
+    const early: string[][] = [];
+    const handler = vi.fn(async (urls: string[]) => {
+      if (!released) early.push(urls);
+    });
     const bootstrapPromise = getDeepLinkBootstrap();
     const emit = await openUrlListener();
     await emit(["maibuk://note/warm-while-pending"]);
     current.resolve(["maibuk://note/bootstrap"]);
     await bootstrapPromise;
-    expect(handler).not.toHaveBeenCalled();
     await installDeepLinkBridge(handler);
-    // Install resolves after the bridge's synchronous drain step, so a delivery
-    // without release would already have happened.
-    expect(handler).not.toHaveBeenCalled();
+    await emit(["maibuk://note/witness"]);
+    released = true;
     releaseDeepLinkQueue();
-    await vi.waitFor(() =>
-      expect(handler).toHaveBeenCalledWith(["maibuk://note/warm-while-pending"])
-    );
-    expect(handler).toHaveBeenCalledTimes(1);
+    // The witness is queued behind the buffered batch, so once it arrives the
+    // buffered batch has been delivered and nothing was delivered before release.
+    await vi.waitFor(() => expect(handler).toHaveBeenLastCalledWith(["maibuk://note/witness"]));
+    expect(early).toEqual([]);
+    expect(handler.mock.calls).toEqual([
+      [["maibuk://note/warm-while-pending"]],
+      [["maibuk://note/witness"]],
+    ]);
   });
 
   it("StrictMode remount delivers to current handler exactly once", async () => {
@@ -214,7 +221,11 @@ describe("deep-link bridge", () => {
     const { getDeepLinkBootstrap, installDeepLinkBridge, releaseDeepLinkQueue } = await import(
       "@/features/deep-link/bridge"
     );
-    const handler = vi.fn(async (_urls: string[]) => {});
+    let released = false;
+    const early: string[][] = [];
+    const handler = vi.fn(async (urls: string[]) => {
+      if (!released) early.push(urls);
+    });
     const bootstrapPromise = getDeepLinkBootstrap();
     const emit = await openUrlListener();
     await emit(["maibuk://note/warmB"]);
@@ -222,14 +233,20 @@ describe("deep-link bridge", () => {
     current.resolve(["maibuk://note/coldA"]);
     await installPromise;
     await bootstrapPromise;
-    // Install and bootstrap have both settled; the gate is still closed.
-    expect(handler).not.toHaveBeenCalled();
     // StartupRedirect consumes cold A, then the queue is released.
     const coldBootstrap = await getDeepLinkBootstrap();
     expect(coldBootstrap).toEqual(["maibuk://note/coldA"]);
+    await emit(["maibuk://note/witness"]);
+    released = true;
     releaseDeepLinkQueue();
-    await vi.waitFor(() => expect(handler).toHaveBeenCalledWith(["maibuk://note/warmB"]));
-    expect(handler).toHaveBeenCalledTimes(1);
+    // The witness is queued after warm B, so its arrival proves warm B has been
+    // delivered; early records any delivery that happened while the gate was closed.
+    await vi.waitFor(() => expect(handler).toHaveBeenLastCalledWith(["maibuk://note/witness"]));
+    expect(early).toEqual([]);
+    expect(handler.mock.calls).toEqual([
+      [["maibuk://note/warmB"]],
+      [["maibuk://note/witness"]],
+    ]);
   });
 
   it("unconsumed bootstrap is delivered via queue when gate released without getDeepLinkBootstrap", async () => {
