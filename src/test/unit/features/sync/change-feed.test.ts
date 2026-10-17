@@ -44,17 +44,31 @@ describe("change feed", () => {
 
   it("awaits async subscribers before resolving", async () => {
     const refreshed: string[] = [];
+    const events: string[] = [];
+    let subscriberStarted = false;
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
     const off = onChange(async (signal) => {
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      subscriberStarted = true;
+      await gate;
       if (isEntityChange(signal)) refreshed.push(signal.id);
+      events.push("subscriber-done");
     });
     try {
-      await emitChange(bookContent);
+      const emitted = emitChange(bookContent);
+      await vi.waitFor(() => expect(subscriberStarted).toBe(true));
+      openGate();
+      await emitted;
+      events.push("emit-resolved");
     } finally {
       off();
     }
 
     expect(refreshed).toEqual(["b1"]);
+    // emit resolves only after the subscriber's refresh finished.
+    expect(events).toEqual(["subscriber-done", "emit-resolved"]);
   });
 
   it("isolates a failing listener: others still run and emit never rejects", async () => {
