@@ -71,7 +71,21 @@ describe("Echoes manifest", () => {
 
   it("contributes the toggle as an editor toolbar button", () => {
     expect(manifest().contributes?.toolbarButtons).toEqual([
-      { id: "toggleHighlights", command: "toggleHighlights", icon: "highlighter", toggle: true },
+      {
+        id: "toggleHighlights",
+        command: "toggleHighlights",
+        icon: {
+          elements: [
+            ["path", { d: "M4 4h5" }],
+            ["path", { d: "M4 4v7" }],
+            ["path", { d: "M4 7.5h4" }],
+            ["path", { d: "M4 11h5" }],
+            ["path", { d: "M20 12 14 18 10 14 16 8Z" }],
+            ["path", { d: "M6 21h8" }],
+          ],
+        },
+        toggle: true,
+      },
     ]);
   });
 
