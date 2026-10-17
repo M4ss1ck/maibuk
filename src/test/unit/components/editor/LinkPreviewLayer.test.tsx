@@ -1,10 +1,11 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
 import { LinkPreviewLayer } from "@/components/editor/LinkPreviewLayer";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { LINK_PREVIEW_DELAY_MS } from "@/constants";
 import { clearLinkPreviewCache } from "@/features/links/link-preview";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "../../../support/db-test-context";
@@ -51,6 +52,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
+  vi.useRealTimers();
 });
 
 /** "Before " then the Link text, then " after." Positions: Link spans 8..14. */
@@ -104,13 +106,12 @@ describe("Link Preview", () => {
     });
 
     it("stays hidden while the caret is outside every Link", async () => {
-      const user = userEvent.setup();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       renderEditor("maibuk://chapter/c1");
 
       await user.keyboard("{ArrowRight}");
-      // Kept: proves a debounce does not show after LINK_PREVIEW_DELAY_MS. Fake timers
-      // break user-event and RTL's async wrapper here, and no event follows a suppressed show.
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await act(() => vi.advanceTimersByTimeAsync(LINK_PREVIEW_DELAY_MS + 1));
 
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
     });
@@ -129,15 +130,14 @@ describe("Link Preview", () => {
     });
 
     it("hides on typing and comes back once the caret moves again", async () => {
-      const user = userEvent.setup();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       renderEditor("maibuk://chapter/c1");
       await caretIntoLink(user);
       await screen.findByRole("tooltip", { name: "linkPreview.label" });
 
       await user.keyboard("x");
-      // Kept: proves a debounce does not show after LINK_PREVIEW_DELAY_MS. Fake timers
-      // break user-event and RTL's async wrapper here, and no event follows a suppressed show.
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await act(() => vi.advanceTimersByTimeAsync(LINK_PREVIEW_DELAY_MS + 1));
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
 
       await user.keyboard("{ArrowLeft}");
@@ -145,7 +145,8 @@ describe("Link Preview", () => {
     });
 
     it("hides on Escape and keeps the caret in the editor", async () => {
-      const user = userEvent.setup();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       const editor = renderEditor("maibuk://chapter/c1");
       await caretIntoLink(user);
       await screen.findByRole("tooltip", { name: "linkPreview.label" });
@@ -158,15 +159,14 @@ describe("Link Preview", () => {
       expect(onEscape).not.toHaveBeenCalled();
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
       expect(document.activeElement).toBe(editor.view.dom);
-      // Kept: proves a debounce does not show after LINK_PREVIEW_DELAY_MS. Fake timers
-      // break user-event and RTL's async wrapper here, and no event follows a suppressed show.
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await act(() => vi.advanceTimersByTimeAsync(LINK_PREVIEW_DELAY_MS + 1));
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
     });
   });
 
   it("leaves Escape to the rest of the app before the preview shows", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderEditor("maibuk://chapter/c1");
     await caretIntoLink(user);
     const onEscape = vi.fn((event: KeyboardEvent) => event.defaultPrevented);
@@ -176,9 +176,7 @@ describe("Link Preview", () => {
     document.removeEventListener("keydown", onEscape);
 
     expect(onEscape).toHaveReturnedWith(false);
-    // Kept: proves a debounce does not show after LINK_PREVIEW_DELAY_MS. Fake timers
-    // break user-event and RTL's async wrapper here, and no event follows a suppressed show.
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    await act(() => vi.advanceTimersByTimeAsync(LINK_PREVIEW_DELAY_MS + 1));
     expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
   });
 
@@ -200,13 +198,12 @@ describe("Link Preview", () => {
     });
 
     it("never opens from a touch", async () => {
-      const user = userEvent.setup();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       renderEditor("maibuk://chapter/c1");
 
       await user.pointer({ keys: "[TouchA]", target: screen.getByText("Target") });
-      // Kept: proves a debounce does not show after LINK_PREVIEW_DELAY_MS. Fake timers
-      // break user-event and RTL's async wrapper here, and no event follows a suppressed show.
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await act(() => vi.advanceTimersByTimeAsync(LINK_PREVIEW_DELAY_MS + 1));
 
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
     });
