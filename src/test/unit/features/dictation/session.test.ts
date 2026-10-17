@@ -1743,8 +1743,8 @@ describe("Dictation Session recordPhrase() (Phrase Recording, #270)", () => {
     const recording = session.recordPhrase("en");
     await waitForRecording(session);
     host.emit({ type: "final", text: ".", latencyMs: 5 });
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(session.getSnapshot().recording).toBe(true);
+    // The "." is ignored, so the recording is still open for the next line:
+    // "hola" resolving it is the witness that the "." did not settle it first.
     host.emit({ type: "final", text: "hola", latencyMs: 5 });
     await expect(recording).resolves.toEqual({ kind: "heard", text: "hola" });
   });
@@ -1961,7 +1961,8 @@ describe("Dictation Session recordPhrase() (Phrase Recording, #270)", () => {
     await vi.waitFor(() =>
       expect(session.getSnapshot()).toMatchObject({ status: "idle", recording: false })
     );
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // stop() awaits the recording's teardown, including any resume, so the
+    // state below is final: no resume started, and no third model load.
     expect(session.getSnapshot().status).toBe("idle");
     expect(host.loads).toEqual(["m-en", "m-es"]);
   });
