@@ -1098,7 +1098,7 @@ describe("collection row labels", () => {
     Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
   });
 
-  it("keeps a row's label visible when its description is long @ui:maibuk-collection-row-label", async () => {
+  it("keeps a row's label visible when its description is long @ui:maibuk-collection-row", async () => {
     harness = renderRemoteUi();
     overflowing.add(LONG_DESCRIPTION);
     await harness.mount(
@@ -1113,7 +1113,7 @@ describe("collection row labels", () => {
     expect(label.className).toContain("max-w-[60%]");
   });
 
-  it("shows the full label and description in a tooltip on hover when something is cut off @ui-kbd:maibuk-collection-row-tooltip", async () => {
+  it("shows the full label and description in a tooltip on hover when something is cut off @ui-kbd:maibuk-collection-row", async () => {
     harness = renderRemoteUi();
     overflowing.add(LONG_DESCRIPTION);
     await harness.mount(
@@ -1128,7 +1128,7 @@ describe("collection row labels", () => {
     expect(tooltip).toHaveTextContent(LONG_DESCRIPTION);
   });
 
-  it("shows the same tooltip on keyboard focus @ui-kbd:maibuk-collection-row-tooltip", async () => {
+  it("shows the same tooltip on keyboard focus @ui-kbd:maibuk-collection-row", async () => {
     harness = renderRemoteUi();
     overflowing.add(LONG_LABEL);
     await harness.mount(
@@ -1144,7 +1144,7 @@ describe("collection row labels", () => {
     expect(tooltip).toHaveTextContent("Short");
   });
 
-  it("shows no tooltip when nothing is truncated @ui-kbd:maibuk-collection-row-tooltip", async () => {
+  it("shows no tooltip when nothing is truncated @ui-kbd:maibuk-collection-row", async () => {
     harness = renderRemoteUi();
     await harness.mount(
       <ui.Collection label="Echoes" selectionMode="none">
@@ -1189,7 +1189,7 @@ describe("collection row labels", () => {
     expect(description.className).not.toContain("truncate");
   });
 
-  it("gives screen readers the full label and description @ui:maibuk-collection-row-label", async () => {
+  it("gives screen readers the full label and description @ui:maibuk-collection-row", async () => {
     harness = renderRemoteUi();
     overflowing.add(LONG_DESCRIPTION);
     await harness.mount(
