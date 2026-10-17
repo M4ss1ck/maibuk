@@ -253,12 +253,18 @@ describe("Settings outline", () => {
     act(() => {
       scroller.dispatchEvent(new Event("scroll"));
     });
+    // Kept: proves the jump lock holds through the jump's scroll. The lock is
+    // the JUMP_SETTLE_MS / JUMP_START_MS timer in useSettingsOutline, and the
+    // selection it guards is set in a requestAnimationFrame measure, so no
+    // asserted event follows the ignored scroll.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(
       within(outlineTree()).getByRole("row", { name: "sync.title, settings.outline.current" })
     ).toBeInTheDocument();
 
-    // Once the jump settles, the author's scroll hands back to the spy.
+    // Once the jump settles, the author's scroll hands back to the spy. Kept:
+    // waits out JUMP_START_MS (useSettingsOutline) so the settle timer has fired.
+    // No observable event marks that timer, and fake timers hang user-event here.
     await new Promise((resolve) => setTimeout(resolve, 450));
     act(() => {
       scroller.dispatchEvent(new Event("scroll"));
