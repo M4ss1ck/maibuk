@@ -7,8 +7,8 @@
  * sibling files still serve, is untouched by runtime keys it would refuse.
  *
  * A string that carries a count ships its forms under `_one` / `_other` (the
- * CLDR categories Intl.PluralRules selects for en and es); every other string
- * ships a single key. A count-less lookup of a plural key reads `_other`.
+ * categories `pluralCategory` selects for en and es); every other string ships a
+ * single key. A count-less lookup of a plural key reads `_other`.
  *
  * This module imports only its own files.
  */
@@ -37,28 +37,25 @@ export function catalogFor(language: string): Readonly<Catalog> {
   return CATALOGS[baseLanguage(language)] ?? en;
 }
 
-const PLURAL_RULES = new Map<string, Intl.PluralRules>();
-/** Selected categories by base language and count; `select` is the hot call. */
-const PLURAL_CATEGORIES = new Map<string, Map<number, Intl.LDMLPluralRule>>();
+/** The plural categories Echoes' shipped catalogs use (`_one` / `_other`). */
+export type PluralCategory = "one" | "other";
 
-/** The CLDR plural category ("one", "other", …) Intl.PluralRules picks for a count. */
-export function pluralCategory(language: string, count: number): Intl.LDMLPluralRule {
-  const base = baseLanguage(language);
-  let byCount = PLURAL_CATEGORIES.get(base);
-  if (byCount === undefined) {
-    byCount = new Map();
-    PLURAL_CATEGORIES.set(base, byCount);
-  }
-  const cached = byCount.get(count);
-  if (cached !== undefined) return cached;
-  let rules = PLURAL_RULES.get(base);
-  if (rules === undefined) {
-    rules = new Intl.PluralRules(base);
-    PLURAL_RULES.set(base, rules);
-  }
-  const category = rules.select(count);
-  byCount.set(count, category);
-  return category;
+/**
+ * CLDR cardinal rules for the two shipped languages, written out because the
+ * Android QuickJS global set has no `Intl`. Both languages select "one" for the
+ * integer 1 (in magnitude) and "other" for everything else Echoes counts. Spanish
+ * CLDR also has a "many" form for exact multiples of a million, but no shipped
+ * key carries one, so `translate()` reads `_other` for it, as Intl would.
+ */
+const CARDINAL_RULES: Readonly<Record<string, (count: number) => PluralCategory>> = {
+  en: (count) => (Math.abs(count) === 1 ? "one" : "other"),
+  es: (count) => (Math.abs(count) === 1 ? "one" : "other"),
+};
+
+/** The CLDR plural category ("one" or "other") for a count, in the language's rule. */
+export function pluralCategory(language: string, count: number): PluralCategory {
+  const rule = CARDINAL_RULES[baseLanguage(language)] ?? CARDINAL_RULES.en;
+  return rule(count);
 }
 
 /**

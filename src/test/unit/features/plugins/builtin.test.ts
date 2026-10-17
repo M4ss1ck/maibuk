@@ -65,6 +65,8 @@ async function shippedOf(folder: PluginFolder): Promise<BuiltInPlugin> {
 interface SetupOptions {
   /** The installed copy; defaults to an untouched copy of the shipped one. */
   installed?: PluginFolder;
+  /** The device the Plugin Directory serves; defaults to web. */
+  kind?: PluginDirectoryAdapter["kind"];
   /** Whether a Built-in source is injected; defaults to one that ships `installed`. */
   source?: BuiltInPluginSource;
 }
@@ -75,7 +77,7 @@ async function setup(options: SetupOptions = {}) {
   let shippedCopy = await shippedOf(shipped);
   const folders = new Map<string, PluginFolder>([[name, shipped]]);
   const directory: PluginDirectoryAdapter = {
-    kind: "web",
+    kind: options.kind ?? "web",
     listFolders: async () => [...folders.keys()],
     readFolder: async (folderName) => folders.get(folderName) ?? null,
     replaceFolder: async (folderName, files) => {
@@ -334,6 +336,35 @@ describe("Built-in Plugins: reserved maibuk- ids", () => {
     h.store.getState().disable("maibuk-echoes");
     await h.store.getState().enable("maibuk-echoes");
 
+    expect(h.lifecycle.state("maibuk-echoes")?.status).toBe("ready");
+    expect(h.frames).toHaveLength(1);
+  });
+});
+
+describe("Built-in Plugins: Android (#517)", () => {
+  it("lists, pre-grants, and enables a maibuk- Built-in that lists android", async () => {
+    const folder = pluginFolder(
+      {},
+      {
+        id: "maibuk-echoes",
+        name: "Echoes",
+        permissions: PERMISSIONS,
+        platforms: ["web", "desktop", "android"],
+      }
+    );
+    const h = await setup({ installed: folder, kind: "android" });
+
+    await h.refresh();
+
+    expect(h.entry()).toMatchObject({ builtIn: true, installed: true, unsupported: false });
+    expect(getPluginApproval("maibuk-echoes")).toMatchObject({
+      enabled: false,
+      granted: ["library:read", "secrets"],
+    });
+
+    await h.store.getState().enable("maibuk-echoes");
+
+    expect(getPluginApproval("maibuk-echoes")?.enabled).toBe(true);
     expect(h.lifecycle.state("maibuk-echoes")?.status).toBe("ready");
     expect(h.frames).toHaveLength(1);
   });

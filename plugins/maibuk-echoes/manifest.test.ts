@@ -20,6 +20,10 @@ describe("Echoes manifest", () => {
     expect(result.ok ? [] : result.problems).toEqual([]);
   });
 
+  it("lists android, web, and desktop in platforms (#517)", () => {
+    expect(manifest().platforms).toEqual(["web", "desktop", "android"]);
+  });
+
   it("asks only for read access and editor highlights, never Library writes", () => {
     const result = parsePluginManifest(text, { builtIn: true });
     if (!result.ok) throw new Error("manifest invalid");
