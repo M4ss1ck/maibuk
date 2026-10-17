@@ -2,8 +2,8 @@
  * The conformance lane's one explicit bypass of the v1 Android host rule (#447
  * D2/D4; the T8 renderer kill → #492).
  *
- * The product rule (`src/features/plugins/host-platform.ts`) runs no Plugin on
- * Android in v1: on the Android emulator a Worker allocating in yielding chunks
+ * Before #517 the product rule (`src/features/plugins/host-platform.ts`) ran no
+ * Plugin on Android: on the Android emulator a Worker allocating in yielding chunks
  * grew the WebView renderer until lowmemorykiller killed it and Chromium killed
  * the whole app (the conformance:plugins T8 result, #492). The lane is the
  * artifact that proves the renderer behaviour, so it must still MEASURE Android
@@ -31,9 +31,10 @@ import type { PluginDirectoryAdapter } from "@/lib/platform/types";
 
 /**
  * The Plugin Directory `kind` the conformance seam reports for `platform`.
- * Android is refused by the host rule (`pluginsRunOn("android")` is false), so
- * the seam reports the desktop kind there; the checks never read the directory
- * kind again, and the lifecycle then scans and runs the fixture as on Linux.
+ * The seam reports the desktop kind for Android, so the lifecycle scans and runs
+ * the fixture as on Linux whether or not its manifest lists "android" (the
+ * Plugin Platforms rule, #517, is not what this lane measures); the checks never
+ * read the directory kind again.
  */
 export function conformanceDirectoryKind(
   platform: ConformancePlatform

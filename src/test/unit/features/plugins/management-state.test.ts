@@ -220,6 +220,36 @@ describe("Plugin management state: known Plugins", () => {
 });
 
 describe("Plugin management state: availability and support", () => {
+  it("lists a Built-in that lists android as available on android, and not one that does not (#517)", async () => {
+    const echoes: PluginManifest = {
+      ...PLUGIN_MANIFEST,
+      id: "maibuk-echoes",
+      name: "Echoes",
+      platforms: ["web", "desktop", "android"],
+    };
+    const desktopOnly: PluginManifest = {
+      ...PLUGIN_MANIFEST,
+      id: "maibuk-other",
+      name: "Other",
+      platforms: ["web", "desktop"],
+    };
+    const builtInSource: BuiltInPluginSource = {
+      list: async () => [
+        { id: echoes.id, manifest: echoes, hash: "h1:echoes", files: [] },
+        { id: desktopOnly.id, manifest: desktopOnly, hash: "h1:other", files: [] },
+      ],
+    };
+    const dir = makeDirectory("android", []);
+    const store = makeStore(dir.adapter, { builtInSource });
+
+    await store.getState().refresh();
+
+    const listed = store.getState().plugins["maibuk-echoes"];
+    expect(listed.available).toBe(true);
+    expect(listed.unsupported).toBe(false);
+    expect(store.getState().plugins["maibuk-other"].available).toBe(false);
+  });
+
   it("lists an absent Built-in as available", async () => {
     const manifest: PluginManifest = { ...PLUGIN_MANIFEST, id: "maibuk-echoes", name: "Echoes" };
     const builtInSource: BuiltInPluginSource = {
@@ -271,17 +301,19 @@ describe("Plugin management state: availability and support", () => {
 });
 
 describe("Plugin management state: host platform support (#447)", () => {
-  it("supports no manifest on android, whatever platforms it declares", () => {
+  it("supports android only when the manifest lists android (#517)", () => {
     const everywhere: PluginManifest = {
       ...PLUGIN_MANIFEST,
       platforms: ["web", "desktop", "android"],
     };
     const androidOnly: PluginManifest = { ...PLUGIN_MANIFEST, platforms: ["android"] };
-    // A manifest that omits `platforms` runs everywhere except a host-unsupported platform.
+    const desktopOnly: PluginManifest = { ...PLUGIN_MANIFEST, platforms: ["desktop"] };
+    // A manifest that omits `platforms` means desktop and web, never android.
     const omitted = { ...PLUGIN_MANIFEST, platforms: undefined } as unknown as PluginManifest;
 
-    expect(isSupported(everywhere, "android")).toBe(false);
-    expect(isSupported(androidOnly, "android")).toBe(false);
+    expect(isSupported(everywhere, "android")).toBe(true);
+    expect(isSupported(androidOnly, "android")).toBe(true);
+    expect(isSupported(desktopOnly, "android")).toBe(false);
     expect(isSupported(omitted, "android")).toBe(false);
   });
 
@@ -300,21 +332,35 @@ describe("Plugin management state: host platform support (#447)", () => {
     expect(isSupported(omitted, "desktop")).toBe(true);
   });
 
-  it("marks every Plugin unsupported on android and refuses to enable it", async () => {
+  it("marks a Plugin that does not list android unsupported on android, and refuses to enable it", async () => {
     const dir = makeDirectory("android", [
-      folderNamed("tracer", "tracer", { platforms: ["web", "desktop", "android"] }),
+      folderNamed("tracer", "tracer", { platforms: ["web", "desktop"] }),
     ]);
     await saveApproval("tracer", false);
     const store = makeStore(dir.adapter);
 
     await store.getState().refresh();
 
-    // A Plugin that declares android everywhere is still unsupported: the host
-    // runs no Plugin on android, so it is never listed as runnable or enabled.
     expect(store.getState().plugins.tracer.unsupported).toBe(true);
 
     await store.getState().enable("tracer");
     expect(getPluginApproval("tracer")?.enabled).toBe(false);
+  });
+
+  it("lists a Plugin that lists android as runnable on android, and enables it (#517)", async () => {
+    const dir = makeDirectory("android", [
+      folderNamed("tracer", "tracer", { platforms: ["web", "desktop", "android"] }),
+    ]);
+    await saveApproval("tracer", false);
+    const fake = createFakeLifecycle();
+    const store = makeStore(dir.adapter, { lifecycle: fake.lifecycle });
+
+    await store.getState().refresh();
+
+    expect(store.getState().plugins.tracer.unsupported).toBe(false);
+
+    await store.getState().enable("tracer");
+    expect(getPluginApproval("tracer")?.enabled).toBe(true);
   });
 });
 

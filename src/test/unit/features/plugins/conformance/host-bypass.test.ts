@@ -13,9 +13,9 @@ describe("conformanceDirectoryKind()", () => {
     expect(pluginsRunOn(conformanceDirectoryKind("android"))).toBe(true);
   });
 
-  it("leaves the product rule untouched: the host still refuses Android", () => {
-    expect(pluginsRunOn("android")).toBe(false);
-    expect(PLUGIN_HOST_UNSUPPORTED_PLATFORMS).toContain("android");
+  it("leaves the product rule untouched: the host runs Plugins on Android (#517)", () => {
+    expect(pluginsRunOn("android")).toBe(true);
+    expect(PLUGIN_HOST_UNSUPPORTED_PLATFORMS).not.toContain("android");
   });
 
   it("passes the desktop and web kinds through unchanged", () => {

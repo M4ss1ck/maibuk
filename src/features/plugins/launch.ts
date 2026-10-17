@@ -19,7 +19,7 @@ import {
 } from "@/features/plugins/approvals";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
-import { pluginsRunOn } from "@/features/plugins/host-platform";
+import { manifestRunsOn, pluginsRunOn } from "@/features/plugins/host-platform";
 import { getKnownPlugin } from "@/features/plugins/known";
 import {
   isSupported,
@@ -71,6 +71,10 @@ export async function scanApprovedPlugins(
       });
       continue;
     }
+    // The Plugin Platforms rule (#517): a manifest that does not run on this
+    // device is not scanned, so no Worker is queued for it. Not a refusal: the
+    // author did not break anything, the Plugin is simply not for this device.
+    if (!manifestRunsOn(manifest.manifest.platforms, directory.kind)) continue;
     plugins.push({
       pluginId: approval.pluginId,
       approval,
