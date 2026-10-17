@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { afterEach, describe, it, expect, beforeEach, vi } from "vitest";
 import { createWebBackup } from "@/lib/platform/web/backup";
 import { computeChecksum } from "@/lib/checksum";
 import type { BackupAdapter } from "@/lib/platform/types";
@@ -11,6 +11,10 @@ describe("WebBackupAdapter", () => {
     // Clear IndexedDB before each test
     indexedDB.deleteDatabase("maibuk-backups");
     adapter = await createWebBackup();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("saveBackup + listBackups", () => {
@@ -41,12 +45,15 @@ describe("WebBackupAdapter", () => {
     });
 
     it("lists multiple backups sorted newest first", async () => {
+      // The adapter stamps createdAt from the clock, so the clock is set per
+      // save: the order under test is the stamp order, not a sleep's luck.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-03-15T14:30:00Z"));
       await adapter.saveBackup(
         "maibuk-backup-daily-2026-03-15T14-30-00.sql",
         new TextEncoder().encode("sql1")
       );
-      // Small delay to ensure different timestamps
-      await new Promise((r) => setTimeout(r, 10));
+      vi.setSystemTime(new Date("2026-03-15T14:30:10Z"));
       await adapter.saveBackup(
         "maibuk-backup-pre-sync-2026-03-15T14-30-10.sql",
         new TextEncoder().encode("sql2")
@@ -59,12 +66,14 @@ describe("WebBackupAdapter", () => {
     });
 
     it("loads a requested page with total count and total size", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const base = Date.parse("2026-03-15T14:30:00Z");
       for (let index = 0; index < 12; index += 1) {
+        vi.setSystemTime(new Date(base + index * 2000));
         await adapter.saveBackup(
           `maibuk-backup-manual-2026-03-15T14-30-${String(index).padStart(2, "0")}.sql`,
           new TextEncoder().encode(`sql-${index}`)
         );
-        await new Promise((r) => setTimeout(r, 2));
       }
 
       const page = await adapter.listBackupsPage({ page: 2, pageSize: 5 });
