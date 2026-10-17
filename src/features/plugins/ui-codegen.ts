@@ -209,6 +209,8 @@ export type PluginUiTag = (typeof PLUGIN_UI_TAGS)[number];
 export interface PluginUiOption {
   value: string;
   label: string;
+  /** Up to 12 \`#rrggbb\` colors drawn as decorative chips before the label (Select). */
+  swatches?: readonly string[];
 }
 
 /** The props and events of every element in the UI kit, by tag. */

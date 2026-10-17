@@ -385,7 +385,12 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     summary: "A single-choice select.",
     props: {
       label: { kind: "string", required: true, maxLength: 512 },
-      options: { kind: "options", required: true },
+      options: {
+        kind: "options",
+        required: true,
+        description:
+          "Each option's value and label, plus optional swatches: up to 12 #rrggbb colors drawn as chips before the label.",
+      },
       selectedKey: { kind: "string", maxLength: 512 },
       placeholder: { kind: "string", maxLength: 512 },
       description: { kind: "string", maxLength: 1024 },

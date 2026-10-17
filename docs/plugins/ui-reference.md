@@ -404,7 +404,7 @@ Props:
 | Name | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `label` | `string` | yes | At most 512 characters. |
-| `options` | `readonly PluginUiOption[]` | yes |  |
+| `options` | `readonly PluginUiOption[]` | yes | Each option's value and label, plus optional swatches: up to 12 #rrggbb colors drawn as chips before the label. |
 | `selectedKey` | `string` | no | At most 512 characters. |
 | `placeholder` | `string` | no | At most 512 characters. |
 | `description` | `string` | no | At most 1024 characters. |

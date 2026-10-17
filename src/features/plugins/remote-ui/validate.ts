@@ -140,6 +140,10 @@ function unindexSubtree(id: string, shadow: TreeShadow, tracking: BatchTracking)
   shadow.nodes -= 1;
 }
 
+/** Most swatches one Select option carries (#533). */
+export const MAX_OPTION_SWATCHES = 12;
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
 function propertyProblem(prop: PluginUiProp, value: unknown, maxOptions: number): string | null {
   if (value === null || value === undefined) return null;
   switch (prop.kind) {
@@ -183,7 +187,21 @@ function propertyProblem(prop: PluginUiProp, value: unknown, maxOptions: number)
         (option) =>
           isRecord(option) && typeof option.value === "string" && typeof option.label === "string"
       );
-      return valid ? null : "is not a valid option list";
+      if (!valid) return "is not a valid option list";
+      // Swatches are optional (#533): up to 12 `#rrggbb` chips per option, drawn
+      // decoratively beside the label. Anything else is refused, never drawn.
+      for (const option of value as Record<string, unknown>[]) {
+        if (option.swatches === undefined) continue;
+        if (!Array.isArray(option.swatches)) return "is not a valid option list";
+        if (option.swatches.length > MAX_OPTION_SWATCHES) {
+          return `has an option with more than ${MAX_OPTION_SWATCHES} swatches`;
+        }
+        const hex = option.swatches.every(
+          (swatch) => typeof swatch === "string" && HEX_COLOR.test(swatch)
+        );
+        if (!hex) return "is not a valid option list";
+      }
+      return null;
     }
     case "keys": {
       if (!Array.isArray(value)) return "is not a valid key list";

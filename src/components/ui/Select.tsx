@@ -15,6 +15,28 @@ interface SelectOption<T> {
    * such as a language code shown as "en" but named "English".
    */
   accessibleName?: string;
+  /**
+   * Up to 12 `#rrggbb` colors drawn as decorative chips before the label (#533).
+   * They are hidden from assistive technology: the label is the option's name.
+   */
+  swatches?: readonly string[];
+}
+
+/** The decorative color chips of an option, before its label. */
+function SwatchChips({ swatches }: { swatches: readonly string[] }) {
+  return (
+    <span aria-hidden="true" className="inline-flex shrink-0 items-center gap-0.5">
+      {swatches.map((color, index) => (
+        <span
+          // Chips are positional: the same color can appear twice in one option.
+          key={index}
+          data-swatch=""
+          className="inline-block h-3 w-3 rounded-sm border border-border"
+          style={{ backgroundColor: color }}
+        />
+      ))}
+    </span>
+  );
 }
 
 interface SelectProps<T> {
@@ -112,6 +134,14 @@ export function Select<T extends string | number>({
         <SelectValue>
           {({ selectedItem, selectedText, isPlaceholder }) => {
             const selected = selectedItem as SelectOption<T> | null;
+            if (selected?.swatches?.length) {
+              return (
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <SwatchChips swatches={selected.swatches} />
+                  <span className="min-w-0 truncate">{selectedText}</span>
+                </span>
+              );
+            }
             if (selected?.accessibleName) {
               return (
                 <span className={chip ? "" : "min-w-0 flex-1 truncate"}>
@@ -148,8 +178,11 @@ export function Select<T extends string | number>({
               className="relative cursor-pointer select-none py-1.5 px-3 text-sm text-foreground data-focused:bg-muted data-selected:bg-primary/10 data-selected:text-primary"
             >
               {({ isSelected }) => (
-                <span className={`block truncate ${isSelected ? "font-medium" : "font-normal"}`}>
-                  {option.label}
+                <span
+                  className={`flex items-center gap-2 truncate ${isSelected ? "font-medium" : "font-normal"}`}
+                >
+                  {option.swatches?.length ? <SwatchChips swatches={option.swatches} /> : null}
+                  <span className="truncate">{option.label}</span>
                 </span>
               )}
             </ListBoxItem>

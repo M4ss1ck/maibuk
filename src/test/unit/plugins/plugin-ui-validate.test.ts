@@ -93,6 +93,61 @@ describe("the connection validator", () => {
     expect(receiver.root.children).toHaveLength(1);
   });
 
+  it("accepts a Select option with up to 12 #rrggbb swatches", () => {
+    const swatches = Array.from({ length: 12 }, (_, index) => `#0000${index.toString(16).padStart(2, "0")}`);
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(
+        element("1", "maibuk-select", {
+          properties: {
+            label: "Palette",
+            options: [{ value: "okabe-ito", label: "Okabe-Ito, 8 colors", swatches }],
+          },
+        })
+      ),
+    ]);
+    expect(violations).toEqual([]);
+    expect(receiver.root.children).toHaveLength(1);
+  });
+
+  it("refuses an option with more than 12 swatches", () => {
+    const swatches = Array.from({ length: 13 }, () => "#aabbcc");
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(
+        element("1", "maibuk-select", {
+          properties: { label: "Palette", options: [{ value: "v", label: "V", swatches }] },
+        })
+      ),
+    ]);
+    expect(violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-select",
+      prop: "options",
+      message: "The prop maibuk-select.options has an option with more than 12 swatches",
+    });
+    expect(receiver.root.children).toHaveLength(0);
+  });
+
+  it.each([["red"], ["#fff"], ["#aabbcc80"], ["rgb(1,2,3)"], [3]])(
+    "refuses a malformed swatch %j",
+    (swatch) => {
+      const { receiver, violations, connection } = setup();
+      connection.mutate([
+        insert(
+          element("1", "maibuk-select", {
+            properties: {
+              label: "Palette",
+              options: [{ value: "v", label: "V", swatches: [swatch] }],
+            },
+          })
+        ),
+      ]);
+      expect(violations[0]).toMatchObject({ code: "invalid-prop", prop: "options" });
+      expect(receiver.root.children).toHaveLength(0);
+    }
+  );
+
   it("refuses an option list longer than the limit and names the limit", () => {
     const options = [
       { value: "a", label: "A" },
