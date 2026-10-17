@@ -240,11 +240,6 @@ function fakeClient(options: FakeOptions = {}) {
   };
 }
 
-/** Waits one macrotask, so any fire-and-forget recompute settles. */
-function flush(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 /**
  * A Chapter of `count` "echo" words, each five characters apart (one per word),
  * so the text is a single nearby chain of `count` ranges. Offsets: word `i` runs
@@ -368,8 +363,9 @@ describe("contentChanged while on", () => {
     const controller = createEchoEditor(fake.client);
     await controller.toggleHighlights();
 
+    // The listener decides synchronously and returns before any content read,
+    // so there is nothing left to settle: a recompute would already have asked.
     fake.emit("editor.contentChanged", { entity: { kind: "chapter", id: "c2" } });
-    await flush();
 
     expect(fake.highlights.length).toBe(3);
     expect(fake.getContentCalls()).toBe(1);
@@ -423,9 +419,9 @@ describe("focusChanged while on", () => {
     expect(kindsOf(fake.highlights.slice(-3))).toEqual(["repetition", "info", "warning"]);
     expect(fake.highlights.slice(-3).every((call) => call.ranges.length === 0)).toBe(true);
 
-    // Off now: a later change for the old entity recomputes nothing.
+    // Off now: a later change for the old entity recomputes nothing. Decided
+    // synchronously in the listener, so there is nothing to wait for.
     fake.emit("editor.contentChanged", { entity: fake.entity });
-    await flush();
     expect(fake.highlights.length).toBe(6);
   });
 
@@ -437,8 +433,8 @@ describe("focusChanged while on", () => {
 
     // The host reports `null` only when the focused editor unmounts: there is no
     // editor left to clear, so nothing more is painted.
+    // Synchronous, as above: the null focus only resets state, and paints nothing.
     fake.emit("editor.focusChanged", { entity: null });
-    await flush();
     expect(fake.highlights.length).toBe(3);
   });
 
@@ -450,10 +446,8 @@ describe("focusChanged while on", () => {
     // Close the editor, then reopen the same entity: highlighting starts off,
     // so its content change repaints nothing.
     fake.emit("editor.focusChanged", { entity: null });
-    await flush();
     fake.emit("editor.focusChanged", { entity: fake.entity });
     fake.emit("editor.contentChanged", { entity: fake.entity });
-    await flush();
     expect(fake.highlights.length).toBe(3);
 
     await controller.nextEcho();
@@ -697,13 +691,10 @@ describe("kind gating and paint dispatch (decision 7)", () => {
     const controller = createEchoEditor(fake.client);
 
     const done = controller.toggleHighlights();
-    await flush();
     // All three were dispatched while the first still awaits its gate.
-    expect(fake.highlights.map((call) => call.kind)).toEqual([
-      "repetition",
-      "info",
-      "warning",
-    ]);
+    await vi.waitFor(() =>
+      expect(fake.highlights.map((call) => call.kind)).toEqual(["repetition", "info", "warning"])
+    );
     for (const release of gates) release();
     await done;
   });
