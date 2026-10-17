@@ -1,6 +1,7 @@
 /**
- * The eight tooling steps `plugin:check` runs over an external Plugin (issue
- * #455): build, validate, typecheck, lint, test, boundary, package, layout. Each
+ * The nine tooling steps `plugin:check` runs over an external Plugin (issue
+ * #455, and the android step of #517): build, validate, typecheck, lint, test,
+ * boundary, android, package, layout. Each
  * is one exported async function returning `{ ok, details }`; none of them calls
  * `process.exit`, and none of them prints, so `runCheck` (scripts/plugin/cli.ts)
  * owns ordering, output, and the exit code. External programs are spawned with
@@ -18,16 +19,18 @@ import { parsePluginLocale, parsePluginManifest } from "@/features/plugins/manif
 import type { PluginManifest } from "@/features/plugins/types";
 import { TEST_TIMEOUT_MS } from "@/test/time-budget";
 import { buildPlugin } from "../build-plugin";
+import { checkAndroidEntry } from "./android";
 import type { CheckStep, StepResult } from "./cli";
 import { externalAliases, testFallbackResolver, writeGeneratedConfigs } from "./config";
+import { listFiles } from "./files";
 import { checkImportBoundary } from "./import-boundary";
 import { checkPackageLayout } from "./layout";
 import { packagePlugin } from "./package";
 
 /**
  * The step order `plugin:check` runs: build, validate, typecheck + lint, test,
- * boundary, package, layout. The CLI prints and dispatches by this order, so it
- * lives with the steps that implement it.
+ * boundary, android, package, layout. The CLI prints and dispatches by this
+ * order, so it lives with the steps that implement it.
  */
 export const CHECK_ORDER = [
   "build",
@@ -36,6 +39,7 @@ export const CHECK_ORDER = [
   "lint",
   "test",
   "boundary",
+  "android",
   "package",
   "layout",
 ] as const;
@@ -273,7 +277,55 @@ export async function boundaryStep(context: PluginStepContext): Promise<StepResu
   };
 }
 
-/** 6 package: zip the built folder to `<plugin>/dist/<id>-<version>.zip`. */
+/** Every built module under `dir`, keyed by its path there, for the Android engine. */
+function builtSources(dir: string): Record<string, string> {
+  const sources: Record<string, string> = {};
+  for (const rel of listFiles(dir)) {
+    if (/\.m?js$/.test(rel)) sources[rel] = readFileSync(join(dir, rel), "utf8");
+  }
+  return sources;
+}
+
+/**
+ * 6 android: the built entry evaluates and sets up in the Android QuickJS engine.
+ * Runs only when the manifest's `platforms` lists `android`; otherwise it is
+ * skipped. It reads the bundle the build step wrote, so run build first.
+ */
+export async function androidStep(context: PluginStepContext): Promise<StepResult> {
+  const { pluginRoot } = context;
+  try {
+    const validation = parsePluginManifest(readFileSync(manifestPathFile(pluginRoot), "utf8"), {
+      builtIn: false,
+    });
+    if (!validation.ok) {
+      return {
+        ok: false,
+        details: ["manifest.json is not valid; the validate step lists the problems"],
+      };
+    }
+    const manifest = validation.manifest;
+    if (!manifest.platforms.includes("android")) {
+      return {
+        ok: true,
+        skipped: true,
+        details: ["manifest.json platforms does not list android"],
+      };
+    }
+    const dir = builtDir(pluginRoot, manifest.id);
+    const entry = manifest.entry;
+    if (!existsSync(join(dir, entry))) {
+      return {
+        ok: false,
+        details: [`${relative(pluginRoot, join(dir, entry))} is missing; run the build step first`],
+      };
+    }
+    return await checkAndroidEntry({ manifest, entry, sources: builtSources(dir) });
+  } catch (error) {
+    return { ok: false, details: [messageOf(error)] };
+  }
+}
+
+/** 7 package: zip the built folder to `<plugin>/dist/<id>-<version>.zip`. */
 export async function packageStep(context: PluginStepContext): Promise<StepResult> {
   const { pluginRoot } = context;
   try {
@@ -296,7 +348,7 @@ export async function packageStep(context: PluginStepContext): Promise<StepResul
   }
 }
 
-/** 7 layout: the packaged zip against the layout rules. */
+/** 8 layout: the packaged zip against the layout rules. */
 export async function layoutStep(context: PluginStepContext): Promise<StepResult> {
   const { pluginRoot, maibukRoot } = context;
   try {
@@ -326,13 +378,14 @@ const STEP_FACTORIES: Record<PluginStepName, StepFn> = {
   lint: lintStep,
   test: testStep,
   boundary: boundaryStep,
+  android: androidStep,
   package: packageStep,
   layout: layoutStep,
 };
 
 /**
  * The steps in the order `plugin:check` runs them: build, validate, typecheck,
- * lint, test, boundary, package, layout.
+ * lint, test, boundary, android, package, layout.
  */
 export function pluginSteps(pluginRoot: string, maibukRoot: string): CheckStep[] {
   const context: PluginStepContext = { pluginRoot, maibukRoot };
