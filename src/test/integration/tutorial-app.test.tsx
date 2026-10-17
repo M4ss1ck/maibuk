@@ -329,6 +329,8 @@ describe("the first-launch offer", () => {
     try {
       renderApp("/");
       await screen.findByRole("heading", { level: 1, name: en("books.title") });
+      // Negative: no offer before the launch run. The offer's decision has no
+      // observable point to wait on, so this stays a counted wait.
       await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
       expect(screen.queryByRole("dialog", { name: en("tutorial.offer.title") })).toBeNull();
 
@@ -350,6 +352,8 @@ describe("the first-launch offer", () => {
     })();
     renderApp("/");
     await screen.findByRole("heading", { level: 1, name: en("books.title") });
+    // Negative: no offer is ever shown. The offer's decision has no observable
+    // point to wait on, so this stays a counted wait.
     await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
     expect(screen.queryByRole("dialog", { name: en("tutorial.offer.title") })).toBeNull();
   });
@@ -557,9 +561,11 @@ describe("running the Tutorial again", () => {
     await screen.findByRole("heading", { level: 1, name: en("notes.title") });
     expect(useBoundShortcutStore.getState().counts["global.startTutorial"]).toBeGreaterThan(0);
 
-    screen.getByRole("textbox", { name: "Probe field" }).focus();
+    const field = screen.getByRole("textbox", { name: "Probe field" });
+    field.focus();
     await user.keyboard("gu");
-    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+    // The keys reached the field, so the shortcut gate has judged them.
+    expect(field).toHaveValue("gu");
     expect(useTutorialStore.getState().status).toBe("idle");
 
     (document.activeElement as HTMLElement).blur();
@@ -605,11 +611,9 @@ describe("running the Tutorial again", () => {
     // g then s would open Settings; Ctrl+N would open New Book.
     await user.keyboard("gs");
     await user.keyboard("{Control>}n{/Control}");
-    await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
-    expect(path).toBe("/");
-    expect(screen.queryByRole("dialog", { name: en("books.newBook") })).toBeNull();
-    expect(useBoundShortcutStore.getState().counts["global.gotoSettings"]).toBeUndefined();
 
+    // The Tab presses come after the ignored keys on the same keyboard
+    // listener, so they witness that those keys were handled before the checks.
     const visited = new Set<Element | null>();
     for (let i = 0; i < 8; i++) {
       await user.tab();
@@ -621,6 +625,9 @@ describe("running the Tutorial again", () => {
       expect(dialog.contains(document.activeElement)).toBe(true);
     }
     expect(visited.size).toBe(2); // Skip and Next on the first step.
+    expect(path).toBe("/");
+    expect(screen.queryByRole("dialog", { name: en("books.newBook") })).toBeNull();
+    expect(useBoundShortcutStore.getState().counts["global.gotoSettings"]).toBeUndefined();
   });
 
   it("pauses while a Modal is open and resumes on the same step", async () => {

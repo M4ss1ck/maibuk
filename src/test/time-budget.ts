@@ -46,7 +46,7 @@ export const FIXED_WAIT_BASELINE: Readonly<Record<string, number>> = {
   "src/test/integration/CommandPalette.test.tsx": 2,
   "src/test/integration/PluginsSettings.test.tsx": 2,
   "src/test/integration/navigating-commands.test.tsx": 1,
-  "src/test/integration/tutorial-app.test.tsx": 4,
+  "src/test/integration/tutorial-app.test.tsx": 2,
   "src/test/integration/tutorial-library.test.ts": 1,
   "src/test/unit/components/editor/CollapsibleHeading.test.ts": 1,
   "src/test/unit/components/editor/Editor.test.tsx": 2,
