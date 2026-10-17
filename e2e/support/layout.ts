@@ -45,3 +45,8 @@ export async function watchForText(page: Page, text: string): Promise<() => Prom
   return () =>
     page.evaluate((flag) => (window as unknown as Record<string, boolean>)[flag] === true, flag);
 }
+
+/** Animations running on `element` and its descendants right now. */
+export function runningAnimationCount(element: Locator): Promise<number> {
+  return element.evaluate((target) => target.getAnimations({ subtree: true }).length);
+}
