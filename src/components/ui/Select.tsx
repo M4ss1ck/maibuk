@@ -138,7 +138,12 @@ export function Select<T extends string | number>({
               return (
                 <span className="flex min-w-0 flex-1 items-center gap-2">
                   <SwatchChips swatches={selected.swatches} />
-                  <span className="min-w-0 truncate">{selectedText}</span>
+                  <span className="min-w-0 truncate">
+                    <span aria-hidden="true">{selected.label}</span>
+                    {selected.accessibleName && (
+                      <span className="sr-only">{selected.accessibleName}</span>
+                    )}
+                  </span>
                 </span>
               );
             }
