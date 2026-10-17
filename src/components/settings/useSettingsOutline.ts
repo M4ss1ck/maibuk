@@ -14,7 +14,7 @@ import {
 const LANDING_GAP = 24;
 // A jump's scroll counts as finished after this long without scroll events;
 // the first wait is longer because a row jump scrolls a frame or more later.
-const JUMP_SETTLE_MS = 150;
+export const JUMP_SETTLE_MS = 150;
 const JUMP_START_MS = 400;
 
 function sectionElement(id: string) {

@@ -2,9 +2,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-/** useSettingsOutline's JUMP_SETTLE_MS. The hook does not export it. */
-const JUMP_SETTLE_MS = 150;
+import { JUMP_SETTLE_MS } from "@/components/settings/useSettingsOutline";
 
 afterEach(() => {
   vi.useRealTimers();
