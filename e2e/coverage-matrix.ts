@@ -3283,6 +3283,7 @@ export const ROWS: MatrixRow[] = [
       "With highlights off, Next echo announces they are off and does not move the caret",
       "The editor toolbar button toggles the same highlights from the keyboard",
       "A Note editor toggles highlights for its own content",
+      "The first toggle after a cold start paints highlights (a stale focus reset must not turn them off)",
     ],
     terms: ["Plugin", "Toggle Button"],
     shortcuts: [

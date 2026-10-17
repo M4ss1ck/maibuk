@@ -35,7 +35,7 @@ interface NotificationCall {
   message: string;
 }
 
-type Listener = (payload: unknown) => void;
+type Listener = (payload: unknown) => void | Promise<void>;
 
 /** Two occurrences of "door" four words apart: one nearby echo, two ranges. */
 const DOOR = "A door creaked. Then a door slammed.";
@@ -93,15 +93,21 @@ function fakeClient(options: FakeOptions = {}) {
   let selection = options.selection === undefined ? { from: 0, to: 0 } : options.selection;
   let getContentCalls = 0;
   let gate: Promise<void> | null = null;
+  // Whether an editor is focused. Off models the editor having unmounted, which
+  // is what the host reports as `editor.focusChanged` with a null entity.
+  let focused = true;
 
   const client: EchoEditorClient = {
     editor: {
       async getContent() {
         getContentCalls++;
+        const hasFocus = focused;
         if (gate !== null) await gate;
+        if (!hasFocus) return { status: "no-target" };
         return { status: "ok", entity, content: { text, html: `<p>${text}</p>` } };
       },
       async getSelection() {
+        if (!focused) return { status: "no-target" };
         return selection === null
           ? { status: "no-target" }
           : { status: "ok", entity, range: selection, text: "" };
@@ -220,6 +226,13 @@ function fakeClient(options: FakeOptions = {}) {
     /** Every `toolbar.setPressed` value the controller sent, in order. */
     pressed,
     getContentCalls: () => getContentCalls,
+    /** The old Worker is gone: its event subscriptions die with it. */
+    dropListeners() {
+      listeners.clear();
+    },
+    setFocused(next: boolean) {
+      focused = next;
+    },
     setSelection(next: { from: number; to: number } | null) {
       selection = next;
     },
@@ -234,8 +247,11 @@ function fakeClient(options: FakeOptions = {}) {
         release();
       };
     },
-    emit(event: PluginApiEventId, payload: unknown) {
-      for (const listener of listeners.get(event) ?? []) listener(payload);
+    /** Resolves when every handler the event reached has finished its work. */
+    emit(event: PluginApiEventId, payload: unknown): Promise<void> {
+      return Promise.all([...(listeners.get(event) ?? [])].map((listener) => listener(payload))).then(
+        () => undefined
+      );
     },
   };
 }
@@ -408,6 +424,25 @@ describe("refresh()", () => {
 });
 
 describe("focusChanged while on", () => {
+  it("keeps highlights on when a cold-start toggle is followed by a null focus while the editor is still focused", async () => {
+    // Echoes starts on demand, so the first toggle runs on a fresh controller.
+    // A stale null focus that arrives after the toggle set highlights on must
+    // not reset them: the editor is still focused, so nothing has closed.
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    expect(fake.pressed).toEqual([true]);
+    expect(fake.highlights.length).toBe(3);
+
+    fake.emit("editor.focusChanged", { entity: null });
+    await vi.waitFor(() => expect(fake.pressed).toEqual([true]));
+    expect(fake.pressed.at(-1)).toBe(true);
+    expect(fake.highlights.length).toBe(3);
+
+    await controller.nextEcho();
+    expect(fake.reveals.length).toBe(1);
+  });
+
   it("turns off and clears every kind for a different entity", async () => {
     const fake = fakeClient();
     const controller = createEchoEditor(fake.client);
@@ -434,6 +469,7 @@ describe("focusChanged while on", () => {
     // The host reports `null` only when the focused editor unmounts: there is no
     // editor left to clear, so nothing more is painted.
     // Synchronous, as above: the null focus only resets state, and paints nothing.
+    fake.setFocused(false);
     fake.emit("editor.focusChanged", { entity: null });
     expect(fake.highlights.length).toBe(3);
   });
@@ -445,9 +481,16 @@ describe("focusChanged while on", () => {
 
     // Close the editor, then reopen the same entity: highlighting starts off,
     // so its content change repaints nothing.
+    fake.setFocused(false);
     fake.emit("editor.focusChanged", { entity: null });
-    fake.emit("editor.focusChanged", { entity: fake.entity });
-    fake.emit("editor.contentChanged", { entity: fake.entity });
+    // The null focus confirms the closed editor asynchronously; the reopen comes
+    // only after that reset, as it does on a real close and reopen.
+    await vi.waitFor(() => expect(fake.pressed.at(-1)).toBe(false));
+    fake.setFocused(true);
+    await Promise.all([
+      fake.emit("editor.focusChanged", { entity: fake.entity }),
+      fake.emit("editor.contentChanged", { entity: fake.entity }),
+    ]);
     expect(fake.highlights.length).toBe(3);
 
     await controller.nextEcho();
@@ -753,5 +796,130 @@ describe("runtime Command routing", () => {
 
     await run({ id: PREVIOUS_ECHO });
     expect(fake.reveals.at(-1)).toEqual({ from: 5, to: 9 });
+  });
+});
+
+/**
+ * The #529 transition audit. Each test drives one transition of the highlight
+ * controller and asserts the two invariants the issue names: the painted state
+ * matches the Toggle Button's pressed state, and nothing paints for an entity
+ * that is no longer focused.
+ */
+describe("highlight transition audit (#529)", () => {
+  it("a null focus whose confirmation is in flight does not wipe a newer focus on the same entity", async () => {
+    // The null focus reads the editor while it is gone; before its answer lands,
+    // the same entity is focused again. The late answer must not reset a state
+    // whose focus moved since the null arrived.
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    const release = fake.gateContent();
+    fake.setFocused(false);
+    const nullFocus = fake.emit("editor.focusChanged", { entity: null });
+    fake.setFocused(true);
+    const sameFocus = fake.emit("editor.focusChanged", { entity: fake.entity });
+    release();
+    await Promise.all([nullFocus, sameFocus]);
+    expect(lastPressed(fake)).toBe(true);
+    expect(fake.highlights.length).toBe(3);
+  });
+
+  it("focusChanged for the same entity during a toggle's content read still turns highlights on", async () => {
+    // The host can announce the focused entity while the toggle reads it (Echoes
+    // starting on demand). That is not a move: the toggle must still turn on.
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    const release = fake.gateContent();
+    const toggling = controller.toggleHighlights();
+    fake.emit("editor.focusChanged", { entity: fake.entity });
+    release();
+    await toggling;
+    expect(lastPressed(fake)).toBe(true);
+    expect(fake.highlights.length).toBe(3);
+  });
+
+  /** The last `setPressed` value and whether the last paint left any range. */
+  const lastPressed = (fake: { pressed: boolean[] }) => fake.pressed.at(-1);
+  const paintedAnything = (fake: { highlights: HighlightCall[] }) =>
+    fake.highlights.slice(-3).some((call) => call.ranges.length > 0);
+
+  it("focus change during a toggle: the toggle does not paint an editor that lost focus", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    const release = fake.gateContent();
+    const toggling = controller.toggleHighlights();
+    // Focus moves to another editor while the toggle still reads the old one.
+    fake.emit("editor.focusChanged", { entity: { kind: "chapter", id: "c2" } });
+    release();
+    await toggling;
+    // The aborted toggle never pressed the button, so nothing was sent for it.
+    expect(lastPressed(fake) ?? false).toBe(false);
+    expect(paintedAnything(fake)).toBe(false);
+  });
+
+  it("chapter switch during a recompute: the in-flight recompute paints nothing for the old chapter", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    const before = fake.highlights.length;
+    const release = fake.gateContent();
+    const recomputing = fake.emit("editor.contentChanged", { entity: fake.entity });
+    const moved = fake.emit("editor.focusChanged", { entity: { kind: "chapter", id: "c2" } });
+    release();
+    await Promise.all([recomputing, moved]);
+    expect(fake.highlights.length).toBe(before + 3); // the turn-off clear only
+    expect(paintedAnything(fake)).toBe(false);
+    expect(lastPressed(fake)).toBe(false);
+  });
+
+  it("editor unmount during a recompute: nothing is painted after the editor closes", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    const before = fake.highlights.length;
+    const release = fake.gateContent();
+    const recomputing = fake.emit("editor.contentChanged", { entity: fake.entity });
+    fake.setFocused(false);
+    const unmounted = fake.emit("editor.focusChanged", { entity: null });
+    release();
+    await Promise.all([recomputing, unmounted]);
+    expect(fake.highlights.length).toBe(before);
+    expect(lastPressed(fake)).toBe(false);
+  });
+
+  it("Plugin restart while on: a new activation starts off and paints nothing", async () => {
+    // The host drops this Plugin's highlights and pressed state when it stops
+    // (lifecycle.ts clearPluginHighlights, clearToolbarPressed). A new activation
+    // is a fresh controller: it must start off, so no event repaints anything.
+    const fake = fakeClient({ text: DOORS });
+    const first = createEchoEditor(fake.client);
+    await first.toggleHighlights();
+    expect(paintedAnything(fake)).toBe(true);
+    const before = fake.highlights.length;
+
+    fake.dropListeners();
+    const second = createEchoEditor(fake.client);
+    await Promise.all([fake.emit("editor.contentChanged", { entity: fake.entity }), second.refresh()]);
+    expect(fake.highlights.length).toBe(before);
+  });
+
+  it("toggle during a recompute: a toggle off wins over the in-flight recompute", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    const release = fake.gateContent();
+    const recomputing = fake.emit("editor.contentChanged", { entity: fake.entity });
+    const toggling = controller.toggleHighlights();
+    release();
+    await Promise.all([recomputing, toggling]);
+    expect(lastPressed(fake)).toBe(false);
+    expect(paintedAnything(fake)).toBe(false);
+  });
+
+  it("button and shortcut fired together: the final pressed state matches what is painted", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await Promise.all([controller.toggleHighlights(), controller.toggleHighlights()]);
+    expect(lastPressed(fake) ?? false).toBe(paintedAnything(fake));
   });
 });
