@@ -109,11 +109,11 @@ async function runStartup(
     // `connect-src 'none'`. The dynamic imports behind the compile-time flag are
     // dropped from every web and desktop bundle.
     const { loadQuickJsEngineAssets } = await import("@/features/plugins/quickjs/host-assets");
-    const { runnerSource, wasmModule } = await loadQuickJsEngineAssets();
+    const { runnerSource, wasmBinary } = await loadQuickJsEngineAssets();
     const runner = await frame.createModule(runnerSource);
     const sources: Record<string, string> = {};
     for (const module of modules) sources[module.path] = module.source;
-    await frame.startWorker(entry.path, port, { runner, sources, wasmModule });
+    await frame.startWorker(entry.path, port, { runner, sources, wasmBinary });
   } else {
     const urls = new Map<string, string>();
     for (const module of modules) {

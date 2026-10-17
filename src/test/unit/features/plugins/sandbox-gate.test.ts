@@ -101,12 +101,13 @@ describe("the sandbox bootstrap source", () => {
 
   it("relays the QuickJS boot fields without evaluating Plugin bytes", () => {
     // The Android fields are only relayed when the host set them; the Wasm
-    // Module crosses as a structured clone, and the bootstrap still evaluates
-    // nothing — its one Worker and one createObjectURL path are unchanged.
+    // bytes cross as an ArrayBuffer (a WebAssembly.Module is dropped by the
+    // opaque-origin frame, #516), and the bootstrap still evaluates nothing;
+    // its one Worker and one createObjectURL path are unchanged.
     expect(script).toContain('message.engine === "quickjs"');
     expect(script).toContain("boot.runner = message.runner");
     expect(script).toContain("boot.sources = message.sources");
-    expect(script).toContain("boot.wasmModule = message.wasmModule");
+    expect(script).toContain("boot.wasmBinary = message.wasmBinary");
     expect(script.match(/new Worker\(/g)).toHaveLength(1);
     expect(script).toContain("URL.createObjectURL");
   });

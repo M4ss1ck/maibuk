@@ -6,9 +6,13 @@
  *   `worker-entry.ts` (`?worker&url`): the host fetches it from its own origin
  *   and hands it to the frame's `create-module`, which turns it into the one
  *   `blob:` URL the Worker imports. The frame never fetches.
- * - `wasmModule` is the QuickJS Wasm, compiled on the host from the variant's
- *   `?url` asset and passed to the Worker as a structured-clonable value, so the
- *   Worker instantiates it without a network fetch.
+ * - `wasmBinary` is the raw bytes of the QuickJS Wasm, read on the host from
+ *   the variant's `?url` asset and passed to the Worker as an `ArrayBuffer`. A
+ *   compiled `WebAssembly.Module` cannot cross the sandbox frame: a
+ *   `postMessage` carrying one to the opaque-origin frame is silently dropped
+ *   (the frame receives nothing), which left the Plugin start timing out. Bytes
+ *   are structured-cloneable across agent clusters; the runner compiles them
+ *   inside the Worker, so the Worker never fetches.
  *
  * Both are memoized: one load per app, however many Plugins start. This module
  * is reached only through the flag-guarded dynamic import in `runtime.ts`, so a
@@ -21,15 +25,18 @@ import runnerUrl from "@/features/plugins/quickjs/worker-entry.ts?worker&url";
 export interface QuickJsEngineAssets {
   /** The text of the bundled runner module the frame turns into a `blob:` URL. */
   runnerSource: string;
-  /** The host-compiled QuickJS Wasm module. */
-  wasmModule: WebAssembly.Module;
+  /**
+   * The raw QuickJS Wasm bytes. Copied (never transferred) through the frame, so
+   * the one memoized buffer stays valid for every Plugin start.
+   */
+  wasmBinary: ArrayBuffer;
 }
 
 let assets: Promise<QuickJsEngineAssets> | null = null;
 
 /**
- * Loads the runner module text and the compiled QuickJS Wasm module once. The
- * same promise answers every caller; a failure is not retried, because a missing
+ * Loads the runner module text and the raw QuickJS Wasm bytes once. The same
+ * promise answers every caller; a failure is not retried, because a missing
  * engine asset is a build problem, not a transient one.
  */
 export function loadQuickJsEngineAssets(): Promise<QuickJsEngineAssets> {
@@ -47,10 +54,9 @@ async function load(): Promise<QuickJsEngineAssets> {
   if (!wasmResponse.ok) {
     throw new Error(`The QuickJS engine could not be loaded (HTTP ${wasmResponse.status})`);
   }
-  const [runnerSource, wasmBytes] = await Promise.all([
+  const [runnerSource, wasmBinary] = await Promise.all([
     runnerResponse.text(),
     wasmResponse.arrayBuffer(),
   ]);
-  const wasmModule = await WebAssembly.compile(wasmBytes);
-  return { runnerSource, wasmModule };
+  return { runnerSource, wasmBinary };
 }

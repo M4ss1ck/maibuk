@@ -197,6 +197,72 @@ describe("runQuickJsPlugin()", () => {
     }
   });
 
+  it("passes the WorkerGlobalScope guard so a guarded entry registers its handler", async () => {
+    // Conformance Plugins register `self.onmessage` only inside
+    // `self instanceof WorkerGlobalScope`, the guard a native Worker satisfies.
+    // Without the QuickJS scope answering it, the Plugin never reports ready
+    // (#516, the Android conformance startup-timeout).
+    const endpoint = new EndpointDouble();
+    const run = runQuickJsPlugin({
+      sources: {
+        "index.js": `if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope) {
+          self.onmessage = (event) => self.postMessage("got " + event.data.kind);
+          self.postMessage("guarded");
+        } else {
+          self.postMessage("unguarded");
+        }`,
+      },
+      entry: "index.js",
+      endpoint,
+      initEvent: { data: { kind: "maibuk:plugin-init" }, ports: [] },
+    });
+    try {
+      await expect(run.outcome).resolves.toEqual({ kind: "ready" });
+      expect(endpoint.messages).toEqual(["guarded", "got maibuk:plugin-init"]);
+    } finally {
+      run.dispose();
+    }
+  });
+
+  it("refuses dynamic code generation the way the native CSP does", async () => {
+    // The native frame has no 'unsafe-eval', so eval and every string-compiling
+    // constructor throw. The VM must refuse the same paths (#516, conformance
+    // checks escapeEval and escapeDynamicImport). Function stays usable as a
+    // type for instanceof.
+    const endpoint = new EndpointDouble();
+    const run = runQuickJsPlugin({
+      sources: {
+        "index.js": `const attempts = {
+            eval: () => eval("1 + 1"),
+            Function: () => new Function("return import('https://example.test/x.js')"),
+            GeneratorFunction: () => (function* () {}).constructor("yield 1"),
+            AsyncFunction: () => (async function () {}).constructor("return 1"),
+            AsyncGeneratorFunction: () => (async function* () {}).constructor("yield 1"),
+          };
+          for (const [name, attempt] of Object.entries(attempts)) {
+            try { attempt(); self.postMessage(name + ": escaped"); }
+            catch (error) { self.postMessage(name + ": " + error.name); }
+          }
+          self.postMessage("instanceof: " + ((() => 1) instanceof Function));`,
+      },
+      entry: "index.js",
+      endpoint,
+    });
+    try {
+      await expect(run.outcome).resolves.toEqual({ kind: "ready" });
+      expect(endpoint.messages).toEqual([
+        "eval: EvalError",
+        "Function: EvalError",
+        "GeneratorFunction: EvalError",
+        "AsyncFunction: EvalError",
+        "AsyncGeneratorFunction: EvalError",
+        "instanceof: true",
+      ]);
+    } finally {
+      run.dispose();
+    }
+  });
+
   it("fails setup with an error for an unknown module in the graph", async () => {
     const endpoint = new EndpointDouble();
     const run = runQuickJsPlugin({

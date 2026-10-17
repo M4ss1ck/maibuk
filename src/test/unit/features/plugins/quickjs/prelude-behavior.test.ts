@@ -12,7 +12,7 @@
  * prelude's `self`.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { QUICKJS_MEMORY_DEATH_MESSAGE } from "@/features/plugins/quickjs/constants";
 import { PRELUDE_SOURCE } from "@/features/plugins/sandbox";
 import {
@@ -38,12 +38,14 @@ interface RecordedRun {
   sources: Record<string, string>;
   entry: string;
   endpoint: unknown;
-  wasmModule: unknown;
+  wasmBinary: unknown;
   initEvent: { data: unknown; ports: readonly unknown[] };
 }
 
 interface BehaviorStore {
   recorded: RecordedRun | null;
+  /** The outcome promise the boot awaits; set once the runner has been called. */
+  pending: Promise<unknown> | null;
   outcome: { kind: "ready" } | { kind: "error"; message: string } | { kind: "memory-death" };
 }
 
@@ -53,10 +55,12 @@ const RUNNER_STUB = `export const runQuickJsPlugin = (options) => {
     sources: options.sources,
     entry: options.entry,
     endpoint: options.endpoint,
-    wasmModule: options.wasmModule,
+    wasmBinary: options.wasmBinary,
     initEvent: options.initEvent,
   };
-  return { outcome: Promise.resolve(globalThis.__preludeBehavior.outcome), startMs: 0, dispose() {} };
+  const outcome = Promise.resolve(globalThis.__preludeBehavior.outcome);
+  globalThis.__preludeBehavior.pending = outcome;
+  return { outcome, startMs: 0, dispose() {} };
 };`;
 
 interface FakeScope {
@@ -106,7 +110,7 @@ async function runPrelude(input: RunInput): Promise<RunOutput> {
     addEventListener: () => {},
     dispatchEvent: () => {},
   };
-  const store: BehaviorStore = { recorded: null, outcome: input.outcome };
+  const store: BehaviorStore = { recorded: null, pending: null, outcome: input.outcome };
   (globalThis as Record<string, unknown>).self = scope;
   (globalThis as Record<string, unknown>).__preludeBehavior = store;
   if (input.captureMicrotasks) {
@@ -127,7 +131,7 @@ async function runPrelude(input: RunInput): Promise<RunOutput> {
       engine: "quickjs",
       runner: runnerUrl,
       sources: input.sources,
-      wasmModule: undefined,
+      wasmBinary: undefined,
     },
     ports: [],
   });
@@ -136,9 +140,12 @@ async function runPrelude(input: RunInput): Promise<RunOutput> {
     ports: input.initPorts ?? [],
   });
 
-  // Let boot()'s awaits settle.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // Let boot()'s awaits settle: boot awaits the runner's outcome last, and
+  // awaiting the same promise here resumes after boot reports it.
+  await vi.waitFor(() => {
+    if (store.pending === null) throw new Error("the runner was never called");
+  });
+  await store.pending;
   return { posted, scope, recorded: store.recorded, microtasks };
 }
 
@@ -160,7 +167,7 @@ describe("the sandbox prelude on the QuickJS branch", () => {
     expect(run.recorded?.sources).toEqual(sources);
     // The prelude passed the Worker scope itself as the endpoint.
     expect(run.recorded?.endpoint).toBe(run.scope);
-    expect(run.recorded?.wasmModule).toBeUndefined();
+    expect(run.recorded?.wasmBinary).toBeUndefined();
     expect(run.recorded?.initEvent.data).toEqual({
       kind: PLUGIN_INIT_MESSAGE.kind,
       startReason: "launch",

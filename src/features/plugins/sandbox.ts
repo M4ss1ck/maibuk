@@ -62,7 +62,7 @@ export const PRELUDE_SOURCE = `"use strict";
         quickjs = {
           runner: message.runner,
           sources: message.sources,
-          wasmModule: message.wasmModule,
+          wasmBinary: message.wasmBinary,
         };
       }
     } else if (message.kind === "${PLUGIN_INIT_MESSAGE.kind}") {
@@ -128,7 +128,7 @@ export const PRELUDE_SOURCE = `"use strict";
         sources: quickjs.sources,
         entry: entry,
         endpoint: self,
-        wasmModule: quickjs.wasmModule,
+        wasmBinary: quickjs.wasmBinary,
         initEvent: { data: event.data, ports: event.ports },
       }).outcome;
     } catch (error) {
@@ -182,7 +182,7 @@ const BOOTSTRAP_SCRIPT = `<script>
       boot.engine = "quickjs";
       boot.runner = message.runner;
       boot.sources = message.sources;
-      boot.wasmModule = message.wasmModule;
+      boot.wasmBinary = message.wasmBinary;
     }
     return boot;
   };
@@ -361,7 +361,7 @@ export function createPluginFrame(doc: Document): PluginSandboxFrame {
         message.engine = "quickjs";
         message.runner = quickJs.runner;
         message.sources = quickJs.sources;
-        message.wasmModule = quickJs.wasmModule;
+        message.wasmBinary = quickJs.wasmBinary;
       }
       post(message, [port]);
     },

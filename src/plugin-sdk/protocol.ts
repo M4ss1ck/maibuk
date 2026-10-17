@@ -160,8 +160,10 @@ export const PLUGIN_ERROR_MESSAGE = { kind: "maibuk:plugin-error" } as const;
  *   module (`host-assets.ts`), which the prelude imports.
  * - `sources` is the verified Plugin module graph as data, keyed by
  *   Plugin-relative path — never turned into `blob:` URLs on this path.
- * - `wasmModule` is the host-compiled QuickJS Wasm module, structured-cloned
- *   through the frame so the Worker never fetches.
+ * - `wasmBinary` is the raw QuickJS Wasm bytes. They cross the frame as a copied
+ *   `ArrayBuffer` and the runner compiles them inside the Worker; a compiled
+ *   `WebAssembly.Module` cannot cross the frame (the message is dropped), so the
+ *   bytes stay bytes until the Worker has them.
  */
 export interface PluginBootMessage {
   kind: typeof PLUGIN_BOOT_MESSAGE.kind;
@@ -173,8 +175,8 @@ export interface PluginBootMessage {
   runner?: string;
   /** The verified Plugin module sources, keyed by Plugin-relative path. */
   sources?: Record<string, string>;
-  /** The host-compiled QuickJS Wasm module. */
-  wasmModule?: WebAssembly.Module;
+  /** The raw QuickJS Wasm bytes the Worker compiles before instantiating. */
+  wasmBinary?: ArrayBuffer;
 }
 
 /** True for the boot message's shape, so the sandbox and a test share one check. */

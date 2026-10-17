@@ -146,6 +146,37 @@ function buildGlobalsSource(): string {
 
   globalThis.self = globalThis;
 
+  // A Worker's global scope is a WorkerGlobalScope. Plugins guard their entry
+  // with \`self instanceof WorkerGlobalScope\` (the same guard the native Worker
+  // runs under), so the QuickJS scope must answer that check or the Plugin never
+  // registers its handler and never reports ready (#516). The prototype chain
+  // keeps everything the scope already had.
+  function WorkerGlobalScope() {}
+  WorkerGlobalScope.prototype = Object.create(Object.getPrototypeOf(globalThis));
+  Object.setPrototypeOf(globalThis, WorkerGlobalScope.prototype);
+  globalThis.WorkerGlobalScope = WorkerGlobalScope;
+
+  // The native frame runs under a CSP without 'unsafe-eval', so dynamic code
+  // generation throws there. The VM refuses it the same way (#516): \`eval\`, and
+  // every constructor that compiles a string (Function, GeneratorFunction,
+  // AsyncFunction, AsyncGeneratorFunction), so \`new Function("return import(x)")\`
+  // fails exactly as it does on the native engine.
+  function refuseCodeGeneration() {
+    throw new EvalError("Code generation from strings is disabled in this Plugin");
+  }
+  var refusedConstructor = function () { refuseCodeGeneration(); };
+  var generatorPrototype = Object.getPrototypeOf(function* () {});
+  var asyncPrototype = Object.getPrototypeOf(async function () {});
+  var asyncGeneratorPrototype = Object.getPrototypeOf(async function* () {});
+  [Function.prototype, generatorPrototype, asyncPrototype, asyncGeneratorPrototype].forEach(
+    function (proto) {
+      Object.defineProperty(proto, "constructor", { value: refusedConstructor, writable: false, configurable: true });
+    }
+  );
+  refusedConstructor.prototype = Function.prototype;
+  globalThis.Function = refusedConstructor;
+  globalThis.eval = refuseCodeGeneration;
+
   try { delete globalThis.Intl; } catch (e) {}
   try { delete globalThis.WebAssembly; } catch (e) {}
 

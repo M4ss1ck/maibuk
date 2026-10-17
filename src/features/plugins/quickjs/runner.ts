@@ -52,7 +52,16 @@ export interface QuickJsRunOptions {
   endpoint: QuickJsPluginEndpoint;
   /** The QuickJS heap cap; defaults to `QUICKJS_HEAP_CAP_BYTES`. */
   memoryCapBytes?: number;
-  /** A Wasm module precompiled by the host; Node and Vitest omit it. */
+  /**
+   * The raw QuickJS Wasm bytes, compiled here inside the Worker. The host sends
+   * bytes, not a `WebAssembly.Module`: a Module posted into the opaque-origin
+   * sandbox frame is silently dropped (#516).
+   */
+  wasmBinary?: ArrayBuffer;
+  /**
+   * A Wasm module precompiled elsewhere; Node and Vitest may pass it. Wins over
+   * `wasmBinary` when both are set.
+   */
   wasmModule?: WebAssembly.Module;
   /** Replayed into the VM after evaluation, exactly as the prelude does. */
   initEvent?: QuickJsScopeEvent;
@@ -468,8 +477,12 @@ export function runQuickJsPlugin(options: QuickJsRunOptions): QuickJsPluginRun {
         initial: QUICKJS_WASM_INITIAL_PAGES,
         maximum,
       });
+      const wasmModule =
+        options.wasmModule ??
+        (options.wasmBinary ? await WebAssembly.compile(options.wasmBinary) : undefined);
+      if (disposed) return;
       variant = newVariant(quickJsVariant, {
-        wasmModule: options.wasmModule,
+        wasmModule,
         wasmMemory,
       });
     } catch (error) {
