@@ -48,7 +48,9 @@ import {
   DEFAULT_NOTES_FILTERS,
   DEFAULT_NOTES_SORT,
   normalizeNotesFilters,
+  normalizeNotesSidebarSort,
   type NotesFilters,
+  type NotesSidebarSort,
 } from "@/components/notes/notes-list-model";
 import { DEFAULT_STATUS_FILTER } from "@/components/project/book-list-model";
 import type { BookStatus } from "@/features/books/types";
@@ -126,6 +128,8 @@ interface SettingsStore extends Settings {
   setChapterListView: (view: ChapterListView) => void;
   setShowChapterOutline: (enabled: boolean) => void;
   setNotesListView: (view: NotesListViewMode) => void;
+  setNotesListSort: (sort: NotesSidebarSort) => void;
+  setNotesTreeSort: (sort: NotesSidebarSort) => void;
   setNotesSort: (sort: NotesSortOption) => void;
   setNotesFilters: (filters: Partial<NotesFilters>) => void;
   setBooksStatusFilter: (statuses: BookStatus[]) => void;
@@ -202,6 +206,8 @@ const defaultSettings: Settings = {
   chapterListView: "normal",
   showChapterOutline: true,
   notesListView: "list",
+  notesListSort: "custom",
+  notesTreeSort: "custom",
   notesSort: DEFAULT_NOTES_SORT,
   notesFilters: DEFAULT_NOTES_FILTERS,
   booksStatusFilter: DEFAULT_STATUS_FILTER,
@@ -419,6 +425,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setChapterListView: (chapterListView) => set({ chapterListView }),
       setShowChapterOutline: (showChapterOutline) => set({ showChapterOutline }),
       setNotesListView: (notesListView) => set({ notesListView }),
+      setNotesListSort: (notesListSort) => set({ notesListSort }),
+      setNotesTreeSort: (notesTreeSort) => set({ notesTreeSort }),
       setNotesSort: (notesSort) => set({ notesSort }),
       setNotesFilters: (filters) =>
         set((state) => ({ notesFilters: { ...state.notesFilters, ...filters } })),
@@ -672,6 +680,8 @@ export const useSettingsStore = create<SettingsStore>()(
             applyToolbarButtonRenames(normalizeToolbarConfig(persisted.toolbarConfig))
           ),
           notesFilters: normalizeNotesFilters(persisted.notesFilters),
+          notesListSort: normalizeNotesSidebarSort(persisted.notesListSort),
+          notesTreeSort: normalizeNotesSidebarSort(persisted.notesTreeSort),
         };
       },
       onRehydrateStorage: () => {

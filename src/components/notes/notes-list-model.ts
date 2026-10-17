@@ -1,4 +1,13 @@
+import {
+  ArrowDownAZ,
+  ArrowDownZA,
+  CalendarArrowDown,
+  CalendarArrowUp,
+  GripVertical,
+  type LucideIcon,
+} from "lucide-react";
 import type { Book } from "@/features/books/types";
+import type { CommandId } from "@/lib/shortcut-registry";
 import type { CreateNoteInput, Note } from "@/features/notes";
 
 export type NotesListViewMode = "list" | "tree";
@@ -8,6 +17,21 @@ export type NotesTreeGroupMode = "book" | "tag" | "date";
 export type NotesSortOption = "date-desc" | "date-asc" | "title-asc" | "title-desc";
 
 export const DEFAULT_NOTES_SORT: NotesSortOption = "date-desc";
+
+/** A sidebar view's Sort: the Gallery's four plus the Custom Order. */
+export type NotesSidebarSort = "custom" | NotesSortOption;
+
+const NOTES_SIDEBAR_SORTS: readonly NotesSidebarSort[] = [
+  "custom",
+  "title-asc",
+  "title-desc",
+  "date-desc",
+  "date-asc",
+];
+
+export function normalizeNotesSidebarSort(value: unknown): NotesSidebarSort {
+  return NOTES_SIDEBAR_SORTS.find((sort) => sort === value) ?? "custom";
+}
 
 // The gallery's filter bar, persisted between visits alongside the sort order.
 export interface NotesFilters {
@@ -46,19 +70,75 @@ export function normalizeNotesFilters(value: unknown): NotesFilters {
   };
 }
 
-export function sortNotesBy(notes: NoteWithBook[], option: NotesSortOption): NoteWithBook[] {
+const TITLE_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/**
+ * The Notes in the order a Sort shows them. Custom is the Custom Order; title
+ * Sorts put untitled Notes first; every tie keeps the Custom Order.
+ */
+export function sortNotesBy<T extends NoteWithBook>(notes: T[], option: NotesSidebarSort): T[] {
+  const byCustomOrder = (a: T, b: T) => a.order - b.order;
+  if (option === "custom") return [...notes].sort(byCustomOrder);
   const [field, direction] = option.split("-");
   const sign = direction === "asc" ? 1 : -1;
   return [...notes].sort((a, b) => {
-    const comparison =
-      field === "title"
-        ? a.title.localeCompare(b.title, undefined, {
-            numeric: true,
-            sensitivity: "base",
-          })
-        : a.contentUpdatedAt - b.contentUpdatedAt;
-    return comparison * sign;
+    if (field === "title") {
+      const aTitle = a.title.trim();
+      const bTitle = b.title.trim();
+      if (!aTitle || !bTitle) {
+        if (aTitle || bTitle) return aTitle ? 1 : -1;
+        return byCustomOrder(a, b);
+      }
+      return TITLE_COLLATOR.compare(aTitle, bTitle) * sign || byCustomOrder(a, b);
+    }
+    return (a.contentUpdatedAt - b.contentUpdatedAt) * sign || byCustomOrder(a, b);
   });
+}
+
+/** The Command that picks each Sort, on whichever Notes screen is showing. */
+export const NOTES_SORT_COMMANDS: readonly { id: CommandId; sort: NotesSidebarSort }[] = [
+  { id: "notes.sortCustom", sort: "custom" },
+  { id: "notes.sortTitleAsc", sort: "title-asc" },
+  { id: "notes.sortTitleDesc", sort: "title-desc" },
+  { id: "notes.sortDateNewest", sort: "date-desc" },
+  { id: "notes.sortDateOldest", sort: "date-asc" },
+];
+
+export interface NotesSortChoice<T extends NotesSidebarSort = NotesSidebarSort> {
+  value: T;
+  label: string;
+  icon: LucideIcon;
+}
+
+type NotesSortLabelKey =
+  | "notes.sortCustom"
+  | "notes.sortTitleAsc"
+  | "notes.sortTitleDesc"
+  | "notes.sortDateNewest"
+  | "notes.sortDateOldest";
+
+/** The Sort menu's options; the sidebar offers Custom, the Gallery does not. */
+export function notesSortOptions(
+  t: (key: NotesSortLabelKey) => string,
+  { custom }: { custom: true }
+): NotesSortChoice[];
+export function notesSortOptions(
+  t: (key: NotesSortLabelKey) => string,
+  { custom }: { custom: false }
+): NotesSortChoice<NotesSortOption>[];
+export function notesSortOptions(
+  t: (key: NotesSortLabelKey) => string,
+  { custom }: { custom: boolean }
+): NotesSortChoice[] {
+  const sorted: NotesSortChoice<NotesSortOption>[] = [
+    { value: "title-asc", label: t("notes.sortTitleAsc"), icon: ArrowDownAZ },
+    { value: "title-desc", label: t("notes.sortTitleDesc"), icon: ArrowDownZA },
+    { value: "date-desc", label: t("notes.sortDateNewest"), icon: CalendarArrowDown },
+    { value: "date-asc", label: t("notes.sortDateOldest"), icon: CalendarArrowUp },
+  ];
+  return custom
+    ? [{ value: "custom", label: t("notes.sortCustom"), icon: GripVertical }, ...sorted]
+    : sorted;
 }
 
 export type NoteWithBook = Note & { bookId?: string | null };
@@ -220,16 +300,34 @@ export function filterNotes(
 
 export function buildListNoteSections(
   notes: NoteWithBook[],
-  criteria: string | NoteFilterCriteria
+  criteria: string | NoteFilterCriteria,
+  sort: NotesSidebarSort = "custom"
 ): NoteSection[] {
   const filtered = filterNotes(notes, criteria);
   return [
-    { id: "pinned", notes: filtered.filter((note) => note.pinned) },
-    { id: "all", notes: filtered.filter((note) => !note.pinned) },
+    {
+      id: "pinned",
+      notes: sortNotesBy(
+        filtered.filter((note) => note.pinned),
+        sort
+      ),
+    },
+    {
+      id: "all",
+      notes: sortNotesBy(
+        filtered.filter((note) => !note.pinned),
+        sort
+      ),
+    },
   ];
 }
 
-export function buildBookNoteGroups(notes: NoteWithBook[], books: Book[]): BookNoteGroup[] {
+export function buildBookNoteGroups(
+  notes: NoteWithBook[],
+  books: Book[],
+  sort: NotesSidebarSort = "custom"
+): BookNoteGroup[] {
+  notes = sortNotesBy(notes, sort);
   const groups = books.map((book) => ({
     id: book.id,
     title: book.title,
@@ -242,10 +340,13 @@ export function buildBookNoteGroups(notes: NoteWithBook[], books: Book[]): BookN
   return [...groups, { id: "unfiled", title: "Unfiled", book: null, notes: unfiled }];
 }
 
-export function buildTagNoteGroups(notes: NoteWithBook[]): TagNoteGroup[] {
+export function buildTagNoteGroups(
+  notes: NoteWithBook[],
+  sort: NotesSidebarSort = "custom"
+): TagNoteGroup[] {
   const groups = new Map<string, NoteWithBook[]>();
 
-  for (const note of notes) {
+  for (const note of sortNotesBy(notes, sort)) {
     for (const rawTag of note.tags) {
       const tag = rawTag.trim();
       if (!tag) continue;
@@ -279,7 +380,11 @@ function noteDate(note: Note): Date {
   return new Date(note.contentUpdatedAt * 1000);
 }
 
-export function buildDateNoteGroups(notes: NoteWithBook[], now = new Date()): DateNoteGroup[] {
+export function buildDateNoteGroups(
+  notes: NoteWithBook[],
+  now = new Date(),
+  sort: NotesSidebarSort = "custom"
+): DateNoteGroup[] {
   const todayStart = startOfDay(now).getTime();
   const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
   const weekStart = startOfWeek(now).getTime();
@@ -287,8 +392,7 @@ export function buildDateNoteGroups(notes: NoteWithBook[], now = new Date()): Da
   const thisWeek: NoteWithBook[] = [];
   const years = new Map<string, NoteWithBook[]>();
 
-  // Most recently edited first within each group, not the manual order notes arrive in.
-  for (const note of sortNotesBy(notes, "date-desc")) {
+  for (const note of sortNotesBy(notes, sort)) {
     const updated = noteDate(note).getTime();
     if (updated >= todayStart && updated < tomorrowStart) {
       today.push(note);

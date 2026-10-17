@@ -246,11 +246,17 @@
     "backToBook": "Back to {{title}}",
     "viewList": "List",
     "viewTree": "Tree",
-    "sortBy": "Sort by",
     "sortDateNewest": "Date (newest first)",
     "sortDateOldest": "Date (oldest first)",
     "sortTitleAsc": "Title (A–Z)",
     "sortTitleDesc": "Title (Z–A)",
+    "sortCustom": "Custom",
+    "sortTrigger": "Sort notes: {{sort}}",
+    "sortCommandCustom": "Sort notes: Custom",
+    "sortCommandTitleAsc": "Sort notes: A to Z",
+    "sortCommandTitleDesc": "Sort notes: Z to A",
+    "sortCommandDateNewest": "Sort notes: newest first",
+    "sortCommandDateOldest": "Sort notes: oldest first",
     "sectionPinned": "Pinned",
     "sectionAll": "All notes",
     "pinnedCount_one": "{{count}} pinned",
@@ -1710,7 +1716,7 @@
         },
         "tree": {
           "title": "List or tree",
-          "body": "Show Notes as a list, or as a tree grouped by Book (Book Notes and Unfiled), by Tag or by date. Groups you collapse stay collapsed."
+          "body": "Show Notes as a list, or as a tree grouped by Book (Book Notes and Unfiled), by Tag or by date. Groups you collapse stay collapsed. The Sort button beside the search arranges Notes A to Z or by date; Custom keeps the order you drag them into."
         },
         "tags": {
           "title": "Tags",

@@ -6,13 +6,14 @@ import type { BookStatus } from "@/features/books/types";
 import type {
   NotesFilters,
   NotesListViewMode,
+  NotesSidebarSort,
   NotesSortOption,
   NotesTreeGroupMode,
 } from "@/components/notes/notes-list-model";
 
 export { DEFAULT_METRICS_SETTINGS };
 export type { MetricsCategory, MetricsSettings };
-export type { NotesListViewMode, NotesSortOption, NotesTreeGroupMode };
+export type { NotesListViewMode, NotesSidebarSort, NotesSortOption, NotesTreeGroupMode };
 
 export type FontSize = 14 | 16 | 18 | 20;
 export type FontFamily = "serif" | "sans" | "mono";
@@ -200,6 +201,8 @@ export interface Settings {
   chapterListView: ChapterListView;
   showChapterOutline: boolean;
   notesListView: NotesListViewMode;
+  notesListSort: NotesSidebarSort;
+  notesTreeSort: NotesSidebarSort;
   notesSort: NotesSortOption;
   notesFilters: NotesFilters;
   booksStatusFilter: BookStatus[];

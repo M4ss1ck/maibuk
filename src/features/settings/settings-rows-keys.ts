@@ -42,6 +42,8 @@ export const SETTINGS_KEY_ROWS = {
   chapterListView: "internal",
   showChapterOutline: "internal",
   notesListView: "internal",
+  notesListSort: "internal",
+  notesTreeSort: "internal",
   notesSort: "internal",
   notesFilters: "internal",
   booksStatusFilter: "internal",

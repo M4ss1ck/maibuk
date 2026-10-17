@@ -246,11 +246,17 @@
     "backToBook": "Volver a {{title}}",
     "viewList": "Lista",
     "viewTree": "Árbol",
-    "sortBy": "Ordenar por",
     "sortDateNewest": "Fecha (más reciente)",
     "sortDateOldest": "Fecha (más antigua)",
     "sortTitleAsc": "Título (A–Z)",
     "sortTitleDesc": "Título (Z–A)",
+    "sortCustom": "Personalizado",
+    "sortTrigger": "Ordenar notas: {{sort}}",
+    "sortCommandCustom": "Ordenar notas: personalizado",
+    "sortCommandTitleAsc": "Ordenar notas: de la A a la Z",
+    "sortCommandTitleDesc": "Ordenar notas: de la Z a la A",
+    "sortCommandDateNewest": "Ordenar notas: más recientes primero",
+    "sortCommandDateOldest": "Ordenar notas: más antiguas primero",
     "sectionPinned": "Fijadas",
     "sectionAll": "Todas las notas",
     "pinnedCount_one": "{{count}} fijada",
@@ -1710,7 +1716,7 @@
         },
         "tree": {
           "title": "Lista o árbol",
-          "body": "Muestra las Notas como lista, o como árbol agrupado por Libro (Notas del Libro y Sin libro), por etiqueta o por fecha. Los grupos que pliegas se quedan plegados."
+          "body": "Muestra las Notas como lista, o como árbol agrupado por Libro (Notas del Libro y Sin libro), por etiqueta o por fecha. Los grupos que pliegas se quedan plegados. El botón de orden junto a la búsqueda ordena las Notas de la A a la Z o por fecha; Personalizado mantiene el orden en que las arrastras."
         },
         "tags": {
           "title": "Etiquetas",

@@ -120,3 +120,19 @@ describe("voice label refusals", () => {
     ).toEqual([]);
   });
 });
+
+describe("Sort Voice Commands (#524)", () => {
+  it("answers to each Sort's label in English and Spanish", () => {
+    const spoken = (id: CommandId, language: DictationLanguage) =>
+      defaultWholeLinePhrases(id, language).map((phrase) => phraseWords(phrase).join(" "));
+
+    expect(spoken("notes.sortCustom", "en")).toEqual(["sort notes custom"]);
+    expect(spoken("notes.sortTitleAsc", "en")).toEqual(["sort notes a to z"]);
+    expect(spoken("notes.sortTitleDesc", "en")).toEqual(["sort notes z to a"]);
+    expect(spoken("notes.sortDateNewest", "en")).toEqual(["sort notes newest first"]);
+    expect(spoken("notes.sortDateOldest", "en")).toEqual(["sort notes oldest first"]);
+    expect(spoken("notes.sortCustom", "es")).toEqual(["ordenar notas personalizado"]);
+    expect(spoken("notes.sortTitleAsc", "es")).toEqual(["ordenar notas de la a a la z"]);
+    expect(spoken("notes.sortDateNewest", "es")).toEqual(["ordenar notas mas recientes primero"]);
+  });
+});
