@@ -152,9 +152,13 @@ const { resetSyncEngineForTests } = await import("@/features/sync/sync-engine");
 const { resetAutoSyncForTests } = await import("@/features/sync/auto-sync");
 
 let path = "/";
+// Every distinct route the app has moved to, in order. A run that navigates
+// shows up here even if it has moved on again by the time we look.
+const pathLog: string[] = [];
 let navigateTo: (to: string) => void = () => {};
 function LocationProbe() {
   path = useLocation().pathname;
+  if (pathLog.at(-1) !== path) pathLog.push(path);
   const navigate = useNavigate();
   navigateTo = (to: string) => navigate(to);
   return null;
@@ -312,6 +316,29 @@ describe.sequential("navigating Commands (issue #319)", () => {
     }
     const bound = Object.keys(useBoundShortcutStore.getState().counts) as CommandId[];
 
+    // Non-navigating runs: each one's route moves are pathLog entries between
+    // its mark and the next run's mark. One navigating Command runs after them
+    // all; a move that a run started lands before that witness does.
+    let negatives: { id: CommandId; mark: number }[] = [];
+    // Runs the witness and judges the batch. Called before any navigating run,
+    // so a batch's windows never include another run's moves.
+    const judgeNegatives = async () => {
+      if (negatives.length === 0) return;
+      const windowsEnd = pathLog.length;
+      const witnessTo = path === "/notes" ? "/" : "/notes";
+      const witnessId: CommandId = witnessTo === "/" ? "global.gotoProjects" : "global.gotoNotes";
+      await runCommand(witnessId, { source: "palette" });
+      await waitFor(() => expect(path).toBe(witnessTo));
+      const moves = negatives.flatMap((negative, index) => {
+        const end = negatives[index + 1]?.mark ?? windowsEnd;
+        return pathLog.slice(negative.mark, end).map((to) => `${negative.id} -> ${to}`);
+      });
+      const judged = negatives.map((negative) => negative.id).join(", ");
+      negatives = [];
+      expect(moves, `non-navigating Commands (${judged}) on ${screen} moved the route`).toEqual([]);
+      navigateTo(screen);
+      await settleOn(screen);
+    };
     for (const id of bound) {
       const skipReason = SKIP[id];
       if (skipReason) continue;
@@ -328,31 +355,32 @@ describe.sequential("navigating Commands (issue #319)", () => {
       if (!(useBoundShortcutStore.getState().counts[id] ?? 0)) continue;
       seen.add(id);
       const before = path;
-      const outcome = await runCommand(id, { source: "palette" });
       const inPlaceReason = IN_PLACE[id]?.(screen);
+      if (getCommand(id).navigates === true && !inPlaceReason) await judgeNegatives();
+      const mark = pathLog.length;
+      const outcome = await runCommand(id, { source: "palette" });
       // Note and canvas creation navigate once the write lands. An in-place
       // run never moves, so waiting for a move would only burn the timeout.
       if (getCommand(id).navigates === true && !inPlaceReason) {
         // time-budget: a Command that wrongly stays put must not wait 10 s per id.
         await waitFor(() => expect(path).not.toBe(before), { timeout: 5_000 }).catch(() => {});
+        const after = path;
+        if (outcome === "ran" && after !== before) exercised.add(id);
+        expect(
+          after !== before,
+          `${id} on ${screen}: route ${before} -> ${after}, navigates=true, outcome=${outcome}`
+        ).toBe(true);
+        if (after !== before) {
+          navigateTo(screen);
+          await settleOn(screen);
+        }
       } else {
-        // Negative: the route must not move. No event marks a run that stays
-        // put, so this is the one counted wait; the fixed-wait guard keeps it.
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-      const after = path;
-      const navigates = getCommand(id).navigates === true;
-      if (outcome === "ran" && navigates && after !== before) exercised.add(id);
-      expect(
-        after !== before,
-        `${id} on ${screen}: route ${before} -> ${after}, navigates=${navigates}, outcome=${outcome}${inPlaceReason ? ` (${inPlaceReason})` : ""}`
-      ).toBe(inPlaceReason ? false : navigates);
-      if (after !== before) {
-        navigateTo(screen);
-        await settleOn(screen);
+        negatives.push({ id, mark });
       }
       await closeLeftoverDialogs();
     }
+
+    await judgeNegatives();
   });
 
   it("ran every flagged Command on some screen", () => {
