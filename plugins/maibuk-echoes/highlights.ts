@@ -61,8 +61,8 @@ export interface EchoHighlightRange {
 export interface EchoHighlightOptions {
   /** Paint each range in its Echo's color (the "Color highlights by echo" switch). */
   colors?: boolean;
-/** The Palette the colors come from (#533); Okabe-Ito when unset. */
-palette?: EchoPaletteId;
+  /** The Palette the colors come from (#533); Okabe-Ito when unset. */
+  palette?: EchoPaletteId;
 }
 
 /** Each host kind and the ranges it paints; a kind with nothing is an empty list. */

@@ -1081,6 +1081,13 @@ function useEchoLanguage(client: PluginClient): string {
   return language;
 }
 
+/** The catalog key of each Palette's name, shown beside its swatches (#533). */
+const PALETTE_LABEL: Readonly<Record<EchoPaletteId, EchoKey>> = {
+  "okabe-ito": "palette.okabe-ito",
+  vivid: "palette.vivid",
+  soft: "palette.soft",
+};
+
 /**
  * The `detection` Settings row's body: one switch per echo kind the detection
  * supports, the stemming switch, the nearby-echo window, and the ignore list,
@@ -1091,12 +1098,6 @@ function useEchoLanguage(client: PluginClient): string {
  * recompute, so an open editor updates at once. Labels come from the runtime
  * catalogs.
  */
-/** The catalog key of each Palette's name, shown beside its swatches (#533). */
-const PALETTE_LABEL: Readonly<Record<EchoPaletteId, EchoKey>> = {
-  "okabe-ito": "palette.okabe-ito",
-  vivid: "palette.vivid",
-  soft: "palette.soft",
-};
 
 function createDetectionSettings(
   client: PluginClient,

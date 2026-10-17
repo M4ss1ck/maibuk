@@ -276,9 +276,9 @@ describe("Echoes color by echo (#532)", () => {
 
   it("reads the Okabe-Ito Palette when the Palette key is unset or unknown (#533)", async () => {
     expect(await readEchoPalette(fakeStorage(new Map()))).toBe("okabe-ito");
-    expect(
-      await readEchoPalette(fakeStorage(new Map([[ECHOES_PALETTE_KEY, "neon"]])))
-    ).toBe("okabe-ito");
+    expect(await readEchoPalette(fakeStorage(new Map([[ECHOES_PALETTE_KEY, "neon"]])))).toBe(
+      "okabe-ito"
+    );
   });
 
   it("round-trips the Palette through storage under its own key (#533)", async () => {

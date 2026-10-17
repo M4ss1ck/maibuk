@@ -81,10 +81,7 @@ function fnv1a(text: string): number {
 }
 
 /** The color an Echo with this match key is painted in, from the chosen Palette. */
-export function echoColor(
-  matchKey: string,
-  palette: EchoPaletteId = DEFAULT_ECHO_PALETTE
-): string {
+export function echoColor(matchKey: string, palette: EchoPaletteId = DEFAULT_ECHO_PALETTE): string {
   const colors = ECHO_PALETTES[palette];
   return colors[fnv1a(matchKey) % colors.length];
 }

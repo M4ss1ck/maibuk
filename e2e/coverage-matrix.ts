@@ -3279,7 +3279,7 @@ export const ROWS: MatrixRow[] = [
     edges: [
       "The Palette dropdown is disabled while coloring is off",
       "Turning coloring on enables the dropdown, and a keyboard choice of Palette persists after reload",
-      "Each Palette option is named by its text, such as \"Vivid, 8 colors\"",
+      'Each Palette option is named by its text, such as "Vivid, 8 colors"',
     ],
     terms: ["Plugin"],
     shortcuts: [],

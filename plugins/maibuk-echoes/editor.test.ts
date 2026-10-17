@@ -256,9 +256,9 @@ function fakeClient(options: FakeOptions = {}) {
     },
     /** Resolves when every handler the event reached has finished its work. */
     emit(event: PluginApiEventId, payload: unknown): Promise<void> {
-      return Promise.all([...(listeners.get(event) ?? [])].map((listener) => listener(payload))).then(
-        () => undefined
-      );
+      return Promise.all(
+        [...(listeners.get(event) ?? [])].map((listener) => listener(payload))
+      ).then(() => undefined);
     },
     /** The Plugin's own storage, so a test can change a stored setting between recomputes. */
     storage,
@@ -1011,7 +1011,10 @@ describe("highlight transition audit (#529)", () => {
 
     fake.dropListeners();
     const second = createEchoEditor(fake.client);
-    await Promise.all([fake.emit("editor.contentChanged", { entity: fake.entity }), second.refresh()]);
+    await Promise.all([
+      fake.emit("editor.contentChanged", { entity: fake.entity }),
+      second.refresh(),
+    ]);
     expect(fake.highlights.length).toBe(before);
   });
 

@@ -230,7 +230,10 @@ export async function readEchoPalette(client: EchoesStorage): Promise<EchoPalett
 }
 
 /** Stores the Echo color Palette under its own key; a refused write is ignored (#533). */
-export async function writeEchoPalette(client: EchoesStorage, palette: EchoPaletteId): Promise<void> {
+export async function writeEchoPalette(
+  client: EchoesStorage,
+  palette: EchoPaletteId
+): Promise<void> {
   try {
     await client.storage.set({ key: ECHOES_PALETTE_KEY, value: palette });
   } catch {

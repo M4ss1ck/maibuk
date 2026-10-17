@@ -116,7 +116,11 @@ describe("the Remote UI renderer", () => {
       const committed: string[] = [];
       harness = renderRemoteUi();
       await harness.mount(
-        <ui.TextField label="Title" value="start" onChange={(event) => committed.push(event.detail)} />
+        <ui.TextField
+          label="Title"
+          value="start"
+          onChange={(event) => committed.push(event.detail)}
+        />
       );
       const field = screen.getByRole("textbox", { name: "Title" });
       await userEvent.type(field, "!");
@@ -169,11 +173,7 @@ describe("the Remote UI renderer", () => {
       const seen: number[] = [];
       harness = renderRemoteUi();
       await harness.mount(
-        <ui.NumberField
-          label="Count"
-          value={1}
-          onInput={(event) => seen.push(event.detail)}
-        />
+        <ui.NumberField label="Count" value={1} onInput={(event) => seen.push(event.detail)} />
       );
       const field = screen.getByRole("textbox", { name: "Count" });
       await userEvent.type(field, "2");
@@ -420,7 +420,11 @@ describe("the Remote UI renderer", () => {
       const seen: boolean[] = [];
       harness = renderRemoteUi();
       await harness.mount(
-        <ui.Checkbox label="Enabled" isSelected={false} onChange={(event) => seen.push(event.detail)} />
+        <ui.Checkbox
+          label="Enabled"
+          isSelected={false}
+          onChange={(event) => seen.push(event.detail)}
+        />
       );
       await userEvent.click(screen.getByText("Enabled"));
       expect(seen).toEqual([true]);
@@ -440,7 +444,11 @@ describe("the Remote UI renderer", () => {
       const seen: boolean[] = [];
       harness = renderRemoteUi();
       await harness.mount(
-        <ui.Checkbox label="Enabled" isSelected={false} onChange={(event) => seen.push(event.detail)} />
+        <ui.Checkbox
+          label="Enabled"
+          isSelected={false}
+          onChange={(event) => seen.push(event.detail)}
+        />
       );
       await userEvent.tab();
       await userEvent.keyboard(" ");
