@@ -236,7 +236,10 @@ function renderApp(initialPath = "/") {
 async function settleOn(screenPath: string) {
   await waitFor(() => expect(path).toBe(screenPath));
   await waitFor(() => expect(document.querySelector("[data-route-heading]")).not.toBeNull());
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  // A screen binds its Commands once it has mounted; the palette lists them.
+  await waitFor(() =>
+    expect(Object.keys(useBoundShortcutStore.getState().counts).length).toBeGreaterThan(0)
+  );
 }
 
 const PALETTE_NAME = "Command palette";
@@ -257,6 +260,8 @@ function activeResultLabel(search: HTMLElement): string | null {
   return element?.textContent ?? null;
 }
 
+// Used only before a negative check ("the palette stays closed"). No event
+// follows a key that opens nothing, so this one is a counted wait.
 async function settleEffects() {
   await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
 }
