@@ -312,12 +312,18 @@ describe("entering the Tutorial Library", () => {
       })
     );
 
-    const entering = tutorial.startTutorial(START);
-    // Keep the close work pending while the switch reaches its settle. No
-    // observable marks that point, so this one stays a counted wait.
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    closing.resolve();
-    await entering;
+    // The switch's settle is the point it waits on the close work; the spy
+    // marks that it has reached it while the close work is still pending.
+    const settleSpy = vi.spyOn(librarySwitch, "settleAuthorLibraryWork");
+    try {
+      const entering = tutorial.startTutorial(START);
+      await vi.waitFor(() => expect(settleSpy).toHaveBeenCalled());
+      expect(librarySwitch.isTutorialLibraryActive()).toBe(false);
+      closing.resolve();
+      await entering;
+    } finally {
+      settleSpy.mockRestore();
+    }
 
     expect(activeWhenClosed).toBe(false);
   });
