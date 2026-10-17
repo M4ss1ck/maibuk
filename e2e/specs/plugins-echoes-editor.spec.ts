@@ -103,6 +103,20 @@ test.describe(
         await expect(marks(page)).toHaveCount(0);
       });
 
+      test("the first toggle after a cold start paints highlights and presses the button", async ({
+        page,
+      }) => {
+        // Nothing was toggled before this: the first Alt+F7 is the cold-start
+        // toggle, which must paint (#529), not reset itself off.
+        await openChapter(page, ECHO_CHAPTER);
+        await expect(marks(page)).toHaveCount(0);
+        await page.keyboard.press("Alt+F7");
+        await expect(marks(page)).toHaveCount(ECHO_COUNT);
+        await expect(marks(page).first()).toHaveAccessibleDescription(
+          "harbor, repeated 4 words later"
+        );
+      });
+
       test("Next and Previous move the caret, announce, and wrap at both ends", async ({
         page,
       }) => {
