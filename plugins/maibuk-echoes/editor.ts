@@ -404,14 +404,14 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
 
   function listen<E extends PluginApiEventId>(
     event: E,
-    handler: (payload: PluginApiEvents[E]) => void
+    handler: (payload: PluginApiEvents[E]) => void | Promise<void>
   ): void {
     void client.on(event, handler).catch(() => {});
   }
 
   listen("editor.contentChanged", (payload) => {
     if (!state.on || state.entity === null || !sameEntity(payload.entity, state.entity)) return;
-    void recompute();
+    return recompute();
   });
 
   listen("editor.focusChanged", (payload) => {
@@ -424,18 +424,17 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     // resets without painting, since an unmounted editor has nothing left to
     // clear and a later editor must never inherit this one's ranges (#451, #529).
     if (payload.entity === null) {
-      void closeIfNoEditor();
-      return;
+      return closeIfNoEditor();
     }
     // A different, non-null entity turns highlighting off and clears the kinds
     // from the editor that still has them.
     if (!state.on || state.entity === null || sameEntity(payload.entity, state.entity)) return;
-    void turnOff();
+    return turnOff();
   });
 
   listen("language.changed", (payload) => {
     state.uiLanguage = payload.language;
-    void recompute();
+    return recompute();
   });
 
   void client.language

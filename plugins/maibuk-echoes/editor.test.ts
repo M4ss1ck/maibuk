@@ -35,7 +35,7 @@ interface NotificationCall {
   message: string;
 }
 
-type Listener = (payload: unknown) => void;
+type Listener = (payload: unknown) => void | Promise<void>;
 
 /** Two occurrences of "door" four words apart: one nearby echo, two ranges. */
 const DOOR = "A door creaked. Then a door slammed.";
@@ -247,8 +247,11 @@ function fakeClient(options: FakeOptions = {}) {
         release();
       };
     },
-    emit(event: PluginApiEventId, payload: unknown) {
-      for (const listener of listeners.get(event) ?? []) listener(payload);
+    /** Resolves when every handler the event reached has finished its work. */
+    emit(event: PluginApiEventId, payload: unknown): Promise<void> {
+      return Promise.all([...(listeners.get(event) ?? [])].map((listener) => listener(payload))).then(
+        () => undefined
+      );
     },
   };
 }
@@ -484,9 +487,10 @@ describe("focusChanged while on", () => {
     // only after that reset, as it does on a real close and reopen.
     await vi.waitFor(() => expect(fake.pressed.at(-1)).toBe(false));
     fake.setFocused(true);
-    fake.emit("editor.focusChanged", { entity: fake.entity });
-    fake.emit("editor.contentChanged", { entity: fake.entity });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.all([
+      fake.emit("editor.focusChanged", { entity: fake.entity }),
+      fake.emit("editor.contentChanged", { entity: fake.entity }),
+    ]);
     expect(fake.highlights.length).toBe(3);
 
     await controller.nextEcho();
@@ -811,11 +815,11 @@ describe("highlight transition audit (#529)", () => {
     await controller.toggleHighlights();
     const release = fake.gateContent();
     fake.setFocused(false);
-    fake.emit("editor.focusChanged", { entity: null });
+    const nullFocus = fake.emit("editor.focusChanged", { entity: null });
     fake.setFocused(true);
-    fake.emit("editor.focusChanged", { entity: fake.entity });
+    const sameFocus = fake.emit("editor.focusChanged", { entity: fake.entity });
     release();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.all([nullFocus, sameFocus]);
     expect(lastPressed(fake)).toBe(true);
     expect(fake.highlights.length).toBe(3);
   });
@@ -830,7 +834,6 @@ describe("highlight transition audit (#529)", () => {
     fake.emit("editor.focusChanged", { entity: fake.entity });
     release();
     await toggling;
-    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(lastPressed(fake)).toBe(true);
     expect(fake.highlights.length).toBe(3);
   });
@@ -849,7 +852,6 @@ describe("highlight transition audit (#529)", () => {
     fake.emit("editor.focusChanged", { entity: { kind: "chapter", id: "c2" } });
     release();
     await toggling;
-    await new Promise((resolve) => setTimeout(resolve, 0));
     // The aborted toggle never pressed the button, so nothing was sent for it.
     expect(lastPressed(fake) ?? false).toBe(false);
     expect(paintedAnything(fake)).toBe(false);
@@ -861,10 +863,10 @@ describe("highlight transition audit (#529)", () => {
     await controller.toggleHighlights();
     const before = fake.highlights.length;
     const release = fake.gateContent();
-    fake.emit("editor.contentChanged", { entity: fake.entity });
-    fake.emit("editor.focusChanged", { entity: { kind: "chapter", id: "c2" } });
+    const recomputing = fake.emit("editor.contentChanged", { entity: fake.entity });
+    const moved = fake.emit("editor.focusChanged", { entity: { kind: "chapter", id: "c2" } });
     release();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.all([recomputing, moved]);
     expect(fake.highlights.length).toBe(before + 3); // the turn-off clear only
     expect(paintedAnything(fake)).toBe(false);
     expect(lastPressed(fake)).toBe(false);
@@ -876,11 +878,11 @@ describe("highlight transition audit (#529)", () => {
     await controller.toggleHighlights();
     const before = fake.highlights.length;
     const release = fake.gateContent();
-    fake.emit("editor.contentChanged", { entity: fake.entity });
+    const recomputing = fake.emit("editor.contentChanged", { entity: fake.entity });
     fake.setFocused(false);
-    fake.emit("editor.focusChanged", { entity: null });
+    const unmounted = fake.emit("editor.focusChanged", { entity: null });
     release();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.all([recomputing, unmounted]);
     expect(fake.highlights.length).toBe(before);
     expect(lastPressed(fake)).toBe(false);
   });
@@ -897,9 +899,7 @@ describe("highlight transition audit (#529)", () => {
 
     fake.dropListeners();
     const second = createEchoEditor(fake.client);
-    fake.emit("editor.contentChanged", { entity: fake.entity });
-    await second.refresh();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.all([fake.emit("editor.contentChanged", { entity: fake.entity }), second.refresh()]);
     expect(fake.highlights.length).toBe(before);
   });
 
@@ -908,11 +908,10 @@ describe("highlight transition audit (#529)", () => {
     const controller = createEchoEditor(fake.client);
     await controller.toggleHighlights();
     const release = fake.gateContent();
-    fake.emit("editor.contentChanged", { entity: fake.entity });
+    const recomputing = fake.emit("editor.contentChanged", { entity: fake.entity });
     const toggling = controller.toggleHighlights();
     release();
-    await toggling;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.all([recomputing, toggling]);
     expect(lastPressed(fake)).toBe(false);
     expect(paintedAnything(fake)).toBe(false);
   });
@@ -921,7 +920,6 @@ describe("highlight transition audit (#529)", () => {
     const fake = fakeClient({ text: DOORS });
     const controller = createEchoEditor(fake.client);
     await Promise.all([controller.toggleHighlights(), controller.toggleHighlights()]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(lastPressed(fake) ?? false).toBe(paintedAnything(fake));
   });
 });
