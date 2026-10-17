@@ -122,7 +122,6 @@ test.describe("Echoes report on a large Book @wf:plugins-echoes", () => {
     const first = nearbyList(page).getByRole("option").first();
     await tabTo(page, first, { max: 20 });
     await expect(first).toBeFocused();
-    // Captured before the layout assertions, so the base run still saves its picture.
     await capture(page, "echoes-long-row");
     await expect(first.getByText("wall", { exact: true })).toBeVisible();
 
