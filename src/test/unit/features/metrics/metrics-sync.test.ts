@@ -361,14 +361,23 @@ describe("metrics sync", () => {
 
       let inFlight = 0;
       let maxInFlight = 0;
+      let openPushGate!: () => void;
+      const pushGate = new Promise<void>((resolve) => {
+        openPushGate = resolve;
+      });
       mockPushEvent.mockImplementation(async () => {
         inFlight++;
         maxInFlight = Math.max(maxInFlight, inFlight);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await pushGate;
         inFlight--;
       });
 
-      await syncMetricsRows("pass");
+      // Pushes park on the gate. Waiting for two in flight proves the overlap
+      // directly; a serial sync never gets there and this waitFor fails.
+      const run = syncMetricsRows("pass");
+      await vi.waitFor(() => expect(inFlight).toBeGreaterThan(1));
+      openPushGate();
+      await run;
 
       expect(mockPushEvent).toHaveBeenCalledTimes(25);
       // Serial one-at-a-time would keep maxInFlight at 1; bounded parallel lifts it.

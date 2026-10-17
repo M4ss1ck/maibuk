@@ -417,11 +417,17 @@ describe("Editor", () => {
   it("replaces the document with new content, dropping keystrokes not yet handed over", async () => {
     let editor: TiptapEditor | null = null;
     const onUpdate = vi.fn();
+    const handle = createRef<EditorHandle>();
     const onEditorReady = (instance: TiptapEditor | null) => {
       editor = instance;
     };
     const { rerender } = render(
-      <Editor content="<p>Original</p>" onUpdate={onUpdate} onEditorReady={onEditorReady} />
+      <Editor
+        ref={handle}
+        content="<p>Original</p>"
+        onUpdate={onUpdate}
+        onEditorReady={onEditorReady}
+      />
     );
     await waitFor(() => expect(editor).not.toBeNull());
     mockSetContentSilently.mockClear();
@@ -430,13 +436,23 @@ describe("Editor", () => {
     act(() => {
       editor!.chain().focus("end").insertContent("X").run();
     });
-    rerender(<Editor content="<p>Pulled</p>" onUpdate={onUpdate} onEditorReady={onEditorReady} />);
+    rerender(
+      <Editor
+        ref={handle}
+        content="<p>Pulled</p>"
+        onUpdate={onUpdate}
+        onEditorReady={onEditorReady}
+      />
+    );
 
     await waitFor(() =>
       expect(mockSetContentSilently).toHaveBeenCalledWith(expect.anything(), "<p>Pulled</p>")
     );
-    // Past the coalescing window: the replaced keystrokes never reach a save.
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // The replaced keystroke is no longer pending, so flushing the burst now
+    // hands nothing to a save. A burst still queued would emit here, at once.
+    act(() => {
+      handle.current!.flush();
+    });
     expect(onUpdate).not.toHaveBeenCalled();
   });
 
@@ -768,6 +784,7 @@ describe("Editor", () => {
     const { rerender } = render(<button type="button">Tutorial card</button>);
     const other = screen.getByRole("button", { name: "Tutorial card" });
     other.focus();
+    let ready: TiptapEditor | null = null;
     rerender(
       <>
         <button type="button">Tutorial card</button>
@@ -776,11 +793,16 @@ describe("Editor", () => {
           onUpdate={vi.fn()}
           autoFocus="if-unfocused"
           ariaLabel="Text"
+          onEditorReady={(instance) => {
+            ready = instance;
+          }}
         />
       </>
     );
     await screen.findByRole("textbox", { name: "Text" });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The focus decision runs in the same effect flush as onEditorReady, which
+    // is declared before it. Once onEditorReady has fired, that flush is over.
+    await waitFor(() => expect(ready).not.toBeNull());
     expect(other).toHaveFocus();
   });
 
@@ -1068,10 +1090,23 @@ describe("Editor", () => {
     expect(onUpdate).toHaveBeenCalledTimes(1);
     expect(onUpdate.mock.calls[0][0]).toContain("HelloW");
 
+    // Nothing is pending, so this flush must not save. The witness is a later
+    // change and flush on the same path: its save arrives after the no-op
+    // flush, so the exact call list proves the no-op flush saved nothing.
     act(() => {
       handle.current!.flush();
     });
-    expect(onUpdate).toHaveBeenCalledTimes(1);
+    act(() => {
+      editor!.chain().focus("end").insertContent("X").run();
+    });
+    act(() => {
+      handle.current!.flush();
+    });
+    expect(onUpdate).toHaveBeenCalledTimes(2);
+    expect(onUpdate.mock.calls.map(([html]) => html)).toEqual([
+      expect.stringContaining("HelloW"),
+      expect.stringContaining("HelloWX"),
+    ]);
   });
 
   it("flushes the pending burst when the editor unmounts", async () => {

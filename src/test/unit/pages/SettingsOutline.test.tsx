@@ -1,7 +1,12 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { JUMP_SETTLE_MS } from "@/components/settings/useSettingsOutline";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { resolvedLanguage: "en" } }),
@@ -244,7 +249,8 @@ describe("Settings outline", () => {
   });
 
   it("keeps a clicked section current through its jump, until the author scrolls", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderSettings();
     const scroller = layOutSections({ appearance: -900, general: -400, shortcuts: 200, sync: 600 });
 
@@ -253,13 +259,15 @@ describe("Settings outline", () => {
     act(() => {
       scroller.dispatchEvent(new Event("scroll"));
     });
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The jump lock holds for JUMP_SETTLE_MS after the last jump scroll. Fake time
+    // runs the scroll's requestAnimationFrame measure, then stops just short of the settle.
+    await act(() => vi.advanceTimersByTimeAsync(JUMP_SETTLE_MS - 1));
     expect(
       within(outlineTree()).getByRole("row", { name: "sync.title, settings.outline.current" })
     ).toBeInTheDocument();
 
     // Once the jump settles, the author's scroll hands back to the spy.
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    await act(() => vi.advanceTimersByTimeAsync(1));
     act(() => {
       scroller.dispatchEvent(new Event("scroll"));
     });

@@ -1023,11 +1023,6 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     vi.useRealTimers();
   });
 
-  async function flushRuns() {
-    for (let i = 0; i < 10 && resolveRun === null; i++) await Promise.resolve();
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-  }
-
   it("queues a line mid-window and hands it to the editor that takes the caret", async () => {
     const session = handoffSession(routeForHandoff);
     const oldTarget = fakeTarget("old");
@@ -1055,16 +1050,14 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     expect(session.getSnapshot().status).toBe("listening");
 
     resolveRun?.("ran");
-    await flushRuns();
-    expect(notices).toContainEqual({
-      kind: "voice_command",
-      id: "global.gotoNotes",
-      polarity: null,
-    });
-    // The window already closed at focus: the timer never starts, and the
-    // Session keeps listening past the hand-off wait.
+    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "voice_command", id: "global.gotoNotes", polarity: null }));
+    // The window already closed at focus: the timer never starts. Time passes
+    // past the hand-off wait, then a later line must still route live into the
+    // new editor. That commit is the witness that the Session kept listening.
     vi.advanceTimersByTime(HANDOFF_LIMIT_MS + 1000);
-    await flushRuns();
+    host.emit({ type: "final", text: "again", latencyMs: 5 });
+    expect(next.commits).toEqual(["hello", "again"]);
+    expect(notices).not.toContainEqual({ kind: "handoff_no_editor" });
     expect(session.getSnapshot().status).toBe("listening");
     expect(copied).toEqual([]);
   });
@@ -1079,12 +1072,11 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     host.emit({ type: "final", text: "hello", latencyMs: 5 });
 
     resolveRun?.("ran");
-    await flushRuns();
+    // The hand-off timer is armed right after this notice is announced.
+    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "voice_command", id: "global.gotoNotes", polarity: null }));
     vi.advanceTimersByTime(HANDOFF_LIMIT_MS);
-    await flushRuns();
-
+    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "handoff_no_editor" }));
     expect(copied).toContain("hello");
-    expect(notices).toContainEqual({ kind: "handoff_no_editor" });
     await vi.waitFor(() => expect(session.getSnapshot().status).toBe("idle"));
   });
 
@@ -1099,14 +1091,23 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     await session.start();
     runCommand.mockResolvedValueOnce(outcome);
     host.emit({ type: "final", text: "go notes", latencyMs: 5 });
-    await flushRuns();
+    // The refusal or unavailable notice is announced once the hand-off is settled.
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual(
+        outcome === "unavailable"
+          ? { kind: "voice_command_unavailable", id: "global.gotoNotes" }
+          : { kind: "voice_command_refused", id: "global.gotoNotes", reason: "dialog_refused" }
+      )
+    );
 
     // No window: the next line routes live into the target that never left.
     host.emit({ type: "final", text: "still here", latencyMs: 5 });
     expect(target.commits).toEqual(["still here"]);
     expect(session.getSnapshot().status).toBe("listening");
     vi.advanceTimersByTime(HANDOFF_LIMIT_MS + 1000);
-    await flushRuns();
+    // A later line still routes live: the Session never closed and never timed out.
+    host.emit({ type: "final", text: "again", latencyMs: 5 });
+    expect(target.commits).toEqual(["still here", "again"]);
     expect(session.getSnapshot().status).toBe("listening");
     expect(copied).toEqual([]);
   });
@@ -1122,16 +1123,22 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     hidden = true;
     runCommand.mockResolvedValueOnce("refused-dialog-close");
     host.emit({ type: "final", text: "go notes", latencyMs: 5 });
-    await flushRuns();
-
-    expect(notices).toContainEqual({
-      kind: "voice_command_refused",
-      id: "global.gotoNotes",
-      reason: "dialog_refused",
-    });
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command_refused",
+        id: "global.gotoNotes",
+        reason: "dialog_refused",
+      })
+    );
+    // Hidden: nothing reaches the target while the dialog stands.
+    expect(target.commits).toEqual([]);
+    // The dialog closes and the author speaks again. The line is the witness:
+    // it lands in the target only if the Session kept listening and never stopped.
+    hidden = false;
+    host.emit({ type: "final", text: "go on", latencyMs: 5 });
+    expect(target.commits).toEqual(["go on"]);
     expect(notices).not.toContainEqual({ kind: "stopped" });
     expect(session.getSnapshot().status).toBe("listening");
-    expect(target.commits).toEqual([]);
   });
 
   it("stops as today when the target leaves after a non-navigating run", async () => {
@@ -1186,7 +1193,7 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     session.register({ ...fakeTarget("new"), scratch: newScratch, resetScratch: newReset });
     session.focus("new");
     resolveRun?.("ran");
-    await flushRuns();
+    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "voice_command", id: "global.gotoNotes", polarity: null }));
 
     // "scratch that" after the hand-off reaches only the new editor, whose
     // history was reset when it took the caret.
@@ -1208,9 +1215,10 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     await session.stop();
     expect(session.getSnapshot().status).toBe("idle");
     resolveRun?.("ran");
-    await flushRuns();
-    vi.advanceTimersByTime(HANDOFF_LIMIT_MS + 1000);
-    await flushRuns();
+    // The run's outcome is announced, then the Session finds the hand-off gone
+    // (the stop dropped it) and returns before arming any timer: the notice is
+    // the witness that the decision was made, so the negatives below are real.
+    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "voice_command", id: "global.gotoNotes", polarity: null }));
     expect(copied).not.toContain("hello");
     expect(notices).not.toContainEqual({ kind: "handoff_no_editor" });
   });
@@ -1225,9 +1233,9 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     // The run kept the route (or the editor): the target never left.
     host.emit({ type: "final", text: "hello", latencyMs: 5 });
     resolveRun?.("ran");
-    await flushRuns();
+    // The hand-off timer is armed right after this notice is announced.
+    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "voice_command", id: "global.gotoNotes", polarity: null }));
     vi.advanceTimersByTime(HANDOFF_LIMIT_MS);
-    await flushRuns();
     expect(target.commits).toEqual(["hello"]);
     expect(session.getSnapshot().status).toBe("listening");
     expect(copied).toEqual([]);
@@ -1743,8 +1751,8 @@ describe("Dictation Session recordPhrase() (Phrase Recording, #270)", () => {
     const recording = session.recordPhrase("en");
     await waitForRecording(session);
     host.emit({ type: "final", text: ".", latencyMs: 5 });
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(session.getSnapshot().recording).toBe(true);
+    // The "." is ignored, so the recording is still open for the next line:
+    // "hola" resolving it is the witness that the "." did not settle it first.
     host.emit({ type: "final", text: "hola", latencyMs: 5 });
     await expect(recording).resolves.toEqual({ kind: "heard", text: "hola" });
   });
@@ -1961,7 +1969,8 @@ describe("Dictation Session recordPhrase() (Phrase Recording, #270)", () => {
     await vi.waitFor(() =>
       expect(session.getSnapshot()).toMatchObject({ status: "idle", recording: false })
     );
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // stop() awaits the recording's teardown, including any resume, so the
+    // state below is final: no resume started, and no third model load.
     expect(session.getSnapshot().status).toBe("idle");
     expect(host.loads).toEqual(["m-en", "m-es"]);
   });

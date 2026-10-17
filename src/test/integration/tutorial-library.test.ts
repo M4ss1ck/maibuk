@@ -287,13 +287,18 @@ describe("entering the Tutorial Library", () => {
   it("waits for a running sync to finish before switching", async () => {
     const sync = deferred();
     const running = runBetweenSyncRuns(() => sync.promise);
+    // Queued before the switch, so it runs right after the sync and before
+    // the switch. If the switch had activated early, it would show here.
+    let activeWhenQueueFreed: boolean | null = null;
+    const witness = runBetweenSyncRuns(async () => {
+      activeWhenQueueFreed = tutorial.isTutorialLibraryActive();
+    });
 
     const entering = tutorial.startTutorial(START);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(tutorial.isTutorialLibraryActive()).toBe(false);
-
     sync.resolve();
     await running;
+    await witness;
+    expect(activeWhenQueueFreed).toBe(false);
     await entering;
     expect(tutorial.isTutorialLibraryActive()).toBe(true);
   });
@@ -307,10 +312,18 @@ describe("entering the Tutorial Library", () => {
       })
     );
 
-    const entering = tutorial.startTutorial(START);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    closing.resolve();
-    await entering;
+    // The switch's settle is the point it waits on the close work; the spy
+    // marks that it has reached it while the close work is still pending.
+    const settleSpy = vi.spyOn(librarySwitch, "settleAuthorLibraryWork");
+    try {
+      const entering = tutorial.startTutorial(START);
+      await vi.waitFor(() => expect(settleSpy).toHaveBeenCalled());
+      expect(librarySwitch.isTutorialLibraryActive()).toBe(false);
+      closing.resolve();
+      await entering;
+    } finally {
+      settleSpy.mockRestore();
+    }
 
     expect(activeWhenClosed).toBe(false);
   });
@@ -325,6 +338,9 @@ describe("entering the Tutorial Library", () => {
 
     const channel = new MessageChannel();
     const gate = deferred();
+    const writeStarted = deferred();
+    const readStarted = deferred();
+    const activeAfterGate: boolean[] = [];
     createPluginBroker({
       pluginId: "race-plugin",
       port: channel.port1,
@@ -334,12 +350,16 @@ describe("entering the Tutorial Library", () => {
       trackLibraryWork: librarySwitch.trackAuthorLibraryWork,
       handlers: {
         "storage.set": async ({ key, value }, { pluginId }) => {
+          writeStarted.resolve();
           await gate.promise;
+          activeAfterGate.push(tutorial.isTutorialLibraryActive());
           await setPluginStorageValue(pluginId, key, value);
           return null;
         },
         "library.books.list": async () => {
+          readStarted.resolve();
           await gate.promise;
+          activeAfterGate.push(tutorial.isTutorialLibraryActive());
           return listPluginBooks();
         },
       },
@@ -348,18 +368,17 @@ describe("entering the Tutorial Library", () => {
     try {
       const write = client.storage.set({ key: "accepted", value: "in-flight" });
       const read = client.library.books.list();
-      // The broker accepted both calls and registered their work.
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      // Both handlers run only once the broker has accepted and tracked them.
+      await Promise.all([writeStarted.promise, readStarted.promise]);
 
       const entering = tutorial.startTutorial(START);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      // Entry is waiting on the accepted calls, not yet on the sample Library.
-      expect(tutorial.isTutorialLibraryActive()).toBe(false);
-
       gate.resolve();
       await write;
       await read;
       await entering;
+      // Each handler recorded the switch state once its gate opened: entry
+      // was still waiting on the accepted calls, not on the sample Library.
+      expect(activeAfterGate).toEqual([false, false]);
       expect(tutorial.isTutorialLibraryActive()).toBe(true);
 
       // The write landed in the author's Library; the sample Library never saw it.
@@ -391,7 +410,11 @@ describe("entering the Tutorial Library", () => {
 
     const entryGate = deferred();
     const handlerGate = deferred();
+    const flushStarted = deferred();
+    const handlerStarted = deferred();
+    const activeAfterHandlerGate: boolean[] = [];
     const unregister = registerPendingEditsFlush(async () => {
+      flushStarted.resolve();
       await entryGate.promise;
     });
 
@@ -405,7 +428,9 @@ describe("entering the Tutorial Library", () => {
       trackLibraryWork: librarySwitch.trackAuthorLibraryWork,
       handlers: {
         "storage.set": async ({ key, value }, { pluginId }) => {
+          handlerStarted.resolve();
           await handlerGate.promise;
+          activeAfterHandlerGate.push(tutorial.isTutorialLibraryActive());
           await setPluginStorageValue(pluginId, key, value);
           return null;
         },
@@ -415,20 +440,18 @@ describe("entering the Tutorial Library", () => {
     try {
       const entering = tutorial.startTutorial(START);
       // Entry passed the first settle and is now held in flushPendingEdits.
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await flushStarted.promise;
 
       // Accepted after the first settle, while entry is still inside the window.
       const write = client.storage.set({ key: "late", value: "after-settle" });
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await handlerStarted.promise;
 
       entryGate.resolve();
-      // The second settle must hold entry until the accepted call finishes.
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      expect(tutorial.isTutorialLibraryActive()).toBe(false);
-
       handlerGate.resolve();
       await write;
       await entering;
+      // The second settle held entry until the accepted call finished.
+      expect(activeAfterHandlerGate).toEqual([false]);
       expect(tutorial.isTutorialLibraryActive()).toBe(true);
 
       const authorRows = await authorDb.current!.select<{ value: string }[]>(

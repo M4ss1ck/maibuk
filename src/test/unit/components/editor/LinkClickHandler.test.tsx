@@ -22,6 +22,20 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
+// Spies on the Link resolver a click starts. navigateToLinkTarget calls it
+// synchronously, so a click that never reaches it is settled when the click returns.
+const { resolveLinkTargetSpy } = vi.hoisted(() => ({ resolveLinkTargetSpy: vi.fn() }));
+vi.mock("@/features/links/resolve-target", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/links/resolve-target")>();
+  return {
+    ...actual,
+    resolveLinkTarget: (href: string) => {
+      resolveLinkTargetSpy(href);
+      return actual.resolveLinkTarget(href);
+    },
+  };
+});
+
 vi.mock("react-router-dom", () => ({
   useNavigate: () => mockNavigate,
 }));
@@ -77,6 +91,7 @@ describe("LinkClickHandler", () => {
   // A drag that starts and ends on the same Link still fires click; it was
   // followed, so a Link's text could not be selected with the mouse.
   it("does not follow a Link when the click ends a drag that selected its text", async () => {
+    resolveLinkTargetSpy.mockClear();
     const user = userEvent.setup();
     const dom = document.createElement("div");
     document.body.appendChild(dom);
@@ -95,10 +110,11 @@ describe("LinkClickHandler", () => {
     ]);
 
     expect(document.getSelection()?.toString()).toBe("epart");
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(mockNavigate).not.toHaveBeenCalled();
 
+    // Witness: a plain click on the same Link goes through the resolver once.
+    // Had the drag's click followed the Link, the resolver would have run twice.
     await user.click(link);
+    expect(resolveLinkTargetSpy).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
     dom.remove();
   });

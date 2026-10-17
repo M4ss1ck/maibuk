@@ -35,4 +35,6 @@ A full-suite round under load (8420 tests, 28 minutes) found one more failure: `
 
 ## What is left
 
-About 90 fixed waits in 31 files sit in the baseline. None failed under load in the full round, but each is a guess. Remove them file by file, lowering the baseline, and prove each file with `pnpm test:stress <file> --rounds 5`. The largest are `deep-link/bridge.test.ts` (25), `tutorial-library.test.ts` (7), `navigating-commands.test.tsx` and `LinkPreviewLayer.test.tsx` (5 each).
+Issue #511 removed the fixed waits that were left: about 90 lines in 31 files. Each file passed `pnpm test:stress <file> --rounds 5`. `FIXED_WAIT_BASELINE` now holds one entry, `src/test/support/frames/probe.ts` (1). That wait runs in a real browser for the frame lane. The browser queues Long Animation Frame entries on its own schedule and fires no completion event, and `takeRecords()` after one frame came back empty in headless Chromium. The comment above the line gives the reason.
+
+The guard does not catch every disguised wait: a helper that counts microtasks or animation frames passes it. #511 also removed the ones it found (`flushRuns()` in `dictation/session.test.ts`, frame counting in `PluginsSettings.test.tsx`). Watch for that shape in review.

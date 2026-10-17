@@ -308,10 +308,12 @@ describe("syncBook — timestamp fix", () => {
     // First sync blocks on the conflict dialog; the second caller queues
     // behind it and runs only after the first settles.
     let resolveConflict: ((choice: "push" | "pull" | "cancel") => void) | null = null;
-    const blockedConflict = () =>
-      new Promise<"push" | "pull" | "cancel">((resolve) => {
-        resolveConflict = resolve;
-      });
+    const blockedConflict = vi.fn(
+      () =>
+        new Promise<"push" | "pull" | "cancel">((resolve) => {
+          resolveConflict = resolve;
+        })
+    );
     mockDb.select.mockImplementation(async (sql: string) => {
       if (sql.includes("COALESCE(MAX(ts)")) return [{ updated_at: 1000 }];
       if (sql.includes("SELECT title")) return [{ title: "Test Book" }];
@@ -325,22 +327,24 @@ describe("syncBook — timestamp fix", () => {
     // Start a sync that will block on the conflict dialog
     const firstSync = syncBook("book-1", "pass", blockedConflict);
 
-    // Allow the first sync to reach the onConflict call
-    await new Promise((r) => setTimeout(r, 10));
+    // Wait until the first sync is really blocked on the conflict callback
+    await vi.waitFor(() => expect(blockedConflict).toHaveBeenCalledTimes(1));
 
     // Second sync queues instead of throwing
     const secondOnConflict = vi.fn().mockResolvedValue("cancel");
     const secondSync = syncBook("book-2", "pass", secondOnConflict);
 
-    // The queued operation waits its turn: only the first pre-sync backup
-    // ran while the first sync is still blocked.
-    await new Promise((r) => setTimeout(r, 10));
-    expect(mockBackupServiceCreateBackup).toHaveBeenCalledTimes(1);
-
-    if (resolveConflict) {
-      (resolveConflict as (choice: "push" | "pull" | "cancel") => void)("cancel");
-    }
+    // The queued operation waits its turn. Its own pre-sync backup must come
+    // after the release that unblocks the first sync; checked once both settle,
+    // since an unqueued second backup would land before the release.
+    const release = vi.fn((choice: "cancel") => {
+      (resolveConflict as unknown as (c: "cancel") => void)(choice);
+    });
+    release("cancel");
     const [firstResult, secondResult] = await Promise.all([firstSync, secondSync]);
+    expect(mockBackupServiceCreateBackup.mock.invocationCallOrder[1]).toBeGreaterThan(
+      release.mock.invocationCallOrder[0]
+    );
     expect(firstResult).toEqual({ outcome: "cancelled", action: "cancelled" });
     expect(secondResult).toEqual({ outcome: "cancelled", action: "cancelled" });
     // Each queued operation gets its own pre-sync backup and its own

@@ -69,6 +69,23 @@ const dictationRuntime = vi.hoisted(() => ({
   load: vi.fn(async () => {}),
 }));
 
+// Each first-launch offer decision, recorded with whether launch Auto Sync had
+// settled when the decision was made. The offer decides once per launch, so a
+// test waits for the decision itself instead of sleeping past it.
+const offerDecisions = vi.hoisted(() => [] as boolean[]);
+vi.mock("@/features/tutorial/controller", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/tutorial/controller")>();
+  const { hasLaunchAutoSyncSettled } = await import("@/features/sync/auto-sync");
+  return {
+    ...actual,
+    authorLibraryIsEmpty: async () => {
+      const empty = await actual.authorLibraryIsEmpty();
+      offerDecisions.push(hasLaunchAutoSyncSettled());
+      return empty;
+    },
+  };
+});
+
 vi.mock("@/features/dictation/runtime", () => ({
   getDictation: dictationRuntime.getDictation,
   resetDictationForTests: vi.fn(),
@@ -326,17 +343,18 @@ describe("the first-launch offer", () => {
   it("waits for launch Auto Sync on a signed-in device before deciding", async () => {
     useSettingsStore.setState({ autoSync: true });
     useSyncStore.setState({ authStatus: "logged-in", authVerified: false, passphrase: null });
+    offerDecisions.length = 0;
     try {
       renderApp("/");
       await screen.findByRole("heading", { level: 1, name: en("books.title") });
-      await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
-      expect(screen.queryByRole("dialog", { name: en("tutorial.offer.title") })).toBeNull();
 
       // The launch run ends (here it cannot sync: no Passphrase) and nothing was Pulled.
       await act(async () => {
         await runAutoSync("launch");
       });
       await screen.findByRole("dialog", { name: en("tutorial.offer.title") });
+      // Every decision was made after launch Auto Sync settled, never before.
+      expect(offerDecisions).toEqual([true]);
     } finally {
       useSyncStore.setState({ authStatus: "logged-out" });
     }
@@ -348,9 +366,11 @@ describe("the first-launch offer", () => {
       await getAuthorDatabase();
       await createNoteRow({ title: "Mine" }, "local");
     })();
+    offerDecisions.length = 0;
     renderApp("/");
     await screen.findByRole("heading", { level: 1, name: en("books.title") });
-    await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
+    // Negative: no offer is ever shown. Wait for the decision, then check it.
+    await waitFor(() => expect(offerDecisions).toHaveLength(1));
     expect(screen.queryByRole("dialog", { name: en("tutorial.offer.title") })).toBeNull();
   });
 
@@ -557,9 +577,11 @@ describe("running the Tutorial again", () => {
     await screen.findByRole("heading", { level: 1, name: en("notes.title") });
     expect(useBoundShortcutStore.getState().counts["global.startTutorial"]).toBeGreaterThan(0);
 
-    screen.getByRole("textbox", { name: "Probe field" }).focus();
+    const field = screen.getByRole("textbox", { name: "Probe field" });
+    field.focus();
     await user.keyboard("gu");
-    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+    // The keys reached the field, so the shortcut gate has judged them.
+    expect(field).toHaveValue("gu");
     expect(useTutorialStore.getState().status).toBe("idle");
 
     (document.activeElement as HTMLElement).blur();
@@ -605,11 +627,9 @@ describe("running the Tutorial again", () => {
     // g then s would open Settings; Ctrl+N would open New Book.
     await user.keyboard("gs");
     await user.keyboard("{Control>}n{/Control}");
-    await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
-    expect(path).toBe("/");
-    expect(screen.queryByRole("dialog", { name: en("books.newBook") })).toBeNull();
-    expect(useBoundShortcutStore.getState().counts["global.gotoSettings"]).toBeUndefined();
 
+    // The Tab presses come after the ignored keys on the same keyboard
+    // listener, so they witness that those keys were handled before the checks.
     const visited = new Set<Element | null>();
     for (let i = 0; i < 8; i++) {
       await user.tab();
@@ -621,6 +641,9 @@ describe("running the Tutorial again", () => {
       expect(dialog.contains(document.activeElement)).toBe(true);
     }
     expect(visited.size).toBe(2); // Skip and Next on the first step.
+    expect(path).toBe("/");
+    expect(screen.queryByRole("dialog", { name: en("books.newBook") })).toBeNull();
+    expect(useBoundShortcutStore.getState().counts["global.gotoSettings"]).toBeUndefined();
   });
 
   it("pauses while a Modal is open and resumes on the same step", async () => {

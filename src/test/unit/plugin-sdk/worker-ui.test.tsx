@@ -422,34 +422,43 @@ describe("servePluginUi", () => {
   });
 
   it("does not touch the closed thread when a batch is scheduled after unmount", async () => {
-    const host = createHost();
-    const client = createClient();
-    let connection!: RemoteConnection;
-    serveSharedPluginUi(client.client, {
-      pages: { main: Page },
-      attach: (next) => {
-        connection = next;
-        return { container: document.createElement("div"), detach: () => {} };
-      },
-    });
+    // Fake timers: the stale batch rides the code's own frameBatch timer, which
+    // the virtual clock fires deterministically below.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      const host = createHost();
+      const client = createClient();
+      let connection!: RemoteConnection;
+      serveSharedPluginUi(client.client, {
+        pages: { main: Page },
+        attach: (next) => {
+          connection = next;
+          return { container: document.createElement("div"), detach: () => {} };
+        },
+      });
 
-    client.request("ui.mount", { surface: "main#1", page: "main", port: host.port });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+      client.request("ui.mount", { surface: "main#1", page: "main", port: host.port });
 
-    // Watch every call the Worker's thread makes on its host imports; a flush
-    // after teardown would show up here as one more call.
-    const call = vi.spyOn(ThreadMessagePort.prototype, "call");
-    client.request("ui.unmount", { surface: "main#1" });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    const callsAtClose = call.mock.calls.length;
+      // Watch every call the Worker's thread makes on its host imports; a flush
+      // after teardown would show up here as one more call.
+      const call = vi.spyOn(ThreadMessagePort.prototype, "call");
+      // Teardown waits one task (the code's own timer) before closing; the
+      // returned promise settles once the mount is closed.
+      const unmounted = client.request("ui.unmount", { surface: "main#1" }) as Promise<null>;
+      await vi.advanceTimersByTimeAsync(0);
+      await unmounted;
+      const callsAtClose = call.mock.calls.length;
 
-    // A stale `frameBatch` timer fires after teardown and flushes one more
-    // batch; the closed mount ignores it instead of touching the closed thread.
-    connection.mutate([[MUTATION_TYPE_UPDATE_TEXT, "node", "late"]]);
-    await new Promise((resolve) => setTimeout(resolve, 40));
+      // A stale `frameBatch` timer fires after teardown and flushes one more
+      // batch; the closed mount ignores it instead of touching the closed thread.
+      connection.mutate([[MUTATION_TYPE_UPDATE_TEXT, "node", "late"]]);
+      await vi.advanceTimersByTimeAsync(PLUGIN_UI_BATCH_MS);
 
-    expect(call.mock.calls.length).toBe(callsAtClose);
-    expect(host.receiver.root.children).toHaveLength(0);
+      expect(call.mock.calls.length).toBe(callsAtClose);
+      expect(host.receiver.root.children).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects a mount of an unknown page", () => {

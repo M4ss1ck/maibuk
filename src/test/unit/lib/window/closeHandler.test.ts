@@ -52,7 +52,6 @@ describe("installWindowCloseHandler", () => {
   async function installFresh(): Promise<void> {
     const { installWindowCloseHandler } = await import("@/lib/window/closeHandler");
     await installWindowCloseHandler();
-    await new Promise((r) => setTimeout(r, 0));
   }
 
   it("hides to tray when closeToTray is on", async () => {

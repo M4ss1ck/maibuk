@@ -54,10 +54,6 @@ function resetSyncStore() {
   });
 }
 
-function tick(): Promise<void> {
-  return new Promise((r) => setTimeout(r, 10));
-}
-
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -86,7 +82,8 @@ describe("useSyncStore — concurrent sync status", () => {
 
     const first = useSyncStore.getState().syncAll("pass", vi.fn());
     const second = useSyncStore.getState().syncAll("pass", vi.fn());
-    await tick();
+    // syncAll starts its sync before its first await, so both are running now.
+    expect(mockSyncAllBooks).toHaveBeenCalledTimes(2);
     expect(useSyncStore.getState().syncStatus).toBe("syncing");
 
     firstGate.resolve({ outcome: "success", actions: ["pushed"] });
@@ -117,7 +114,8 @@ describe("useSyncStore — concurrent sync status", () => {
       (error: Error) => error.message
     );
     const second = useSyncStore.getState().syncAll("pass", vi.fn());
-    await tick();
+    // syncAll starts its sync before its first await, so both are running now.
+    expect(mockSyncAllBooks).toHaveBeenCalledTimes(2);
 
     firstGate.reject(new Error("boom"));
     await expect(firstSettled).resolves.toBe("boom");
@@ -147,7 +145,8 @@ describe("useSyncStore — concurrent sync status", () => {
 
     const first = useSyncStore.getState().syncAll("pass", vi.fn());
     const second = useSyncStore.getState().syncAll("pass", vi.fn());
-    await tick();
+    // syncAll starts its sync before its first await, so both are running now.
+    expect(mockSyncAllBooks).toHaveBeenCalledTimes(2);
 
     firstGate.resolve({
       outcome: "partial",

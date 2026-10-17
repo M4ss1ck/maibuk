@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 import {
@@ -86,8 +86,6 @@ function recordedEventTypes(worker: MockWorker): string[] {
     .filter((m): m is Extract<WorkerRequest, { type: "recordEvents" }> => m.type === "recordEvents")
     .flatMap((m) => m.events.map((e) => e.eventType));
 }
-
-const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
 describe("MetricsService", () => {
   beforeEach(async () => {
@@ -426,9 +424,8 @@ describe("MetricsService", () => {
     await service.init();
     service.recordEvents([buildEvent()]);
     window.dispatchEvent(new Event("beforeunload"));
-    await tick();
 
-    expect(await listEvents(testDb)).toHaveLength(1);
+    await vi.waitFor(async () => expect(await listEvents(testDb)).toHaveLength(1));
 
     service.shutdown();
   });
@@ -450,13 +447,12 @@ describe("MetricsService", () => {
       get: () => "hidden",
     });
     document.dispatchEvent(new Event("visibilitychange"));
-    await tick();
+
+    await vi.waitFor(async () => expect(await listEvents(testDb)).toHaveLength(1));
 
     if (descriptor) {
       Object.defineProperty(document, "visibilityState", descriptor);
     }
-
-    expect(await listEvents(testDb)).toHaveLength(1);
 
     service.shutdown();
   });

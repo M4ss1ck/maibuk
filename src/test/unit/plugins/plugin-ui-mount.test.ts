@@ -85,14 +85,17 @@ describe("openPluginUiMount", () => {
 
   it("does not become an unhandled rejection when a refused mount is never awaited", async () => {
     const { broker, client } = harness();
-    client.onHostRequest(async () => {
+    client.onHostRequest(async (method) => {
+      if (method === "health.check") return "pong";
       throw new Error("no such page");
     });
     // Deliberately never observe `mounted` until after the rejection settles;
     // vitest fails the run on an unhandled rejection, so this test only passes
-    // when the module attaches its own no-op handler.
+    // when the module attaches its own no-op handler. The refusal and the
+    // witness are replies on one port, which the host reads in order: the
+    // witness settling means the refusal has settled first.
     const mount = openPluginUiMount(broker, "page.refused");
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await expect(broker.request("health.check", {})).resolves.toBe("pong");
     await expect(mount.mounted).rejects.toMatchObject({ message: "no such page" });
   });
 
@@ -101,7 +104,7 @@ describe("openPluginUiMount", () => {
     const requests: { method: string; params: unknown }[] = [];
     client.onHostRequest(async (method, params) => {
       requests.push({ method, params });
-      return null;
+      return method === "health.check" ? "pong" : null;
     });
 
     const mount = openPluginUiMount(broker, "page.three");
@@ -112,17 +115,16 @@ describe("openPluginUiMount", () => {
     mount.unmount();
     mount.unmount();
 
-    await vi.waitFor(() =>
-      expect(requests.map((request) => request.method)).toEqual([
-        PLUGIN_UI_MOUNT_REQUEST,
-        PLUGIN_UI_UNMOUNT_REQUEST,
-      ])
-    );
+    // The second unmount sends nothing. The witness is queued behind any unmount
+    // that was sent, so once it resolves the host has seen every request.
+    await expect(broker.request("health.check", {})).resolves.toBe("pong");
+    expect(requests.map((request) => request.method)).toEqual([
+      PLUGIN_UI_MOUNT_REQUEST,
+      PLUGIN_UI_UNMOUNT_REQUEST,
+      "health.check",
+    ]);
     expect(requests[1].params).toEqual({ surface: mount.surface });
     expect(close).toHaveBeenCalledTimes(1);
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(requests).toHaveLength(2);
   });
 
   it("does not send ui.unmount and does not throw once the broker is stopped", async () => {
@@ -136,12 +138,15 @@ describe("openPluginUiMount", () => {
     const mount = openPluginUiMount(broker, "page.four");
     await mount.mounted;
     const close = vi.spyOn(mount.port, "close");
+    // A stopped broker takes no messages, so no event could witness a skipped send.
+    // unmount() decides synchronously, and the send is the broker's request call.
+    const send = vi.spyOn(broker, "request");
     broker.stop("requested");
 
     expect(() => mount.unmount()).not.toThrow();
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(requests).toEqual([PLUGIN_UI_MOUNT_REQUEST]);
+    expect(send).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledTimes(1);
+    expect(requests).toEqual([PLUGIN_UI_MOUNT_REQUEST]);
   });
 });

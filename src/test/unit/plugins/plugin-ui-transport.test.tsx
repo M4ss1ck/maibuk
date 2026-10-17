@@ -282,7 +282,9 @@ describe("the Plugin page's Remote UI transport", () => {
     install(fakeLifecycle({ runtime: runtimeOf(run.broker), status: "starting" }));
 
     renderBoundary();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    // A mount would be posted during render, before this witness on the same
+    // port, so the witness settling means the Plugin has seen everything sent.
+    await expect(run.broker.request("health.check", {})).resolves.toBeNull();
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     expect(run.mounts).toHaveLength(0);
   });
@@ -332,8 +334,9 @@ describe("the Plugin page's Remote UI transport", () => {
     const { unmount } = renderBoundary();
     await screen.findByRole("heading", { name: "Bye" });
     unmount();
-    await vi.waitFor(() => expect(run.unmounts).toHaveLength(1));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The unmount is posted by the effect cleanup inside unmount(); the witness
+    // is queued behind it, so a second ui.unmount would have been sent before it.
+    await expect(run.broker.request("health.check", {})).resolves.toBeNull();
     expect(run.unmounts).toHaveLength(1);
   });
 
@@ -344,6 +347,7 @@ describe("the Plugin page's Remote UI transport", () => {
     renderBoundary();
     await screen.findByRole("heading", { name: "Gone" });
     const ui = created.uis.at(-1);
+    const send = vi.spyOn(run.broker, "request");
 
     // The Plugin stops: its runtime is gone and the broker no longer answers.
     act(() => {
@@ -352,9 +356,10 @@ describe("the Plugin page's Remote UI transport", () => {
     });
 
     // The boundary tears the mount down (the receiver is disposed) and asks the
-    // stopped Plugin nothing: no ui.unmount crosses the dead channel.
+    // stopped Plugin nothing. The cleanup runs in order: mount.unmount() before
+    // dispose, so once disposed the unmount decision has been made, synchronously.
     await vi.waitFor(() => expect(ui?.disposed).toBe(true));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(send.mock.calls.map(([method]) => method)).not.toContain(PLUGIN_UI_UNMOUNT_REQUEST);
     expect(run.unmounts).toHaveLength(0);
   });
 

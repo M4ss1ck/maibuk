@@ -236,7 +236,10 @@ function renderApp(initialPath = "/") {
 async function settleOn(screenPath: string) {
   await waitFor(() => expect(path).toBe(screenPath));
   await waitFor(() => expect(document.querySelector("[data-route-heading]")).not.toBeNull());
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  // A screen binds its Commands once it has mounted; the palette lists them.
+  await waitFor(() =>
+    expect(Object.keys(useBoundShortcutStore.getState().counts).length).toBeGreaterThan(0)
+  );
 }
 
 const PALETTE_NAME = "Command palette";
@@ -255,10 +258,6 @@ function activeResultLabel(search: HTMLElement): string | null {
   const id = search.getAttribute("aria-activedescendant");
   const element = id ? document.getElementById(id) : null;
   return element?.textContent ?? null;
-}
-
-async function settleEffects() {
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
 }
 
 /** The Book Editor's heading is the open Book's title. */
@@ -394,8 +393,13 @@ describe("Command Palette", () => {
     await settleOn("/");
 
     await user.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
-    await settleEffects();
+    // Ordering witness: "?" opens the shortcuts dialog through the same key
+    // handler, after the ignored shortcut. Its dialog proves that keystroke ran.
+    await user.keyboard("?");
+    await screen.findByRole("dialog", { name: en("shortcuts.title") });
     expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: en("shortcuts.title") })).toBeNull());
 
     await user.keyboard("{F1}");
     const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
@@ -564,7 +568,11 @@ describe("Command Palette", () => {
     expect(toggle).toHaveAttribute("aria-disabled", "true");
 
     await user.keyboard("{Enter}");
-    await settleEffects();
+    // Ordering witness: a typed character reaches the search only while the
+    // palette is still open, so the value changing proves Enter was handled first.
+    const searchBefore = (paletteSearch(dialog) as HTMLInputElement).value;
+    await user.keyboard("q");
+    await waitFor(() => expect(paletteSearch(dialog)).toHaveValue(`${searchBefore}q`));
     expect(screen.getByRole("dialog", { name: PALETTE_NAME })).toBeInTheDocument();
     expect(screen.queryByText(en("commandPalette.unavailable"))).toBeNull();
   });
@@ -661,7 +669,9 @@ describe("Command Palette", () => {
       await settleOn("/");
 
       await user.keyboard("{F1}");
-      await settleEffects();
+      // Ordering witness: "?" opens the shortcuts dialog after the refused F1.
+      await user.keyboard("?");
+      await screen.findByRole("dialog", { name: en("shortcuts.title") });
       expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull();
     } finally {
       librarySwitch.resetLibrarySwitchForTests();
@@ -676,23 +686,28 @@ describe("Command Palette", () => {
     await user.keyboard("?");
     await screen.findByRole("dialog", { name: en("shortcuts.title") });
     await user.keyboard("{F1}");
-    await settleEffects();
-    expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull();
-
+    // Ordering witness: Escape closes the top dialog. If F1 had opened the
+    // palette above the shortcuts dialog, Escape would close only the palette
+    // and the shortcuts dialog would stay open.
     await user.keyboard("{Escape}");
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: en("shortcuts.title") })).toBeNull()
     );
+    expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull();
   });
 
   it("is absent on the embed route", async () => {
     const user = userEvent.setup();
     renderApp("/embed");
     await waitFor(() => expect(path).toBe("/embed"));
-    await settleEffects();
 
+    // The embed route mounts no global shortcuts, so the witness is the Editor:
+    // a character typed into it lands only if F1 did not move focus to a palette.
+    const editor = await screen.findByRole("textbox");
+    await user.click(editor);
     await user.keyboard("{F1}");
-    await settleEffects();
+    await user.keyboard("x");
+    await waitFor(() => expect(editor).toHaveTextContent("x"));
     expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull();
   });
 
@@ -845,7 +860,6 @@ describe("Command Palette entities and pages", () => {
     await arrowToAndChoose(user, dialog, search, book);
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
-    await settleEffects();
     await waitFor(() => expect(bookEditorTitle()).toBe("Alpha"));
     expect(path).toBe(`/book/${(useBookStore.getState().books[0] as { id: string }).id}`);
   });
