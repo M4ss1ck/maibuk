@@ -53,3 +53,9 @@ client.onHostRequest((method, params) => {
   throw new Error(`No handler for ${method}`);
 });
 ```
+
+## Android
+
+The built folder is the same for every platform. A Plugin that lists `"android"` in `platforms` runs on Android from that folder, so run `pnpm plugin:check <path>` before you package and read its Android step. The step runs only when the manifest lists `"android"`.
+
+Android's engine has no `Intl` and no `WebAssembly`. If your Plugin needs either, bundle your own implementation into the entry so it ships inside `dist/<id>/`. Android also caps each Plugin at 64 MB; see [Platforms](host-rendered-ui.md#platforms).

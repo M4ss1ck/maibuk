@@ -1,7 +1,6 @@
 /**
- * Contributions on Android (#447, T8): the host runs no Plugin there, so
- * registering an otherwise-everywhere manifest must add nothing to any shared
- * registry — no Command, page, sidebar entry, Settings row, toolbar button, or
+ * Contributions on Android (#517): a manifest that does not list android must add
+ * nothing to any shared registry: no Command, page, sidebar entry, Settings row, toolbar button, or
  * Item Menu entry. The platform is forced through the platform flags the way the
  * Settings section test forces it.
  */

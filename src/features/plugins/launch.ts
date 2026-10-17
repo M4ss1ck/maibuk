@@ -47,8 +47,8 @@ export async function scanApprovedPlugins(
   if (approvals.length === 0) return { plugins: [], refusals: [] };
 
   const directory = options.directory ?? (await getPluginDirectory());
-  // The host runs no Plugin on a platform it does not support (Android in v1,
-  // #447): nothing is scanned there, so no contribution registers and no Worker
+  // The host runs no Plugin on a platform it does not support (none today, see
+  // PLUGIN_HOST_UNSUPPORTED_PLATFORMS): nothing is scanned there, so no contribution registers and no Worker
   // is ever queued, whatever the author approved.
   if (!pluginsRunOn(directory.kind)) return { plugins: [], refusals: [] };
   const folders = new Set(await directory.listFolders());

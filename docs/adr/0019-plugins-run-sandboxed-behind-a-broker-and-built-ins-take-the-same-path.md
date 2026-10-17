@@ -23,6 +23,8 @@ Decided in [Plugin sandbox runtime on every Maibuk platform](https://github.com/
 
 ## Amendment: Android runs no Plugin in v1 (2026-10-13)
 
+Superseded by the 2026-10-16 amendment below (Android runs Plugins in a memory-capped QuickJS, by opt-in).
+
 The conformance:plugins T8 run on the Android emulator showed a Plugin allocating in yielding chunks growing the WebView renderer to 1.8 GB; lowmemorykiller killed it, and Chromium's `aw_browser_terminator` then killed the whole app (logcat in #492). A Plugin can therefore take down the Android app, so v1 does not run Plugins on Android: no Plugin — Built-in or added — is listed as runnable, enabled, started, or contributes Commands or panels there (#447). The manifest schema still accepts `"android"` in `platforms`, ignored in v1, so a published manifest stays valid and forward compatible. This is the QuickJS trigger named under Considered Options: Android support waits for a hard Worker memory cap (#492).
 
 ## Amendment: Android runs Plugins in a memory-capped QuickJS, by opt-in (2026-10-16)

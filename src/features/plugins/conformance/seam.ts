@@ -259,8 +259,7 @@ export async function createRuntimeSeam(
 
   // The in-memory Plugin Directory: the shape the lifecycle suite uses. Its
   // kind comes from the conformance bypass (host-bypass.ts), not the device, so
-  // the real lifecycle scans the fixtures on Android too — where the v1 host rule
-  // otherwise runs no Plugin (#447, #492). The seam still reports the true
+  // the real lifecycle scans the fixtures on Android too . The seam still reports the true
   // platform to every check.
   const folders = new Map<string, PluginFolder>([
     [FIXTURE_HOSTILE_ID, folder],

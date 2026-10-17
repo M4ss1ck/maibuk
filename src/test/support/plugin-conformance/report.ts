@@ -45,7 +45,7 @@ export const CONFORMANCE_UNSUPPORTED_FOLLOW_UP = "#492";
 
 /**
  * True when the host runs no Plugin on the platform a lane platform measures
- * (`PLUGIN_HOST_UNSUPPORTED_PLATFORMS`, v1 Android, #447): the run is recorded
+ * (`PLUGIN_HOST_UNSUPPORTED_PLATFORMS`, empty since #517): the run is recorded
  * with `support: "unsupported-in-v1"` and its follow-up, #492.
  */
 export function isHostUnsupportedLanePlatform(platform: ConformancePlatformName): boolean {

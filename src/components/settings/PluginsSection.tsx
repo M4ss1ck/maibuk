@@ -84,8 +84,8 @@ export function PluginsSection() {
 
   const platform = currentSettingsPlatform();
   const isDesktop = platform === "desktop";
-  // The host runs no Plugin on a platform it does not support (Android in v1,
-  // #447): the Add Plugin action stays visible but disabled so the section
+  // The host runs no Plugin on a platform it does not support (none today, see
+  // PLUGIN_HOST_UNSUPPORTED_PLATFORMS): the Add Plugin action stays visible but disabled so the section
   // explains itself instead of offering a Plugin that can never run, matching
   // the row's disabled enable control (#443).
   const hostRunsPlugins = pluginsRunOn(platform);

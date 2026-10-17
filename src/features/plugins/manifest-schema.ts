@@ -21,8 +21,7 @@ export { MANIFEST_LANGUAGES, PLUGIN_TARGETS } from "@/features/plugins/manifest-
 
 /**
  * The platforms a Plugin can declare, matching the Settings row platforms.
- * "android" is accepted so a published manifest stays valid and forward
- * compatible, but v1 runs no Plugin on Android, so it is ignored there (#447).
+ * "android" is accepted, and a Plugin runs on Android only when it lists it (#517).
  */
 export const PLUGIN_PLATFORMS = [
   "desktop",

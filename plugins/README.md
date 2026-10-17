@@ -111,11 +111,10 @@ A Release build includes a Built-in only for the platforms its manifest declares
 a Plugin whose `platforms` exclude the target is skipped with
 `omitted <id>: platforms exclude <target>`.
 
-Android is unsupported in v1: Maibuk runs no Plugin on Android (ADR 0019
-amendment, #447), so the `--target android` build ships no Built-in at all and
-skips every Plugin with `omitted <id>: Plugins do not run on android in this
-version`. A manifest may still list `android` in `platforms`; the value stays
-valid and is ignored there, so a published manifest needs no change.
+Android runs a Plugin only when its manifest lists `android` in `platforms`
+(ADR 0019 amendment, 2026-10-16, #517). The `--target android` build ships a
+Built-in only when its manifest lists `android`, and skips the rest with
+`omitted <id>: platforms exclude android`.
 
 ## Bundle-size gate
 

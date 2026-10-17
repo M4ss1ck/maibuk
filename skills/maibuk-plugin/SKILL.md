@@ -39,9 +39,11 @@ Your code imports only `@maibuk/plugin-sdk` and its public subpaths (`@maibuk/pl
 
 **Host-rendered UI is the default.** Maibuk draws it from the component table, so focus, keyboard, theming, and screen-reader behavior come from Maibuk.
 
+Declare `platforms` on purpose. Omitted means desktop and the web. List `"android"` only for a Plugin that passes the Android step of `pnpm plugin:check`: Android has no `Intl` or `WebAssembly`, caps the Plugin at 64 MB, and stops it with `out-of-memory` past that.
+
 Choose a **Frame** only when the component table cannot express the surface: a canvas, a chart, a DOM-dependent third-party library, a rich widget that already exists as web code. A Frame Plugin:
 
-- sets `customUi: true` and leaves `android` out of manifest `platforms`;
+- sets `customUi: true`. Frame UI is off on Android, so the Frame shows a placeholder there, and `android` stays out of `platforms` unless the rest of the Plugin is meant to run there;
 - bundles the library inside the Plugin folder, so it ships in the zip, and excludes a vendored copy with a `!!` entry in `biome.json` `files.includes`, since lint covers the whole folder;
 - styles with the host's `--maibuk-*` theme tokens from `frame-ui.md`;
 - owns its own accessibility, which the handoff states.
@@ -70,7 +72,7 @@ Report, in this order:
 
 1. The command you ran and its exit code, plus the zip path under `dist/`.
 2. The surfaces built, the UI path of each, and the Plugin Permissions declared with the method that needs each.
-3. Engines: jsdom through the test kit is checked. Every other engine (the installed desktop app, the web app, Android) is unchecked unless you ran the Plugin there yourself; name each one left unchecked.
+3. Engines: jsdom through the test kit is checked. Every other engine (the installed desktop app, the web app, Android on a device) is unchecked unless you ran the Plugin there yourself; name each one left unchecked. `pnpm plugin:check` runs an Android step only when `platforms` lists `"android"`, and that step evaluates the entry in the Android engine without a device, so it does not count as an Android run.
 4. For a Frame: "This Plugin uses custom UI; Maibuk does not verify its accessibility."
 5. The in-app checklist for the author: install the zip from Settings → Plugins, review the permission prompt, open each surface, run each Command and Shortcut, and try Development mode reload. Mark an item done only if you ran it.
 

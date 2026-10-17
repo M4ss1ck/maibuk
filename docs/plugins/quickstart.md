@@ -43,7 +43,7 @@ setup.mjs writes `maibuk.local.json` with the absolute checkout path, generates 
 pnpm check
 ```
 
-`pnpm check` runs eight steps in order and stops at the first failure. A passing run prints one `PASS` line per step and one closing line:
+`pnpm check` runs nine steps in order and stops at the first failure. A passing run prints one `PASS` line per step and one closing line:
 
 ```text
 PASS build (1234ms)
@@ -52,12 +52,13 @@ PASS typecheck (2345ms)
 PASS lint (456ms)
 PASS test (3456ms)
 PASS boundary (34ms)
+SKIP android
 PASS package (56ms)
 PASS layout (23ms)
-plugin check passed (8 steps)
+plugin check passed (9 steps)
 ```
 
-Each line names the step, in the order build, validate, typecheck, lint, test, boundary, package, layout; the number in parentheses is that step's runtime in milliseconds, so the exact figures vary. A failing run stops at the first `FAIL <step>` and prints that step's details below it. scripts/plugin/steps.ts holds what each step does and scripts/plugin/cli.ts holds how the lines are printed.
+Each line names the step, in the order build, validate, typecheck, lint, test, boundary, android, package, layout. The android step prints `SKIP android` unless the manifest lists `"android"` in `platforms`; a skipped step passes. The number in parentheses is that step's runtime in milliseconds, so the exact figures vary. A failing run stops at the first `FAIL <step>` and prints that step's details below it. scripts/plugin/steps.ts holds what each step does and scripts/plugin/cli.ts holds how the lines are printed.
 
 ## Tour of the template
 

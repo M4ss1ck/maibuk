@@ -932,8 +932,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         return { ok: false, refusal: { code: "not-installed" } };
       }
       const directory = options.directory ?? (await getPluginDirectory());
-      // The host runs no Plugin on a platform it does not support (Android in
-      // v1, #447): an explicit enable can never start a Worker there.
+      // The host runs no Plugin on a platform it does not support (none today,
+      // see PLUGIN_HOST_UNSUPPORTED_PLATFORMS): an explicit enable can never start
+      // a Worker there.
       if (!pluginsRunOn(directory.kind)) return { ok: false, refusal: { code: "not-installed" } };
       const folder = await directory.readFolder(pluginId);
       if (!folder) return { ok: false, refusal: { code: "not-installed" } };
