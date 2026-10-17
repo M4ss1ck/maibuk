@@ -29,6 +29,13 @@ import {
   type HostRequestHandler,
   type PluginClient,
 } from "@/plugin-sdk";
+import {
+  DEFAULT_ECHO_PALETTE,
+  ECHO_PALETTE_IDS,
+  ECHO_PALETTES,
+  type EchoPaletteId,
+  parseEchoPalette,
+} from "./colors";
 import { createEchoEditor, type EchoEditorController } from "./editor";
 import {
   DEFAULT_ECHO_SETTINGS,
@@ -60,12 +67,14 @@ import {
 import {
   clampNearbyWindow,
   DEFAULT_EDITOR_KINDS,
+  readColorByEcho,
+  readEchoPalette,
   readEchoesSettings,
   readEditorKinds,
-  readColorByEcho,
   toggledEditorKind,
-  writeEchoesSettings,
   writeColorByEcho,
+  writeEchoPalette,
+  writeEchoesSettings,
   writeEditorKinds,
 } from "./settings";
 
@@ -1082,6 +1091,13 @@ function useEchoLanguage(client: PluginClient): string {
  * recompute, so an open editor updates at once. Labels come from the runtime
  * catalogs.
  */
+/** The catalog key of each Palette's name, shown beside its swatches (#533). */
+const PALETTE_LABEL: Readonly<Record<EchoPaletteId, EchoKey>> = {
+  "okabe-ito": "palette.okabe-ito",
+  vivid: "palette.vivid",
+  soft: "palette.soft",
+};
+
 function createDetectionSettings(
   client: PluginClient,
   editor: Pick<EchoEditorController, "refresh">
@@ -1095,6 +1111,8 @@ function createDetectionSettings(
     const [editorKinds, setEditorKinds] = useState<readonly EchoKind[]>(DEFAULT_EDITOR_KINDS);
     // "Color highlights by echo" is off until the author turns it on (#532).
     const [colorByEcho, setColorByEcho] = useState(false);
+    // The Palette the colors come from; the dropdown is disabled while coloring is off (#533).
+    const [palette, setPalette] = useState<EchoPaletteId>(DEFAULT_ECHO_PALETTE);
     // Nothing is written before the stored value has been read, so a slow read
     // cannot be clobbered by the initial defaults.
     const hydrated = useRef(false);
@@ -1105,12 +1123,14 @@ function createDetectionSettings(
         readEchoesSettings(client),
         readEditorKinds(client),
         readColorByEcho(client),
-      ]).then(([stored, kinds, color]) => {
+        readEchoPalette(client),
+      ]).then(([stored, kinds, color, storedPalette]) => {
         if (cancelled) return;
         hydrated.current = true;
         setSettings(stored);
         setEditorKinds(kinds);
         setColorByEcho(color);
+        setPalette(storedPalette);
       });
       return () => {
         cancelled = true;
@@ -1143,6 +1163,12 @@ function createDetectionSettings(
       if (!hydrated.current) return;
       void writeColorByEcho(client, colorByEcho).then(() => editor.refresh());
     }, [client, editor, colorByEcho]);
+
+    // The Palette is stored and repaints an open editor at once (#533).
+    useEffect(() => {
+      if (!hydrated.current) return;
+      void writeEchoPalette(client, palette).then(() => editor.refresh());
+    }, [client, editor, palette]);
 
     return (
       <ui.View direction="column" gap="md">
@@ -1203,6 +1229,17 @@ function createDetectionSettings(
           label={translate(language, "settings.editor.color")}
           isSelected={colorByEcho}
           onChange={(event) => setColorByEcho(event.detail)}
+        />
+        <ui.Select
+          label={translate(language, "settings.editor.palette")}
+          isDisabled={!colorByEcho}
+          selectedKey={palette}
+          options={ECHO_PALETTE_IDS.map((id) => ({
+            value: id,
+            label: translate(language, PALETTE_LABEL[id]),
+            swatches: [...ECHO_PALETTES[id]],
+          }))}
+          onChange={(event) => setPalette(parseEchoPalette(event.detail))}
         />
       </ui.View>
     );

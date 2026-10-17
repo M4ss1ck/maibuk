@@ -17,6 +17,7 @@ import {
   type EchoSettings,
   findEchoes,
 } from "./find-echoes";
+import { echoColor } from "./colors";
 import * as en from "./fixtures/en";
 import { type Token, tokenize } from "./language";
 import {
@@ -255,7 +256,21 @@ describe("echoHighlightSets()", () => {
     expect(echoHighlightSets(entries, t, { colors: false }).info[0]).not.toHaveProperty("color");
   });
 
-  it("colors every range of one Echo with its stable Echo color (#532)", () => {
+it("colors each range from the Palette the options name (#533)", () => {
+  const entries: EchoNavigationEntry[] = [
+    {
+      from: 2,
+      to: 6,
+      kind: "repetition",
+      match: "door",
+      label: { key: "echo.label.nearbyLater", word: "door", count: 4 },
+    },
+  ];
+  const sets = echoHighlightSets(entries, t, { colors: true, palette: "vivid" });
+  expect(sets.repetition.map((range) => range.color)).toEqual([echoColor("door", "vivid")]);
+});
+
+it("colors every range of one Echo with its stable Echo color (#532)", () => {
     const entries: EchoNavigationEntry[] = [
       {
         from: 2,

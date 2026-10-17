@@ -21,7 +21,8 @@ import {
   type EchoServe,
   startEchoes,
 } from "./runtime";
-import { ECHOES_COLOR_KEY, ECHOES_EDITOR_KEY } from "./settings";
+import { ECHOES_COLOR_KEY, ECHOES_EDITOR_KEY, ECHOES_PALETTE_KEY } from "./settings";
+import { echoColor } from "./colors";
 
 /** One recorded `editor.setHighlights` call. */
 interface HighlightCall {
@@ -66,6 +67,8 @@ interface FakeOptions {
   editorKinds?: readonly string[];
   /** The "Color highlights by echo" value to store (unset leaves it off, as 0.1.0 did). */
   colorByEcho?: boolean;
+  /** The Echo color Palette to store (unset leaves Okabe-Ito, as 0.2.0 did) (#533). */
+  palette?: string;
 }
 
 function fakeClient(options: FakeOptions = {}) {
@@ -78,6 +81,7 @@ function fakeClient(options: FakeOptions = {}) {
   const storage = new Map<string, unknown>();
   if (options.editorKinds !== undefined) storage.set(ECHOES_EDITOR_KEY, [...options.editorKinds]);
   if (options.colorByEcho !== undefined) storage.set(ECHOES_COLOR_KEY, options.colorByEcho);
+  if (options.palette !== undefined) storage.set(ECHOES_PALETTE_KEY, options.palette);
   const listeners = new Map<string, Set<Listener>>();
   const highlights: HighlightCall[] = [];
   const reveals: Array<{ from: number; to: number }> = [];
@@ -452,6 +456,42 @@ describe("color highlights by echo (#532)", () => {
 
     fake.storage.set(ECHOES_COLOR_KEY, true);
     await controller.refresh();
+
+    expect(lastRepetition(fake.highlights)?.ranges.map((range) => range.color)).toEqual([
+      DOOR_COLOR,
+      DOOR_COLOR,
+    ]);
+  });
+
+  it("paints each Echo in the stored Palette (#533)", async () => {
+    const fake = fakeClient({ colorByEcho: true, palette: "soft" });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+
+    expect(lastRepetition(fake.highlights)?.ranges.map((range) => range.color)).toEqual([
+      echoColor("door", "soft"),
+      echoColor("door", "soft"),
+    ]);
+  });
+
+  it("repaints an open editor in the new Palette at once (#533)", async () => {
+    const fake = fakeClient({ colorByEcho: true });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+
+    fake.storage.set(ECHOES_PALETTE_KEY, "vivid");
+    await controller.refresh();
+
+    expect(lastRepetition(fake.highlights)?.ranges.map((range) => range.color)).toEqual([
+      echoColor("door", "vivid"),
+      echoColor("door", "vivid"),
+    ]);
+  });
+
+  it("paints Okabe-Ito when the stored Palette is unknown (#533)", async () => {
+    const fake = fakeClient({ colorByEcho: true, palette: "neon" });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
 
     expect(lastRepetition(fake.highlights)?.ranges.map((range) => range.color)).toEqual([
       DOOR_COLOR,
