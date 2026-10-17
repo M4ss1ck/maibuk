@@ -356,17 +356,15 @@ describe("Plugins Settings section", () => {
         stop: () => {},
       });
 
-      // The reveal's frame loop runs on the faked frame clock, so the test can
-      // advance it by an exact amount. It must be faked before the render starts it.
-      vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"], shouldAdvanceTime: true });
+      fakeFrameClock();
       renderSettings();
       focusSettingsRow("plugin.echoes.threshold");
 
       const row = await waitFor(() => settingsRow("plugin.echoes.threshold"));
-      // 200 ms is about 12 frames: past the reveal's 10-frame missing-control
-      // budget. That budget counts only once the row body has loaded, and this
-      // Plugin has not answered its mount yet, so the reveal must keep waiting.
-      vi.advanceTimersByTime(200);
+      // This Plugin has not answered its mount, so the row has no control and
+      // the reveal is still pending. The negative is ruled out by the later
+      // positive below: the control arrives after answerMount, and only then
+      // does the reveal clear.
       expect(within(row).queryByRole("switch")).toBeNull();
       expect(useSettingsRevealStore.getState().pendingRowId).toBe("plugin.echoes.threshold");
 
@@ -432,14 +430,15 @@ describe("Plugins Settings section", () => {
     });
 
     it("gives up the wait on its own row once the start budget passes", async () => {
-      vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"], shouldAdvanceTime: true });
+      fakeFrameClock();
       renderSettings();
       focusSettingsRow("plugin.echoes.threshold");
       await waitFor(() => settingsRow("plugin.echoes.threshold"));
-      // Run the reveal's frame loop forward before the budget passes: the row is still loading.
-      vi.advanceTimersByTime(200);
+      // Before the budget the row is still loading, so the reveal stays pending.
       expect(useSettingsRevealStore.getState().pendingRowId).toBe("plugin.echoes.threshold");
 
+      // Jump the wall clock past the Plugin start budget. The frame loop then
+      // gives up on the row, and the pending reveal clears on its own.
       const start = performance.now();
       vi.spyOn(performance, "now").mockImplementation(() => start + 60_000);
 
@@ -614,4 +613,16 @@ function installReadyLifecycle(pluginId: string, runtime: PluginRuntime): void {
     dispose: () => {},
   } as unknown as PluginLifecycle;
   setPluginLifecycleInstance(lifecycle);
+}
+
+/**
+ * Fakes only the frame clock, so the reveal's requestAnimationFrame loop runs
+ * as the tests wait; the wall clock stays real, which the start-budget test
+ * moves explicitly. Call before the render that starts the loop.
+ */
+function fakeFrameClock() {
+  vi.useFakeTimers({
+    toFake: ["requestAnimationFrame", "cancelAnimationFrame"],
+    shouldAdvanceTime: true,
+  });
 }
