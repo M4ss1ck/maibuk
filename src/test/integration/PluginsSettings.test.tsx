@@ -356,15 +356,17 @@ describe("Plugins Settings section", () => {
         stop: () => {},
       });
 
-      const frames = vi.spyOn(window, "requestAnimationFrame");
+      // The reveal's frame loop runs on the faked frame clock, so the test can
+      // advance it by an exact amount. It must be faked before the render starts it.
+      vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"], shouldAdvanceTime: true });
       renderSettings();
       focusSettingsRow("plugin.echoes.threshold");
 
       const row = await waitFor(() => settingsRow("plugin.echoes.threshold"));
-      // Well past the reveal's missing-control frame budget (10 frames): the
-      // reveal's own frame loop has run that long on this row.
-      await waitFor(() => expect(frames.mock.calls.length).toBeGreaterThan(10));
-      frames.mockRestore();
+      // 200 ms is about 12 frames: past the reveal's 10-frame missing-control
+      // budget. That budget counts only once the row body has loaded, and this
+      // Plugin has not answered its mount yet, so the reveal must keep waiting.
+      vi.advanceTimersByTime(200);
       expect(within(row).queryByRole("switch")).toBeNull();
       expect(useSettingsRevealStore.getState().pendingRowId).toBe("plugin.echoes.threshold");
 
@@ -373,6 +375,7 @@ describe("Plugins Settings section", () => {
       await waitFor(() => expect(document.activeElement).toBe(control));
       expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
     } finally {
+      vi.useRealTimers();
       host.stop();
       resetPluginLifecycleForTests();
     }
@@ -412,6 +415,7 @@ describe("Plugins Settings section", () => {
 
     afterEach(() => {
       vi.restoreAllMocks();
+      vi.useRealTimers();
       host.stop();
       resetPluginLifecycleForTests();
     });
@@ -428,13 +432,12 @@ describe("Plugins Settings section", () => {
     });
 
     it("gives up the wait on its own row once the start budget passes", async () => {
+      vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"], shouldAdvanceTime: true });
       renderSettings();
       focusSettingsRow("plugin.echoes.threshold");
       await waitFor(() => settingsRow("plugin.echoes.threshold"));
-      // Let the reveal's frame loop run for a while before the budget passes.
-      const frames = vi.spyOn(window, "requestAnimationFrame");
-      await waitFor(() => expect(frames.mock.calls.length).toBeGreaterThan(10));
-      frames.mockRestore();
+      // Run the reveal's frame loop forward before the budget passes: the row is still loading.
+      vi.advanceTimersByTime(200);
       expect(useSettingsRevealStore.getState().pendingRowId).toBe("plugin.echoes.threshold");
 
       const start = performance.now();
