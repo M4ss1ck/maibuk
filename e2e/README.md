@@ -517,10 +517,9 @@ QuickJS engine (#492, #516): the 64 MB cap is hard, so a Plugin that exhausts it
 heap stops with `out-of-memory` and the WebView renderer survives. Custom Frame UI
 stays off on Android. The Android conformance run is judged on T1 to T8 like
 Linux: T8 must stop the hostile Plugin with exactly `out-of-memory` while a healthy
-Plugin beside it keeps answering. The lane's seam
-(`src/features/plugins/conformance/host-bypass.ts`) hands the real lifecycle a
-directory kind the host rule accepts, so the fixture starts on Android as it does on
-Linux. A measured Android run records the engine's start time and call latency (no
+Plugin beside it keeps answering. The lane's seam reports the true Android directory
+kind, and the hostile and healthy fixtures list `"android"` in their manifest
+`platforms`, so the real launch scan starts them. A measured Android run records the engine's start time and call latency (no
 gate on them, decision-401).
 
 ## Plugins bench lane

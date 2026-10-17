@@ -7,7 +7,7 @@
   "version": "1.0.0",
   "apiVersion": "^0.1",
   "entry": "index.js",
-  "platforms": ["web"],
+  "platforms": ["web", "desktop", "android"],
   "lifecycle": "persistent",
   "defaultLanguage": "en",
   "permissions": {
