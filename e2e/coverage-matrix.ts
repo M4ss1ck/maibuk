@@ -34,6 +34,13 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "term",
+    items: ["Plugin Platforms"],
+    reason:
+      "A manifest field the Plugin author writes, never shown on screen; Android Plugins are not shown to users yet (#516), so no workflow reaches the term",
+    owner: "Vitest manifest-schema and contributions-android suites",
+  },
+  {
+    kind: "term",
     items: ["Drawing"],
     reason: "Creating a Drawing and erasing are pointer gestures by nature (documented exemption)",
     owner: "Vitest canvas suites; keyboard tool switching is covered by canvas-tools",
