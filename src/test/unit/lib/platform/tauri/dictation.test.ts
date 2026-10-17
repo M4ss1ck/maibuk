@@ -156,12 +156,17 @@ describe("TauriRecognizerHost", () => {
 
 describe("tauriModelFiles", () => {
   it("reports progress and cancels through the command", async () => {
-    const cancel = vi.fn();
+    // The backend fails the install once it is told to cancel, as it does for
+    // real: the cancel command is what settles the pending install.
+    let failInstall!: (reason: unknown) => void;
+    const installFailed = new Promise<never>((_, reject) => {
+      failInstall = reject;
+    });
+    const cancel = vi.fn(() => failInstall({ code: "cancelled" }));
     handlers.dictation_models_cancel = cancel;
-    handlers.dictation_models_install = async ({ onProgress }) => {
+    handlers.dictation_models_install = ({ onProgress }) => {
       (onProgress as FakeChannel<[number, number]>).onmessage([5, 10]);
-      await new Promise((r) => setTimeout(r, 20));
-      throw { code: "cancelled" };
+      return installFailed;
     };
     const progress: number[] = [];
     const controller = new AbortController();
