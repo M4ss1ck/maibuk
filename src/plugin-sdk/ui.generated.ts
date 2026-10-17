@@ -285,8 +285,9 @@ export interface PluginUiElementProps {
   "maibuk-collection-row": {
     /** Stable row identity. */
     id: string;
-    /** The row's primary text. */
+    /** The row's primary text. It keeps its width; the description truncates first. */
     label: string;
+    /** Secondary text. When the label or description is cut off, hovering or focusing the row shows both in full; an expanded row shows it wrapped. */
     description?: string;
     /** Shows a toggle that reveals the row's panel. */
     isExpandable?: boolean;
