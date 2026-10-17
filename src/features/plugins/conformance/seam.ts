@@ -512,7 +512,11 @@ export async function createRuntimeSeam(
     // host raises for an oversized tree, reported by the lifecycle.
     if (stopReason !== null) {
       return {
-        outcome: { kind: "stopped", reason: stopReason, detail: "the Worker reported its element limit" },
+        outcome: {
+          kind: "stopped",
+          reason: stopReason,
+          detail: `the Worker stopped the Plugin: ${stopReason}`,
+        },
       };
     }
     if (!accepted) {
