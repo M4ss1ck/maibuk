@@ -22,6 +22,7 @@
  */
 
 import type { PluginApiEventId, PluginApiEvents, PluginClient } from "@/plugin-sdk";
+import { type EchoPaletteId } from "./colors";
 import { findEchoesWithTokens } from "./find-echoes";
 import {
   ECHO_HIGHLIGHT_KINDS,
@@ -41,6 +42,7 @@ import {
 } from "./highlights";
 import {
   readColorByEcho,
+  readEchoPalette,
   readEchoesSettings,
   readEditorKinds,
   toEditorFindOptions,
@@ -261,13 +263,15 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     settings: Awaited<ReturnType<typeof readEchoesSettings>>;
     kinds: Awaited<ReturnType<typeof readEditorKinds>>;
     colors: boolean;
+    palette: EchoPaletteId;
   }> {
-    const [settings, kinds, colors] = await Promise.all([
+    const [settings, kinds, colors, palette] = await Promise.all([
       readEchoesSettings(client),
       readEditorKinds(client),
       readColorByEcho(client),
+      readEchoPalette(client),
     ]);
-    return { settings, kinds, colors };
+    return { settings, kinds, colors, palette };
   }
 
   /**
@@ -276,7 +280,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
    * enabled kinds are detected, and only the window's ranges are labelled.
    */
   async function apply(text: string, entity: EntityTarget, caret: number): Promise<void> {
-    const { settings, kinds, colors } = await enabledKinds();
+    const { settings, kinds, colors, palette } = await enabledKinds();
     if (!state.on || state.entity === null || !sameEntity(state.entity, entity)) return;
     const t = translate();
     // Time only Echoes' own compute (findEchoes + building and labelling the
@@ -290,7 +294,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     );
     const list = buildEchoList(echoes, kinds, text, chapters);
     const { start, end } = paintWindow(list, caret, ECHO_PAINT_LIMIT);
-    const sets = echoHighlightSets(list.slice(start, end), t, { colors });
+    const sets = echoHighlightSets(list.slice(start, end), t, { colors, palette });
     recordRecompute(startedAt);
     await paint(sets, entity);
     if (!state.on || state.entity === null || !sameEntity(state.entity, entity)) return;

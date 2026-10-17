@@ -26,7 +26,7 @@
 
 import { type Echo, type EchoKind, type EchoOccurrence } from "./find-echoes";
 import { type EchoKey, format, translate } from "./i18n";
-import { echoColor } from "./colors";
+import { type EchoPaletteId, echoColor } from "./colors";
 import { type Token, tokenize } from "./language";
 
 /** The host `editor.setHighlights` kind each Echo kind paints as (decision 2). */
@@ -61,6 +61,8 @@ export interface EchoHighlightRange {
 export interface EchoHighlightOptions {
   /** Paint each range in its Echo's color (the "Color highlights by echo" switch). */
   colors?: boolean;
+  /** The Palette the colors come from (#533); Okabe-Ito when unset. */
+  palette?: EchoPaletteId;
 }
 
 /** Each host kind and the ranges it paints; a kind with nothing is an empty list. */
@@ -250,7 +252,7 @@ export function echoHighlightSets(
       to: entry.to,
       label: echoLabel(entry.label, t),
     };
-    if (options.colors) range.color = echoColor(entry.match);
+    if (options.colors) range.color = echoColor(entry.match, options.palette);
     sets[entry.kind].push(range);
   }
   return sets;

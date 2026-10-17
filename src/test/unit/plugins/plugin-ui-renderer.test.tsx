@@ -116,7 +116,11 @@ describe("the Remote UI renderer", () => {
       const committed: string[] = [];
       harness = renderRemoteUi();
       await harness.mount(
-        <ui.TextField label="Title" value="start" onChange={(event) => committed.push(event.detail)} />
+        <ui.TextField
+          label="Title"
+          value="start"
+          onChange={(event) => committed.push(event.detail)}
+        />
       );
       const field = screen.getByRole("textbox", { name: "Title" });
       await userEvent.type(field, "!");
@@ -169,11 +173,7 @@ describe("the Remote UI renderer", () => {
       const seen: number[] = [];
       harness = renderRemoteUi();
       await harness.mount(
-        <ui.NumberField
-          label="Count"
-          value={1}
-          onInput={(event) => seen.push(event.detail)}
-        />
+        <ui.NumberField label="Count" value={1} onInput={(event) => seen.push(event.detail)} />
       );
       const field = screen.getByRole("textbox", { name: "Count" });
       await userEvent.type(field, "2");
@@ -352,6 +352,36 @@ describe("the Remote UI renderer", () => {
       expect(trigger).toHaveAttribute("aria-invalid", "true");
     });
 
+    it("draws option swatches as decorative chips and names the option by its label @ui:maibuk-select", async () => {
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.Select
+          label="Palette"
+          selectedKey="okabe-ito"
+          options={[
+            {
+              value: "okabe-ito",
+              label: "Okabe-Ito, 8 colors",
+              swatches: ["#aa4b18", "#a929ff"],
+            },
+            { value: "vivid", label: "Vivid, 8 colors", swatches: ["#4e79a7"] },
+          ]}
+        />
+      );
+      // React Aria names the trigger by its label and its selected value.
+      const trigger = screen.getByRole("button", { name: /Palette/ });
+      expect(trigger).toHaveTextContent("Okabe-Ito, 8 colors");
+      const chips = trigger.querySelectorAll("[data-swatch]");
+      expect(chips).toHaveLength(2);
+      expect(chips[0].closest('[aria-hidden="true"]')).not.toBeNull();
+      expect(chips[0]).toHaveStyle({ backgroundColor: "rgb(170, 75, 24)" });
+
+      await userEvent.click(trigger);
+      const option = await screen.findByRole("option", { name: "Vivid, 8 colors" });
+      expect(option.querySelectorAll("[data-swatch]")).toHaveLength(1);
+      expect(option.querySelector("[data-swatch]")?.closest('[aria-hidden="true"]')).not.toBeNull();
+    });
+
     it("links a combobox's description and error @ui:maibuk-combobox", async () => {
       harness = renderRemoteUi();
       await harness.mount(
@@ -390,7 +420,11 @@ describe("the Remote UI renderer", () => {
       const seen: boolean[] = [];
       harness = renderRemoteUi();
       await harness.mount(
-        <ui.Checkbox label="Enabled" isSelected={false} onChange={(event) => seen.push(event.detail)} />
+        <ui.Checkbox
+          label="Enabled"
+          isSelected={false}
+          onChange={(event) => seen.push(event.detail)}
+        />
       );
       await userEvent.click(screen.getByText("Enabled"));
       expect(seen).toEqual([true]);
@@ -410,7 +444,11 @@ describe("the Remote UI renderer", () => {
       const seen: boolean[] = [];
       harness = renderRemoteUi();
       await harness.mount(
-        <ui.Checkbox label="Enabled" isSelected={false} onChange={(event) => seen.push(event.detail)} />
+        <ui.Checkbox
+          label="Enabled"
+          isSelected={false}
+          onChange={(event) => seen.push(event.detail)}
+        />
       );
       await userEvent.tab();
       await userEvent.keyboard(" ");

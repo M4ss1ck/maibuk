@@ -22,7 +22,12 @@ import {
   TOGGLE_HIGHLIGHTS,
   startEchoes,
 } from "./runtime";
-import { ECHOES_COLOR_KEY, ECHOES_EDITOR_KEY, ECHOES_SETTINGS_KEY } from "./settings";
+import {
+  ECHOES_COLOR_KEY,
+  ECHOES_EDITOR_KEY,
+  ECHOES_PALETTE_KEY,
+  ECHOES_SETTINGS_KEY,
+} from "./settings";
 import { echoesManifest, settingsStorage, shiftTabTo, tabTo } from "./test-support";
 
 const BOOK = {
@@ -222,6 +227,50 @@ describe("Echoes detection settings", () => {
 
       await user.keyboard(" ");
       await waitFor(() => expect(storage.get(ECHOES_COLOR_KEY)).toBe(false));
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("disables the Palette dropdown while coloring is off, and a keyboard choice persists and repaints (#533)", async () => {
+    const storage = settingsStorage();
+    const host = settingsHost(storage);
+    try {
+      const page = await host.renderSettingsRow(SETTINGS_ROW_ID);
+      const user = userEvent.setup();
+      await waitFor(() => expect(storage.has(ECHOES_EDITOR_KEY)).toBe(true));
+
+      const palette = screen.getByRole("button", { name: /Palette/ });
+      expect(palette).toBeDisabled();
+      expect(palette).toHaveTextContent("Okabe-Ito, 8 colors");
+
+      const color = screen.getByRole("switch", { name: "Color highlights by echo" });
+      await tabTo(user, color);
+      await user.keyboard(" ");
+      await waitFor(() => expect(storage.get(ECHOES_COLOR_KEY)).toBe(true));
+      expect(palette).toBeEnabled();
+
+      await tabTo(user, palette);
+      expect(palette).toHaveFocus();
+      await user.keyboard("{Enter}");
+      await user.keyboard("{ArrowDown}{Enter}");
+      await waitFor(() => expect(storage.get(ECHOES_PALETTE_KEY)).toBe("vivid"));
+      expect(palette).toHaveTextContent("Vivid, 8 colors");
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("shows the default Palette when the stored Palette is unknown (#533)", async () => {
+    const storage = settingsStorage();
+    storage.set(ECHOES_COLOR_KEY, true);
+    storage.set(ECHOES_PALETTE_KEY, "neon");
+    const host = settingsHost(storage);
+    try {
+      const page = await host.renderSettingsRow(SETTINGS_ROW_ID);
+      await waitFor(() => expect(screen.getByRole("button", { name: /Palette/ })).toBeEnabled());
       page.unmount();
     } finally {
       host.stop();

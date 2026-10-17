@@ -46,6 +46,8 @@ export type PluginUiTag = (typeof PLUGIN_UI_TAGS)[number];
 export interface PluginUiOption {
   value: string;
   label: string;
+  /** Up to 12 `#rrggbb` colors drawn as decorative chips before the label (Select). */
+  swatches?: readonly string[];
 }
 
 /** The props and events of every element in the UI kit, by tag. */
@@ -178,6 +180,7 @@ export interface PluginUiElementProps {
   /** A single-choice select. Keyboard-interactive. */
   "maibuk-select": {
     label: string;
+    /** Each option's value and label, plus optional swatches: up to 12 #rrggbb colors drawn as chips before the label. */
     options: readonly PluginUiOption[];
     selectedKey?: string;
     placeholder?: string;

@@ -3272,6 +3272,23 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-echoes-palette",
+    area: "plugins",
+    workflow:
+      "Echoes Settings: with Color highlights by echo off, the Palette dropdown is disabled; turning coloring on enables it, a keyboard choice of Palette is stored Library-wide and survives a reload, and each Palette option is named by its text with swatches as decoration; asserts: the disabled and enabled states, the option names, the trigger text after the choice and after reload; persists: yes (Plugin storage)",
+    edges: [
+      "The Palette dropdown is disabled while coloring is off",
+      "Turning coloring on enables the dropdown, and a keyboard choice of Palette persists after reload",
+      'Each Palette option is named by its text, such as "Vivid, 8 colors"',
+    ],
+    terms: ["Plugin"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "echoesBook",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "plugins-echoes-editor",
     area: "plugins",
     workflow:

@@ -13,13 +13,16 @@ import {
   ECHOES_SETTINGS_KEY,
   type EchoesStorage,
   clampNearbyWindow,
+  ECHOES_PALETTE_KEY,
   parseColorByEcho,
   parseEchoesSettings,
   parseEditorKinds,
   readColorByEcho,
+  readEchoPalette,
   readEchoesSettings,
   readEditorKinds,
   writeColorByEcho,
+  writeEchoPalette,
   toEditorFindOptions,
   toFindEchoesOptions,
   toggledEditorKind,
@@ -269,5 +272,43 @@ describe("Echoes color by echo (#532)", () => {
       },
     };
     expect(await readColorByEcho(refusing)).toBe(false);
+  });
+
+  it("reads the Okabe-Ito Palette when the Palette key is unset or unknown (#533)", async () => {
+    expect(await readEchoPalette(fakeStorage(new Map()))).toBe("okabe-ito");
+    expect(await readEchoPalette(fakeStorage(new Map([[ECHOES_PALETTE_KEY, "neon"]])))).toBe(
+      "okabe-ito"
+    );
+  });
+
+  it("round-trips the Palette through storage under its own key (#533)", async () => {
+    const data = new Map<string, unknown>();
+    const client = fakeStorage(data);
+
+    await writeEchoPalette(client, "vivid");
+
+    expect(data.get(ECHOES_PALETTE_KEY)).toBe("vivid");
+    expect(await readEchoPalette(client)).toBe("vivid");
+  });
+
+  it("reads the default Palette when storage refuses the read (#533)", async () => {
+    const refusing: EchoesStorage = {
+      storage: {
+        async get() {
+          throw new Error("refused");
+        },
+        async set() {
+          throw new Error("refused");
+        },
+        async delete() {
+          throw new Error("refused");
+        },
+        async keys() {
+          throw new Error("refused");
+        },
+      },
+    };
+    expect(await readEchoPalette(refusing)).toBe("okabe-ito");
+    await expect(writeEchoPalette(refusing, "soft")).resolves.toBeUndefined();
   });
 });

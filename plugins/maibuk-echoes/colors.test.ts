@@ -6,7 +6,14 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { ECHO_PALETTE, echoColor } from "./colors";
+import {
+  DEFAULT_ECHO_PALETTE,
+  ECHO_PALETTE,
+  ECHO_PALETTE_IDS,
+  ECHO_PALETTES,
+  echoColor,
+  parseEchoPalette,
+} from "./colors";
 
 /** WCAG relative luminance of a `#rrggbb` color. */
 function luminance(hex: string): number {
@@ -81,6 +88,7 @@ function simulatedLabs(hex: string): [number, number, number][] {
 
 describe("the default Palette", () => {
   it("is Okabe-Ito (adapted): eight colors in the fixed slot order", () => {
+    expect(DEFAULT_ECHO_PALETTE).toBe("okabe-ito");
     expect(ECHO_PALETTE).toHaveLength(8);
     expect(ECHO_PALETTE).toEqual([
       "#aa4b18",
@@ -93,22 +101,31 @@ describe("the default Palette", () => {
       "#737373",
     ]);
   });
+});
+
+describe.each(ECHO_PALETTE_IDS)("the %s Palette", (id) => {
+  const palette = ECHO_PALETTES[id];
+
+  it("has eight distinct colors", () => {
+    expect(palette).toHaveLength(8);
+    expect(new Set(palette).size).toBe(8);
+  });
 
   it("keeps every pair at least dE 15 apart under normal, protan, deutan, and tritan vision", () => {
     // CIE76 distance in Lab D65 between each pair, under each simulation. The
     // smallest distance across all pairs and simulations must reach 15.
     let worst = Number.POSITIVE_INFINITY;
     let worstPair = "";
-    for (let i = 0; i < ECHO_PALETTE.length; i++) {
-      for (let j = i + 1; j < ECHO_PALETTE.length; j++) {
-        const a = simulatedLabs(ECHO_PALETTE[i]);
-        const b = simulatedLabs(ECHO_PALETTE[j]);
+    for (let i = 0; i < palette.length; i++) {
+      for (let j = i + 1; j < palette.length; j++) {
+        const a = simulatedLabs(palette[i]);
+        const b = simulatedLabs(palette[j]);
         a.forEach((labA, simulation) => {
           const labB = b[simulation];
           const distance = Math.hypot(labA[0] - labB[0], labA[1] - labB[1], labA[2] - labB[2]);
           if (distance < worst) {
             worst = distance;
-            worstPair = `${ECHO_PALETTE[i]} vs ${ECHO_PALETTE[j]} (simulation ${simulation})`;
+            worstPair = `${palette[i]} vs ${palette[j]} (simulation ${simulation})`;
           }
         });
       }
@@ -117,11 +134,23 @@ describe("the default Palette", () => {
   });
 
   it("reaches 3:1 contrast for every color against both editor backgrounds", () => {
-    for (const color of ECHO_PALETTE) {
+    for (const color of palette) {
       expect(contrast(color, LIGHT_EDITOR_BACKGROUND), `${color} on light`).toBeGreaterThanOrEqual(
         3
       );
       expect(contrast(color, DARK_EDITOR_BACKGROUND), `${color} on dark`).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
+describe("parseEchoPalette()", () => {
+  it("keeps a known Palette id", () => {
+    for (const id of ECHO_PALETTE_IDS) expect(parseEchoPalette(id)).toBe(id);
+  });
+
+  it("falls back to the default for an unknown, missing, or malformed value", () => {
+    for (const value of ["neon", "", 3, null, undefined, { id: "vivid" }]) {
+      expect(parseEchoPalette(value)).toBe(DEFAULT_ECHO_PALETTE);
     }
   });
 });
@@ -143,6 +172,13 @@ describe("echoColor()", () => {
   it("always returns a Palette color", () => {
     for (const key of ["a", "tea", "héroe", "x y z", "", "🙂"]) {
       expect(ECHO_PALETTE).toContain(echoColor(key));
+    }
+  });
+
+  it("maps the same key to the same slot of each Palette", () => {
+    for (const id of ECHO_PALETTE_IDS) {
+      expect(echoColor("door", id)).toBe(ECHO_PALETTES[id][1]);
+      expect(echoColor("the quiet house", id)).toBe(ECHO_PALETTES[id][0]);
     }
   });
 });

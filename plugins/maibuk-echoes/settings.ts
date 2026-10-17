@@ -18,6 +18,7 @@
  */
 
 import type { PluginClient } from "@/plugin-sdk";
+import { type EchoPaletteId, parseEchoPalette } from "./colors";
 import {
   DEFAULT_ECHO_SETTINGS,
   type EchoKind,
@@ -34,6 +35,9 @@ export const ECHOES_EDITOR_KEY = "editor";
 
 /** The one storage key the "Color highlights by echo" switch lives under (#532). */
 export const ECHOES_COLOR_KEY = "color";
+
+/** The one storage key the Echo color Palette lives under (#533). */
+export const ECHOES_PALETTE_KEY = "palette";
 
 /** The kinds the editor highlights before the author changes anything: nearby only. */
 export const DEFAULT_EDITOR_KINDS: readonly EchoKind[] = ["nearby"];
@@ -211,6 +215,27 @@ export async function readColorByEcho(client: EchoesStorage): Promise<boolean> {
 export async function writeColorByEcho(client: EchoesStorage, on: boolean): Promise<void> {
   try {
     await client.storage.set({ key: ECHOES_COLOR_KEY, value: on });
+  } catch {
+    // Storage is best-effort: a refused write must not break the Settings row.
+  }
+}
+
+/** Reads the Echo color Palette, the default when unset, unknown, or the read fails (#533). */
+export async function readEchoPalette(client: EchoesStorage): Promise<EchoPaletteId> {
+  try {
+    return parseEchoPalette(await client.storage.get({ key: ECHOES_PALETTE_KEY }));
+  } catch {
+    return parseEchoPalette(undefined);
+  }
+}
+
+/** Stores the Echo color Palette under its own key; a refused write is ignored (#533). */
+export async function writeEchoPalette(
+  client: EchoesStorage,
+  palette: EchoPaletteId
+): Promise<void> {
+  try {
+    await client.storage.set({ key: ECHOES_PALETTE_KEY, value: palette });
   } catch {
     // Storage is best-effort: a refused write must not break the Settings row.
   }
