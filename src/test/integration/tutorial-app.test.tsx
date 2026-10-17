@@ -69,6 +69,23 @@ const dictationRuntime = vi.hoisted(() => ({
   load: vi.fn(async () => {}),
 }));
 
+// Each first-launch offer decision, recorded with whether launch Auto Sync had
+// settled when the decision was made. The offer decides once per launch, so a
+// test waits for the decision itself instead of sleeping past it.
+const offerDecisions = vi.hoisted(() => [] as boolean[]);
+vi.mock("@/features/tutorial/controller", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/tutorial/controller")>();
+  const { hasLaunchAutoSyncSettled } = await import("@/features/sync/auto-sync");
+  return {
+    ...actual,
+    authorLibraryIsEmpty: async () => {
+      const empty = await actual.authorLibraryIsEmpty();
+      offerDecisions.push(hasLaunchAutoSyncSettled());
+      return empty;
+    },
+  };
+});
+
 vi.mock("@/features/dictation/runtime", () => ({
   getDictation: dictationRuntime.getDictation,
   resetDictationForTests: vi.fn(),
@@ -326,19 +343,18 @@ describe("the first-launch offer", () => {
   it("waits for launch Auto Sync on a signed-in device before deciding", async () => {
     useSettingsStore.setState({ autoSync: true });
     useSyncStore.setState({ authStatus: "logged-in", authVerified: false, passphrase: null });
+    offerDecisions.length = 0;
     try {
       renderApp("/");
       await screen.findByRole("heading", { level: 1, name: en("books.title") });
-      // Negative: no offer before the launch run. The offer's decision has no
-      // observable point to wait on, so this stays a counted wait.
-      await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
-      expect(screen.queryByRole("dialog", { name: en("tutorial.offer.title") })).toBeNull();
 
       // The launch run ends (here it cannot sync: no Passphrase) and nothing was Pulled.
       await act(async () => {
         await runAutoSync("launch");
       });
       await screen.findByRole("dialog", { name: en("tutorial.offer.title") });
+      // Every decision was made after launch Auto Sync settled, never before.
+      expect(offerDecisions).toEqual([true]);
     } finally {
       useSyncStore.setState({ authStatus: "logged-out" });
     }
@@ -350,11 +366,11 @@ describe("the first-launch offer", () => {
       await getAuthorDatabase();
       await createNoteRow({ title: "Mine" }, "local");
     })();
+    offerDecisions.length = 0;
     renderApp("/");
     await screen.findByRole("heading", { level: 1, name: en("books.title") });
-    // Negative: no offer is ever shown. The offer's decision has no observable
-    // point to wait on, so this stays a counted wait.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
+    // Negative: no offer is ever shown. Wait for the decision, then check it.
+    await waitFor(() => expect(offerDecisions).toHaveLength(1));
     expect(screen.queryByRole("dialog", { name: en("tutorial.offer.title") })).toBeNull();
   });
 
