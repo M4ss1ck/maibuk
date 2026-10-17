@@ -203,6 +203,15 @@ describe("Plugin authoring docs", () => {
     expect(stale, `the Plugin API is ${PLUGIN_API_VERSION}`).toEqual([]);
   });
 
+  it("states the pre-1.0 rule and links ADR 0029 from the packaging page", () => {
+    const packaging = readFileSync(join(docsDir, "packaging.md"), "utf8");
+    expect(packaging).toMatch(/a patch is additive/);
+    expect(packaging).toMatch(/a minor is breaking/);
+    expect(packaging).toMatch(/\^0\.1\.1/);
+    expect(packaging).toMatch(/\]\(\.\.\/adr\/0029-[^)]+\.md\)/);
+    expect(existsSync(join(root, "docs", "adr", "0029-before-1-0-a-plugin-api-patch-is-additive-and-a-minor-is-breaking.md"))).toBe(true);
+  });
+
   it("ships every required page", () => {
     const missing = REQUIRED_DOCS.map((name) => join("docs", "plugins", name)).filter(
       (doc) => !existsSync(join(root, doc))

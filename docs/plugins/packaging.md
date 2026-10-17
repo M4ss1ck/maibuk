@@ -29,7 +29,7 @@ Share `dist/<id>-<version>.zip`. To run the Plugin, open Settings, then Plugins,
 
 ## Versions and Plugin API compatibility
 
-The manifest carries the Plugin's own `version`, the `apiVersion` range it needs, an optional `minAppVersion`, and an optional `dataVersion`. The Plugin API has its own semver, independent of Maibuk's Release number; before API 1.0 a minor is breaking, so `^0.1` pins 0.1.x.
+The manifest carries the Plugin's own `version`, the `apiVersion` range it needs, an optional `minAppVersion`, and an optional `dataVersion`. The Plugin API has its own semver, independent of Maibuk's Release number; before API 1.0 the caret range is the compatibility rule: `^0.1` pins 0.1.x, a patch is additive, and a minor is breaking. A Plugin that uses an addition declares the patch it needs, such as `^0.1.1`, so an older app refuses it with the message below. The decision is in [ADR 0029](../adr/0029-before-1-0-a-plugin-api-patch-is-additive-and-a-minor-is-breaking.md).
 
 `checkPluginCompatibility` (src/features/plugins/manifest-compat.ts, with the range parser in src/features/plugins/semver.ts) compares the manifest against the host's API version and the app Release, and returns one plain message:
 
