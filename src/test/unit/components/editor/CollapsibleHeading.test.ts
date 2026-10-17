@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -198,7 +198,7 @@ describe("CollapsibleHeading", () => {
       },
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => expect(getHeadingIds(editor)[0]?.length).toBeGreaterThan(0));
 
     const ids = getHeadingIds(editor);
     expect(ids).toHaveLength(1);
