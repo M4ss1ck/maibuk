@@ -28,6 +28,7 @@ import {
   type PluginUiUnmountParams,
 } from "@/plugin-sdk/protocol";
 import { installPluginUiElements } from "@/plugin-sdk/ui";
+import { createPluginNodeBudget } from "@/plugin-sdk/ui-node-budget";
 import { PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
 
 /**
@@ -169,6 +170,29 @@ export function servePluginUi(
   const attach = options.attach ?? observeContainer();
   const mounted = new Map<string, MountedSurface>();
 
+  /**
+   * Counts live nodes as each mutation is made, so an oversized interface stops
+   * the render before the rest of its work (#516, decision 2a). The batch that
+   * crosses the limit, and everything queued before it, is flushed to the host
+   * now: the host raises the same `too-many-nodes` violation it raises for any
+   * oversized tree and stops the Plugin with `remote-ui-limit`. The render is
+   * then aborted by the throw. The host's check is unchanged and stays
+   * authoritative.
+   */
+  function guardNodeBudget(connection: BatchingRemoteConnection): void {
+    const budget = createPluginNodeBudget(PLUGIN_UI_LIMITS.maxNodes);
+    const queue = connection.mutate.bind(connection);
+    connection.mutate = (records) => {
+      if (budget.apply(records)) {
+        queue(records);
+        return;
+      }
+      queue(records);
+      connection.flush();
+      throw new Error(`The interface has more than ${PLUGIN_UI_LIMITS.maxNodes} elements`);
+    };
+  }
+
   function mount({ surface, kind, page, port }: PluginUiMountParams): null {
     if (mounted.has(surface)) {
       throw new Error(`Surface ${surface} is already mounted`);
@@ -211,6 +235,7 @@ export function servePluginUi(
     };
 
     const connection = new BatchingRemoteConnection(hostConnection, { batch: frameBatch() });
+    guardNodeBudget(connection);
     const { container, detach } = attach(connection);
     const reactRoot = createRoot(container);
     reactRoot.render(<Page />);
