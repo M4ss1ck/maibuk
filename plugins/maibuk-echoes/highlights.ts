@@ -26,6 +26,7 @@
 
 import { type Echo, type EchoKind, type EchoOccurrence } from "./find-echoes";
 import { type EchoKey, format, translate } from "./i18n";
+import { echoColor } from "./colors";
 import { type Token, tokenize } from "./language";
 
 /** The host `editor.setHighlights` kind each Echo kind paints as (decision 2). */
@@ -48,15 +49,24 @@ export const ECHO_HIGHLIGHT_KIND: Readonly<Record<EchoKind, PluginEchoHighlightK
 /** The most ranges one editor paints at a time (#451, decision 7). */
 export const ECHO_PAINT_LIMIT = 2000;
 
-/** One labelled range the editor paints. */
+/** One labelled range the editor paints; `color` is set only when Echo colors are on (#532). */
 export interface EchoHighlightRange {
   from: number;
   to: number;
   label: string;
+  color?: string;
+}
+
+/** Options for `echoHighlightSets` (#532). */
+export interface EchoHighlightOptions {
+  /** Paint each range in its Echo's color (the "Color highlights by echo" switch). */
+  colors?: boolean;
 }
 
 /** Each host kind and the ranges it paints; a kind with nothing is an empty list. */
-export type EchoHighlightSets = Readonly<Record<PluginEchoHighlightKind, readonly EchoHighlightRange[]>>;
+export type EchoHighlightSets = Readonly<
+  Record<PluginEchoHighlightKind, readonly EchoHighlightRange[]>
+>;
 
 /**
  * Everything needed to build one range's localized label (#451, decision 7): the
@@ -75,6 +85,8 @@ export interface EchoNavigationEntry {
   from: number;
   to: number;
   kind: PluginEchoHighlightKind;
+  /** The Echo's normalized match key; its color is `echoColor(match)` (#532). */
+  match: string;
   /** The label's runtime key and values, built into text only when painted or announced. */
   label: EchoLabelSpec;
 }
@@ -175,12 +187,13 @@ export function buildEchoList(
     kind: PluginEchoHighlightKind,
     from: number,
     to: number,
-    label: EchoLabelSpec
+    label: EchoLabelSpec,
+    match: string
   ): void => {
-    const id = `${kind}|${from}|${to}|${label.key}|${label.word}|${label.count}`;
+    const id = `${kind}|${from}|${to}|${label.key}|${label.word}|${label.count}|${match}`;
     if (seen.has(id)) return;
     seen.add(id);
-    list.push({ from, to, kind, label });
+    list.push({ from, to, kind, match, label });
   };
 
   for (const echo of echoes) {
@@ -195,7 +208,13 @@ export function buildEchoList(
         const distance =
           index === 0 ? indexes[1] - indexes[0] : indexes[index] - indexes[index - 1];
         const key = index === 0 ? NEARBY_LATER : NEARBY_EARLIER;
-        push(hostKind, occurrence.from, occurrence.to, { key, word, count: distance });
+        push(
+          hostKind,
+          occurrence.from,
+          occurrence.to,
+          { key, word, count: distance },
+          echo.normalized
+        );
       });
       continue;
     }
@@ -204,7 +223,7 @@ export function buildEchoList(
     for (const occurrence of occurrences) {
       const word = echo.kind === "phrase" ? firstWord : surface(text, occurrence);
       const key = echo.kind === "overused" ? OVERUSED : PHRASE;
-      push(hostKind, occurrence.from, occurrence.to, { key, word, count });
+      push(hostKind, occurrence.from, occurrence.to, { key, word, count }, echo.normalized);
     }
   }
   return list.sort((a, b) => a.from - b.from || a.to - b.to);
@@ -217,7 +236,8 @@ export function buildEchoList(
  */
 export function echoHighlightSets(
   entries: readonly EchoNavigationEntry[],
-  t: EchoTranslate
+  t: EchoTranslate,
+  options: EchoHighlightOptions = {}
 ): EchoHighlightSets {
   const sets: Record<PluginEchoHighlightKind, EchoHighlightRange[]> = {
     repetition: [],
@@ -225,11 +245,13 @@ export function echoHighlightSets(
     warning: [],
   };
   for (const entry of entries) {
-    sets[entry.kind].push({
+    const range: EchoHighlightRange = {
       from: entry.from,
       to: entry.to,
       label: echoLabel(entry.label, t),
-    });
+    };
+    if (options.colors) range.color = echoColor(entry.match);
+    sets[entry.kind].push(range);
   }
   return sets;
 }
@@ -314,5 +336,9 @@ export function echoAnnouncement(
 ): string {
   const entry = list[index];
   if (entry === undefined) return echoNoEchoes(t);
-  return t(ANNOUNCEMENT, { index: index + 1, count: list.length, label: echoLabel(entry.label, t) });
+  return t(ANNOUNCEMENT, {
+    index: index + 1,
+    count: list.length,
+    label: echoLabel(entry.label, t),
+  });
 }

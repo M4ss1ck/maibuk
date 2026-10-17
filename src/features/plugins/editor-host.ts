@@ -199,6 +199,11 @@ function notifyContentChanged(entry: EditorEntry): void {
   }, EDITOR_CONTENT_EVENT_MS);
 }
 
+/** The inline style a colored range paints with: a low-alpha tint and an underline color. */
+function highlightColorStyle(color: string): string {
+  return `background-color: color-mix(in srgb, ${color} 22%, transparent); text-decoration-color: ${color};`;
+}
+
 /** Builds every Plugin's decorations against one document walk. */
 function buildHighlightDecorations(
   doc: ProseMirrorNode,
@@ -224,6 +229,9 @@ function buildHighlightDecorations(
           ...(range.label
             ? { "aria-description": range.label, "data-plugin-highlight-label": range.label }
             : {}),
+          // A colored range tints its background and colors its underline. The
+          // kind's class keeps the underline style and offset; text color is never set.
+          ...(range.color ? { style: highlightColorStyle(range.color) } : {}),
         })
       );
     }
@@ -455,7 +463,8 @@ function fragmentFromContent(
  */
 function plainTextContent(editor: Editor, text: string): Fragment {
   const blocks = text.split(/\n{2,}/);
-  if (blocks.length <= 1) return fragmentFromContent(editor, plainTextInlineContent(blocks[0] ?? ""));
+  if (blocks.length <= 1)
+    return fragmentFromContent(editor, plainTextInlineContent(blocks[0] ?? ""));
   return fragmentFromContent(
     editor,
     blocks.map((block) => ({ type: "paragraph", content: plainTextInlineContent(block) }))
@@ -627,9 +636,7 @@ export function invalidatePluginEditorWork(): void {
 }
 
 /** Runs after a focused editor's content changes (coalesced per burst). */
-export function onEditorContentChanged(
-  listener: (entity: PluginEntityTarget) => void
-): () => void {
+export function onEditorContentChanged(listener: (entity: PluginEntityTarget) => void): () => void {
   contentListeners.add(listener);
   return () => {
     contentListeners.delete(listener);

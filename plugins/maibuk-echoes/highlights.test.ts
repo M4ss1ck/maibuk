@@ -176,12 +176,14 @@ describe("buildEchoList()", () => {
         from: 2,
         to: 6,
         kind: "repetition",
+        match: "door",
         label: { key: "echo.label.nearbyLater", word: "door", count: 1 },
       },
       {
         from: 7,
         to: 11,
         kind: "repetition",
+        match: "door",
         label: { key: "echo.label.nearbyEarlier", word: "door", count: 1 },
       },
     ]);
@@ -204,7 +206,13 @@ describe("buildEchoList()", () => {
     ];
     const list = buildEchoList(duplicated, ["overused"], "just");
     expect(list).toEqual([
-      { from: 0, to: 4, kind: "info", label: { key: "echo.label.overused", word: "just", count: 1 } },
+      {
+        from: 0,
+        to: 4,
+        kind: "info",
+        match: "just",
+        label: { key: "echo.label.overused", word: "just", count: 1 },
+      },
     ]);
   });
 });
@@ -212,11 +220,18 @@ describe("buildEchoList()", () => {
 describe("echoHighlightSets()", () => {
   it("splits entries into per-kind labelled ranges, keeping order", () => {
     const entries: EchoNavigationEntry[] = [
-      { from: 2, to: 6, kind: "info", label: { key: "echo.label.overused", word: "a", count: 2 } },
+      {
+        from: 2,
+        to: 6,
+        kind: "info",
+        match: "a",
+        label: { key: "echo.label.overused", word: "a", count: 2 },
+      },
       {
         from: 10,
         to: 14,
         kind: "repetition",
+        match: "b",
         label: { key: "echo.label.nearbyLater", word: "b", count: 4 },
       },
     ];
@@ -224,6 +239,63 @@ describe("echoHighlightSets()", () => {
     expect(sets.info).toEqual([{ from: 2, to: 6, label: "a, used 2 times" }]);
     expect(sets.repetition).toEqual([{ from: 10, to: 14, label: "b, repeated 4 words later" }]);
     expect(sets.warning).toEqual([]);
+  });
+
+  it("leaves ranges uncolored unless colors are on (#532)", () => {
+    const entries: EchoNavigationEntry[] = [
+      {
+        from: 2,
+        to: 6,
+        kind: "info",
+        match: "door",
+        label: { key: "echo.label.overused", word: "a", count: 2 },
+      },
+    ];
+    expect(echoHighlightSets(entries, t).info[0]).not.toHaveProperty("color");
+    expect(echoHighlightSets(entries, t, { colors: false }).info[0]).not.toHaveProperty("color");
+  });
+
+  it("colors every range of one Echo with its stable Echo color (#532)", () => {
+    const entries: EchoNavigationEntry[] = [
+      {
+        from: 2,
+        to: 6,
+        kind: "repetition",
+        match: "door",
+        label: { key: "echo.label.nearbyLater", word: "door", count: 4 },
+      },
+      {
+        from: 20,
+        to: 24,
+        kind: "repetition",
+        match: "door",
+        label: { key: "echo.label.nearbyEarlier", word: "door", count: 4 },
+      },
+      {
+        from: 30,
+        to: 33,
+        kind: "info",
+        match: "just",
+        label: { key: "echo.label.overused", word: "just", count: 3 },
+      },
+    ];
+    const sets = echoHighlightSets(entries, t, { colors: true });
+    expect(sets.repetition.map((range) => range.color)).toEqual(["#a929ff", "#a929ff"]);
+    expect(sets.info[0].color).toBe("#737373");
+  });
+
+  it("gives an Echo the same color in every Chapter and whatever else the Book holds (#532)", () => {
+    const doorChapters = ["A door creaked. Then a door slammed.", "One door, one door."];
+    const bookWithMore = ["Nothing to see here.", "A sentence.", ...doorChapters];
+    const doorColors = (chapters: readonly string[]) => {
+      const echoes = findEchoes(chapters, "en", settings({ overused: false, phrases: false }));
+      const list = buildEchoList(echoes, ["nearby"], chapters);
+      return echoHighlightSets(list, t, { colors: true }).repetition.map((range) => range.color);
+    };
+    const colors = doorColors(doorChapters);
+    expect(colors.length).toBeGreaterThan(1);
+    expect(new Set(colors).size).toBe(1);
+    expect(doorColors(bookWithMore)).toEqual(colors);
   });
 });
 
@@ -327,9 +399,16 @@ describe("echoAnnouncement()", () => {
       from: 0,
       to: 4,
       kind: "repetition",
+      match: "door",
       label: { key: "echo.label.nearbyEarlier", word: "door", count: 14 },
     },
-    { from: 20, to: 28, kind: "info", label: { key: "echo.label.overused", word: "just", count: 23 } },
+    {
+      from: 20,
+      to: 28,
+      kind: "info",
+      match: "just",
+      label: { key: "echo.label.overused", word: "just", count: 23 },
+    },
   ];
 
   it("announces the entry 1-based with its label", () => {

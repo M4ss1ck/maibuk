@@ -479,6 +479,7 @@ Input:
     from: number;
     to: number;
     label?: string;
+    color?: string;
   }[];
 }
 ```

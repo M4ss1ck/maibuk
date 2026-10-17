@@ -32,6 +32,9 @@ export const ECHOES_SETTINGS_KEY = "settings";
 /** The one storage key Echoes' editor highlight kinds live under. */
 export const ECHOES_EDITOR_KEY = "editor";
 
+/** The one storage key the "Color highlights by echo" switch lives under (#532). */
+export const ECHOES_COLOR_KEY = "color";
+
 /** The kinds the editor highlights before the author changes anything: nearby only. */
 export const DEFAULT_EDITOR_KINDS: readonly EchoKind[] = ["nearby"];
 
@@ -188,4 +191,27 @@ export function toggledEditorKind(kinds: readonly EchoKind[], kind: EchoKind): E
   if (next.has(kind)) next.delete(kind);
   else next.add(kind);
   return orderKinds(next);
+}
+
+/** The "Color highlights by echo" value from a stored value: off unless it is `true` (#532). */
+export function parseColorByEcho(value: unknown): boolean {
+  return value === true;
+}
+
+/** Reads the color switch, off when the key is unset or the read fails (#532). */
+export async function readColorByEcho(client: EchoesStorage): Promise<boolean> {
+  try {
+    return parseColorByEcho(await client.storage.get({ key: ECHOES_COLOR_KEY }));
+  } catch {
+    return false;
+  }
+}
+
+/** Stores the color switch under its own key; a refused write is ignored (#532). */
+export async function writeColorByEcho(client: EchoesStorage, on: boolean): Promise<void> {
+  try {
+    await client.storage.set({ key: ECHOES_COLOR_KEY, value: on });
+  } catch {
+    // Storage is best-effort: a refused write must not break the Settings row.
+  }
 }

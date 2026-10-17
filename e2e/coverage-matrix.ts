@@ -3275,7 +3275,7 @@ export const ROWS: MatrixRow[] = [
     id: "plugins-echoes-editor",
     area: "plugins",
     workflow:
-      "Echoes' editor Commands in an open Chapter and Note: its Default Shortcut toggles nearby-echo highlights, which paint a labelled mark on each repeated word (both ends of a nearby echo); Next echo moves the caret and announces 'Echo N of M: <label>' and Previous echo wraps to the last, Next wraps back to Echo 1; with highlights off both announce 'Echo highlights are off' and move nothing; the editor toolbar button toggles the same highlights from the keyboard; asserts: the labelled marks, the announcement toast, the caret on the echoed word, the marks gone when off; persists: no",
+      "Echoes' editor Commands in an open Chapter and Note: its Default Shortcut toggles nearby-echo highlights, which paint a labelled mark on each repeated word (both ends of a nearby echo); Next echo moves the caret and announces 'Echo N of M: <label>' and Previous echo wraps to the last, Next wraps back to Echo 1; with highlights off both announce 'Echo highlights are off' and move nothing; the editor toolbar button toggles the same highlights from the keyboard; with Color highlights by echo switched on in Settings, each Echo's marks take that Echo's color; asserts: the labelled marks, the announcement toast, the caret on the echoed word, the marks gone when off, the Echo color of the underline; persists: no",
     edges: [
       "The toolbar button is a Toggle Button: it shows on while highlights are on and off once they are off",
       "Toggle echo highlights from its Default Shortcut paints a labelled mark on every repeated word, and toggling again clears them",
@@ -3284,6 +3284,7 @@ export const ROWS: MatrixRow[] = [
       "The editor toolbar button toggles the same highlights from the keyboard",
       "A Note editor toggles highlights for its own content",
       "The first toggle after a cold start paints highlights (a stale focus reset must not turn them off)",
+      "With Color highlights by echo on in Settings, every occurrence of one Echo paints in its Echo color",
     ],
     terms: ["Plugin", "Toggle Button"],
     shortcuts: [

@@ -10,6 +10,7 @@
 // from that limit and back-to-back Next/Previous assertions need no wait.
 
 import type { Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import {
   caretText,
   expectFocusWithin,
@@ -155,6 +156,46 @@ test.describe(
         await expect(toast(page, "Echo highlights are off")).toBeVisible();
         await expect(marks(page)).toHaveCount(0);
         await expect.poll(async () => caretText(page)).toBe(before);
+      });
+
+      test("with Color highlights by echo on, each Echo paints in its own color", async ({
+        page,
+      }) => {
+        // Turn the switch on in Settings, as an author does, before the Chapter opens.
+        await page.goto("/settings");
+        await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+        const accordion = page.getByRole("button", { name: "Echoes" });
+        await expect(accordion).toBeVisible({ timeout: 20_000 });
+        await tabTo(page, accordion, { max: 250 });
+        await page.keyboard.press("Enter");
+        const colorSwitch = page.getByRole("switch", {
+          name: "Color highlights by echo",
+          exact: true,
+        });
+        await expect(colorSwitch).toBeVisible({ timeout: 15_000 });
+        await expect(colorSwitch).not.toBeChecked();
+        await tabTo(page, colorSwitch);
+        await page.keyboard.press("Space");
+        await expect(colorSwitch).toBeChecked();
+        // Leave Settings through the sidebar before the Chapter opens.
+        await tabTo(page, navOption(page, "Books"), { max: 80 });
+        await page.keyboard.press("Enter");
+        await expect(page.getByRole("grid", { name: "Books" })).toBeVisible({ timeout: 20_000 });
+
+        await openChapter(page, ECHO_CHAPTER);
+        await page.keyboard.press("Alt+F7");
+        await expect(marks(page)).toHaveCount(ECHO_COUNT);
+        await capture(page, "echo-colors-on");
+
+        // "harbor" (first in the Chapter) and "night" (last) each keep one Echo
+        // color across every occurrence; the underline carries it, the text does not.
+        const harbor = page.locator("role=mark").filter({ hasText: /^harbor$/ });
+        await expect(harbor).toHaveCount(4);
+        for (const mark of await harbor.all()) {
+          await expect(mark).toHaveCSS("text-decoration-color", "rgb(185, 133, 70)");
+        }
+        const night = page.locator("role=mark").filter({ hasText: /^night$/ });
+        await expect(night.first()).toHaveCSS("text-decoration-color", "rgb(169, 41, 255)");
       });
 
       test("the editor toolbar button toggles the same highlights", async ({ page }) => {

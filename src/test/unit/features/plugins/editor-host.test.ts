@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
-import { buildPlainTextMap, plainRangeToPmRange, pmToPlainOffset } from "@/components/editor/plain-text-offsets";
+import {
+  buildPlainTextMap,
+  plainRangeToPmRange,
+  pmToPlainOffset,
+} from "@/components/editor/plain-text-offsets";
 import * as plainTextOffsets from "@/components/editor/plain-text-offsets";
 import type { PluginEntityTarget } from "@/features/plugins/types";
 import {
@@ -26,6 +30,7 @@ import {
 } from "@/features/plugins/editor-host";
 import { longChapterHtml, spreadHighlightRanges } from "@/test/support/long-chapter";
 import { PluginApiError } from "@/plugin-sdk/protocol";
+import { PLUGIN_API_TABLE } from "@/features/plugins/api-table";
 
 const editors: Editor[] = [];
 let nextId = 0;
@@ -37,7 +42,10 @@ function mountEditor(content: string): Editor {
   return editor;
 }
 
-function register(editor: Editor, entity: PluginEntityTarget = { kind: "chapter", id: "c1" }): () => void {
+function register(
+  editor: Editor,
+  entity: PluginEntityTarget = { kind: "chapter", id: "c1" }
+): () => void {
   return registerPluginEditor({ id: `editor-${nextId++}`, editor, entity });
 }
 
@@ -299,7 +307,9 @@ describe("editor highlights", () => {
 
     const marks = within(editor.view.dom).getAllByRole("mark");
     expect(marks).toHaveLength(2);
-    const byPlugin = new Map(marks.map((mark) => [mark.getAttribute("data-plugin-highlight"), mark]));
+    const byPlugin = new Map(
+      marks.map((mark) => [mark.getAttribute("data-plugin-highlight"), mark])
+    );
     const a = byPlugin.get("a");
     const b = byPlugin.get("b");
     expect(a).toHaveAttribute("aria-description", "A");
@@ -451,7 +461,9 @@ describe("editor highlights", () => {
     editor.commands.insertContentAt(1, "X");
     setPluginEditorHighlights("a", { kind: "repetition", ranges: [{ from: 5, to: 8 }] });
     expect(spy).toHaveBeenCalledTimes(2);
-    expect(editor.view.dom.querySelectorAll(".plugin-highlight--repetition").length).toBeGreaterThan(0);
+    expect(
+      editor.view.dom.querySelectorAll(".plugin-highlight--repetition").length
+    ).toBeGreaterThan(0);
   });
 
   it("never becomes saved formatting", () => {
@@ -802,5 +814,75 @@ describe("editor writes", () => {
 
     expect(first.getText()).toBe("Alpha!");
     expect(second.getHTML()).toBe(secondBefore);
+  });
+});
+
+describe("colored highlight ranges (#532)", () => {
+  function markFor(editor: Editor, kind: string): HTMLElement {
+    const mark = editor.view.dom.querySelector<HTMLElement>(`.plugin-highlight--${kind}`);
+    if (!mark) throw new Error(`no ${kind} highlight painted`);
+    return mark;
+  }
+
+  it("paints a colored range's tint and underline in its color and keeps the kind's class", () => {
+    const editor = mountEditor("<p>one two three</p>");
+    editor.view.dom.focus();
+    register(editor);
+
+    setPluginEditorHighlights("echoes", {
+      kind: "repetition",
+      ranges: [{ from: 0, to: 3, color: "#0072b2" }],
+    });
+
+    const mark = markFor(editor, "repetition");
+    expect(mark.classList.contains("plugin-highlight")).toBe(true);
+    expect(mark.style.backgroundColor).toBe(
+      "color-mix(in srgb, rgb(0, 114, 178) 22%, transparent)"
+    );
+    expect(mark.style.textDecorationColor).toBe("rgb(0, 114, 178)");
+    // Text color is never set by a range color.
+    expect(mark.style.color).toBe("");
+  });
+
+  it("leaves the kind's underline to the stylesheet on a colored info range", () => {
+    const editor = mountEditor("<p>one two</p>");
+    editor.view.dom.focus();
+    register(editor);
+
+    setPluginEditorHighlights("echoes", {
+      kind: "info",
+      ranges: [{ from: 0, to: 3, color: "#E69F00" }],
+    });
+
+    const mark = markFor(editor, "info");
+    // The underline style and offset come from the kind's CSS rule; the inline
+    // style only sets the color of that underline.
+    expect(mark.style.textDecorationLine).toBe("");
+    expect(mark.style.textDecorationColor).toBe("rgb(230, 159, 0)");
+  });
+
+  it("paints an uncolored range with no inline color, as before", () => {
+    const editor = mountEditor("<p>one two</p>");
+    editor.view.dom.focus();
+    register(editor);
+
+    setPluginEditorHighlights("echoes", { kind: "warning", ranges: [{ from: 0, to: 3 }] });
+
+    const mark = markFor(editor, "warning");
+    expect(mark.style.backgroundColor).toBe("");
+    expect(mark.style.textDecorationColor).toBe("");
+  });
+
+  it("refuses a malformed range color at the API schema", () => {
+    const row = PLUGIN_API_TABLE.find((r) => r.id === "editor.setHighlights");
+    const parse = (color: string) =>
+      row?.input.safeParse({ kind: "info", ranges: [{ from: 0, to: 1, color }] }).success;
+    expect(parse("#0072b2")).toBe(true);
+    expect(parse("#0072B2")).toBe(true);
+    expect(parse("#abc")).toBe(false);
+    expect(parse("0072b2")).toBe(false);
+    expect(parse("red")).toBe(false);
+    expect(parse("#0072b2ff")).toBe(false);
+    expect(parse("url(x)")).toBe(false);
   });
 });
