@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.0";
+export const PLUGIN_API_VERSION = "0.1.1";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
