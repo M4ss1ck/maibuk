@@ -8,7 +8,6 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ECHO_PALETTE,
-  ECHO_PALETTE,
   ECHO_PALETTE_IDS,
   ECHO_PALETTES,
   echoColor,
@@ -89,8 +88,8 @@ function simulatedLabs(hex: string): [number, number, number][] {
 describe("the default Palette", () => {
   it("is Okabe-Ito (adapted): eight colors in the fixed slot order", () => {
     expect(DEFAULT_ECHO_PALETTE).toBe("okabe-ito");
-    expect(ECHO_PALETTE).toHaveLength(8);
-    expect(ECHO_PALETTE).toEqual([
+    expect(ECHO_PALETTES[DEFAULT_ECHO_PALETTE]).toHaveLength(8);
+    expect(ECHO_PALETTES[DEFAULT_ECHO_PALETTE]).toEqual([
       "#aa4b18",
       "#a929ff",
       "#2d764a",
@@ -157,11 +156,11 @@ describe("parseEchoPalette()", () => {
 
 describe("echoColor()", () => {
   it("maps one match key to a fixed Palette slot", () => {
-    expect(echoColor("door")).toBe(ECHO_PALETTE[1]);
-    expect(echoColor("just")).toBe(ECHO_PALETTE[7]);
-    expect(echoColor("phrase of two")).toBe(ECHO_PALETTE[3]);
-    expect(echoColor("beautiful")).toBe(ECHO_PALETTE[4]);
-    expect(echoColor("the quiet house")).toBe(ECHO_PALETTE[0]);
+    expect(echoColor("door")).toBe(ECHO_PALETTES[DEFAULT_ECHO_PALETTE][1]);
+    expect(echoColor("just")).toBe(ECHO_PALETTES[DEFAULT_ECHO_PALETTE][7]);
+    expect(echoColor("phrase of two")).toBe(ECHO_PALETTES[DEFAULT_ECHO_PALETTE][3]);
+    expect(echoColor("beautiful")).toBe(ECHO_PALETTES[DEFAULT_ECHO_PALETTE][4]);
+    expect(echoColor("the quiet house")).toBe(ECHO_PALETTES[DEFAULT_ECHO_PALETTE][0]);
   });
 
   it("gives the same key the same color every time", () => {
@@ -171,7 +170,7 @@ describe("echoColor()", () => {
 
   it("always returns a Palette color", () => {
     for (const key of ["a", "tea", "héroe", "x y z", "", "🙂"]) {
-      expect(ECHO_PALETTE).toContain(echoColor(key));
+      expect(ECHO_PALETTES[DEFAULT_ECHO_PALETTE]).toContain(echoColor(key));
     }
   });
 

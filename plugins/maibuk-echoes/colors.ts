@@ -56,9 +56,6 @@ export const ECHO_PALETTES: Readonly<Record<EchoPaletteId, readonly string[]>> =
   soft: ["#6360c3", "#54979c", "#5d6e35", "#759749", "#7a5e8d", "#c37974", "#a37ece", "#8a5c6a"],
 };
 
-/** The default Palette's colors, kept under their 0.2.0 name (#532). */
-export const ECHO_PALETTE: readonly string[] = ECHO_PALETTES[DEFAULT_ECHO_PALETTE];
-
 /** The stored id as a Palette id, or the default for anything unknown or malformed (#533). */
 export function parseEchoPalette(value: unknown): EchoPaletteId {
   return typeof value === "string" && (ECHO_PALETTE_IDS as readonly string[]).includes(value)
