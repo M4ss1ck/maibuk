@@ -13,9 +13,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : TauriActivity() {
-  // Set once a renderer death has been handled for the current WebView, so a
-  // death is logged once. Reset in onWebViewCreate, because recreate() builds
-  // a new WebView for the next death.
+  // Set once a renderer death has been handled, so each death is logged and
+  // acted on once even if Chromium reports it again before the restart.
   private var rendererGoneHandled = false
 
   override fun onWebViewCreate(webView: WebView) {
