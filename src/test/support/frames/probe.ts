@@ -124,6 +124,12 @@ export function installFrameProbe(): void {
       // Let the last keystroke's frame and any queued LoAF entry land.
       for (let i = 0; i < 5 && pendingInputs > 0; i++) await nextFrame();
       await nextFrame();
+      // Kept: a real-browser time wait, not a condition. The browser queues a
+      // long-animation-frame entry on its own schedule, after the frame that
+      // produced it, and no event marks when the observer has been handed it
+      // (takeRecords() returns only entries already queued; checked in headless
+      // Chromium, where one rAF and takeRecords() returned 0 entries and a 300 ms
+      // wait returned the entry). Measured on this probe, not in the Vitest lane.
       await new Promise((resolve) => setTimeout(resolve, 100));
       recording = false;
       return {
