@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
+import com.jakewharton.processphoenix.ProcessPhoenix
 import androidx.activity.enableEdgeToEdge
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
@@ -34,15 +35,21 @@ class MainActivity : TauriActivity() {
   }
 
   // Chromium kills the whole app when a renderer dies unless onRenderProcessGone
-  // returns true. Drop the dead WebView and recreate the activity so wry builds
-  // a fresh one on the app start route (#518).
+  // returns true. Returning true keeps the process alive, but the dead WebView
+  // cannot be reused, so we restart the process (#518).
+  //
+  // recreate() is not an option: the activity teardown crashes wry's native
+  // state with "FORTIFY: pthread_mutex_lock called on a destroyed mutex" on the
+  // render thread, which kills the process. ProcessPhoenix kills this process
+  // and relaunches the launcher activity, which builds a fresh WebView on the
+  // app start route.
   private fun handleRendererGone(view: WebView, detail: RenderProcessGoneDetail) {
     if (rendererGoneHandled) return
     rendererGoneHandled = true
     Log.e("Maibuk", describeRenderProcessGone(detail.didCrash(), detail.rendererPriorityAtExit()))
     (view.parent as? ViewGroup)?.removeView(view)
     view.destroy()
-    recreate()
+    ProcessPhoenix.triggerRebirth(this)
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
