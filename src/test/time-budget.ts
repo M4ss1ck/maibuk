@@ -61,6 +61,5 @@ export const FIXED_WAIT_BASELINE: Readonly<Record<string, number>> = {
   "src/test/unit/lib/platform/web/backup.test.ts": 2,
   "src/test/unit/pages/SettingsOutline.test.tsx": 2,
   "src/test/support/frames/probe.ts": 1,
-  "src/test/support/plugin-remote-ui.tsx": 1,
   "plugins/maibuk-echoes/editor.test.ts": 1,
 };

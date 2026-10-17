@@ -24,7 +24,7 @@ export interface RemoteUiHarness {
   ui: PluginRemoteUi;
   /** Every declaration the validator refused, in order. */
   violations: PluginUiViolation[];
-  /** Renders (or re-renders) the Plugin's tree and waits for the observer to deliver. */
+  /** Renders (or re-renders) the Plugin's tree and flushes it to the host through act. */
   mount(node: ReactNode): Promise<void>;
   /**
    * Stops the Worker: unmounts the Plugin's tree and disconnects its observer,
@@ -65,9 +65,10 @@ export function renderRemoteUi(options?: {
     ui,
     violations,
     async mount(node) {
+      // act flushes the commit before it resolves, and the observer's callback
+      // (a microtask queued by that commit) runs before the caller resumes.
       await act(async () => {
         root?.render(node);
-        await new Promise((resolve) => setTimeout(resolve, 0));
       });
     },
     stopWorker() {
