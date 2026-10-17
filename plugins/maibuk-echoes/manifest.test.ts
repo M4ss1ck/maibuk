@@ -76,12 +76,12 @@ describe("Echoes manifest", () => {
         command: "toggleHighlights",
         icon: {
           elements: [
-            ["path", { d: "M4 4h5" }],
-            ["path", { d: "M4 4v7" }],
-            ["path", { d: "M4 7.5h4" }],
-            ["path", { d: "M4 11h5" }],
-            ["path", { d: "M20 12 14 18 10 14 16 8Z" }],
-            ["path", { d: "M6 21h8" }],
+            ["path", { d: "m9 11-6 6v3h9l3-3" }],
+            ["path", { d: "m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" }],
+            ["path", { d: "M3 2.5h4.5" }],
+            ["path", { d: "M3 2.5v7" }],
+            ["path", { d: "M3 6h3.5" }],
+            ["path", { d: "M3 9.5h4.5" }],
           ],
         },
         toggle: true,
