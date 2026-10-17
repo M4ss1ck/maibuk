@@ -39,7 +39,12 @@ import {
   paintWindow,
   stepFrom,
 } from "./highlights";
-import { readEchoesSettings, readEditorKinds, toEditorFindOptions } from "./settings";
+import {
+  readColorByEcho,
+  readEchoesSettings,
+  readEditorKinds,
+  toEditorFindOptions,
+} from "./settings";
 
 /**
  * The bench ring for Echoes' own recompute time (#451): the last
@@ -187,7 +192,10 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
         const own = languageOrNull(note?.language);
         if (own !== null) return own;
         const bookId = note?.bookId;
-        return (bookId === null || bookId === undefined ? null : await bookLanguageOf(bookId)) ?? fallback;
+        return (
+          (bookId === null || bookId === undefined ? null : await bookLanguageOf(bookId)) ??
+          fallback
+        );
       }
       if (entity.kind === "chapter") {
         const chapter = await client.library.chapters.get({ chapterId: entity.id });
@@ -218,8 +226,15 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
    * previous one's ranges. Unless `force`, a kind that is empty and was already
    * empty in the previous paint is left alone (still cleared by `force`).
    */
-  async function paint(sets: EchoHighlightSets, entity?: EntityTarget, force = false): Promise<void> {
-    if (entity !== undefined && (!state.on || state.entity === null || !sameEntity(state.entity, entity))) {
+  async function paint(
+    sets: EchoHighlightSets,
+    entity?: EntityTarget,
+    force = false
+  ): Promise<void> {
+    if (
+      entity !== undefined &&
+      (!state.on || state.entity === null || !sameEntity(state.entity, entity))
+    ) {
       return;
     }
     const tasks: Promise<void>[] = [];
@@ -241,16 +256,18 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     await Promise.all(tasks);
   }
 
-  /** Reads the detection settings and the kinds the editor paints. */
+  /** Reads the detection settings, the kinds the editor paints, and the color switch. */
   async function enabledKinds(): Promise<{
     settings: Awaited<ReturnType<typeof readEchoesSettings>>;
     kinds: Awaited<ReturnType<typeof readEditorKinds>>;
+    colors: boolean;
   }> {
-    const [settings, kinds] = await Promise.all([
+    const [settings, kinds, colors] = await Promise.all([
       readEchoesSettings(client),
       readEditorKinds(client),
+      readColorByEcho(client),
     ]);
-    return { settings, kinds };
+    return { settings, kinds, colors };
   }
 
   /**
@@ -259,7 +276,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
    * enabled kinds are detected, and only the window's ranges are labelled.
    */
   async function apply(text: string, entity: EntityTarget, caret: number): Promise<void> {
-    const { settings, kinds } = await enabledKinds();
+    const { settings, kinds, colors } = await enabledKinds();
     if (!state.on || state.entity === null || !sameEntity(state.entity, entity)) return;
     const t = translate();
     // Time only Echoes' own compute (findEchoes + building and labelling the
@@ -273,7 +290,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     );
     const list = buildEchoList(echoes, kinds, text, chapters);
     const { start, end } = paintWindow(list, caret, ECHO_PAINT_LIMIT);
-    const sets = echoHighlightSets(list.slice(start, end), t);
+    const sets = echoHighlightSets(list.slice(start, end), t, { colors });
     recordRecompute(startedAt);
     await paint(sets, entity);
     if (!state.on || state.entity === null || !sameEntity(state.entity, entity)) return;

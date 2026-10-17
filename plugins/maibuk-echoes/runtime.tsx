@@ -62,8 +62,10 @@ import {
   DEFAULT_EDITOR_KINDS,
   readEchoesSettings,
   readEditorKinds,
+  readColorByEcho,
   toggledEditorKind,
   writeEchoesSettings,
+  writeColorByEcho,
   writeEditorKinds,
 } from "./settings";
 
@@ -1091,20 +1093,25 @@ function createDetectionSettings(
       ignore: [],
     }));
     const [editorKinds, setEditorKinds] = useState<readonly EchoKind[]>(DEFAULT_EDITOR_KINDS);
+    // "Color highlights by echo" is off until the author turns it on (#532).
+    const [colorByEcho, setColorByEcho] = useState(false);
     // Nothing is written before the stored value has been read, so a slow read
     // cannot be clobbered by the initial defaults.
     const hydrated = useRef(false);
 
     useEffect(() => {
       let cancelled = false;
-      void Promise.all([readEchoesSettings(client), readEditorKinds(client)]).then(
-        ([stored, kinds]) => {
-          if (cancelled) return;
-          hydrated.current = true;
-          setSettings(stored);
-          setEditorKinds(kinds);
-        }
-      );
+      void Promise.all([
+        readEchoesSettings(client),
+        readEditorKinds(client),
+        readColorByEcho(client),
+      ]).then(([stored, kinds, color]) => {
+        if (cancelled) return;
+        hydrated.current = true;
+        setSettings(stored);
+        setEditorKinds(kinds);
+        setColorByEcho(color);
+      });
       return () => {
         cancelled = true;
       };
@@ -1130,6 +1137,12 @@ function createDetectionSettings(
     const toggleKind = useCallback((kind: EchoKind) => {
       setEditorKinds((current) => toggledEditorKind(current, kind));
     }, []);
+
+    // The color switch is stored and repaints an open editor at once (#532).
+    useEffect(() => {
+      if (!hydrated.current) return;
+      void writeColorByEcho(client, colorByEcho).then(() => editor.refresh());
+    }, [client, editor, colorByEcho]);
 
     return (
       <ui.View direction="column" gap="md">
@@ -1185,6 +1198,11 @@ function createDetectionSettings(
           label={translate(language, EDITOR_KIND_LABEL.phrase)}
           isSelected={editorKinds.includes("phrase")}
           onChange={() => toggleKind("phrase")}
+        />
+        <ui.Switch
+          label={translate(language, "settings.editor.color")}
+          isSelected={colorByEcho}
+          onChange={(event) => setColorByEcho(event.detail)}
         />
       </ui.View>
     );

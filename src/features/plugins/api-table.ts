@@ -11,11 +11,7 @@
  */
 
 import { z } from "zod";
-import type {
-  McpToolProjection,
-  PluginApiEventRow,
-  PluginApiRow,
-} from "@/features/plugins/types";
+import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
 export const PLUGIN_API_VERSION = "0.1.1";
@@ -251,7 +247,17 @@ export const PLUGIN_API_TABLE = [
       "Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text.",
     input: z.strictObject({
       kind: z.enum(["info", "warning", "repetition"]),
-      ranges: z.array(z.strictObject({ ...range.shape, label: z.string().max(200).optional() })),
+      ranges: z.array(
+        z.strictObject({
+          ...range.shape,
+          label: z.string().max(200).optional(),
+          // Strict #rrggbb (ADR 0029, additive in 0.1.1): a tint and underline in this color.
+          color: z
+            .string()
+            .regex(/^#[0-9a-fA-F]{6}$/, "color must be #rrggbb")
+            .optional(),
+        })
+      ),
     }),
     output: applied,
     permission: "editor:decorate",
@@ -353,7 +359,9 @@ export const PLUGIN_API_TABLE = [
     chunk: z.strictObject({
       text: z
         .string()
-        .describe("The next piece of the response body, decoded as UTF-8. A chunk is at most 64 KB."),
+        .describe(
+          "The next piece of the response body, decoded as UTF-8. A chunk is at most 64 KB."
+        ),
     }),
     permission: "network",
     effect: "write",

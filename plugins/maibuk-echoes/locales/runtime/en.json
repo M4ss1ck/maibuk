@@ -20,6 +20,7 @@
   "settings.editor.nearby": "Highlight nearby echoes",
   "settings.editor.overused": "Highlight overused words",
   "settings.editor.phrase": "Highlight repeated phrases",
+  "settings.editor.color": "Color highlights by echo",
   "echo.label.nearbyEarlier_one": "{{word}}, repeated {{count}} word earlier",
   "echo.label.nearbyEarlier_other": "{{word}}, repeated {{count}} words earlier",
   "echo.label.nearbyLater_one": "{{word}}, repeated {{count}} word later",

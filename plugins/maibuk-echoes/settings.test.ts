@@ -8,14 +8,18 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_ECHO_SETTINGS, NEARBY_WINDOW_MAX, NEARBY_WINDOW_MIN } from "./find-echoes";
 import {
   DEFAULT_EDITOR_KINDS,
+  ECHOES_COLOR_KEY,
   ECHOES_EDITOR_KEY,
   ECHOES_SETTINGS_KEY,
   type EchoesStorage,
   clampNearbyWindow,
+  parseColorByEcho,
   parseEchoesSettings,
   parseEditorKinds,
+  readColorByEcho,
   readEchoesSettings,
   readEditorKinds,
+  writeColorByEcho,
   toEditorFindOptions,
   toFindEchoesOptions,
   toggledEditorKind,
@@ -204,5 +208,66 @@ describe("Echoes editor kinds", () => {
     expect(toggledEditorKind(["nearby"], "overused")).toEqual(["nearby", "overused"]);
     expect(toggledEditorKind(["nearby", "overused"], "overused")).toEqual(["nearby"]);
     expect(toggledEditorKind(["overused", "nearby"], "overused")).toEqual(["nearby"]);
+  });
+});
+
+describe("Echoes color by echo (#532)", () => {
+  it("is off by default, for a missing or malformed value", () => {
+    expect(parseColorByEcho(undefined)).toBe(false);
+    expect(parseColorByEcho("yes")).toBe(false);
+    expect(parseColorByEcho(null)).toBe(false);
+  });
+
+  it("keeps an explicit boolean", () => {
+    expect(parseColorByEcho(true)).toBe(true);
+    expect(parseColorByEcho(false)).toBe(false);
+  });
+
+  it("loads with coloring off when storage holds only 0.1.0 settings", async () => {
+    const data = new Map<string, unknown>([
+      [
+        ECHOES_SETTINGS_KEY,
+        {
+          nearby: true,
+          overused: false,
+          phrases: true,
+          stemming: true,
+          nearbyWindow: 50,
+          ignore: [],
+        },
+      ],
+      [ECHOES_EDITOR_KEY, ["nearby"]],
+    ]);
+    expect(await readColorByEcho(fakeStorage(data))).toBe(false);
+  });
+
+  it("round-trips through storage under its own key", async () => {
+    const data = new Map<string, unknown>();
+    const client = fakeStorage(data);
+
+    await writeColorByEcho(client, true);
+
+    expect(data.get(ECHOES_COLOR_KEY)).toBe(true);
+    expect(await readColorByEcho(client)).toBe(true);
+  });
+
+  it("reads off when storage refuses the read", async () => {
+    const refusing: EchoesStorage = {
+      storage: {
+        async get() {
+          throw new Error("refused");
+        },
+        async set() {
+          throw new Error("refused");
+        },
+        async delete() {
+          throw new Error("refused");
+        },
+        async keys() {
+          throw new Error("refused");
+        },
+      },
+    };
+    expect(await readColorByEcho(refusing)).toBe(false);
   });
 });

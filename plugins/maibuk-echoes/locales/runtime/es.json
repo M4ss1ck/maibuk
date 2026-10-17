@@ -20,6 +20,7 @@
   "settings.editor.nearby": "Resaltar ecos cercanos",
   "settings.editor.overused": "Resaltar palabras excesivas",
   "settings.editor.phrase": "Resaltar frases repetidas",
+  "settings.editor.color": "Colorear resaltados por eco",
   "echo.label.nearbyEarlier_one": "{{word}}, se repite {{count}} palabra antes",
   "echo.label.nearbyEarlier_other": "{{word}}, se repite {{count}} palabras antes",
   "echo.label.nearbyLater_one": "{{word}}, se repite {{count}} palabra después",

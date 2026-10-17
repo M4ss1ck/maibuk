@@ -284,6 +284,7 @@ export interface PluginApiMethods {
         from: number;
         to: number;
         label?: string;
+        color?: string;
       }[];
     };
     output: {

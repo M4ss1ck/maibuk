@@ -22,7 +22,7 @@ import {
   TOGGLE_HIGHLIGHTS,
   startEchoes,
 } from "./runtime";
-import { ECHOES_EDITOR_KEY, ECHOES_SETTINGS_KEY } from "./settings";
+import { ECHOES_COLOR_KEY, ECHOES_EDITOR_KEY, ECHOES_SETTINGS_KEY } from "./settings";
 import { echoesManifest, settingsStorage, shiftTabTo, tabTo } from "./test-support";
 
 const BOOK = {
@@ -197,6 +197,31 @@ describe("Echoes detection settings", () => {
 
       await user.keyboard(" ");
       await waitFor(() => expect(storage.get(ECHOES_EDITOR_KEY)).toEqual(["nearby"]));
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("toggles Color highlights by echo with the keyboard, off by default, and persists it", async () => {
+    const storage = settingsStorage();
+    const host = settingsHost(storage);
+    try {
+      const page = await host.renderSettingsRow(SETTINGS_ROW_ID);
+      const user = userEvent.setup();
+      await waitFor(() => expect(storage.has(ECHOES_EDITOR_KEY)).toBe(true));
+
+      const color = screen.getByRole("switch", { name: "Color highlights by echo" });
+      expect(color).not.toBeChecked();
+      expect(storage.get(ECHOES_COLOR_KEY) ?? false).toBe(false);
+      await tabTo(user, color);
+      expect(color).toHaveFocus();
+      await user.keyboard(" ");
+      await waitFor(() => expect(storage.get(ECHOES_COLOR_KEY)).toBe(true));
+      expect(color).toBeChecked();
+
+      await user.keyboard(" ");
+      await waitFor(() => expect(storage.get(ECHOES_COLOR_KEY)).toBe(false));
       page.unmount();
     } finally {
       host.stop();

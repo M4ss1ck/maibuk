@@ -132,3 +132,10 @@ describe("compileTemplate()", () => {
     expect(compileTemplate("{{a}}-{{a}}")({ a: "x" })).toBe("x-x");
   });
 });
+
+describe("the color switch label (#532)", () => {
+  it("is named in English and Spanish", () => {
+    expect(translate("en", "settings.editor.color")).toBe("Color highlights by echo");
+    expect(translate("es", "settings.editor.color")).toBe("Colorear resaltados por eco");
+  });
+});

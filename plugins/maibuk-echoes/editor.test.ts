@@ -21,12 +21,12 @@ import {
   type EchoServe,
   startEchoes,
 } from "./runtime";
-import { ECHOES_EDITOR_KEY } from "./settings";
+import { ECHOES_COLOR_KEY, ECHOES_EDITOR_KEY } from "./settings";
 
 /** One recorded `editor.setHighlights` call. */
 interface HighlightCall {
   kind: string;
-  ranges: Array<{ from: number; to: number; label?: string }>;
+  ranges: Array<{ from: number; to: number; label?: string; color?: string }>;
 }
 
 /** One recorded `notifications.show` call. */
@@ -64,6 +64,8 @@ interface FakeOptions {
   noteLanguage?: string | null;
   /** The editor highlight kinds to store (unset leaves the nearby-only default). */
   editorKinds?: readonly string[];
+  /** The "Color highlights by echo" value to store (unset leaves it off, as 0.1.0 did). */
+  colorByEcho?: boolean;
 }
 
 function fakeClient(options: FakeOptions = {}) {
@@ -75,6 +77,7 @@ function fakeClient(options: FakeOptions = {}) {
   const text = options.text ?? DOOR;
   const storage = new Map<string, unknown>();
   if (options.editorKinds !== undefined) storage.set(ECHOES_EDITOR_KEY, [...options.editorKinds]);
+  if (options.colorByEcho !== undefined) storage.set(ECHOES_COLOR_KEY, options.colorByEcho);
   const listeners = new Map<string, Set<Listener>>();
   const highlights: HighlightCall[] = [];
   const reveals: Array<{ from: number; to: number }> = [];
@@ -253,6 +256,8 @@ function fakeClient(options: FakeOptions = {}) {
         () => undefined
       );
     },
+    /** The Plugin's own storage, so a test can change a stored setting between recomputes. */
+    storage,
   };
 }
 
@@ -394,6 +399,76 @@ describe("contentChanged while on", () => {
 
     fake.emit("language.changed", { language: "es" });
     await vi.waitFor(() => expect(fake.getContentCalls()).toBe(2));
+  });
+});
+
+describe("color highlights by echo (#532)", () => {
+  // "door" is one nearby echo: both of its words share the Echo's color.
+  const DOOR_COLOR = "#a929ff";
+  const lastRepetition = (calls: readonly HighlightCall[]) =>
+    calls.filter((call) => call.kind === "repetition").at(-1);
+
+  it("paints no color by default, as 0.1.0 did", async () => {
+    const fake = fakeClient();
+    const controller = createEchoEditor(fake.client);
+
+    await controller.toggleHighlights();
+
+    const [repetition] = fake.highlights;
+    expect(repetition.ranges.length).toBeGreaterThan(0);
+    for (const range of repetition.ranges) expect(range).not.toHaveProperty("color");
+  });
+
+  it("paints every occurrence of one Echo in the same Echo color when on", async () => {
+    const fake = fakeClient({ colorByEcho: true });
+    const controller = createEchoEditor(fake.client);
+
+    await controller.toggleHighlights();
+
+    const ranges = fake.highlights[0].ranges;
+    expect(ranges.length).toBe(2);
+    expect(ranges.map((range) => range.color)).toEqual([DOOR_COLOR, DOOR_COLOR]);
+  });
+
+  it("keeps the same color after a recompute of the same text", async () => {
+    const fake = fakeClient({ colorByEcho: true });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    await controller.refresh();
+    await controller.refresh();
+
+    const colors = fake.highlights
+      .filter((call) => call.kind === "repetition")
+      .flatMap((call) => call.ranges.map((range) => range.color));
+    expect(colors.length).toBeGreaterThan(2);
+    expect(new Set(colors)).toEqual(new Set([DOOR_COLOR]));
+  });
+
+  it("repaints an open editor at once when the switch flips on", async () => {
+    const fake = fakeClient();
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    expect(lastRepetition(fake.highlights)?.ranges[0]).not.toHaveProperty("color");
+
+    fake.storage.set(ECHOES_COLOR_KEY, true);
+    await controller.refresh();
+
+    expect(lastRepetition(fake.highlights)?.ranges.map((range) => range.color)).toEqual([
+      DOOR_COLOR,
+      DOOR_COLOR,
+    ]);
+  });
+
+  it("repaints an open editor without colors at once when the switch flips off", async () => {
+    const fake = fakeClient({ colorByEcho: true });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+
+    fake.storage.set(ECHOES_COLOR_KEY, false);
+    await controller.refresh();
+
+    for (const range of lastRepetition(fake.highlights)?.ranges ?? [])
+      expect(range).not.toHaveProperty("color");
   });
 });
 
@@ -691,11 +766,7 @@ describe("kind gating and paint dispatch (decision 7)", () => {
     // overused detection, so info stays empty.
     const nearby = fakeClient({ text: DOORS });
     await createEchoEditor(nearby.client).toggleHighlights();
-    expect(nearby.highlights.map((call) => call.kind)).toEqual([
-      "repetition",
-      "info",
-      "warning",
-    ]);
+    expect(nearby.highlights.map((call) => call.kind)).toEqual(["repetition", "info", "warning"]);
     expect(nearby.highlights[0].ranges.length).toBeGreaterThan(0);
     expect(nearby.highlights[1].ranges).toEqual([]);
     expect(nearby.highlights[2].ranges).toEqual([]);
@@ -711,11 +782,7 @@ describe("kind gating and paint dispatch (decision 7)", () => {
     const fake = fakeClient({ text: DOORS });
     const controller = createEchoEditor(fake.client);
     await controller.toggleHighlights();
-    expect(fake.highlights.map((call) => call.kind)).toEqual([
-      "repetition",
-      "info",
-      "warning",
-    ]);
+    expect(fake.highlights.map((call) => call.kind)).toEqual(["repetition", "info", "warning"]);
 
     fake.emit("editor.contentChanged", { entity: fake.entity });
     // Only repetition is re-sent; info and warning were already empty.
@@ -770,7 +837,12 @@ describe("detection language (spec line 15)", () => {
     await createEchoEditor(note.client).toggleHighlights();
     expect(note.highlights[0].ranges).toEqual([]);
 
-    const englishBook = fakeClient({ text: PARA, kind: "note", noteLanguage: null, bookLanguage: "en" });
+    const englishBook = fakeClient({
+      text: PARA,
+      kind: "note",
+      noteLanguage: null,
+      bookLanguage: "en",
+    });
     await createEchoEditor(englishBook.client).toggleHighlights();
     expect(englishBook.highlights[0].ranges.length).toBeGreaterThan(0);
   });
