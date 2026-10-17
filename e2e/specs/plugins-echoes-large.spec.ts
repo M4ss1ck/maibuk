@@ -104,6 +104,41 @@ test.describe("Echoes report on a large Book @wf:plugins-echoes", () => {
     await capture(page, "echoes-report-tall-window");
   });
 
+  test("a long Book row keeps its word visible and shows the full row in a tooltip", async ({
+    page,
+  }) => {
+    // At 1100px the top row's 12-Part summary still fits; 900px is the widest
+    // window that cuts it off while the sidebar stays open.
+    await page.setViewportSize({ width: 900, height: 800 });
+    await page.goto("/");
+    await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });
+    await tabTo(page, navOption(page, "Books"));
+    await pressUntilFocused(page, "ArrowDown", navOption(page, "Echoes"), { max: 12 });
+    await page.keyboard.press("Enter");
+    await expect(nearbyList(page).getByRole("option")).toHaveCount(200, { timeout: 60_000 });
+
+    // The word has 1,800 occurrences across many Chapters: its description is cut
+    // off, so the label keeps its own width and the tooltip carries both texts.
+    const first = nearbyList(page).getByRole("option").first();
+    await tabTo(page, first, { max: 20 });
+    await expect(first).toBeFocused();
+    await expect(first.getByText("wall", { exact: true })).toBeVisible();
+
+    // Keyboard focus opens the tooltip with the full label and description. The
+    // arrows move focus off the row and back, so the tooltip follows the focus.
+    const tooltip = page.getByRole("tooltip");
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText("wall");
+    await expect(tooltip).toContainText("1800 times");
+    await capture(page, "echoes-long-row-tooltip-focus");
+
+    await page.keyboard.press("ArrowDown");
+    await expect(first).not.toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(first).toBeFocused();
+    await expect(page.getByRole("tooltip")).toContainText("1800 times");
+  });
+
   test("a revisit paints the kept report without the loading screen", async ({ page }) => {
     await page.goto("/");
     await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });
