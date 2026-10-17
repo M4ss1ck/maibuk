@@ -192,14 +192,16 @@ function propertyProblem(prop: PluginUiProp, value: unknown, maxOptions: number)
       // decoratively beside the label. Anything else is refused, never drawn.
       for (const option of value as Record<string, unknown>[]) {
         if (option.swatches === undefined) continue;
-        if (!Array.isArray(option.swatches)) return "is not a valid option list";
+        if (!Array.isArray(option.swatches)) {
+          return "has an option whose swatches are not a list";
+        }
         if (option.swatches.length > MAX_OPTION_SWATCHES) {
           return `has an option with more than ${MAX_OPTION_SWATCHES} swatches`;
         }
         const hex = option.swatches.every(
           (swatch) => typeof swatch === "string" && HEX_COLOR.test(swatch)
         );
-        if (!hex) return "is not a valid option list";
+        if (!hex) return "has an option with a swatch that is not a #rrggbb color";
       }
       return null;
     }

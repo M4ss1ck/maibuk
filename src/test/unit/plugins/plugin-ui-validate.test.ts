@@ -94,7 +94,10 @@ describe("the connection validator", () => {
   });
 
   it("accepts a Select option with up to 12 #rrggbb swatches", () => {
-    const swatches = Array.from({ length: 12 }, (_, index) => `#0000${index.toString(16).padStart(2, "0")}`);
+    const swatches = Array.from(
+      { length: 12 },
+      (_, index) => `#0000${index.toString(16).padStart(2, "0")}`
+    );
     const { receiver, violations, connection } = setup();
     connection.mutate([
       insert(
@@ -129,24 +132,52 @@ describe("the connection validator", () => {
     expect(receiver.root.children).toHaveLength(0);
   });
 
-  it.each([["red"], ["#fff"], ["#aabbcc80"], ["rgb(1,2,3)"], [3]])(
-    "refuses a malformed swatch %j",
-    (swatch) => {
-      const { receiver, violations, connection } = setup();
-      connection.mutate([
-        insert(
-          element("1", "maibuk-select", {
-            properties: {
-              label: "Palette",
-              options: [{ value: "v", label: "V", swatches: [swatch] }],
-            },
-          })
-        ),
-      ]);
-      expect(violations[0]).toMatchObject({ code: "invalid-prop", prop: "options" });
-      expect(receiver.root.children).toHaveLength(0);
-    }
-  );
+  it("refuses option swatches that are not a list and names the problem", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(
+        element("1", "maibuk-select", {
+          properties: {
+            label: "Palette",
+            options: [{ value: "v", label: "V", swatches: "#aabbcc" }],
+          },
+        })
+      ),
+    ]);
+    expect(violations[0]).toMatchObject({
+      code: "invalid-prop",
+      prop: "options",
+      message: "The prop maibuk-select.options has an option whose swatches are not a list",
+    });
+    expect(receiver.root.children).toHaveLength(0);
+  });
+
+  it.each([
+    ["red"],
+    ["#fff"],
+    ["#aabbcc80"],
+    ["rgb(1,2,3)"],
+    [3],
+  ])("refuses a malformed swatch %j", (swatch) => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(
+        element("1", "maibuk-select", {
+          properties: {
+            label: "Palette",
+            options: [{ value: "v", label: "V", swatches: [swatch] }],
+          },
+        })
+      ),
+    ]);
+    expect(violations[0]).toMatchObject({
+      code: "invalid-prop",
+      prop: "options",
+      message:
+        "The prop maibuk-select.options has an option with a swatch that is not a #rrggbb color",
+    });
+    expect(receiver.root.children).toHaveLength(0);
+  });
 
   it("refuses an option list longer than the limit and names the limit", () => {
     const options = [
@@ -393,8 +424,16 @@ describe("the connection validator", () => {
   });
 
   it("refuses a batch with too many records", () => {
-    const { violations, connection } = setup({ ...PLUGIN_UI_LIMITS, maxNodes: 10, maxRecordsPerBatch: 1, maxBatchesPerSecond: 120 });
-    connection.mutate([insert(element("1", "maibuk-text")), insert(element("2", "maibuk-text"), 1)]);
+    const { violations, connection } = setup({
+      ...PLUGIN_UI_LIMITS,
+      maxNodes: 10,
+      maxRecordsPerBatch: 1,
+      maxBatchesPerSecond: 120,
+    });
+    connection.mutate([
+      insert(element("1", "maibuk-text")),
+      insert(element("2", "maibuk-text"), 1),
+    ]);
     expect(violations[0]?.code).toBe("too-many-records");
   });
 
@@ -447,15 +486,28 @@ describe("the connection validator", () => {
   });
 
   it("refuses a tree over the node budget", () => {
-    const { violations, connection } = setup({ ...PLUGIN_UI_LIMITS, maxNodes: 1, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
-    connection.mutate([insert(element("1", "maibuk-text")), insert(element("2", "maibuk-text"), 1)]);
+    const { violations, connection } = setup({
+      ...PLUGIN_UI_LIMITS,
+      maxNodes: 1,
+      maxRecordsPerBatch: 10,
+      maxBatchesPerSecond: 120,
+    });
+    connection.mutate([
+      insert(element("1", "maibuk-text")),
+      insert(element("2", "maibuk-text"), 1),
+    ]);
     expect(violations[0]?.code).toBe("too-many-nodes");
   });
 
   it("counts only Plugin nodes toward the node cap, not the receiver root", () => {
     // The receiver root is the host's `~`, so a budget of N accepts N Plugin
     // nodes: it refuses the (N+1)th, not the Nth.
-    const atBudget = setup({ ...PLUGIN_UI_LIMITS, maxNodes: 3, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
+    const atBudget = setup({
+      ...PLUGIN_UI_LIMITS,
+      maxNodes: 3,
+      maxRecordsPerBatch: 10,
+      maxBatchesPerSecond: 120,
+    });
     atBudget.connection.mutate([
       insert(element("1", "maibuk-text")),
       insert(element("2", "maibuk-text"), 1),
@@ -464,7 +516,12 @@ describe("the connection validator", () => {
     expect(atBudget.violations).toEqual([]);
     expect(atBudget.receiver.root.children).toHaveLength(3);
 
-    const overBudget = setup({ ...PLUGIN_UI_LIMITS, maxNodes: 3, maxRecordsPerBatch: 10, maxBatchesPerSecond: 120 });
+    const overBudget = setup({
+      ...PLUGIN_UI_LIMITS,
+      maxNodes: 3,
+      maxRecordsPerBatch: 10,
+      maxBatchesPerSecond: 120,
+    });
     overBudget.connection.mutate([
       insert(element("1", "maibuk-text")),
       insert(element("2", "maibuk-text"), 1),
