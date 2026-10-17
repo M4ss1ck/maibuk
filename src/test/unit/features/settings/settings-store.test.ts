@@ -72,6 +72,8 @@ describe("useSettingsStore", () => {
       },
       chapterListView: "normal",
       notesListView: "list",
+      notesListSort: "custom",
+      notesTreeSort: "custom",
       notesTreeGroupMode: "book",
       pasteCleanup: {
         preset: "keepAll",
@@ -128,6 +130,56 @@ describe("useSettingsStore", () => {
     it("persists the notes tree grouping mode", () => {
       useSettingsStore.getState().setNotesTreeGroupMode("tag");
       expect(useSettingsStore.getState().notesTreeGroupMode).toBe("tag");
+    });
+  });
+
+  describe("notes sidebar sort settings (ADR 0028)", () => {
+    it("defaults both the list and the tree sort to custom", () => {
+      const state = useSettingsStore.getState();
+      expect(state.notesListSort).toBe("custom");
+      expect(state.notesTreeSort).toBe("custom");
+    });
+
+    it("setNotesListSort changes only the list sort", () => {
+      useSettingsStore.getState().setNotesListSort("title-desc");
+      const state = useSettingsStore.getState();
+      expect(state.notesListSort).toBe("title-desc");
+      expect(state.notesTreeSort).toBe("custom");
+    });
+
+    it("setNotesTreeSort changes only the tree sort", () => {
+      useSettingsStore.getState().setNotesTreeSort("date-asc");
+      const state = useSettingsStore.getState();
+      expect(state.notesTreeSort).toBe("date-asc");
+      expect(state.notesListSort).toBe("custom");
+    });
+
+    it("normalizes an unknown persisted list or tree sort to custom on rehydrate", async () => {
+      localStorage.setItem(
+        "maibuk-settings",
+        JSON.stringify({
+          state: { notesListSort: "by-size", notesTreeSort: "by-size" },
+          version: 0,
+        })
+      );
+      await useSettingsStore.persist.rehydrate();
+      const state = useSettingsStore.getState();
+      expect(state.notesListSort).toBe("custom");
+      expect(state.notesTreeSort).toBe("custom");
+    });
+
+    it("keeps a valid persisted list and tree sort on rehydrate", async () => {
+      localStorage.setItem(
+        "maibuk-settings",
+        JSON.stringify({
+          state: { notesListSort: "title-desc", notesTreeSort: "title-desc" },
+          version: 0,
+        })
+      );
+      await useSettingsStore.persist.rehydrate();
+      const state = useSettingsStore.getState();
+      expect(state.notesListSort).toBe("title-desc");
+      expect(state.notesTreeSort).toBe("title-desc");
     });
   });
 

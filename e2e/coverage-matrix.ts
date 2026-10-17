@@ -1250,6 +1250,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "notes-sidebar-sort",
+    area: "notes",
+    workflow:
+      "Notes sidebar Sort menu by keyboard (list and tree keep their own Sort); a drag while sorted keeps the shown order and turns the Sort to Custom; asserts: Menu focus; persists: yes",
+    edges: ["Drag while sorted: the Sort turns to Custom"],
+    terms: ["Note", "Sort", "Custom Order"],
+    shortcuts: [],
+    routes: ["/notes/:noteId"],
+    fixture: "notesWithLinksAndTags",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "notes-item-menu",
     area: "notes",
     workflow:

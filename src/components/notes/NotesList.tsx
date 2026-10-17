@@ -24,7 +24,7 @@ import {
 import type { Book } from "@/features/books/types";
 import type { ReorderNoteItem } from "@/features/notes";
 import { AddIcon } from "@/components/icons/AddIcon";
-import { FileDropImportStatus, ResponsiveToggleGroup, Tooltip } from "@/components/ui";
+import { FileDropImportStatus, ResponsiveToggleGroup, SortSelect, Tooltip } from "@/components/ui";
 import {
   SectionDropIndicators,
   SectionedDropTargetDelegate,
@@ -43,6 +43,7 @@ import type { DropPoint } from "@/hooks/useTextFileDrop";
 import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
 import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
+import { useFlipReorder } from "@/hooks/useFlipReorder";
 import { useSettingsStore } from "@/features/settings/store";
 import { useShortcuts } from "@/lib/shortcuts";
 import { tagColor } from "@/components/notes/tagColor";
@@ -52,12 +53,16 @@ import {
   buildListNoteSections,
   buildTagNoteGroups,
   filterNotes,
+  NOTES_SORT_COMMANDS,
+  notesSortOptions,
   placeNote,
+  sortNotesBy,
 } from "@/components/notes/notes-list-model";
 import type {
   NoteWithBook,
   NoteSection,
   NotesListViewMode,
+  NotesSidebarSort,
   NotesTreeGroupMode,
 } from "@/components/notes/notes-list-model";
 
@@ -124,6 +129,10 @@ export function NotesList({
   const setViewMode = useSettingsStore((s) => s.setNotesListView);
   const treeGroupMode = useSettingsStore((s) => s.notesTreeGroupMode);
   const setTreeGroupMode = useSettingsStore((s) => s.setNotesTreeGroupMode);
+  const listSort = useSettingsStore((s) => s.notesListSort);
+  const setListSort = useSettingsStore((s) => s.setNotesListSort);
+  const treeSort = useSettingsStore((s) => s.notesTreeSort);
+  const setTreeSort = useSettingsStore((s) => s.setNotesTreeSort);
   const collapsedGroupsList = useSettingsStore((s) => s.notesCollapsedGroups);
   const expandedEmptyGroupsList = useSettingsStore((s) => s.notesExpandedEmptyGroups);
   const toggleCollapsed = useSettingsStore((s) => s.toggleNotesGroupCollapsed);
@@ -174,16 +183,42 @@ export function NotesList({
     [t]
   );
 
+  const sortOptions = useMemo(() => notesSortOptions(t, { custom: true }), [t]);
+  const activeSort = viewMode === "list" ? listSort : treeSort;
+  const activeSortLabel =
+    sortOptions.find((option) => option.value === activeSort)?.label ?? sortOptions[0].label;
+
   const query = search.trim().toLowerCase();
   const filtered = filterNotes(notes, query);
-  const listSections = buildListNoteSections(notes, query);
+  const listSections = buildListNoteSections(notes, query, listSort);
   const listSectionsRef = useRef(listSections);
   listSectionsRef.current = listSections;
+  // Rows glide to the place a Sort gives them; another view or search just redraws.
+  useFlipReorder(
+    listContainerRef,
+    viewMode === "list"
+      ? listSections.flatMap((section) => section.notes.map((note) => note.id))
+      : sortNotesBy(filtered, treeSort).map((note) => note.id),
+    { skipKey: draggedId, scope: `${viewMode}:${treeGroupMode}:${query}` }
+  );
   const pinnedCount = notes.filter((note) => note.pinned).length;
   const isSearchActive = query.length > 0;
   // The list view reorders through React Aria drag-and-drop, which is also its
   // keyboard path. Search hides Notes, so an order written then would be partial.
   const canReorder = viewMode === "list" && !isSearchActive && filtered.length > 0;
+
+  // A list Sort is a view; leaving it keeps the order it showed as the Custom
+  // Order (ADR 0028). The tree's Sort never writes.
+  const applySort = (sort: NotesSidebarSort) => {
+    if (viewMode === "tree") {
+      setTreeSort(sort);
+      return;
+    }
+    if (sort === "custom" && listSort !== "custom") {
+      emitSectionOrder(buildListNoteSections(notes, "", listSort));
+    }
+    setListSort(sort);
+  };
 
   useShortcuts([
     { id: "notes.newNote", onTrigger: () => onCreateNote(null) },
@@ -192,6 +227,7 @@ export function NotesList({
       enabled: books.length > 0,
       onTrigger: () => onCreateNote(books[0]?.id ?? null),
     },
+    ...NOTES_SORT_COMMANDS.map(({ id, sort }) => ({ id, onTrigger: () => applySort(sort) })),
   ]);
 
   const resolveFileDropTarget = useCallback(
@@ -255,7 +291,13 @@ export function NotesList({
     setDropTarget({ sectionId, targetId: null, placement: "after" });
   };
 
-  const emitSectionOrder = (sections: NoteSection[]) => {
+  // A drag while sorted makes the shown order, with the move, the Custom Order.
+  const emitDraggedOrder = (sections: NoteSection[]) => {
+    emitSectionOrder(sections);
+    if (listSort !== "custom") setListSort("custom");
+  };
+
+  function emitSectionOrder(sections: NoteSection[]) {
     void onReorderNotesRef.current(
       sections.flatMap((section) =>
         section.notes.map((note) => ({
@@ -264,7 +306,7 @@ export function NotesList({
         }))
       )
     );
-  };
+  }
 
   const importDroppedItems = async (
     items: Parameters<typeof readDroppedItems>[0],
@@ -311,7 +353,7 @@ export function NotesList({
         noteId: String(e.target.key),
         placement: e.target.dropPosition,
       });
-      if (nextSections) emitSectionOrder(nextSections);
+      if (nextSections) emitDraggedOrder(nextSections);
     },
     getDropOperation: (target, types, allowedOperations) => {
       // Notes do not nest: only the gaps between rows take a drop.
@@ -350,7 +392,7 @@ export function NotesList({
     const nextSections =
       draggedNote &&
       placeNote(listSections, draggedNote, { sectionId: targetSectionId, at: "end" });
-    if (nextSections) emitSectionOrder(nextSections);
+    if (nextSections) emitDraggedOrder(nextSections);
     setDraggedId(null);
     setDropTarget(null);
   };
@@ -549,7 +591,7 @@ export function NotesList({
 
   const renderTreeGroups = () => {
     if (treeGroupMode === "book") {
-      return buildBookNoteGroups(filtered, books).map((group) => {
+      return buildBookNoteGroups(filtered, books, treeSort).map((group) => {
         const defaultCollapsed = Boolean(group.book && group.notes.length === 0);
         const isCollapsed = defaultCollapsed
           ? !expandedEmptyGroups.has(groupKey(group.id))
@@ -624,7 +666,7 @@ export function NotesList({
     }
 
     if (treeGroupMode === "tag") {
-      const groups = buildTagNoteGroups(filtered);
+      const groups = buildTagNoteGroups(filtered, treeSort);
       return groups.map((group) => {
         const isCollapsed = collapsedGroups.has(groupKey(group.id));
         const color = tagColor(group.tag);
@@ -659,7 +701,7 @@ export function NotesList({
       });
     }
 
-    return buildDateNoteGroups(filtered).map((group) => {
+    return buildDateNoteGroups(filtered, undefined, treeSort).map((group) => {
       const isCollapsed = collapsedGroups.has(groupKey(group.id));
       const title =
         group.id === "today"
@@ -723,14 +765,23 @@ export function NotesList({
       </div>
 
       <div className="px-3 pb-3 shrink-0">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("notes.search")}
-            className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-background"
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("notes.search")}
+              className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-background"
+            />
+          </div>
+          <SortSelect
+            look="icon"
+            value={activeSort}
+            options={sortOptions}
+            onChange={applySort}
+            triggerLabel={t("notes.sortTrigger", { sort: activeSortLabel })}
           />
         </div>
         {viewMode === "tree" && (

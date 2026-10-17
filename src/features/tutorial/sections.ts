@@ -94,7 +94,9 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
       step("notes.card", ["Pinned", "Book Note", "Tag", "Item Menu"]),
       step("notes.filters", ["Tag"]),
       step("notes.new", ["Unfiled Note"]),
-      step("notes.tree", ["Book Note", "Unfiled Note"], { route: NOTE_ROUTE }),
+      step("notes.tree", ["Book Note", "Unfiled Note", "Sort", "Custom Order"], {
+        route: NOTE_ROUTE,
+      }),
       step("notes.tags", ["Tag"], { route: NOTE_ROUTE }),
       step("notes.content", ["Heading", "Link", "Link Preview"], { route: NOTE_ROUTE }),
       step("notes.backlinks", ["Link", "Backlink"], { route: NOTE_ROUTE }),
@@ -221,7 +223,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Plugin Directory": "decided, not built (ADR 0020); there is no Plugin in the app to point at",
   "Plugin Permission": "decided, not built (ADR 0019); there is no Plugin in the app to point at",
   "Plugin Command": "decided, not built (ADR 0022); there is no Plugin in the app to point at",
-  "Toggle Button": "decided, not built: a Plugin toolbar button, and the Tutorial Library has no Plugin to point at",
+  "Toggle Button":
+    "decided, not built: a Plugin toolbar button, and the Tutorial Library has no Plugin to point at",
   "Inactive Binding":
     "shown only as a badge inside the Shortcut Editor, which the Tutorial does not open",
   "Retained Plugin Preference":

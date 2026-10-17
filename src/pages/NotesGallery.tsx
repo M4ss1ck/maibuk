@@ -23,11 +23,17 @@ import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage } from "@/features/settings/types";
 import { NoteCard } from "@/components/notes";
 import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
-import { NotesSortMenu } from "@/components/notes/NotesSortMenu";
-import { duplicateNoteInput, filterNotes, sortNotesBy } from "@/components/notes/notes-list-model";
+import {
+  duplicateNoteInput,
+  filterNotes,
+  NOTES_SORT_COMMANDS,
+  notesSortOptions,
+  sortNotesBy,
+} from "@/components/notes/notes-list-model";
 import type { ItemAction } from "@/components/ui";
 import { Button } from "@/components/ui/Button";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
+import { SortSelect } from "@/components/ui/SortSelect";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 import { AddIcon, MaibukLogo } from "@/components/icons";
@@ -55,6 +61,9 @@ export function NotesGallery() {
   const setLastNoteId = useSettingsStore((s) => s.setLastNoteId);
   const sort = useSettingsStore((s) => s.notesSort);
   const setSort = useSettingsStore((s) => s.setNotesSort);
+  const sortOptions = useMemo(() => notesSortOptions(t, { custom: false }), [t]);
+  const currentSortLabel = (sortOptions.find((option) => option.value === sort) ?? sortOptions[0])
+    .label;
   const notesFilters = useSettingsStore((s) => s.notesFilters);
   const setNotesFilters = useSettingsStore((s) => s.setNotesFilters);
   const { search, showAdvanced, tags: tagFilters, excludeTags, dateFrom, dateTo } = notesFilters;
@@ -305,6 +314,11 @@ export function NotesGallery() {
         enabled: hasFilters,
         onTrigger: clearFilters,
       },
+      // The Sort Commands act on the Gallery's own Sort; it has no Custom, so
+      // that Command stays unbound (unavailable) here.
+      ...NOTES_SORT_COMMANDS.flatMap(({ id, sort: commandSort }) =>
+        commandSort === "custom" ? [] : [{ id, onTrigger: () => setSort(commandSort) }]
+      ),
     ],
     { enabled: notes.length > 0 }
   );
@@ -449,7 +463,15 @@ export function NotesGallery() {
         )}
 
         <div className="row-start-2 flex items-center gap-2 @xl:col-start-2 @xl:row-start-1 @xl:ml-auto">
-          {notes.length > 0 && <NotesSortMenu value={sort} onChange={setSort} />}
+          {notes.length > 0 && (
+            <SortSelect
+              look="labeled"
+              value={sort}
+              options={sortOptions}
+              onChange={setSort}
+              triggerLabel={t("notes.sortTrigger", { sort: currentSortLabel })}
+            />
+          )}
           <Button
             ref={newNoteButtonRef}
             onClick={handleCreateNote}

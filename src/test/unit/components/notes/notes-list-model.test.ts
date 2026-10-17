@@ -7,7 +7,9 @@ import {
   buildListNoteSections,
   buildTagNoteGroups,
   filterNotes,
+  normalizeNotesSidebarSort,
   notePlainText,
+  notesSortOptions,
   placeNote,
   sortNotesBy,
 } from "@/components/notes/notes-list-model";
@@ -197,6 +199,155 @@ describe("notes list model", () => {
     expect(sortNotesBy([newer, older], "title-desc")).toEqual([older, newer]);
   });
 
+  it("sorts by Custom Order under Custom", () => {
+    const second = note({ id: "second", title: "Alpha", order: 2 });
+    const first = note({ id: "first", title: "Zulu", order: 1 });
+
+    expect(sortNotesBy([second, first], "custom")).toEqual([first, second]);
+  });
+
+  it("breaks title and date ties by Custom Order", () => {
+    const later = note({ id: "later", title: "Same", order: 5, updatedAt: 100 });
+    const earlier = note({ id: "earlier", title: "same", order: 1, updatedAt: 100 });
+
+    for (const sort of ["title-asc", "title-desc", "date-asc", "date-desc"] as const) {
+      expect(
+        sortNotesBy([later, earlier], sort).map((n) => n.id),
+        sort
+      ).toEqual(["earlier", "later"]);
+    }
+  });
+
+  it("puts untitled Notes first under both title Sorts", () => {
+    const alpha = note({ id: "alpha", title: "Alpha" });
+    const untitled = note({ id: "untitled", title: "  " });
+    const zulu = note({ id: "zulu", title: "Zulu" });
+
+    expect(sortNotesBy([alpha, zulu, untitled], "title-asc").map((n) => n.id)).toEqual([
+      "untitled",
+      "alpha",
+      "zulu",
+    ]);
+    expect(sortNotesBy([alpha, zulu, untitled], "title-desc").map((n) => n.id)).toEqual([
+      "untitled",
+      "zulu",
+      "alpha",
+    ]);
+  });
+
+  it("compares titles the way people read them: numbers in order, accents and case ignored", () => {
+    const ten = note({ id: "ten", title: "Note 10", order: 0 });
+    const two = note({ id: "two", title: "Note 2", order: 1 });
+    const accented = note({ id: "accented", title: "Éclair", order: 2 });
+    const plain = note({ id: "plain", title: "eclair", order: 3 });
+
+    expect(sortNotesBy([ten, plain, two, accented], "title-asc").map((n) => n.id)).toEqual([
+      "accented",
+      "plain",
+      "two",
+      "ten",
+    ]);
+  });
+
+  it("sorts each list section separately, keeping Pinned Notes apart", () => {
+    const pinnedZ = note({ id: "pz", title: "Zed", pinned: true, order: 0 });
+    const pinnedA = note({ id: "pa", title: "Ant", pinned: true, order: 1 });
+    const restB = note({ id: "rb", title: "Bee", order: 0 });
+    const restA = note({ id: "ra", title: "Aardvark", order: 1 });
+
+    const ids = (sort: Parameters<typeof buildListNoteSections>[2]) =>
+      buildListNoteSections([pinnedZ, pinnedA, restB, restA], "", sort).map((section) => [
+        section.id,
+        section.notes.map((n) => n.id),
+      ]);
+
+    expect(ids("title-asc")).toEqual([
+      ["pinned", ["pa", "pz"]],
+      ["all", ["ra", "rb"]],
+    ]);
+    expect(ids("custom")).toEqual([
+      ["pinned", ["pz", "pa"]],
+      ["all", ["rb", "ra"]],
+    ]);
+  });
+
+  it("sorts Notes inside each book and tag group and keeps the groups' order", () => {
+    const bookA = book({ id: "book-a", title: "Book A" });
+    const bookB = book({ id: "book-b", title: "Book B" });
+    const b2 = note({ id: "b2", title: "Bravo", bookId: "book-a", order: 0, tags: ["x"] });
+    const b1 = note({ id: "b1", title: "Alpha", bookId: "book-a", order: 1, tags: ["x"] });
+    const loose = note({ id: "loose", title: "Loose", order: 2, tags: ["a"] });
+
+    expect(
+      buildBookNoteGroups([b2, b1, loose], [bookB, bookA], "title-asc").map((group) => [
+        group.id,
+        group.notes.map((n) => n.id),
+      ])
+    ).toEqual([
+      ["book-b", []],
+      ["book-a", ["b1", "b2"]],
+      ["unfiled", ["loose"]],
+    ]);
+    expect(
+      buildTagNoteGroups([b2, b1, loose], "title-desc").map((group) => [
+        group.id,
+        group.notes.map((n) => n.id),
+      ])
+    ).toEqual([
+      ["a", ["loose"]],
+      ["x", ["b2", "b1"]],
+    ]);
+  });
+
+  it("shows Custom Order inside each date group under Custom", () => {
+    const now = new Date("2026-06-12T12:00:00Z");
+    const at = (iso: string) => Date.parse(iso) / 1000;
+    const morning = note({
+      id: "morning",
+      title: "M",
+      order: 0,
+      updatedAt: at("2026-06-12T07:00:00Z"),
+    });
+    const noon = note({ id: "noon", title: "N", order: 1, updatedAt: at("2026-06-12T11:00:00Z") });
+
+    expect(buildDateNoteGroups([morning, noon], now, "custom")[0].notes.map((n) => n.id)).toEqual([
+      "morning",
+      "noon",
+    ]);
+    expect(
+      buildDateNoteGroups([morning, noon], now, "date-desc")[0].notes.map((n) => n.id)
+    ).toEqual(["noon", "morning"]);
+  });
+
+  it("builds the Sort options with an icon each, Custom only when asked for", () => {
+    const t = (key: string) => key;
+
+    expect(notesSortOptions(t, { custom: true }).map((option) => option.value)).toEqual([
+      "custom",
+      "title-asc",
+      "title-desc",
+      "date-desc",
+      "date-asc",
+    ]);
+    expect(notesSortOptions(t, { custom: false }).map((option) => option.value)).toEqual([
+      "title-asc",
+      "title-desc",
+      "date-desc",
+      "date-asc",
+    ]);
+    for (const option of notesSortOptions(t, { custom: true })) {
+      expect(option.label).toMatch(/^notes\.sort/);
+      expect(option.icon).toBeTruthy();
+    }
+  });
+
+  it("normalizes an unknown persisted sidebar Sort to Custom", () => {
+    expect(normalizeNotesSidebarSort("title-asc")).toBe("title-asc");
+    expect(normalizeNotesSidebarSort("custom")).toBe("custom");
+    expect(normalizeNotesSidebarSort("by-size")).toBe("custom");
+    expect(normalizeNotesSidebarSort(undefined)).toBe("custom");
+  });
+
   it("groups notes by book, keeps empty books, and appends unfiled notes last", () => {
     const bookA = book({ id: "book-a", title: "Book A" });
     const bookB = book({ id: "book-b", title: "Book B" });
@@ -235,7 +386,7 @@ describe("notes list model", () => {
     ]);
   });
 
-  it("lists each date group's Notes most recently edited first, whatever their manual order", () => {
+  it("lists each date group's Notes most recently edited first under newest first, whatever their Custom Order", () => {
     const now = new Date("2026-06-12T12:00:00Z");
     const at = (iso: string) => Date.parse(iso) / 1000;
     // The store hands Notes over pinned first, then in manual order.
@@ -266,7 +417,11 @@ describe("notes list model", () => {
       contentUpdatedAt: at("2025-10-01T08:00:00Z"),
     });
 
-    const groups = buildDateNoteGroups([pinnedMorning, todayNine, todayNoon, march, october], now);
+    const groups = buildDateNoteGroups(
+      [pinnedMorning, todayNine, todayNoon, march, october],
+      now,
+      "date-desc"
+    );
 
     expect(groups.map((group) => [group.id, group.notes.map((n) => n.id)])).toEqual([
       ["today", ["noon", "nine", "pinned"]],

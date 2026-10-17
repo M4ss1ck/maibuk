@@ -259,18 +259,23 @@ test.describe("Notes list grouping, view and sort @wf:notes-list-group-sort", ()
   test("the sort menu reorders the Gallery by keyboard and persists", async ({ page }) => {
     await page.goto("/notes");
     await expect(galleryGrid(page).getByRole("row").first()).toBeVisible();
-    await tabTo(page, page.getByRole("button", { name: "Sort by" }), { max: 40 });
+    await capture(page, "notes-gallery-sort");
+    const sortButton = page.getByRole("button", { name: /^Sort notes:/ });
+    await tabTo(page, sortButton, { max: 40 });
     await page.keyboard.press("Enter");
+    await expect(page.getByRole("option", { name: "Title (A–Z)" })).toBeVisible();
+    await capture(page, "notes-gallery-sort-menu");
 
     const titleAsc = page.getByRole("option", { name: "Title (A–Z)" });
-    await pressUntilFocused(page, "ArrowDown", titleAsc);
+    await pressUntilFocused(page, "ArrowUp", titleAsc);
     await page.keyboard.press("Enter");
 
-    await expect(page.getByRole("button", { name: "Sort by" })).toContainText("Title (A–Z)");
+    await expect(sortButton).toHaveAccessibleName("Sort notes: Title (A–Z)");
+    await expect(sortButton).toContainText("Title (A–Z)");
     await expect(galleryGrid(page).getByRole("row").first()).toHaveAccessibleName("Harbor Notes");
 
     await page.reload();
-    await expect(page.getByRole("button", { name: "Sort by" })).toContainText("Title (A–Z)");
+    await expect(sortButton).toHaveAccessibleName("Sort notes: Title (A–Z)");
     await expect(galleryGrid(page).getByRole("row").first()).toHaveAccessibleName("Harbor Notes");
   });
 

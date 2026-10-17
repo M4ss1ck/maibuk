@@ -123,6 +123,15 @@ _Avoid_: label
 Kept at the top of its Gallery by the author's choice, for Notes and Canvases.
 _Avoid_: favorite, starred
 
+**Custom Order**:
+The order the author arranges Notes in by hand. Pinned Notes and the rest each keep their own.
+_UI_: en "Custom" / es "Personalizado"
+_Avoid_: manual order
+
+**Sort**:
+How Notes are shown: by Custom Order, by title (A to Z, Z to A), or by Last Edited (newest or oldest first). A Sort keeps Notes in place as they are added, renamed, and edited. In the Notes list view it applies to Pinned Notes and the rest separately, and leaving it keeps the order it showed as the new Custom Order; in the tree view it applies inside each group. The list and tree views each keep their own Sort.
+_Avoid_: order by, arrange
+
 **Last Edited**:
 When a Note's, Book's, or Canvas's content or title last changed, ignoring Tags, pins, order, and status. A Chapter text or title change moves its Book's Last Edited.
 _Avoid_: updated, modified

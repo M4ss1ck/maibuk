@@ -1019,6 +1019,28 @@ export const COMMANDS = {
   },
   "notes.addNoteToBook": { labelKey: "notes.addNoteToBook", contexts: ["notes"], defaults: [] },
   "notes.clearFilters": { labelKey: "notes.clearFilters", contexts: ["notes"], defaults: [] },
+  // Each Sort, on whichever Notes screen is showing (#524); Voice Commands from the labels.
+  "notes.sortCustom": { labelKey: "notes.sortCommandCustom", contexts: ["notes"], defaults: [] },
+  "notes.sortTitleAsc": {
+    labelKey: "notes.sortCommandTitleAsc",
+    contexts: ["notes"],
+    defaults: [],
+  },
+  "notes.sortTitleDesc": {
+    labelKey: "notes.sortCommandTitleDesc",
+    contexts: ["notes"],
+    defaults: [],
+  },
+  "notes.sortDateNewest": {
+    labelKey: "notes.sortCommandDateNewest",
+    contexts: ["notes"],
+    defaults: [],
+  },
+  "notes.sortDateOldest": {
+    labelKey: "notes.sortCommandDateOldest",
+    contexts: ["notes"],
+    defaults: [],
+  },
 
   "canvas.toolSelect": {
     labelKey: "canvas.toolSelect",
