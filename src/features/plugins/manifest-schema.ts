@@ -80,10 +80,18 @@ const voiceSpec = strictObject({
 
 const contributionPlatforms = z.array(z.enum(PLUGIN_PLATFORMS)).min(1);
 
+const inlineIcon = strictObject({
+  elements: z
+    .array(z.tuple([z.string().min(1), z.record(z.string(), z.string())]))
+    .min(1)
+    .describe("SVG elements on a 24x24 grid: [tag, attributes] pairs. The validator sets the allowed tags, attributes, and count."),
+});
+
 const icon = z
-  .string()
-  .min(1)
-  .describe("A Lucide icon name (kebab-case) or a relative .svg path inside the Plugin folder.");
+  .union([z.string().min(1), inlineIcon])
+  .describe(
+    "A Lucide icon name (kebab-case), a relative .svg path inside the Plugin folder, or an inline icon { elements: [[tag, attrs], ...] } on a 24x24 grid."
+  );
 
 const commandContribution = strictObject({
   id: localId,

@@ -56,6 +56,11 @@ function registerSample(): void {
         toolbarButtons: [
           { id: "plainButton", command: "plain", icon: "book-open" },
           { id: "targetButton", command: "targeted", icon: "book-open" },
+          {
+            id: "inlineButton",
+            command: "plain",
+            icon: { elements: [["path", { d: "M4 20h16" }]] },
+          },
         ],
       },
     }
@@ -95,6 +100,25 @@ afterEach(() => {
   useChapterStore.setState({ currentChapter: null });
   lifecycleStatus = "ready";
   brokerRequest = vi.fn(async () => null);
+});
+
+describe("PluginToolbarButton with an inline icon (#531)", () => {
+  it("renders the inline icon and follows the Plugin's ready state", () => {
+    registerSample();
+    lifecycleStatus = "stopped";
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/book/b1"]}>
+        <PluginToolbarButton id={"plugin.sample.inlineButton" as never} iconSize="md" />
+      </MemoryRouter>
+    );
+    const button = screen.getByRole("button", { name: "Plain" });
+    expect(button.querySelector("svg path")?.getAttribute("d")).toBe("M4 20h16");
+    expect(button).toBeDisabled();
+    unmount();
+    lifecycleStatus = "ready";
+    renderButton("plugin.sample.inlineButton");
+    expect(screen.getByRole("button", { name: "Plain" })).toBeEnabled();
+  });
 });
 
 describe("PluginToolbarButton with targets (#395, #446)", () => {

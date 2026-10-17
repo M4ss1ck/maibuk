@@ -14,6 +14,11 @@ import { normalizeVoicePhraseList } from "@/features/dictation/voice-commands";
 import { PluginRenameError, collapseContributionRenames } from "@/features/plugins/ids";
 import LUCIDE_ICON_NAMES from "@/features/plugins/lucide-icon-names.json";
 import { localeField } from "@/features/plugins/manifest-constants";
+import {
+  type PluginIconSpec,
+  inlineIconProblem,
+  isInlineIcon,
+} from "@/features/plugins/inline-icon";
 import { normalizeRelativePath } from "@/features/plugins/relative-path";
 import {
   MANIFEST_LANGUAGES,
@@ -166,6 +171,7 @@ function frameProblem(frame: string): string | null {
 }
 
 export { normalizeRelativePath };
+export { MAX_INLINE_ICON_ELEMENTS } from "@/features/plugins/inline-icon";
 
 function entryProblem(entry: string): string | null {
   const pathProblem = relativePathProblem(entry, "entry");
@@ -177,7 +183,8 @@ function entryProblem(entry: string): string | null {
   return null;
 }
 
-function iconProblem(icon: string): string | null {
+function iconProblem(icon: PluginIconSpec): string | null {
+  if (isInlineIcon(icon)) return inlineIconProblem(icon);
   if (icon.endsWith(".svg")) {
     const subject = `the .svg icon "${icon}"`;
     const pathProblem = relativePathProblem(icon, subject);
