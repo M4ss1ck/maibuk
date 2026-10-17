@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { androidStep, type PluginStepContext } from "../../../../../scripts/plugin/steps";
+import { QUICKJS_ANDROID_GLOBALS } from "@/features/plugins/quickjs/globals";
 
 const MAIBUK_ROOT = join(__dirname, "..", "..", "..", "..", "..");
 const roots: string[] = [];
@@ -80,7 +81,9 @@ describe("androidStep()", () => {
     expect(result.details).toHaveLength(1);
     expect(result.details[0]).toContain("uses `Intl`, which Android Plugins lack");
     expect(result.details[0]).toContain("bundle a polyfill");
-    expect(result.details[0]).toContain("setTimeout");
+    for (const name of QUICKJS_ANDROID_GLOBALS) {
+      expect(result.details[0]).toContain(name);
+    }
   });
 
   it("names the unevaluable module and keeps the engine's own error text", async () => {

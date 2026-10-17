@@ -15,6 +15,25 @@
 import type { QuickJSContext, QuickJSHandle } from "quickjs-emscripten-core";
 import { toVmValue } from "@/features/plugins/quickjs/bridge";
 
+/**
+ * The globals the Android engine provides to a Plugin, by name. The Android
+ * step of `plugin:check` reads this list for its missing-global message, and
+ * `quickjs/android-globals.test.ts` proves each name is defined after
+ * {@link installQuickJsGlobals}, so the list cannot drift from the install.
+ */
+export const QUICKJS_ANDROID_GLOBALS = [
+  "setTimeout",
+  "clearTimeout",
+  "setInterval",
+  "clearInterval",
+  "queueMicrotask",
+  "performance",
+  "URL",
+  "TextEncoder",
+  "TextDecoder",
+  "console",
+] as const;
+
 /** The console methods a Plugin may call. */
 export type QuickJsConsoleLevel = "log" | "info" | "warn" | "error" | "debug";
 

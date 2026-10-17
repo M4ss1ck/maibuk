@@ -112,10 +112,11 @@ Downloaded models remain available to manage while Dictation is off.
 
 ### Plugins
 
-Plugins are available in the desktop app and in compatible web browsers.
-**Android is unsupported in this version**: a Plugin could grow until the system
-killed the app, so v1 runs no Plugin — Built-in or added — on Android until a
-hard memory cap exists.
+Plugins are available in the desktop app, in compatible web browsers, and on
+Android. A Plugin runs on Android when its manifest lists `"android"` in
+`platforms`; it runs in a memory-capped QuickJS engine (64 MiB), and the Custom
+Frame UI stays off there. See [docs/plugins/](docs/plugins/README.md) for the
+details.
 
 ## Tech Stack
 

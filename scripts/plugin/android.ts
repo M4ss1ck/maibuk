@@ -17,20 +17,7 @@
 import type { PluginManifest } from "@/features/plugins/types";
 import { PLUGIN_INIT_MESSAGE } from "@/plugin-sdk/protocol";
 import type { QuickJsRunOutcome } from "@/features/plugins/quickjs";
-
-/** The globals the Android engine provides (src/features/plugins/quickjs/globals.ts). */
-const ANDROID_GLOBALS = [
-  "setTimeout",
-  "clearTimeout",
-  "setInterval",
-  "clearInterval",
-  "queueMicrotask",
-  "performance",
-  "URL",
-  "TextEncoder",
-  "TextDecoder",
-  "console",
-];
+import { QUICKJS_ANDROID_GLOBALS } from "@/features/plugins/quickjs/globals";
 
 /** A run that did not settle in time; the runner itself has no deadline. */
 const RUN_TIMEOUT_MS = 10_000;
@@ -105,7 +92,7 @@ function describeFailure(
   const missing = NOT_DEFINED.exec(outcome.message.trim());
   if (missing) {
     const name = missing[1];
-    return `uses \`${name}\`, which Android Plugins lack: bundle a polyfill for it or drop the call. Android provides only ${ANDROID_GLOBALS.join(", ")}`;
+    return `uses \`${name}\`, which Android Plugins lack: bundle a polyfill for it or drop the call. Android provides only ${QUICKJS_ANDROID_GLOBALS.join(", ")}`;
   }
   if (phase === "evaluate") {
     return `${entry} does not evaluate on Android: ${outcome.message}. Fix the syntax or the top-level code it names`;
