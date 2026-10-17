@@ -156,6 +156,10 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     detectionLanguage: "en",
   };
 
+  // Bumped on every focus event. A toggle that awaited the focused editor
+  // checks it again before turning on, so a focus move during the read wins.
+  let focusEpoch = 0;
+
   // Coalescing: one recompute runs at a time; a change that arrives while one
   // is in flight is remembered and runs exactly one more time afterwards.
   let running = false;
@@ -407,6 +411,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
   });
 
   listen("editor.focusChanged", (payload) => {
+    focusEpoch++;
     // The host reports `null` only when the focused editor unmounts (a mere
     // blur to a toolbar button or a Plugin page keeps the target), so `null`
     // means the editor closed: turn the state off without painting, since there
@@ -443,11 +448,15 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
         }
         // The caret comes with the content, so the first paint centers on it
         // without an extra round trip (#451, decision 7).
+        const epoch = focusEpoch;
         const [content, selection] = await Promise.all([
           client.editor.getContent(),
           client.editor.getSelection(),
         ]);
         if (content.status !== "ok") return;
+        // Focus moved while the content was read: that editor is no longer the
+        // one focused, so turning on would paint it (#529).
+        if (focusEpoch !== epoch) return;
         setOn(true);
         state.entity = content.entity;
         state.index = null;

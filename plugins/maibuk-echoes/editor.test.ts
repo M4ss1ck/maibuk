@@ -225,6 +225,10 @@ function fakeClient(options: FakeOptions = {}) {
     /** Every `toolbar.setPressed` value the controller sent, in order. */
     pressed,
     getContentCalls: () => getContentCalls,
+    /** The old Worker is gone: its event subscriptions die with it. */
+    dropListeners() {
+      listeners.clear();
+    },
     setFocused(next: boolean) {
       focused = next;
     },
@@ -786,5 +790,103 @@ describe("runtime Command routing", () => {
 
     await run({ id: PREVIOUS_ECHO });
     expect(fake.reveals.at(-1)).toEqual({ from: 5, to: 9 });
+  });
+});
+
+/**
+ * The #529 transition audit. Each test drives one transition of the highlight
+ * controller and asserts the two invariants the issue names: the painted state
+ * matches the Toggle Button's pressed state, and nothing paints for an entity
+ * that is no longer focused.
+ */
+describe("highlight transition audit (#529)", () => {
+  /** The last `setPressed` value and whether the last paint left any range. */
+  const lastPressed = (fake: { pressed: boolean[] }) => fake.pressed.at(-1);
+  const paintedAnything = (fake: { highlights: HighlightCall[] }) =>
+    fake.highlights.slice(-3).some((call) => call.ranges.length > 0);
+
+  it("focus change during a toggle: the toggle does not paint an editor that lost focus", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    const release = fake.gateContent();
+    const toggling = controller.toggleHighlights();
+    // Focus moves to another editor while the toggle still reads the old one.
+    fake.emit("editor.focusChanged", { entity: { kind: "chapter", id: "c2" } });
+    release();
+    await toggling;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The aborted toggle never pressed the button, so nothing was sent for it.
+    expect(lastPressed(fake) ?? false).toBe(false);
+    expect(paintedAnything(fake)).toBe(false);
+  });
+
+  it("chapter switch during a recompute: the in-flight recompute paints nothing for the old chapter", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    const before = fake.highlights.length;
+    const release = fake.gateContent();
+    fake.emit("editor.contentChanged", { entity: fake.entity });
+    fake.emit("editor.focusChanged", { entity: { kind: "chapter", id: "c2" } });
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fake.highlights.length).toBe(before + 3); // the turn-off clear only
+    expect(paintedAnything(fake)).toBe(false);
+    expect(lastPressed(fake)).toBe(false);
+  });
+
+  it("editor unmount during a recompute: nothing is painted after the editor closes", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    const before = fake.highlights.length;
+    const release = fake.gateContent();
+    fake.emit("editor.contentChanged", { entity: fake.entity });
+    fake.setFocused(false);
+    fake.emit("editor.focusChanged", { entity: null });
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fake.highlights.length).toBe(before);
+    expect(lastPressed(fake)).toBe(false);
+  });
+
+  it("Plugin restart while on: a new activation starts off and paints nothing", async () => {
+    // The host drops this Plugin's highlights and pressed state when it stops
+    // (lifecycle.ts clearPluginHighlights, clearToolbarPressed). A new activation
+    // is a fresh controller: it must start off, so no event repaints anything.
+    const fake = fakeClient({ text: DOORS });
+    const first = createEchoEditor(fake.client);
+    await first.toggleHighlights();
+    expect(paintedAnything(fake)).toBe(true);
+    const before = fake.highlights.length;
+
+    fake.dropListeners();
+    const second = createEchoEditor(fake.client);
+    fake.emit("editor.contentChanged", { entity: fake.entity });
+    await second.refresh();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fake.highlights.length).toBe(before);
+  });
+
+  it("toggle during a recompute: a toggle off wins over the in-flight recompute", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    const release = fake.gateContent();
+    fake.emit("editor.contentChanged", { entity: fake.entity });
+    const toggling = controller.toggleHighlights();
+    release();
+    await toggling;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(lastPressed(fake)).toBe(false);
+    expect(paintedAnything(fake)).toBe(false);
+  });
+
+  it("button and shortcut fired together: the final pressed state matches what is painted", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await Promise.all([controller.toggleHighlights(), controller.toggleHighlights()]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(lastPressed(fake) ?? false).toBe(paintedAnything(fake));
   });
 });
