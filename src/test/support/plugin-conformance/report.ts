@@ -4,16 +4,10 @@
 // is tested without a build or a device.
 //
 // D1 recording rule: a MEASURED run (exit 0 or 1) is recorded; an exit-2 run is
-// never. A run on a host-unsupported platform (v1 Android) records exit 1 with
-// `support: "unsupported-in-v1"` and `followUp: "#492"`, unless the run measured
-// under the Android QuickJS engine (#516), which removes the marker; the engine
-// records the engine's own version (`mergeRunEngine`), never the app version.
+// never. Android is judged on the same checks (T1 to T8) as Linux (#517); the
+// engine records the engine's own version (`mergeRunEngine`), never the app version.
 
 import { RENDERER_DIED_DETAIL, T7_CHECK_ID, T8_CHECK_ID } from "@/features/plugins/conformance/checks";
-import {
-  PLUGIN_HOST_UNSUPPORTED_PLATFORMS,
-  type PluginHostPlatform,
-} from "@/features/plugins/host-platform";
 import type {
   ConformanceCheck,
   ConformanceEngine,
@@ -30,27 +24,6 @@ export const CONFORMANCE_RESULTS_PATH = "docs/research/plugins-conformance.resul
 
 /** The engines the lane measures and the results file keys platforms by. */
 export type ConformancePlatformName = "linux" | "android";
-
-/** The host platform each lane platform measures (the lane's own naming). */
-const HOST_PLATFORM_BY_LANE: Record<ConformancePlatformName, PluginHostPlatform> = {
-  linux: "desktop",
-  android: "android",
-};
-
-/** The `support` marker a run on a host-unsupported platform records (#447, D1). */
-export const CONFORMANCE_UNSUPPORTED_SUPPORT = "unsupported-in-v1" as const;
-
-/** The issue that lifts the marker, when present (#492). */
-export const CONFORMANCE_UNSUPPORTED_FOLLOW_UP = "#492";
-
-/**
- * True when the host runs no Plugin on the platform a lane platform measures
- * (`PLUGIN_HOST_UNSUPPORTED_PLATFORMS`, empty since #517): the run is recorded
- * with `support: "unsupported-in-v1"` and its follow-up, #492.
- */
-export function isHostUnsupportedLanePlatform(platform: ConformancePlatformName): boolean {
-  return PLUGIN_HOST_UNSUPPORTED_PLATFORMS.includes(HOST_PLATFORM_BY_LANE[platform]);
-}
 
 /** The Tauri/wry versions the results pin, plus the WebView the run saw (D1). */
 export interface ConformanceStack {
@@ -69,10 +42,6 @@ export interface PlatformRun {
   device?: string;
   /** The lane exit code this run recorded (0 or 1; only a measured run records). */
   exit: ExitCode;
-  /** `"unsupported-in-v1"` when the host runs no Plugin on this platform (#447, #492). */
-  support?: "unsupported-in-v1";
-  /** The issue that lifts `support`, when present. */
-  followUp?: string;
   /**
    * The QuickJS engine's own timings (#516), recorded only when the run measured
    * under it; there is no gate on them (decision-401).
@@ -166,9 +135,7 @@ export function finalizeRun(
  * recorded; an exit-2 run (no check arrived, any `unmeasured`, a build or device
  * the lane could not reach) is never recorded, because the lane could not tell.
  * The gate is about versions, not pass/fail: a genuine failure while the host is
- * supported still records, keeping exit 1, so the file shows it. An Android run
- * records exit 1 with `support: "unsupported-in-v1"` because the host runs no
- * Plugin there (#447, #492), unless it measured under the QuickJS engine (#516).
+ * supported still records, keeping exit 1, so the file shows it.
  */
 export function canRecord(outcome: PlatformOutcome): boolean {
   return outcome.exitCode === 0 || outcome.exitCode === 1;
@@ -211,15 +178,7 @@ export function mergeRunEngine(input: {
   };
 }
 
-/**
- * The run a platform writes to `.bench/` and, on a measured run, merges in.
- *
- * The v1 unsupported marker (#447, #492) is for a platform whose host runs no
- * Plugin. A run that measured under the Android QuickJS engine (#516) is no
- * longer that case: the lane proves the capped engine there, so only a run that
- * did not measure QuickJS (`quickjs` absent) keeps the marker and its #492
- * follow-up.
- */
+/** The run a platform writes to `.bench/` and, on a measured run, merges in. */
 export function buildPlatformRun(input: {
   platform: ConformancePlatformName;
   engine: ConformanceEngine;
@@ -231,17 +190,12 @@ export function buildPlatformRun(input: {
   /** The measured QuickJS timings (#516); absent off the QuickJS engine. */
   quickjs?: QuickJsTimings;
 }): PlatformRun {
-  const unsupported =
-    isHostUnsupportedLanePlatform(input.platform) && input.quickjs === undefined;
   return {
     ranAt: input.ranAt,
     engine: input.engine,
     ...(input.device === undefined ? {} : { device: input.device }),
     exit: input.exit,
     ...(input.quickjs === undefined ? {} : { quickjs: input.quickjs }),
-    ...(unsupported
-      ? { support: CONFORMANCE_UNSUPPORTED_SUPPORT, followUp: CONFORMANCE_UNSUPPORTED_FOLLOW_UP }
-      : {}),
     checks: input.checks,
   };
 }

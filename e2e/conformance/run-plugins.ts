@@ -24,7 +24,6 @@ import {
 } from "@/test/support/plugin-conformance/args";
 import {
   CONFORMANCE_RESULTS_PATH,
-  CONFORMANCE_UNSUPPORTED_SUPPORT,
   type ConformanceResultsFile,
   type ConformanceStack,
   type PlatformOutcome,
@@ -313,12 +312,8 @@ async function main(): Promise<void> {
         if (canRecord(result.outcome)) {
           results = mergePlatformRun(results, platform, result.run, result.stack, new Date().toISOString());
           writeFileSync(resultsPath, `${JSON.stringify(results, null, 2)}\n`);
-          const unsupported =
-            result.run.support === CONFORMANCE_UNSUPPORTED_SUPPORT
-              ? " (unsupported-in-v1, follow-up #492)"
-              : "";
           console.log(
-            `[conformance] recorded ${platform} (exit ${result.outcome.exitCode})${unsupported} into ${CONFORMANCE_RESULTS_PATH}`
+            `[conformance] recorded ${platform} (exit ${result.outcome.exitCode}) into ${CONFORMANCE_RESULTS_PATH}`
           );
         } else {
           console.warn(

@@ -216,7 +216,7 @@ export async function runConformanceChecks(
     await onCheck?.(check);
   };
 
-  // The Android frame path is off in v1 and under private disclosure: skip it
+  // Custom Frame UI is off on Android (#517): skip it
   // entirely so no sandboxed-frame IPC result is ever probed or recorded.
   if (seam.platform !== "android") {
     await record(
