@@ -60,7 +60,6 @@ export const FIXED_WAIT_BASELINE: Readonly<Record<string, number>> = {
   "src/test/unit/lib/platform/tauri/dictation.test.ts": 1,
   "src/test/unit/lib/platform/web/backup.test.ts": 2,
   "src/test/unit/pages/SettingsOutline.test.tsx": 2,
-  "src/test/unit/plugin-sdk/worker-ui.test.tsx": 3,
   "src/test/unit/plugins/plugin-ui-mount.test.ts": 3,
   "src/test/unit/plugins/plugin-ui-transport.test.tsx": 3,
   "src/test/support/frames/probe.ts": 1,
