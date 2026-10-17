@@ -33,3 +33,4 @@ export * from "@/components/icons/CoverDesignIcon";
 export * from "@/components/icons/DocumentIcon";
 export * from "@/components/icons/RefreshIcon";
 export * from "@/components/icons/MaibukLogo";
+export * from "@/components/icons/ArrowDownGripIcon";

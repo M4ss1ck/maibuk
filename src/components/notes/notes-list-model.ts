@@ -3,9 +3,9 @@ import {
   ArrowDownZA,
   CalendarArrowDown,
   CalendarArrowUp,
-  GripVertical,
   type LucideIcon,
 } from "lucide-react";
+import { ArrowDownGripIcon } from "@/components/icons/ArrowDownGripIcon";
 import type { Book } from "@/features/books/types";
 import type { CommandId } from "@/lib/shortcut-registry";
 import type { CreateNoteInput, Note } from "@/features/notes";
@@ -137,7 +137,7 @@ export function notesSortOptions(
     { value: "date-asc", label: t("notes.sortDateOldest"), icon: CalendarArrowUp },
   ];
   return custom
-    ? [{ value: "custom", label: t("notes.sortCustom"), icon: GripVertical }, ...sorted]
+    ? [{ value: "custom", label: t("notes.sortCustom"), icon: ArrowDownGripIcon }, ...sorted]
     : sorted;
 }
 
