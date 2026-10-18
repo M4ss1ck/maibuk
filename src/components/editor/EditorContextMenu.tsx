@@ -430,8 +430,11 @@ export function EditorContextMenu({
                   <Header className="truncate px-3 py-1.5 text-xs text-muted-foreground">
                     {menu.misspelling.word}
                   </Header>
+                  {/* Each branch is keyed: these items share one slot, and React Aria
+                      throws "Cannot change the id of an item" if React reuses one. */}
                   {menu.isLoadingSuggestions ? (
                     <MenuItem
+                      key="suggestions-loading"
                       id="suggestions-loading"
                       data-command-exempt="spelling suggestion"
                       isDisabled
@@ -442,8 +445,6 @@ export function EditorContextMenu({
                     </MenuItem>
                   ) : topSuggestions.length > 0 ? (
                     topSuggestions.map((suggestion, index) => (
-                      // React key and React Aria id must agree: React Aria throws
-                      // "Cannot change the id of an item" if a reused element's id moves.
                       <MenuItem
                         key={index}
                         id={`suggestion:${index}`}
@@ -456,6 +457,7 @@ export function EditorContextMenu({
                     ))
                   ) : (
                     <MenuItem
+                      key="suggestions-none"
                       id="suggestions-none"
                       data-command-exempt="spelling suggestion"
                       isDisabled

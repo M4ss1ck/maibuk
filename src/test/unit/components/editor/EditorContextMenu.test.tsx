@@ -140,6 +140,23 @@ describe("EditorContextMenu", () => {
     expect(items).toEqual(["the", "ten"]);
   });
 
+  it("shows no suggestions after loading when the lookup finds none", async () => {
+    // Regression: the loading and empty items shared an unkeyed slot, so React
+    // reused the loading item and React Aria threw "Cannot change the id of an
+    // item" when the lookup came back empty, blanking the app.
+    const { spellCheckService } = await import("@/lib/spellcheck");
+    vi.mocked(spellCheckService.suggest).mockResolvedValue([]);
+    const user = userEvent.setup();
+    const editor = renderRealEditor("<p>qzxv</p>");
+    editor.storage.spellCheck = {
+      getMisspellingAt: () => ({ from: 1, to: 5, word: "qzxv" }),
+    } as never;
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+
+    expect(await screen.findByRole("menuitem", { name: "editor.noSuggestions" })).toBeInTheDocument();
+  });
+
   it("renders duplicate suggestions without crashing and applies the chosen one", async () => {
     const { spellCheckService } = await import("@/lib/spellcheck");
     vi.mocked(spellCheckService.suggest).mockResolvedValue(["the", "the", "ten"]);
