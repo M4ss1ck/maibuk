@@ -366,8 +366,12 @@ judges:
   tracing protocol (WebKit; also `--engine chromium` to cross-check). The
   refresh interval is a quiet page's rAF cadence. Headless WebKit ticks rAF on
   a ~16 ms timer instead of a display, so its numbers say less than a headed
-  run; headed WebKit needs Playwright's system libraries
-  (`sudo pnpm exec playwright install-deps webkit`).
+  run (the default, `--source probe`), which is the representative WebKit
+  number. Headed WebKit presents at about 60 Hz even on a faster display, so
+  the probe judges it against a ~16 ms interval where Chromium on the same
+  monitor gets the display's own. It needs Playwright's system libraries once
+  per machine (`sudo pnpm exec playwright install-deps webkit`); without them
+  the lane exits 2 and prints that command.
 - `android`: `dumpsys gfxinfo com.massick.maibuk framestats` (IntendedVsync to
   FrameCompleted, flagged rows dropped), with the refresh period from
   SurfaceFlinger. The lane drives the app's WebView over CDP, so it needs a
