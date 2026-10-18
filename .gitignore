@@ -52,3 +52,4 @@ vendor/
 
 # Vitest shard blob reports (CI)
 .vitest-reports
+.vitest-artifacts

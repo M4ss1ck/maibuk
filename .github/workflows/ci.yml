@@ -114,7 +114,9 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: vitest-blob-${{ matrix.shard }}
+          # One name per attempt: "Re-run failed jobs" keeps the old report,
+          # and the coverage job picks the newest (scripts/latest-shard-reports.mjs).
+          name: vitest-blob-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: .vitest-reports/
           include-hidden-files: true
           retention-days: 1
@@ -175,8 +177,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: vitest-blob-*
-          path: .vitest-reports
-          merge-multiple: true
+          path: .vitest-artifacts
+
+      - name: Pick the newest report of each shard
+        run: node scripts/latest-shard-reports.mjs .vitest-artifacts .vitest-reports
 
       - name: Merge reports and check coverage thresholds
         run: pnpm exec vitest run --mergeReports --coverage
