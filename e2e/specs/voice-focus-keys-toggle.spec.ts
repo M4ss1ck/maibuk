@@ -1,6 +1,6 @@
 // focus.toggle by voice (issue #318): the microphone says "Press Space".
 // Pattern: e2e/specs/voice-commands-app.spec.ts; setup: e2e/support/voice-focus.ts.
-import { tabTo } from "../support/keyboard";
+import { pressUntilFocused } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import {
   downloadEnglishFast,
@@ -25,7 +25,8 @@ test.describe("@wf:voice-focus-keys @sc:focus.toggle @chromium-only", () => {
     await openChapterWithDictation(page);
     await focusChapter(page, "The Lamp");
     const remove = row(page, "The Lamp").getByRole("button", { name: "Delete Chapter" });
-    await tabTo(page, remove, { max: 6 });
+    // Row buttons are reached by ArrowRight; Tab leaves the grid (ADR 0025).
+    await pressUntilFocused(page, "ArrowRight", remove, { max: 6 });
     await page.keyboard.press("Enter");
     const no = page.getByRole("button", { name: "No", exact: true });
     await expect(no).toBeFocused();
