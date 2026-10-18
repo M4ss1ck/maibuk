@@ -127,6 +127,8 @@ export interface EchoEditorController {
    * while highlighting is off.
    */
   refresh(): Promise<void>;
+  /** Resolves once startup has read the stored switch and painted the focused editor, if any. */
+  readonly ready: Promise<void>;
 }
 
 /** The controller's own state; off until the author toggles it on. */
@@ -523,7 +525,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     })
     .catch(() => {});
 
-  void restore().catch(() => {});
+  const ready = restore().catch(() => {});
 
   return {
     async toggleHighlights() {
@@ -567,5 +569,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     async refresh() {
       await recompute();
     },
+
+    ready,
   };
 }

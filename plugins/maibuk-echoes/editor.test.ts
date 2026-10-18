@@ -251,9 +251,6 @@ function repeatedEchoText(count: number): string {
 
 const kindsOf = (calls: readonly HighlightCall[]): string[] => calls.map((call) => call.kind);
 
-/** Lets every pending microtask and zero-delay timer run, for "nothing happens" checks. */
-const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-
 /** Whether a repetition paint with ranges was sent at or after call index `mark`. */
 const paintedSince = (fake: { highlights: readonly HighlightCall[] }, mark: number): boolean =>
   fake.highlights.slice(mark).some((call) => call.kind === "repetition" && call.ranges.length > 0);
@@ -654,21 +651,19 @@ describe("one highlights switch for every editor", () => {
 
   it("announces no echoes at startup, even when the enabled kinds find none", async () => {
     const fake = fakeClient({ text: PLAIN, highlightsOn: true });
-    createEchoEditor(fake.client);
+    await createEchoEditor(fake.client).ready;
 
-    await vi.waitFor(() => expect(fake.pressed).toEqual([true]));
-    await vi.waitFor(() => expect(fake.getContentCalls()).toBe(1));
-    await settle();
+    expect(fake.pressed).toEqual([true]);
+    expect(fake.getContentCalls()).toBe(1);
     expect(fake.notifications).toEqual([]);
   });
 
   it("waits for the next editor focus when none is focused at startup", async () => {
     const fake = fakeClient({ text: DOORS, highlightsOn: true });
     fake.setFocused(false);
-    createEchoEditor(fake.client);
+    await createEchoEditor(fake.client).ready;
 
-    await vi.waitFor(() => expect(fake.pressed).toEqual([true]));
-    await settle();
+    expect(fake.pressed).toEqual([true]);
     expect(fake.highlights).toEqual([]);
 
     fake.setFocused(true);
@@ -683,9 +678,8 @@ describe("one highlights switch for every editor", () => {
     ["a non-boolean string", "true"],
   ])("stays off at startup when the stored switch is %s", async (_label, value) => {
     const fake = fakeClient({ text: DOORS, highlightsOn: value });
-    createEchoEditor(fake.client);
+    await createEchoEditor(fake.client).ready;
 
-    await settle();
     expect(fake.pressed).toEqual([]);
     expect(fake.getContentCalls()).toBe(0);
     expect(fake.highlights).toEqual([]);
@@ -699,7 +693,7 @@ describe("one highlights switch for every editor", () => {
     await controller.toggleHighlights();
     await controller.toggleHighlights();
     release();
-    await settle();
+    await controller.ready;
 
     expect(fake.pressed).toEqual([true, false]);
     expect(fake.storage.get(ECHOES_HIGHLIGHTS_KEY)).toBe(false);
