@@ -10,8 +10,12 @@
  * `runtime.tsx`, so it is kept apart from the report page and Settings row: a
  * test drives it over a fake client, with no Worker, host, or live editor.
  *
- * State lives for the Plugin activation and starts off each time. Only the
- * kinds the author enabled in Settings are painted (nearby by default); a
+ * One switch covers every editor (Chapter, Note, Ephemeral). It is stored in the
+ * Plugin's storage, read at startup, and changed only by an explicit toggle, so
+ * it survives editor switches, app restarts, and Plugin stops. Focus moving to
+ * another editor keeps it on and paints that editor; an editor closing keeps it
+ * on too, and the next editor to take focus is painted. Only the kinds the
+ * author enabled in Settings are painted (nearby by default); a
  * nearby echo paints both of its words. Detection runs in the language the
  * host reports with the editor's content (spec line 15, ADR 0030): a Note's own
  * else its Book's, a Chapter's Book's, the Ephemeral's Spell Check language;
@@ -47,7 +51,9 @@ import {
   readEchoPalette,
   readEchoesSettings,
   readEditorKinds,
+  readHighlightsOn,
   toEditorFindOptions,
+  writeHighlightsOn,
 } from "./settings";
 
 /**
@@ -106,6 +112,9 @@ type ContentOk = Extract<ContentResult, { status: "ok" }>;
 
 /** The entity a focused editor is bound to. */
 type EntityTarget = ContentOk["entity"];
+
+/** The focused editor's caret read, as the SDK returns it. */
+type SelectionResult = Awaited<ReturnType<EchoEditorClient["editor"]["getSelection"]>>;
 
 /** The three editor Commands the controller answers, plus its Settings refresh. */
 export interface EchoEditorController {
@@ -167,6 +176,10 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
   // that awaited the focused editor checks both after its read (#529).
   let focusEpoch = 0;
   let lastFocused: EntityTarget | null = null;
+
+  // Set by the first explicit toggle. The startup read of the stored switch is
+  // ignored once the author has acted, so an explicit toggle always wins (#534).
+  let toggledByAuthor = false;
 
   // Coalescing: one recompute runs at a time; a change that arrives while one
   // is in flight is remembered and runs exactly one more time afterwards.
@@ -316,19 +329,63 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     void client.toolbar.setPressed({ button: "toggleHighlights", pressed: value }).catch(() => {});
   }
 
-  /** Forgets the focused editor and switches off, without touching the host. */
-  function resetState(): void {
-    setOn(false);
+  /**
+   * Forgets the focused editor without touching the switch, the button, or the
+   * host: the next editor to take focus starts from nothing.
+   */
+  function forget(): void {
     state.entity = null;
     state.list = [];
     state.window = { start: 0, end: 0 };
     state.index = null;
+    state.empty = { repetition: false, info: false, warning: false };
+  }
+
+  /** Switches off and forgets the focused editor, without touching the host. */
+  function resetState(): void {
+    setOn(false);
+    forget();
   }
 
   /** Switches off and clears every kind from the still-focused editor. */
   function turnOff(): Promise<void> {
     resetState();
     return clear();
+  }
+
+  /**
+   * Points the controller at `content`'s editor and paints it with the enabled
+   * kinds. The shared paint path of the explicit toggle, startup, and a focus
+   * change to an editor while the switch is on.
+   */
+  async function activate(content: ContentOk, selection: SelectionResult): Promise<void> {
+    forget();
+    state.entity = content.entity;
+    state.detectionLanguage = detectionLanguageOf(content);
+    const caret = selection.status === "ok" ? selection.range.from : 0;
+    await apply(content.content.text, content.entity, caret);
+  }
+
+  /**
+   * The focused editor's content and caret, or null when no editor is focused
+   * or focus moved to another entity during the read.
+   */
+  async function readFocused(): Promise<{ content: ContentOk; selection: SelectionResult } | null> {
+    const epoch = focusEpoch;
+    const [content, selection] = await Promise.all([
+      client.editor.getContent(),
+      client.editor.getSelection(),
+    ]);
+    if (content.status !== "ok") return null;
+    // A focus event during the read aborts only when it moved focus away
+    // from the editor read: the same entity re-announced is not a move (#529).
+    if (
+      focusEpoch !== epoch &&
+      (lastFocused === null || !sameEntity(lastFocused, content.entity))
+    ) {
+      return null;
+    }
+    return { content, selection };
   }
 
   /**
@@ -370,9 +427,10 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
   }
 
   // A stale null can arrive while the same editor is still focused (#529), so
-  // reset only when the host confirms no editor has focus on this entity.
+  // forget the editor only when the host confirms no editor has focus on it. The
+  // switch stays on and pressed: the next editor to take focus is painted.
   async function closeIfNoEditor(): Promise<void> {
-    if (!state.on && state.entity === null) return;
+    if (state.entity === null) return;
     const epoch = focusEpoch;
     const content = await client.editor.getContent().catch(() => null);
     // Any focus event since the null arrived supersedes its answer.
@@ -385,7 +443,42 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     ) {
       return;
     }
-    resetState();
+    forget();
+  }
+
+  /**
+   * Moves the paint from the previous editor to `entity`, the newly focused one
+   * (#534). The previous editor's paint is cleared, then the new editor is
+   * painted, unless focus moved again, the switch went off, or the content read
+   * is not for `entity`.
+   */
+  async function switchTo(entity: EntityTarget, epoch: number): Promise<void> {
+    const previous = state.entity;
+    // Forget first: a change to the old entity that lands during the clear must
+    // not repaint it, and the new editor must not inherit its ranges.
+    forget();
+    if (previous !== null) await clear();
+    const [content, selection] = await Promise.all([
+      client.editor.getContent(),
+      client.editor.getSelection(),
+    ]);
+    if (focusEpoch !== epoch || !state.on || state.entity !== null) return;
+    if (content.status !== "ok" || !sameEntity(content.entity, entity)) return;
+    await activate(content, selection);
+  }
+
+  /**
+   * Startup (#534): when the stored switch is on, presses the Toggle Button and
+   * paints the focused editor if there is one. With no editor, the next non-null
+   * focus paints. A read that resolves after an explicit toggle is ignored.
+   */
+  async function restore(): Promise<void> {
+    const on = await readHighlightsOn(client);
+    if (!on || toggledByAuthor) return;
+    setOn(true);
+    const focused = await readFocused();
+    if (focused === null || !state.on || state.entity !== null) return;
+    await activate(focused.content, focused.selection);
   }
 
   function listen<E extends PluginApiEventId>(
@@ -402,20 +495,20 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
 
   listen("editor.focusChanged", (payload) => {
     focusEpoch++;
+    const epoch = focusEpoch;
     lastFocused = payload.entity;
     // The host reports `null` when the focused editor unmounts or a stale null
     // arrives after a toggle (a mere blur to a toolbar button or a Plugin page
-    // keeps the target). A null only asks for a check: `closeIfNoEditor` resets
-    // the state when the host confirms no editor is focused on this entity, and
-    // resets without painting, since an unmounted editor has nothing left to
-    // clear and a later editor must never inherit this one's ranges (#451, #529).
+    // keeps the target). A null only asks for a check: `closeIfNoEditor` forgets
+    // the editor when the host confirms no editor is focused on it. The switch
+    // stays on, and a later editor must never inherit this one's ranges (#451, #529).
     if (payload.entity === null) {
       return closeIfNoEditor();
     }
-    // A different, non-null entity turns highlighting off and clears the kinds
-    // from the editor that still has them.
-    if (!state.on || state.entity === null || sameEntity(payload.entity, state.entity)) return;
-    return turnOff();
+    // A non-null entity while the switch is on paints that editor. A different
+    // one first clears the previous editor's paint (#534).
+    if (!state.on || (state.entity !== null && sameEntity(payload.entity, state.entity))) return;
+    return switchTo(payload.entity, epoch);
   });
 
   listen("language.changed", (payload) => {
@@ -430,38 +523,25 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     })
     .catch(() => {});
 
+  void restore().catch(() => {});
+
   return {
     async toggleHighlights() {
+      toggledByAuthor = true;
       try {
         if (state.on) {
           await turnOff();
+          await writeHighlightsOn(client, false);
           return;
         }
         // The caret comes with the content, so the first paint centers on it
         // without an extra round trip (#451, decision 7).
-        const epoch = focusEpoch;
-        const [content, selection] = await Promise.all([
-          client.editor.getContent(),
-          client.editor.getSelection(),
-        ]);
-        if (content.status !== "ok") return;
-        // A focus event during the read aborts only when it moved focus away
-        // from the editor read: the same entity re-announced is not a move (#529).
-        if (
-          focusEpoch !== epoch &&
-          (lastFocused === null || !sameEntity(lastFocused, content.entity))
-        ) {
-          return;
-        }
+        const focused = await readFocused();
+        if (focused === null) return;
         setOn(true);
-        state.entity = content.entity;
-        state.index = null;
-        state.list = [];
-        state.window = { start: 0, end: 0 };
-        state.empty = { repetition: false, info: false, warning: false };
-        state.detectionLanguage = detectionLanguageOf(content);
-        const caret = selection.status === "ok" ? selection.range.from : 0;
-        await apply(content.content.text, content.entity, caret);
+        await activate(focused.content, focused.selection);
+        // Best-effort: a refused write leaves the switch working in memory (#534).
+        await writeHighlightsOn(client, true);
         if (state.on && state.list.length === 0) await notify(echoNoEchoes(translate()));
       } catch {
         // Keep the controller alive; the next toggle retries.

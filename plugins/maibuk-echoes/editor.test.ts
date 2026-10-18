@@ -21,7 +21,12 @@ import {
   type EchoServe,
   startEchoes,
 } from "./runtime";
-import { ECHOES_COLOR_KEY, ECHOES_EDITOR_KEY, ECHOES_PALETTE_KEY } from "./settings";
+import {
+  ECHOES_COLOR_KEY,
+  ECHOES_EDITOR_KEY,
+  ECHOES_HIGHLIGHTS_KEY,
+  ECHOES_PALETTE_KEY,
+} from "./settings";
 import { echoColor } from "./colors";
 
 /** One recorded `editor.setHighlights` call. */
@@ -67,11 +72,17 @@ interface FakeOptions {
   colorByEcho?: boolean;
   /** The Echo color Palette to store (unset leaves Okabe-Ito, as 0.2.0 did) (#533). */
   palette?: string;
+  /** The raw "Toggle echo highlights" value to store (unset leaves it missing). */
+  highlightsOn?: unknown;
+  /** Makes every storage write reject, as a refusing host would. */
+  refuseWrites?: boolean;
 }
+
+type FakeEntity = { kind: "chapter" | "note" | "ephemeral"; id: string };
 
 function fakeClient(options: FakeOptions = {}) {
   const kind = options.kind ?? "chapter";
-  const entity = {
+  let entity: FakeEntity = {
     kind,
     id: options.id ?? (kind === "chapter" ? "c1" : kind === "note" ? "n1" : "ephemeral"),
   };
@@ -81,6 +92,7 @@ function fakeClient(options: FakeOptions = {}) {
   if (options.editorKinds !== undefined) storage.set(ECHOES_EDITOR_KEY, [...options.editorKinds]);
   if (options.colorByEcho !== undefined) storage.set(ECHOES_COLOR_KEY, options.colorByEcho);
   if (options.palette !== undefined) storage.set(ECHOES_PALETTE_KEY, options.palette);
+  if (options.highlightsOn !== undefined) storage.set(ECHOES_HIGHLIGHTS_KEY, options.highlightsOn);
   const listeners = new Map<string, Set<Listener>>();
   const highlights: HighlightCall[] = [];
   const reveals: Array<{ from: number; to: number }> = [];
@@ -90,6 +102,7 @@ function fakeClient(options: FakeOptions = {}) {
   let selection = options.selection === undefined ? { from: 0, to: 0 } : options.selection;
   let getContentCalls = 0;
   let gate: Promise<void> | null = null;
+  let highlightsReadGate: Promise<void> | null = null;
   // Whether an editor is focused. Off models the editor having unmounted, which
   // is what the host reports as `editor.focusChanged` with a null entity.
   let focused = true;
@@ -138,9 +151,11 @@ function fakeClient(options: FakeOptions = {}) {
     },
     storage: {
       async get({ key }) {
+        if (key === ECHOES_HIGHLIGHTS_KEY && highlightsReadGate !== null) await highlightsReadGate;
         return storage.get(key) ?? null;
       },
       async set({ key, value }) {
+        if (options.refuseWrites) throw new Error("storage refused the write");
         storage.set(key, value);
         return null;
       },
@@ -164,7 +179,10 @@ function fakeClient(options: FakeOptions = {}) {
 
   return {
     client,
-    entity,
+    /** The entity the focused editor is bound to now. */
+    get entity(): FakeEntity {
+      return entity;
+    },
     highlights,
     reveals,
     notifications,
@@ -184,6 +202,21 @@ function fakeClient(options: FakeOptions = {}) {
     /** The author switches the editor's language (its Spell Check language). */
     setLanguage(next: string) {
       language = next;
+    },
+    /** Moves focus to another entity (a Chapter, a Note, or the Ephemeral). */
+    setEntity(next: FakeEntity) {
+      entity = next;
+    },
+    /** Makes the startup read of the stored highlights switch wait for the returned release. */
+    gateHighlightsRead(): () => void {
+      let release!: () => void;
+      highlightsReadGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return () => {
+        highlightsReadGate = null;
+        release();
+      };
     },
     /** Makes every later `editor.getContent` wait for the returned release. */
     gateContent(): () => void {
@@ -217,6 +250,13 @@ function repeatedEchoText(count: number): string {
 }
 
 const kindsOf = (calls: readonly HighlightCall[]): string[] => calls.map((call) => call.kind);
+
+/** Lets every pending microtask and zero-delay timer run, for "nothing happens" checks. */
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/** Whether a repetition paint with ranges was sent at or after call index `mark`. */
+const paintedSince = (fake: { highlights: readonly HighlightCall[] }, mark: number): boolean =>
+  fake.highlights.slice(mark).some((call) => call.kind === "repetition" && call.ranges.length > 0);
 
 describe("toggleHighlights() Toggle Button state", () => {
   it("sets the Toggle Button pressed when highlights turn on, and back off when they turn off", async () => {
@@ -500,62 +540,201 @@ describe("focusChanged while on", () => {
     expect(fake.reveals.length).toBe(1);
   });
 
-  it("turns off and clears every kind for a different entity", async () => {
-    const fake = fakeClient();
+  it("keeps the switch on and clears the old editor for a different entity", async () => {
+    const fake = fakeClient({ text: DOORS });
     const controller = createEchoEditor(fake.client);
     await controller.toggleHighlights();
 
-    fake.emit("editor.focusChanged", { entity: { kind: "chapter", id: "c2" } });
+    fake.setEntity({ kind: "chapter", id: "c2" });
+    await fake.emit("editor.focusChanged", { entity: fake.entity });
 
-    await vi.waitFor(() => expect(fake.highlights.length).toBe(6));
-    expect(kindsOf(fake.highlights.slice(-3))).toEqual(["repetition", "info", "warning"]);
-    expect(fake.highlights.slice(-3).every((call) => call.ranges.length === 0)).toBe(true);
+    expect(fake.pressed).toEqual([true]);
+    // The old editor's three kinds are cleared, then the new one is painted.
+    expect(kindsOf(fake.highlights.slice(3, 6))).toEqual(["repetition", "info", "warning"]);
+    expect(fake.highlights.slice(3, 6).every((call) => call.ranges.length === 0)).toBe(true);
+    expect(paintedSince(fake, 6)).toBe(true);
 
-    // Off now: a later change for the old entity recomputes nothing. Decided
-    // synchronously in the listener, so there is nothing to wait for.
-    fake.emit("editor.contentChanged", { entity: fake.entity });
-    expect(fake.highlights.length).toBe(6);
+    // Still on: a change to the new entity recomputes it.
+    const mark = fake.highlights.length;
+    await fake.emit("editor.contentChanged", { entity: fake.entity });
+    expect(paintedSince(fake, mark)).toBe(true);
   });
 
-  it("turns off when the focused editor closes, without painting the gone editor", async () => {
+  it("keeps the switch on when the focused editor closes, without painting the gone editor", async () => {
     const fake = fakeClient();
     const controller = createEchoEditor(fake.client);
     await controller.toggleHighlights();
     expect(fake.highlights.length).toBe(3);
 
     // The host reports `null` only when the focused editor unmounts: there is no
-    // editor left to clear, so nothing more is painted.
-    // Synchronous, as above: the null focus only resets state, and paints nothing.
+    // editor left to clear, so nothing is painted, and the switch stays pressed.
     fake.setFocused(false);
-    fake.emit("editor.focusChanged", { entity: null });
+    await fake.emit("editor.focusChanged", { entity: null });
     expect(fake.highlights.length).toBe(3);
+    expect(fake.pressed).toEqual([true]);
   });
 
-  it("does not repaint when the same entity reopens, and Next says highlights are off", async () => {
+  it("repaints the same entity when it reopens, with the switch still on", async () => {
     const fake = fakeClient({ text: DOORS });
     const controller = createEchoEditor(fake.client);
     await controller.toggleHighlights();
 
-    // Close the editor, then reopen the same entity: highlighting starts off,
-    // so its content change repaints nothing.
+    // Close the editor; the null focus is confirmed before the reopen arrives.
     fake.setFocused(false);
-    fake.emit("editor.focusChanged", { entity: null });
-    // The null focus confirms the closed editor asynchronously; the reopen comes
-    // only after that reset, as it does on a real close and reopen.
-    await vi.waitFor(() => expect(fake.pressed.at(-1)).toBe(false));
+    await fake.emit("editor.focusChanged", { entity: null });
+    expect(fake.pressed).toEqual([true]);
+
     fake.setFocused(true);
     await Promise.all([
       fake.emit("editor.focusChanged", { entity: fake.entity }),
       fake.emit("editor.contentChanged", { entity: fake.entity }),
     ]);
-    expect(fake.highlights.length).toBe(3);
+    expect(paintedSince(fake, 3)).toBe(true);
 
     await controller.nextEcho();
-    expect(fake.reveals).toEqual([]);
-    expect(fake.notifications.at(-1)).toEqual({
-      variant: "info",
-      message: "Echo highlights are off",
-    });
+    expect(fake.reveals.length).toBe(1);
+  });
+});
+
+describe("one highlights switch for every editor", () => {
+  it("keeps the switch pressed and paints a Note after focus moves off a Chapter", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+
+    const mark = fake.highlights.length;
+    fake.setEntity({ kind: "note", id: "n1" });
+    await fake.emit("editor.focusChanged", { entity: fake.entity });
+
+    expect(fake.pressed).toEqual([true]);
+    expect(paintedSince(fake, mark)).toBe(true);
+  });
+
+  it("clears the old editor's paint before painting the new one", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+
+    const mark = fake.highlights.length;
+    fake.setEntity({ kind: "note", id: "n1" });
+    await fake.emit("editor.focusChanged", { entity: fake.entity });
+
+    const sent = fake.highlights.slice(mark);
+    expect(kindsOf(sent.slice(0, 3))).toEqual(["repetition", "info", "warning"]);
+    expect(sent.slice(0, 3).every((call) => call.ranges.length === 0)).toBe(true);
+    expect(paintedSince(fake, mark + 3)).toBe(true);
+  });
+
+  it("keeps the switch on across Chapter, Note, and back to the Chapter", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+
+    fake.setEntity({ kind: "note", id: "n1" });
+    await fake.emit("editor.focusChanged", { entity: fake.entity });
+
+    const mark = fake.highlights.length;
+    fake.setEntity({ kind: "chapter", id: "c1" });
+    await fake.emit("editor.focusChanged", { entity: fake.entity });
+
+    expect(fake.pressed).toEqual([true]);
+    expect(paintedSince(fake, mark)).toBe(true);
+    expect(fake.notifications).toEqual([]);
+  });
+
+  it("presses the switch and paints the focused editor at startup when stored on", async () => {
+    const fake = fakeClient({ text: DOORS, highlightsOn: true });
+    createEchoEditor(fake.client);
+
+    await vi.waitFor(() => expect(fake.pressed).toEqual([true]));
+    await vi.waitFor(() => expect(paintedSince(fake, 0)).toBe(true));
+    expect(fake.getContentCalls()).toBe(1);
+    expect(fake.notifications).toEqual([]);
+  });
+
+  it("announces no echoes at startup, even when the enabled kinds find none", async () => {
+    const fake = fakeClient({ text: PLAIN, highlightsOn: true });
+    createEchoEditor(fake.client);
+
+    await vi.waitFor(() => expect(fake.pressed).toEqual([true]));
+    await vi.waitFor(() => expect(fake.getContentCalls()).toBe(1));
+    await settle();
+    expect(fake.notifications).toEqual([]);
+  });
+
+  it("waits for the next editor focus when none is focused at startup", async () => {
+    const fake = fakeClient({ text: DOORS, highlightsOn: true });
+    fake.setFocused(false);
+    createEchoEditor(fake.client);
+
+    await vi.waitFor(() => expect(fake.pressed).toEqual([true]));
+    await settle();
+    expect(fake.highlights).toEqual([]);
+
+    fake.setFocused(true);
+    await fake.emit("editor.focusChanged", { entity: fake.entity });
+    expect(paintedSince(fake, 0)).toBe(true);
+    expect(fake.pressed).toEqual([true]);
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["false", false],
+    ["a non-boolean string", "true"],
+  ])("stays off at startup when the stored switch is %s", async (_label, value) => {
+    const fake = fakeClient({ text: DOORS, highlightsOn: value });
+    createEchoEditor(fake.client);
+
+    await settle();
+    expect(fake.pressed).toEqual([]);
+    expect(fake.getContentCalls()).toBe(0);
+    expect(fake.highlights).toEqual([]);
+  });
+
+  it("lets an explicit toggle win over a startup read that resolves later", async () => {
+    const fake = fakeClient({ text: DOORS, highlightsOn: true });
+    const release = fake.gateHighlightsRead();
+    const controller = createEchoEditor(fake.client);
+
+    await controller.toggleHighlights();
+    await controller.toggleHighlights();
+    release();
+    await settle();
+
+    expect(fake.pressed).toEqual([true, false]);
+    expect(fake.storage.get(ECHOES_HIGHLIGHTS_KEY)).toBe(false);
+    expect(fake.highlights.slice(-3).every((call) => call.ranges.length === 0)).toBe(true);
+  });
+
+  it("writes highlights true when toggled on", async () => {
+    const fake = fakeClient({ text: DOORS });
+    await createEchoEditor(fake.client).toggleHighlights();
+
+    expect(fake.storage.get(ECHOES_HIGHLIGHTS_KEY)).toBe(true);
+  });
+
+  it("writes highlights false when toggled off", async () => {
+    const fake = fakeClient({ text: DOORS });
+    const controller = createEchoEditor(fake.client);
+    await controller.toggleHighlights();
+    await controller.toggleHighlights();
+
+    expect(fake.storage.get(ECHOES_HIGHLIGHTS_KEY)).toBe(false);
+  });
+
+  it("still toggles on and off in memory when storage refuses the write, silently", async () => {
+    const fake = fakeClient({ text: DOORS, refuseWrites: true });
+    const controller = createEchoEditor(fake.client);
+
+    await controller.toggleHighlights();
+    expect(fake.pressed).toEqual([true]);
+    expect(paintedSince(fake, 0)).toBe(true);
+    expect(fake.notifications).toEqual([]);
+
+    await controller.toggleHighlights();
+    expect(fake.pressed).toEqual([true, false]);
+    expect(fake.highlights.slice(-3).every((call) => call.ranges.length === 0)).toBe(true);
+    expect(fake.notifications).toEqual([]);
   });
 });
 
@@ -923,14 +1102,25 @@ describe("highlight transition audit (#529)", () => {
     const controller = createEchoEditor(fake.client);
     await controller.toggleHighlights();
     const before = fake.highlights.length;
+    const oldChapter = fake.entity;
     const release = fake.gateContent();
-    const recomputing = fake.emit("editor.contentChanged", { entity: fake.entity });
-    const moved = fake.emit("editor.focusChanged", { entity: { kind: "chapter", id: "c2" } });
+    const recomputing = fake.emit("editor.contentChanged", { entity: oldChapter });
+    // Focus moves to Chapter c2 while the recompute still reads c1.
+    fake.setEntity({ kind: "chapter", id: "c2" });
+    const moved = fake.emit("editor.focusChanged", { entity: fake.entity });
     release();
     await Promise.all([recomputing, moved]);
-    expect(fake.highlights.length).toBe(before + 3); // the turn-off clear only
-    expect(paintedAnything(fake)).toBe(false);
-    expect(lastPressed(fake)).toBe(false);
+    // The switch clears c1 (three empty sends), then paints c2 once. The
+    // in-flight c1 recompute sends nothing, so c2 is the only nonempty repaint.
+    expect(
+      fake.highlights.slice(before, before + 3).every((call) => call.ranges.length === 0)
+    ).toBe(true);
+    expect(
+      fake.highlights
+        .slice(before)
+        .filter((call) => call.kind === "repetition" && call.ranges.length > 0)
+    ).toHaveLength(1);
+    expect(lastPressed(fake)).toBe(true);
   });
 
   it("editor unmount during a recompute: nothing is painted after the editor closes", async () => {
@@ -944,8 +1134,9 @@ describe("highlight transition audit (#529)", () => {
     const unmounted = fake.emit("editor.focusChanged", { entity: null });
     release();
     await Promise.all([recomputing, unmounted]);
+    // Nothing is painted once the editor is gone; the switch itself stays on.
     expect(fake.highlights.length).toBe(before);
-    expect(lastPressed(fake)).toBe(false);
+    expect(lastPressed(fake)).toBe(true);
   });
 
   it("Plugin restart while on: a new activation starts off and paints nothing", async () => {
