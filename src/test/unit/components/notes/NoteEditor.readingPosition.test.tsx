@@ -3,8 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import type { Note, UpdateNoteInput } from "@/features/notes";
 
-const { editorProps } = vi.hoisted(() => ({
+const { editorProps, bookState } = vi.hoisted(() => ({
   editorProps: [] as Array<Record<string, unknown>>,
+  bookState: { books: [] as Array<{ id: string; title: string; language: string }> },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -31,7 +32,7 @@ vi.mock("../../../../features/notes/store", () => {
 });
 
 vi.mock("../../../../features/books/store", () => ({
-  useBookStore: (selector: (state: Record<string, unknown>) => unknown) => selector({ books: [] }),
+  useBookStore: (selector: (state: Record<string, unknown>) => unknown) => selector(bookState),
 }));
 
 vi.mock("../../../../features/chapters/store", () => ({
@@ -107,5 +108,33 @@ describe("NoteEditor reading-position wiring", () => {
     const last = editorProps[editorProps.length - 1];
     expect(last?.restoreKey).toBe("note:n1");
     expect(last?.suppressRestore).toBe(true);
+  });
+
+  it("tells Plugins the Note's own language", () => {
+    editorProps.length = 0;
+    render(
+      <NoteEditor
+        note={buildNote({ id: "n1", language: "es" })}
+        onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>()}
+      />
+    );
+
+    const last = editorProps[editorProps.length - 1];
+    expect(last?.pluginEntity).toEqual({ kind: "note", id: "n1" });
+    expect(last?.pluginLanguage).toBe("es");
+  });
+
+  it("tells Plugins its Book's language when the Note has none", () => {
+    editorProps.length = 0;
+    bookState.books = [{ id: "b1", title: "Book", language: "pt" }];
+    render(
+      <NoteEditor
+        note={buildNote({ id: "n1", language: " ", bookId: "b1" })}
+        onSave={vi.fn<(input: UpdateNoteInput) => Promise<void>>()}
+      />
+    );
+
+    expect(editorProps[editorProps.length - 1]?.pluginLanguage).toBe("pt");
+    bookState.books = [];
   });
 });

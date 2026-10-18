@@ -55,14 +55,12 @@ interface FakeOptions {
   text?: string;
   /** The entity the focused editor is bound to. */
   id?: string;
-  /** The kind of editor: a Chapter, or a Note. */
-  kind?: "chapter" | "note";
+  /** The kind of editor: a Chapter, a Note, or the Ephemeral. */
+  kind?: "chapter" | "note" | "ephemeral";
   /** The caret the editor reports, or null for a no-target selection. */
   selection?: { from: number; to: number } | null;
-  /** The language of the entity's Book. */
-  bookLanguage?: string;
-  /** A Note's own language, or null (then its Book's language is used). */
-  noteLanguage?: string | null;
+  /** The language the host reports with the editor's content (default en). */
+  language?: string;
   /** The editor highlight kinds to store (unset leaves the nearby-only default). */
   editorKinds?: readonly string[];
   /** The "Color highlights by echo" value to store (unset leaves it off, as 0.1.0 did). */
@@ -75,9 +73,10 @@ function fakeClient(options: FakeOptions = {}) {
   const kind = options.kind ?? "chapter";
   const entity = {
     kind,
-    id: options.id ?? (kind === "note" ? "n1" : "c1"),
-  } as { kind: "chapter" | "note"; id: string };
+    id: options.id ?? (kind === "chapter" ? "c1" : kind === "note" ? "n1" : "ephemeral"),
+  };
   const text = options.text ?? DOOR;
+  let language = options.language ?? "en";
   const storage = new Map<string, unknown>();
   if (options.editorKinds !== undefined) storage.set(ECHOES_EDITOR_KEY, [...options.editorKinds]);
   if (options.colorByEcho !== undefined) storage.set(ECHOES_COLOR_KEY, options.colorByEcho);
@@ -87,15 +86,6 @@ function fakeClient(options: FakeOptions = {}) {
   const reveals: Array<{ from: number; to: number }> = [];
   const notifications: NotificationCall[] = [];
   const pressed: boolean[] = [];
-
-  // A minimal Library: one Book whose language the options set, one Chapter in
-  // it, and one Note that may carry its own language.
-  const bookLanguage = options.bookLanguage ?? "en";
-  const books: Record<string, string> = { b1: bookLanguage };
-  const chapters: Record<string, string> = { c1: "b1" };
-  const notes: Record<string, { bookId: string | null; language: string | null }> = {
-    n1: { bookId: "b1", language: options.noteLanguage ?? null },
-  };
 
   let selection = options.selection === undefined ? { from: 0, to: 0 } : options.selection;
   let getContentCalls = 0;
@@ -111,7 +101,7 @@ function fakeClient(options: FakeOptions = {}) {
         const hasFocus = focused;
         if (gate !== null) await gate;
         if (!hasFocus) return { status: "no-target" };
-        return { status: "ok", entity, content: { text, html: `<p>${text}</p>` } };
+        return { status: "ok", entity, language, content: { text, html: `<p>${text}</p>` } };
       },
       async getSelection() {
         if (!focused) return { status: "no-target" };
@@ -126,58 +116,6 @@ function fakeClient(options: FakeOptions = {}) {
       async setHighlights({ kind, ranges }) {
         highlights.push({ kind, ranges: ranges.map((range) => ({ ...range })) });
         return { status: "applied" };
-      },
-    },
-    library: {
-      books: {
-        async get({ bookId }) {
-          const language = books[bookId];
-          return language === undefined
-            ? null
-            : {
-                id: bookId,
-                title: "Book",
-                subtitle: null,
-                authorName: "Author",
-                language,
-                wordCount: 0,
-                updatedAt: 0,
-              };
-        },
-      },
-      chapters: {
-        async get({ chapterId }) {
-          const bookId = chapters[chapterId];
-          return bookId === undefined
-            ? null
-            : {
-                id: chapterId,
-                bookId,
-                title: "Chapter",
-                order: 0,
-                parentId: null,
-                wordCount: 0,
-                updatedAt: 0,
-                content: { text: "", html: "" },
-              };
-        },
-      },
-      notes: {
-        async get({ noteId }) {
-          const note = notes[noteId];
-          return note === undefined
-            ? null
-            : {
-                id: noteId,
-                bookId: note.bookId,
-                title: "Note",
-                language: note.language,
-                tags: [],
-                wordCount: 0,
-                updatedAt: 0,
-                content: { text: "", html: "" },
-              };
-        },
       },
     },
     notifications: {
@@ -242,6 +180,10 @@ function fakeClient(options: FakeOptions = {}) {
     },
     setSelection(next: { from: number; to: number } | null) {
       selection = next;
+    },
+    /** The author switches the editor's language (its Spell Check language). */
+    setLanguage(next: string) {
+      language = next;
     },
     /** Makes every later `editor.getContent` wait for the returned release. */
     gateContent(): () => void {
@@ -851,40 +793,47 @@ describe("kind gating and paint dispatch (decision 7)", () => {
 });
 
 describe("detection language (spec line 15)", () => {
-  it("detects a Chapter in its Book's language", async () => {
+  it("detects in the language the host reports for the editor", async () => {
     // "para" is a Spanish stop word: nothing echoes under es...
-    const spanish = fakeClient({ text: PARA, kind: "chapter", bookLanguage: "es" });
+    const spanish = fakeClient({ text: PARA, kind: "chapter", language: "es" });
     await createEchoEditor(spanish.client).toggleHighlights();
     expect(spanish.highlights[0].ranges).toEqual([]);
     expect(spanish.notifications).toEqual([{ variant: "info", message: "No echoes found" }]);
 
-    // ...while the same text echoes in English, so the Book's language decided it.
-    const english = fakeClient({ text: PARA, kind: "chapter", bookLanguage: "en" });
+    // ...while the same text echoes in English, so the reported language decided it.
+    const english = fakeClient({ text: PARA, kind: "note", language: "en" });
     await createEchoEditor(english.client).toggleHighlights();
     expect(english.highlights[0].ranges.length).toBeGreaterThan(0);
   });
 
-  it("detects a Note in its own language before its Book's", async () => {
-    // The Note's own es wins over its Book's en: "para" is silent.
-    const note = fakeClient({ text: PARA, kind: "note", noteLanguage: "es", bookLanguage: "en" });
-    await createEchoEditor(note.client).toggleHighlights();
-    expect(note.highlights[0].ranges).toEqual([]);
-    expect(note.notifications).toEqual([{ variant: "info", message: "No echoes found" }]);
+  it("detects in the Ephemeral, in its Spell Check language", async () => {
+    const ephemeral = fakeClient({ text: PARA, kind: "ephemeral", language: "en" });
+    await createEchoEditor(ephemeral.client).toggleHighlights();
+    expect(ephemeral.highlights[0].ranges.length).toBeGreaterThan(0);
+
+    const spanish = fakeClient({ text: PARA, kind: "ephemeral", language: "es" });
+    await createEchoEditor(spanish.client).toggleHighlights();
+    expect(spanish.highlights[0].ranges).toEqual([]);
   });
 
-  it("falls back to a Note's Book language when the Note has none", async () => {
-    const note = fakeClient({ text: PARA, kind: "note", noteLanguage: null, bookLanguage: "es" });
-    await createEchoEditor(note.client).toggleHighlights();
-    expect(note.highlights[0].ranges).toEqual([]);
+  it("follows a language switch while on, without a toggle", async () => {
+    const fake = fakeClient({ text: PARA, kind: "note", language: "en" });
+    await createEchoEditor(fake.client).toggleHighlights();
+    expect(fake.highlights[0].ranges.length).toBeGreaterThan(0);
 
-    const englishBook = fakeClient({
-      text: PARA,
-      kind: "note",
-      noteLanguage: null,
-      bookLanguage: "en",
-    });
-    await createEchoEditor(englishBook.client).toggleHighlights();
-    expect(englishBook.highlights[0].ranges.length).toBeGreaterThan(0);
+    // The host reports a language switch as a content change.
+    fake.setLanguage("es");
+    await fake.emit("editor.contentChanged", { entity: fake.entity });
+
+    const repetition = fake.highlights.filter((call) => call.kind === "repetition").at(-1);
+    expect(repetition?.ranges).toEqual([]);
+  });
+
+  it("falls back to the app's language when the host reports a blank one", async () => {
+    const fake = fakeClient({ text: PARA, kind: "note", language: " " });
+    await createEchoEditor(fake.client).toggleHighlights();
+    // The fake's UI language is en, where "para" echoes.
+    expect(fake.highlights[0].ranges.length).toBeGreaterThan(0);
   });
 });
 

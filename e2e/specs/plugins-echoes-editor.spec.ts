@@ -2,7 +2,10 @@
 // highlights in an open Chapter, Next/Previous echo step the caret through the
 // Plugin's own range list and wrap at both ends with an announcement, highlights
 // off makes Next announce that and move nothing, the editor toolbar button
-// toggles the same highlights, and a Note editor toggles too.
+// toggles the same highlights, and a Note editor toggles too. An editor on
+// screen is the target before the caret is ever placed in it (ADR 0030): an
+// existing Note or Chapter toggles from its Shortcut or toolbar button straight
+// after opening, and so does the Ephemeral.
 //
 // The Plugin announces a step with `notifications.show`, which the broker
 // otherwise allows at most once every 5 seconds (`api-table.ts`). A step
@@ -235,6 +238,40 @@ test.describe(
       });
     });
 
+    test.describe("Chapter editor, caret never placed", () => {
+      test.use({
+        library: "echoesBook",
+        plugins: ["maibuk-echoes"],
+        pluginApprovals: [{ pluginId: "maibuk-echoes", granted: [...REQUIRED_PERMISSIONS] }],
+        builtInPlugins: [{ id: "maibuk-echoes" }],
+      });
+
+      test("toggles from its Shortcut straight from the Chapter list", async ({ page }) => {
+        await page.goto("/");
+        await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
+        const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
+        await page.keyboard.press("1");
+        await expect(card).toBeFocused();
+        await page.keyboard.press("Enter");
+        await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
+
+        const grid = page.getByRole("grid", { name: "Chapters" });
+        const row = grid.getByRole("row", { name: ECHO_CHAPTER });
+        await page.keyboard.press("Escape");
+        await tabTo(page, grid.getByRole("row", { selected: true }));
+        await pressUntilFocused(page, "ArrowUp", row);
+        await page.keyboard.press("Enter");
+        const text = page.getByRole("textbox", { name: `Text of ${ECHO_CHAPTER}` });
+        await expect(text).toBeVisible();
+        // Back in the Chapter list: the editor on screen never had the caret.
+        await page.keyboard.press("Escape");
+        await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
+
+        await page.keyboard.press("Alt+F7");
+        await expect(marks(page)).toHaveCount(ECHO_COUNT);
+      });
+    });
+
     test.describe("Note editor", () => {
       test.use({
         library: "notesWithLinksAndTags",
@@ -270,6 +307,95 @@ test.describe(
         await expect(marks(page).first()).toHaveAccessibleDescription(
           "door, repeated 3 words later"
         );
+      });
+
+      /** Opens Tide Tables from the Notes grid, leaving the caret out of its text. */
+      async function openTideTables(page: Page): Promise<void> {
+        await page.goto("/notes");
+        await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
+        const grid = page.getByRole("grid", { name: "Notes" });
+        const card = grid.getByRole("row", { name: new RegExp(SEED_NOTES.tideTables) });
+        await expect(card).toHaveCount(1);
+        await tabTo(page, grid.getByRole("row").first(), { max: 40 });
+        await page.keyboard.press("Home");
+        await pressUntilFocused(page, "ArrowRight", card, { max: 10 });
+        await page.keyboard.press("Enter");
+        await expect(page).toHaveURL(/\/notes\/.+/);
+        await expect(page.getByRole("textbox", { name: "Text", exact: true })).toBeVisible();
+        await expect(page.getByRole("textbox", { name: "Text", exact: true })).not.toBeFocused();
+      }
+
+      // "High water at six. Low water at noon.": "water" is one nearby echo.
+      const WATER = /^water, repeated \d+ words later$/;
+
+      test("an existing Note toggles from its Shortcut before the caret is placed", async ({
+        page,
+      }) => {
+        await openTideTables(page);
+        await expect(marks(page)).toHaveCount(0);
+
+        await page.keyboard.press("Alt+F7");
+        await expect(marks(page)).toHaveCount(2);
+        await expect(marks(page).first()).toHaveAccessibleDescription(WATER);
+      });
+
+      test("an existing Note toggles from the toolbar button before the caret is placed", async ({
+        page,
+      }) => {
+        await seedSettings(page, { toolbarExpanded: true });
+        await openTideTables(page);
+        const text = page.getByRole("textbox", { name: "Text", exact: true });
+        const toolbar = page.getByRole("toolbar", { name: "Toolbar" });
+        const button = toolbar.getByRole("button", { name: "Toggle echo highlights", exact: true });
+        await expect(button).toBeEnabled();
+
+        for (let i = 0; i < 80; i++) {
+          if (await isFocusWithin(toolbar)) break;
+          await page.keyboard.press("Tab");
+          // Tab into the text would place the caret; this test is about never doing so.
+          await expect(text).not.toBeFocused();
+        }
+        await pressUntilFocused(page, "ArrowRight", button, { max: 200 });
+        await page.keyboard.press("Enter");
+
+        // Soft, so a base without the fix still reaches the capture; a soft
+        // failure still fails the test.
+        await expect.soft(marks(page)).toHaveCount(2);
+        await capture(page, "echoes-note-no-caret");
+        await expect(marks(page)).toHaveCount(2);
+        await expect(marks(page).first()).toHaveAccessibleDescription(WATER);
+        await expect(
+          toolbar.getByRole("button", { name: "Toggle echo highlights", pressed: true })
+        ).toBeVisible();
+      });
+    });
+
+    test.describe("Ephemeral", () => {
+      test.use({
+        plugins: ["maibuk-echoes"],
+        pluginApprovals: [{ pluginId: "maibuk-echoes", granted: [...REQUIRED_PERMISSIONS] }],
+        builtInPlugins: [{ id: "maibuk-echoes" }],
+      });
+
+      test("the Ephemeral toggles highlights in its Spell Check language", async ({ page }) => {
+        await page.goto("/ephemeral");
+        await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
+        const text = page.getByRole("textbox", { name: "Text", exact: true });
+        await tabTo(page, text, { max: 40 });
+        // English, the app's (and so the Ephemeral's Spell Check) language.
+        await page.keyboard.type("The door opened. The door closed.");
+        await expect(marks(page)).toHaveCount(0);
+
+        await page.keyboard.press("Alt+F7");
+        await expect.soft(marks(page)).toHaveCount(2);
+        await capture(page, "echoes-ephemeral");
+        await expect(marks(page)).toHaveCount(2);
+        await expect(marks(page).first()).toHaveAccessibleDescription(
+          "door, repeated 3 words later"
+        );
+
+        await page.keyboard.press("Alt+F7");
+        await expect(marks(page)).toHaveCount(0);
       });
     });
   }

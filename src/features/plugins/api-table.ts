@@ -14,7 +14,7 @@ import { z } from "zod";
 import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.1";
+export const PLUGIN_API_VERSION = "0.1.2";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -115,6 +115,12 @@ const entityRef = z.strictObject({
   id,
 });
 
+/** What an editor is bound to: a Library entity, or the Ephemeral (no Library row). */
+const editorEntityRef = z.strictObject({
+  kind: z.enum(["book", "chapter", "note", "canvas", "ephemeral"]),
+  id,
+});
+
 const libraryRead = { permission: "library:read", effect: "read", requiresLibrary: true } as const;
 const libraryWrite = {
   permission: "library:write",
@@ -210,10 +216,20 @@ export const PLUGIN_API_TABLE = [
   }),
   defineApiRow({
     id: "editor.getContent",
-    description: "Reads the focused rich-text editor's content, or no-target when none is focused.",
+    description:
+      "Reads the target editor's content and language. The target is the rich-text editor that last took focus, else the only one on screen; no-target when there is none.",
     input: none,
     output: z.union([
-      z.strictObject({ status: z.literal("ok"), entity: entityRef, content }),
+      z.strictObject({
+        status: z.literal("ok"),
+        entity: editorEntityRef,
+        language: z
+          .string()
+          .describe(
+            "The language the text is written in: a Note's own, else its Book's; a Chapter's Book's; else the editor's Spell Check language (the Ephemeral's)."
+          ),
+        content,
+      }),
       noTarget,
     ]),
     permission: "editor:read",
@@ -222,10 +238,10 @@ export const PLUGIN_API_TABLE = [
   }),
   defineApiRow({
     id: "editor.getSelection",
-    description: "Reads the focused editor's selection as plain-text offsets.",
+    description: "Reads the target editor's selection as plain-text offsets.",
     input: none,
     output: z.union([
-      z.strictObject({ status: z.literal("ok"), entity: entityRef, range, text: z.string() }),
+      z.strictObject({ status: z.literal("ok"), entity: editorEntityRef, range, text: z.string() }),
       noTarget,
     ]),
     permission: "editor:read",
@@ -234,7 +250,7 @@ export const PLUGIN_API_TABLE = [
   }),
   defineApiRow({
     id: "editor.reveal",
-    description: "Scrolls the focused editor to a range and places the caret there.",
+    description: "Scrolls the target editor to a range and places the caret there.",
     input: z.strictObject({ range }),
     output: applied,
     permission: "editor:read",
@@ -244,7 +260,7 @@ export const PLUGIN_API_TABLE = [
   defineApiRow({
     id: "editor.setHighlights",
     description:
-      "Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text.",
+      "Replaces this Plugin's highlights of one kind in the target editor; empty ranges clear that kind. Never changes text.",
     input: z.strictObject({
       kind: z.enum(["info", "warning", "repetition"]),
       ranges: z.array(
@@ -486,14 +502,16 @@ export const PLUGIN_API_EVENTS = [
   }),
   defineApiEvent({
     id: "editor.contentChanged",
-    description: "The focused editor's content changed; sent once per typing burst.",
-    payload: z.strictObject({ entity: entityRef }),
+    description:
+      "The target editor's content or language changed; sent once per typing burst.",
+    payload: z.strictObject({ entity: editorEntityRef }),
     permission: "editor:read",
   }),
   defineApiEvent({
     id: "editor.focusChanged",
-    description: "A different editor took focus, or none did (entity is null).",
-    payload: z.strictObject({ entity: entityRef.nullable() }),
+    description:
+      "The target editor changed: another took focus, or the only one on screen mounted or unmounted (entity is null when there is none).",
+    payload: z.strictObject({ entity: editorEntityRef.nullable() }),
     permission: "editor:read",
   }),
 ] as const;

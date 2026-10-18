@@ -1,13 +1,15 @@
 /**
- * The focused-editor registry the Plugin editor API reads (#441), the concept
- * the dictation hub already uses for its targets. A Chapter or Note editor
- * registers itself with its entity and its TipTap instance; the host resolves
- * "the focused editor" as the last editor to take focus that is still mounted,
- * not destroyed, and not behind a modal. Losing focus to a toolbar button or a
- * Plugin page does not clear the target; taking focus in another editor moves
- * it, and it becomes none only when the target unregisters or unmounts. Reads,
- * reveal, and highlights all address that one editor, in the plain-text offsets
- * the Library reads share (#396).
+ * The editor registry the Plugin editor API reads (#441), the concept the
+ * dictation hub already uses for its targets. A Chapter, Note, or Ephemeral
+ * editor registers itself with its entity, its language, and its TipTap
+ * instance; the host resolves "the target editor" as the last editor to take
+ * focus that is still mounted, not destroyed, and not behind a modal, else,
+ * when none has taken focus, the only such editor on screen (so an existing
+ * Note opened and never clicked into is still addressed). Losing focus to a
+ * toolbar button or a Plugin page does not clear the target; taking focus in
+ * another editor moves it, and it becomes none only when the target unregisters
+ * or unmounts. Reads, reveal, and highlights all address that one editor, in
+ * the plain-text offsets the Library reads share (#396).
  *
  * Highlights live in a per-editor ProseMirror plugin, keyed by Plugin id and
  * kind, so each Plugin replaces only its own set of one kind, several kinds
@@ -25,6 +27,9 @@
  *
  * Editor events are invalidation-only (`editor.contentChanged`,
  * `editor.focusChanged`); the lifecycle forwards them to subscribed Plugins.
+ * `editor.focusChanged` follows the target, not DOM focus, so it also fires
+ * when the only editor on screen mounts or unmounts; a language change is a
+ * content change, since `editor.getContent` reports the language.
  */
 
 import {
@@ -51,6 +56,7 @@ import type {
   PluginApiInput,
   PluginEditorApplied,
   PluginEditorContentResult,
+  PluginEditorEntity,
   PluginEditorSelectionResult,
   PluginEntityTarget,
   PluginHighlightKind,
@@ -75,7 +81,13 @@ export interface PluginEditorRegistration {
   /** A stable id for one editor instance across entity changes. */
   id: string;
   editor: Editor;
-  entity: PluginEntityTarget;
+  entity: PluginEditorEntity;
+  /**
+   * The language the text is written in, as `editor.getContent` reports it: a
+   * Note's own, else its Book's; a Chapter's Book's; else the editor's Spell
+   * Check language (the Ephemeral's).
+   */
+  language: string;
 }
 
 type HighlightMeta =
@@ -101,7 +113,8 @@ function highlightSetKey(pluginId: string, kind: PluginHighlightKind): string {
 
 interface EditorEntry {
   id: string;
-  entity: PluginEntityTarget;
+  entity: PluginEditorEntity;
+  language: string;
   editor: Editor;
   key: PluginKey<HighlightsState>;
   contentTimer: ReturnType<typeof setTimeout> | null;
@@ -116,14 +129,16 @@ interface PendingReveal {
 
 const editors = new Map<string, EditorEntry>();
 const pendingReveals = new Map<string, PendingReveal>();
-const contentListeners = new Set<(entity: PluginEntityTarget) => void>();
-const focusListeners = new Set<(entity: PluginEntityTarget | null) => void>();
+const contentListeners = new Set<(entity: PluginEditorEntity) => void>();
+const focusListeners = new Set<(entity: PluginEditorEntity | null) => void>();
 
 let focusedId: string | null = null;
-let lastFocusKey: string | null = null;
+/** The target last announced through `editor.focusChanged`, as an entity key. */
+let lastTargetKey: string | null = null;
 let focusClearTimer: ReturnType<typeof setTimeout> | null = null;
+let announceTimer: ReturnType<typeof setTimeout> | null = null;
 
-function entityKey(entity: PluginEntityTarget): string {
+function entityKey(entity: PluginEditorEntity): string {
   return `${entity.kind}:${entity.id}`;
 }
 
@@ -148,18 +163,53 @@ function isUsable(entry: EditorEntry): boolean {
   return !entry.editor.isDestroyed && !isOutsideLayer(entry.editor.view.dom);
 }
 
-function resolveFocusedEditor(): EditorEntry | null {
-  if (focusedId === null) return null;
-  const entry = editors.get(focusedId);
-  return entry !== undefined && isUsable(entry) ? entry : null;
+/**
+ * The editor every Plugin editor call addresses: the last one to take focus,
+ * else, when none has (or it unmounted), the only usable editor on screen. A
+ * focused editor behind a modal is no target, even when another editor is
+ * usable: the author is in the modal. Two unfocused editors are no target
+ * either, since neither is the one the author is in.
+ */
+function resolveTargetEditor(): EditorEntry | null {
+  const focused = focusedId === null ? undefined : editors.get(focusedId);
+  if (focused !== undefined) return isUsable(focused) ? focused : null;
+  let only: EditorEntry | null = null;
+  for (const entry of editors.values()) {
+    if (!isUsable(entry)) continue;
+    if (only !== null) return null;
+    only = entry;
+  }
+  return only;
 }
 
-function findEditorForEntity(entity: PluginEntityTarget): EditorEntry | null {
+function findEditorForEntity(entity: PluginEditorEntity): EditorEntry | null {
   const key = entityKey(entity);
   for (const entry of editors.values()) {
     if (entityKey(entry.entity) === key && isUsable(entry)) return entry;
   }
   return null;
+}
+
+/** Tells `editor.focusChanged` listeners when the target editor's entity changed. */
+function announceTarget(): void {
+  if (announceTimer !== null) {
+    clearTimeout(announceTimer);
+    announceTimer = null;
+  }
+  const entity = resolveTargetEditor()?.entity ?? null;
+  const key = entity === null ? null : entityKey(entity);
+  if (lastTargetKey === key) return;
+  lastTargetKey = key;
+  for (const listener of [...focusListeners]) listener(entity);
+}
+
+/**
+ * Announces after a tick, so an editor that unregisters and registers again in
+ * the same commit (a Note switch) never reports an intermediate "none".
+ */
+function scheduleAnnounce(): void {
+  if (announceTimer !== null) clearTimeout(announceTimer);
+  announceTimer = setTimeout(announceTarget, 0);
 }
 
 function setFocused(id: string | null): void {
@@ -168,11 +218,7 @@ function setFocused(id: string | null): void {
     focusClearTimer = null;
   }
   focusedId = id;
-  const entity = id === null ? null : (editors.get(id)?.entity ?? null);
-  const key = entity === null ? null : entityKey(entity);
-  if (lastFocusKey === key) return;
-  lastFocusKey = key;
-  for (const listener of [...focusListeners]) listener(entity);
+  announceTarget();
 }
 
 /**
@@ -331,6 +377,7 @@ export function registerPluginEditor(input: PluginEditorRegistration): () => voi
   const entry: EditorEntry = {
     id: input.id,
     entity: input.entity,
+    language: input.language,
     editor: input.editor,
     key,
     contentTimer: null,
@@ -346,6 +393,7 @@ export function registerPluginEditor(input: PluginEditorRegistration): () => voi
   editors.set(entry.id, entry);
   if (hadFocus) setFocused(entry.id);
   else if (input.editor.isFocused) onFocus();
+  else announceTarget();
   consumePendingReveal(entry);
 
   entry.dispose = () => {
@@ -355,6 +403,7 @@ export function registerPluginEditor(input: PluginEditorRegistration): () => voi
     if (!input.editor.isDestroyed) input.editor.unregisterPlugin(key);
     editors.delete(entry.id);
     if (focusedId === entry.id) scheduleFocusClear();
+    else scheduleAnnounce();
   };
   return entry.dispose;
 }
@@ -384,11 +433,12 @@ export function flushPendingEditorReveal(id: string): void {
 }
 
 export function getPluginEditorContent(): PluginEditorContentResult {
-  const entry = resolveFocusedEditor();
+  const entry = resolveTargetEditor();
   if (!entry) return { status: "no-target" };
   return {
     status: "ok",
     entity: entry.entity,
+    language: entry.language,
     content: {
       text: entry.editor.getText(),
       html: sanitizePluginHtml(entry.editor.getHTML()),
@@ -397,7 +447,7 @@ export function getPluginEditorContent(): PluginEditorContentResult {
 }
 
 export function getPluginEditorSelection(): PluginEditorSelectionResult {
-  const entry = resolveFocusedEditor();
+  const entry = resolveTargetEditor();
   if (!entry) return { status: "no-target" };
   const map = plainTextMapFor(entry.editor.state.doc);
   const { from, to } = entry.editor.state.selection;
@@ -406,7 +456,7 @@ export function getPluginEditorSelection(): PluginEditorSelectionResult {
 }
 
 export function revealInFocusedEditor(range: PluginRevealRange): PluginEditorApplied {
-  const entry = resolveFocusedEditor();
+  const entry = resolveTargetEditor();
   if (!entry) return { status: "no-target" };
   applyReveal(entry, range);
   return { status: "applied" };
@@ -535,7 +585,7 @@ function applyEditorFragment(
 
 /** Inserts a fragment at the caret, replacing the selection, as one undoable step. */
 export function insertInFocusedEditor(fragment: PluginContentFragment): PluginEditorApplied {
-  const entry = resolveFocusedEditor();
+  const entry = resolveTargetEditor();
   if (!entry) return { status: "no-target" };
   const { from, to } = entry.editor.state.selection;
   applyEditorFragment(entry, from, to, fragmentContent(entry.editor, fragment));
@@ -547,7 +597,7 @@ export function replaceInFocusedEditor(
   range: PluginRevealRange,
   fragment: PluginContentFragment
 ): PluginEditorApplied {
-  const entry = resolveFocusedEditor();
+  const entry = resolveTargetEditor();
   if (!entry) return { status: "no-target" };
   const { from, to } = resolvePluginRange(entry, range);
   applyEditorFragment(entry, from, to, fragmentContent(entry.editor, fragment));
@@ -559,7 +609,7 @@ export function setPluginEditorHighlights(
   pluginId: string,
   input: PluginApiInput<"editor.setHighlights">
 ): PluginEditorApplied {
-  const entry = resolveFocusedEditor();
+  const entry = resolveTargetEditor();
   if (!entry) return { status: "no-target" };
   // The host share of one highlight update — the transaction dispatch and the
   // decoration build it triggers — timed for the #401 Echoes main-thread budget
@@ -633,17 +683,37 @@ export function invalidatePluginEditorWork(): void {
   pendingReveals.clear();
 }
 
-/** Runs after a focused editor's content changes (coalesced per burst). */
-export function onEditorContentChanged(listener: (entity: PluginEntityTarget) => void): () => void {
+/**
+ * Updates the language a registered editor reports, without re-registering it
+ * (which would drop its highlights). A change is a content change: Plugins
+ * re-read `editor.getContent`, so detection follows the author's switch.
+ */
+export function setPluginEditorLanguage(id: string, language: string): void {
+  const entry = editors.get(id);
+  if (entry === undefined || entry.language === language) return;
+  entry.language = language;
+  notifyContentChanged(entry);
+}
+
+/**
+ * The target editor as last announced (`kind:id`), or null when there is none;
+ * a snapshot for `useSyncExternalStore` with `onEditorFocusChanged`.
+ */
+export function pluginEditorTargetKey(): string | null {
+  return lastTargetKey;
+}
+
+/** Runs after a registered editor's content or language changes (coalesced per burst). */
+export function onEditorContentChanged(listener: (entity: PluginEditorEntity) => void): () => void {
   contentListeners.add(listener);
   return () => {
     contentListeners.delete(listener);
   };
 }
 
-/** Runs when the focused editor changes, including to none. */
+/** Runs when the target editor changes, including to none. */
 export function onEditorFocusChanged(
-  listener: (entity: PluginEntityTarget | null) => void
+  listener: (entity: PluginEditorEntity | null) => void
 ): () => void {
   focusListeners.add(listener);
   return () => {
@@ -659,9 +729,13 @@ export function resetPluginEditorHostForTests(): void {
   contentListeners.clear();
   focusListeners.clear();
   focusedId = null;
-  lastFocusKey = null;
+  lastTargetKey = null;
   if (focusClearTimer !== null) {
     clearTimeout(focusClearTimer);
     focusClearTimer = null;
+  }
+  if (announceTimer !== null) {
+    clearTimeout(announceTimer);
+    announceTimer = null;
   }
 }

@@ -1593,7 +1593,7 @@ describe("Plugin lifecycle: library and language events", () => {
     const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one</p>" });
     document.body.appendChild(editor.view.dom);
     editor.view.dom.focus();
-    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
     await advance(0);
 
     editor.commands.insertContentAt(4, " two");
@@ -1640,7 +1640,7 @@ describe("Plugin lifecycle: library and language events", () => {
     const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one</p>" });
     document.body.appendChild(editor.view.dom);
     editor.view.dom.focus();
-    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
     await advance(0);
     editor.commands.insertContentAt(4, " two");
     await advance(EDITOR_CONTENT_EVENT_MS);
@@ -1655,7 +1655,7 @@ describe("Plugin lifecycle: library and language events", () => {
     const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one two</p>" });
     document.body.appendChild(editor.view.dom);
     editor.view.dom.focus();
-    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
 
     setPluginEditorHighlights("alpha", { kind: "info", ranges: [{ from: 0, to: 3 }] });
     setPluginEditorHighlights("beta", { kind: "warning", ranges: [{ from: 4, to: 7 }] });
@@ -1896,7 +1896,7 @@ describe("Plugin lifecycle: Tutorial entry/exit boundary", () => {
     const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one two</p>" });
     document.body.appendChild(editor.view.dom);
     editor.view.dom.focus();
-    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
     setPluginEditorHighlights("alpha", { kind: "info", ranges: [{ from: 0, to: 3 }] });
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
 
@@ -1914,7 +1914,7 @@ describe("Plugin lifecycle: Tutorial entry/exit boundary", () => {
       content: "<p>one two three</p>",
     });
     document.body.appendChild(later.view.dom);
-    registerPluginEditor({ id: "e2", editor: later, entity: { kind: "chapter", id: "c9" } });
+    registerPluginEditor({ id: "e2", editor: later, entity: { kind: "chapter", id: "c9" }, language: "en" });
     const map = buildPlainTextMap(later.state.doc);
     expect(pmToPlainOffset(map, later.state.selection.from)).toBe(0);
 
@@ -1956,7 +1956,7 @@ describe("Plugin lifecycle: bulk Library replacement", () => {
     });
     document.body.appendChild(editor.view.dom);
     editor.view.dom.focus();
-    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" } });
+    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
     setPluginEditorHighlights("alpha", { kind: "info", ranges: [{ from: 0, to: 3 }] });
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
 

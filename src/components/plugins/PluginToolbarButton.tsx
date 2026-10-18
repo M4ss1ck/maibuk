@@ -4,6 +4,7 @@ import { ToolbarButton } from "@/components/editor/ToolbarButton";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
 import { pluginCommandId, runPluginCommand } from "@/features/plugins/commands";
 import { currentUILanguage, getPluginCommand } from "@/features/plugins/contributions-registry";
+import { onEditorFocusChanged, pluginEditorTargetKey } from "@/features/plugins/editor-host";
 import { resolvePluginTarget } from "@/features/plugins/target-context";
 import {
   isToolbarPressed,
@@ -32,6 +33,11 @@ import { commandLabel } from "@/lib/shortcut-registry";
  * path uses (#446). It stays visible for discovery and is disabled when no
  * declared kind is in context, rather than acting on a guessed target (#395).
  *
+ * A Command whose only Context is `editor` acts on the target editor (the
+ * focused one, else the only one on screen), so its button is disabled while
+ * there is none, such as in the Embed editor, instead of running as a silent
+ * no-op.
+ *
  * A Toggle Button (`toggle: true` in the manifest) shows on only while its
  * Plugin is ready and has set it on with `toolbar.setPressed`. Any other button
  * passes no pressed state, so it renders without `aria-pressed`.
@@ -53,6 +59,7 @@ export function PluginToolbarButton({
   const itemContextRef = useRef(itemContext);
   itemContextRef.current = itemContext;
   useSyncExternalStore(subscribeToolbarPressed, toolbarPressedRevision);
+  const editorTarget = useSyncExternalStore(onEditorFocusChanged, pluginEditorTargetKey);
 
   if (button === undefined || button.command === undefined) return null;
   const commandId = pluginCommandId(button.pluginId, button.command);
@@ -61,7 +68,12 @@ export function PluginToolbarButton({
   const isActive = button.toggle
     ? ready && isToolbarPressed(button.pluginId, button.localId)
     : undefined;
-  const targets = getPluginCommand(button.pluginId, button.command)?.targets;
+  const command = getPluginCommand(button.pluginId, button.command);
+  const targets = command?.targets;
+  const needsEditor =
+    command !== undefined &&
+    command.contexts.length > 0 &&
+    command.contexts.every((context) => context === "editor");
   const hasTargets = (targets?.length ?? 0) > 0;
   const target = hasTargets && targets !== undefined ? resolvePluginTarget(targets, itemContext) : null;
   const icon = iconSize === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
@@ -70,7 +82,7 @@ export function PluginToolbarButton({
     <ToolbarButton
       label={label}
       shortcut={commandId}
-      disabled={!ready || (hasTargets && target === null)}
+      disabled={!ready || (hasTargets && target === null) || (needsEditor && editorTarget === null)}
       isActive={isActive}
       onClick={() => {
         if (!lifecycle) return;

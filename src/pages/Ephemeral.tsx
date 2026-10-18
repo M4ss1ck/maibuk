@@ -9,12 +9,18 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { DictationBar } from "@/components/dictation";
 import { Tooltip } from "@/components/ui";
 import { useEphemeralStore } from "@/features/ephemeral";
+import type { PluginEditorEntity } from "@/features/plugins/types";
 import { useNoteStore } from "@/features/notes";
 import { useSettingsStore } from "@/features/settings/store";
 import { IS_DESKTOP } from "@/lib/platform";
 import { useShortcuts } from "@/lib/shortcuts";
 
 const EPHEMERAL_TUTORIAL_ANCHORS: EditorTutorialAnchors = { text: "ephemeral.editor" };
+/**
+ * The Ephemeral as Plugins see it: it has no Library row, so one fixed id. It
+ * reports its Spell Check language, having none of its own.
+ */
+const EPHEMERAL_PLUGIN_ENTITY: PluginEditorEntity = { kind: "ephemeral", id: "ephemeral" };
 
 export function Ephemeral() {
   const { t } = useTranslation();
@@ -135,6 +141,7 @@ export function Ephemeral() {
         onEscape={handleEditorEscape}
         extraExtensions={ephemeralExtensions}
         tutorialAnchors={EPHEMERAL_TUTORIAL_ANCHORS}
+        pluginEntity={EPHEMERAL_PLUGIN_ENTITY}
       />
 
       <DictationBar />

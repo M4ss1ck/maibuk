@@ -39,8 +39,12 @@ import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { buildDropHtml } from "@/components/editor/file-drop-html";
 import { textDropExtension } from "@/features/markdown/dropped-file";
 import { dictationHub } from "@/features/dictation/hub";
-import { flushPendingEditorReveal, registerPluginEditor } from "@/features/plugins/editor-host";
-import type { PluginEntityTarget } from "@/features/plugins/types";
+import {
+  flushPendingEditorReveal,
+  registerPluginEditor,
+  setPluginEditorLanguage,
+} from "@/features/plugins/editor-host";
+import type { PluginEditorEntity } from "@/features/plugins/types";
 import { readDroppedWebFiles } from "@/hooks/useTextFileDrop";
 import { useEditorFileDrop } from "@/components/editor/useEditorFileDrop";
 import { IS_TAURI } from "@/lib/platform";
@@ -128,11 +132,17 @@ interface EditorProps {
   /** Tutorial steps that point at this editor's toolbar and text, if any. */
   tutorialAnchors?: EditorTutorialAnchors;
   /**
-   * The Chapter or Note this editor edits, so the Plugin editor API can address
-   * it (#441). Only Chapter and Note editors register; other rich-text surfaces
-   * pass nothing.
+   * The Chapter, Note, or Ephemeral this editor edits, so the Plugin editor API
+   * can address it (#441). Other rich-text surfaces (the Embed editor) pass
+   * nothing and are never a Plugin target.
    */
-  pluginEntity?: PluginEntityTarget | null;
+  pluginEntity?: PluginEditorEntity | null;
+  /**
+   * The language the text is written in, reported to Plugins with the content:
+   * a Note's own else its Book's, or a Chapter's Book's. Omitted or blank, the
+   * editor's Spell Check language stands in (the Ephemeral's case).
+   */
+  pluginLanguage?: string | null;
 }
 
 export function Editor({
@@ -167,6 +177,7 @@ export function Editor({
   ariaLabel,
   tutorialAnchors,
   pluginEntity = null,
+  pluginLanguage = null,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
@@ -480,11 +491,15 @@ export function Editor({
     if (pluginEditorIdRef.current) flushPendingEditorReveal(pluginEditorIdRef.current);
   }, [editor, content, runEmit]);
 
-  // The Plugin editor API addresses the focused Chapter or Note editor. The id
-  // is stable across entity changes; a changed entity re-registers, which drops
-  // the previous editor's highlights.
+  // The Plugin editor API addresses the target Chapter, Note, or Ephemeral
+  // editor. The id is stable across entity changes; a changed entity
+  // re-registers, which drops the previous editor's highlights. A changed
+  // language only updates the registration, so highlights stay put.
   const pluginEntityKind = pluginEntity?.kind ?? null;
   const pluginEntityId = pluginEntity?.id ?? null;
+  const pluginReportedLanguage = pluginLanguage?.trim() || activeSpellCheckLanguage;
+  const pluginLanguageRef = useRef(pluginReportedLanguage);
+  pluginLanguageRef.current = pluginReportedLanguage;
   useEffect(() => {
     if (!editor || pluginEntityKind === null || pluginEntityId === null) return;
     pluginEditorIdRef.current ??= crypto.randomUUID();
@@ -492,8 +507,14 @@ export function Editor({
       id: pluginEditorIdRef.current,
       editor,
       entity: { kind: pluginEntityKind, id: pluginEntityId },
+      language: pluginLanguageRef.current,
     });
   }, [editor, pluginEntityKind, pluginEntityId]);
+  useEffect(() => {
+    if (pluginEditorIdRef.current) {
+      setPluginEditorLanguage(pluginEditorIdRef.current, pluginReportedLanguage);
+    }
+  }, [pluginReportedLanguage]);
 
   const textLabel = ariaLabel ?? t("editor.textLabel");
   useEffect(() => {

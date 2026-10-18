@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Ephemeral } from "@/pages/Ephemeral";
 import { useEphemeralStore } from "@/features/ephemeral";
 
-const { mockNavigate, mockCreateNote, mockSetAlwaysOnTop, platformState } = vi.hoisted(() => ({
+const { mockNavigate, mockCreateNote, mockSetAlwaysOnTop, platformState, editorProps } = vi.hoisted(() => ({
+  editorProps: [] as Array<Record<string, unknown>>,
   mockNavigate: vi.fn(),
   mockCreateNote: vi.fn(),
   mockSetAlwaysOnTop: vi.fn(),
@@ -59,17 +60,29 @@ vi.mock("@/components/dictation", () => ({
 
 // Stub the heavy TipTap editor with a textarea that mirrors its callbacks.
 vi.mock("@/components/editor", () => ({
-  Editor: ({
-    onUpdate,
-    onWordCountChange,
-    onEscape,
-    placeholder,
-  }: {
+  Editor: (props: {
     onUpdate: (html: string) => void;
     onWordCountChange: (n: number) => void;
     onEscape?: () => void;
     placeholder?: string;
-  }) => (
+  }) => {
+    editorProps.push(props);
+    return <EphemeralEditorStub {...props} />;
+  },
+}));
+
+function EphemeralEditorStub({
+  onUpdate,
+  onWordCountChange,
+  onEscape,
+  placeholder,
+}: {
+  onUpdate: (html: string) => void;
+  onWordCountChange: (n: number) => void;
+  onEscape?: () => void;
+  placeholder?: string;
+}) {
+  return (
     <textarea
       aria-label="editor"
       placeholder={placeholder}
@@ -82,8 +95,8 @@ vi.mock("@/components/editor", () => ({
         if (e.key === "Escape") onEscape?.();
       }}
     />
-  ),
-}));
+  );
+}
 
 describe("Ephemeral page", () => {
   beforeEach(() => {
@@ -92,6 +105,18 @@ describe("Ephemeral page", () => {
     mockCreateNote.mockReset();
     mockSetAlwaysOnTop.mockReset();
     platformState.isDesktop = false;
+  });
+
+  it("registers its editor as the Ephemeral for Plugins", () => {
+    editorProps.length = 0;
+    render(<Ephemeral />);
+
+    expect(editorProps[editorProps.length - 1]?.pluginEntity).toEqual({
+      kind: "ephemeral",
+      id: "ephemeral",
+    });
+    // No language of its own: the editor reports its Spell Check language.
+    expect(editorProps[editorProps.length - 1]?.pluginLanguage).toBeUndefined();
   });
 
   it("disables Clear and Create note when empty", () => {

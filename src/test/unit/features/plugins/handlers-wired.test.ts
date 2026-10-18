@@ -171,6 +171,7 @@ describe("createPluginHandlers(): the wired rows", () => {
       id: "handler-editor",
       editor,
       entity: { kind: "chapter", id: "c1" },
+      language: "en",
     });
     try {
       const handlers = createPluginHandlers(PLUGIN_MANIFEST);

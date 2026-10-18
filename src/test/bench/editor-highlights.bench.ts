@@ -28,6 +28,7 @@ registerPluginEditor({
   id: "editor-highlights-bench",
   editor,
   entity: { kind: "chapter", id: "bench" },
+  language: "en",
 });
 const highlightRanges = spreadHighlightRanges(buildPlainTextMap(editor.state.doc).text);
 setPluginEditorHighlights("echoes", {

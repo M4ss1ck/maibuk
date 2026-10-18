@@ -1371,6 +1371,7 @@ export function BookEditor() {
               bookId={bookId ?? null}
               chapterId={currentChapter.id}
               pluginEntity={{ kind: "chapter", id: currentChapter.id }}
+              pluginLanguage={currentBook.language}
               spellCheckLanguage={normalizeLanguage(currentBook.language)}
               onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
               restoreKey={`chapter:${currentChapter.id}`}
