@@ -173,14 +173,9 @@ export function EditorContextMenu({
       if (misspelling) {
         void spellCheckService.suggest(misspelling.word).then((suggestions) => {
           setMenu((prev) => {
-            if (
-              !prev ||
-              prev.misspelling?.word !== misspelling.word ||
-              prev.misspelling?.from !== misspelling.from
-            ) {
-              return prev;
-            }
-            return { ...prev, suggestions, isLoadingSuggestions: false };
+            // A lookup from an earlier open must not overwrite this one's list.
+            if (!prev || prev.id !== menuId) return prev;
+            return { ...prev, suggestions: [...new Set(suggestions)], isLoadingSuggestions: false };
           });
         });
       }
@@ -435,8 +430,11 @@ export function EditorContextMenu({
                   <Header className="truncate px-3 py-1.5 text-xs text-muted-foreground">
                     {menu.misspelling.word}
                   </Header>
+                  {/* Each branch is keyed: these items share one slot, and React Aria
+                      throws "Cannot change the id of an item" if React reuses one. */}
                   {menu.isLoadingSuggestions ? (
                     <MenuItem
+                      key="suggestions-loading"
                       id="suggestions-loading"
                       data-command-exempt="spelling suggestion"
                       isDisabled
@@ -448,7 +446,7 @@ export function EditorContextMenu({
                   ) : topSuggestions.length > 0 ? (
                     topSuggestions.map((suggestion, index) => (
                       <MenuItem
-                        key={suggestion}
+                        key={index}
                         id={`suggestion:${index}`}
                         data-command-exempt="spelling suggestion"
                         textValue={suggestion}
@@ -459,6 +457,7 @@ export function EditorContextMenu({
                     ))
                   ) : (
                     <MenuItem
+                      key="suggestions-none"
                       id="suggestions-none"
                       data-command-exempt="spelling suggestion"
                       isDisabled
