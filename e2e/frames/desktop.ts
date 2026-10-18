@@ -49,6 +49,7 @@ import type { RunDir } from "../conformance/types";
 import { buildLinuxApp, linuxBinaryFor, webkitgtkVersion } from "../conformance/linux";
 import { createLaunchDirs, launchEnv } from "../plugins-bench/webkitgtk";
 import { SEED_DIR } from "../support/seed/seeds";
+import { dismissTutorialOnLoadedPage } from "../support/storage";
 import { PrerequisiteMissing } from "./android";
 import type { FramePage } from "./frame-page";
 
@@ -60,20 +61,6 @@ const APP_ORIGIN = "tauri://localhost";
 const VIEWPORT = { width: 1280, height: 800 };
 const DRIVER_READY_MS = 15_000;
 const DRIVER_STOP_MS = 3_000;
-/** The Tutorial state the web source dismisses with (scenarios: `tutorial: "dismissed"`). */
-const TUTORIAL_DISMISSED = JSON.stringify({
-  state: {
-    progress: {
-      dismissedAt: 1,
-      completedAt: null,
-      lastSection: null,
-      lastStep: null,
-      skippedAt: null,
-      sections: {},
-    },
-  },
-  version: 1,
-});
 
 interface DesktopDrivers {
   tauriDriver: string;
@@ -139,7 +126,9 @@ function appSourceVersion(root: string): string {
 function viteFlags(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(
     Object.entries(env)
-      .filter((entry): entry is [string, string] => entry[0].startsWith("VITE_") && entry[1] !== undefined)
+      .filter(
+        (entry): entry is [string, string] => entry[0].startsWith("VITE_") && entry[1] !== undefined
+      )
       .sort(([a], [b]) => a.localeCompare(b))
   );
 }
@@ -352,10 +341,7 @@ export async function launchDesktop(root: string, seed: string): Promise<Desktop
     // app with it dismissed and the probe installed.
     const setup = webdriverFramePage(session, { origin: APP_ORIGIN });
     await setup.goto("/");
-    await setup.evaluate(
-      (value) => localStorage.setItem("maibuk-tutorial", value),
-      TUTORIAL_DISMISSED
-    );
+    await dismissTutorialOnLoadedPage(setup);
 
     const probe = frameProbeScript();
     const page = webdriverFramePage(session, {

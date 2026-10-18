@@ -2,6 +2,7 @@
 // frame-rate source: tauri-driver proxies WebDriver to the Tauri binary on
 // 127.0.0.1. Node and global fetch only; no dependencies.
 
+import { setTimeout as sleep } from "node:timers/promises";
 import type { FrameLocator, FramePage, RoleOptions } from "../../../../e2e/frames/frame-page";
 import { type LocateStep, locateAll, serializableName } from "./locate";
 
@@ -35,8 +36,6 @@ export interface WebDriverSession {
   readonly id: string;
   call<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T>;
 }
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
