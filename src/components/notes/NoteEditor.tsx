@@ -507,6 +507,13 @@ export function NoteEditor({
     [navigate, note.id]
   );
 
+  // Plugins detect in the language the Note is written in: its own, else its
+  // Book's (the editor falls back to the Spell Check language).
+  const pluginLanguage =
+    note.language?.trim() ||
+    (note.bookId ? books.find((book) => book.id === note.bookId)?.language : null) ||
+    null;
+
   const handleSpellCheckLanguageChange = useCallback(
     (language: Language) => {
       saveNoteFields({ language });
@@ -709,6 +716,7 @@ export function NoteEditor({
         onExportImage={handleExportImage}
         restoreKey={`note:${note.id}`}
         pluginEntity={{ kind: "note", id: note.id }}
+        pluginLanguage={pluginLanguage}
         spellCheckLanguage={normalizeLanguage(note.language)}
         onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
         suppressRestore={suppressRestore}

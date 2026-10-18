@@ -1085,6 +1085,18 @@ export interface PluginEntityTarget {
   id: string;
 }
 
+/**
+ * What a rich-text editor is bound to, as the editor methods and events report
+ * it: a Library entity, or the Ephemeral, which has no Library row and is
+ * always `{ kind: "ephemeral", id: "ephemeral" }`.
+ */
+export type PluginEditorEntityKind = PluginEntityKind | "ephemeral";
+
+export interface PluginEditorEntity {
+  kind: PluginEditorEntityKind;
+  id: string;
+}
+
 export interface PluginRevealRange {
   from: number;
   to: number;

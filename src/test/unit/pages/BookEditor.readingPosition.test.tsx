@@ -184,6 +184,8 @@ describe("BookEditor reading-position wiring", () => {
     expect(last?.restoreKey).toBe("chapter:ch1");
     expect(last?.suppressRestore).toBe(false);
     expect(last?.pluginEntity).toEqual({ kind: "chapter", id: "ch1" });
+    // Plugins detect in the Book's language, not only the Spell Check one.
+    expect(last?.pluginLanguage).toBe("en");
   });
 
   it("suppresses restore while a heading deep-link is pending", () => {

@@ -9,6 +9,7 @@ import type { PluginManifest } from "@/features/plugins/types";
 // ADR 0029: before 1.0 a Plugin API patch is additive, so a `^0.1` Plugin keeps
 // loading on 0.1.1, and a Plugin that needs the 0.1.1 addition declares `^0.1.1`
 // and is refused by a 0.1.0 host with the usual compatibility message (#530).
+// 0.1.2 adds the editor's language and the Ephemeral editor entity (ADR 0030).
 
 function manifestWith(apiVersion: string): PluginManifest {
   const result = validateManifestValue({
@@ -31,9 +32,17 @@ function manifestWith(apiVersion: string): PluginManifest {
 
 const APP = "0.12.0";
 
-describe("Plugin API 0.1.1 compatibility (ADR 0029)", () => {
-  it("the host reports Plugin API 0.1.1", () => {
-    expect(PLUGIN_API_VERSION).toBe("0.1.1");
+describe("Plugin API patch compatibility (ADR 0029)", () => {
+  it("the host reports Plugin API 0.1.2", () => {
+    expect(PLUGIN_API_VERSION).toBe("0.1.2");
+  });
+
+  it("a ^0.1.1 Plugin still loads against the 0.1.2 host", () => {
+    const verdict = checkPluginCompatibility(manifestWith("^0.1.1"), {
+      apiVersion: "0.1.2",
+      appVersion: APP,
+    });
+    expect(verdict.verdict).toBe("ok");
   });
 
   it("a ^0.1 Plugin still loads against the 0.1.1 host", () => {
@@ -56,13 +65,13 @@ describe("Plugin API 0.1.1 compatibility (ADR 0029)", () => {
     });
   });
 
-  it("the Echoes manifest is 0.2.0 and needs Plugin API ^0.1.1", () => {
+  it("the Echoes manifest is 0.3.0 and needs Plugin API ^0.1.2", () => {
     const text = readFileSync(
       join(process.cwd(), "plugins", "maibuk-echoes", "manifest.json"),
       "utf8"
     );
     const json = JSON.parse(text) as { version: string; apiVersion: string };
-    expect(json.version).toBe("0.2.0");
-    expect(json.apiVersion).toBe("^0.1.1");
+    expect(json.version).toBe("0.3.0");
+    expect(json.apiVersion).toBe("^0.1.2");
   });
 });

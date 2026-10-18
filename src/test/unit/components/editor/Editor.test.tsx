@@ -11,6 +11,11 @@ import { CollapsibleHeading } from "@/components/editor/extensions";
 import { useBookStore } from "@/features/books/store";
 import { useNoteStore } from "@/features/notes/store";
 import { attachSession, resetDictationHubForTests } from "@/features/dictation/hub";
+import {
+  getPluginEditorContent,
+  resetPluginEditorHostForTests,
+  setPluginEditorHighlights,
+} from "@/features/plugins/editor-host";
 
 const { mockSetContentSilently } = vi.hoisted(() => ({
   mockSetContentSilently: vi.fn(),
@@ -510,6 +515,85 @@ describe("Editor", () => {
     const lastProps = capturedToolbarProps[capturedToolbarProps.length - 1];
     expect(lastProps.spellCheckLanguage).toBe("es");
     expect(lastProps.onSpellCheckLanguageChange).toBe(onSpellCheckLanguageChange);
+  });
+
+  describe("the Plugin editor registration", () => {
+    afterEach(() => resetPluginEditorHostForTests());
+
+    it("reports the entity's language, else its Spell Check language", async () => {
+      const { rerender } = render(
+        <Editor
+          content={"<p>hola</p>"}
+          onUpdate={vi.fn()}
+          pluginEntity={{ kind: "note", id: "n1" }}
+          pluginLanguage="fr"
+          spellCheckLanguage="en"
+        />
+      );
+      await waitFor(() =>
+        expect(getPluginEditorContent()).toMatchObject({
+          status: "ok",
+          entity: { kind: "note", id: "n1" },
+          language: "fr",
+        })
+      );
+
+      rerender(
+        <Editor
+          content={"<p>hola</p>"}
+          onUpdate={vi.fn()}
+          pluginEntity={{ kind: "note", id: "n1" }}
+          pluginLanguage={null}
+          spellCheckLanguage="es"
+        />
+      );
+      expect(getPluginEditorContent()).toMatchObject({ language: "es" });
+    });
+
+    it("registers the Ephemeral with its Spell Check language", async () => {
+      render(
+        <Editor
+          content={"<p>scratch</p>"}
+          onUpdate={vi.fn()}
+          pluginEntity={{ kind: "ephemeral", id: "ephemeral" }}
+        />
+      );
+      // The settings mock's language is "en", the Ephemeral's Spell Check language.
+      await waitFor(() =>
+        expect(getPluginEditorContent()).toMatchObject({
+          status: "ok",
+          entity: { kind: "ephemeral", id: "ephemeral" },
+          language: "en",
+        })
+      );
+    });
+
+    it("keeps its registration, and so its highlights, when only the language changes", async () => {
+      const { rerender } = render(
+        <Editor
+          content={"<p>hola hola</p>"}
+          onUpdate={vi.fn()}
+          pluginEntity={{ kind: "chapter", id: "c1" }}
+          pluginLanguage="en"
+        />
+      );
+      await waitFor(() => expect(getPluginEditorContent()).toMatchObject({ status: "ok" }));
+      setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 0, to: 4 }] });
+      expect(document.querySelectorAll(".plugin-highlight--info").length).toBeGreaterThan(0);
+
+      rerender(
+        <Editor
+          content={"<p>hola hola</p>"}
+          onUpdate={vi.fn()}
+          pluginEntity={{ kind: "chapter", id: "c1" }}
+          pluginLanguage="es"
+        />
+      );
+
+      // Re-registering would drop the highlights; a language change keeps them.
+      expect(getPluginEditorContent()).toMatchObject({ language: "es" });
+      expect(document.querySelectorAll(".plugin-highlight--info").length).toBeGreaterThan(0);
+    });
   });
 
   // BookEditor passes onEscape (leave the text for the Chapter list); editor

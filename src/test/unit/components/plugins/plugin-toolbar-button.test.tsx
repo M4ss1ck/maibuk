@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { Editor } from "@tiptap/core";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { PluginToolbarButton } from "@/components/plugins/PluginToolbarButton";
@@ -8,6 +9,11 @@ import {
   resetPluginContributionsForTests,
 } from "@/features/plugins/contributions";
 import { clearToolbarPressed, setToolbarPressed } from "@/features/plugins/toolbar-pressed";
+import {
+  registerPluginEditor,
+  resetPluginEditorHostForTests,
+} from "@/features/plugins/editor-host";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { readPluginManifest } from "@/features/plugins/runtime";
 import type { PluginLifecycle, PluginRuntime } from "@/features/plugins/types";
 import type { Chapter } from "@/features/chapters/types";
@@ -53,10 +59,12 @@ function registerSample(): void {
         commands: [
           { id: "plain", label: "Plain", contexts: ["global"] },
           { id: "targeted", label: "Targeted", contexts: ["global"], targets: ["chapter"] },
+          { id: "inEditor", label: "In editor", contexts: ["editor"] },
         ],
         toolbarButtons: [
           { id: "plainButton", command: "plain", icon: "book-open" },
           { id: "targetButton", command: "targeted", icon: "book-open" },
+          { id: "editorButton", command: "inEditor", icon: "book-open" },
           {
             id: "inlineButton",
             command: "plain",
@@ -103,6 +111,7 @@ function seedOpenChapter(id: string): void {
 
 afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
+  resetPluginEditorHostForTests();
   resetPluginContributionsForTests();
   useChapterStore.setState({ currentChapter: null });
   lifecycleStatus = "ready";
@@ -236,5 +245,68 @@ describe("PluginToolbarButton with a filtered Command (#482)", () => {
 
     expect(() => renderButton("plugin.probe.b")).not.toThrow();
     expect(screen.queryByRole("button")).toBeNull();
+  });
+});
+
+// An `editor` Context Command acts on the target editor; with none on screen
+// (the Embed editor registers none) the button is unavailable instead of a
+// silent no-op.
+describe("PluginToolbarButton for an editor Command", () => {
+  function mountEditor(): Editor {
+    const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one</p>" });
+    document.body.appendChild(editor.view.dom);
+    cleanups.push(() => {
+      editor.view.dom.remove();
+      editor.destroy();
+    });
+    return editor;
+  }
+
+  it("is disabled while no editor is the target", () => {
+    registerSample();
+
+    renderButton("plugin.sample.editorButton");
+    expect(screen.getByRole("button", { name: "In editor" })).toBeDisabled();
+  });
+
+  it("enables once an editor is on screen, without its caret, and runs from the keyboard", async () => {
+    registerSample();
+    const user = userEvent.setup();
+    renderButton("plugin.sample.editorButton");
+    const button = screen.getByRole("button", { name: "In editor" });
+    expect(button).toBeDisabled();
+
+    act(() => {
+      registerPluginEditor({
+        id: "e1",
+        editor: mountEditor(),
+        entity: { kind: "note", id: "n1" },
+        language: "en",
+      });
+    });
+
+    expect(button).toBeEnabled();
+    button.focus();
+    await user.keyboard("{Enter}");
+    expect(brokerRequest).toHaveBeenCalledWith("command.run", { id: "inEditor" });
+  });
+
+  it("disables again once the editor unmounts", async () => {
+    registerSample();
+    renderButton("plugin.sample.editorButton");
+    let dispose = () => {};
+    act(() => {
+      dispose = registerPluginEditor({
+        id: "e1",
+        editor: mountEditor(),
+        entity: { kind: "ephemeral", id: "ephemeral" },
+        language: "es",
+      });
+    });
+    expect(screen.getByRole("button", { name: "In editor" })).toBeEnabled();
+
+    act(() => dispose());
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "In editor" })).toBeDisabled());
   });
 });

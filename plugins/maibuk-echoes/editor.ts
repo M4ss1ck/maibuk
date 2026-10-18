@@ -12,9 +12,11 @@
  *
  * State lives for the Plugin activation and starts off each time. Only the
  * kinds the author enabled in Settings are painted (nearby by default); a
- * nearby echo paints both of its words. Detection runs in the entity's own
- * language (spec line 15): a Chapter's Book's language, a Note's own language
- * else its Book's, a Book's own, otherwise the app's UI language. Labels and
+ * nearby echo paints both of its words. Detection runs in the language the
+ * host reports with the editor's content (spec line 15, ADR 0030): a Note's own
+ * else its Book's, a Chapter's Book's, the Ephemeral's Spell Check language;
+ * the app's UI language only when that is blank. It is read on every recompute,
+ * so a language switch while highlighting is on re-detects. Labels and
  * announcements stay in the app's UI language; nothing here reads the host's
  * i18n — they come from the Plugin's own catalog, through `createEchoTranslator`.
  *
@@ -89,11 +91,6 @@ function recordRecompute(startedAt: number): void {
 /** The slice of the SDK client the controller uses. */
 export interface EchoEditorClient {
   editor: Pick<PluginClient["editor"], "getContent" | "getSelection" | "reveal" | "setHighlights">;
-  library: {
-    books: Pick<PluginClient["library"]["books"], "get">;
-    chapters: Pick<PluginClient["library"]["chapters"], "get">;
-    notes: Pick<PluginClient["library"]["notes"], "get">;
-  };
   notifications: Pick<PluginClient["notifications"], "show">;
   toolbar: Pick<PluginClient["toolbar"], "setPressed">;
   language: Pick<PluginClient["language"], "get">;
@@ -104,8 +101,11 @@ export interface EchoEditorClient {
 /** The focused editor's content read, as the SDK returns it. */
 type ContentResult = Awaited<ReturnType<EchoEditorClient["editor"]["getContent"]>>;
 
+/** The focused editor's content read, when there is a target editor. */
+type ContentOk = Extract<ContentResult, { status: "ok" }>;
+
 /** The entity a focused editor is bound to. */
-type EntityTarget = Extract<ContentResult, { status: "ok" }>["entity"];
+type EntityTarget = ContentOk["entity"];
 
 /** The three editor Commands the controller answers, plus its Settings refresh. */
 export interface EchoEditorController {
@@ -134,7 +134,7 @@ interface EchoEditorState {
   index: number | null;
   /** The app's UI language, for labels and announcements. */
   uiLanguage: string;
-  /** The language detection runs in, resolved for the entity at toggle-on. */
+  /** The language detection runs in, as the host last reported it. */
   detectionLanguage: string;
 }
 
@@ -175,41 +175,9 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
 
   const translate = (): EchoTranslate => createEchoTranslator(state.uiLanguage);
 
-  /** The Book's language, or null when the Book is absent or carries none. */
-  async function bookLanguageOf(bookId: string): Promise<string | null> {
-    const book = await client.library.books.get({ bookId });
-    return languageOrNull(book?.language);
-  }
-
-  /**
-   * The language detection runs in (spec line 15): a Chapter's Book's language;
-   * a Note's own language, else its Book's; a Book's own language; otherwise the
-   * app's UI language. A Canvas has no language. Resolved once per toggle-on.
-   */
-  async function resolveDetectionLanguage(entity: EntityTarget): Promise<string> {
-    const fallback = state.uiLanguage;
-    try {
-      if (entity.kind === "note") {
-        const note = await client.library.notes.get({ noteId: entity.id });
-        const own = languageOrNull(note?.language);
-        if (own !== null) return own;
-        const bookId = note?.bookId;
-        return (
-          (bookId === null || bookId === undefined ? null : await bookLanguageOf(bookId)) ??
-          fallback
-        );
-      }
-      if (entity.kind === "chapter") {
-        const chapter = await client.library.chapters.get({ chapterId: entity.id });
-        return (chapter === null ? null : await bookLanguageOf(chapter.bookId)) ?? fallback;
-      }
-      if (entity.kind === "book") {
-        return (await bookLanguageOf(entity.id)) ?? fallback;
-      }
-      return fallback;
-    } catch {
-      return fallback;
-    }
+  /** The language to detect in: the one the host reported, else the app's. */
+  function detectionLanguageOf(content: ContentOk): string {
+    return languageOrNull(content.language) ?? state.uiLanguage;
   }
 
   async function notify(message: string): Promise<void> {
@@ -313,6 +281,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
     if (content.status !== "ok") return;
     if (!state.on || state.entity === null || !sameEntity(content.entity, state.entity)) return;
     const caret = selection.status === "ok" ? selection.range.from : 0;
+    state.detectionLanguage = detectionLanguageOf(content);
     await apply(content.content.text, content.entity, caret);
   }
 
@@ -490,7 +459,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
         state.list = [];
         state.window = { start: 0, end: 0 };
         state.empty = { repetition: false, info: false, warning: false };
-        state.detectionLanguage = await resolveDetectionLanguage(content.entity);
+        state.detectionLanguage = detectionLanguageOf(content);
         const caret = selection.status === "ok" ? selection.range.from : 0;
         await apply(content.content.text, content.entity, caret);
         if (state.on && state.list.length === 0) await notify(echoNoEchoes(translate()));

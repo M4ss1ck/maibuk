@@ -9,9 +9,11 @@ import {
   pmToPlainOffset,
 } from "@/components/editor/plain-text-offsets";
 import * as plainTextOffsets from "@/components/editor/plain-text-offsets";
-import type { PluginEntityTarget } from "@/features/plugins/types";
+import type { PluginEditorEntity } from "@/features/plugins/types";
 import {
   EDITOR_CONTENT_EVENT_MS,
+  pluginEditorTargetKey,
+  setPluginEditorLanguage,
   PENDING_REVEAL_TTL_MS,
   clearPluginHighlights,
   flushPendingEditorReveal,
@@ -44,9 +46,10 @@ function mountEditor(content: string): Editor {
 
 function register(
   editor: Editor,
-  entity: PluginEntityTarget = { kind: "chapter", id: "c1" }
+  entity: PluginEditorEntity = { kind: "chapter", id: "c1" },
+  language = "en"
 ): () => void {
-  return registerPluginEditor({ id: `editor-${nextId++}`, editor, entity });
+  return registerPluginEditor({ id: `editor-${nextId++}`, editor, entity, language });
 }
 
 beforeEach(() => {
@@ -81,6 +84,7 @@ describe("the focused editor reads", () => {
     expect(getPluginEditorContent()).toEqual({
       status: "ok",
       entity: { kind: "chapter", id: "c1" },
+      language: "en",
       content: { text: "Hello world", html: "<p>Hello <strong>world</strong></p>" },
     });
   });
@@ -191,7 +195,7 @@ describe("the focused editor reads", () => {
     const editor = mountEditor("<p>one two</p>");
     editor.view.dom.focus();
     const id = `editor-${nextId++}`;
-    registerPluginEditor({ id, editor, entity: { kind: "chapter", id: "c1" } });
+    registerPluginEditor({ id, editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
 
     // The toolbar button a Plugin command runs from is outside the editor.
     const button = document.createElement("button");
@@ -247,17 +251,123 @@ describe("the focused editor reads", () => {
   });
 });
 
+describe("the only editor on screen", () => {
+  it("is the target before the author ever puts the caret in it", () => {
+    // Opening an existing Note and going straight to a toolbar button never
+    // focuses its editor; the editor on screen is still the one to address.
+    const editor = mountEditor("<p>The door opened. The door closed.</p>");
+    register(editor, { kind: "note", id: "n1" });
+
+    expect(editor.isFocused).toBe(false);
+    expect(getPluginEditorContent()).toMatchObject({
+      status: "ok",
+      entity: { kind: "note", id: "n1" },
+    });
+    expect(getPluginEditorSelection()).toMatchObject({ status: "ok" });
+    expect(setPluginEditorHighlights("a", { kind: "info", ranges: [{ from: 4, to: 8 }] })).toEqual({
+      status: "applied",
+    });
+    expect(revealInFocusedEditor({ from: 0, to: 3 })).toEqual({ status: "applied" });
+  });
+
+  it("is announced as the target when it registers, and none once it unmounts", () => {
+    vi.useFakeTimers();
+    const seen = vi.fn();
+    const off = onEditorFocusChanged(seen);
+    const editor = mountEditor("<p>one</p>");
+
+    const dispose = register(editor, { kind: "note", id: "n1" });
+    expect(seen).toHaveBeenLastCalledWith({ kind: "note", id: "n1" });
+    expect(pluginEditorTargetKey()).toBe("note:n1");
+
+    dispose();
+    vi.advanceTimersByTime(0);
+    expect(seen).toHaveBeenLastCalledWith(null);
+    expect(pluginEditorTargetKey()).toBeNull();
+    off();
+  });
+
+  it("is no target when two editors are on screen and neither has had focus", () => {
+    register(mountEditor("<p>First</p>"), { kind: "chapter", id: "c1" });
+    register(mountEditor("<p>Second</p>"), { kind: "note", id: "n1" });
+
+    expect(getPluginEditorContent()).toEqual({ status: "no-target" });
+    expect(pluginEditorTargetKey()).toBeNull();
+  });
+
+  it("is no target while it sits behind a modal", () => {
+    const editor = mountEditor("<p>one two</p>");
+    register(editor);
+    const modal = document.createElement("div");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.appendChild(modal);
+    modal.appendChild(editor.view.dom);
+
+    expect(getPluginEditorContent()).toEqual({ status: "no-target" });
+
+    document.body.appendChild(editor.view.dom);
+    modal.remove();
+  });
+
+  it("serves the Ephemeral, which has no Library row", () => {
+    const editor = mountEditor("<p>scratch words</p>");
+    register(editor, { kind: "ephemeral", id: "ephemeral" }, "es");
+
+    expect(getPluginEditorContent()).toEqual({
+      status: "ok",
+      entity: { kind: "ephemeral", id: "ephemeral" },
+      language: "es",
+      content: { text: "scratch words", html: "<p>scratch words</p>" },
+    });
+  });
+});
+
+describe("the editor's language", () => {
+  it("is read with the content", () => {
+    const editor = mountEditor("<p>hola</p>");
+    editor.view.dom.focus();
+    register(editor, { kind: "note", id: "n1" }, "es");
+
+    expect(getPluginEditorContent()).toMatchObject({ status: "ok", language: "es" });
+  });
+
+  it("changing is a content change, and setting the same language is not", () => {
+    vi.useFakeTimers();
+    const editor = mountEditor("<p>hola</p>");
+    editor.view.dom.focus();
+    const id = `editor-${nextId++}`;
+    registerPluginEditor({ id, editor, entity: { kind: "note", id: "n1" }, language: "en" });
+    const changed = vi.fn();
+    const off = onEditorContentChanged(changed);
+
+    setPluginEditorLanguage(id, "en");
+    vi.advanceTimersByTime(EDITOR_CONTENT_EVENT_MS);
+    expect(changed).not.toHaveBeenCalled();
+
+    setPluginEditorLanguage(id, "es");
+    expect(getPluginEditorContent()).toMatchObject({ language: "es" });
+    vi.advanceTimersByTime(EDITOR_CONTENT_EVENT_MS);
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(changed).toHaveBeenLastCalledWith({ kind: "note", id: "n1" });
+    off();
+  });
+
+  it("ignores a language set for an editor that is not registered", () => {
+    expect(() => setPluginEditorLanguage("missing", "es")).not.toThrow();
+  });
+});
+
 describe("re-registering the same editor id", () => {
   it("keeps the target and emits one focusChanged with the new entity", () => {
     const editor = mountEditor("<p>one</p>");
     editor.view.dom.focus();
     const seen = vi.fn();
     const off = onEditorFocusChanged(seen);
-    registerPluginEditor({ id: "note-editor", editor, entity: { kind: "note", id: "n1" } });
+    registerPluginEditor({ id: "note-editor", editor, entity: { kind: "note", id: "n1" }, language: "en" });
     seen.mockClear();
 
     // A Note switch re-registers the same editor instance and id.
-    registerPluginEditor({ id: "note-editor", editor, entity: { kind: "note", id: "n2" } });
+    registerPluginEditor({ id: "note-editor", editor, entity: { kind: "note", id: "n2" }, language: "en" });
 
     expect(seen).not.toHaveBeenCalledWith(null);
     expect(seen).toHaveBeenCalledTimes(1);
@@ -536,7 +646,7 @@ describe("editor reveal", () => {
     const editor = mountEditor("<p>one two three</p>");
     editor.view.dom.focus();
     const id = `editor-${nextId++}`;
-    registerPluginEditor({ id, editor, entity: { kind: "chapter", id: "c1" } });
+    registerPluginEditor({ id, editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
 
     // Behind a modal the editor is not a target, so the reveal is queued.
     const modal = document.createElement("div");
@@ -646,6 +756,7 @@ describe("editor writes", () => {
       id: `write-editor-${nextWriteId++}`,
       editor,
       entity: { kind: "chapter", id: "c1" },
+      language: "en",
     });
     return editor;
   }
@@ -726,6 +837,32 @@ describe("editor writes", () => {
     expect(html).not.toContain("javascript:");
   });
 
+  it("writes into the only editor on screen, never focused, at its selection, undoable in one step", () => {
+    // The target rule (ADR 0030) covers writes too: an existing Note opened and
+    // never clicked into takes an insert at its stored selection.
+    const editor = mountEditor("<p>Hello world</p>");
+    registerPluginEditor({
+      id: `write-editor-${nextWriteId++}`,
+      editor,
+      entity: { kind: "note", id: "n1" },
+      language: "en",
+    });
+    expect(editor.isFocused).toBe(false);
+    const before = editor.getHTML();
+    caretAtEnd(editor);
+
+    expect(insertInFocusedEditor({ text: "!" })).toEqual({ status: "applied" });
+    expect(replaceInFocusedEditor({ from: 0, to: 5 }, { text: "Howdy" })).toEqual({
+      status: "applied",
+    });
+    expect(editor.getText()).toBe("Howdy world!");
+
+    editor.commands.undo();
+    expect(editor.getText()).toBe("Hello world!");
+    editor.commands.undo();
+    expect(editor.getHTML()).toBe(before);
+  });
+
   it("undoes an insert in one step", () => {
     const editor = focusedEditor();
     const before = editor.getHTML();
@@ -802,8 +939,8 @@ describe("editor writes", () => {
   it("edits the editor it resolved even when focus moves to another during the call", () => {
     const first = mountEditor("<p>Alpha</p>");
     const second = mountEditor("<p>Beta</p>");
-    registerPluginEditor({ id: "a", editor: first, entity: { kind: "chapter", id: "c1" } });
-    registerPluginEditor({ id: "b", editor: second, entity: { kind: "chapter", id: "c2" } });
+    registerPluginEditor({ id: "a", editor: first, entity: { kind: "chapter", id: "c1" }, language: "en" });
+    registerPluginEditor({ id: "b", editor: second, entity: { kind: "chapter", id: "c2" }, language: "en" });
     first.view.dom.focus();
     const secondBefore = second.getHTML();
     // The edit's own update moves focus to the other editor mid-call.

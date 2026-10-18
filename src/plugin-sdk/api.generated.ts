@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.1";
+export const PLUGIN_API_VERSION = "0.1.2";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -225,15 +225,17 @@ export interface PluginApiMethods {
     };
     output: null;
   };
-  /** Reads the focused rich-text editor's content, or no-target when none is focused. */
+  /** Reads the target editor's content and language. The target is the rich-text editor that last took focus, else the only one on screen; no-target when there is none. */
   "editor.getContent": {
     input: Record<string, never>;
     output: {
       status: "ok";
       entity: {
-        kind: "book" | "chapter" | "note" | "canvas";
+        kind: "book" | "chapter" | "note" | "canvas" | "ephemeral";
         id: string;
       };
+      /** The language the text is written in: a Note's own, else its Book's; a Chapter's Book's; else the editor's Spell Check language (the Ephemeral's). */
+      language: string;
       content: {
         /** Plain text. */
         text: string;
@@ -244,13 +246,13 @@ export interface PluginApiMethods {
       status: "no-target";
     };
   };
-  /** Reads the focused editor's selection as plain-text offsets. */
+  /** Reads the target editor's selection as plain-text offsets. */
   "editor.getSelection": {
     input: Record<string, never>;
     output: {
       status: "ok";
       entity: {
-        kind: "book" | "chapter" | "note" | "canvas";
+        kind: "book" | "chapter" | "note" | "canvas" | "ephemeral";
         id: string;
       };
       range: {
@@ -262,7 +264,7 @@ export interface PluginApiMethods {
       status: "no-target";
     };
   };
-  /** Scrolls the focused editor to a range and places the caret there. */
+  /** Scrolls the target editor to a range and places the caret there. */
   "editor.reveal": {
     input: {
       range: {
@@ -276,7 +278,7 @@ export interface PluginApiMethods {
       status: "no-target";
     };
   };
-  /** Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text. */
+  /** Replaces this Plugin's highlights of one kind in the target editor; empty ranges clear that kind. Never changes text. */
   "editor.setHighlights": {
     input: {
       kind: "info" | "warning" | "repetition";
@@ -493,17 +495,17 @@ export interface PluginApiEvents {
   "language.changed": {
     language: string;
   };
-  /** The focused editor's content changed; sent once per typing burst. */
+  /** The target editor's content or language changed; sent once per typing burst. */
   "editor.contentChanged": {
     entity: {
-      kind: "book" | "chapter" | "note" | "canvas";
+      kind: "book" | "chapter" | "note" | "canvas" | "ephemeral";
       id: string;
     };
   };
-  /** A different editor took focus, or none did (entity is null). */
+  /** The target editor changed: another took focus, or the only one on screen mounted or unmounted (entity is null when there is none). */
   "editor.focusChanged": {
     entity: {
-      kind: "book" | "chapter" | "note" | "canvas";
+      kind: "book" | "chapter" | "note" | "canvas" | "ephemeral";
       id: string;
     } | null;
   };
@@ -543,13 +545,13 @@ export interface PluginApi {
     };
   };
   editor: {
-    /** Reads the focused rich-text editor's content, or no-target when none is focused. */
+    /** Reads the target editor's content and language. The target is the rich-text editor that last took focus, else the only one on screen; no-target when there is none. */
     getContent(params?: PluginApiMethods["editor.getContent"]["input"]): Promise<PluginApiMethods["editor.getContent"]["output"]>;
-    /** Reads the focused editor's selection as plain-text offsets. */
+    /** Reads the target editor's selection as plain-text offsets. */
     getSelection(params?: PluginApiMethods["editor.getSelection"]["input"]): Promise<PluginApiMethods["editor.getSelection"]["output"]>;
-    /** Scrolls the focused editor to a range and places the caret there. */
+    /** Scrolls the target editor to a range and places the caret there. */
     reveal(params: PluginApiMethods["editor.reveal"]["input"]): Promise<PluginApiMethods["editor.reveal"]["output"]>;
-    /** Replaces this Plugin's highlights of one kind in the focused editor; empty ranges clear that kind. Never changes text. */
+    /** Replaces this Plugin's highlights of one kind in the target editor; empty ranges clear that kind. Never changes text. */
     setHighlights(params: PluginApiMethods["editor.setHighlights"]["input"]): Promise<PluginApiMethods["editor.setHighlights"]["output"]>;
     /** Inserts text or an HTML fragment at the caret as one undoable step. */
     insert(params: PluginApiMethods["editor.insert"]["input"]): Promise<PluginApiMethods["editor.insert"]["output"]>;
