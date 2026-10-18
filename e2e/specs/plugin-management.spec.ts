@@ -124,10 +124,10 @@ test.describe("Plugin management: list and filters @wf:plugin-management-list-fi
 
   test("lists Plugins alphabetically with counts", async ({ page }) => {
     await openPluginsSection(page);
-    const rows = main(page).getByRole("button", { name: /Fixture$/ });
+    const rows = main(page).getByRole("button", { name: /^\w+ Fixture v\d/ });
     await expect(rows).toHaveCount(2);
-    await expect(rows.nth(0)).toHaveAccessibleName("Approvals Fixture");
-    await expect(rows.nth(1)).toHaveAccessibleName("Tracer Fixture");
+    await expect(rows.nth(0)).toHaveAccessibleName(/^Approvals Fixture v\d/);
+    await expect(rows.nth(1)).toHaveAccessibleName(/^Tracer Fixture v\d/);
 
     // The filter shows one count per category across every known Plugin.
     const listbox = await openFilter(page);
@@ -147,11 +147,11 @@ test.describe("Plugin management: list and filters @wf:plugin-management-list-fi
 
     // The tracer matched only Installed, so it is gone; the approvals copy still
     // matches the still-selected Disabled category.
-    await expect(main(page).getByRole("button", { name: "Tracer Fixture", exact: true })).toHaveCount(
+    await expect(main(page).getByRole("button", { name: /^Tracer Fixture v\d/ })).toHaveCount(
       0
     );
     await expect(
-      main(page).getByRole("button", { name: "Approvals Fixture", exact: true })
+      main(page).getByRole("button", { name: /^Approvals Fixture v\d/ })
     ).toBeVisible();
   });
 
@@ -380,9 +380,9 @@ test.describe("Plugin management by touch @touch", () => {
       page,
     }) => {
       await tapPluginsSection(page);
-      const rows = main(page).getByRole("button", { name: /Fixture$/ });
+      const rows = main(page).getByRole("button", { name: /^\w+ Fixture v\d/ });
       await expect(rows).toHaveCount(2);
-      await expect(rows.nth(0)).toHaveAccessibleName("Approvals Fixture");
+      await expect(rows.nth(0)).toHaveAccessibleName(/^Approvals Fixture v\d/);
 
       await main(page).getByRole("button", { name: "Filter by status", exact: true }).tap();
       const listbox = page.getByRole("listbox", { name: "Filter by status" });
@@ -392,10 +392,10 @@ test.describe("Plugin management by touch @touch", () => {
       await page.keyboard.press("Escape");
 
       await expect(
-        main(page).getByRole("button", { name: "Tracer Fixture", exact: true })
+        main(page).getByRole("button", { name: /^Tracer Fixture v\d/ })
       ).toHaveCount(0);
       await expect(
-        main(page).getByRole("button", { name: "Approvals Fixture", exact: true })
+        main(page).getByRole("button", { name: /^Approvals Fixture v\d/ })
       ).toBeVisible();
     });
   });
@@ -425,7 +425,7 @@ test.describe("Plugin management by touch @touch", () => {
       page,
     }) => {
       await tapPluginsSection(page);
-      await main(page).getByRole("button", { name: "Tracer Fixture", exact: true }).tap();
+      await main(page).getByRole("button", { name: /^Tracer Fixture v\d/ }).tap();
       await main(page).getByRole("button", { name: "Remove", exact: true }).tap();
       const dialog = page.getByRole("alertdialog", { name: "Remove Tracer Fixture?" });
       await expect(dialog).toBeVisible();

@@ -705,6 +705,30 @@ describe("Plugin card header (#442)", () => {
     expect(screen.queryByRole("switch", { name: "Enable Gone" })).toBeNull();
   });
 
+  it("shows the manifest version beside the name on installed, removed, and available cards", () => {
+    seed(
+      entry({ manifest: manifest({ version: "0.4.0" }) }),
+      entry({
+        pluginId: "gone",
+        manifest: manifest({ id: "gone", name: "Gone", version: "1.2.0" }),
+        installed: false,
+        removed: true,
+      }),
+      entry({
+        pluginId: "shipped",
+        manifest: manifest({ id: "shipped", name: "Shipped", version: "2.0.1" }),
+        builtIn: true,
+        installed: false,
+        available: true,
+      })
+    );
+    render(<PluginsSection />);
+
+    expect(screen.getByRole("button", { name: /^Echoes\s*v0\.4\.0/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Gone\s*v1\.2\.0/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Shipped\s*v2\.0\.1/ })).toBeInTheDocument();
+  });
+
   it("shows the Failed to start badge when a startup error is recorded", () => {
     seed(entry({ approval: approval({ enabled: false, startupError: "incompatible" }) }));
     render(<PluginsSection />);
@@ -1011,7 +1035,7 @@ describe("Plugin management (#443)", () => {
     expect(screen.getByRole("button", { name: "Filter by status" })).toHaveTextContent(
       "All statuses"
     );
-    expect(screen.getByRole("button", { name: "Echoes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Echoes/ })).toBeInTheDocument();
   });
 
   it("deselecting a category hides only the rows that belong to it (ANY match)", async () => {

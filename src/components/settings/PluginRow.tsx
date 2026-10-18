@@ -219,6 +219,9 @@ export function PluginRow({
           className="flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded py-1 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <span className="truncate">{name}</span>
+          <span className="shrink-0 text-sm font-normal text-muted-foreground">
+            {t("plugins.management.version", { version: manifest.version })}
+          </span>
           <span className="flex flex-wrap items-center gap-2">
             {entry.builtIn && <span className={BADGE_CLASS}>{t("plugins.builtInBadge")}</span>}
             {entry.modified && (

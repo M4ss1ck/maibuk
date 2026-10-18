@@ -2213,6 +2213,7 @@
       "failedToStart": "No se pudo iniciar",
       "modified": "Modificado",
       "stopped": "Detenido",
+      "version": "v{{version}}",
       "custom": "Interfaz personalizada: Maibuk no ha verificado su accesibilidad",
       "remove": "Eliminar",
       "reinstall": "Reinstalar",
