@@ -58,6 +58,7 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 - **Typography**: Three font families defined — `font-sans` (Inter), `font-serif` (Literata), `font-mono`
 - **Button variants**: `primary`, `secondary`, `ghost`, `destructive` — use the existing `Button` component, don't create ad-hoc button styles
 - **Border radius**: Consistently `rounded-lg` across the codebase
+- **Clickable cards show the pointer**: put `cursor-pointer` on the card's `GridListItem`. A `<button>` inside the card does not inherit it (the browser sets `cursor: default` on buttons), so a button that opens the card also needs `cursor-pointer`, and an `<input>` inside needs `cursor-text`. See `src/components/canvas/CanvasCard.tsx`
 - **Scroll boxes inside overlays**: add `scrollbar-themed` (`src/index.css`) so the scrollbar follows the theme instead of the OS default
 - **Panel layout responds to its container, not the viewport**: content sits beside a resizable sidebar, so a viewport breakpoint (`md:`) does not describe the space a panel actually has. Mark the wrapper `@container` and use container variants (`@md:`, `@3xl:`) for anything laid out inside the main content area — see the notes filter panel in `src/pages/NotesGallery.tsx`. Viewport breakpoints stay correct for the outermost page shell
 - **Touch compatibility**: No hover-only controls (`CODING_STANDARDS.md`, "Keyboard and accessibility", item 7). Use `pointer-coarse:` for touch-only visibility and larger touch targets, never a viewport breakpoint; desktop hover affordances stay as they are
