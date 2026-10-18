@@ -1587,7 +1587,9 @@ describe("virtualized Chapter list (#550)", () => {
 
     // The selection moves to the top after the delete resolves. That must not
     // scroll the focused row out of the mounted set and drop focus to <body>.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+    await waitFor(() =>
+      expect(screen.getByRole("row", { name: "Chapter 1" })).toHaveAttribute("aria-selected", "true")
+    );
     expect(screen.getByRole("row", { name: "Chapter 151" })).toHaveFocus();
   });
 });
