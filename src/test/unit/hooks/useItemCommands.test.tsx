@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GridList, GridListItem } from "react-aria-components";
@@ -199,5 +199,80 @@ describe("useItemCommands inside a React Aria collection", () => {
 
     await user.keyboard("{Delete}");
     expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("useItemCommands across a long list (#550)", () => {
+  const ROWS = 200;
+  const renders = new Map<string, number>();
+
+  function PlainRow({ name }: { name: string }) {
+    const ref = useRef<HTMLButtonElement>(null);
+    renders.set(name, (renders.get(name) ?? 0) + 1);
+    useItemCommands(ref, [{ commandId: "common.delete", onAction: () => {} }]);
+    return (
+      <li>
+        <button ref={ref} type="button" aria-label={name}>
+          {name}
+        </button>
+      </li>
+    );
+  }
+
+  function Long() {
+    return (
+      <ul aria-label="Long">
+        {Array.from({ length: ROWS }, (_, i) => (
+          <PlainRow key={i} name={`row-${i}`} />
+        ))}
+      </ul>
+    );
+  }
+
+  it("re-renders only the rows whose focus state changed when focus moves", async () => {
+    const user = userEvent.setup();
+    render(<Long />);
+    await user.tab();
+    expect(screen.getByRole("button", { name: "row-0" })).toHaveFocus();
+
+    renders.clear();
+    act(() => {
+      screen.getByRole("button", { name: "row-1" }).focus();
+    });
+
+    const total = [...renders.values()].reduce((sum, n) => sum + n, 0);
+    expect(total).toBeLessThanOrEqual(4);
+    expect(renders.get("row-0")).toBe(1);
+    expect(renders.get("row-1")).toBe(1);
+  });
+
+  it("registers at most one document focusin listener for all rows", () => {
+    const add = vi.spyOn(document, "addEventListener");
+    try {
+      const { unmount } = render(<Long />);
+      const focusin = add.mock.calls.filter(([type]) => type === "focusin");
+      expect(focusin.length).toBeLessThanOrEqual(1);
+      unmount();
+    } finally {
+      add.mockRestore();
+    }
+  });
+
+  it("removes the document focus listeners once the last row unmounts", () => {
+    const add = vi.spyOn(document, "addEventListener");
+    const remove = vi.spyOn(document, "removeEventListener");
+    try {
+      const { unmount } = render(<Long />);
+      unmount();
+      const added = add.mock.calls.filter(([type]) => type === "focusin" || type === "focusout");
+      const removed = remove.mock.calls.filter(
+        ([type]) => type === "focusin" || type === "focusout"
+      );
+      expect(added.length).toBeGreaterThan(0);
+      expect(removed.map(([type]) => type).sort()).toEqual(added.map(([type]) => type).sort());
+    } finally {
+      add.mockRestore();
+      remove.mockRestore();
+    }
   });
 });

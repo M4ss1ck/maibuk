@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useSyncExternalStore, type RefObject } from "react";
 import { useShortcuts } from "@/lib/shortcuts";
 import type { CommandId } from "@/lib/shortcut-registry";
 
@@ -9,31 +9,54 @@ export interface ItemCommand {
   children?: ItemCommand[];
 }
 
+const focusListeners = new Set<() => void>();
+
+function notifyFocusListeners() {
+  for (const listener of focusListeners) listener();
+}
+
+function onFocusOut() {
+  // focusout fires before the next element takes focus; read it once focus settles.
+  queueMicrotask(notifyFocusListeners);
+}
+
+/**
+ * One document focus listener pair shared by every mounted item row. A long
+ * list costs one listener, not one per row (issue #550). Each row's snapshot
+ * is a boolean, so useSyncExternalStore re-renders only rows whose focus
+ * state changed.
+ */
+function subscribeToFocus(listener: () => void): () => void {
+  if (focusListeners.size === 0) {
+    document.addEventListener("focusin", notifyFocusListeners);
+    document.addEventListener("focusout", onFocusOut);
+  }
+  focusListeners.add(listener);
+  return () => {
+    focusListeners.delete(listener);
+    if (focusListeners.size === 0) {
+      document.removeEventListener("focusin", notifyFocusListeners);
+      document.removeEventListener("focusout", onFocusOut);
+    }
+  };
+}
+
 /**
  * Whether focus is on the element or inside it; only reads focus, never moves
- * it. Listens on the document and reads the ref when focus moves, because a
- * React Aria collection item renders twice (a hidden pass that builds the
+ * it. The ref is read at snapshot time, not captured once, because a React
+ * Aria collection item renders twice (a hidden pass that builds the
  * collection, then the visible one) and the ref only reaches the visible DOM
  * after this effect has run.
  */
 function useFocusInside(ref: RefObject<HTMLElement | null>): boolean {
-  const [inside, setInside] = useState(false);
-  useEffect(() => {
-    const update = () => {
+  return useSyncExternalStore(
+    subscribeToFocus,
+    () => {
       const element = ref.current;
-      setInside(element !== null && element.contains(document.activeElement));
-    };
-    update();
-    // focusout fires before the next element takes focus; read it once focus settles.
-    const onFocusOut = () => queueMicrotask(update);
-    document.addEventListener("focusin", update);
-    document.addEventListener("focusout", onFocusOut);
-    return () => {
-      document.removeEventListener("focusin", update);
-      document.removeEventListener("focusout", onFocusOut);
-    };
-  }, [ref]);
-  return inside;
+      return element !== null && element.contains(document.activeElement);
+    },
+    () => false
+  );
 }
 
 /**
