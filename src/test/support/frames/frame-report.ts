@@ -20,6 +20,8 @@ export interface FrameSample {
 export interface InputSample {
   atMs: number;
   nextFrameMs: number;
+  /** The key pressed, when the source records it (the probe does). */
+  key?: string;
 }
 
 export interface LongAnimationFrameScript {
@@ -39,6 +41,8 @@ export interface LongAnimationFrame {
   durationMs: number;
   blockingDurationMs?: number;
   scripts: LongAnimationFrameScript[];
+  /** The latest key press before the frame started, as "ArrowDown #7" (the 7th ArrowDown of the window). */
+  afterKeyPress?: string;
 }
 
 export interface FrameSampleSet {
@@ -309,7 +313,7 @@ export function aggregateSamples(runs: FrameSampleSet[]): FrameSampleSet {
       pooled.longAnimationFrames.push({ ...f, startMs: f.startMs + shift });
     }
     for (const i of run.inputs ?? []) {
-      pooled.inputs?.push({ atMs: i.atMs + shift, nextFrameMs: i.nextFrameMs + shift });
+      pooled.inputs?.push({ ...i, atMs: i.atMs + shift, nextFrameMs: i.nextFrameMs + shift });
     }
     for (const duration of run.handlerMs ?? []) pooled.handlerMs?.push(duration);
     const last = Math.max(

@@ -98,6 +98,8 @@ export function checkFrameBench(report: FrameBenchReport): BenchCheck {
 }
 
 const ms = (value: number) => value.toFixed(1);
+/** Long frames listed per failing scenario, longest first. */
+const LONG_FRAMES_LISTED = 20;
 
 function row(label: string, report: FrameReport, verdict: string): string {
   const s = report.stats;
@@ -145,7 +147,7 @@ export function formatFrameBench(
     if (!scenario.aggregate || scenario.verdict === "pass") continue;
     const failing = scenario.aggregate.lines.filter((line) => line.verdict !== "pass");
     out.push("", `${scenario.id}: ${failing.map((l) => `${l.id} ${l.verdict}`).join(", ")}`);
-    for (const frame of scenario.aggregate.longAnimationFrames.slice(0, 3)) {
+    for (const frame of scenario.aggregate.longAnimationFrames.slice(0, LONG_FRAMES_LISTED)) {
       const scripts = [...frame.scripts].sort((a, b) => b.durationMs - a.durationMs).slice(0, 3);
       const where = scripts.length
         ? scripts
@@ -155,7 +157,8 @@ export function formatFrameBench(
             )
             .join("; ")
         : "no attribution from this engine";
-      out.push(`  long frame ${ms(frame.durationMs)} ms: ${where}`);
+      const after = frame.afterKeyPress ? ` after ${frame.afterKeyPress}` : "";
+      out.push(`  long frame ${ms(frame.durationMs)} ms${after}: ${where}`);
     }
   }
   out.push("", check.ok ? "Every scenario holds its budget." : "Frame budget missed.");

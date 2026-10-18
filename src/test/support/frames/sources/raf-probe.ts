@@ -10,6 +10,7 @@ import {
   type LongAnimationFrame,
   percentile,
 } from "@/test/support/frames/frame-report";
+import { attributeKeyPresses } from "@/test/support/frames/attribution";
 import type { ProbeDump } from "@/test/support/frames/probe";
 
 /** Fewer quiet-page deltas than this cannot establish the refresh interval. */
@@ -60,25 +61,24 @@ export function probeInputsAndLongFrames(dump: ProbeDump): {
   longAnimationFrames: LongAnimationFrame[];
 } {
   if (!isDump(dump)) throw new FrameReportRefused("probe dump is malformed");
-  return {
-    inputs: dump.inputs
-      .filter((input) => Number.isFinite(input.atMs) && Number.isFinite(input.nextFrameMs))
-      .map(({ atMs, nextFrameMs }) => ({ atMs, nextFrameMs })),
-    longAnimationFrames: dump.longAnimationFrames.map((entry) => ({
-      startMs: entry.startTime,
-      durationMs: entry.duration,
-      blockingDurationMs: entry.blockingDuration,
-      scripts: entry.scripts.map((script) => ({
-        invoker: script.invoker,
-        sourceURL: script.sourceURL,
-        sourceFunctionName: script.sourceFunctionName,
-        ...(typeof script.sourceCharPosition === "number" && script.sourceCharPosition >= 0
-          ? { sourceCharPosition: script.sourceCharPosition }
-          : {}),
-        durationMs: script.duration,
-      })),
+  const inputs: InputSample[] = dump.inputs
+    .filter((input) => Number.isFinite(input.atMs) && Number.isFinite(input.nextFrameMs))
+    .map(({ atMs, nextFrameMs, key }) => ({ atMs, nextFrameMs, ...(key ? { key } : {}) }));
+  const longAnimationFrames: LongAnimationFrame[] = dump.longAnimationFrames.map((entry) => ({
+    startMs: entry.startTime,
+    durationMs: entry.duration,
+    blockingDurationMs: entry.blockingDuration,
+    scripts: entry.scripts.map((script) => ({
+      invoker: script.invoker,
+      sourceURL: script.sourceURL,
+      sourceFunctionName: script.sourceFunctionName,
+      ...(typeof script.sourceCharPosition === "number" && script.sourceCharPosition >= 0
+        ? { sourceCharPosition: script.sourceCharPosition }
+        : {}),
+      durationMs: script.duration,
     })),
-  };
+  }));
+  return { inputs, longAnimationFrames: attributeKeyPresses(longAnimationFrames, inputs) };
 }
 
 /**
@@ -99,8 +99,11 @@ export function parseProbeDump(dump: ProbeDump, refreshIntervalMs: number): Fram
     inputs,
     longAnimationFrames: dump.loafSupported
       ? longAnimationFrames
-      : frames
-          .filter((frame) => frame.durationMs > LONG_FRAME_MS)
-          .map((frame) => ({ ...frame, scripts: [] })),
+      : attributeKeyPresses(
+          frames
+            .filter((frame) => frame.durationMs > LONG_FRAME_MS)
+            .map((frame) => ({ ...frame, scripts: [] })),
+          inputs
+        ),
   };
 }
