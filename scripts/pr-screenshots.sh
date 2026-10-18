@@ -72,7 +72,10 @@ fi
 
 (
   cd "$WORKTREE"
-  VITE_BUILD_TARGET=web pnpm exec vite build --outDir e2e/.output/web-dist --emptyOutDir --logLevel warn
+  # The same env as e2e/run-steps.mjs `buildWeb`: without the E2E Built-in seed,
+  # no Built-in Plugin starts on the base and every Plugin spec fails before
+  # its first capture.
+  VITE_BUILD_TARGET=web VITE_E2E_BUILTIN_SEED=1 pnpm exec vite build --outDir e2e/.output/web-dist --emptyOutDir --logLevel warn
   # No coverage guard here (--no-preflight): it checks the branch's matrix
   # against the base's app, which is not the question. The after run below runs it.
   E2E_CAPTURE_DIR="$OUT/before" E2E_REUSE_BUILD=1 node e2e/run.mjs --no-preflight --reporter=line "${args[@]}"
