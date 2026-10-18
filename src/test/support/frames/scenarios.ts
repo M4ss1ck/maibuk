@@ -3,15 +3,17 @@
 // drivers that perform them live in e2e/frames/drivers.ts, and every id here
 // has a budget entry in budget.ts and a driver there (frame-scenarios.test.ts).
 
-export type FrameSource = "chromium" | "probe" | "android";
+export type FrameSource = "chromium" | "probe" | "android" | "desktop";
 
-export const FRAME_SOURCES: readonly FrameSource[] = ["chromium", "probe", "android"];
+export const FRAME_SOURCES: readonly FrameSource[] = ["chromium", "probe", "android", "desktop"];
 
 /**
  * A fixture Plugin the scenario's device seeds before the app boots, and the
  * Plugin Permissions its approval record grants. Seeding a Plugin writes the web
  * Plugin Directory (OPFS), which the `probe` (Playwright WebKit in an ephemeral
- * context) and `android` sources lack, so every scenario with `plugins` skips both (see `skip`).
+ * context) and `android` sources lack, so every scenario with `plugins` skips
+ * `probe`, `android`, and `desktop` (see `skip`). The desktop source launches
+ * with an empty Plugin Directory.
  */
 export interface FrameScenarioPlugin {
   /** The Plugin fixture id (a `PluginSeed` in e2e/support/storage.ts). */
@@ -191,6 +193,8 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
         "seeding the Plugin Directory needs OPFS, which the pinned Playwright WebKit (the probe engine) lacks",
       android:
         "the Android WebView seeds no web Plugin Directory, so the echo page has no Plugin to open",
+      desktop:
+        "the desktop source launches with an empty Plugin Directory; the real-engine Plugin numbers are bench:plugins' (--engine webkitgtk)",
     },
   },
   {
@@ -209,6 +213,8 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
         "seeding the Plugin Directory needs OPFS, which the pinned Playwright WebKit (the probe engine) lacks",
       android:
         "the Android WebView seeds no web Plugin Directory, so the Chapter gets no Plugin highlights",
+      desktop:
+        "the desktop source launches with an empty Plugin Directory; the real-engine Plugin numbers are bench:plugins' (--engine webkitgtk)",
     },
   },
   {
@@ -233,6 +239,8 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
         "seeding the Plugin Directory needs OPFS, which the pinned Playwright WebKit (the probe engine) lacks",
       android:
         "the Android WebView seeds no web Plugin Directory, so the Chapter gets no Echoes highlights",
+      desktop:
+        "the desktop source launches with an empty Plugin Directory; the real-engine Plugin numbers are bench:plugins' (--engine webkitgtk)",
     },
   },
 ];

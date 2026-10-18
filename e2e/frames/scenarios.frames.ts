@@ -12,7 +12,12 @@ import { type Browser, chromium, type Page, test, webkit } from "@playwright/tes
 import type { FrameBenchScenarioResult } from "@/test/support/frames/bench-report";
 import { FrameReportRefused } from "@/test/support/frames/frame-report";
 import { frameProbeScript } from "@/test/support/frames/probe";
-import { type FrameScenario, type FrameSource, scenariosFor } from "@/test/support/frames/scenarios";
+import { isUnsupportedAction } from "@/test/support/frames/webdriver";
+import {
+  type FrameScenario,
+  type FrameSource,
+  scenariosFor,
+} from "@/test/support/frames/scenarios";
 import { SEED_DIR } from "../support/seed/seeds";
 import { resetDeviceAndOpen, prepareDevice } from "../support/storage";
 import { makeHermetic } from "../support/test";
@@ -31,6 +36,11 @@ import {
   probeCollector,
 } from "./collect";
 import { FRAME_DRIVERS, type FrameDriverContext } from "./drivers";
+import { type FramePage, playwrightFramePage } from "./frame-page";
+import { launchDesktop } from "./desktop";
+
+/** The repo root: the desktop source builds and launches the binary from here. */
+const root = resolve(import.meta.dirname, "../..");
 
 const source = (process.env.FRAMES_SOURCE ?? "chromium") as FrameSource;
 const only = process.env.FRAMES_SCENARIOS ? process.env.FRAMES_SCENARIOS.split(",") : undefined;
@@ -45,7 +55,9 @@ if (!outDir) throw new Error("FRAMES_OUT is not set: run the lane with `pnpm ben
 mkdirSync(outDir, { recursive: true });
 
 interface ScenarioPage {
-  page: Page;
+  /** The Playwright page; absent for the desktop source, which has none. */
+  page?: Page;
+  framePage: FramePage;
   ctx: FrameDriverContext;
   engineVersion: string;
   close(): Promise<void>;
@@ -110,9 +122,12 @@ async function webPage(
       .map((plugin) => ({ id: plugin.id })) as never,
   });
   await page.addInitScript({ content: frameProbeScript() });
+  const open = async (path: string) => void (await page.goto(path));
+  const framePage = playwrightFramePage(page, open);
   return {
     page,
-    ctx: { page, open: async (path) => void (await page.goto(path)) },
+    framePage,
+    ctx: { page: framePage, open },
     engineVersion: browser.version(),
     close: () => context.close(),
   };
@@ -126,17 +141,34 @@ async function androidPage(seed: string): Promise<ScenarioPage> {
   const { page, origin } = session;
   await page.context().addInitScript({ content: frameProbeScript() });
   await resetDeviceAndOpen(page, new URL("/", origin).href);
+  const open = async (path: string) => void (await page.goto(new URL(path, origin).href));
+  const framePage = playwrightFramePage(page, open);
   return {
     page,
-    ctx: { page, open: async (path) => void (await page.goto(new URL(path, origin).href)) },
+    framePage,
+    ctx: { page: framePage, open },
     engineVersion: session.version,
     close: () => session.close(),
+  };
+}
+
+/** The desktop app over WebDriver: no Playwright page, so only the FramePage. */
+async function desktopPage(seed: string): Promise<ScenarioPage> {
+  const session = await launchDesktop(root, seed);
+  const framePage = session.page;
+  const open = (path: string) => framePage.goto(path);
+  return {
+    framePage,
+    ctx: { page: framePage, open },
+    engineVersion: session.engineVersion,
+    close: session.close,
   };
 }
 
 function collectorFor(): FrameCollector {
   if (source === "chromium") return chromiumCollector(cpuThrottling);
   if (source === "probe") return probeCollector();
+  if (source === "desktop") return probeCollector();
   return androidCollector(device!);
 }
 
@@ -160,12 +192,16 @@ for (const scenario of scenariosFor(source, only)) {
       target =
         source === "android"
           ? await androidPage(scenario.seed)
-          : await webPage(await webBrowser(), scenario, baseURL!);
+          : source === "desktop"
+            ? await desktopPage(scenario.seed)
+            : await webPage(await webBrowser(), scenario, baseURL!);
+      // Set before the driver runs, so a refused scenario still names its engine.
+      result.engineVersion = target.engineVersion;
       const driver = FRAME_DRIVERS[scenario.id];
       const collector = collectorFor();
       await driver.prepare(target.ctx);
       try {
-        await collector.prepare(target.page);
+        await collector.prepare(target.framePage, target.page);
       } catch (error) {
         // An unknown refresh rate is a setup problem, never a perf result.
         if (error instanceof FrameReportRefused) {
@@ -173,10 +209,9 @@ for (const scenario of scenariosFor(source, only)) {
         }
         throw error;
       }
-      result.engineVersion = target.engineVersion;
-      result.userAgent = await target.page.evaluate(() => navigator.userAgent);
+      result.userAgent = await target.framePage.evaluate(() => navigator.userAgent);
       result.refreshSource = collector.refreshSource;
-      result.viewport = await target.page.evaluate(() => ({
+      result.viewport = await target.framePage.evaluate(() => ({
         width: innerWidth,
         height: innerHeight,
       }));
@@ -186,9 +221,9 @@ for (const scenario of scenariosFor(source, only)) {
       }
       for (let i = 0; i < (repeat ?? scenario.repetitions); i++) {
         await driver.arrange?.(target.ctx);
-        await collector.begin(target.page);
+        await collector.begin(target.framePage);
         await driver.measure(target.ctx);
-        const run = await collector.end(target.page);
+        const run = await collector.end(target.framePage);
         if (driver.handlerSamples) run.handlerMs = await driver.handlerSamples(target.ctx);
         result.runs.push(run);
         if (rawDir) {
@@ -202,7 +237,10 @@ for (const scenario of scenariosFor(source, only)) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       // Playwright colors its messages; the report is plain text.
-      result.refused = message.replace(/\u001b\[[0-9;]*m/g, "").split("\n")[0];
+      const plain = message.replace(/\u001b\[[0-9;]*m/g, "").split("\n")[0];
+      result.refused = isUnsupportedAction(error)
+        ? `unmeasured: WebKitWebDriver cannot perform this scenario's input (${plain}); it is never faked with DOM events`
+        : plain;
       result.prerequisite = error instanceof PrerequisiteMissing;
       write();
       throw error;

@@ -1,10 +1,15 @@
 // `pnpm bench:frames` arguments (issue #372). Pure, so the runner's options
 // are tested without launching anything.
 
-import { FRAME_SCENARIOS, FRAME_SOURCES, type FrameSource, scenariosFor } from "@/test/support/frames/scenarios";
+import {
+  FRAME_SCENARIOS,
+  FRAME_SOURCES,
+  type FrameSource,
+  scenariosFor,
+} from "@/test/support/frames/scenarios";
 
 export const FRAME_BENCH_USAGE = `usage: pnpm bench:frames [options]
-  --source <chromium|probe|android>  where frames come from (default chromium)
+  --source <chromium|probe|android|desktop>  where frames come from (default chromium)
   --scenario <id[,id...]>            run only these scenarios (repeatable)
   --repeat <n>                       repetitions per scenario (default: each scenario's own)
   --cpu-throttle <n>                 Chromium CPU slowdown, e.g. 4 for a mid-range phone
@@ -122,6 +127,9 @@ export function parseFrameBenchArgs(argv: string[]): FrameBenchOptions {
   }
   if (options.headless && options.source === "android") {
     throw new FrameBenchUsageError("--headless does not apply to --source android");
+  }
+  if (options.headless && options.source === "desktop") {
+    throw new FrameBenchUsageError("--headless does not apply to --source desktop");
   }
   let scenarios: string[];
   try {

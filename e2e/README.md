@@ -338,7 +338,8 @@ before and after a jank fix, never in CI, because frame timing on a shared
 runner is noise. It prints a budget table per scenario, writes a JSON report
 to `.bench/frames-<source>.json`, exits 1 when a scenario misses its budget,
 and exits 2 when it could not measure at all (no display, no web build, no
-adb device, an author's Library on the device).
+adb device, an author's Library on the device, no tauri-driver or
+WebKitWebDriver for the desktop source).
 
 ```bash
 pnpm bench:frames                                   # Chromium, every scenario, headed
@@ -348,6 +349,7 @@ pnpm bench:frames --cpu-throttle 4                  # Chromium 4x slower: a mid-
 pnpm bench:frames --headless                        # Chromium's new headless mode
 pnpm bench:frames --source probe --headless         # WebKit through the rAF probe
 pnpm bench:frames --source android                  # the installed debug app over adb
+pnpm bench:frames --source desktop --reuse-build    # the Linux release app (WebKitGTK) over WebDriver
 pnpm bench:frames --reuse-build --raw               # skip the build; keep raw captures
 pnpm bench:frames --list                            # scenarios, warm-ups, and what each measures
 pnpm exec tsx scripts/frame-bench-budget.ts .bench/frames-chromium.json  # re-check a report
@@ -378,9 +380,37 @@ judges:
   Android's own measure, IntendedVsync to FrameCompleted (render time), not the
   cadence the web sources read, so compare Android runs with Android runs.
 
-Not covered yet: the Linux desktop build (Tauri on WebKitGTK). The probe
-measures WebKit through Playwright, but nothing drives the desktop binary;
-that needs a WebDriver for it (tauri-driver and WebKitWebDriver).
+- `desktop`: the probe, inside the real Linux shell. Playwright's WebKit is
+  not the WebKitGTK build the shell ships, so this source builds the Tauri
+  release binary under the bench identifier (`com.massick.maibuk.bench`) and
+  drives it through `tauri-driver` and `WebKitWebDriver`. Input is WebDriver
+  Actions, which go through WebKit's own input pipeline (trusted wheel,
+  pointer, and key events), never synthetic DOM events. Every launch gets a
+  fresh temporary `HOME`/XDG tree with the scenario's seed copied in as its
+  Library, so the author's install is unreachable. WebDriver has no init
+  scripts, so the probe is injected after each load. Prerequisites, found on
+  `PATH`, in `~/.cargo/bin`, or through `TAURI_DRIVER` / `WEBKIT_WEBDRIVER`:
+  `cargo install tauri-driver --locked` and
+  `sudo apt install webkit2gtk-driver` (its version must match
+  `libwebkit2gtk-4.1`), plus a display. The report records the WebKitGTK
+  version, the display server (X11 or Wayland), and the build profile. The
+  scenario drivers are the same code as every other source: they act on
+  `e2e/frames/frame-page.ts`, which Playwright and WebDriver
+  (`src/test/support/frames/webdriver.ts`, with role queries resolved in the
+  page by `src/test/support/frames/locate.ts`) both implement. Plugin
+  scenarios are skipped here (no Plugin Directory is seeded; bench:plugins
+  `--engine webkitgtk` measures Plugins on this engine). Judge desktop runs
+  with the probe's caveats below, and compare them with desktop runs.
+
+  `--reuse-build` reuses the binary only when the stamp beside it
+  (`src-tauri/target/release/maibuk.frames-stamp.json`) names this lane, HEAD
+  plus a digest of uncommitted app-source edits, and the binary's size and
+  mtime: bench:plugins writes the same path with its in-app driver baked in,
+  and that build must never be measured here.
+
+  One WebKitWebDriver quirk the client works around: a wheel source
+  dispatches only the change from its previous action's delta, so every
+  wheel tick is sent on a fresh source.
 
 The probe counts every rAF tick of the measured window as a frame, idle ticks
 included, so on a sparse interaction (one keystroke every 83 ms) its dropped

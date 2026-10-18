@@ -20,13 +20,15 @@ import type { FrameSource } from "@/test/support/frames/scenarios";
 
 export interface FrameBenchEnvironment {
   source: FrameSource;
-  /** chromium, webkit, or android-webview. */
+  /** chromium, webkit, android-webview, or webkitgtk (the desktop source's engine). */
   engine: string;
   engineVersion: string;
   /** headed, new-headless, or device. */
   mode: string;
   platform: string;
   device?: { model: string; abi: string; androidVersion: string; serial: string };
+  /** The desktop source's shell: X11 or Wayland, the Tauri build profile, and the WebKitGTK version. */
+  desktop?: { displayServer: string; buildProfile: "release" | "debug"; webkitgtk: string | null };
   refreshIntervalMs: number | null;
   /** Where the refresh interval came from: trace, raf-cadence, or surfaceflinger. */
   refreshSource: string;
@@ -86,7 +88,12 @@ function checkScenario(id: string, result: FrameBenchScenarioResult | undefined)
 
 export function checkFrameBench(report: FrameBenchReport): BenchCheck {
   const ids = [...new Set([...(report.requested ?? []), ...report.scenarios.map((s) => s.id)])];
-  const scenarios = ids.map((id) => checkScenario(id, report.scenarios.find((s) => s.id === id)));
+  const scenarios = ids.map((id) =>
+    checkScenario(
+      id,
+      report.scenarios.find((s) => s.id === id)
+    )
+  );
   return { ok: scenarios.length > 0 && scenarios.every((s) => s.verdict === "pass"), scenarios };
 }
 
@@ -111,8 +118,11 @@ export function formatFrameBench(
   const device = env.device
     ? ` on ${env.device.model} (${env.device.abi}, Android ${env.device.androidVersion})`
     : "";
+  const desktop = env.desktop
+    ? ` on WebKitGTK ${env.desktop.webkitgtk ?? "unknown"} (${env.desktop.displayServer}, ${env.desktop.buildProfile} build)`
+    : "";
   const out: string[] = [
-    `Frame budget (issue #372): ${env.source} via ${env.engine} ${env.engineVersion}, ${env.mode}${device}`,
+    `Frame budget (issue #372): ${env.source} via ${env.engine} ${env.engineVersion}, ${env.mode}${device}${desktop}`,
     `Refresh ${refresh}; CPU throttling ${env.cpuThrottling}x; app ${env.appVersion} @ ${env.commit}`,
     "",
     "| scenario | frames | p50 ms | p95 ms | p99 ms | dropped (missed vsyncs) | worst ms | LoAF > 50 ms | key→frame p95 ms | handler time (p95) | verdict |",

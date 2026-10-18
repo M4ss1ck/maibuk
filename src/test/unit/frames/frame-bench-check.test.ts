@@ -151,6 +151,41 @@ describe("checkFrameBench()", () => {
 });
 
 describe("formatFrameBench()", () => {
+  it("adds the WebKitGTK shell to the header for a desktop run", () => {
+    const desktop = report([{ id: "typing", runs: [steady()] }]);
+    desktop.environment = {
+      ...desktop.environment,
+      source: "desktop",
+      engine: "webkitgtk",
+      engineVersion: "2.44.0",
+      mode: "tauri-driver",
+      desktop: { displayServer: "wayland", buildProfile: "release", webkitgtk: "2.44.0" },
+    };
+    const header = formatFrameBench(desktop).split("\n")[0];
+    expect(header).toBe(
+      "Frame budget (issue #372): desktop via webkitgtk 2.44.0, tauri-driver on WebKitGTK 2.44.0 (wayland, release build)"
+    );
+  });
+
+  it("prints unknown for a desktop run whose WebKitGTK version was not read", () => {
+    const desktop = report([{ id: "typing", runs: [steady()] }]);
+    desktop.environment = {
+      ...desktop.environment,
+      source: "desktop",
+      engine: "webkitgtk",
+      desktop: { displayServer: "x11", buildProfile: "debug", webkitgtk: null },
+    };
+    expect(formatFrameBench(desktop).split("\n")[0]).toContain(
+      " on WebKitGTK unknown (x11, debug build)"
+    );
+  });
+
+  it("prints no desktop suffix for a non-desktop run", () => {
+    expect(
+      formatFrameBench(report([{ id: "typing", runs: [steady()] }])).split("\n")[0]
+    ).not.toContain("WebKitGTK");
+  });
+
   it("prints the per-scenario table with every run, and names a failure's long frames", () => {
     const withLoaf = steady(120, {
       longAnimationFrames: [
@@ -193,7 +228,10 @@ describe("formatFrameBench()", () => {
               ...withLoaf,
               longAnimationFrames: withLoaf.longAnimationFrames.map((f) => ({
                 ...f,
-                scripts: f.scripts.map((s) => ({ ...s, source: "src/components/editor/Editor.tsx:120 (emit)" })),
+                scripts: f.scripts.map((s) => ({
+                  ...s,
+                  source: "src/components/editor/Editor.tsx:120 (emit)",
+                })),
               })),
             },
           ],

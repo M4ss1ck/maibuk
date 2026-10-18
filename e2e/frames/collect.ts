@@ -22,6 +22,7 @@ import {
   refreshIntervalFromCadence,
 } from "@/test/support/frames/sources/raf-probe";
 import type { AndroidDevice } from "./android";
+import type { FramePage } from "./frame-page";
 
 /** The source's own output for one run, saved by `--raw`. */
 export type RawCapture =
@@ -30,24 +31,28 @@ export type RawCapture =
   | { kind: "probe"; dump: ProbeDump; calibration?: number[] };
 
 export interface FrameCollector {
-  /** Once per scenario, after the warm-up. */
-  prepare(page: Page): Promise<void>;
-  begin(page: Page): Promise<void>;
-  end(page: Page): Promise<FrameSampleSet>;
+  /**
+   * Once per scenario, after the warm-up. `native` is the Playwright Page for
+   * the sources that need Playwright-only APIs (the chromium collector's CDP
+   * session); only the web source passes it.
+   */
+  prepare(page: FramePage, native?: Page): Promise<void>;
+  begin(page: FramePage): Promise<void>;
+  end(page: FramePage): Promise<FrameSampleSet>;
   /** Where the refresh interval came from, for the report's environment. */
   refreshSource: string;
   /** The last run's raw capture. */
   raw(): RawCapture | null;
 }
 
-async function startProbe(page: Page, raf: boolean): Promise<void> {
+async function startProbe(page: FramePage, raf: boolean): Promise<void> {
   await page.evaluate((raf) => {
     if (!window.__maibukFrameProbe) throw new Error("frame probe not installed");
     window.__maibukFrameProbe.start({ raf });
   }, raf);
 }
 
-async function stopProbe(page: Page): Promise<ProbeDump> {
+async function stopProbe(page: FramePage): Promise<ProbeDump> {
   return page.evaluate(() => window.__maibukFrameProbe!.stop());
 }
 
@@ -60,8 +65,8 @@ export function chromiumCollector(cpuThrottling: number): FrameCollector {
   return {
     refreshSource: "trace",
     raw: () => ({ kind: "trace", events }),
-    async prepare(page) {
-      cdp = await page.context().newCDPSession(page);
+    async prepare(_page, native) {
+      cdp = await native!.context().newCDPSession(native!);
       cdp.on("Tracing.dataCollected", (data) => {
         // Playwright types the events as string maps; they are trace events.
         events.push(...(data.value as unknown as TraceEvent[]));
