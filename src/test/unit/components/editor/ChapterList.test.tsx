@@ -14,6 +14,7 @@ import {
   pointerHitTarget,
   touchLongPress,
 } from "@/test/support/pointer-events";
+import { CHAPTER_ROW_ESTIMATE } from "@/components/editor/ChapterList";
 import type { Chapter } from "@/features/chapters/types";
 import type { DropItem } from "react-aria-components/useDragAndDrop";
 
@@ -1534,7 +1535,7 @@ describe("virtualized Chapter list (#550)", () => {
   });
 
   it("deleting a Chapter focuses its neighbour even when the neighbour is off-screen", async () => {
-    restoreLayout = mockVirtualizerLayout({ height: 400 });
+    restoreLayout = mockVirtualizerLayout({ height: 200 });
     restoreRowHeight = mockRowScrollHeight(72);
     restoreScrollEvents = mockScrollEventOnScrollTopWrite();
     const user = userEvent.setup();
@@ -1542,14 +1543,25 @@ describe("virtualized Chapter list (#550)", () => {
     render(
       <DeleteHarness
         initialChapters={buildChapters(200)}
-        initialCurrentId="ch-150"
+        initialCurrentId="ch-1"
         onDelete={onDelete}
       />
     );
 
-    const row = await screen.findByRole("row", { name: "Chapter 150" });
-    const deleteButton = within(row).getByRole("button", { name: "chapters.deleteChapter" });
-    deleteButton.focus();
+    // The last mounted row sits at the viewport's bottom edge, so the row after
+    // it is not mounted: the case the delete focus has to reveal. At 200px a
+    // row at the centre (ch-150) would keep its neighbour mounted.
+    await screen.findByRole("row", { name: "Chapter 1" });
+    // The Virtualizer measures in a second pass: wait until more than the first rows are mounted.
+    await waitFor(() => expect(screen.getAllByRole("row").length).toBeGreaterThan(3));
+    const lastKey = screen.getAllByRole("row").at(-1)?.getAttribute("data-key") ?? "";
+    const neighbourKey = `ch-${Number(lastKey.replace("ch-", "")) + 1}`;
+    expect(document.querySelector(`[data-key="${neighbourKey}"]`)).toBeNull();
+
+    const row = document.querySelector<HTMLElement>(`[role="row"][data-key="${lastKey}"]`);
+    const deleteButton = within(row!).getByRole("button", { name: "chapters.deleteChapter" });
+    row!.focus();
+    await tabToControl(user, deleteButton);
     await user.keyboard("{Enter}");
     const noButton = screen.getByRole("button", { name: "common.no" });
     await confirmationFocused(noButton);
@@ -1557,8 +1569,8 @@ describe("virtualized Chapter list (#550)", () => {
     expect(screen.getByRole("button", { name: "common.yes" })).toHaveFocus();
     await user.keyboard("{Enter}");
 
-    expect(onDelete).toHaveBeenCalledWith("ch-150");
-    await waitFor(() => expect(screen.getByRole("row", { name: "Chapter 151" })).toHaveFocus());
+    expect(onDelete).toHaveBeenCalledWith(lastKey);
+    await waitFor(() => expect(document.activeElement).toHaveAttribute("data-key", neighbourKey));
   });
 
   it("keeps focus on the neighbour when the selection moves to the top after the delete resolves", async () => {
@@ -1588,10 +1600,109 @@ describe("virtualized Chapter list (#550)", () => {
     // The selection moves to the top after the delete resolves. That must not
     // scroll the focused row out of the mounted set and drop focus to <body>.
     await waitFor(() =>
-      expect(screen.getByRole("row", { name: "Chapter 1" })).toHaveAttribute("aria-selected", "true")
+      expect(screen.getByRole("row", { name: "Chapter 1" })).toHaveAttribute(
+        "aria-selected",
+        "true"
+      )
     );
     expect(screen.getByRole("row", { name: "Chapter 151" })).toHaveFocus();
   });
 });
 
 afterEach(() => vi.restoreAllMocks());
+
+describe("virtualized Chapter list (#550): long list", () => {
+  let restoreLayout: () => void = () => {};
+  let restoreRowHeight: () => void = () => {};
+  let restoreScrollEvents: () => void = () => {};
+
+  beforeEach(() => {
+    restoreLayout = mockVirtualizerLayout({ height: 400 });
+    restoreRowHeight = mockRowScrollHeight(CHAPTER_ROW_ESTIMATE.normal);
+    restoreScrollEvents = mockScrollEventOnScrollTopWrite();
+  });
+
+  afterEach(() => {
+    restoreLayout();
+    restoreRowHeight();
+    restoreScrollEvents();
+  });
+
+  /** Keys of the rows the Virtualizer has mounted, in list order. */
+  const mountedKeys = () =>
+    screen
+      .getAllByRole("row")
+      .map((row) => row.getAttribute("data-key") ?? "")
+      .filter(Boolean);
+
+  /** The Virtualizer measures in a second pass: wait until the list is past the first rows. */
+  const waitForMountedBottom = async () => {
+    await waitFor(() => expect(mountedKeys().length).toBeGreaterThan(3));
+  };
+
+  it("End and Home reach the true last and first Chapters of a 200-Chapter list", async () => {
+    const user = userEvent.setup();
+    renderCL({ chapters: buildChapters(200), currentChapterId: "ch-1" });
+
+    const first = await screen.findByRole("row", { name: "Chapter 1" });
+    first.focus();
+    await user.keyboard("{End}");
+    await waitFor(() => expect(screen.getByRole("row", { name: "Chapter 200" })).toHaveFocus());
+
+    await user.keyboard("{Home}");
+    await waitFor(() => expect(screen.getByRole("row", { name: "Chapter 1" })).toHaveFocus());
+  });
+
+  it("ArrowDown on the last mounted row moves focus to the next Chapter, not out of the list", async () => {
+    const user = userEvent.setup();
+    renderCL({ chapters: buildChapters(200), currentChapterId: "ch-1" });
+    await screen.findByRole("row", { name: "Chapter 1" });
+    await waitForMountedBottom();
+
+    const lastKey = mountedKeys().at(-1) ?? "";
+    const lastMounted = Number(lastKey.replace("ch-", ""));
+    expect(lastMounted).toBeLessThan(200);
+    const lastRow = document.querySelector<HTMLElement>(`[role="row"][data-key="${lastKey}"]`);
+    lastRow!.focus();
+    expect(lastRow).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+
+    const nextKey = `ch-${lastMounted + 1}`;
+    await waitFor(() => expect(document.activeElement).toHaveAttribute("data-key", nextKey));
+    expect(document.activeElement).toHaveAttribute("role", "row");
+  });
+
+  it("opens with a selected Chapter far down mounted and scrolled into the view", async () => {
+    renderCL({ chapters: buildChapters(200), currentChapterId: "ch-151" });
+
+    const row = await screen.findByRole("row", { name: "Chapter 151" });
+    const scroll = screen.getByRole("grid", { name: "chapters.title" });
+    expect(row).toHaveAttribute("aria-selected", "true");
+    expect(scroll.scrollTop).toBeGreaterThan(0);
+  });
+
+  it("does not mount the neighbour of a focused Chapter at the bottom edge before its delete", async () => {
+    const user = userEvent.setup();
+    render(
+      <DeleteHarness
+        initialChapters={buildChapters(200)}
+        initialCurrentId="ch-1"
+        onDelete={vi.fn()}
+      />
+    );
+    await screen.findByRole("row", { name: "Chapter 1" });
+    await waitForMountedBottom();
+
+    const lastKey = mountedKeys().at(-1) ?? "";
+    const lastMounted = Number(lastKey.replace("ch-", ""));
+    const neighbourName = `Chapter ${lastMounted + 1}`;
+    expect(screen.queryByRole("row", { name: neighbourName })).not.toBeInTheDocument();
+
+    const row = document.querySelector<HTMLElement>(`[role="row"][data-key="${lastKey}"]`);
+    const deleteButton = within(row!).getByRole("button", { name: "chapters.deleteChapter" });
+    deleteButton.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByRole("row", { name: neighbourName })).not.toBeInTheDocument();
+  });
+});

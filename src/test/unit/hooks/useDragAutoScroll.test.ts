@@ -1,6 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
+import { createDataTransfer, dispatchDragEvent, mockRect } from "@/test/support/drag-events";
 
 function makeContainer(rect: { top: number; bottom: number }) {
   const el = document.createElement("div");
@@ -65,5 +66,52 @@ describe("useDragAutoScroll", () => {
     result.current.onDragOver(250);
     expect(container.scrollTop).toBe(100);
     result.current.stop();
+  });
+});
+
+// NotesList wires the hook to its GridList scroll view: a dragover on that view
+// near its bottom edge scrolls it. Here the view is a bare element, with the
+// same listener shape the list uses.
+describe("useDragAutoScroll on a scrolling list view (#550)", () => {
+  beforeEach(() => {
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      cb(0);
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("scrolls the view when a dragover hovers near its bottom edge", () => {
+    const view = document.createElement("div");
+    document.body.appendChild(view);
+    mockRect(view, 0, 500);
+    Object.defineProperty(view, "scrollTop", { value: 100, writable: true, configurable: true });
+    const ref = { current: view };
+    const { result } = renderHook(() => useDragAutoScroll(ref));
+    view.addEventListener("dragover", (event) => result.current.onDragOver(event.clientY));
+
+    dispatchDragEvent(view, "dragover", createDataTransfer(), 495);
+
+    expect(view.scrollTop).toBeGreaterThan(100);
+    result.current.stop();
+    view.remove();
+  });
+
+  it("leaves the view alone when a dragover hovers in its middle", () => {
+    const view = document.createElement("div");
+    document.body.appendChild(view);
+    mockRect(view, 0, 500);
+    Object.defineProperty(view, "scrollTop", { value: 100, writable: true, configurable: true });
+    const { result } = renderHook(() => useDragAutoScroll({ current: view }));
+    view.addEventListener("dragover", (event) => result.current.onDragOver(event.clientY));
+
+    dispatchDragEvent(view, "dragover", createDataTransfer(), 250);
+
+    expect(view.scrollTop).toBe(100);
+    view.remove();
   });
 });

@@ -10,7 +10,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { NotesList } from "@/components/notes/NotesList";
+import { NOTE_ROW_ESTIMATE, NotesList } from "@/components/notes/NotesList";
 import { useSettingsStore } from "@/features/settings/store";
 import type { Book } from "@/features/books/types";
 import type { Note } from "@/features/notes";
@@ -36,12 +36,12 @@ installPointerEvent();
 
 // The Notes list is virtualized (#550): a Virtualizer lays rows out from the
 // scroll view's size, which jsdom reports as 0, so no row would mount. Every
-// row here is 88px tall; the long-list suite below narrows the viewport.
+// row here is NOTE_ROW_ESTIMATE px tall; the long-list suite below narrows the viewport.
 let restoreVirtualizerLayout: () => void = () => {};
 let restoreRowHeight: () => void = () => {};
 beforeAll(() => {
   restoreVirtualizerLayout = mockVirtualizerLayout();
-  restoreRowHeight = mockRowScrollHeight(88);
+  restoreRowHeight = mockRowScrollHeight(NOTE_ROW_ESTIMATE);
 });
 afterAll(() => {
   restoreRowHeight();
@@ -1633,12 +1633,16 @@ describe("virtualized Notes list (#550): small viewport", () => {
   let restoreSmallLayout: () => void = () => {};
   let restoreScrollEvents: () => void = () => {};
 
+  const savedScrollIntoView = HTMLElement.prototype.scrollIntoView;
   beforeAll(() => {
-    // A 400px scroll view fits about five 88px rows.
+    // A 400px scroll view fits about five NOTE_ROW_ESTIMATE-tall rows.
     restoreSmallLayout = mockVirtualizerLayout({ height: 400 });
     restoreScrollEvents = mockScrollEventOnScrollTopWrite();
+    // jsdom has no scrollIntoView; the reveal path calls it on a mounted row.
+    HTMLElement.prototype.scrollIntoView = vi.fn();
   });
   afterAll(() => {
+    HTMLElement.prototype.scrollIntoView = savedScrollIntoView;
     restoreScrollEvents();
     restoreSmallLayout();
   });
@@ -1660,6 +1664,21 @@ describe("virtualized Notes list (#550): small viewport", () => {
     expect(screen.getByTestId("notes-section-pinned")).toBeInTheDocument();
     expect(screen.getByTestId("notes-section-all")).toBeInTheDocument();
     expect(mountedKeys()).toContain("p");
+  });
+
+  it("End reaches the last of 500 Notes and Home the first", async () => {
+    const user = userEvent.setup();
+    render(<NotesList {...baseProps(longNotes())} />);
+
+    const first = await screen.findByRole("row", { name: "Note 0" });
+    first.focus();
+    await user.keyboard("{End}");
+    await waitFor(() =>
+      expect(document.activeElement).toHaveAttribute("data-key", `n${LONG_LIST_SIZE - 1}`)
+    );
+
+    await user.keyboard("{Home}");
+    await waitFor(() => expect(document.activeElement).toHaveAttribute("data-key", "n0"));
   });
 });
 
