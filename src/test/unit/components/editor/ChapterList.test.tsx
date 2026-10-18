@@ -353,6 +353,91 @@ describe("ChapterList", () => {
       expect(screen.getByRole("row", { name: "First" })).toHaveFocus();
     });
 
+    // The editor's outside is inert for the length of a keyboard drag (#551):
+    // React Aria's ariaHideOutside would otherwise flip it on every row mount.
+    describe("the editor while a keyboard drag runs", () => {
+      let mounted: HTMLElement | null = null;
+      afterEach(() => {
+        mounted?.remove();
+        mounted = null;
+      });
+
+      function mountEditorPage() {
+        const page = document.createElement("main");
+        const editor = document.createElement("div");
+        editor.className = "ProseMirror";
+        editor.setAttribute("contenteditable", "true");
+        page.append(editor);
+        document.body.append(page);
+        mounted = page;
+        return { page, editor };
+      }
+
+      const threeChapters = () => [
+        buildChapter({ id: "ch-1", title: "First", order: 1 }),
+        buildChapter({ id: "ch-2", title: "Second", order: 2 }),
+        buildChapter({ id: "ch-3", title: "Third", order: 3 }),
+      ];
+
+      const rowOrder = () =>
+        screen
+          .getAllByRole("row")
+          .map((row) => row.getAttribute("aria-label") ?? row.textContent ?? "");
+
+      it("is inert from Enter until the drop, and not after", async () => {
+        const user = userEvent.setup();
+        const onReorder = vi.fn();
+        const { page } = mountEditorPage();
+        render(<ReorderHarness initialChapters={threeChapters()} onReorder={onReorder} />);
+
+        screen.getAllByRole("button", { name: "chapters.reorder" })[0].focus();
+        expect(page.hasAttribute("inert")).toBe(false);
+        await user.keyboard("{Enter}");
+        await arrowToDropTarget(user, "Insert between Second and Third");
+        expect(page.hasAttribute("inert")).toBe(true);
+        await user.keyboard("{Enter}");
+
+        expect(onReorder).toHaveBeenCalledWith(["ch-2", "ch-1", "ch-3"]);
+        await waitFor(() => expect(page.hasAttribute("inert")).toBe(false));
+      });
+
+      it("keeps focus out of the editor while the drag runs", async () => {
+        const user = userEvent.setup();
+        const { page, editor } = mountEditorPage();
+        render(<ReorderHarness initialChapters={threeChapters()} onReorder={vi.fn()} />);
+
+        screen.getAllByRole("button", { name: "chapters.reorder" })[0].focus();
+        await user.keyboard("{Enter}");
+        await waitForDropTarget();
+        for (let i = 0; i < 4; i++) {
+          await user.tab();
+          expect(editor.contains(document.activeElement)).toBe(false);
+        }
+        await user.keyboard("{Escape}");
+        await waitFor(() => expect(page.hasAttribute("inert")).toBe(false));
+      });
+
+      it("is released on Escape, with the handle focused and the order unchanged", async () => {
+        const user = userEvent.setup();
+        const onReorder = vi.fn();
+        const { page } = mountEditorPage();
+        render(<ReorderHarness initialChapters={threeChapters()} onReorder={onReorder} />);
+
+        const handle = screen.getAllByRole("button", { name: "chapters.reorder" })[0];
+        handle.focus();
+        const before = rowOrder();
+        await user.keyboard("{Enter}");
+        await waitForDropTarget();
+        expect(page.hasAttribute("inert")).toBe(true);
+        await user.keyboard("{Escape}");
+
+        await waitFor(() => expect(page.hasAttribute("inert")).toBe(false));
+        expect(onReorder).not.toHaveBeenCalled();
+        expect(handle).toHaveFocus();
+        expect(rowOrder()).toEqual(before);
+      });
+    });
+
     // The caret an author left in the editor is parked for the drag (#377);
     // parkInertSelection() is tested in park-selection.test.ts (jsdom), and
     // the caret's return in Chromium and WebKit by the

@@ -303,15 +303,26 @@ const chapterListResize: FrameDriver = {
   },
 };
 
-const chapterGrid = (page: FramePage) => page.getByRole("grid", { name: "Chapters" });
+// The phone drawer renders a second, hidden Chapter list.
+const chapterGrid = (page: FramePage) =>
+  page
+    .locator('[data-focus-pane="chapter-list"]')
+    .visible()
+    .getByRole("grid", { name: "Chapters" });
 const chapterRow = (page: FramePage, title: string) =>
   chapterGrid(page).getByRole("row", { name: new RegExp(`^${title}\\b`) });
 
 /** Focuses Log 1's Reorder button from the Chapter list. */
 async function focusFirstReorder(page: FramePage): Promise<FrameLocator> {
-  // The list is one Tab stop; its row buttons are reached by ArrowRight.
-  await tabTo(page, chapterGrid(page).getByRole("row", { selected: true }), { max: 40 });
-  await page.keyboard.press("Home");
+  // Tab from the editor (Indent) and from the pane (WebKit, which lands on the
+  // Chapter list pane itself) never reaches the grid's one Tab stop in this
+  // probe, so a row is focused directly. The selected row can be virtualized
+  // out by a previous run, so any mounted row is focused and Control+Home
+  // moves to the first (#551).
+  await chapterGrid(page).evaluate((grid) =>
+    (grid.querySelector('[role="row"]') as HTMLElement | null)?.focus()
+  );
+  await page.keyboard.press("Control+Home");
   await waitFocused(chapterRow(page, "Log 1"));
   const handle = chapterRow(page, "Log 1").getByRole("button", { name: "Reorder" });
   await pressUntilFocused(page, "ArrowRight", handle, { max: 6 });

@@ -31,7 +31,8 @@ export interface ProbeDump {
   loafSupported: boolean;
   /** rAF timestamps of the measured window; empty unless `raf` was asked for. */
   rafTimestamps: number[];
-  inputs: { atMs: number; nextFrameMs: number }[];
+  /** Keystrokes of the window, in order; `key` is the KeyboardEvent's key. */
+  inputs: { atMs: number; nextFrameMs: number; key: string }[];
   longAnimationFrames: ProbeLongAnimationFrame[];
 }
 
@@ -53,7 +54,7 @@ export function installFrameProbe(): void {
   let recording = false;
   let rafLoop = false;
   let rafTimestamps: number[] = [];
-  let inputs: { atMs: number; nextFrameMs: number }[] = [];
+  let inputs: { atMs: number; nextFrameMs: number; key: string }[] = [];
   let longAnimationFrames: Loaf[] = [];
   let pendingInputs = 0;
 
@@ -87,10 +88,11 @@ export function installFrameProbe(): void {
     (event) => {
       if (!recording) return;
       const atMs = event.timeStamp;
+      const key = event.key;
       pendingInputs++;
       requestAnimationFrame(() => {
         pendingInputs--;
-        if (recording) inputs.push({ atMs, nextFrameMs: performance.now() });
+        if (recording) inputs.push({ atMs, nextFrameMs: performance.now(), key });
       });
     },
     { capture: true }

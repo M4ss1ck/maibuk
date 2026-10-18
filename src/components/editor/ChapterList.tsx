@@ -275,7 +275,9 @@ export function ChapterList({
     if (chapter) onSelectChapter(chapter);
   };
 
-  const parkedSelection = useParkSelectionWhileDragging();
+  const parkedSelection = useParkSelectionWhileDragging({
+    shieldEditorFrom: () => listContainerRef.current,
+  });
 
   const { dragAndDropHooks } = useDragAndDrop({
     ...parkedSelection,

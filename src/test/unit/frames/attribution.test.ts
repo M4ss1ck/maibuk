@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { SourceMapGenerator } from "source-map-js";
 import { describe, expect, it } from "vitest";
-import { resolveLongFrameSources } from "@/test/support/frames/attribution";
+import { attributeKeyPresses, resolveLongFrameSources } from "@/test/support/frames/attribution";
 import type { LongAnimationFrame } from "@/test/support/frames/frame-report";
 
 // A two-line "bundle". Line 1 is "/* bundle 1 */\n", 15 characters, so line 2
@@ -79,5 +79,69 @@ describe("resolveLongFrameSources()", () => {
     expect(noPosition[0].scripts[0].source).toBeUndefined();
     const notAUrl = resolveLongFrameSources([frame("", 23)], read);
     expect(notAUrl[0].scripts[0].source).toBeUndefined();
+  });
+});
+
+describe("attributeKeyPresses", () => {
+  const at = (startMs: number): LongAnimationFrame => ({ startMs, durationMs: 90, scripts: [] });
+
+  it("names a frame after the latest key press at or before its start, numbered per key", () => {
+    const inputs = [
+      { atMs: 100, nextFrameMs: 110, key: "Enter" },
+      { atMs: 200, nextFrameMs: 210, key: "ArrowDown" },
+      { atMs: 300, nextFrameMs: 310, key: "ArrowDown" },
+      { atMs: 400, nextFrameMs: 410, key: "ArrowUp" },
+      { atMs: 500, nextFrameMs: 510, key: "Escape" },
+    ];
+    const labelled = attributeKeyPresses(
+      [at(250), at(300), at(399), at(450), at(9000)],
+      inputs
+    );
+    // Each frame runs from its start to start + 90 ms; the press it is named
+    // after is the latest one at or before that end.
+    expect(labelled.map((frame) => frame.afterKeyPress)).toEqual([
+      "ArrowDown #2",
+      "ArrowDown #2",
+      "ArrowUp #1",
+      "Escape #1",
+      "Escape #1",
+    ]);
+  });
+
+  it("labels a frame that started before a press and ran into it by that press", () => {
+    const inputs = [{ atMs: 300, nextFrameMs: 310, key: "ArrowDown" }];
+    const [overlapping, after, before] = attributeKeyPresses(
+      [at(250), at(305), at(100)],
+      inputs
+    );
+    expect(overlapping.afterKeyPress).toBe("ArrowDown #1");
+    expect(after.afterKeyPress).toBe("ArrowDown #1");
+    expect(before.afterKeyPress).toBeUndefined();
+  });
+
+  it("does not label a frame that ends before the press", () => {
+    const [frame] = attributeKeyPresses(
+      [at(100)],
+      [{ atMs: 191, nextFrameMs: 200, key: "Enter" }]
+    );
+    expect(frame.afterKeyPress).toBeUndefined();
+  });
+
+  it("leaves a frame before the first press unlabelled, and an unkeyed input unlabelled too", () => {
+    const labelled = attributeKeyPresses(
+      [at(50), at(150)],
+      [{ atMs: 100, nextFrameMs: 110 }]
+    );
+    expect(labelled[0].afterKeyPress).toBeUndefined();
+    expect(labelled[1].afterKeyPress).toBeUndefined();
+  });
+
+  it("keeps the frame's other fields and does not reorder the frames", () => {
+    const frames = [at(300), at(120)];
+    const labelled = attributeKeyPresses(frames, [{ atMs: 100, nextFrameMs: 101, key: "Enter" }]);
+    expect(labelled).toEqual([
+      { ...frames[0], afterKeyPress: "Enter #1" },
+      { ...frames[1], afterKeyPress: "Enter #1" },
+    ]);
   });
 });
