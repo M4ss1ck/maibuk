@@ -9,6 +9,7 @@
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
+import { runningAnimationCount } from "../support/layout";
 import {
   expectFocusWithin,
   isFocusWithin,
@@ -165,6 +166,41 @@ test.describe("Settings Plugin cards @wf:settings-plugin-cards", () => {
     await expect(
       card(page).getByRole("checkbox", { name: /Read your Library/ })
     ).toBeVisible();
+  });
+
+  test("the collapsed Permissions panel takes no space on first open, and still animates", async ({
+    page,
+  }) => {
+    await openPluginsSection(page);
+    const trigger = cardTrigger(page);
+    await tabTo(page, trigger, { max: 40 });
+    await page.keyboard.press("Enter");
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    // Collapsed on first open of the card: the nested panel has zero height,
+    // so no empty band sits under the Permissions header.
+    const permissions = permissionsTrigger(page);
+    await expect(permissions).toHaveAttribute("aria-expanded", "false");
+    const panelId = await permissions.getAttribute("aria-controls");
+    expect(panelId).not.toBeNull();
+    const panel = page.locator(`[id="${panelId}"]`);
+    const panelHeight = async () => Math.round((await panel.boundingBox())?.height ?? -1);
+    await expect.poll(panelHeight).toBe(0);
+    await capture(page, "settings-plugin-card-permissions-collapsed", { around: [card(page)] });
+
+    // Animations are on: opening runs a height transition that ends at the
+    // content's height, and closing returns the panel to zero.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await tabTo(page, permissions, { max: 40 });
+    await page.keyboard.press("Enter");
+    await expect(permissions).toHaveAttribute("aria-expanded", "true");
+    expect(await runningAnimationCount(panel)).toBeGreaterThan(0);
+    await expect.poll(panelHeight).toBeGreaterThan(0);
+
+    await page.keyboard.press("Enter");
+    await expect(permissions).toHaveAttribute("aria-expanded", "false");
+    expect(await runningAnimationCount(panel)).toBeGreaterThan(0);
+    await expect.poll(panelHeight).toBe(0);
   });
 
   test("the outline lists the card by name and choosing it reveals it", async ({ page }) => {

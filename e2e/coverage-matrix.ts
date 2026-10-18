@@ -2100,6 +2100,7 @@ export const ROWS: MatrixRow[] = [
       "First sight: the Built-in's switch is off and its sidebar entry and Open Echoes Command are not available",
       "The switch turns the Built-in on and Open Echoes from the Command Palette opens its report",
       "The card expands to the description, and its nested Permissions accordion lists the pre-granted permissions with no Needs attention badge",
+      "The collapsed Permissions accordion takes no height on first open of the card, and opens and closes with an animation",
       "The Settings outline lists the card by name; choosing it expands the card and focuses its trigger",
       "The card name and the switch name follow the UI language",
       "With reduced motion the card still expands",

@@ -758,6 +758,28 @@ describe("Plugin card body (#442)", () => {
     expect(panel?.className).toContain("h-(--disclosure-panel-height)");
   });
 
+  it("collapses the nested Permissions panel on first open of the card", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        manifest: manifest({ permissions: { required: ["library:read"], optional: [] } }),
+        approval: approval({ granted: ["library:read"], enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    render(<PluginsSection />);
+
+    await openRow(user);
+    // The card mounted collapsed; its Permissions accordion must start closed
+    // and take no space, with the height variable pinned to 0px.
+    const permissions = await screen.findByRole("button", { name: /Plugin permissions/ });
+    expect(permissions).toHaveAttribute("aria-expanded", "false");
+    const panel = document.getElementById(permissions.getAttribute("aria-controls") ?? "");
+    expect(panel).not.toBeNull();
+    expect(panel).toHaveAttribute("hidden");
+    expect(panel?.style.getPropertyValue("--disclosure-panel-height")).toBe("0px");
+  });
+
   it("expands and collapses the Permissions accordion from the keyboard", async () => {
     const user = userEvent.setup();
     seed(
