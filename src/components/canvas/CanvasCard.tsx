@@ -65,7 +65,7 @@ export function CanvasCard({
   return (
     <article
       data-tutorial={tutorialAnchor}
-      className="flex h-48 flex-col rounded-lg border border-border bg-card p-4 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-lg"
+      className="flex h-48 flex-col rounded-lg border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-lg"
     >
       {renaming ? (
         <div className="min-w-0 flex-1 text-left">
@@ -84,7 +84,7 @@ export function CanvasCard({
           {metadata}
         </div>
       ) : (
-        <button type="button" className="min-w-0 flex-1 text-left" onClick={onOpen}>
+        <button type="button" className="min-w-0 flex-1 cursor-pointer text-left" onClick={onOpen}>
           <div className="flex items-center gap-2">
             <Network className="size-5 shrink-0 text-primary" aria-hidden="true" />
             <h2 className="truncate font-medium">{canvas.title || t("canvas.untitled")}</h2>
