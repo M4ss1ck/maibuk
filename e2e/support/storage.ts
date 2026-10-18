@@ -16,6 +16,7 @@ import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/direc
 import type { PluginApproval, PluginFolderFile, PluginManifest } from "@/features/plugins/types";
 import { PASTE_CLEANUP_PRESETS, type PasteCleanupPreset } from "@/features/settings/types";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
+import type { FramePage } from "../frames/frame-page";
 import type { SeedName } from "./seed/libraries";
 import { REPO_ROOT, SEED_DIR } from "./seed/seeds";
 
@@ -170,9 +171,7 @@ export function clonePluginManifest(manifestText: string, id: string, name: stri
   const manifest = JSON.parse(manifestText) as Record<string, unknown>;
   manifest.id = id;
   manifest.name = name;
-  const contributes = manifest.contributes as
-    | { commands?: Record<string, unknown>[] }
-    | undefined;
+  const contributes = manifest.contributes as { commands?: Record<string, unknown>[] } | undefined;
   for (const command of contributes?.commands ?? []) {
     delete command.defaults;
     delete command.web;
@@ -224,9 +223,7 @@ export function clonePluginSeeds(from: PluginSeed, count: number): Set<PluginSee
   return entries;
 }
 
-async function readPluginSeed(
-  seed: PluginSeed | PluginSeedEntry
-): Promise<PluginSeedData> {
+async function readPluginSeed(seed: PluginSeed | PluginSeedEntry): Promise<PluginSeedData> {
   const entry: PluginSeedEntry = typeof seed === "string" ? { name: seed } : seed;
   const name = entry.name;
   const from = entry.from ?? name;
@@ -303,7 +300,10 @@ function manifestOf(seed: PluginSeedData): PluginManifest {
  * them (`granted`), like `plugins: ["fixture-everything"]` with
  * `pluginApprovals: [{ pluginId, granted: [...required] }]`.
  */
-export async function buildApproval(seed: PluginSeedData, overrides: PluginApprovalSeed): Promise<PluginApproval> {
+export async function buildApproval(
+  seed: PluginSeedData,
+  overrides: PluginApprovalSeed
+): Promise<PluginApproval> {
   const files = seedFolderFiles(seed);
   const manifest = manifestOf(seed);
   const digests = Object.fromEntries(await pluginFileDigests(files));
@@ -317,11 +317,10 @@ export async function buildApproval(seed: PluginSeedData, overrides: PluginAppro
     granted: (overrides.granted ?? []) as PluginApproval["granted"],
     enabled: overrides.enabled ?? true,
     approvedVersion: overrides.approvedVersion ?? manifest.version,
-    approvedPermissions:
-      overrides.approvedPermissions ?? {
-        required: [...manifest.permissions.required],
-        optional: [...manifest.permissions.optional],
-      },
+    approvedPermissions: overrides.approvedPermissions ?? {
+      required: [...manifest.permissions.required],
+      optional: [...manifest.permissions.optional],
+    },
     approvedFiles,
     ...(overrides.builtIn !== undefined ? { builtIn: overrides.builtIn } : {}),
     ...(overrides.notifiedHash !== undefined ? { notifiedHash: overrides.notifiedHash } : {}),
@@ -648,6 +647,28 @@ export async function readLibraryBytes(page: Page): Promise<string | null> {
     });
     database.close();
     return value ? toBase64(value) : null;
+  });
+}
+
+/**
+ * Answers the first-launch Tutorial offer ("Not now") on a page whose app has
+ * already loaded once: the frame-rate lane's desktop WebKitGTK app, where
+ * WebDriver has no init scripts. The value takes effect on the next load, so
+ * reload before measuring.
+ */
+export async function dismissTutorialOnLoadedPage(
+  page: Pick<FramePage, "evaluate">
+): Promise<void> {
+  await page.evaluate(() => {
+    const progress = {
+      dismissedAt: 1,
+      completedAt: null,
+      lastSection: null,
+      lastStep: null,
+      skippedAt: null,
+      sections: {},
+    };
+    localStorage.setItem("maibuk-tutorial", JSON.stringify({ state: { progress }, version: 1 }));
   });
 }
 
