@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
-import { DropIndicator } from "react-aria-components";
+import { DropIndicator, ListLayout, Virtualizer } from "react-aria-components";
 import type { Chapter, ChapterStatus, ChapterType } from "@/features/chapters/types";
 import { ChapterOutline } from "@/components/editor/ChapterOutline";
 import { Select } from "@/components/ui/Select";
@@ -58,6 +58,75 @@ interface ChapterListProps {
 }
 
 const CHAPTER_DND_TYPE = "chapter";
+
+/**
+ * React Aria layout for the Chapter list, one entry per density. Rows are
+ * variable height (the expandable outline), so `estimatedRowSize` only places
+ * rows that are not mounted yet; the mounted rows are measured. `gap` and
+ * `padding` replace the former `space-y-1` and `p-2` on the list.
+ */
+const CHAPTER_LAYOUT_OPTIONS = {
+  normal: { estimatedRowSize: 72, gap: 4, padding: 8 },
+  compact: { estimatedRowSize: 40, gap: 4, padding: 8 },
+} as const;
+
+/** Where the Chapter at `index` sits by estimate, for a row that is not mounted. */
+function estimatedChapterTop(index: number, compact: boolean): number {
+  const { estimatedRowSize, gap, padding } = CHAPTER_LAYOUT_OPTIONS[compact ? "compact" : "normal"];
+  return padding + index * (estimatedRowSize + gap);
+}
+
+const REVEAL_FRAMES = 3;
+
+/**
+ * Runs `onRow` once the row for `id` is mounted. The Virtualizer mounts only the
+ * rows near the viewport, so a missing row gets the scroll view moved to its
+ * estimated offset, then is checked again on the next frame. The chapter order
+ * comes from the data (`indexOf`), not the DOM. `onMissing` runs when the row
+ * never mounts.
+ */
+function revealChapterRow({
+  getList,
+  indexOf,
+  compact,
+  id,
+  onRow,
+  onMissing,
+  framesLeft = REVEAL_FRAMES,
+}: {
+  getList: () => HTMLElement | null;
+  indexOf: (id: string) => number;
+  compact: boolean;
+  id: string;
+  onRow: (row: HTMLElement) => void;
+  onMissing?: () => void;
+  framesLeft?: number;
+}): void {
+  const list = getList();
+  const row = list?.querySelector<HTMLElement>(`[data-key="${CSS.escape(id)}"]`) ?? null;
+  if (row) {
+    row.scrollIntoView({ block: "nearest" });
+    onRow(row);
+    return;
+  }
+  const index = indexOf(id);
+  if (!list || index < 0 || framesLeft === 0) {
+    onMissing?.();
+    return;
+  }
+  list.scrollTop = estimatedChapterTop(index, compact);
+  requestAnimationFrame(() =>
+    revealChapterRow({
+      getList,
+      indexOf,
+      compact,
+      id,
+      onRow,
+      onMissing,
+      framesLeft: framesLeft - 1,
+    })
+  );
+}
 
 /**
  * The Chapter Status submenu: each value runs its own Command, so an action
@@ -132,6 +201,7 @@ export function ChapterList({
   const setShowChapterOutline = useSettingsStore((state) => state.setShowChapterOutline);
   const buildPluginChapterActions = usePluginItemMenuActions("chapter");
   const isCompactView = chapterListView === "compact";
+  // The scroll view: the GridList itself, which the Virtualizer scrolls.
   const listContainerRef = useRef<HTMLDivElement>(null);
   const onImportFilesRef = useRef(onImportFiles);
   onImportFilesRef.current = onImportFiles;
@@ -152,19 +222,6 @@ export function ChapterList({
   const toggleChapterListView = () => {
     setChapterListView(isCompactView ? "normal" : "compact");
   };
-
-  useEffect(() => {
-    const container = listContainerRef.current;
-    if (!container) return;
-    if (chapters.length === 0) {
-      container.scrollTop = 0;
-      return;
-    }
-    const selectedEl = container.querySelector('[aria-selected="true"]');
-    if (selectedEl) {
-      selectedEl.scrollIntoView({ block: "nearest" });
-    }
-  }, [currentChapterId, chapters.length]);
 
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -190,6 +247,37 @@ export function ChapterList({
 
   const chaptersRef = useRef(chapters);
   chaptersRef.current = chapters;
+  const isCompactRef = useRef(isCompactView);
+  isCompactRef.current = isCompactView;
+
+  /** Reveals the Chapter row for `id`, then runs `onRow` on it. See revealChapterRow. */
+  const revealChapter = (id: string, onRow: (row: HTMLElement) => void, onMissing?: () => void) =>
+    revealChapterRow({
+      getList: () => listContainerRef.current,
+      indexOf: (key) => chaptersRef.current.findIndex((chapter) => chapter.id === key),
+      compact: isCompactRef.current,
+      id,
+      onRow,
+      onMissing,
+    });
+
+  // Bring the selected Chapter into view on open and when the selection changes.
+  useEffect(() => {
+    const list = listContainerRef.current;
+    if (!list) return;
+    if (chaptersRef.current.length === 0) {
+      list.scrollTop = 0;
+      return;
+    }
+    if (currentChapterId === null) return;
+    revealChapterRow({
+      getList: () => listContainerRef.current,
+      indexOf: (key) => chaptersRef.current.findIndex((chapter) => chapter.id === key),
+      compact: isCompactRef.current,
+      id: currentChapterId,
+      onRow: () => {},
+    });
+  }, [currentChapterId, chapters.length]);
   const activatedKeysRef = useRef(new Set<Key>());
   const [activeReactAriaImports, setActiveReactAriaImports] = useState(0);
 
@@ -299,11 +387,7 @@ export function ChapterList({
 
   /** Returns focus to a Chapter row after an inline form closes. */
   const focusChapterRow = (id: string) => {
-    requestAnimationFrame(() => {
-      listContainerRef.current
-        ?.querySelector<HTMLElement>(`[data-key="${CSS.escape(id)}"]`)
-        ?.focus();
-    });
+    requestAnimationFrame(() => revealChapter(id, (row) => row.focus()));
   };
 
   const openDeleteConfirm = (id: string) => {
@@ -320,11 +404,15 @@ export function ChapterList({
     onDeleteChapter(id);
     setDeleteConfirmId(null);
     requestAnimationFrame(() => {
-      const rows = listContainerRef.current?.querySelectorAll<HTMLElement>("[data-key]");
-      const focusTarget = [...(rows ?? [])].find(
-        (row) => row.getAttribute("data-key") === focusChapter?.id
+      if (!focusChapter) {
+        addButtonRef.current?.focus();
+        return;
+      }
+      revealChapter(
+        focusChapter.id,
+        (row) => row.focus(),
+        () => addButtonRef.current?.focus()
       );
-      (focusTarget ?? addButtonRef.current)?.focus();
     });
   };
 
@@ -334,12 +422,12 @@ export function ChapterList({
     // the Item Menu button on touch.
     requestAnimationFrame(() => {
       const isTouch = window.matchMedia?.("(pointer: coarse)").matches;
-      const target = isTouch
-        ? listContainerRef.current?.querySelector<HTMLElement>(
-            `[data-key="${CSS.escape(id)}"] [data-item-actions]`
-          )
-        : deleteButtonRefs.current.get(id);
-      target?.focus();
+      revealChapter(id, (row) => {
+        const target = isTouch
+          ? row.querySelector<HTMLElement>("[data-item-actions]")
+          : deleteButtonRefs.current.get(id);
+        target?.focus();
+      });
     });
   };
 
@@ -494,279 +582,288 @@ export function ChapterList({
 
       {/* Chapter list */}
       <div
-        ref={listContainerRef}
-        className={`relative flex-1 overflow-y-auto overflow-x-hidden ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+        className={`relative flex min-h-0 flex-1 flex-col ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
         {...touchDragGuard}
         {...(chapters.length === 0 ? dropHandlers : {})}
       >
         {(isImportingFiles || activeReactAriaImports > 0) && <FileDropImportStatus />}
-        <GridList
-          key={chapters.length === 0 ? "empty" : "populated"}
-          aria-label={t("chapters.title")}
-          data-focus-pane-entry=""
-          items={chapters}
-          dependencies={[
-            currentChapterId,
-            deleteConfirmId,
-            menuChapterId,
-            editTitle,
-            editType,
-            editingId,
-            editor,
-            isCompactView,
-            i18n.resolvedLanguage,
-            showChapterOutline,
-            t,
-          ]}
-          selectedKeys={currentChapterId ? [currentChapterId] : []}
-          selectionMode="single"
-          selectionBehavior="replace"
-          disallowEmptySelection
-          onAction={activateChapter}
-          {...(chapters.length > 0 ? { dragAndDropHooks } : {})}
-          className="p-2 space-y-1 data-[drop-target]:ring-2 data-[drop-target]:ring-inset data-[drop-target]:ring-primary"
-          renderEmptyState={() => (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              <p>{t("chapters.noChapters")}</p>
-            </div>
-          )}
+        <Virtualizer
+          layout={ListLayout}
+          layoutOptions={CHAPTER_LAYOUT_OPTIONS[isCompactView ? "compact" : "normal"]}
         >
-          {(chapter) => {
-            const isActive = currentChapterId === chapter.id;
-            const outlineToggle =
-              isActive && editor ? (
-                <Tooltip content={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}>
-                  <AriaButton
-                    data-tutorial={tutorialAnchors ? "book-editor.outline" : undefined}
-                    onPress={() => setShowChapterOutline(!showChapterOutline)}
-                    aria-label={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
-                    aria-pressed={showChapterOutline}
-                    className={`shrink-0 p-1 rounded transition-colors ${
-                      showChapterOutline
-                        ? "text-primary bg-primary/10 hover:bg-primary/20"
-                        : "text-muted-foreground hover:bg-muted"
-                    }`}
+          <GridList
+            ref={listContainerRef}
+            key={chapters.length === 0 ? "empty" : "populated"}
+            aria-label={t("chapters.title")}
+            data-focus-pane-entry=""
+            items={chapters}
+            dependencies={[
+              currentChapterId,
+              deleteConfirmId,
+              menuChapterId,
+              editTitle,
+              editType,
+              editingId,
+              editor,
+              isCompactView,
+              i18n.resolvedLanguage,
+              showChapterOutline,
+              t,
+            ]}
+            selectedKeys={currentChapterId ? [currentChapterId] : []}
+            selectionMode="single"
+            selectionBehavior="replace"
+            disallowEmptySelection
+            onAction={activateChapter}
+            {...(chapters.length > 0 ? { dragAndDropHooks } : {})}
+            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden data-[drop-target]:ring-2 data-[drop-target]:ring-inset data-[drop-target]:ring-primary"
+            renderEmptyState={() => (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                <p>{t("chapters.noChapters")}</p>
+              </div>
+            )}
+          >
+            {(chapter) => {
+              const isActive = currentChapterId === chapter.id;
+              const outlineToggle =
+                isActive && editor ? (
+                  <Tooltip
+                    content={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
                   >
-                    <ListTree className="w-3.5 h-3.5" />
-                  </AriaButton>
-                </Tooltip>
-              ) : null;
+                    <AriaButton
+                      data-tutorial={tutorialAnchors ? "book-editor.outline" : undefined}
+                      onPress={() => setShowChapterOutline(!showChapterOutline)}
+                      aria-label={showChapterOutline ? t("toc.hideOutline") : t("toc.showOutline")}
+                      aria-pressed={showChapterOutline}
+                      className={`shrink-0 p-1 rounded transition-colors ${
+                        showChapterOutline
+                          ? "text-primary bg-primary/10 hover:bg-primary/20"
+                          : "text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <ListTree className="w-3.5 h-3.5" />
+                    </AriaButton>
+                  </Tooltip>
+                ) : null;
 
-            const chapterActions: ItemAction[] = [
-              {
-                id: "edit",
-                label: t("chapters.editChapter"),
-                icon: EditIcon,
-                commandId: "chapterItem.edit",
-                onAction: () => startEditing(chapter),
-              },
-              ...(onSetChapterStatus
-                ? [
-                    {
-                      id: "status",
-                      label: t("chapters.statusMenu"),
-                      icon: Flag,
-                      children: CHAPTER_STATUS_CHOICES.map((choice) => ({
-                        id: `status:${choice.status}`,
-                        label: t(`chapters.chapterStatus.${choice.status}`),
-                        isCurrent: chapter.status === choice.status,
-                        commandId: choice.commandId,
-                        onAction: () => setChapterStatus(chapter, choice.status),
-                      })),
-                    },
-                  ]
-                : []),
-              {
-                id: "delete",
-                label: t("chapters.deleteChapter"),
-                icon: DeleteIcon,
-                isDestructive: true,
-                commandId: "chapterItem.delete",
-                onAction: () => openDeleteConfirm(chapter.id),
-              },
-              ...buildPluginChapterActions({ kind: "chapter", id: chapter.id }),
-            ];
+              const chapterActions: ItemAction[] = [
+                {
+                  id: "edit",
+                  label: t("chapters.editChapter"),
+                  icon: EditIcon,
+                  commandId: "chapterItem.edit",
+                  onAction: () => startEditing(chapter),
+                },
+                ...(onSetChapterStatus
+                  ? [
+                      {
+                        id: "status",
+                        label: t("chapters.statusMenu"),
+                        icon: Flag,
+                        children: CHAPTER_STATUS_CHOICES.map((choice) => ({
+                          id: `status:${choice.status}`,
+                          label: t(`chapters.chapterStatus.${choice.status}`),
+                          isCurrent: chapter.status === choice.status,
+                          commandId: choice.commandId,
+                          onAction: () => setChapterStatus(chapter, choice.status),
+                        })),
+                      },
+                    ]
+                  : []),
+                {
+                  id: "delete",
+                  label: t("chapters.deleteChapter"),
+                  icon: DeleteIcon,
+                  isDestructive: true,
+                  commandId: "chapterItem.delete",
+                  onAction: () => openDeleteConfirm(chapter.id),
+                },
+                ...buildPluginChapterActions({ kind: "chapter", id: chapter.id }),
+              ];
 
-            return (
-              <GridListItem
-                id={chapter.id}
-                textValue={chapter.title}
-                onPress={() => activateChapter(chapter.id)}
-                className={`group relative rounded transition-colors ${
-                  isActive ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"
-                }`}
-              >
-                <ChapterItemGestures
-                  onOpenMenu={() => setMenuChapterId(chapter.id)}
-                  isDisabled={editingId === chapter.id || deleteConfirmId === chapter.id}
-                  actions={chapterActions}
-                  className={
-                    isActive && showChapterOutline
-                      ? "sticky top-0 z-10 rounded bg-inherit backdrop-blur-sm"
-                      : "bg-inherit"
-                  }
+              return (
+                <GridListItem
+                  id={chapter.id}
+                  textValue={chapter.title}
+                  onPress={() => activateChapter(chapter.id)}
+                  className={`group relative rounded transition-colors ${
+                    isActive ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/50"
+                  }`}
                 >
-                  {(anchorRef) =>
-                    editingId === chapter.id ? (
-                      <div className="p-2" {...rowFormProps}>
-                        <input
-                          type="text"
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          className="w-full px-2 py-1 text-sm border border-border rounded mb-2 bg-background text-foreground"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            // The field keeps its keys: the list's typeahead
-                            // would otherwise swallow a space typed after a letter.
-                            e.stopPropagation();
-                            if (e.key === "Enter") handleUpdate();
-                            if (e.key === "Escape") cancelEditing();
-                          }}
-                        />
-                        <Select
-                          ariaLabel={t("chapters.chapterType")}
-                          value={editType}
-                          onChange={(value) => setEditType(value)}
-                          options={Object.entries(chapterTypeLabels).map(([value, label]) => ({
-                            value: value as ChapterType,
-                            label,
-                          }))}
-                          className="mb-2"
-                        />
-                        <div className="flex gap-2">
-                          <AriaButton
-                            onPress={handleUpdate}
-                            isDisabled={!editTitle.trim()}
-                            className="flex-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-hover hover:text-primary-hover-foreground disabled:opacity-50"
-                          >
-                            {t("common.save")}
-                          </AriaButton>
-                          <AriaButton
-                            onPress={cancelEditing}
-                            className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
-                          >
-                            {t("common.cancel")}
-                          </AriaButton>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex w-full min-w-0 items-center">
-                          <ReorderHandle
-                            label={t("chapters.reorder")}
-                            className="mr-1 p-0.5 pointer-coarse:p-1.5"
+                  <ChapterItemGestures
+                    onOpenMenu={() => setMenuChapterId(chapter.id)}
+                    isDisabled={editingId === chapter.id || deleteConfirmId === chapter.id}
+                    actions={chapterActions}
+                    className={
+                      isActive && showChapterOutline
+                        ? "sticky top-0 z-10 rounded bg-inherit backdrop-blur-sm"
+                        : "bg-inherit"
+                    }
+                  >
+                    {(anchorRef) =>
+                      editingId === chapter.id ? (
+                        <div className="p-2" {...rowFormProps}>
+                          <input
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            className="w-full px-2 py-1 text-sm border border-border rounded mb-2 bg-background text-foreground"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              // The field keeps its keys: the list's typeahead
+                              // would otherwise swallow a space typed after a letter.
+                              e.stopPropagation();
+                              if (e.key === "Enter") handleUpdate();
+                              if (e.key === "Escape") cancelEditing();
+                            }}
                           />
-
-                          <div
-                            className={`flex-1 min-w-0 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}
-                          >
-                            {/* Title line: icon, title, hover actions (mouse), item menu (touch) */}
-                            <div className="flex min-w-0 items-center gap-2 bg-inherit">
-                              <ChapterIcon
-                                className={`shrink-0 text-muted-foreground ${
-                                  isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
-                                }`}
-                              />
-                              <span className="relative min-w-0 flex-1 bg-inherit">
-                                <span
-                                  className={`block w-full truncate font-medium ${
-                                    isCompactView ? "text-xs" : "text-sm"
-                                  }`}
-                                >
-                                  {chapter.title}
-                                </span>
-
-                                {/* Edit/Delete overlay the full-width title without causing hover reflow. */}
-                                <span className="pointer-events-none absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:hidden">
-                                  <Tooltip content={t("chapters.editChapter")}>
-                                    <AriaButton
-                                      onPress={() => startEditing(chapter)}
-                                      className="p-1 hover:bg-muted rounded transition-colors"
-                                      aria-label={t("chapters.editChapter")}
-                                    >
-                                      <EditIcon className="w-4 h-4 text-foreground" />
-                                    </AriaButton>
-                                  </Tooltip>
-                                  <Tooltip content={t("chapters.deleteChapter")}>
-                                    <AriaButton
-                                      ref={(element) => {
-                                        if (element)
-                                          deleteButtonRefs.current.set(chapter.id, element);
-                                        else deleteButtonRefs.current.delete(chapter.id);
-                                      }}
-                                      onPress={() => openDeleteConfirm(chapter.id)}
-                                      className="p-1 hover:bg-destructive/10 rounded transition-colors"
-                                      aria-label={t("chapters.deleteChapter")}
-                                    >
-                                      <DeleteIcon className="w-4 h-4 text-destructive" />
-                                    </AriaButton>
-                                  </Tooltip>
-                                </span>
-                              </span>
-                              <ItemActionsMenu
-                                anchorRef={anchorRef}
-                                label={t("common.moreActionsFor", { title: chapter.title })}
-                                actions={chapterActions}
-                                isOpen={menuChapterId === chapter.id}
-                                onOpenChange={(open) => setMenuChapterId(open ? chapter.id : null)}
-                                className="hidden pointer-coarse:inline-flex"
-                              />
-
-                              {/* Compact view has no metadata line: keep the toggle here */}
-                              {isCompactView && outlineToggle}
-                            </div>
-
-                            {/* Metadata line: word count, status, outline toggle */}
-                            {!isCompactView && (
-                              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground truncate">
-                                <span>
-                                  {chapter.wordCount.toLocaleString()} {t("common.words")}
-                                </span>
-                                <span>•</span>
-                                <span>{t(`chapters.chapterStatus.${chapter.status}`)}</span>
-                                {outlineToggle && (
-                                  <span className="ml-auto flex">{outlineToggle}</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Delete confirmation */}
-                        {deleteConfirmId === chapter.id && (
-                          <div
-                            className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2"
-                            {...rowFormProps}
-                          >
-                            <span className="text-xs">{t("common.deleteConfirm")}</span>
+                          <Select
+                            ariaLabel={t("chapters.chapterType")}
+                            value={editType}
+                            onChange={(value) => setEditType(value)}
+                            options={Object.entries(chapterTypeLabels).map(([value, label]) => ({
+                              value: value as ChapterType,
+                              label,
+                            }))}
+                            className="mb-2"
+                          />
+                          <div className="flex gap-2">
                             <AriaButton
-                              onPress={() => handleDelete(chapter.id)}
-                              className="px-2 py-1 text-xs bg-destructive text-white rounded hover:bg-destructive-hover"
+                              onPress={handleUpdate}
+                              isDisabled={!editTitle.trim()}
+                              className="flex-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-hover hover:text-primary-hover-foreground disabled:opacity-50"
                             >
-                              {t("common.yes")}
+                              {t("common.save")}
                             </AriaButton>
                             <AriaButton
-                              ref={(element) => {
-                                if (element)
-                                  cancelDeleteButtonRefs.current.set(chapter.id, element);
-                                else cancelDeleteButtonRefs.current.delete(chapter.id);
-                              }}
-                              onPress={() => cancelDelete(chapter.id)}
+                              onPress={cancelEditing}
                               className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
                             >
-                              {t("common.no")}
+                              {t("common.cancel")}
                             </AriaButton>
                           </div>
-                        )}
-                      </>
-                    )
-                  }
-                </ChapterItemGestures>
-                {isActive && editor && showChapterOutline && <ChapterOutline editor={editor} />}
-              </GridListItem>
-            );
-          }}
-        </GridList>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex w-full min-w-0 items-center">
+                            <ReorderHandle
+                              label={t("chapters.reorder")}
+                              className="mr-1 p-0.5 pointer-coarse:p-1.5"
+                            />
+
+                            <div
+                              className={`flex-1 min-w-0 ${isCompactView ? "px-2 py-1.5" : "p-3"}`}
+                            >
+                              {/* Title line: icon, title, hover actions (mouse), item menu (touch) */}
+                              <div className="flex min-w-0 items-center gap-2 bg-inherit">
+                                <ChapterIcon
+                                  className={`shrink-0 text-muted-foreground ${
+                                    isCompactView ? "w-3.5 h-3.5" : "w-4 h-4"
+                                  }`}
+                                />
+                                <span className="relative min-w-0 flex-1 bg-inherit">
+                                  <span
+                                    className={`block w-full truncate font-medium ${
+                                      isCompactView ? "text-xs" : "text-sm"
+                                    }`}
+                                  >
+                                    {chapter.title}
+                                  </span>
+
+                                  {/* Edit/Delete overlay the full-width title without causing hover reflow. */}
+                                  <span className="pointer-events-none absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 pointer-coarse:hidden">
+                                    <Tooltip content={t("chapters.editChapter")}>
+                                      <AriaButton
+                                        onPress={() => startEditing(chapter)}
+                                        className="p-1 hover:bg-muted rounded transition-colors"
+                                        aria-label={t("chapters.editChapter")}
+                                      >
+                                        <EditIcon className="w-4 h-4 text-foreground" />
+                                      </AriaButton>
+                                    </Tooltip>
+                                    <Tooltip content={t("chapters.deleteChapter")}>
+                                      <AriaButton
+                                        ref={(element) => {
+                                          if (element)
+                                            deleteButtonRefs.current.set(chapter.id, element);
+                                          else deleteButtonRefs.current.delete(chapter.id);
+                                        }}
+                                        onPress={() => openDeleteConfirm(chapter.id)}
+                                        className="p-1 hover:bg-destructive/10 rounded transition-colors"
+                                        aria-label={t("chapters.deleteChapter")}
+                                      >
+                                        <DeleteIcon className="w-4 h-4 text-destructive" />
+                                      </AriaButton>
+                                    </Tooltip>
+                                  </span>
+                                </span>
+                                <ItemActionsMenu
+                                  anchorRef={anchorRef}
+                                  label={t("common.moreActionsFor", { title: chapter.title })}
+                                  actions={chapterActions}
+                                  isOpen={menuChapterId === chapter.id}
+                                  onOpenChange={(open) =>
+                                    setMenuChapterId(open ? chapter.id : null)
+                                  }
+                                  className="hidden pointer-coarse:inline-flex"
+                                />
+
+                                {/* Compact view has no metadata line: keep the toggle here */}
+                                {isCompactView && outlineToggle}
+                              </div>
+
+                              {/* Metadata line: word count, status, outline toggle */}
+                              {!isCompactView && (
+                                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground truncate">
+                                  <span>
+                                    {chapter.wordCount.toLocaleString()} {t("common.words")}
+                                  </span>
+                                  <span>•</span>
+                                  <span>{t(`chapters.chapterStatus.${chapter.status}`)}</span>
+                                  {outlineToggle && (
+                                    <span className="ml-auto flex">{outlineToggle}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Delete confirmation */}
+                          {deleteConfirmId === chapter.id && (
+                            <div
+                              className="absolute inset-0 bg-background rounded flex items-center justify-center gap-2 p-2"
+                              {...rowFormProps}
+                            >
+                              <span className="text-xs">{t("common.deleteConfirm")}</span>
+                              <AriaButton
+                                onPress={() => handleDelete(chapter.id)}
+                                className="px-2 py-1 text-xs bg-destructive text-white rounded hover:bg-destructive-hover"
+                              >
+                                {t("common.yes")}
+                              </AriaButton>
+                              <AriaButton
+                                ref={(element) => {
+                                  if (element)
+                                    cancelDeleteButtonRefs.current.set(chapter.id, element);
+                                  else cancelDeleteButtonRefs.current.delete(chapter.id);
+                                }}
+                                onPress={() => cancelDelete(chapter.id)}
+                                className="px-2 py-1 text-xs border border-border rounded hover:bg-muted"
+                              >
+                                {t("common.no")}
+                              </AriaButton>
+                            </div>
+                          )}
+                        </>
+                      )
+                    }
+                  </ChapterItemGestures>
+                  {isActive && editor && showChapterOutline && <ChapterOutline editor={editor} />}
+                </GridListItem>
+              );
+            }}
+          </GridList>
+        </Virtualizer>
       </div>
 
       {/* Sticky footer - Word count summary */}

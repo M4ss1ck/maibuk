@@ -1,9 +1,10 @@
-import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, it, expect, vi, beforeEach } from "vitest";
 import { useState } from "react";
 import { act, render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
 import { buildChapter } from "@/test/support/fixtures";
+import { mockVirtualizerLayout } from "@/test/support/virtualizer-layout";
 import {
   installPointerEvent,
   pointerHitTarget,
@@ -169,13 +170,20 @@ function ReorderHarness({
 
 function DeleteHarness({
   initialChapters,
+  initialCurrentId,
+  deferSelection = 0,
   onDelete,
 }: {
   initialChapters: Chapter[];
+  initialCurrentId?: string;
+  /** Milliseconds before the selection moves, as BookEditor moves it after an awaited delete. */
+  deferSelection?: number;
   onDelete: (chapterId: string) => void;
 }) {
   const [chapters, setChapters] = useState(initialChapters);
-  const [currentChapterId, setCurrentChapterId] = useState(initialChapters[0]?.id ?? null);
+  const [currentChapterId, setCurrentChapterId] = useState(
+    initialCurrentId ?? initialChapters[0]?.id ?? null
+  );
 
   return (
     <ChapterList
@@ -186,7 +194,9 @@ function DeleteHarness({
           onDelete(chapterId);
           const remaining = chapters.filter((chapter) => chapter.id !== chapterId);
           setChapters(remaining);
-          setCurrentChapterId(remaining[0]?.id ?? null);
+          const select = () => setCurrentChapterId(remaining[0]?.id ?? null);
+          if (deferSelection > 0) setTimeout(select, deferSelection);
+          else select();
         },
       })}
     />
@@ -1093,6 +1103,20 @@ describe("ChapterList", () => {
 
   // ---------------------------------------------------------------------------
   describe("external markdown file drop", () => {
+    // Rows are laid out by the Virtualizer, which needs a scroll-view size under jsdom.
+    // 40px rows with the 4px gap and 8px padding put row 2 at y 52-92, the band
+    // mockGridLayout gives it, so the drop coordinates below keep their halves.
+    let restoreLayout: () => void = () => {};
+    let restoreRowHeight: () => void = () => {};
+    beforeAll(() => {
+      restoreLayout = mockVirtualizerLayout();
+      restoreRowHeight = mockRowScrollHeight(40);
+    });
+    afterAll(() => {
+      restoreRowHeight();
+      restoreLayout();
+    });
+
     it("reads supported file drop items in order and skips others", async () => {
       const items = [
         fileDropItem("one.md", "# One"),
@@ -1337,6 +1361,20 @@ describe("ChapterList", () => {
   });
 
   describe("pointer reorder", () => {
+    // Rows are laid out by the Virtualizer, which needs a scroll-view size under jsdom.
+    // 40px rows with the 4px gap and 8px padding put row 2 at y 52-92, the band
+    // mockGridLayout gives it, so the drop coordinates below keep their halves.
+    let restoreLayout: () => void = () => {};
+    let restoreRowHeight: () => void = () => {};
+    beforeAll(() => {
+      restoreLayout = mockVirtualizerLayout();
+      restoreRowHeight = mockRowScrollHeight(40);
+    });
+    afterAll(() => {
+      restoreRowHeight();
+      restoreLayout();
+    });
+
     it("reorders chapters via native pointer drag and drop", async () => {
       const onReorder = vi.fn();
       const chapters = [
@@ -1439,6 +1477,159 @@ describe("nested row controls by keyboard", () => {
     await user.keyboard(key);
     expect(await screen.findByText("common.deleteConfirm")).toBeInTheDocument();
     expect(onSelect).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * React Aria measures each virtualized item by its scrollHeight, which jsdom
+ * reports as 0. Every item would then measure 0px and the Virtualizer would
+ * mount all of them. Items are the absolutely positioned wrappers (and the rows
+ * inside them), so those get a fixed height. Returns the restore function.
+ */
+function mockRowScrollHeight(px: number): () => void {
+  const saved = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");
+  Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.getAttribute("role") === "row" || this.style.position === "absolute" ? px : 0;
+    },
+  });
+  return () => {
+    if (saved) Object.defineProperty(HTMLElement.prototype, "scrollHeight", saved);
+    else Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight");
+  };
+}
+
+/**
+ * A browser fires a `scroll` event after a script writes scrollTop, and the
+ * Virtualizer only re-reads the viewport on that event. jsdom fires none, so
+ * write-then-scroll would never mount the target row. Writes here dispatch the
+ * event asynchronously, as a browser does. Returns the restore function.
+ */
+function mockScrollEventOnScrollTopWrite(): () => void {
+  const saved = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollTop");
+  const values = new WeakMap<HTMLElement, number>();
+  Object.defineProperty(HTMLElement.prototype, "scrollTop", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return values.get(this) ?? 0;
+    },
+    set(this: HTMLElement, value: number) {
+      values.set(this, value);
+      queueMicrotask(() => this.dispatchEvent(new Event("scroll")));
+    },
+  });
+  return () => {
+    if (saved) Object.defineProperty(HTMLElement.prototype, "scrollTop", saved);
+    else Reflect.deleteProperty(HTMLElement.prototype, "scrollTop");
+  };
+}
+
+// #550: the Chapter list is virtualized, so only rows near the viewport mount.
+describe("virtualized Chapter list (#550)", () => {
+  let restoreLayout: () => void = () => {};
+  let restoreRowHeight: () => void = () => {};
+  let restoreScrollEvents: () => void = () => {};
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockParkSelection.mockReturnValue(mockRestoreSelection);
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    storeState.chapterListView = "normal";
+    storeState.showChapterOutline = false;
+    i18nState.language = "en";
+    textFileDropOptions.current = null;
+    useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
+  });
+
+  afterEach(() => {
+    restoreLayout();
+    restoreLayout = () => {};
+    restoreRowHeight();
+    restoreRowHeight = () => {};
+    restoreScrollEvents();
+    restoreScrollEvents = () => {};
+  });
+
+  it("mounts only the rows near the viewport, not all 200", () => {
+    restoreLayout = mockVirtualizerLayout({ height: 400 });
+    restoreRowHeight = mockRowScrollHeight(72);
+    restoreScrollEvents = mockScrollEventOnScrollTopWrite();
+    renderCL({ chapters: buildChapters(200), currentChapterId: "ch-1" });
+
+    const rows = screen.getAllByRole("row");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(200);
+    expect(screen.getByRole("row", { name: "Chapter 1" })).toBeInTheDocument();
+  });
+
+  it("opens with a far selected Chapter mounted and aria-selected", async () => {
+    restoreLayout = mockVirtualizerLayout({ height: 400 });
+    restoreRowHeight = mockRowScrollHeight(72);
+    restoreScrollEvents = mockScrollEventOnScrollTopWrite();
+    renderCL({ chapters: buildChapters(200), currentChapterId: "ch-151" });
+
+    const row = await screen.findByRole("row", { name: "Chapter 151" });
+    expect(row).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByRole("row").length).toBeLessThan(200);
+  });
+
+  it("deleting a Chapter focuses its neighbour even when the neighbour is off-screen", async () => {
+    restoreLayout = mockVirtualizerLayout({ height: 400 });
+    restoreRowHeight = mockRowScrollHeight(72);
+    restoreScrollEvents = mockScrollEventOnScrollTopWrite();
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(
+      <DeleteHarness
+        initialChapters={buildChapters(200)}
+        initialCurrentId="ch-150"
+        onDelete={onDelete}
+      />
+    );
+
+    const row = await screen.findByRole("row", { name: "Chapter 150" });
+    const deleteButton = within(row).getByRole("button", { name: "chapters.deleteChapter" });
+    deleteButton.focus();
+    await user.keyboard("{Enter}");
+    const noButton = screen.getByRole("button", { name: "common.no" });
+    await confirmationFocused(noButton);
+    await user.tab({ shift: true });
+    expect(screen.getByRole("button", { name: "common.yes" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(onDelete).toHaveBeenCalledWith("ch-150");
+    await waitFor(() => expect(screen.getByRole("row", { name: "Chapter 151" })).toHaveFocus());
+  });
+
+  it("keeps focus on the neighbour when the selection moves to the top after the delete resolves", async () => {
+    restoreLayout = mockVirtualizerLayout({ height: 400 });
+    restoreRowHeight = mockRowScrollHeight(72);
+    restoreScrollEvents = mockScrollEventOnScrollTopWrite();
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(
+      <DeleteHarness
+        initialChapters={buildChapters(200)}
+        initialCurrentId="ch-150"
+        deferSelection={50}
+        onDelete={onDelete}
+      />
+    );
+
+    const row = await screen.findByRole("row", { name: "Chapter 150" });
+    const deleteButton = within(row).getByRole("button", { name: "chapters.deleteChapter" });
+    deleteButton.focus();
+    await user.keyboard("{Enter}");
+    await confirmationFocused(screen.getByRole("button", { name: "common.no" }));
+    await user.tab({ shift: true });
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.getByRole("row", { name: "Chapter 151" })).toHaveFocus());
+
+    // The selection moves to the top after the delete resolves. That must not
+    // scroll the focused row out of the mounted set and drop focus to <body>.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+    expect(screen.getByRole("row", { name: "Chapter 151" })).toHaveFocus();
   });
 });
 
