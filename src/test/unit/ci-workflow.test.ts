@@ -48,6 +48,24 @@ describe("CI workflow", () => {
     expect(coverage).not.toContain("--coverage.thresholds");
   });
 
+  // A re-run shard uploads a second report under the same name, and
+  // download-artifact keeps the one with the higher ID, which can be the old
+  // failed one (PR #546). Each attempt gets its own name, and the merge reads
+  // only the newest attempt of each shard.
+  it("merges only the newest attempt of each shard's report", () => {
+    expect(job("tests")).toContain(
+      ["name: vitest-blob-$", "{{ matrix.shard }}-attempt-$", "{{ github.run_attempt }}"].join("")
+    );
+    const coverage = job("coverage");
+    expect(coverage).not.toContain("merge-multiple");
+    expect(coverage).toContain(
+      "run: node scripts/latest-shard-reports.mjs .vitest-artifacts .vitest-reports"
+    );
+    expect(coverage.indexOf("latest-shard-reports")).toBeLessThan(
+      coverage.indexOf("--mergeReports")
+    );
+  });
+
   // The merge runs the time budget reporter from vite.config.ts (no --reporter
   // flag, which would replace it), and must run after a failed shard too.
   it("reports the time budget from the merged run, even when a shard failed", () => {
