@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
@@ -107,6 +107,54 @@ describe("EditorContextMenu", () => {
     await user.keyboard("{Enter}");
 
     expect(editor.getHTML()).toContain("receive");
+  });
+
+  it("keeps the menu alive when a later suggestion lookup reorders the list", async () => {
+    // Regression: suggestion items were keyed by word but identified by index,
+    // so a re-render that moved a word to another index threw
+    // "Cannot change the id of an item" and blanked the app.
+    const { spellCheckService } = await import("@/lib/spellcheck");
+    const resolvers: Array<(value: string[]) => void> = [];
+    vi.mocked(spellCheckService.suggest).mockImplementation(
+      () => new Promise<string[]>((resolve) => resolvers.push(resolve))
+    );
+    const user = userEvent.setup();
+    const editor = renderRealEditor("<p>teh</p>");
+    editor.storage.spellCheck = {
+      getMisspellingAt: () => ({ from: 1, to: 4, word: "teh" }),
+    } as never;
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    editor.view.dom.focus();
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    expect(resolvers).toHaveLength(2);
+
+    await act(async () => resolvers[1](["the", "ten"]));
+    await screen.findByRole("menuitem", { name: "the" });
+    await act(async () => resolvers[0](["ten", "the"]));
+
+    const items = screen
+      .getAllByRole("menuitem")
+      .map((item) => item.textContent)
+      .filter((text) => text === "the" || text === "ten");
+    expect(items).toEqual(["the", "ten"]);
+  });
+
+  it("renders duplicate suggestions without crashing and applies the chosen one", async () => {
+    const { spellCheckService } = await import("@/lib/spellcheck");
+    vi.mocked(spellCheckService.suggest).mockResolvedValue(["the", "the", "ten"]);
+    const user = userEvent.setup();
+    const editor = renderRealEditor("<p>teh</p>");
+    editor.storage.spellCheck = {
+      getMisspellingAt: () => ({ from: 1, to: 4, word: "teh" }),
+    } as never;
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    const ten = await screen.findByRole("menuitem", { name: "ten" });
+    ten.focus();
+    await user.keyboard("{Enter}");
+
+    expect(editor.getHTML()).toContain("ten");
   });
 
   it("opens link editing instead of the generic context menu when right-clicking an internal link", async () => {
