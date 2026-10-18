@@ -23,7 +23,7 @@ const ran = (page: Page) =>
   page.getByRole("status").filter({ hasText: "approvals fixture running" });
 /** The Development mode switch: a changed setting the reset must return to default. */
 const devMode = (page: Page) => page.getByRole("switch", { name: "Development mode" });
-const pluginRow = (page: Page) => page.getByRole("button", { name: ROW_NAME, exact: true });
+const pluginRow = (page: Page) => page.getByRole("button", { name: new RegExp(`^${ROW_NAME} v\\d`) });
 /** The Plugin card's enable switch, whose state the reset changes. */
 const enableSwitch = (page: Page) =>
   page.getByRole("switch", { name: `Enable ${ROW_NAME}`, exact: true });

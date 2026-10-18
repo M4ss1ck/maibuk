@@ -2213,6 +2213,7 @@
       "failedToStart": "Failed to start",
       "modified": "Modified",
       "stopped": "Stopped",
+      "version": "v{{version}}",
       "custom": "Custom UI: accessibility not verified by Maibuk",
       "remove": "Remove",
       "reinstall": "Reinstall",
