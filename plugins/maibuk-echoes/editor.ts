@@ -178,7 +178,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
   let lastFocused: EntityTarget | null = null;
 
   // Set by the first explicit toggle. The startup read of the stored switch is
-  // ignored once the author has acted, so an explicit toggle always wins (#534).
+  // ignored once the author has acted, so an explicit toggle always wins.
   let toggledByAuthor = false;
 
   // Coalescing: one recompute runs at a time; a change that arrives while one
@@ -448,7 +448,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
 
   /**
    * Moves the paint from the previous editor to `entity`, the newly focused one
-   * (#534). The previous editor's paint is cleared, then the new editor is
+   *. The previous editor's paint is cleared, then the new editor is
    * painted, unless focus moved again, the switch went off, or the content read
    * is not for `entity`.
    */
@@ -468,7 +468,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
   }
 
   /**
-   * Startup (#534): when the stored switch is on, presses the Toggle Button and
+   * Startup: when the stored switch is on, presses the Toggle Button and
    * paints the focused editor if there is one. With no editor, the next non-null
    * focus paints. A read that resolves after an explicit toggle is ignored.
    */
@@ -506,7 +506,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
       return closeIfNoEditor();
     }
     // A non-null entity while the switch is on paints that editor. A different
-    // one first clears the previous editor's paint (#534).
+    // one first clears the previous editor's paint.
     if (!state.on || (state.entity !== null && sameEntity(payload.entity, state.entity))) return;
     return switchTo(payload.entity, epoch);
   });
@@ -540,7 +540,7 @@ export function createEchoEditor(client: EchoEditorClient): EchoEditorController
         if (focused === null) return;
         setOn(true);
         await activate(focused.content, focused.selection);
-        // Best-effort: a refused write leaves the switch working in memory (#534).
+        // Best-effort: a refused write leaves the switch working in memory.
         await writeHighlightsOn(client, true);
         if (state.on && state.list.length === 0) await notify(echoNoEchoes(translate()));
       } catch {
