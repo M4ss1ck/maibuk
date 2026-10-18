@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
+import { mockVirtualizerLayout } from "@/test/support/virtualizer-layout";
 
 // The palette dialog over the real app on a real in-memory Library, driven
 // with real keys. Only what jsdom cannot run is stubbed: the Fabric cover
@@ -157,6 +158,7 @@ Element.prototype.scrollIntoView ??= function scrollIntoView() {};
 (document as Document & { elementFromPoint?: () => null }).elementFromPoint ??= () => null;
 
 const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+let restoreLayout: () => void;
 const measuredRect = {
   width: 800,
   height: 400,
@@ -172,14 +174,12 @@ const measuredRect = {
 beforeAll(() => {
   // The Virtualizer lays rows out from the scroll view's size, which jsdom
   // reports as 0.
-  Object.defineProperties(HTMLElement.prototype, {
-    clientWidth: { configurable: true, get: () => 900 },
-    clientHeight: { configurable: true, get: () => 4000 },
-  });
+  restoreLayout = mockVirtualizerLayout({ width: 900, height: 4000 });
   Element.prototype.getBoundingClientRect = () => measuredRect as DOMRect;
 });
 
 afterAll(() => {
+  restoreLayout();
   Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
 });
 

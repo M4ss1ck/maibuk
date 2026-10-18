@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { mockVirtualizerLayout } from "@/test/support/virtualizer-layout";
 import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
@@ -40,12 +41,12 @@ vi.mock("@/features/settings/shortcut-file", () => ({
   pickShortcutFileText: file.pick,
 }));
 
+let restoreLayout: () => void;
 beforeAll(() => {
-  // The Virtualizer lays rows out from the scroll view's size, which jsdom reports as 0.
-  Object.defineProperties(HTMLElement.prototype, {
-    clientWidth: { configurable: true, get: () => 900 },
-    clientHeight: { configurable: true, get: () => 4000 },
-  });
+  restoreLayout = mockVirtualizerLayout({ width: 900, height: 4000 });
+});
+afterAll(() => {
+  restoreLayout();
 });
 
 function Harness() {
