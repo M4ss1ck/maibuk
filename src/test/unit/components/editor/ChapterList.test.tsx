@@ -4,7 +4,11 @@ import { act, render, screen, within, fireEvent, waitFor } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
 import { buildChapter } from "@/test/support/fixtures";
-import { mockVirtualizerLayout } from "@/test/support/virtualizer-layout";
+import {
+  mockRowScrollHeight,
+  mockScrollEventOnScrollTopWrite,
+  mockVirtualizerLayout,
+} from "@/test/support/virtualizer-layout";
 import {
   installPointerEvent,
   pointerHitTarget,
@@ -1479,51 +1483,6 @@ describe("nested row controls by keyboard", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
-
-/**
- * React Aria measures each virtualized item by its scrollHeight, which jsdom
- * reports as 0. Every item would then measure 0px and the Virtualizer would
- * mount all of them. Items are the absolutely positioned wrappers (and the rows
- * inside them), so those get a fixed height. Returns the restore function.
- */
-function mockRowScrollHeight(px: number): () => void {
-  const saved = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");
-  Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return this.getAttribute("role") === "row" || this.style.position === "absolute" ? px : 0;
-    },
-  });
-  return () => {
-    if (saved) Object.defineProperty(HTMLElement.prototype, "scrollHeight", saved);
-    else Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight");
-  };
-}
-
-/**
- * A browser fires a `scroll` event after a script writes scrollTop, and the
- * Virtualizer only re-reads the viewport on that event. jsdom fires none, so
- * write-then-scroll would never mount the target row. Writes here dispatch the
- * event asynchronously, as a browser does. Returns the restore function.
- */
-function mockScrollEventOnScrollTopWrite(): () => void {
-  const saved = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollTop");
-  const values = new WeakMap<HTMLElement, number>();
-  Object.defineProperty(HTMLElement.prototype, "scrollTop", {
-    configurable: true,
-    get(this: HTMLElement) {
-      return values.get(this) ?? 0;
-    },
-    set(this: HTMLElement, value: number) {
-      values.set(this, value);
-      queueMicrotask(() => this.dispatchEvent(new Event("scroll")));
-    },
-  });
-  return () => {
-    if (saved) Object.defineProperty(HTMLElement.prototype, "scrollTop", saved);
-    else Reflect.deleteProperty(HTMLElement.prototype, "scrollTop");
-  };
-}
 
 // #550: the Chapter list is virtualized, so only rows near the viewport mount.
 describe("virtualized Chapter list (#550)", () => {

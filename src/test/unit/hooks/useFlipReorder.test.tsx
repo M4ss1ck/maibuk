@@ -242,4 +242,30 @@ describe("useFlipReorder", () => {
     expect(container.scrollTop).toBe(120);
     expect(animate).toHaveBeenCalledTimes(2);
   });
+
+  it("ignores a key that mounts between two measurements and animates the rows that stayed", () => {
+    // A Virtualizer mounts rows near the viewport as it scrolls, so a key can
+    // appear in the DOM only after the previous measurement. It has no earlier
+    // top to glide from, so it must not animate. The rows that stayed do.
+    const animated: string[] = [];
+    const saved = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "animate");
+    Object.defineProperty(HTMLElement.prototype, "animate", {
+      configurable: true,
+      value(this: HTMLElement) {
+        animated.push(this.dataset.key ?? "");
+        return { cancel: vi.fn() } as unknown as Animation;
+      },
+    });
+    try {
+      const { rerender } = render(<Harness order={["a", "b", "c"]} />);
+      rerender(<Harness order={["x", "a", "c", "b"]} />);
+
+      // a moves 0 to 40 and b moves 40 to 120; c stays at 80 and does not glide.
+      expect(animated).not.toContain("x");
+      expect(animated.sort()).toEqual(["a", "b"]);
+    } finally {
+      if (saved) Object.defineProperty(HTMLElement.prototype, "animate", saved);
+      else Reflect.deleteProperty(HTMLElement.prototype, "animate");
+    }
+  });
 });
