@@ -94,6 +94,8 @@ describe("frame scenarios", () => {
     ]);
     for (const scenario of pluginScenarios) {
       expect(scenario.plugins?.length, scenario.id).toBeGreaterThan(0);
+      // The desktop source launches with an empty Plugin Directory: skipped, with a reason.
+      expect(scenario.skip?.desktop, scenario.id).toBeTruthy();
       for (const plugin of scenario.plugins ?? []) {
         expect(["fixture-bench", "maibuk-echoes"], scenario.id).toContain(plugin.id);
         expect(plugin.granted.length, scenario.id).toBeGreaterThan(0);
@@ -122,7 +124,7 @@ describe("frame scenarios", () => {
     expect(byId.get("plugin-remote-ui")?.recordsInput).toBe(false);
     expect(byId.get("typing-with-highlights")?.recordsInput).toBe(true);
     expect(byId.get("typing-with-echoes")?.recordsInput).toBe(true);
-    for (const source of ["probe", "android"] as const) {
+    for (const source of ["probe", "android", "desktop"] as const) {
       const ids = scenariosFor(source).map((s) => s.id);
       expect(ids, source).not.toContain("plugin-remote-ui");
       expect(ids, source).not.toContain("typing-with-highlights");
@@ -173,6 +175,35 @@ describe("parseFrameBenchArgs()", () => {
       expect(() => parseFrameBenchArgs(argv), argv.join(" ")).toThrow(FrameBenchUsageError);
     }
     expect(() => parseFrameBenchArgs(["--fast"])).toThrow(FRAME_BENCH_USAGE.split("\n")[0]);
+  });
+
+  it("parses --source desktop, and refuses --headless with it", () => {
+    expect(parseFrameBenchArgs(["--source", "desktop"])).toMatchObject({
+      source: "desktop",
+      headless: false,
+      out: ".bench/frames-desktop.json",
+    });
+    expect(() => parseFrameBenchArgs(["--source", "desktop", "--headless"])).toThrow(
+      FrameBenchUsageError
+    );
+    expect(() => parseFrameBenchArgs(["--source", "desktop", "--headless"])).toThrow(
+      "--headless does not apply to --source desktop"
+    );
+  });
+
+  it("lists the desktop source's scenarios without the three Plugin scenarios", () => {
+    const ids = parseFrameBenchArgs(["--source", "desktop"]).scenarios;
+    expect(ids).toEqual(scenariosFor("desktop").map((s) => s.id));
+    expect(ids).toHaveLength(FRAME_SCENARIOS.length - 3);
+    for (const id of ["plugin-remote-ui", "typing-with-highlights", "typing-with-echoes"]) {
+      expect(ids).not.toContain(id);
+    }
+  });
+
+  it("refuses a Plugin scenario on the desktop source, with the reason", () => {
+    expect(() =>
+      parseFrameBenchArgs(["--source", "desktop", "--scenario", "plugin-remote-ui"])
+    ).toThrow(/not measured on desktop: plugin-remote-ui: the desktop source launches/);
   });
 
   it("refuses a scenario the source does not run, with the reason", () => {

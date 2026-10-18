@@ -9,12 +9,25 @@
 // Repetitions run back to back on one page: `arrange` (outside the measured
 // window) brings the screen back to where `measure` starts.
 
-import { expect, type Locator, type Page } from "@playwright/test";
-import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  type FrameLocator,
+  type FramePage,
+  boundingBox,
+  isFocused,
+  isFocusWithin,
+  pressUntilFocused,
+  tabTo,
+  waitAttribute,
+  waitCount,
+  waitFocusWithin,
+  waitFocused,
+  waitHidden,
+  waitVisible,
+} from "./frame-page";
 import { PERF_BOOK, PERF_CANVAS, PERF_MANY_CHAPTERS_BOOK } from "../support/seed/names";
 
 export interface FrameDriverContext {
-  page: Page;
+  page: FramePage;
   /** Navigates to an app path on whatever origin serves the app. */
   open(path: string): Promise<void>;
 }
@@ -34,7 +47,7 @@ export interface FrameDriver {
 }
 
 /** Resolves on the page's next animation frame. */
-export async function nextFrame(page: Page): Promise<void> {
+export async function nextFrame(page: FramePage): Promise<void> {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
 }
 
@@ -45,7 +58,7 @@ const MOUSE_EVENT_MS = 8;
 
 /** A point inside the viewport, as a fraction of its width and height. */
 async function viewportPoint(
-  page: Page,
+  page: FramePage,
   fx: number,
   fy: number
 ): Promise<{ x: number; y: number }> {
@@ -54,15 +67,14 @@ async function viewportPoint(
   return { x: size.width * fx, y: size.height * fy };
 }
 
-async function center(target: Locator): Promise<{ x: number; y: number }> {
-  const box = await target.boundingBox();
-  if (!box) throw new Error(`${target} has no box`);
+async function center(target: FrameLocator): Promise<{ x: number; y: number }> {
+  const box = await boundingBox(target);
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
 /** Moves the pressed mouse by (dx, dy) in `steps` events at the mouse's rate. */
 async function dragBy(
-  page: Page,
+  page: FramePage,
   from: { x: number; y: number },
   dx: number,
   dy: number,
@@ -74,7 +86,7 @@ async function dragBy(
   }
 }
 
-const editorText = (page: Page) =>
+const editorText = (page: FramePage) =>
   page.getByRole("textbox", { name: `Text of ${PERF_BOOK.longChapter}` });
 
 /**
@@ -92,22 +104,18 @@ const TYPING_WARMUP = " The keeper wrote by lamplight.";
 async function openBookInGallery(
   { page }: FrameDriverContext,
   title: string,
-  text: Locator
+  text: FrameLocator
 ): Promise<void> {
   const card = page.getByRole("grid", { name: "Books" }).getByRole("row", { name: title });
-  await expect(card).toBeVisible();
+  await waitVisible(card);
   await page.keyboard.press("1");
-  await expect(card).toBeFocused();
+  await waitFocused(card);
   await page.keyboard.press("Enter");
-  await expect(text).toBeFocused({ timeout: 30_000 });
+  await waitFocused(text, 30_000);
 }
 
 /** Opens a seeded Book from the Books gallery; the editor opens its last Chapter. */
-async function openBook(
-  ctx: FrameDriverContext,
-  title: string,
-  text: Locator
-): Promise<void> {
+async function openBook(ctx: FrameDriverContext, title: string, text: FrameLocator): Promise<void> {
   await ctx.open("/");
   await openBookInGallery(ctx, title, text);
 }
@@ -133,7 +141,7 @@ const typing: FrameDriver = {
   },
 };
 
-async function wheelTicks(page: Page, dx: number, dy: number, ticks: number): Promise<void> {
+async function wheelTicks(page: FramePage, dx: number, dy: number, ticks: number): Promise<void> {
   for (let i = 0; i < ticks; i++) {
     await page.mouse.wheel(dx, dy);
     await nextFrame(page);
@@ -159,7 +167,7 @@ const scroll: FrameDriver = {
   },
 };
 
-const canvasPane = (page: Page) => page.locator(".react-flow__pane");
+const canvasPane = (page: FramePage) => page.locator(".react-flow__pane");
 
 const canvas: FrameDriver = {
   async prepare({ page, open }) {
@@ -170,14 +178,13 @@ const canvas: FrameDriver = {
     await page.keyboard.press("Home");
     await pressUntilFocused(page, "ArrowRight", row, { max: 12 });
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("toolbar", { name: "Tools" })).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(`${PERF_CANVAS.nodePrefix} 1`, { exact: true })).toBeVisible();
+    await waitVisible(page.getByRole("toolbar", { name: "Tools" }), 30_000);
+    await waitVisible(page.getByText(`${PERF_CANVAS.nodePrefix} 1`, { exact: true }));
     await sleep(500);
   },
   async measure({ page }) {
     // Pan: drag the empty pane (the toolbar sits on the right edge).
-    const box = await canvasPane(page).boundingBox();
-    if (!box) throw new Error("no Canvas pane");
+    const box = await boundingBox(canvasPane(page));
     const from = { x: box.x + box.width * 0.35, y: box.y + box.height * 0.5 };
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
@@ -191,11 +198,11 @@ const canvas: FrameDriver = {
   },
 };
 
-const outlineTree = (page: Page) =>
+const outlineTree = (page: FramePage) =>
   page
     .getByRole("navigation", { name: "Settings sections" })
     .getByRole("treegrid", { name: "Settings sections" });
-const outlineEntry = (page: Page, name: string) =>
+const outlineEntry = (page: FramePage, name: string) =>
   outlineTree(page).getByRole("row", { name: new RegExp(`^${name}(, current)?$`) });
 
 /** Wheel ticks that cross the whole Settings page at 100 px a tick. */
@@ -208,13 +215,13 @@ const SETTINGS_TICKS = 120;
 const settingsOutline: FrameDriver = {
   async prepare({ page, open }) {
     await open("/settings");
-    await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
-    await expect(outlineEntry(page, "Appearance")).toHaveAccessibleName("Appearance, current");
+    await waitVisible(page.getByRole("heading", { name: "Settings", level: 1 }));
+    await waitAttribute(outlineEntry(page, "Appearance"), "aria-label", "Appearance, current");
     // Warm-up: one keyboard jump through the outline.
     await tabTo(page, outlineEntry(page, "Appearance"), { backwards: true, max: 4 });
     await pressUntilFocused(page, "ArrowDown", outlineEntry(page, "General"), { max: 30 });
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { name: "General", level: 2 })).toBeFocused();
+    await waitFocused(page.getByRole("heading", { name: "General", level: 2 }));
     await sleep(500);
   },
   async arrange({ page }) {
@@ -227,12 +234,13 @@ const settingsOutline: FrameDriver = {
     for (let i = 0; i < 40; i++) {
       await wheelTicks(page, 0, -400, 1);
       if (
-        (await appearance.getAttribute("aria-label").catch(() => null)) === "Appearance, current"
+        (await appearance.evaluate((el) => el.getAttribute("aria-label")).catch(() => null)) ===
+        "Appearance, current"
       ) {
         break;
       }
     }
-    await expect(appearance).toHaveAccessibleName("Appearance, current");
+    await waitAttribute(appearance, "aria-label", "Appearance, current");
     await sleep(400);
   },
   async measure({ page }) {
@@ -244,12 +252,12 @@ const settingsOutline: FrameDriver = {
 
 /** The main sidebar's drag edge. It has no accessible name (it is mouse-only),
  * so the Tutorial anchor it carries is the stable hook. */
-const sidebarEdge = (page: Page) => page.locator('[data-tutorial~="books.remember"]');
+const sidebarEdge = (page: FramePage) => page.locator('[data-tutorial~="books.remember"]');
 
 const sidebarResize: FrameDriver = {
   async prepare({ page, open }) {
     await open("/");
-    await expect(page.getByRole("grid", { name: "Books" }).getByRole("row").first()).toBeVisible();
+    await waitVisible(page.getByRole("grid", { name: "Books" }).getByRole("row").first());
     const at = await center(sidebarEdge(page));
     await page.mouse.move(at.x, at.y);
     await page.mouse.down();
@@ -269,7 +277,7 @@ const sidebarResize: FrameDriver = {
   },
 };
 
-const chapterListEdge = (page: Page) =>
+const chapterListEdge = (page: FramePage) =>
   page.getByRole("separator", { name: "Resize chapter list" });
 
 const chapterListResize: FrameDriver = {
@@ -295,16 +303,16 @@ const chapterListResize: FrameDriver = {
   },
 };
 
-const chapterGrid = (page: Page) => page.getByRole("grid", { name: "Chapters" });
-const chapterRow = (page: Page, title: string) =>
+const chapterGrid = (page: FramePage) => page.getByRole("grid", { name: "Chapters" });
+const chapterRow = (page: FramePage, title: string) =>
   chapterGrid(page).getByRole("row", { name: new RegExp(`^${title}\\b`) });
 
 /** Focuses Log 1's Reorder button from the Chapter list. */
-async function focusFirstReorder(page: Page): Promise<Locator> {
+async function focusFirstReorder(page: FramePage): Promise<FrameLocator> {
   // The list is one Tab stop; its row buttons are reached by ArrowRight.
   await tabTo(page, chapterGrid(page).getByRole("row", { selected: true }), { max: 40 });
   await page.keyboard.press("Home");
-  await expect(chapterRow(page, "Log 1")).toBeFocused();
+  await waitFocused(chapterRow(page, "Log 1"));
   const handle = chapterRow(page, "Log 1").getByRole("button", { name: "Reorder" });
   await pressUntilFocused(page, "ArrowRight", handle, { max: 6 });
   return handle;
@@ -325,14 +333,14 @@ const chapterReorder: FrameDriver = {
     // A cancelled reorder (the warm-up's, or the last run's) leaves focus on
     // the handle, where the measured window starts.
     const handle = chapterRow(page, "Log 1").getByRole("button", { name: "Reorder" });
-    if (!(await handle.evaluate((el) => el === document.activeElement))) {
+    if (!(await isFocused(handle))) {
       await focusFirstReorder(page);
     }
     await sleep(300);
   },
   async measure({ page }) {
     const handle = chapterRow(page, "Log 1").getByRole("button", { name: "Reorder" });
-    await expect(handle).toBeFocused();
+    await waitFocused(handle);
     await page.keyboard.press("Enter");
     for (let i = 0; i < 20; i++) {
       await page.keyboard.press("ArrowDown");
@@ -344,12 +352,12 @@ const chapterReorder: FrameDriver = {
     }
     // Escape cancels: the order is unchanged for the next repetition.
     await page.keyboard.press("Escape");
-    await expect(handle).toBeFocused();
+    await waitFocused(handle);
     await sleep(200);
   },
 };
 
-const paletteInput = (page: Page) =>
+const paletteInput = (page: FramePage) =>
   page.getByRole("dialog").getByRole("searchbox", { name: "Find by name" });
 
 const palette: FrameDriver = {
@@ -357,15 +365,15 @@ const palette: FrameDriver = {
     await openPerfBook(ctx);
     const { page } = ctx;
     await page.keyboard.press("F1");
-    await expect(page.getByRole("dialog")).toBeVisible();
+    await waitVisible(page.getByRole("dialog"));
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toBeHidden();
+    await waitHidden(page.getByRole("dialog"));
     await sleep(300);
   },
   async measure({ page }) {
     await page.keyboard.press("F1");
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(paletteInput(page)).toBeFocused();
+    await waitVisible(page.getByRole("dialog"));
+    await waitFocused(paletteInput(page));
     const query = "long night log";
     await page.keyboard.type(query, { delay: 120 });
     await sleep(300);
@@ -374,17 +382,17 @@ const palette: FrameDriver = {
       await sleep(80);
     }
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).toBeHidden();
+    await waitHidden(page.getByRole("dialog"));
     await sleep(200);
   },
 };
 
 /** Presses `key` (F6 or Shift+F6) until focus is inside `pane`. */
-async function cycleTo(page: Page, key: string, pane: Locator): Promise<void> {
+async function cycleTo(page: FramePage, key: string, pane: FrameLocator): Promise<void> {
   for (let i = 0; i < 6 && !(await isFocusWithin(pane)); i++) {
     await page.keyboard.press(key);
   }
-  await expectFocusWithin(pane);
+  await waitFocusWithin(pane);
 }
 
 /** Arrow leaves per measured window. */
@@ -407,10 +415,10 @@ declare global {
  */
 function arrowLeave(
   reach: (ctx: FrameDriverContext) => Promise<void>,
-  list: (page: Page) => Locator,
-  text: (page: Page) => Locator
+  list: (page: FramePage) => FrameLocator,
+  text: (page: FramePage) => FrameLocator
 ): FrameDriver {
-  async function round(page: Page) {
+  async function round(page: FramePage) {
     await cycleTo(page, "Shift+F6", list(page));
     await sleep(150);
     await pressUntilFocused(page, "ArrowRight", text(page), { max: 8 });
@@ -423,7 +431,7 @@ function arrowLeave(
       await sleep(300);
     },
     async arrange({ page }) {
-      await expect(text(page)).toBeFocused();
+      await waitFocused(text(page));
       await page.evaluate(() => {
         window.__maibukArrowLeaveMs = [];
       });
@@ -438,21 +446,21 @@ function arrowLeave(
   };
 }
 
-const notesGallery = (page: Page) => page.getByRole("grid", { name: "Notes" });
-const noteText = (page: Page) => page.locator('.ProseMirror[aria-label="Text"]');
+const notesGallery = (page: FramePage) => page.getByRole("grid", { name: "Notes" });
+const noteText = (page: FramePage) => page.locator('.ProseMirror[aria-label="Text"]');
 
 /** Opens the first Note in the Notes Gallery. */
 async function openFirstNote({ page, open }: FrameDriverContext): Promise<void> {
   await open("/notes");
   const first = notesGallery(page).getByRole("row").first();
-  await expect(first).toBeVisible({ timeout: 30_000 });
+  await waitVisible(first, 30_000);
   await tabTo(page, first, { max: 40 });
   await page.keyboard.press("Home");
   await page.keyboard.press("Enter");
-  await expect(noteText(page)).toBeVisible({ timeout: 30_000 });
+  await waitVisible(noteText(page), 30_000);
 }
 
-const manyChaptersText = (page: Page) => page.locator('.ProseMirror[aria-label^="Text of "]');
+const manyChaptersText = (page: FramePage) => page.locator('.ProseMirror[aria-label^="Text of "]');
 const openManyChaptersBook = (ctx: FrameDriverContext) =>
   openBook(ctx, PERF_MANY_CHAPTERS_BOOK.title, manyChaptersText(ctx.page));
 
@@ -480,12 +488,12 @@ const paneSlide: FrameDriver = {
 
 /** The fixture-bench echo page's route (its only page). */
 const BENCH_ECHO_PATH = "/plugin/fixture-bench/echo";
-const echoInput = (page: Page) => page.getByRole("textbox", { name: "Echo input" });
-const benchTableRowCount = (page: Page) =>
+const echoInput = (page: FramePage) => page.getByRole("textbox", { name: "Echo input" });
+const benchTableRowCount = (page: FramePage) =>
   page.getByRole("table", { name: "Bench rows" }).locator("tbody tr");
-const pluginHighlight = (page: Page) => page.locator(".plugin-highlight");
+const pluginHighlight = (page: FramePage) => page.locator(".plugin-highlight");
 
-const navOption = (page: Page, name: string) =>
+const navOption = (page: FramePage, name: string) =>
   page
     .getByRole("listbox", { name: "Primary navigation" })
     .getByRole("option", { name: new RegExp(`^${name}`) });
@@ -495,14 +503,14 @@ const navOption = (page: Page, name: string) =>
  * (the echo field and the full 1,000-row table). CSS row count, not a role
  * query: the table is a plain `<table>` with no scroll container of its own.
  */
-async function openBenchEcho(page: Page): Promise<void> {
+async function openBenchEcho(page: FramePage): Promise<void> {
   await page.goto(BENCH_ECHO_PATH);
-  await expect(echoInput(page)).toBeVisible({ timeout: 30_000 });
-  await expect(benchTableRowCount(page)).toHaveCount(1000, { timeout: 30_000 });
+  await waitVisible(echoInput(page), 30_000);
+  await waitCount(benchTableRowCount(page), 1000, 30_000);
 }
 
 /** Wheel ticks of 100 px that cross the whole echo page, from the table's height. */
-async function tableWheelTicks(page: Page): Promise<number> {
+async function tableWheelTicks(page: FramePage): Promise<number> {
   const distance = await page.evaluate(() => {
     let node: HTMLElement | null = document.querySelector("table");
     while (node !== null) {
@@ -516,7 +524,7 @@ async function tableWheelTicks(page: Page): Promise<number> {
 }
 
 /** Leaves the echo page by keyboard, so the Worker keeps running (on-demand). */
-async function leaveBenchEcho(page: Page): Promise<void> {
+async function leaveBenchEcho(page: FramePage): Promise<void> {
   await tabTo(page, navOption(page, "Books"));
   await page.keyboard.press("Enter");
 }
@@ -526,7 +534,7 @@ async function leaveBenchEcho(page: Page): Promise<void> {
  * (the 1,000-row table). The Worker is already running (`prepare`), so this
  * measures rendering the transplanted Remote UI, not starting the Plugin.
  */
-async function openBenchEchoFromSidebar(page: Page): Promise<void> {
+async function openBenchEchoFromSidebar(page: FramePage): Promise<void> {
   await tabTo(
     page,
     page
@@ -535,8 +543,8 @@ async function openBenchEchoFromSidebar(page: Page): Promise<void> {
   );
   await pressUntilFocused(page, "ArrowDown", navOption(page, "Bench echo"));
   await page.keyboard.press("Enter");
-  await expect(echoInput(page)).toBeVisible({ timeout: 30_000 });
-  await expect(benchTableRowCount(page)).toHaveCount(1000, { timeout: 30_000 });
+  await waitVisible(echoInput(page), 30_000);
+  await waitCount(benchTableRowCount(page), 1000, 30_000);
 }
 
 const pluginRemoteUi: FrameDriver = {
@@ -580,7 +588,7 @@ const typingWithHighlights: FrameDriver = {
     await page.keyboard.press("Enter");
     await openBookInGallery(ctx, PERF_BOOK.title, editorText(page));
     // The host renders each highlight as a `plugin-highlight` span.
-    await expect(pluginHighlight(page).first()).toBeVisible({ timeout: 15_000 });
+    await waitVisible(pluginHighlight(page).first(), 15_000);
     // Deep in the Chapter, like `typing`.
     await page.keyboard.press("ControlOrMeta+End");
     for (let i = 0; i < 12; i++) await page.keyboard.press("PageUp");
@@ -608,7 +616,7 @@ const typingWithEchoes: FrameDriver = {
     await ctx.open("/");
     // The on-demand Echoes Plugin warm-starts at launch (its Open Echoes Command
     // is global); its sidebar entry appearing means its Commands are live.
-    await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });
+    await waitVisible(navOption(page, "Echoes"), 60_000);
     await openBookInGallery(ctx, PERF_BOOK.title, editorText(page));
     // Toggle nearby-echo highlights on with the Command's Default Shortcut. The
     // first press can land before the Plugin's Commands are available (the
@@ -618,9 +626,7 @@ const typingWithEchoes: FrameDriver = {
     let on = false;
     for (let attempt = 0; attempt < 12 && !on; attempt++) {
       await page.keyboard.press("Alt+F7");
-      on = await marks
-        .first()
-        .waitFor({ state: "visible", timeout: 5_000 })
+      on = await waitVisible(marks.first(), 5_000)
         .then(() => true)
         .catch(() => false);
     }
@@ -657,7 +663,7 @@ export const FRAME_DRIVERS: Record<string, FrameDriver> = {
   "arrow-leave-chapters": arrowLeave(
     openManyChaptersBook,
     // The phone drawer renders a second, hidden Chapter list.
-    (page) => page.locator('[data-focus-pane="chapter-list"]').filter({ visible: true }),
+    (page) => page.locator('[data-focus-pane="chapter-list"]').visible(),
     manyChaptersText
   ),
   "pane-slide": paneSlide,

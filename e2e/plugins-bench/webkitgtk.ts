@@ -191,7 +191,7 @@ interface LaunchDirs {
   runtimeDir: string;
 }
 
-function createLaunchDirs(base: string): LaunchDirs {
+export function createLaunchDirs(base: string): LaunchDirs {
   const home = mkdtempSync(resolve(base, "home-"));
   const dataDir = resolve(home, "data", BENCH_IDENTIFIER);
   const configDir = resolve(home, "config", BENCH_IDENTIFIER);
@@ -205,7 +205,7 @@ function createLaunchDirs(base: string): LaunchDirs {
 }
 
 /** The environment a bench launch runs with: every device path inside one temp HOME. */
-function launchEnv(dirs: LaunchDirs): NodeJS.ProcessEnv {
+export function launchEnv(dirs: LaunchDirs): NodeJS.ProcessEnv {
   return {
     ...process.env,
     HOME: dirs.home,

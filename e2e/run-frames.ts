@@ -15,6 +15,7 @@ import {
   checkFrameBench,
   formatFrameBench,
 } from "@/test/support/frames/bench-report";
+import { displayServer } from "@/test/support/frames/desktop";
 import {
   FRAME_BENCH_USAGE,
   FrameBenchUsageError,
@@ -24,6 +25,8 @@ import {
 import { resolveLongFrameSources } from "@/test/support/frames/attribution";
 import { FRAME_SCENARIOS } from "@/test/support/frames/scenarios";
 import { connectDevice, PrerequisiteMissing } from "./frames/android";
+import { ensureDesktopBuild, resolveDesktopDrivers } from "./frames/desktop";
+import { assertLinuxPrerequisites, webkitgtkVersion } from "./conformance/linux";
 import {
   PREVIEW_RUNS_DIR,
   type Preview,
@@ -83,6 +86,22 @@ async function checkPrerequisites(options: FrameBenchOptions): Promise<void> {
     }
     return;
   }
+  if (options.source === "desktop") {
+    if (process.platform !== "linux") {
+      refuse("the desktop source measures the Linux shell; run it on Linux");
+    }
+    if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) {
+      refuse("no display for the desktop app");
+    }
+    try {
+      assertLinuxPrerequisites();
+      resolveDesktopDrivers();
+    } catch (error) {
+      if (error instanceof PrerequisiteMissing) refuse(error.message);
+      throw error;
+    }
+    return;
+  }
   if (!options.headless && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) {
     refuse("no display for a headed browser; pass --headless for the new headless mode");
   }
@@ -98,7 +117,9 @@ function environment(options: FrameBenchOptions, files: ScenarioFile[]): FrameBe
       ? "android-webview"
       : options.source === "probe"
         ? options.engine
-        : "chromium";
+        : options.source === "desktop"
+          ? "webkitgtk"
+          : "chromium";
   return {
     source: options.source,
     engine,
@@ -106,13 +127,24 @@ function environment(options: FrameBenchOptions, files: ScenarioFile[]): FrameBe
     mode:
       options.source === "android"
         ? "device"
-        : !options.headless
+        : options.source === "desktop"
           ? "headed"
-          : engine === "chromium"
-            ? "new-headless"
-            : "headless",
+          : !options.headless
+            ? "headed"
+            : engine === "chromium"
+              ? "new-headless"
+              : "headless",
     platform: `${process.platform}-${process.arch}`,
     ...(first?.device ? { device: first.device } : {}),
+    ...(options.source === "desktop"
+      ? {
+          desktop: {
+            displayServer: displayServer(process.env),
+            buildProfile: "release" as const,
+            webkitgtk: webkitgtkVersion(),
+          },
+        }
+      : {}),
     refreshIntervalMs:
       intervals.length > 0 ? intervals.reduce((a, b) => a + b, 0) / intervals.length : null,
     refreshSource: first?.refreshSource ?? "none",
@@ -148,7 +180,14 @@ async function main(): Promise<void> {
 
   const started = Date.now();
   await checkPrerequisites(options);
-  const web = options.source !== "android";
+  if (options.source === "desktop") {
+    try {
+      ensureDesktopBuild(root, { reuse: options.reuseBuild });
+    } catch (error) {
+      refuse(`the desktop build failed: ${(error as Error).message}`);
+    }
+  }
+  const web = options.source !== "android" && options.source !== "desktop";
   if (web) {
     if (options.reuseBuild) process.env.E2E_REUSE_BUILD = "1";
     buildWeb({ sourcemap: true });
@@ -195,7 +234,12 @@ async function main(): Promise<void> {
       FRAMES_REPEAT: options.repeat ? String(options.repeat) : undefined,
       FRAMES_CPU_THROTTLE: String(options.cpuThrottling),
       FRAMES_HEADLESS: options.headless ? "1" : "0",
-      FRAMES_ENGINE: options.source === "probe" ? options.engine : "chromium",
+      FRAMES_ENGINE:
+        options.source === "probe"
+          ? options.engine
+          : options.source === "desktop"
+            ? "webkitgtk"
+            : "chromium",
       FRAMES_OUT: outDir,
       FRAMES_RAW: options.raw ? resolve(root, ".bench/frames-raw", options.source) : undefined,
     },
