@@ -10,6 +10,7 @@ import {
   DEFAULT_EDITOR_KINDS,
   ECHOES_COLOR_KEY,
   ECHOES_EDITOR_KEY,
+  ECHOES_HIGHLIGHTS_KEY,
   ECHOES_SETTINGS_KEY,
   type EchoesStorage,
   clampNearbyWindow,
@@ -21,6 +22,7 @@ import {
   readEchoPalette,
   readEchoesSettings,
   readEditorKinds,
+  readHighlightsOn,
   writeColorByEcho,
   writeEchoPalette,
   toEditorFindOptions,
@@ -28,6 +30,7 @@ import {
   toggledEditorKind,
   writeEchoesSettings,
   writeEditorKinds,
+  writeHighlightsOn,
 } from "./settings";
 
 /** A storage double over one Map, shaped like the SDK client's `storage`. */
@@ -310,5 +313,73 @@ describe("Echoes color by echo (#532)", () => {
     };
     expect(await readEchoPalette(refusing)).toBe("okabe-ito");
     await expect(writeEchoPalette(refusing, "soft")).resolves.toBeUndefined();
+  });
+});
+
+describe("Echoes highlights on (persisted switch)", () => {
+  const refusing: EchoesStorage = {
+    storage: {
+      async get() {
+        throw new Error("refused");
+      },
+      async set() {
+        throw new Error("refused");
+      },
+      async delete() {
+        throw new Error("refused");
+      },
+      async keys() {
+        throw new Error("refused");
+      },
+    },
+  };
+
+  it("uses its own key", () => {
+    expect(ECHOES_HIGHLIGHTS_KEY).toBe("highlights");
+  });
+
+  it("reads on only when the stored value is exactly true", async () => {
+    expect(await readHighlightsOn(fakeStorage(new Map([[ECHOES_HIGHLIGHTS_KEY, true]])))).toBe(
+      true
+    );
+  });
+
+  it("reads off when the key is missing", async () => {
+    expect(await readHighlightsOn(fakeStorage(new Map()))).toBe(false);
+  });
+
+  it("reads off for an explicit false", async () => {
+    expect(await readHighlightsOn(fakeStorage(new Map([[ECHOES_HIGHLIGHTS_KEY, false]])))).toBe(
+      false
+    );
+  });
+
+  it("reads off for a malformed value, never a truthy one", async () => {
+    for (const value of ["true", 1, "yes", {}, [true], null]) {
+      expect(await readHighlightsOn(fakeStorage(new Map([[ECHOES_HIGHLIGHTS_KEY, value]])))).toBe(
+        false
+      );
+    }
+  });
+
+  it("reads off when storage refuses the read", async () => {
+    expect(await readHighlightsOn(refusing)).toBe(false);
+  });
+
+  it("writes the switch under its own key and reads it back", async () => {
+    const data = new Map<string, unknown>();
+    const client = fakeStorage(data);
+
+    await writeHighlightsOn(client, true);
+    expect(data.get(ECHOES_HIGHLIGHTS_KEY)).toBe(true);
+    expect(await readHighlightsOn(client)).toBe(true);
+
+    await writeHighlightsOn(client, false);
+    expect(data.get(ECHOES_HIGHLIGHTS_KEY)).toBe(false);
+    expect(await readHighlightsOn(client)).toBe(false);
+  });
+
+  it("swallows a refused write, so the switch never breaks on storage", async () => {
+    await expect(writeHighlightsOn(refusing, true)).resolves.toBeUndefined();
   });
 });

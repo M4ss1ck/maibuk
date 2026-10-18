@@ -39,6 +39,9 @@ export const ECHOES_COLOR_KEY = "color";
 /** The one storage key the Echo color Palette lives under (#533). */
 export const ECHOES_PALETTE_KEY = "palette";
 
+/** The one storage key the "Toggle echo highlights" switch lives under: one switch for every editor. */
+export const ECHOES_HIGHLIGHTS_KEY = "highlights";
+
 /** The kinds the editor highlights before the author changes anything: nearby only. */
 export const DEFAULT_EDITOR_KINDS: readonly EchoKind[] = ["nearby"];
 
@@ -226,10 +229,18 @@ function keyedSetting<T>(key: string, parse: (value: unknown) => T) {
   };
 }
 
+/** The highlight switch from a stored value: on only when it is `true`, so anything else is off. */
+export function parseHighlightsOn(value: unknown): boolean {
+  return value === true;
+}
+
 const colorByEchoSetting = keyedSetting(ECHOES_COLOR_KEY, parseColorByEcho);
 const echoPaletteSetting = keyedSetting(ECHOES_PALETTE_KEY, parseEchoPalette);
+const highlightsOnSetting = keyedSetting(ECHOES_HIGHLIGHTS_KEY, parseHighlightsOn);
 
 export const readColorByEcho = colorByEchoSetting.read;
 export const writeColorByEcho = colorByEchoSetting.write;
 export const readEchoPalette = echoPaletteSetting.read;
 export const writeEchoPalette = echoPaletteSetting.write;
+export const readHighlightsOn = highlightsOnSetting.read;
+export const writeHighlightsOn = highlightsOnSetting.write;
