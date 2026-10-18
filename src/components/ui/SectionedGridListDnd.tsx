@@ -1,6 +1,6 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useMemo } from "react";
 import type { ReactNode, RefObject } from "react";
-import { CollectionRendererContext, DefaultCollectionRenderer } from "react-aria-components";
+import { CollectionRendererContext } from "react-aria-components";
 import type { CollectionRenderer, DropTarget } from "react-aria-components";
 import type { useDragAndDrop } from "react-aria-components/useDragAndDrop";
 
@@ -23,31 +23,40 @@ type RenderDropIndicator = CollectionRenderer extends {
 
 const RootDropIndicatorContext = createContext<RenderDropIndicator | undefined>(undefined);
 
-// Passes the root's drop indicators down to every section.
-const sectionAwareRenderer: CollectionRenderer = {
-  ...DefaultCollectionRenderer,
-  CollectionRoot: function SectionAwareCollectionRoot(props) {
-    return (
-      <RootDropIndicatorContext.Provider value={props.renderDropIndicator}>
-        <DefaultCollectionRenderer.CollectionRoot {...props} />
-      </RootDropIndicatorContext.Provider>
-    );
-  },
-  CollectionBranch: function SectionAwareCollectionBranch(props) {
-    const inherited = useContext(RootDropIndicatorContext);
-    return (
-      <DefaultCollectionRenderer.CollectionBranch
-        {...props}
-        renderDropIndicator={props.renderDropIndicator ?? inherited}
-      />
-    );
-  },
-};
+/**
+ * Wraps a renderer so the root's drop indicators reach every section. It builds
+ * on the renderer in context, so it can sit inside a Virtualizer (whose own
+ * renderer would otherwise replace this one) as well as at the top of a plain
+ * GridList.
+ */
+function sectionAwareRendererOver(base: CollectionRenderer): CollectionRenderer {
+  const BaseRoot = base.CollectionRoot;
+  const BaseBranch = base.CollectionBranch;
+  return {
+    ...base,
+    CollectionRoot: function SectionAwareCollectionRoot(props) {
+      return (
+        <RootDropIndicatorContext.Provider value={props.renderDropIndicator}>
+          <BaseRoot {...props} />
+        </RootDropIndicatorContext.Provider>
+      );
+    },
+    CollectionBranch: function SectionAwareCollectionBranch(props) {
+      const inherited = useContext(RootDropIndicatorContext);
+      return <BaseBranch {...props} renderDropIndicator={props.renderDropIndicator ?? inherited} />;
+    },
+  };
+}
 
-/** Wrap a sectioned GridList that uses drag-and-drop so its section rows get drop targets. */
+/**
+ * Wrap a sectioned GridList that uses drag-and-drop so its section rows get drop targets.
+ * Inside a Virtualizer, place it between the Virtualizer and the GridList.
+ */
 export function SectionDropIndicators({ children }: { children: ReactNode }) {
+  const base = useContext(CollectionRendererContext);
+  const renderer = useMemo(() => sectionAwareRendererOver(base), [base]);
   return (
-    <CollectionRendererContext.Provider value={sectionAwareRenderer}>
+    <CollectionRendererContext.Provider value={renderer}>
       {children}
     </CollectionRendererContext.Provider>
   );
@@ -56,7 +65,7 @@ export function SectionDropIndicators({ children }: { children: ReactNode }) {
 type DropTargetDelegate = NonNullable<Parameters<typeof useDragAndDrop>[0]["dropTargetDelegate"]>;
 
 /**
- * Pointer drop targets from the rendered rows, in document order, whatever
+ * Pointer drop targets from the mounted rows, in screen order, whatever
  * section they sit in: the gap before the first row whose middle is below the
  * pointer, else after the last row. Drops *on* a row are never offered.
  */
@@ -71,9 +80,14 @@ export class SectionedDropTargetDelegate implements DropTargetDelegate {
     const grid = this.gridRef.current;
     if (!grid) return { type: "root" };
     // Only this grid's rows; drop indicators and section headers carry no key.
-    const rows = [...grid.querySelectorAll<HTMLElement>('[role="row"][data-key]')].filter(
-      (row) => row.closest('[role="grid"]') === grid
-    );
+    // A Virtualizer appends rows in an order that is not their visual order, and
+    // only the rows near the viewport are mounted, so the rows are ordered by
+    // where they sit on screen rather than by DOM position.
+    const rows = [...grid.querySelectorAll<HTMLElement>('[role="row"][data-key]')]
+      .filter((row) => row.closest('[role="grid"]') === grid)
+      .map((row) => ({ row, top: row.getBoundingClientRect().top }))
+      .sort((a, b) => a.top - b.top)
+      .map(({ row }) => row);
     if (rows.length === 0) return { type: "root" };
 
     // React Aria passes the point relative to the collection element.

@@ -756,3 +756,86 @@ describe("arrow navigation (ADR 0025)", () => {
     expect(button("Bold")).toHaveFocus();
   });
 });
+
+// A grid whose rows are virtualized: only rows first..last are mounted, and
+// each carries its position in the whole grid (aria-rowindex, 1-based) out of
+// aria-rowcount. Panes sit on either side, so a leave is observable as focus.
+function VirtualGridFixture({ first, last, count }: { first: number; last: number; count: number }) {
+  const rows = [];
+  for (let i = first; i <= last; i += 1) {
+    rows.push(
+      // biome-ignore lint/a11y/useSemanticElements: a grid of divs, as the Virtualizer mounts them.
+      <div
+        key={i}
+        role="row"
+        tabIndex={-1}
+        aria-label={`Card ${i}`}
+        aria-rowindex={i}
+        data-rect={`200 ${(i - 1) * 40} 400 ${i * 40}`}
+      >
+        Card {i}
+      </div>
+    );
+  }
+  return (
+    <main>
+      <section data-focus-pane="sidebar" tabIndex={-1} aria-label="Sidebar" data-rect="0 0 200 800">
+        <button type="button" data-rect="10 10 100 40">
+          Sidebar action
+        </button>
+      </section>
+      <section data-focus-pane="gallery" tabIndex={-1} aria-label="Gallery" data-rect="200 0 400 800">
+        {/* biome-ignore lint/a11y/useSemanticElements: a 2D grid of divs, as the gallery renders it. */}
+        <div role="grid" data-layout="grid" aria-label="Books" aria-rowcount={count} data-rect="200 0 400 800">
+          {rows}
+        </div>
+      </section>
+      <section data-focus-pane="editor" tabIndex={-1} aria-label="Editor" data-rect="400 0 1000 800">
+        <button type="button" data-rect="410 10 450 40">
+          Editor action
+        </button>
+      </section>
+    </main>
+  );
+}
+
+describe("virtualized grid rows (aria-rowindex / aria-rowcount)", () => {
+  it("does not leave a grid through its right edge while the next row is unmounted", async () => {
+    const user = userEvent.setup();
+    render(<VirtualGridFixture first={5} last={9} count={20} />);
+    act(() => row("Card 9").focus());
+
+    await user.keyboard("{ArrowRight}");
+    expect(row("Card 9")).toHaveFocus();
+  });
+
+  it("does not leave a grid through its left edge while the previous row is unmounted", async () => {
+    const user = userEvent.setup();
+    render(<VirtualGridFixture first={5} last={9} count={20} />);
+    act(() => row("Card 5").focus());
+
+    await user.keyboard("{ArrowLeft}");
+    expect(row("Card 5")).toHaveFocus();
+  });
+
+  it("still leaves through the right edge at the true last row", async () => {
+    const user = userEvent.setup();
+    render(<VirtualGridFixture first={16} last={20} count={20} />);
+    act(() => row("Card 20").focus());
+
+    await user.keyboard("{ArrowRight}");
+    expect(button("Editor action")).toHaveFocus();
+  });
+
+  it("keeps Up and Down inside a virtualized list at its mounted ends", async () => {
+    const user = userEvent.setup();
+    render(<VirtualGridFixture first={5} last={9} count={20} />);
+    act(() => row("Card 9").focus());
+
+    await user.keyboard("{ArrowDown}");
+    expect(row("Card 9")).toHaveFocus();
+    act(() => row("Card 5").focus());
+    await user.keyboard("{ArrowUp}");
+    expect(row("Card 5")).toHaveFocus();
+  });
+});

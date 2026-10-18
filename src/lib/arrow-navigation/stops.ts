@@ -193,11 +193,28 @@ function gridOutcome(el: HTMLElement, widget: Element, key: ArrowKey): ArrowOutc
   if (el !== item) return { kind: "inside" };
   const items = [...widget.querySelectorAll('[role="row"], [role="option"]')];
   const beside = items[items.indexOf(item) + (key === "ArrowRight" ? 1 : -1)];
-  if (!(beside instanceof HTMLElement)) return { kind: "edge" };
+  if (!(beside instanceof HTMLElement)) {
+    // A virtualized grid mounts only the rows near the viewport, so no mounted
+    // neighbor does not mean there is none. React Aria sets aria-rowindex (1-based)
+    // on each virtualized row and aria-rowcount on the grid (useGridRow.mjs,
+    // useGrid.mjs). When the true neighbor exists, the grid handles the arrow.
+    return hasUnmountedNeighbor(widget, item, key) ? { kind: "inside" } : { kind: "edge" };
+  }
   const from = item.getBoundingClientRect();
   const to = beside.getBoundingClientRect();
   const sameRow = Math.min(to.bottom, from.bottom) > Math.max(to.top, from.top);
   return sameRow ? { kind: "move", to: beside } : { kind: "edge" };
+}
+
+// Whether the grid holds a row past `item` in the arrow's direction that is
+// not mounted. Rows are numbered in grid order, so the true neighbor is
+// aria-rowindex +/- 1. Without both attributes (a non-virtualized grid) there
+// is no unmounted row to find.
+function hasUnmountedNeighbor(widget: Element, item: Element, key: ArrowKey): boolean {
+  const index = Number(item.getAttribute("aria-rowindex"));
+  const count = Number(widget.getAttribute("aria-rowcount"));
+  if (!Number.isInteger(index) || !Number.isInteger(count) || index < 1) return false;
+  return key === "ArrowRight" ? index < count : index > 1;
 }
 
 // Every element React Aria's tabbable selector can match, before its

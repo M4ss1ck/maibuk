@@ -48,6 +48,13 @@ if (typeof window !== "undefined") {
       }) as unknown as DOMRectList;
   }
 
+  // jsdom has no Element.scrollIntoView; revealing a virtualized row calls it
+  // from an animation frame, where a missing method throws unhandled. Tests
+  // that assert the scroll replace this no-op with their own spy.
+  if (typeof Element !== "undefined" && typeof Element.prototype.scrollIntoView !== "function") {
+    Element.prototype.scrollIntoView = () => {};
+  }
+
   // ProseMirror's scrollIntoView wraps a Text node in a Range; jsdom's Range has
   // no layout methods, so focusing an editor there would throw unhandled.
   if (typeof Range !== "undefined" && typeof Range.prototype.getClientRects !== "function") {
