@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { DragEvent } from "react";
+import type { DragEvent, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { Collection } from "react-aria-components/Collection";
 import {
@@ -8,7 +8,7 @@ import {
   GridListItem,
   GridListSection,
 } from "react-aria-components/GridList";
-import { DropIndicator } from "react-aria-components";
+import { DropIndicator, ListLayout, Virtualizer } from "react-aria-components";
 import { useDragAndDrop } from "react-aria-components/useDragAndDrop";
 import {
   BookOpen,
@@ -68,6 +68,22 @@ import type {
 
 const NOTE_DND_TYPE = "note";
 
+/**
+ * React Aria layout for the list view, sections included (#550). Rows are
+ * variable height, so `estimatedRowSize` only places rows that are not mounted
+ * yet; mounted rows are measured. A section heading is 44px: the 32px label
+ * row plus the 12px gap that the section margin used to give. `gap` and
+ * `padding` replace the former `space-y` and `p-2`.
+ */
+const NOTE_LIST_LAYOUT = {
+  estimatedRowSize: 88,
+  estimatedHeadingSize: 44,
+  headingSize: 44,
+  gap: 0,
+  padding: 8,
+} as const;
+const REVEAL_FRAMES = 3;
+
 type DropPlacement = "before" | "after";
 
 interface DropTarget {
@@ -105,9 +121,10 @@ export function NotesList({
 }: NotesListProps) {
   const { t } = useTranslation();
   const listContainerRef = useRef<HTMLDivElement>(null);
+  // The list view's scroll view is the GridList the Virtualizer scrolls.
+  const gridRef = useRef<HTMLDivElement>(null);
   const newNoteButtonRef = useRef<HTMLButtonElement>(null);
   const activatedNoteIdsRef = useRef(new Set<string>());
-  const autoScroll = useDragAutoScroll(listContainerRef);
   const [search, setSearch] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
@@ -120,13 +137,24 @@ export function NotesList({
   onReorderNotesRef.current = onReorderNotes;
   // The row a Delete was confirmed from, and the row that should take focus
   // once it is gone (next, else previous, else the create control).
-  const deleteFocusRef = useRef<{ row: HTMLElement | null; neighbor: HTMLElement | null }>({
+  const deleteFocusRef = useRef<{ row: HTMLElement | null; neighborId: string | null }>({
     row: null,
-    neighbor: null,
+    neighborId: null,
   });
   const touchDragGuard = useTouchDragFromHandle();
   const viewMode = useSettingsStore((s) => s.notesListView);
   const setViewMode = useSettingsStore((s) => s.setNotesListView);
+  // The scroll view: the GridList in the list view, the wrapper in the tree.
+  // Read at call time, so a drag or a reorder follows the view that is shown.
+  const scrollViewRef = useMemo<RefObject<HTMLElement | null>>(
+    () => ({
+      get current() {
+        return viewMode === "list" ? gridRef.current : listContainerRef.current;
+      },
+    }),
+    [viewMode]
+  );
+  const autoScroll = useDragAutoScroll(scrollViewRef);
   const treeGroupMode = useSettingsStore((s) => s.notesTreeGroupMode);
   const setTreeGroupMode = useSettingsStore((s) => s.setNotesTreeGroupMode);
   const listSort = useSettingsStore((s) => s.notesListSort);
@@ -195,7 +223,7 @@ export function NotesList({
   listSectionsRef.current = listSections;
   // Rows glide to the place a Sort gives them; another view or search just redraws.
   useFlipReorder(
-    listContainerRef,
+    scrollViewRef,
     viewMode === "list"
       ? listSections.flatMap((section) => section.notes.map((note) => note.id))
       : sortNotesBy(filtered, treeSort).map((note) => note.id),
@@ -324,7 +352,6 @@ export function NotesList({
     }
   };
 
-  const gridRef = useRef<HTMLDivElement>(null);
   const [dropTargetDelegate] = useState(() => new SectionedDropTargetDelegate(gridRef));
   const dragHandlers = useParkSelectionWhileDragging({
     onDragStart: (e: { keys: Set<string | number> }) =>
@@ -450,37 +477,89 @@ export function NotesList({
       : [];
   const moveNote = (note: { id: string }, bookId: string | null) =>
     onReassignNoteBook?.(note.id, bookId);
+  const noteRowElement = (id: string): HTMLElement | null =>
+    listContainerRef.current?.querySelector<HTMLElement>(
+      `[role="row"][data-key="${CSS.escape(id)}"]`
+    ) ?? null;
+
+  /** Note ids in the order they are shown: the list's sections, or the tree's rendered rows. */
+  const shownNoteIds = (): string[] =>
+    viewMode === "list"
+      ? listSectionsRef.current.flatMap((section) => section.notes.map((note) => note.id))
+      : [...(listContainerRef.current?.querySelectorAll<HTMLElement>("[data-key]") ?? [])].map(
+          (row) => row.dataset.key ?? ""
+        );
+
+  /** Where the Note at `id` sits by estimate, for a row the Virtualizer has not mounted. */
+  const estimatedNoteTop = (id: string): number | null => {
+    const { padding, gap, headingSize, estimatedRowSize } = NOTE_LIST_LAYOUT;
+    let top = padding;
+    for (const section of listSectionsRef.current) {
+      top += headingSize + gap;
+      for (const note of section.notes) {
+        if (note.id === id) return top;
+        top += estimatedRowSize + gap;
+      }
+    }
+    return null;
+  };
+
+  /**
+   * Runs `onRow` on the row for `id`, once it is mounted. A row the Virtualizer
+   * has not mounted gets the scroll view moved to its estimated offset, then is
+   * checked again on the next frame. The order comes from the data, not the DOM.
+   */
+  const revealNoteRow = (
+    id: string,
+    onRow: (row: HTMLElement) => void,
+    framesLeft = REVEAL_FRAMES
+  ): void => {
+    const row = noteRowElement(id);
+    if (row) {
+      row.scrollIntoView({ block: "nearest" });
+      onRow(row);
+      return;
+    }
+    const top = viewMode === "list" ? estimatedNoteTop(id) : null;
+    const scroll = gridRef.current;
+    if (top === null || !scroll || framesLeft === 0) return;
+    scroll.scrollTop = top;
+    requestAnimationFrame(() => revealNoteRow(id, onRow, framesLeft - 1));
+  };
+
   const requestDelete = onDeleteNote
     ? (id: string) => {
-        const rows = [
-          ...(listContainerRef.current?.querySelectorAll<HTMLElement>("[data-key]") ?? []),
-        ];
-        const index = rows.findIndex((row) => row.dataset.key === id);
+        const order = shownNoteIds();
+        const index = order.indexOf(id);
         deleteFocusRef.current = {
-          row: index === -1 ? null : rows[index],
-          neighbor: index === -1 ? null : (rows[index + 1] ?? rows[index - 1] ?? null),
+          row: noteRowElement(id),
+          neighborId: index === -1 ? null : (order[index + 1] ?? order[index - 1] ?? null),
         };
         setPendingDeleteId(id);
       }
     : undefined;
   const pendingDeleteNote = notes.find((note) => note.id === pendingDeleteId) ?? null;
 
-  // The row that opened the dialog on cancel; the surviving neighbour (or the
-  // create control) once a confirmed delete has removed it.
+  // The row that opened the dialog on cancel. Once a delete is confirmed the
+  // row is gone: the neighbour if it is mounted, else the create control, and
+  // confirmDelete then reveals the neighbour.
   const getDeleteRestoreTarget = () => {
-    const { row, neighbor } = deleteFocusRef.current;
+    const { row, neighborId } = deleteFocusRef.current;
     if (row?.isConnected) return row;
-    if (neighbor?.isConnected) return neighbor;
+    const neighbor = neighborId ? noteRowElement(neighborId) : null;
+    if (neighbor) return neighbor;
     return newNoteButtonRef.current;
   };
 
   const confirmDelete = async () => {
     const id = pendingDeleteId;
     if (!id) return;
-    // The dialog closes when the Note leaves the list, so focus restoration
-    // already sees the row gone and can land on its neighbour.
+    const { neighborId } = deleteFocusRef.current;
     await onDeleteNote?.(id);
     setPendingDeleteId(null);
+    // The neighbour may be off-screen, so it is revealed and focused after the
+    // dialog's own focus restoration has run.
+    if (neighborId) requestAnimationFrame(() => revealNoteRow(neighborId, (row) => row.focus()));
   };
 
   const renderDropIndicator = (note: NoteWithBook, placement: DropPlacement) => {
@@ -802,7 +881,7 @@ export function NotesList({
 
       <div
         ref={listContainerRef}
-        className={`flex-1 overflow-auto transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+        className={`flex min-h-0 flex-1 flex-col overflow-auto transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
         {...touchDragGuard}
         {...(onImportFiles ? dropHandlers : {})}
       >
@@ -815,55 +894,53 @@ export function NotesList({
         ) : viewMode === "tree" ? (
           <div className="pb-2">{renderTreeGroups()}</div>
         ) : (
-          <SectionDropIndicators>
-            <GridList
-              ref={gridRef}
-              aria-label={t("notes.title")}
-              data-focus-pane-entry=""
-              dependencies={[
-                currentNoteId,
-                draggedId,
-                dropTarget,
-                canReorder,
-                onDeleteNote,
-                onDuplicateNote,
-                onRenameNote,
-                books,
-              ]}
-              selectedKeys={currentNoteId ? [currentNoteId] : []}
-              selectionMode="single"
-              selectionBehavior="replace"
-              disallowEmptySelection
-              className="p-2"
-              dragAndDropHooks={dragAndDropHooks}
-            >
-              {listSections.map((section) => (
-                <GridListSection
-                  key={section.id}
-                  id={section.id}
-                  className="mb-3 min-h-8 last:mb-0"
-                >
-                  <GridListHeader>
-                    <div
-                      data-testid={`notes-section-${section.id}`}
-                      data-drop-active={dropTarget?.sectionId === section.id ? "true" : undefined}
-                      onDragOver={(e) => handleSectionDragOver(e, section.id)}
-                      onDrop={(e) => handleSectionDrop(e, section.id)}
-                      className={`min-h-8 rounded-md px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors ${
-                        dropTarget?.sectionId === section.id
-                          ? "bg-primary/10 ring-1 ring-inset ring-primary/40"
-                          : ""
-                      }`}
-                    >
-                      {section.id === "pinned" ? t("notes.sectionPinned") : t("notes.sectionAll")}
-                      {renderSectionAppendIndicator(section.id)}
-                    </div>
-                  </GridListHeader>
-                  <Collection items={section.notes}>{renderNote}</Collection>
-                </GridListSection>
-              ))}
-            </GridList>
-          </SectionDropIndicators>
+          <Virtualizer layout={ListLayout} layoutOptions={NOTE_LIST_LAYOUT}>
+            <SectionDropIndicators>
+              <GridList
+                ref={gridRef}
+                aria-label={t("notes.title")}
+                data-focus-pane-entry=""
+                dependencies={[
+                  currentNoteId,
+                  draggedId,
+                  dropTarget,
+                  canReorder,
+                  onDeleteNote,
+                  onDuplicateNote,
+                  onRenameNote,
+                  books,
+                ]}
+                selectedKeys={currentNoteId ? [currentNoteId] : []}
+                selectionMode="single"
+                selectionBehavior="replace"
+                disallowEmptySelection
+                className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+                dragAndDropHooks={dragAndDropHooks}
+              >
+                {listSections.map((section) => (
+                  <GridListSection key={section.id} id={section.id}>
+                    <GridListHeader>
+                      <div
+                        data-testid={`notes-section-${section.id}`}
+                        data-drop-active={dropTarget?.sectionId === section.id ? "true" : undefined}
+                        onDragOver={(e) => handleSectionDragOver(e, section.id)}
+                        onDrop={(e) => handleSectionDrop(e, section.id)}
+                        className={`min-h-11 rounded-md px-2 pt-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors ${
+                          dropTarget?.sectionId === section.id
+                            ? "bg-primary/10 ring-1 ring-inset ring-primary/40"
+                            : ""
+                        }`}
+                      >
+                        {section.id === "pinned" ? t("notes.sectionPinned") : t("notes.sectionAll")}
+                        {renderSectionAppendIndicator(section.id)}
+                      </div>
+                    </GridListHeader>
+                    <Collection items={section.notes}>{renderNote}</Collection>
+                  </GridListSection>
+                ))}
+              </GridList>
+            </SectionDropIndicators>
+          </Virtualizer>
         )}
       </div>
 

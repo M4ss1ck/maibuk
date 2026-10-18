@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesList } from "@/components/notes/NotesList";
 import { useSettingsStore } from "@/features/settings/store";
 import type { Book } from "@/features/books/types";
@@ -21,6 +21,11 @@ import {
   mockRect,
 } from "@/test/support/drag-events";
 import {
+  mockRowScrollHeight,
+  mockScrollEventOnScrollTopWrite,
+  mockVirtualizerLayout,
+} from "@/test/support/virtualizer-layout";
+import {
   installPointerEvent,
   pointerHitTarget,
   touchLongPress,
@@ -28,6 +33,20 @@ import {
 } from "@/test/support/pointer-events";
 
 installPointerEvent();
+
+// The Notes list is virtualized (#550): a Virtualizer lays rows out from the
+// scroll view's size, which jsdom reports as 0, so no row would mount. Every
+// row here is 88px tall; the long-list suite below narrows the viewport.
+let restoreVirtualizerLayout: () => void = () => {};
+let restoreRowHeight: () => void = () => {};
+beforeAll(() => {
+  restoreVirtualizerLayout = mockVirtualizerLayout();
+  restoreRowHeight = mockRowScrollHeight(88);
+});
+afterAll(() => {
+  restoreRowHeight();
+  restoreVirtualizerLayout();
+});
 
 const { mockParkSelection, mockRestoreSelection } = vi.hoisted(() => ({
   mockParkSelection: vi.fn(),
@@ -1346,24 +1365,6 @@ describe("NotesList item menu", () => {
     );
   }
 
-  async function openDeleteDialog(user: ReturnType<typeof userEvent.setup>, row: HTMLElement) {
-    row.focus();
-    fireEvent.keyDown(row, { key: "F10", shiftKey: true });
-    await screen.findByRole("menu");
-    const remove = screen.getByRole("menuitem", { name: "common.delete" });
-    while (document.activeElement !== remove) await user.keyboard("{ArrowDown}");
-    await user.keyboard("{Enter}");
-    await screen.findByRole("dialog", { name: "notes.deleteConfirm" });
-  }
-
-  async function confirmDelete(user: ReturnType<typeof userEvent.setup>) {
-    const confirm = screen.getByRole("button", { name: "notes.delete" });
-    for (let step = 0; step < 4 && document.activeElement !== confirm; step++) {
-      await user.keyboard("{Tab}");
-    }
-    await user.keyboard("{Enter}");
-  }
-
   it("asks before deleting and deletes only after confirmation", async () => {
     const user = userEvent.setup();
     const props = renderMenuList();
@@ -1601,3 +1602,112 @@ describe("NotesList item menu", () => {
     expect(onCreateNote).toHaveBeenCalledWith("book-a");
   });
 });
+
+// #550: the list view is virtualized, so only rows near the viewport mount.
+const LONG_LIST_SIZE = 500;
+const longNotes = () =>
+  Array.from({ length: LONG_LIST_SIZE }, (_, index) =>
+    buildNote({ id: `n${index}`, title: `Note ${index}`, order: index })
+  );
+const mountedKeys = () =>
+  [...document.querySelectorAll<HTMLElement>('[role="row"][data-key]')].map(
+    (row) => row.dataset.key ?? ""
+  );
+
+/** A controlled 500-note list whose Delete removes the Note. */
+function LongDeleteHarness() {
+  const [notes, setNotes] = useState(longNotes);
+  return (
+    <NotesList
+      notes={notes}
+      currentNoteId={null}
+      onSelectNote={vi.fn()}
+      onCreateNote={vi.fn()}
+      onReorderNotes={vi.fn(async () => {})}
+      onDeleteNote={(id) => setNotes((current) => current.filter((note) => note.id !== id))}
+    />
+  );
+}
+
+describe("virtualized Notes list (#550): small viewport", () => {
+  let restoreSmallLayout: () => void = () => {};
+  let restoreScrollEvents: () => void = () => {};
+
+  beforeAll(() => {
+    // A 400px scroll view fits about five 88px rows.
+    restoreSmallLayout = mockVirtualizerLayout({ height: 400 });
+    restoreScrollEvents = mockScrollEventOnScrollTopWrite();
+  });
+  afterAll(() => {
+    restoreScrollEvents();
+    restoreSmallLayout();
+  });
+
+  it("mounts only the rows near the viewport out of 500", () => {
+    render(<NotesList {...baseProps(longNotes())} />);
+
+    expect(mountedKeys().length).toBeGreaterThan(0);
+    expect(mountedKeys().length).toBeLessThan(50);
+  });
+
+  it("keeps the pinned and all-notes section headers at the top of the list", () => {
+    const notes = [
+      buildNote({ id: "p", title: "Pinned one", pinned: true, order: 0 }),
+      ...longNotes(),
+    ];
+    render(<NotesList {...baseProps(notes)} />);
+
+    expect(screen.getByTestId("notes-section-pinned")).toBeInTheDocument();
+    expect(screen.getByTestId("notes-section-all")).toBeInTheDocument();
+    expect(mountedKeys()).toContain("p");
+  });
+});
+
+describe("virtualized Notes list (#550): delete focus", () => {
+  it("focuses the neighbour of a deleted note even when that neighbour is off-screen", async () => {
+    const user = userEvent.setup();
+    render(<LongDeleteHarness />);
+
+    // The last mounted row sits at the viewport's bottom edge, so the row
+    // after it is not mounted: the case the delete focus has to reveal.
+    const lastMounted = Math.max(...mountedKeys().map((key) => Number(key.slice(1))));
+    const neighbourKey = `n${lastMounted + 1}`;
+    expect(mountedKeys()).not.toContain(neighbourKey);
+
+    const row = document.querySelector<HTMLElement>(`[role="row"][data-key="n${lastMounted}"]`);
+    expect(row).not.toBeNull();
+    await openDeleteDialog(user, row!);
+    await confirmDelete(user);
+
+    await waitFor(() => expect(document.activeElement).toHaveAttribute("data-key", neighbourKey));
+  });
+});
+
+async function openDeleteDialog(user: ReturnType<typeof userEvent.setup>, row: HTMLElement) {
+  row.focus();
+  fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+  await screen.findByRole("menu");
+  const remove = screen.getByRole("menuitem", { name: "common.delete" });
+  while (document.activeElement !== remove) await user.keyboard("{ArrowDown}");
+  await user.keyboard("{Enter}");
+  await screen.findByRole("dialog", { name: "notes.deleteConfirm" });
+}
+
+async function confirmDelete(user: ReturnType<typeof userEvent.setup>) {
+  const confirm = screen.getByRole("button", { name: "notes.delete" });
+  for (let step = 0; step < 4 && document.activeElement !== confirm; step++) {
+    await user.keyboard("{Tab}");
+  }
+  await user.keyboard("{Enter}");
+}
+
+function baseProps(notes: Note[]): Parameters<typeof NotesList>[0] {
+  return {
+    notes,
+    currentNoteId: null,
+    onSelectNote: vi.fn(),
+    onCreateNote: vi.fn(),
+    onReorderNotes: vi.fn(async () => {}),
+    onDeleteNote: vi.fn(),
+  };
+}
