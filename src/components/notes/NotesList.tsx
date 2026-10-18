@@ -71,16 +71,21 @@ const NOTE_DND_TYPE = "note";
 /**
  * React Aria layout for the list view, sections included (#550). Rows are
  * variable height, so `estimatedRowSize` only places rows that are not mounted
- * yet; mounted rows are measured. A section heading is 44px: the 32px label
- * row plus the 12px gap that the section margin used to give. `gap` and
- * `padding` replace the former `space-y` and `p-2`.
+ * yet; mounted rows are measured.
+ *
+ * A section heading is 44px: a 12px top inset (`pt-3` on the header) above the
+ * 32px label row, which is where the section gap sits. ListLayout gives every
+ * heading the same box, so the first label's position fixes `padding`: the
+ * label must sit 8px down as on main, so the padding is -4px (8 - 12). The
+ * GridList's `pb-3` restores the 12px that the negative padding takes off the
+ * bottom. `gap` stays 0 because it would also space the rows.
  */
 const NOTE_LIST_LAYOUT = {
   estimatedRowSize: 88,
   estimatedHeadingSize: 44,
   headingSize: 44,
   gap: 0,
-  padding: 8,
+  padding: -4,
 } as const;
 const REVEAL_FRAMES = 3;
 
@@ -401,7 +406,7 @@ export function NotesList({
         target={target}
         className={({ isDropTarget }) =>
           isDropTarget
-            ? "mx-2 my-1 block h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_var(--color-primary)]"
+            ? "mx-5 my-1 block h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_var(--color-primary)]"
             : "h-0"
         }
       />
@@ -594,7 +599,7 @@ export function NotesList({
       textValue={note.title || t("notes.untitled")}
       onAction={() => activateNote(note)}
       className={({ isFocusVisible }) =>
-        `rounded-md ${isFocusVisible ? "ring-2 ring-primary ring-offset-1" : ""}`
+        `mx-3 rounded-md ${isFocusVisible ? "ring-2 ring-primary ring-offset-1" : ""}`
       }
     >
       {renderDropIndicator(note, "before")}
@@ -914,7 +919,7 @@ export function NotesList({
                 selectionMode="single"
                 selectionBehavior="replace"
                 disallowEmptySelection
-                className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+                className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-3"
                 dragAndDropHooks={dragAndDropHooks}
               >
                 {listSections.map((section) => (
@@ -925,7 +930,7 @@ export function NotesList({
                         data-drop-active={dropTarget?.sectionId === section.id ? "true" : undefined}
                         onDragOver={(e) => handleSectionDragOver(e, section.id)}
                         onDrop={(e) => handleSectionDrop(e, section.id)}
-                        className={`min-h-11 rounded-md px-2 pt-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors ${
+                        className={`mx-3 min-h-11 rounded-md px-2 pt-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors ${
                           dropTarget?.sectionId === section.id
                             ? "bg-primary/10 ring-1 ring-inset ring-primary/40"
                             : ""
