@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-10-18
+
+### Added
+- Sort control for the Notes sidebar, shared with the Gallery, with Custom Order, A to Z, Z to A, and Last Edited (newest or oldest first)
+- Arrow grip indicator so the Custom Order sort option reads as a sort
+- Echo highlight colors assigned per Echo, using an adapted Okabe-Ito palette
+- Palette dropdown for Echo highlights with Okabe-Ito, Vivid, and Soft palettes
+- Persisted "Toggle echo highlights" switch that stays on across editors, restarts, and Plugin stops
+- Toolbar icon for Echoes drawn from inline SVG elements
+- Plugin manifest icons may use inline SVG elements on a 24x24 grid
+- Plugin Select options may display up to 12 decorative swatch colors
+
+### Changed
+- Plugin API updated to 0.1.1, with Echoes declaring `^0.1.1` and version 0.2.0
+
+### Fixed
+- Pointer cursor now appears on Book, Note, and Canvas gallery cards, and Canvas cards deepen their shadow on hover instead of lifting
+- Spelling context menu no longer crashes the app when suggestion items change
+- Echoes highlights work before the caret is placed and in the Ephemeral editor
+- Echo highlights toggle reliably on the first click after a cold start
+- Echoes report rows always show the word, with a full-text tooltip on hover or keyboard focus
+
 ## [0.12.0] - 2026-10-17
 
 ### Added
