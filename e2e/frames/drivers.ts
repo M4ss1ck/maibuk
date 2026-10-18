@@ -14,12 +14,10 @@ import {
   type FramePage,
   boundingBox,
   isFocused,
-  isFocusWithin,
   pressUntilFocused,
   tabTo,
   waitAttribute,
   waitCount,
-  waitFocusWithin,
   waitFocused,
   waitHidden,
   waitVisible,
@@ -309,9 +307,13 @@ const chapterRow = (page: FramePage, title: string) =>
 
 /** Focuses Log 1's Reorder button from the Chapter list. */
 async function focusFirstReorder(page: FramePage): Promise<FrameLocator> {
-  // The list is one Tab stop; its row buttons are reached by ArrowRight.
-  await tabTo(page, chapterGrid(page).getByRole("row", { selected: true }), { max: 40 });
-  await page.keyboard.press("Home");
+  // Tab from the editor (Indent) and from the pane (WebKit, which lands on the
+  // Chapter list pane itself) never reaches the grid's one Tab stop in this
+  // probe, so the selected row is focused directly (#551).
+  await chapterGrid(page).getByRole("row", { selected: true }).evaluate((row) =>
+    (row as HTMLElement).focus()
+  );
+  await page.keyboard.press("Control+Home");
   await waitFocused(chapterRow(page, "Log 1"));
   const handle = chapterRow(page, "Log 1").getByRole("button", { name: "Reorder" });
   await pressUntilFocused(page, "ArrowRight", handle, { max: 6 });
