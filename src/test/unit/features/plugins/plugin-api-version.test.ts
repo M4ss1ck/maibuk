@@ -65,13 +65,13 @@ describe("Plugin API patch compatibility (ADR 0029)", () => {
     });
   });
 
-  it("the Echoes manifest is 0.3.0 and needs Plugin API ^0.1.2", () => {
+  it("the Echoes manifest is 0.4.0 and needs Plugin API ^0.1.2", () => {
     const text = readFileSync(
       join(process.cwd(), "plugins", "maibuk-echoes", "manifest.json"),
       "utf8"
     );
     const json = JSON.parse(text) as { version: string; apiVersion: string };
-    expect(json.version).toBe("0.3.0");
+    expect(json.version).toBe("0.4.0");
     expect(json.apiVersion).toBe("^0.1.2");
   });
 });
