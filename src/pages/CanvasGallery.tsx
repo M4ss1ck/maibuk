@@ -101,7 +101,7 @@ export function CanvasGallery() {
             <GridListItem
               id={canvas.id}
               textValue={canvas.title || t("canvas.untitled")}
-              className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <CanvasCard
                 tutorialAnchor={

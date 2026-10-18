@@ -59,7 +59,7 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
       onPress={onPress}
       style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
       className={({ isFocusVisible, isFocused, isHovered, isPressed }) =>
-        `book-card-enter group relative flex flex-col bg-card border rounded-xl overflow-hidden transition-all duration-200 text-left w-full ${
+        `book-card-enter group relative flex cursor-pointer flex-col bg-card border rounded-xl overflow-hidden transition-all duration-200 text-left w-full ${
           isFocusVisible
             ? "ring-2 ring-primary ring-offset-2"
             : isFocused

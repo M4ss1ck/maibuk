@@ -73,7 +73,7 @@ export function CanvasCard({
             <Network className="size-5 shrink-0 text-primary" aria-hidden="true" />
             <input
               autoFocus
-              className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-sm font-medium outline-none focus:border-primary"
+              className="min-w-0 flex-1 cursor-text rounded-lg border border-border bg-background px-2 py-1 text-sm font-medium outline-none focus:border-primary"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleRenameKeyDown}
