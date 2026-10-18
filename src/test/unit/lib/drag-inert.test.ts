@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { inertEditorOutside } from "@/lib/drag-inert";
+import { dragStartedByKeyboard, inertEditorOutside } from "@/lib/drag-inert";
 
 // jsdom has no `inert` reflection; the attribute is what browsers honour and
 // what park-selection's `closest("[inert]")` reads, so tests use the attribute.
@@ -89,5 +89,19 @@ describe("inertEditorOutside()", () => {
     shield.setAttribute("inert", "");
     release();
     expect(shield.hasAttribute("inert")).toBe(true);
+  });
+});
+
+describe("dragStartedByKeyboard()", () => {
+  it("is false when the last input was a pointer press after a key press", () => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    document.dispatchEvent(new Event("pointerdown"));
+    expect(dragStartedByKeyboard()).toBe(false);
+  });
+
+  it("is true when the last input was a key press after a pointer press", () => {
+    document.dispatchEvent(new Event("pointerdown"));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(dragStartedByKeyboard()).toBe(true);
   });
 });

@@ -97,13 +97,34 @@ describe("attributeKeyPresses", () => {
       [at(250), at(300), at(399), at(450), at(9000)],
       inputs
     );
+    // Each frame runs from its start to start + 90 ms; the press it is named
+    // after is the latest one at or before that end.
     expect(labelled.map((frame) => frame.afterKeyPress)).toEqual([
-      "ArrowDown #1",
       "ArrowDown #2",
       "ArrowDown #2",
       "ArrowUp #1",
       "Escape #1",
+      "Escape #1",
     ]);
+  });
+
+  it("labels a frame that started before a press and ran into it by that press", () => {
+    const inputs = [{ atMs: 300, nextFrameMs: 310, key: "ArrowDown" }];
+    const [overlapping, after, before] = attributeKeyPresses(
+      [at(250), at(305), at(100)],
+      inputs
+    );
+    expect(overlapping.afterKeyPress).toBe("ArrowDown #1");
+    expect(after.afterKeyPress).toBe("ArrowDown #1");
+    expect(before.afterKeyPress).toBeUndefined();
+  });
+
+  it("does not label a frame that ends before the press", () => {
+    const [frame] = attributeKeyPresses(
+      [at(100)],
+      [{ atMs: 191, nextFrameMs: 200, key: "Enter" }]
+    );
+    expect(frame.afterKeyPress).toBeUndefined();
   });
 
   it("leaves a frame before the first press unlabelled, and an unkeyed input unlabelled too", () => {

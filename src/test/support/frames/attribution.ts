@@ -71,9 +71,11 @@ export function resolveLongFrameSources(
 }
 
 /**
- * Names each long frame after the key press that preceded it: the latest
- * keystroke at or before the frame's start, labelled "ArrowDown #7" for the
- * seventh ArrowDown of the window. A frame with no earlier press keeps no label.
+ * Names each long frame after the key press whose window overlaps it: the
+ * latest keystroke at or before the frame's end, labelled "ArrowDown #7" for
+ * the seventh ArrowDown of the window. A press that lands inside a frame
+ * (the frame started before it) counts, because the frame runs its handler.
+ * A frame with no press at or before its end keeps no label.
  */
 export function attributeKeyPresses(
   frames: LongAnimationFrame[],
@@ -89,9 +91,10 @@ export function attributeKeyPresses(
     return { atMs: press.atMs, label: `${press.key} #${count}` };
   });
   return frames.map((frame) => {
+    const end = frame.startMs + frame.durationMs;
     let before: { atMs: number; label: string } | undefined;
     for (const press of labelled) {
-      if (press.atMs > frame.startMs) break;
+      if (press.atMs > end) break;
       before = press;
     }
     return before ? { ...frame, afterKeyPress: before.label } : frame;
