@@ -37,6 +37,7 @@ import { Button as AriaButton } from "react-aria-components/Button";
 import { useDragAndDrop } from "react-aria-components/useDragAndDrop";
 import { useItemContextMenu, useTouchDragFromHandle } from "@/hooks/useItemContextMenu";
 import { useParkSelectionWhileDragging } from "@/hooks/useParkSelectionWhileDragging";
+import { revealVirtualRow } from "@/lib/reveal-virtual-row";
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -60,72 +61,26 @@ interface ChapterListProps {
 const CHAPTER_DND_TYPE = "chapter";
 
 /**
- * React Aria layout for the Chapter list, one entry per density. Rows are
- * variable height (the expandable outline), so `estimatedRowSize` only places
- * rows that are not mounted yet; the mounted rows are measured. `gap` and
- * `padding` replace the former `space-y-1` and `p-2` on the list.
+ * Estimated row height per density, used only to place a row the Virtualizer has
+ * not mounted yet: rows are variable height (the expandable outline) and are
+ * measured once mounted. 72 is a normal row, 40 a compact one.
+ */
+export const CHAPTER_ROW_ESTIMATE = { normal: 72, compact: 40 } as const;
+
+/**
+ * React Aria layout for the Chapter list, one entry per density. `gap` and
+ * `padding` replace the former `space-y-1` and `p-2` on the list (4px between
+ * rows, 8px around them).
  */
 const CHAPTER_LAYOUT_OPTIONS = {
-  normal: { estimatedRowSize: 72, gap: 4, padding: 8 },
-  compact: { estimatedRowSize: 40, gap: 4, padding: 8 },
+  normal: { estimatedRowSize: CHAPTER_ROW_ESTIMATE.normal, gap: 4, padding: 8 },
+  compact: { estimatedRowSize: CHAPTER_ROW_ESTIMATE.compact, gap: 4, padding: 8 },
 } as const;
 
 /** Where the Chapter at `index` sits by estimate, for a row that is not mounted. */
 function estimatedChapterTop(index: number, compact: boolean): number {
   const { estimatedRowSize, gap, padding } = CHAPTER_LAYOUT_OPTIONS[compact ? "compact" : "normal"];
   return padding + index * (estimatedRowSize + gap);
-}
-
-const REVEAL_FRAMES = 3;
-
-/**
- * Runs `onRow` once the row for `id` is mounted. The Virtualizer mounts only the
- * rows near the viewport, so a missing row gets the scroll view moved to its
- * estimated offset, then is checked again on the next frame. The chapter order
- * comes from the data (`indexOf`), not the DOM. `onMissing` runs when the row
- * never mounts.
- */
-function revealChapterRow({
-  getList,
-  indexOf,
-  compact,
-  id,
-  onRow,
-  onMissing,
-  framesLeft = REVEAL_FRAMES,
-}: {
-  getList: () => HTMLElement | null;
-  indexOf: (id: string) => number;
-  compact: boolean;
-  id: string;
-  onRow: (row: HTMLElement) => void;
-  onMissing?: () => void;
-  framesLeft?: number;
-}): void {
-  const list = getList();
-  const row = list?.querySelector<HTMLElement>(`[data-key="${CSS.escape(id)}"]`) ?? null;
-  if (row) {
-    row.scrollIntoView({ block: "nearest" });
-    onRow(row);
-    return;
-  }
-  const index = indexOf(id);
-  if (!list || index < 0 || framesLeft === 0) {
-    onMissing?.();
-    return;
-  }
-  list.scrollTop = estimatedChapterTop(index, compact);
-  requestAnimationFrame(() =>
-    revealChapterRow({
-      getList,
-      indexOf,
-      compact,
-      id,
-      onRow,
-      onMissing,
-      framesLeft: framesLeft - 1,
-    })
-  );
 }
 
 /**
@@ -250,16 +205,53 @@ export function ChapterList({
   const isCompactRef = useRef(isCompactView);
   isCompactRef.current = isCompactView;
 
-  /** Reveals the Chapter row for `id`, then runs `onRow` on it. See revealChapterRow. */
-  const revealChapter = (id: string, onRow: (row: HTMLElement) => void, onMissing?: () => void) =>
-    revealChapterRow({
-      getList: () => listContainerRef.current,
-      indexOf: (key) => chaptersRef.current.findIndex((chapter) => chapter.id === key),
-      compact: isCompactRef.current,
+  // One reveal in flight at a time: a newer one, or unmount, cancels the pending frames.
+  const revealCancelRef = useRef<(() => void) | null>(null);
+  // Frames for one-shot focus moves; cancelled on unmount so none focuses a gone row.
+  const focusFramesRef = useRef(new Set<number>());
+
+  useEffect(() => {
+    const frames = focusFramesRef.current;
+    return () => {
+      revealCancelRef.current?.();
+      for (const frame of frames) cancelAnimationFrame(frame);
+      frames.clear();
+    };
+  }, []);
+
+  const onNextFrame = (fn: () => void) => {
+    const frame = requestAnimationFrame(() => {
+      focusFramesRef.current.delete(frame);
+      fn();
+    });
+    focusFramesRef.current.add(frame);
+  };
+
+  /** Starts a reveal of the Chapter row for `id`; the returned fn cancels it. */
+  const startChapterReveal = (
+    id: string,
+    onRow: (row: HTMLElement) => void,
+    onMissing?: () => void
+  ): (() => void) =>
+    revealVirtualRow({
+      getScroll: () => listContainerRef.current,
+      findRow: (key) =>
+        listContainerRef.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`) ??
+        null,
+      estimatedTop: (key) => {
+        const index = chaptersRef.current.findIndex((chapter) => chapter.id === key);
+        return index < 0 ? null : estimatedChapterTop(index, isCompactRef.current);
+      },
       id,
       onRow,
       onMissing,
     });
+
+  /** A focus-driven reveal supersedes the one before it. */
+  const revealChapter = (id: string, onRow: (row: HTMLElement) => void, onMissing?: () => void) => {
+    revealCancelRef.current?.();
+    revealCancelRef.current = startChapterReveal(id, onRow, onMissing);
+  };
 
   // Bring the selected Chapter into view on open and when the selection changes.
   useEffect(() => {
@@ -270,13 +262,7 @@ export function ChapterList({
       return;
     }
     if (currentChapterId === null) return;
-    revealChapterRow({
-      getList: () => listContainerRef.current,
-      indexOf: (key) => chaptersRef.current.findIndex((chapter) => chapter.id === key),
-      compact: isCompactRef.current,
-      id: currentChapterId,
-      onRow: () => {},
-    });
+    return startChapterReveal(currentChapterId, () => {});
   }, [currentChapterId, chapters.length]);
   const activatedKeysRef = useRef(new Set<Key>());
   const [activeReactAriaImports, setActiveReactAriaImports] = useState(0);
@@ -382,19 +368,19 @@ export function ChapterList({
   const closeNewDialog = () => {
     setShowNewDialog(false);
     // The form is inline: without this the focused input unmounts to <body>.
-    requestAnimationFrame(() => addButtonRef.current?.focus());
+    onNextFrame(() => addButtonRef.current?.focus());
   };
 
   /** Returns focus to a Chapter row after an inline form closes. */
   const focusChapterRow = (id: string) => {
-    requestAnimationFrame(() => revealChapter(id, (row) => row.focus()));
+    onNextFrame(() => revealChapter(id, (row) => row.focus()));
   };
 
   const openDeleteConfirm = (id: string) => {
     setDeleteConfirmId(id);
     // The confirmation covers the row: focus its safe action, not the button
     // it is covering.
-    requestAnimationFrame(() => cancelDeleteButtonRefs.current.get(id)?.focus());
+    onNextFrame(() => cancelDeleteButtonRefs.current.get(id)?.focus());
   };
 
   const handleDelete = (id: string) => {
@@ -403,7 +389,7 @@ export function ChapterList({
       chaptersRef.current[chapterIndex + 1] ?? chaptersRef.current[chapterIndex - 1];
     onDeleteChapter(id);
     setDeleteConfirmId(null);
-    requestAnimationFrame(() => {
+    onNextFrame(() => {
       if (!focusChapter) {
         addButtonRef.current?.focus();
         return;
@@ -420,7 +406,7 @@ export function ChapterList({
     setDeleteConfirmId(null);
     // Back to whichever control started the delete: the hover icon with a mouse,
     // the Item Menu button on touch.
-    requestAnimationFrame(() => {
+    onNextFrame(() => {
       const isTouch = window.matchMedia?.("(pointer: coarse)").matches;
       revealChapter(id, (row) => {
         const target = isTouch

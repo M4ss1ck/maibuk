@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { Collection } from "react-aria-components/Collection";
@@ -46,6 +46,7 @@ import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
 import { useFlipReorder } from "@/hooks/useFlipReorder";
 import { useSettingsStore } from "@/features/settings/store";
 import { useShortcuts } from "@/lib/shortcuts";
+import { revealVirtualRow } from "@/lib/reveal-virtual-row";
 import { tagColor } from "@/components/notes/tagColor";
 import {
   buildBookNoteGroups,
@@ -68,26 +69,35 @@ import type {
 
 const NOTE_DND_TYPE = "note";
 
+/** Estimated height of a Note row, used only to place a row the Virtualizer has not mounted. */
+export const NOTE_ROW_ESTIMATE = 88;
+
+/** Height of a section heading: a 12px top inset (`pt-3`) above the 32px label row. */
+export const NOTE_HEADING_SIZE = 44;
+
+/**
+ * Bottom inset of the GridList (`pb-3`, 12px). The list layout's negative
+ * padding takes this much off the top, so the GridList restores it at the bottom.
+ */
+export const NOTE_GRID_BOTTOM_INSET = 12;
+
 /**
  * React Aria layout for the list view, sections included (#550). Rows are
  * variable height, so `estimatedRowSize` only places rows that are not mounted
  * yet; mounted rows are measured.
  *
- * A section heading is 44px: a 12px top inset (`pt-3` on the header) above the
- * 32px label row, which is where the section gap sits. ListLayout gives every
- * heading the same box, so the first label's position fixes `padding`: the
- * label must sit 8px down as on main, so the padding is -4px (8 - 12). The
- * GridList's `pb-3` restores the 12px that the negative padding takes off the
- * bottom. `gap` stays 0 because it would also space the rows.
+ * ListLayout gives every heading the same box, so the first label's position
+ * fixes `padding`: the label must sit 8px down as on main, so the padding is
+ * -4px (8 - 12, the heading inset). Keep the GridList's
+ * `pb-3` in step with NOTE_GRID_BOTTOM_INSET. `gap` stays 0 because it would
+ * also space the rows.
  */
 const NOTE_LIST_LAYOUT = {
-  estimatedRowSize: 88,
-  estimatedHeadingSize: 44,
-  headingSize: 44,
+  estimatedRowSize: NOTE_ROW_ESTIMATE,
+  headingSize: NOTE_HEADING_SIZE,
   gap: 0,
   padding: -4,
 } as const;
-const REVEAL_FRAMES = 3;
 
 type DropPlacement = "before" | "after";
 
@@ -497,6 +507,7 @@ export function NotesList({
 
   /** Where the Note at `id` sits by estimate, for a row the Virtualizer has not mounted. */
   const estimatedNoteTop = (id: string): number | null => {
+    if (viewMode !== "list") return null;
     const { padding, gap, headingSize, estimatedRowSize } = NOTE_LIST_LAYOUT;
     let top = padding;
     for (const section of listSectionsRef.current) {
@@ -509,27 +520,42 @@ export function NotesList({
     return null;
   };
 
+  // One reveal in flight at a time; a newer one, or unmount, cancels the pending frames.
+  const revealCancelRef = useRef<(() => void) | null>(null);
+  const focusFramesRef = useRef(new Set<number>());
+
+  useEffect(() => {
+    const frames = focusFramesRef.current;
+    return () => {
+      revealCancelRef.current?.();
+      for (const frame of frames) cancelAnimationFrame(frame);
+      frames.clear();
+    };
+  }, []);
+
+  /** Runs `fn` on the next frame, unless unmount cancels it first. */
+  const onNextFrame = (fn: () => void) => {
+    const frame = requestAnimationFrame(() => {
+      focusFramesRef.current.delete(frame);
+      fn();
+    });
+    focusFramesRef.current.add(frame);
+  };
+
   /**
-   * Runs `onRow` on the row for `id`, once it is mounted. A row the Virtualizer
-   * has not mounted gets the scroll view moved to its estimated offset, then is
-   * checked again on the next frame. The order comes from the data, not the DOM.
+   * Runs `onRow` on the row for `id` once it is mounted, scrolling a row the
+   * Virtualizer has not mounted into place first. The order comes from the data,
+   * not the DOM. A newer reveal supersedes this one.
    */
-  const revealNoteRow = (
-    id: string,
-    onRow: (row: HTMLElement) => void,
-    framesLeft = REVEAL_FRAMES
-  ): void => {
-    const row = noteRowElement(id);
-    if (row) {
-      row.scrollIntoView({ block: "nearest" });
-      onRow(row);
-      return;
-    }
-    const top = viewMode === "list" ? estimatedNoteTop(id) : null;
-    const scroll = gridRef.current;
-    if (top === null || !scroll || framesLeft === 0) return;
-    scroll.scrollTop = top;
-    requestAnimationFrame(() => revealNoteRow(id, onRow, framesLeft - 1));
+  const revealNoteRow = (id: string, onRow: (row: HTMLElement) => void): void => {
+    revealCancelRef.current?.();
+    revealCancelRef.current = revealVirtualRow({
+      getScroll: () => gridRef.current,
+      findRow: noteRowElement,
+      estimatedTop: estimatedNoteTop,
+      id,
+      onRow,
+    });
   };
 
   const requestDelete = onDeleteNote
@@ -564,7 +590,7 @@ export function NotesList({
     setPendingDeleteId(null);
     // The neighbour may be off-screen, so it is revealed and focused after the
     // dialog's own focus restoration has run.
-    if (neighborId) requestAnimationFrame(() => revealNoteRow(neighborId, (row) => row.focus()));
+    if (neighborId) onNextFrame(() => revealNoteRow(neighborId, (row) => row.focus()));
   };
 
   const renderDropIndicator = (note: NoteWithBook, placement: DropPlacement) => {
