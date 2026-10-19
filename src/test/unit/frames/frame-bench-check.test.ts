@@ -87,6 +87,17 @@ describe("the frozen frame budget", () => {
     // Keystroke echo through a Plugin is bench:plugins' remoteUiEcho row.
     expect(budgetFor("plugin-remote-ui")).toEqual(budgetFor("scroll"));
   });
+
+  it("judges the arrow leaves' excluded focus cost from keypress to next frame", () => {
+    for (const id of ["arrow-leave-notes", "arrow-leave-chapters"]) {
+      expect(budgetFor(id)).toMatchObject({
+        handlerP95Ms: 2,
+        minHandlerSamples: 10,
+        inputP95Intervals: 1,
+        minInputs: 10,
+      });
+    }
+  });
 });
 
 describe("checkFrameBench()", () => {

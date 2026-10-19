@@ -2,7 +2,7 @@
 // focus lands when F6 or an arrow enters one (ADR 0025 rule 8).
 import { getFocusableTreeWalker } from "react-aria/private/focus/FocusScope";
 import { isOutsideLayer } from "@/lib/top-layer";
-import { landOn, stopsIn } from "@/lib/arrow-navigation/stops";
+import { type BeforeFocus, landOn, stopsIn } from "@/lib/arrow-navigation/stops";
 
 /** Matches every Pane container. */
 export const PANE_SELECTOR = "[data-focus-pane]";
@@ -72,8 +72,16 @@ export function installPaneMemory(): () => void {
 
 // A remembered control may since have been removed, hidden, or disabled;
 // focus() on it then does nothing, which is how a stale memory is detected.
-function tryFocus(el: HTMLElement | undefined, pane: HTMLElement): boolean {
+function tryFocus(
+  el: HTMLElement | undefined,
+  pane: HTMLElement,
+  beforeFocus?: BeforeFocus
+): boolean {
   if (!el || !el.isConnected || !pane.contains(el) || isOutsideLayer(el)) return false;
+  // The remembered control is only known to be usable once focus() takes.
+  // A timed sample stops here, before this first focus() call; the rare
+  // fallback after a stale memory then goes unmeasured (issue #564).
+  beforeFocus?.();
   el.focus();
   return document.activeElement === el;
 }
@@ -85,26 +93,31 @@ function tryFocus(el: HTMLElement | undefined, pane: HTMLElement): boolean {
  * `except` is never a landing spot: a control leaving for its own Pane's
  * content (a resize handle on Escape) passes itself.
  */
-export function landInPane(pane: HTMLElement, except?: HTMLElement): void {
+export function landInPane(
+  pane: HTMLElement,
+  except?: HTMLElement,
+  beforeFocus?: BeforeFocus
+): void {
   const allowed = (candidate: Element) => candidate !== except && isOwnedBy(candidate, pane);
   const last = lastFocused.get(pane);
-  if (last !== except && tryFocus(last, pane)) return;
+  if (last !== except && tryFocus(last, pane, beforeFocus)) return;
   const entry = [...pane.querySelectorAll<HTMLElement>("[data-focus-pane-entry]")].find(
     (candidate) => allowed(candidate) && !isOutsideLayer(candidate)
   );
   if (entry) {
-    landOn(entry);
+    landOn(entry, beforeFocus);
     return;
   }
   const stop = stopsIn(pane).find(allowed);
   if (stop) {
-    landOn(stop);
+    landOn(stop, beforeFocus);
     return;
   }
   const walker = getFocusableTreeWalker(pane, { tabbable: true });
   walker.currentNode = pane;
   let first = walker.nextNode();
   while (first && !allowed(first as Element)) first = walker.nextNode();
+  beforeFocus?.();
   (first instanceof HTMLElement ? first : pane).focus();
 }
 

@@ -60,21 +60,29 @@ export const FRAME_BUDGETS: Readonly<Record<string, ScenarioBudget>> = {
     },
   },
   "arrow-leave-notes": {
-    overrides: { handlerP95Ms: 2, minHandlerSamples: 10 },
+    overrides: { handlerP95Ms: 2, minHandlerSamples: 10, inputP95Intervals: 1, minInputs: 10 },
     reasons: {
       handlerP95Ms:
-        "keyboard arrow navigation plan, criterion 11: an arrow that leaves a widget finds its target in under 2 ms at p95, with 500 Notes in the list",
+        "issue #564: target finding, focus change excluded; keyboard arrow navigation plan, criterion 11: an arrow that leaves a widget finds its target in under 2 ms at p95, with 500 Notes in the list",
       minHandlerSamples:
         "half the twenty leaves of one run, so a driver that stopped leaving the list is not-measured",
+      inputP95Intervals:
+        "issue #564: the focus change excluded from handler time is judged here, keypress to next frame",
+      minInputs:
+        "half the twenty leaves of one run, so a driver whose arrow presses never land is not-measured",
     },
   },
   "arrow-leave-chapters": {
-    overrides: { handlerP95Ms: 2, minHandlerSamples: 10 },
+    overrides: { handlerP95Ms: 2, minHandlerSamples: 10, inputP95Intervals: 1, minInputs: 10 },
     reasons: {
       handlerP95Ms:
-        "keyboard arrow navigation plan, criterion 11: an arrow that leaves a widget finds its target in under 2 ms at p95, with 100 Chapters in the list",
+        "issue #564: target finding, focus change excluded; keyboard arrow navigation plan, criterion 11: an arrow that leaves a widget finds its target in under 2 ms at p95, with 100 Chapters in the list",
       minHandlerSamples:
         "half the twenty leaves of one run, so a driver that stopped leaving the list is not-measured",
+      inputP95Intervals:
+        "issue #564: the focus change excluded from handler time is judged here, keypress to next frame",
+      minInputs:
+        "half the twenty leaves of one run, so a driver whose arrow presses never land is not-measured",
     },
   },
   "pane-slide": { overrides: {}, reasons: {} },
