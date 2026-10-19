@@ -1,5 +1,6 @@
 import {
   useCallback,
+  memo,
   useEffect,
   useMemo,
   useRef,
@@ -78,7 +79,14 @@ const LIST_LAYOUT_OPTIONS = { estimatedRowSize: 32, estimatedHeadingSize: 22, pa
 
 function OpenCommandPalette() {
   const { t, i18n } = useTranslation();
-  const close = useCommandPaletteStore((state) => state.close);
+  const storeClose = useCommandPaletteStore((state) => state.close);
+  const close = useCallback(() => {
+    if (typeof requestAnimationFrame !== "undefined") {
+      requestAnimationFrame(() => storeClose());
+    } else {
+      storeClose();
+    }
+  }, [storeClose]);
   const snapshot = useCommandPaletteStore((state) => state.snapshot);
   const customVoice = useShortcutSettingsStore((state) => state.shortcuts.voice);
   const recentKeys = useCommandPaletteRecentStore((state) => state.keys);
@@ -86,6 +94,8 @@ function OpenCommandPalette() {
   const removeRecent = useCommandPaletteRecentStore((state) => state.remove);
   const pruneRecent = useCommandPaletteRecentStore((state) => state.prune);
   const [query, setQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [page, setPage] = useState<PalettePage>("root");
   const [announcement, setAnnouncement] = useState("");
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -173,8 +183,8 @@ function OpenCommandPalette() {
   }, [entitiesLoaded, index, pruneRecent, recentKeys]);
 
   const sections = useMemo(
-    () => searchPalette(index, { query, page, recent: recentKeys, openBookId }),
-    [index, query, page, recentKeys, openBookId]
+    () => searchPalette(index, { query: searchQuery, page, recent: recentKeys, openBookId }),
+    [index, searchQuery, page, recentKeys, openBookId]
   );
   const flatResults = useMemo(() => sections.flatMap((section) => section.results), [sections]);
   const count = flatResults.length;
@@ -225,16 +235,18 @@ function OpenCommandPalette() {
     activeKey !== null && recentKeySet.has(activeKey)
   );
 
-  const removeByKey = (key: string) => {
+  const removeByKey = useCallback((key: string) => {
     removalRef.current = true;
     setAnnouncement(t("commandPalette.removedFromRecent"));
     removeRecent(key);
-  };
+  }, [t, removeRecent]);
 
   const changeQuery = (value: string) => {
     // Typing after a removal that changed no count: the next count is news.
     removalRef.current = false;
     setQuery(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setSearchQuery(value), 150);
   };
 
   const removeActiveRecent = () => {
@@ -290,6 +302,8 @@ function OpenCommandPalette() {
   const enterPage = (next: PalettePage) => {
     setPage(next);
     setQuery("");
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    setSearchQuery("");
   };
 
   /**
@@ -332,7 +346,7 @@ function OpenCommandPalette() {
     })();
   };
 
-  const choose = (item: PaletteItem) => {
+  const choose = useCallback((item: PaletteItem) => {
     if (item.state === "disabled") return;
     if (item.kind === "page") {
       // A page is not a destination: it narrows the list and stays open.
@@ -363,7 +377,33 @@ function OpenCommandPalette() {
       const outcome = await runCommand(id, { source: "palette" });
       if (outcome !== "ran") toast.info(t("commandPalette.unavailable"));
     })();
-  };
+  }, [t, navigate, location, recordRecent, close]);
+
+  const renderedSections = useMemo(
+    () =>
+      sections.map((section, sectionIndex) => (
+        <ListBoxSection key={section.id} id={section.id}>
+          <Header
+            className={`mx-1.5 px-2 pt-0.5 text-right text-[11px] text-muted-foreground ${
+              sectionIndex === 0 ? "" : "mt-1 border-t border-border"
+            }`}
+          >
+            {t(`commandPalette.sections.${section.id}`)}
+          </Header>
+          {section.results.map((result) => (
+            <PaletteRow
+              key={result.item.key}
+              result={result}
+              isRecent={section.id === "recent"}
+              mac={mac}
+              onChoose={choose}
+              onRemoveRecent={removeByKey}
+            />
+          ))}
+        </ListBoxSection>
+      )),
+    [sections, mac, choose, removeByKey, t]
+  );
 
   const chipLabel = page === "root" ? null : t(`commandPalette.chips.${page}`);
 
@@ -409,28 +449,7 @@ function OpenCommandPalette() {
               aria-label={t("commandPalette.resultsLabel")}
               className="scrollbar-themed max-h-[min(60dvh,26rem)] min-h-0 pointer-coarse:max-h-[70dvh] overflow-y-auto outline-none"
             >
-              {sections.map((section, sectionIndex) => (
-                <ListBoxSection key={section.id} id={section.id}>
-                  {/* A rule between sections, none above the first. */}
-                  <Header
-                    className={`mx-1.5 px-2 pt-0.5 text-right text-[11px] text-muted-foreground ${
-                      sectionIndex === 0 ? "" : "mt-1 border-t border-border"
-                    }`}
-                  >
-                    {t(`commandPalette.sections.${section.id}`)}
-                  </Header>
-                  {section.results.map((result) => (
-                    <PaletteRow
-                      key={result.item.key}
-                      result={result}
-                      isRecent={section.id === "recent"}
-                      mac={mac}
-                      onChoose={choose}
-                      onRemoveRecent={removeByKey}
-                    />
-                  ))}
-                </ListBoxSection>
-              ))}
+              {renderedSections}
             </ListBox>
           </Virtualizer>
         )}
@@ -494,7 +513,7 @@ interface PaletteRowProps {
   onRemoveRecent: (key: string) => void;
 }
 
-function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: PaletteRowProps) {
+const PaletteRow = memo(function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: PaletteRowProps) {
   const { t } = useTranslation();
   const item = result.item;
   const unavailable = item.state === "disabled";
@@ -551,4 +570,4 @@ function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: Palette
       )}
     </ListBoxItem>
   );
-}
+});
