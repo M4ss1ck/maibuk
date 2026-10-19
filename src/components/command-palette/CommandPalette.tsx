@@ -1,5 +1,7 @@
 import {
+  memo,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -73,11 +75,36 @@ export function CommandPalette() {
   return <OpenCommandPalette />;
 }
 
-// Padding keeps the last row's focus ring inside the scroll box.
-const LIST_LAYOUT_OPTIONS = { estimatedRowSize: 32, estimatedHeadingSize: 22, padding: 4 };
+// A result row is exactly one 32px line on a fine pointer (`min-h-8`,
+// single-line text); a coarse pointer raises the row to 44px (`min-h-11`) for
+// touch. A fixed size is not just an estimate: the virtualizer measures
+// estimated rows with a forced layout on every mount, which WebKit cannot
+// afford per keystroke (#552). On a coarse pointer the row can grow with text
+// scaling, so it stays estimated. Padding keeps the last row's focus ring
+// inside the scroll box.
+const FINE_POINTER_LAYOUT = { rowSize: 32, estimatedHeadingSize: 22, padding: 4 };
+const COARSE_POINTER_LAYOUT = { estimatedRowSize: 44, estimatedHeadingSize: 22, padding: 4 };
+
+/** Whether the primary pointer is a finger, so the rows take their 44px size. */
+function useCoarsePointer(): boolean {
+  const [coarse, setCoarse] = useState(
+    () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true
+  );
+  useEffect(() => {
+    const query = window.matchMedia?.("(pointer: coarse)");
+    if (!query) return;
+    const update = () => setCoarse(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return coarse;
+}
 
 function OpenCommandPalette() {
   const { t, i18n } = useTranslation();
+  const coarsePointer = useCoarsePointer();
+  const layoutOptions = coarsePointer ? COARSE_POINTER_LAYOUT : FINE_POINTER_LAYOUT;
   const close = useCommandPaletteStore((state) => state.close);
   const snapshot = useCommandPaletteStore((state) => state.snapshot);
   const customVoice = useShortcutSettingsStore((state) => state.shortcuts.voice);
@@ -87,18 +114,22 @@ function OpenCommandPalette() {
   const pruneRecent = useCommandPaletteRecentStore((state) => state.prune);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState<PalettePage>("root");
-  const [announcement, setAnnouncement] = useState("");
-  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [activeKeyIsRecent, setActiveKeyIsRecent] = useState(false);
   const [entities, setEntities] = useState<Awaited<ReturnType<typeof loadPaletteEntities>> | null>(
     null
   );
   const inputRef = useRef<HTMLInputElement>(null);
+  const announcementRef = useRef<HTMLDivElement>(null);
+  const activeKeyRef = useRef<string | null>(null);
   const removalRef = useRef(false);
   const previousCountRef = useRef(-1);
   const mac = isMac();
   const navigate = useNavigate();
   const location = useLocation();
   const openBookId = useMatch("/book/:bookId")?.params.bookId ?? null;
+  const announce = useCallback((message: string) => {
+    if (announcementRef.current) announcementRef.current.textContent = message;
+  }, []);
 
   // One typed local for the builders: they accept registry and Settings keys
   // the i18n `t` type does not know about.
@@ -172,9 +203,20 @@ function OpenCommandPalette() {
     pruneRecent(liveRecentKeys(index, recentKeys));
   }, [entitiesLoaded, index, pruneRecent, recentKeys]);
 
+  // The field shows every keystroke immediately; the ranked list follows in a
+  // background render, so the keystroke's frame only carries the input echo.
+  // The results are the same, one frame later; a key pressed inside that
+  // window acts on the row the author still sees (useDeferredValue, #552).
+  const deferredQuery = useDeferredValue(query);
   const sections = useMemo(
-    () => searchPalette(index, { query, page, recent: recentKeys, openBookId }),
-    [index, query, page, recentKeys, openBookId]
+    () =>
+      searchPalette(index, {
+        query: deferredQuery,
+        page,
+        recent: recentKeys,
+        openBookId,
+      }),
+    [index, deferredQuery, page, recentKeys, openBookId]
   );
   const flatResults = useMemo(() => sections.flatMap((section) => section.results), [sections]);
   const count = flatResults.length;
@@ -183,6 +225,10 @@ function OpenCommandPalette() {
   // The count and the removal confirmation share one live region: a removal
   // wins over the count change it causes. A removal may change no count at
   // all (a Suggested row fills the place), so it announces itself.
+  //
+  // The text goes straight into the region: a keystroke changes the count, and
+  // storing the message in state would re-render the whole result list once
+  // more per keystroke (measured on the WebKit palette probe, #552).
   useEffect(() => {
     if (previousCountRef.current === count) return;
     previousCountRef.current = count;
@@ -190,54 +236,61 @@ function OpenCommandPalette() {
       removalRef.current = false;
       return;
     }
-    setAnnouncement(t("commandPalette.resultCount", { count }));
-  }, [count, t]);
+    // A nested page with an empty query announces the page, not the count the
+    // deferred query is about to replace; its own results are "N results".
+    if (page !== "root" && deferredQuery === "") return;
+    announce(t("commandPalette.resultCount", { count }));
+  }, [count, t, page, deferredQuery, announce]);
 
   // Entering or leaving a nested page is announced after the count it changes,
   // so this effect sits below the count's on purpose.
   useEffect(() => {
     if (page === "root") return;
-    setAnnouncement(
-      t("commandPalette.pageAnnouncement", { page: t(`commandPalette.chips.${page}`) })
-    );
-  }, [page, t]);
+    announce(t("commandPalette.pageAnnouncement", { page: t(`commandPalette.chips.${page}`) }));
+  }, [page, t, announce]);
 
   // The active result lives in React Aria's virtual focus (the caret stays in
-  // the field), so read it off the input's active descendant.
+  // the field), so read it off the input's active descendant. Only the one
+  // fact the palette reacts to is state: whether the active row is a Recent
+  // row, which binds Shift+Delete. Tracking the key itself re-rendered the
+  // list on every arrow that moved, even though nothing visible changed.
   useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
     const sync = () => {
       const id = input.getAttribute("aria-activedescendant");
       const key = (id ? document.getElementById(id)?.getAttribute("data-key") : null) ?? null;
-      setActiveKey((previous) => (previous === key ? previous : key));
+      activeKeyRef.current = key;
+      const isRecent = key !== null && recentKeySet.has(key);
+      setActiveKeyIsRecent((previous) => (previous === isRecent ? previous : isRecent));
     };
     sync();
     const observer = new MutationObserver(sync);
     observer.observe(input, { attributes: true, attributeFilter: ["aria-activedescendant"] });
     return () => observer.disconnect();
-  }, []);
+  }, [recentKeySet]);
 
   // useShortcuts pauses while this Modal is open, so Shift+Delete is handled
   // on the field itself; the id is still declared for the shortcut help.
-  useBoundShortcutIds(
-    ["commandPalette.removeRecent"],
-    activeKey !== null && recentKeySet.has(activeKey)
+  useBoundShortcutIds(["commandPalette.removeRecent"], activeKeyIsRecent);
+
+  const removeByKey = useCallback(
+    (key: string) => {
+      removalRef.current = true;
+      announce(t("commandPalette.removedFromRecent"));
+      removeRecent(key);
+    },
+    [announce, t, removeRecent]
   );
 
-  const removeByKey = (key: string) => {
-    removalRef.current = true;
-    setAnnouncement(t("commandPalette.removedFromRecent"));
-    removeRecent(key);
-  };
-
-  const changeQuery = (value: string) => {
+  const changeQuery = useCallback((value: string) => {
     // Typing after a removal that changed no count: the next count is news.
     removalRef.current = false;
     setQuery(value);
-  };
+  }, []);
 
   const removeActiveRecent = () => {
+    const activeKey = activeKeyRef.current;
     if (activeKey === null || !recentKeySet.has(activeKey)) return;
     const inRecent = sections.some(
       (section) =>
@@ -287,83 +340,116 @@ function OpenCommandPalette() {
     }
   };
   /** Enters a nested page: it narrows the list, it does not open anything. */
-  const enterPage = (next: PalettePage) => {
+  const enterPage = useCallback((next: PalettePage) => {
     setPage(next);
     setQuery("");
-  };
+  }, []);
 
   /**
    * Leaves the palette and lands on the entity, Settings row, or page the
    * result named. Open editor text lands first: navigating away from a Chapter
    * with unsaved keystrokes would lose them.
    */
-  const openResult = (item: PaletteItem) => {
-    recordRecent(item.key);
-    close();
-    void (async () => {
-      // Let the Modal unmount (and lift its gate) before moving.
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      try {
-        await flushPendingEdits();
-      } catch {
-        toast.info(t("commandPalette.saveFailed"));
-        return;
-      }
-      if (item.kind === "settingsRow") {
-        focusSettingsRow(item.id as SettingsRowId);
-        if (location.pathname !== "/settings") navigate("/settings");
-        return;
-      }
-      if (item.kind === "book") {
-        navigate(`/book/${item.id}`);
-        return;
-      }
-      if (item.kind === "chapter") {
-        navigate(`/book/${item.bookId}`, { state: { openChapterId: item.id } });
-        return;
-      }
-      if (item.kind === "note") {
-        navigate(`/notes/${item.id}`);
-        return;
-      }
-      if (item.kind === "canvas") {
-        navigate(`/canvas/${item.id}`);
-      }
-    })();
-  };
+  const openResult = useCallback(
+    (item: PaletteItem) => {
+      recordRecent(item.key);
+      close();
+      void (async () => {
+        // Let the Modal unmount (and lift its gate) before moving.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        try {
+          await flushPendingEdits();
+        } catch {
+          toast.info(t("commandPalette.saveFailed"));
+          return;
+        }
+        if (item.kind === "settingsRow") {
+          focusSettingsRow(item.id as SettingsRowId);
+          if (location.pathname !== "/settings") navigate("/settings");
+          return;
+        }
+        if (item.kind === "book") {
+          navigate(`/book/${item.id}`);
+          return;
+        }
+        if (item.kind === "chapter") {
+          navigate(`/book/${item.bookId}`, { state: { openChapterId: item.id } });
+          return;
+        }
+        if (item.kind === "note") {
+          navigate(`/notes/${item.id}`);
+          return;
+        }
+        if (item.kind === "canvas") {
+          navigate(`/canvas/${item.id}`);
+        }
+      })();
+    },
+    [recordRecent, close, t, navigate, location.pathname]
+  );
 
-  const choose = (item: PaletteItem) => {
-    if (item.state === "disabled") return;
-    if (item.kind === "page") {
-      // A page is not a destination: it narrows the list and stays open.
-      if (item.targetPage) enterPage(item.targetPage);
-      return;
-    }
-    if (item.kind !== "command") {
-      openResult(item);
-      return;
-    }
-    const id = item.id as CommandId;
-    const opener = useCommandPaletteStore.getState().opener;
-    recordRecent(item.key);
-    close();
-    void (async () => {
-      // Let the Modal unmount (and lift its gate) before running anything.
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      for (let attempt = 0; attempt < 10; attempt++) {
-        if (useModalStore.getState().modalIds.length === 0) break;
-        await new Promise((resolve) => setTimeout(resolve, 0));
+  const choose = useCallback(
+    (item: PaletteItem) => {
+      if (item.state === "disabled") return;
+      if (item.kind === "page") {
+        // A page is not a destination: it narrows the list and stays open.
+        if (item.targetPage) enterPage(item.targetPage);
+        return;
       }
-      if (opener && opener.isConnected) opener.focus();
-      // Item bindings re-register once focus is back inside the item.
-      for (let attempt = 0; attempt < 10; attempt++) {
-        if (commandState(id) !== "hidden") break;
-        await new Promise((resolve) => setTimeout(resolve, 0));
+      if (item.kind !== "command") {
+        openResult(item);
+        return;
       }
-      const outcome = await runCommand(id, { source: "palette" });
-      if (outcome !== "ran") toast.info(t("commandPalette.unavailable"));
-    })();
-  };
+      const id = item.id as CommandId;
+      const opener = useCommandPaletteStore.getState().opener;
+      recordRecent(item.key);
+      close();
+      void (async () => {
+        // Let the Modal unmount (and lift its gate) before running anything.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        for (let attempt = 0; attempt < 10; attempt++) {
+          if (useModalStore.getState().modalIds.length === 0) break;
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+        if (opener && opener.isConnected) opener.focus();
+        // Item bindings re-register once focus is back inside the item.
+        for (let attempt = 0; attempt < 10; attempt++) {
+          if (commandState(id) !== "hidden") break;
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+        const outcome = await runCommand(id, { source: "palette" });
+        if (outcome !== "ran") toast.info(t("commandPalette.unavailable"));
+      })();
+    },
+    [enterPage, openResult, recordRecent, close, t]
+  );
+
+  const renderedSections = useMemo(
+    () =>
+      sections.map((section, sectionIndex) => (
+        <ListBoxSection key={section.id} id={section.id}>
+          {/* A rule between sections, none above the first. */}
+          <Header
+            className={`mx-1.5 px-2 pt-0.5 text-right text-[11px] text-muted-foreground ${
+              sectionIndex === 0 ? "" : "mt-1 border-t border-border"
+            }`}
+          >
+            {t(`commandPalette.sections.${section.id}`)}
+          </Header>
+          {section.results.map((result) => (
+            <PaletteRow
+              key={result.item.key}
+              result={result}
+              isRecent={section.id === "recent"}
+              mac={mac}
+              onChoose={choose}
+              onRemoveRecent={removeByKey}
+            />
+          ))}
+        </ListBoxSection>
+      )),
+    [sections, mac, choose, removeByKey, t]
+  );
 
   const chipLabel = page === "root" ? null : t(`commandPalette.chips.${page}`);
 
@@ -398,46 +484,23 @@ function OpenCommandPalette() {
           />
         </SearchField>
         {count === 0 ? (
-          query.trim() !== "" && (
+          deferredQuery.trim() !== "" && (
             <p className="px-3 pb-3 pt-1 text-sm text-muted-foreground">
               {t("commandPalette.noResults")}
             </p>
           )
         ) : (
-          <Virtualizer layout={ListLayout} layoutOptions={LIST_LAYOUT_OPTIONS}>
+          <Virtualizer layout={ListLayout} layoutOptions={layoutOptions}>
             <ListBox
               aria-label={t("commandPalette.resultsLabel")}
               className="scrollbar-themed max-h-[min(60dvh,26rem)] min-h-0 pointer-coarse:max-h-[70dvh] overflow-y-auto outline-none"
             >
-              {sections.map((section, sectionIndex) => (
-                <ListBoxSection key={section.id} id={section.id}>
-                  {/* A rule between sections, none above the first. */}
-                  <Header
-                    className={`mx-1.5 px-2 pt-0.5 text-right text-[11px] text-muted-foreground ${
-                      sectionIndex === 0 ? "" : "mt-1 border-t border-border"
-                    }`}
-                  >
-                    {t(`commandPalette.sections.${section.id}`)}
-                  </Header>
-                  {section.results.map((result) => (
-                    <PaletteRow
-                      key={result.item.key}
-                      result={result}
-                      isRecent={section.id === "recent"}
-                      mac={mac}
-                      onChoose={choose}
-                      onRemoveRecent={removeByKey}
-                    />
-                  ))}
-                </ListBoxSection>
-              ))}
+              {renderedSections}
             </ListBox>
           </Virtualizer>
         )}
       </Autocomplete>
-      <div aria-live="polite" role="status" className="sr-only">
-        {announcement}
-      </div>
+      <div ref={announcementRef} aria-live="polite" role="status" className="sr-only" />
     </Modal>
   );
 }
@@ -494,7 +557,13 @@ interface PaletteRowProps {
   onRemoveRecent: (key: string) => void;
 }
 
-function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: PaletteRowProps) {
+const PaletteRow = memo(function PaletteRow({
+  result,
+  isRecent,
+  mac,
+  onChoose,
+  onRemoveRecent,
+}: PaletteRowProps) {
   const { t } = useTranslation();
   const item = result.item;
   const unavailable = item.state === "disabled";
@@ -551,4 +620,4 @@ function PaletteRow({ result, isRecent, mac, onChoose, onRemoveRecent }: Palette
       )}
     </ListBoxItem>
   );
-}
+});
