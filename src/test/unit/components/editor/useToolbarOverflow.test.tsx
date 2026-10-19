@@ -75,8 +75,9 @@ function buildLayout({
   return { root, end, lane, entryCount: entries.length };
 }
 
-function visibleCountFor(layout: Layout) {
-  const { root, end, lane, entryCount } = buildLayout(layout);
+function renderOverflow(layout: Layout) {
+  const elements = buildLayout(layout);
+  const { root, end, lane, entryCount } = elements;
   const { result } = renderHook(() =>
     useToolbarOverflow({
       rootRef: useRef<HTMLElement>(root),
@@ -86,7 +87,11 @@ function visibleCountFor(layout: Layout) {
       deps: [],
     })
   );
-  return result.current.visibleCount;
+  return { ...elements, result };
+}
+
+function visibleCountFor(layout: Layout) {
+  return renderOverflow(layout).result.current.visibleCount;
 }
 
 it("admits the longest prefix of whole entries that fit", () => {
@@ -152,23 +157,14 @@ it("does not admit an entry that overflows by a fraction of a pixel", () => {
   expect(visibleCountFor({ rootWidth: 300.25, endWidth: 80, entries })).toBe(2);
 });
 
-it("waits for a resize burst to settle before re-measuring", () => {
+it("keeps its count through a narrowing resize burst until it settles", () => {
   // Only the settle timer is faked; rAF stays the immediate stub from above.
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  const { root, end, lane, entryCount } = buildLayout({
+  const { root, result } = renderOverflow({
     rootWidth: 300,
     endWidth: 80,
     entries: [{ width: 100 }, { width: 100 }, { width: 100 }],
   });
-  const { result } = renderHook(() =>
-    useToolbarOverflow({
-      rootRef: useRef<HTMLElement>(root),
-      endRef: useRef<HTMLElement>(end),
-      measureRef: useRef<HTMLElement>(lane),
-      entryCount,
-      deps: [],
-    })
-  );
   expect(result.current.visibleCount).toBe(2);
 
   // A panel drag narrows the row every pointer move. Each observer fire must
@@ -185,4 +181,58 @@ it("waits for a resize burst to settle before re-measuring", () => {
   });
   // available = 100 - 80 = 20: no entry fits
   expect(result.current.visibleCount).toBe(0);
+});
+
+it("shows the entries that fit once a widening resize burst settles", () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const { root, result } = renderOverflow({
+    rootWidth: 300,
+    endWidth: 80,
+    entries: [{ width: 100 }, { width: 100 }, { width: 100 }],
+  });
+  expect(result.current.visibleCount).toBe(2);
+
+  withRect(root, 0, 400);
+  act(() => {
+    for (let step = 0; step < 5; step++) resizeCallbacks[0]([], {} as ResizeObserver);
+  });
+  expect(result.current.visibleCount).toBe(2);
+
+  act(() => {
+    vi.advanceTimersByTime(1000);
+  });
+  // available = 400 - 80 = 320: all three fit
+  expect(result.current.visibleCount).toBe(3);
+});
+
+it("re-measures at once when deps change during a pending resize", () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const elements = buildLayout({
+    rootWidth: 300,
+    endWidth: 80,
+    entries: [{ width: 100 }, { width: 100 }, { width: 100 }],
+  });
+  const { result, rerender } = renderHook(
+    ({ deps }: { deps: unknown[] }) =>
+      useToolbarOverflow({
+        rootRef: useRef<HTMLElement>(elements.root),
+        endRef: useRef<HTMLElement>(elements.end),
+        measureRef: useRef<HTMLElement>(elements.lane),
+        entryCount: elements.entryCount,
+        deps,
+      }),
+    { initialProps: { deps: [0] } }
+  );
+  expect(result.current.visibleCount).toBe(2);
+
+  withRect(elements.root, 0, 400);
+  act(() => {
+    resizeCallbacks[0]([], {} as ResizeObserver);
+  });
+  expect(result.current.visibleCount).toBe(2);
+
+  act(() => {
+    rerender({ deps: [1] });
+  });
+  expect(result.current.visibleCount).toBe(3);
 });

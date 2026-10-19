@@ -17,12 +17,14 @@ interface UseToolbarOverflowParams {
 // Absorbs floating-point noise in subpixel layout without admitting a visible overflow.
 const EPSILON = 0.01;
 
-// A resize that keeps changing (dragging a panel edge) settles before the
-// toolbar re-measures. Measuring on every step forces a layout of the row and
-// its measure lane on every frame, which on WebKit costs more than the resize
-// itself and misses the frame budget (issue #554). Any other resize — the
-// window, a zoom, a late font — waits the same short beat, which the Start
-// lane's `overflow-hidden` already covers.
+// A resize that keeps changing (dragging a panel edge) re-measures once, after the
+// size has held still for RESIZE_SETTLE_MS: every observer fire restarts the wait.
+// Measuring on every step forces a layout of the row and its measure lane on every
+// frame, which on WebKit misses the frame budget (issue #554). Until the resize
+// settles the toolbar keeps the count it had: when narrowing, the Start lane's
+// `overflow-hidden` clips the entries that no longer fit; when widening, entries
+// that now fit appear once the resize settles. A window resize, a zoom, or a late
+// font load takes the same path.
 const RESIZE_SETTLE_MS = 120;
 
 function px(value: string): number {
@@ -114,7 +116,7 @@ export function useToolbarOverflow({
       scheduleMeasure.cancel();
       observer.disconnect();
     };
-    // deps are external recompute triggers, spread intentionally alongside measure
+    // deps are external recompute triggers, spread intentionally alongside measure and scheduleMeasure
   }, [measure, scheduleMeasure, ...deps]);
 
   return { visibleCount };

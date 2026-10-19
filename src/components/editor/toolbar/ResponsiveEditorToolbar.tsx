@@ -98,8 +98,8 @@ export function ResponsiveEditorToolbar({
     : "flex flex-nowrap items-center overflow-x-auto px-2 sm:px-4 py-1 sm:py-2 gap-0.5 sm:gap-1";
 
   const collapsedStartClass = "flex flex-nowrap items-center gap-0.5 sm:gap-1";
-  // Between a resize and the next measurement the Start lane may briefly hold one entry too
-  // many; clipping it there keeps the row from flashing a scrollbar.
+  // Until a resize settles and the toolbar re-measures, the Start lane may hold entries that
+  // no longer fit; clipping them keeps the row from flashing a scrollbar.
   const startBlockClass = toolbarExpanded
     ? "contents"
     : `${collapsedStartClass} min-w-0 overflow-hidden`;

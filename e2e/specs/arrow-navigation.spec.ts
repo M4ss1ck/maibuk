@@ -545,7 +545,9 @@ test.describe("resizing the Chapter list by keyboard @wf:resize-handles-keyboard
     page,
   }) => {
     await openBook(page);
+    await capture(page, "book-editor-chapter-pane");
     await f6To(page, page.getByRole("complementary", { name: "Chapter list" }));
     await resizeByKeyboard(page, "Resize chapter list");
+    await capture(page, "book-editor-chapter-pane-widened");
   });
 });
