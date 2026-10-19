@@ -640,6 +640,130 @@ describe("arrow navigation (ADR 0025)", () => {
     }
   });
 
+  it("stops the sample at a remembered control before its focus change runs", () => {
+    render(<NotesFixture />);
+    // Use Italic in the editor, then leave for the title bar so the next arrow
+    // re-enters the editor through landInPane's remembered-control path.
+    act(() => button("Italic").focus());
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true })
+      );
+    });
+    expect(button("Back")).toHaveFocus();
+
+    const samples: number[] = [];
+    window.__maibukArrowLeaveMs = samples;
+    let now = 1000;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => now);
+    const burnFocusTime = (event: FocusEvent) => {
+      if (event.target === button("Italic")) now += 20;
+    };
+    document.addEventListener("focusin", burnFocusTime, true);
+    try {
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        window.dispatchEvent(event);
+      });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(button("Italic")).toHaveFocus();
+      // The remembered control's focus listener burned 20 ms; the sample
+      // stopped at the probe before it.
+      expect(now).toBe(1020);
+      expect(samples).toHaveLength(1);
+      expect(samples[0]).toBeLessThan(20);
+    } finally {
+      document.removeEventListener("focusin", burnFocusTime, true);
+      nowSpy.mockRestore();
+      delete window.__maibukArrowLeaveMs;
+    }
+  });
+
+  it("stops the sample before an in-widget move's focus change runs", () => {
+    render(<GalleryFixture />);
+    act(() => row("Card 1").focus());
+
+    const samples: number[] = [];
+    window.__maibukArrowLeaveMs = samples;
+    let now = 1000;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => now);
+    const burnFocusTime = (event: FocusEvent) => {
+      if (event.target === row("Card 2")) now += 20;
+    };
+    document.addEventListener("focusin", burnFocusTime, true);
+    try {
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        window.dispatchEvent(event);
+      });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(row("Card 2")).toHaveFocus();
+      // The grid moves focus itself (arrowOutcome's "move"), and the sample
+      // stops before that focus call, not after its listener.
+      expect(now).toBe(1020);
+      expect(samples).toHaveLength(1);
+      expect(samples[0]).toBeLessThan(20);
+    } finally {
+      document.removeEventListener("focusin", burnFocusTime, true);
+      nowSpy.mockRestore();
+      delete window.__maibukArrowLeaveMs;
+    }
+  });
+
+  it("falls back from a removed remembered control, stopping the sample at the first probe", () => {
+    render(<NotesFixture />);
+    act(() => button("Italic").focus());
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true })
+      );
+    });
+    expect(button("Back")).toHaveFocus();
+    // The editor's remembered control is gone: tryFocus cannot use it, so
+    // landInPane falls back to the toolbar's first item.
+    act(() => button("Italic").remove());
+
+    const samples: number[] = [];
+    window.__maibukArrowLeaveMs = samples;
+    let now = 1000;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => now);
+    const burnFocusTime = (event: FocusEvent) => {
+      if (event.target === button("Bold")) now += 20;
+    };
+    document.addEventListener("focusin", burnFocusTime, true);
+    try {
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        window.dispatchEvent(event);
+      });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(button("Bold")).toHaveFocus();
+      // The fallback is still timed, and stops before its focus change.
+      expect(now).toBe(1020);
+      expect(samples).toHaveLength(1);
+      expect(samples[0]).toBeLessThan(20);
+    } finally {
+      document.removeEventListener("focusin", burnFocusTime, true);
+      nowSpy.mockRestore();
+      delete window.__maibukArrowLeaveMs;
+    }
+  });
+
   it("records no sample for arrows it does not act on, or when the lane has not asked", () => {
     render(<NotesFixture />);
     act(() => button("Bold").focus());

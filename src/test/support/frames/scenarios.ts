@@ -142,7 +142,7 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
     measured:
       "Twenty times: Shift+F6 back to the Notes list (it lands on the last-used row button), then ArrowRight out of the row into the note's text. Each arrow that moves focus is timed in the page.",
     repetitions: 3,
-    recordsInput: false,
+    recordsInput: true,
     skip: {
       android:
         "a phone shows one Pane at a time (the lists are a drawer below md), so there is no Pane to cross into",
@@ -157,7 +157,7 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
     measured:
       "Twenty times: Shift+F6 back to the Chapter list (it lands on the last-used row button), then ArrowRight out of the row into the Chapter's text. Each arrow that moves focus is timed in the page.",
     repetitions: 3,
-    recordsInput: false,
+    recordsInput: true,
     skip: {
       android:
         "a phone shows one Pane at a time (the lists are a drawer below md), so there is no Pane to cross into",

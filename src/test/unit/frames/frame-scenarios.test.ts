@@ -54,8 +54,12 @@ describe("frame scenarios", () => {
   });
 
   it("judge the arrow leave on both long lists and the Pane slide by dropped frames", () => {
-    expect(FRAME_BUDGETS["arrow-leave-notes"].overrides.handlerP95Ms).toBe(2);
-    expect(FRAME_BUDGETS["arrow-leave-chapters"].overrides.handlerP95Ms).toBe(2);
+    for (const id of ["arrow-leave-notes", "arrow-leave-chapters"]) {
+      expect(FRAME_BUDGETS[id].overrides.handlerP95Ms).toBe(2);
+      expect(FRAME_BUDGETS[id].overrides.inputP95Intervals).toBe(1);
+      expect(FRAME_BUDGETS[id].overrides.minInputs).toBe(10);
+      expect(FRAME_SCENARIOS.find((s) => s.id === id)?.recordsInput).toBe(true);
+    }
     expect(FRAME_SCENARIOS.find((s) => s.id === "arrow-leave-notes")?.seed).toBe("perfManyNotes");
     expect(FRAME_SCENARIOS.find((s) => s.id === "arrow-leave-chapters")?.seed).toBe(
       "perfManyChapters"
