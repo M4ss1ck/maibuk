@@ -540,6 +540,33 @@ test.describe("Zoom, fit, and lock @wf:canvas-zoom-fit-lock @sc:common.zoomIn @s
     await page.reload();
     await expect(page.locator(".react-flow__viewport")).toHaveAttribute("style", zoomed);
   });
+
+  // PR evidence for the WebKit pan fix (issue #553): the watermark must look the
+  // same at rest and after a pan and zoom. `capture` is a no-op unless
+  // E2E_CAPTURE_DIR is set (scripts/pr-screenshots.sh), so normal runs only
+  // check that the pan moved the viewport and zoom kept working.
+  test("the watermark follows a pan and zoom unchanged", async ({ page }) => {
+    await openMap(page);
+    await capture(page, "canvas-watermark-default");
+
+    const viewport = page.locator(".react-flow__viewport");
+    const before = (await viewport.getAttribute("style")) ?? "";
+
+    // The seeded nodes sit around the centre, so the bottom-left corner is
+    // empty pane; dragging it pans instead of moving a node.
+    const box = await page.locator(".react-flow__pane").boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+    const from = { x: box.x + 48, y: box.y + box.height - 48 };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 260, from.y - 150, { steps: 12 });
+    await page.mouse.up();
+    await expect.poll(async () => (await viewport.getAttribute("style")) ?? "").not.toBe(before);
+
+    await page.keyboard.press("Control+=");
+    await capture(page, "canvas-watermark-panned-zoomed");
+  });
 });
 
 test.describe("Save Status @wf:canvas-save-status", () => {

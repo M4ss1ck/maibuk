@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -13,6 +14,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
   useStore,
+  useStoreApi,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -79,11 +81,19 @@ const FIGLET_LINES = maibukArt
   .filter((line) => line.trim().length > 0);
 const FIGLET_COLS = Math.max(...FIGLET_LINES.map((line) => line.length));
 const MONO_ASPECT = 0.6; // monospace glyph advance ÷ font size
-const CANVAS_PAGE_SIZE = 1200;
+export const CANVAS_PAGE_SIZE = 1200;
 const TILE_INSET = 0.1;
+export const CANVAS_BACKGROUND_TILE_ID = "maibuk-canvas-tile";
 
-function CanvasBackground() {
-  const [translateX, translateY, zoom] = useStore((state) => state.transform);
+export interface CanvasTileGeometry {
+  tileWidth: number;
+  tileHeight: number;
+  pad: number;
+  fontSize: number;
+}
+
+/** The tile's geometry depends only on the zoom: a single figlet page. */
+export function canvasTileGeometry(zoom: number): CanvasTileGeometry {
   const tileWidth = CANVAS_PAGE_SIZE * zoom;
   const pad = tileWidth * TILE_INSET;
   const available = tileWidth - pad * 2;
@@ -92,49 +102,132 @@ function CanvasBackground() {
   // Hug the figlet vertically (even padding all around) so stacked tiles don't
   // leave a tall empty gap the way a square tile would.
   const tileHeight = blockHeight + pad * 2;
-  const patternId = "maibuk-canvas-pattern";
+  return { tileWidth, tileHeight, pad, fontSize };
+}
+
+/** Tiles needed to fill a pane `width`×`height` plus one whole tile each way. */
+export function canvasTileGrid(
+  width: number,
+  height: number,
+  tileWidth: number,
+  tileHeight: number
+): Array<{ x: number; y: number }> {
+  const columns = Math.ceil(width / tileWidth) + 1;
+  const rows = Math.ceil(height / tileHeight) + 1;
+  const tiles: Array<{ x: number; y: number }> = [];
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      tiles.push({ x: column * tileWidth, y: row * tileHeight });
+    }
+  }
+  return tiles;
+}
+
+/**
+ * Where to stamp the pre-rasterized tile layer for a viewport translation.
+ *
+ * The offset is the translation modulo one tile, kept in `[-tile, 0)` so a
+ * negative translation stays positive (JavaScript's `%` is signed). Because
+ * the tiles repeat every tile, an offset congruent to the translation modulo
+ * the tile pins them to canvas space without moving the layer to the right or
+ * below its origin, so a layer sized one tile larger than the pane always
+ * covers it.
+ */
+export function canvasBackgroundOffset(translate: number, tile: number): number {
+  return (((translate % tile) + tile) % tile) - tile;
+}
+
+export function CanvasBackground() {
+  // React re-renders only when the zoom changes: a pan must not touch the SVG.
+  // The tile geometry depends on the zoom alone, and the translation is written
+  // straight to the DOM. The pane size only changes on a resize.
+  const zoom = useStore((state) => state.transform[2]);
+  const paneWidth = useStore((state) => state.width);
+  const paneHeight = useStore((state) => state.height);
+  const { tileWidth, tileHeight, pad, fontSize } = useMemo(() => canvasTileGeometry(zoom), [zoom]);
+  const tiles = useMemo(
+    () => canvasTileGrid(paneWidth, paneHeight, tileWidth, tileHeight),
+    [paneHeight, paneWidth, tileHeight, tileWidth]
+  );
+  const layerRef = useRef<HTMLDivElement>(null);
+  const storeApi = useStoreApi();
+
+  // A pan writes a CSS transform to the layer so the compositor moves the
+  // cached raster. Rasterizing the figlet once per zoom and moving it is what
+  // keeps every pan frame inside the refresh interval on WebKit.
+  useLayoutEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) return;
+    const apply = (transform: readonly [number, number, number]) => {
+      layer.style.transform = `translate3d(${canvasBackgroundOffset(
+        transform[0],
+        tileWidth
+      )}px, ${canvasBackgroundOffset(transform[1], tileHeight)}px, 0)`;
+    };
+    apply(storeApi.getState().transform);
+    return storeApi.subscribe((state, previous) => {
+      if (state.transform === previous.transform) return;
+      apply(state.transform);
+    });
+  }, [storeApi, tileHeight, tileWidth]);
+
   return (
-    <svg
+    // The wrapper (not the `<svg>`, which WebKit does not promote) is the
+    // composited layer: `will-change` and `contain` keep a pane repaint from
+    // re-rasterizing the figlet text inside it.
+    <div
+      ref={layerRef}
       aria-hidden="true"
       className="react-flow__background text-foreground"
       style={{
         position: "absolute",
-        inset: 0,
-        width: "100%",
-        height: "100%",
+        top: 0,
+        left: 0,
+        // One tile larger on each axis so the pan offset, which shifts the
+        // layer up to a whole tile, never exposes an uncovered edge.
+        width: `calc(100% + ${tileWidth}px)`,
+        height: `calc(100% + ${tileHeight}px)`,
         backgroundColor: "transparent",
         opacity: 0.02,
+        willChange: "transform",
+        contain: "layout paint",
       }}
     >
-      <pattern
-        id={patternId}
-        x={translateX % tileWidth}
-        y={translateY % tileHeight}
-        width={tileWidth}
-        height={tileHeight}
-        patternUnits="userSpaceOnUse"
-      >
-        <text
-          x={pad}
-          y={pad}
-          fill="currentColor"
-          xmlSpace="preserve"
-          dominantBaseline="hanging"
-          style={{
-            fontFamily: "ui-monospace, SFMono-Regular, monospace",
-            fontSize,
-            whiteSpace: "pre",
-          }}
-        >
-          {FIGLET_LINES.map((line, index) => (
-            <tspan key={`figlet-line-${index}`} x={pad} dy={index === 0 ? 0 : fontSize}>
-              {line}
-            </tspan>
-          ))}
-        </text>
-      </pattern>
-      <rect x="0" y="0" width="100%" height="100%" fill={`url(#${patternId})`} />
-    </svg>
+      <svg aria-hidden="true" width="100%" height="100%" style={{ display: "block" }}>
+        {/* Explicit tiles instead of an SVG `<pattern>`: WebKit re-evaluates a
+            pattern fill on every paint, so a pan re-rasterized the whole
+            watermark, while plain text rasterizes once into the layer. */}
+        <defs>
+          <text
+            id={CANVAS_BACKGROUND_TILE_ID}
+            x={pad}
+            y={pad}
+            fill="currentColor"
+            xmlSpace="preserve"
+            dominantBaseline="hanging"
+            style={{
+              fontFamily: "ui-monospace, SFMono-Regular, monospace",
+              fontSize,
+              whiteSpace: "pre",
+            }}
+          >
+            {FIGLET_LINES.map((line, index) => (
+              <tspan key={`figlet-line-${index}`} x={pad} dy={index === 0 ? 0 : fontSize}>
+                {line}
+              </tspan>
+            ))}
+          </text>
+        </defs>
+        {tiles.map((tile) => (
+          <use
+            key={`${tile.x}:${tile.y}`}
+            href={`#${CANVAS_BACKGROUND_TILE_ID}`}
+            x={tile.x}
+            y={tile.y}
+          />
+        ))}
+      </svg>
+    </div>
   );
 }
 
