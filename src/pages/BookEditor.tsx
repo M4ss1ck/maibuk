@@ -1342,9 +1342,12 @@ export function BookEditor() {
           </>
         )}
 
-        {/* Main editor area */}
+        {/* Main editor area. Not an `@container`: the Chapter pane drag resizes
+            it on every pointer move, and on WebKit a size container here cost
+            a frame per step (issue #554). `relative z-0` gives it its own
+            stacking context, which keeps that drag inside the budget. */}
         <main
-          className="flex-1 flex flex-col min-h-0 min-w-0 @container"
+          className="flex-1 flex flex-col min-h-0 min-w-0 relative z-0"
           data-focus-pane="editor-main"
           tabIndex={-1}
           aria-label={t("panes.editorMain")}
