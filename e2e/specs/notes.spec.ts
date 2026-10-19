@@ -117,6 +117,31 @@ test.describe("Notes Gallery columns @wf:notes-gallery-browse", () => {
   }
 });
 
+// The virtualized Gallery made its header a fixed block over a scrolling grid
+// (#562): these sizes check the header never presses the grid to nothing or
+// clips the open filters, light and dark.
+test.describe("Notes Gallery header @wf:notes-gallery-browse", () => {
+  test.use({ library: "perfManyNotes" });
+
+  for (const [size, viewport] of [
+    ["360x640", { width: 360, height: 640 }],
+    ["1280x600", { width: 1280, height: 600 }],
+  ] as const) {
+    test.describe(size, () => {
+      test.use({ viewport });
+
+      test(`captures the advanced filters at ${size}, light and dark`, async ({ page }) => {
+        await page.goto("/notes");
+        await expect(galleryGrid(page).getByRole("row").first()).toBeVisible();
+        await tabTo(page, page.getByRole("button", { name: "Filters", exact: true }), { max: 40 });
+        await page.keyboard.press("Enter");
+        await expect(page.getByPlaceholder("Any tag")).toBeVisible();
+        await capture(page, `notes-gallery-filters-${size}`);
+      });
+    });
+  }
+});
+
 test.describe("Notes creation @wf:notes-create", () => {
   test("creates a Note from the Gallery, reaches its editor and persists the body", async ({
     page,
@@ -348,10 +373,18 @@ test.describe("Notes list grouping, view and sort @wf:notes-list-group-sort", ()
     ).toBeVisible();
     await capture(page, "notes-tree-view");
 
-    // One virtualized grid holds every group: Tab reaches the selected Note,
-    // and arrows move through the groups' rows.
+    // A group header is a focusable row now: from the open Note, ArrowUp
+    // reaches its Book's header and ArrowDown walks back through Notes and
+    // the next group's header (#562).
     const notesGrid = page.getByRole("grid", { name: "Notes" });
     await tabTo(page, notesGrid.getByRole("row", { name: SEED_NOTES.keeperLog }), { max: 60 });
+    await page.keyboard.press("ArrowUp");
+    await expect(
+      notesGrid.getByRole("row", { name: SEED_BOOK.title, exact: true })
+    ).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(notesGrid.getByRole("row", { name: SEED_NOTES.keeperLog })).toBeFocused();
+
     await pressUntilFocused(
       page,
       "ArrowDown",

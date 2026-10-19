@@ -1,8 +1,9 @@
 import { render, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
+import { mockVirtualizerLayout } from "@/test/support/virtualizer-layout";
 
 // The Tutorial app's full-route setup: the real App on a real in-memory
 // Library, with only what jsdom cannot run stubbed. A navigating Command is
@@ -246,6 +247,15 @@ const IN_PLACE: Partial<Record<CommandId, (screen: string) => string | null>> = 
   "notes.newNote": (screen) =>
     screen.startsWith("/notes/") ? "swaps the open note without navigating" : null,
 };
+
+// The Notes Gallery is virtualized (#562): jsdom reports no viewport, so the
+// grid would mount no cards and the Gallery's roving Tab stop would be the
+// grid itself, not a card. Give the Virtualizer the size a browser would.
+let restoreVirtualizerLayout: () => void = () => {};
+beforeAll(() => {
+  restoreVirtualizerLayout = mockVirtualizerLayout();
+});
+afterAll(() => restoreVirtualizerLayout());
 
 beforeEach(async () => {
   await closeDatabase();

@@ -1248,7 +1248,10 @@ export const ROWS: MatrixRow[] = [
     area: "notes",
     workflow:
       "Notes list: group by book/date/tag; list vs tree view; sort menu by keyboard; asserts: Menu focus; persists: yes",
-    edges: ["Tree view: arrows move, Enter opens a Note"],
+    edges: [
+      "Tree view: arrows move, Enter opens a Note",
+      "Tree view: a group header is a row; ArrowUp/Down walks header to Notes, Enter toggles",
+    ],
     terms: ["Note", "Book", "Tag"],
     shortcuts: [],
     routes: ["/notes", "/notes/:noteId"],

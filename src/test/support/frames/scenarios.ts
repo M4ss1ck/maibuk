@@ -184,7 +184,7 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
     seed: "perfManyNotes",
     warmUp: "Open the Notes Gallery, F6 into the card grid and move across a few cards.",
     measured:
-      "F6 into the Gallery, then twenty arrow-key moves across and between card rows.",
+      "F6 into the Gallery, then twenty arrow-key moves: repeated ArrowDown scrolls past the Virtualizer's overscan, with Right/Left pairs inside a row.",
     repetitions: 3,
     recordsInput: false,
     skip: {

@@ -2,23 +2,15 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installPointerEvent, touchLongPress } from "@/test/support/pointer-events";
-import {
-  mockRowScrollHeight,
-  mockVirtualizerLayout,
-} from "@/test/support/virtualizer-layout";
+import { mockVirtualizer } from "@/test/support/virtualizer-layout";
 
 installPointerEvent();
 
-let restoreVirtualizerLayout: () => void = () => {};
-let restoreRowHeight: () => void = () => {};
+let restoreVirtualizer: () => void = () => {};
 beforeAll(() => {
-  restoreVirtualizerLayout = mockVirtualizerLayout();
-  restoreRowHeight = mockRowScrollHeight(176);
+  restoreVirtualizer = mockVirtualizer({ rowHeight: 176 });
 });
-afterAll(() => {
-  restoreRowHeight();
-  restoreVirtualizerLayout();
-});
+afterAll(() => restoreVirtualizer());
 
 vi.mock("../../../lib/platform", () => ({
   IS_ANDROID: false,

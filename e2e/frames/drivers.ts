@@ -503,31 +503,33 @@ async function enterNotesGallery(page: FramePage): Promise<void> {
 }
 
 /**
- * Twenty arrow moves inside the Gallery: across a card and back, then down to
- * the next row. It stays away from the last column, where Right leaves the
- * grid by position (ADR 0025).
+ * Twenty arrow moves inside the Gallery: repeated ArrowDown walks far enough
+ * to scroll the Virtualizer past its overscan (so the scenario measures
+ * mounting and unmounting), with Right/Left pairs inside a row to measure the
+ * horizontal moves too. It starts on the first column and never reaches the
+ * last column, where Right leaves the grid by position (ADR 0025).
  */
 const GALLERY_ARROW_SEQUENCE = [
-  "ArrowRight",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowLeft",
+  "ArrowDown",
+  "ArrowDown",
+  "ArrowDown",
+  "ArrowDown",
+  "ArrowDown",
   "ArrowRight",
   "ArrowLeft",
   "ArrowDown",
-  "ArrowUp",
   "ArrowDown",
-  "ArrowUp",
+  "ArrowDown",
+  "ArrowDown",
+  "ArrowDown",
   "ArrowRight",
   "ArrowLeft",
+  "ArrowDown",
+  "ArrowDown",
+  "ArrowDown",
+  "ArrowDown",
+  "ArrowDown",
   "ArrowRight",
-  "ArrowLeft",
 ] as const;
 
 const notesGalleryArrows: FrameDriver = {

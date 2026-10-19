@@ -224,6 +224,9 @@ export function NoteListItem({
             onChange={(event) => setDraftTitle(event.target.value)}
             onBlur={commitTitle}
             onKeyDown={handleEditKeyDown}
+            // The collection takes focus inside it as a move to its focused
+            // row, which would blur this field as it mounts.
+            onFocus={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
             aria-label={t("common.rename")}
             className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary"

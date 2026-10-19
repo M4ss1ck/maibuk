@@ -5,10 +5,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
-import {
-  mockRowScrollHeight,
-  mockVirtualizerLayout,
-} from "@/test/support/virtualizer-layout";
+import { mockVirtualizer } from "@/test/support/virtualizer-layout";
 
 // Seam 2 (issue #189): the rendered app on real in-memory databases, driven
 // with real keys from the offer to the end of a run. React Joyride is not
@@ -264,16 +261,11 @@ async function pressCardButton(user: User, label: string) {
 
 // The Notes Gallery is virtualized (#562): jsdom reports no viewport, so its
 // cards (and the Tutorial's notes.card anchor on the first one) need a size.
-let restoreVirtualizerLayout: () => void = () => {};
-let restoreRowHeight: () => void = () => {};
+let restoreVirtualizer: () => void = () => {};
 beforeAll(() => {
-  restoreVirtualizerLayout = mockVirtualizerLayout();
-  restoreRowHeight = mockRowScrollHeight(176);
+  restoreVirtualizer = mockVirtualizer({ rowHeight: 176 });
 });
-afterAll(() => {
-  restoreRowHeight();
-  restoreVirtualizerLayout();
-});
+afterAll(() => restoreVirtualizer());
 
 beforeEach(async () => {
   await closeDatabase();

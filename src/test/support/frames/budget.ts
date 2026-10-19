@@ -98,7 +98,15 @@ export const FRAME_BUDGETS: Readonly<Record<string, ScenarioBudget>> = {
         "half the twenty leaves of one run, so a driver whose arrow presses never land is not-measured",
     },
   },
-  "notes-gallery-arrows": { overrides: {}, reasons: {} },
+  "notes-gallery-arrows": {
+    overrides: { p95FrameIntervals: 2.5, maxDroppedPct: 10 },
+    reasons: {
+      p95FrameIntervals:
+        "issue #562: repeated ArrowDown scrolls the Virtualizer past its overscan, so a focus move can mount a card row and miss the next vsync; the after runs measure 2 intervals on 180 Hz Chromium and 1.6 on 62 Hz WebKit, against 37 and 11 intervals before",
+      maxDroppedPct:
+        "issue #562: the twenty-move window mounts and unmounts a card row per ArrowDown; the after runs drop 6-7% of frames (before: 27% Chromium, 16% WebKit) while keeping 0 long animation frames over 50 ms",
+    },
+  },
   "pane-slide": { overrides: {}, reasons: {} },
   "plugin-remote-ui": { overrides: {}, reasons: {} },
   "typing-with-highlights": {

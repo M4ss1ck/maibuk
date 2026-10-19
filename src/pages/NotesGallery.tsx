@@ -396,11 +396,14 @@ export function NotesGallery() {
     [filteredNotes, books, t, updateNote, createNote, buildPluginNoteActions]
   );
 
+  // The header can be taller than a phone viewport with the advanced filters
+  // open, so the column scrolls rather than clipping them; the grid keeps a
+  // minimum height and scrolls its own cards (#562).
   return (
     <div
       ref={galleryDropRef}
       {...dropHandlers}
-      className={`@container flex h-full flex-col overflow-hidden p-4 sm:p-8 transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+      className={`@container flex h-full flex-col overflow-y-auto p-4 sm:p-8 transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
     >
       {isImportingFiles && <FileDropImportStatus />}
       <div className="mb-6 grid shrink-0 gap-4 @xl:mb-8 @xl:grid-cols-[minmax(0,1fr)_auto]">
@@ -560,7 +563,7 @@ export function NotesGallery() {
       {notes.length === 0 && notesError ? (
         <LibraryLoadError error={notesError} onRetry={() => void loadNotes()} />
       ) : notes.length === 0 ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-auto py-20 sm:py-28 text-center">
+        <div className="flex min-h-64 flex-1 flex-col items-center justify-center overflow-auto py-20 sm:py-28 text-center">
           <div className="w-20 h-20 mb-8">
             <MaibukLogo className="w-full h-full text-primary opacity-70" />
           </div>
@@ -573,7 +576,7 @@ export function NotesGallery() {
           </Button>
         </div>
       ) : filteredNotes.length === 0 ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-auto py-16 text-center">
+        <div className="flex min-h-64 flex-1 flex-col items-center justify-center overflow-auto py-16 text-center">
           <div className="mb-5 rounded-full bg-muted p-4 text-muted-foreground">
             <Search className="h-8 w-8" />
           </div>
@@ -589,7 +592,7 @@ export function NotesGallery() {
       ) : (
         // One GridList owns the scroll, so the Virtualizer mounts the cards
         // near the viewport instead of every Note in the Library (#562).
-        <div ref={gridAreaRef} className="min-h-0 flex-1">
+        <div ref={gridAreaRef} className="min-h-64 flex-1">
           <Virtualizer layout={GridLayout} layoutOptions={galleryLayoutOptions}>
             <GridList
               ref={gridRef}

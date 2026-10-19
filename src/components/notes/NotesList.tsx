@@ -29,6 +29,7 @@ import {
   SectionDropIndicators,
   SectionedDropTargetDelegate,
 } from "@/components/ui/SectionedGridListDnd";
+import { keepRowFromActing } from "@/lib/arrow-navigation";
 import { toast } from "@/components/ui/Toast";
 import type { ResponsiveToggleOption } from "@/components/ui";
 import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
@@ -776,6 +777,9 @@ export function NotesList({
 
   const renderTreeNote = (group: TreeGroup, note: NoteWithBook) => {
     const key = treeNoteKey(group.id, note.id);
+    // The drag feedback tints the whole group, header and rows (#562), the
+    // same as the unvirtualized group wrapper did.
+    const isDropTarget = dragOverGroupId === group.id;
     return (
       <GridListItem
         key={key}
@@ -784,7 +788,9 @@ export function NotesList({
         textValue={note.title || t("notes.untitled")}
         onAction={() => activateNote(note)}
         className={({ isFocusVisible }) =>
-          `ml-7 mr-2 rounded-md ${isFocusVisible ? "ring-2 ring-primary ring-offset-1" : ""}`
+          `ml-7 mr-2 rounded-md ${
+            isDropTarget ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""
+          } ${isFocusVisible ? "ring-2 ring-primary ring-offset-1" : ""}`
         }
       >
         <NoteListItem
@@ -814,9 +820,6 @@ export function NotesList({
 
     return (
       <div
-        // The GridList treats focus inside it as a move to its focused row,
-        // which would take these controls' focus the moment they get it.
-        onFocus={(event) => event.stopPropagation()}
         className={`rounded-md px-2 py-1 transition-colors ${
           isDropTarget ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""
         }`}
@@ -824,7 +827,11 @@ export function NotesList({
         <div className="group flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50 transition-colors duration-200">
           <button
             type="button"
-            onClick={() => toggleGroup(group.id, group.defaultCollapsed)}
+            onClick={(event) => {
+              event.stopPropagation();
+              toggleGroup(group.id, group.defaultCollapsed);
+            }}
+            onKeyDown={keepRowFromActing}
             aria-label={group.title}
             aria-expanded={!isCollapsed}
             className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
@@ -854,7 +861,11 @@ export function NotesList({
               <Tooltip content={t("notes.addNoteToBook")}>
                 <button
                   type="button"
-                  onClick={() => onCreateNote(group.book?.id ?? null)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onCreateNote(group.book?.id ?? null);
+                  }}
+                  onKeyDown={keepRowFromActing}
                   aria-label={t("notes.addNoteToBook")}
                   className="shrink-0 rounded p-0.5 pointer-coarse:p-1.5 text-muted-foreground opacity-0 transition-all duration-200 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
                 >
@@ -980,6 +991,9 @@ export function NotesList({
                 selectedKeys={treeSelectedKeys}
                 selectionMode="single"
                 selectionBehavior="replace"
+                // Selection is the current Note's highlight, controlled by the
+                // route, not a user toggle: a click or Space on it must not
+                // clear it, the same as the list view.
                 disallowEmptySelection
                 className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2"
               >
@@ -990,7 +1004,19 @@ export function NotesList({
                     data-group-id={group.id}
                     data-testid={`book-group-${group.id}`}
                   >
-                    <GridListHeader>{renderTreeGroupHeader(group)}</GridListHeader>
+                    <GridListItem
+                      key={`${groupKey(group.id)}:header`}
+                      id={`${groupKey(group.id)}:header`}
+                      data-group-header={group.id}
+                      textValue={group.title}
+                      aria-expanded={!isGroupCollapsed(group)}
+                      onAction={() => toggleGroup(group.id, group.defaultCollapsed)}
+                      className={({ isFocusVisible }) =>
+                        `rounded-md ${isFocusVisible ? "ring-2 ring-primary ring-offset-1" : ""}`
+                      }
+                    >
+                      {renderTreeGroupHeader(group)}
+                    </GridListItem>
                     {!isGroupCollapsed(group) && (
                       <Collection items={group.notes}>
                         {(note) => renderTreeNote(group, note)}

@@ -28,6 +28,29 @@ export function mockVirtualizerLayout({ height = 4000, width = 900 } = {}): () =
 }
 
 /**
+ * Both jsdom layout gaps the Virtualizer needs at once: the scroll view's size
+ * and each row's height. Call it in `beforeAll` and the returned function in
+ * `afterAll`, instead of pairing `mockVirtualizerLayout` and
+ * `mockRowScrollHeight` in every suite.
+ */
+export function mockVirtualizer({
+  rowHeight,
+  height,
+  width,
+}: {
+  rowHeight: number;
+  height?: number;
+  width?: number;
+}): () => void {
+  const restoreLayout = mockVirtualizerLayout({ height, width });
+  const restoreRows = mockRowScrollHeight(rowHeight);
+  return () => {
+    restoreRows();
+    restoreLayout();
+  };
+}
+
+/**
  * React Aria measures each virtualized item by its scrollHeight, which jsdom
  * reports as 0. Every item would then measure 0px and the Virtualizer would
  * mount all of them. Items are the absolutely positioned wrappers (and the rows

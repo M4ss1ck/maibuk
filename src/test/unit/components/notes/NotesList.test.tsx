@@ -21,8 +21,8 @@ import {
   mockRect,
 } from "@/test/support/drag-events";
 import {
-  mockRowScrollHeight,
   mockScrollEventOnScrollTopWrite,
+  mockVirtualizer,
   mockVirtualizerLayout,
 } from "@/test/support/virtualizer-layout";
 import {
@@ -37,16 +37,11 @@ installPointerEvent();
 // The Notes list is virtualized (#550): a Virtualizer lays rows out from the
 // scroll view's size, which jsdom reports as 0, so no row would mount. Every
 // row here is NOTE_ROW_ESTIMATE px tall; the long-list suite below narrows the viewport.
-let restoreVirtualizerLayout: () => void = () => {};
-let restoreRowHeight: () => void = () => {};
+let restoreVirtualizer: () => void = () => {};
 beforeAll(() => {
-  restoreVirtualizerLayout = mockVirtualizerLayout();
-  restoreRowHeight = mockRowScrollHeight(NOTE_ROW_ESTIMATE);
+  restoreVirtualizer = mockVirtualizer({ rowHeight: NOTE_ROW_ESTIMATE });
 });
-afterAll(() => {
-  restoreRowHeight();
-  restoreVirtualizerLayout();
-});
+afterAll(() => restoreVirtualizer());
 
 const { mockParkSelection, mockRestoreSelection } = vi.hoisted(() => ({
   mockParkSelection: vi.fn(),
@@ -903,6 +898,33 @@ describe("NotesList", () => {
     expect(onReassignNoteBook).toHaveBeenCalledWith("a", "book-b");
   });
 
+  it("tints the whole dragged-over group, header and rows", () => {
+    const books = [buildBook({ id: "book-a", title: "Novel" })];
+    const noteA = { ...buildNote({ id: "a", title: "Novel note" }), bookId: "book-a" };
+
+    render(
+      <NotesList
+        notes={[noteA]}
+        books={books}
+        currentNoteId={null}
+        onSelectNote={vi.fn()}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+        onReassignNoteBook={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tree" }));
+    const source = screen.getByText("Novel note").closest("[data-note-row]");
+    if (!source) throw new Error("Expected note row to exist");
+    const dataTransfer = createDataTransfer();
+
+    fireEvent.dragStart(source, { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId("book-group-book-a"), { dataTransfer });
+
+    expect(screen.getByRole("row", { name: "Novel note" })).toHaveClass("ring-primary/40");
+  });
+
   it("reassigns to unfiled (null) and ignores drops on the same book group", () => {
     const onReassignNoteBook = vi.fn();
     const books = [buildBook({ id: "book-a", title: "Novel" })];
@@ -1705,6 +1727,9 @@ describe("virtualized Notes tree (#562): small viewport", () => {
   const mountedTreeRows = () => [
     ...document.querySelectorAll<HTMLElement>('[role="row"][data-note-id]'),
   ];
+  const mountedTreeGroupHeaders = () => [
+    ...document.querySelectorAll<HTMLElement>('[role="row"][data-group-header]'),
+  ];
 
   it("mounts only the rows near the viewport out of 500", () => {
     useSettingsStore.setState({ notesListView: "tree", notesTreeGroupMode: "book" });
@@ -1714,29 +1739,76 @@ describe("virtualized Notes tree (#562): small viewport", () => {
     expect(mountedTreeRows().length).toBeLessThan(50);
   });
 
-  it("collapses and expands a group by keyboard", async () => {
+  it("marks every tag row of the current Note as selected", () => {
+    useSettingsStore.setState({ notesListView: "tree", notesTreeGroupMode: "tag" });
+    const shared = buildNote({ id: "a", title: "Shared", tags: ["craft", "revision"] });
+    render(<NotesList {...baseProps([shared])} currentNoteId="a" />);
+
+    const rows = mountedTreeRows();
+    expect(rows.map((row) => row.dataset.noteId)).toEqual(["a", "a"]);
+    for (const row of rows) {
+      expect(row).toHaveAttribute("aria-selected", "true");
+    }
+  });
+
+  it("reaches each book group's toggle and Add-note button with Tab, and Enter toggles", async () => {
     const user = userEvent.setup();
     useSettingsStore.setState({ notesListView: "tree", notesTreeGroupMode: "book" });
+    const books = [buildBook({ id: "book-a", title: "Novel" })];
+    const inBook = { ...buildNote({ id: "a", title: "Book note" }), bookId: "book-a" };
     render(
       <NotesList
-        {...baseProps([
-          buildNote({ id: "a", title: "First" }),
-          buildNote({ id: "b", title: "Second" }),
-        ])}
+        {...baseProps([inBook, buildNote({ id: "b", title: "Loose note" })])}
+        books={books}
       />
     );
 
-    const toggle = screen.getByRole("button", { name: "Unfiled" });
-    toggle.focus();
-    await user.keyboard("{Enter}");
-    expect(screen.queryByText("First")).not.toBeInTheDocument();
+    const dateToggle = screen.getByRole("button", { name: "Date" });
+    const novelToggle = screen.getByRole("button", { name: "Novel" });
+    const addNote = screen.getByRole("button", { name: "Add note" });
 
-    toggle.focus();
+    // Forward Tab from the Date control reaches the Novel header row, its
+    // toggle, then Add note: the DOM order main had.
+    dateToggle.focus();
+    await user.tab();
+    expect(mountedTreeGroupHeaders()[0]).toHaveFocus();
+    await user.tab();
+    expect(novelToggle).toHaveFocus();
+    await user.tab();
+    expect(addNote).toHaveFocus();
+
+    // Shift+Tab walks the same row back out to the Date control.
+    await user.tab({ shift: true });
+    expect(novelToggle).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(mountedTreeGroupHeaders()[0]).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(dateToggle).toHaveFocus();
+
+    // Enter on the header row itself toggles, as does Enter on its toggle.
+    mountedTreeGroupHeaders()[0].focus();
     await user.keyboard("{Enter}");
-    expect(await screen.findByText("First")).toBeInTheDocument();
+    expect(screen.queryByText("Book note")).not.toBeInTheDocument();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("Book note")).toBeInTheDocument();
+
+    novelToggle.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByText("Book note")).not.toBeInTheDocument();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("Book note")).toBeInTheDocument();
+
+    // The Unfiled group's toggle is on the same forward Tab pass.
+    dateToggle.focus();
+    let reachedUnfiled = false;
+    for (let press = 0; press < 12 && !reachedUnfiled; press += 1) {
+      await user.tab();
+      reachedUnfiled = document.activeElement === screen.getByRole("button", { name: "Unfiled" });
+    }
+    expect(reachedUnfiled).toBe(true);
   });
 
-  it("ArrowDown crosses a group boundary and Enter opens that Note", async () => {
+  it("ArrowDown walks header -> Notes -> next header, and Enter opens that Note", async () => {
     const user = userEvent.setup();
     const onSelectNote = vi.fn();
     const books = [buildBook({ id: "book-a", title: "Novel" })];
@@ -1755,9 +1827,17 @@ describe("virtualized Notes tree (#562): small viewport", () => {
       />
     );
 
+    // One row per group header, then that group's Notes, then the next header.
     const rows = mountedTreeRows();
+    const headers = mountedTreeGroupHeaders();
     expect(rows.map((row) => row.dataset.noteId)).toEqual(["a", "b"]);
-    rows[0].focus();
+    expect(headers.map((row) => row.dataset.groupHeader)).toEqual(["book-a", "unfiled"]);
+
+    headers[0].focus();
+    await user.keyboard("{ArrowDown}");
+    expect(rows[0]).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(headers[1]).toHaveFocus();
     await user.keyboard("{ArrowDown}");
     expect(rows[1]).toHaveFocus();
 
