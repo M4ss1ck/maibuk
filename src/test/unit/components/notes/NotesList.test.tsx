@@ -1751,7 +1751,7 @@ describe("virtualized Notes tree (#562): small viewport", () => {
     }
   });
 
-  it("reaches each book group's toggle and Add-note button with Tab, and Enter toggles", async () => {
+  it("with no Note selected, Tab reaches each book group's toggle and Add-note button", async () => {
     const user = userEvent.setup();
     useSettingsStore.setState({ notesListView: "tree", notesTreeGroupMode: "book" });
     const books = [buildBook({ id: "book-a", title: "Novel" })];
@@ -1806,6 +1806,40 @@ describe("virtualized Notes tree (#562): small viewport", () => {
       reachedUnfiled = document.activeElement === screen.getByRole("button", { name: "Unfiled" });
     }
     expect(reachedUnfiled).toBe(true);
+  });
+
+  it("with a current Note, Tab lands on its row and arrows reach the group's toggle and Add note", async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ notesListView: "tree", notesTreeGroupMode: "book" });
+    const books = [buildBook({ id: "book-a", title: "Novel" })];
+    const inBook = { ...buildNote({ id: "a", title: "Book note" }), bookId: "book-a" };
+    const loose = buildNote({ id: "b", title: "Loose note" });
+    render(<NotesList {...baseProps([inBook, loose])} books={books} currentNoteId="a" />);
+
+    const selectedRow = screen.getByRole("row", { name: "Book note" });
+    const novelToggle = screen.getByRole("button", { name: "Novel" });
+    const addNote = screen.getByRole("button", { name: "Add note" });
+
+    // The grid is one Tab stop: with a selected Note it resumes on that row,
+    // so a forward Tab passes over the Book group's header controls.
+    screen.getByRole("button", { name: "Date" }).focus();
+    await user.tab();
+    expect(selectedRow).toHaveFocus();
+    expect(novelToggle).not.toHaveFocus();
+    expect(addNote).not.toHaveFocus();
+
+    // Arrows are how the header controls are reached from the selected row.
+    await user.keyboard("{ArrowUp}");
+    const header = mountedTreeGroupHeaders()[0];
+    expect(header).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(novelToggle).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByText("Book note")).not.toBeInTheDocument();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("Book note")).toBeInTheDocument();
+    await user.keyboard("{ArrowRight}");
+    expect(addNote).toHaveFocus();
   });
 
   it("ArrowDown walks header -> Notes -> next header, and Enter opens that Note", async () => {
