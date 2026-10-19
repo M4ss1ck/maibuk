@@ -1,9 +1,16 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installPointerEvent, touchLongPress } from "@/test/support/pointer-events";
+import { mockVirtualizer } from "@/test/support/virtualizer-layout";
 
 installPointerEvent();
+
+let restoreVirtualizer: () => void = () => {};
+beforeAll(() => {
+  restoreVirtualizer = mockVirtualizer({ rowHeight: 176 });
+});
+afterAll(() => restoreVirtualizer());
 
 vi.mock("../../../lib/platform", () => ({
   IS_ANDROID: false,

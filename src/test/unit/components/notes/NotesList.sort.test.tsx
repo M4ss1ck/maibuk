@@ -128,11 +128,16 @@ function sectionIds() {
   );
 }
 
-/** Note ids in display order inside one tree group (its GridList). */
+/** Note ids in display order inside one tree group (its virtualized section). */
 function groupIds(name: string) {
-  return [
-    ...screen.getByRole("grid", { name }).querySelectorAll<HTMLElement>('[role="row"][data-key]'),
-  ].map((row) => row.dataset.key);
+  const header = screen
+    .getAllByText(name, { exact: true })
+    .find((element) => element.className.includes("font-medium"));
+  const section = header?.closest("[data-group-id]");
+  if (!section) throw new Error(`no tree group named ${name}`);
+  return [...section.querySelectorAll<HTMLElement>('[role="row"][data-note-id]')].map(
+    (row) => row.dataset.noteId
+  );
 }
 
 async function pickSort(user: ReturnType<typeof userEvent.setup>, label: string) {

@@ -164,6 +164,34 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
     },
   },
   {
+    id: "arrow-leave-notes-tree",
+    title: "Arrow leave from the Notes tree view",
+    seed: "perfManyNotes",
+    warmUp:
+      "Open a Note from the Notes Gallery, switch the Notes sidebar to the tree view, Shift+F6 to it and ArrowRight past the row's buttons into the note's text.",
+    measured:
+      "Twenty times: Shift+F6 back to the tree (it lands on the last-used row button), then ArrowRight out of the row into the note's text. Each arrow that moves focus is timed in the page.",
+    repetitions: 3,
+    recordsInput: true,
+    skip: {
+      android:
+        "a phone shows one Pane at a time (the lists are a drawer below md), so there is no Pane to cross into",
+    },
+  },
+  {
+    id: "notes-gallery-arrows",
+    title: "Arrow moves across the Notes Gallery",
+    seed: "perfManyNotes",
+    warmUp: "Open the Notes Gallery, F6 into the card grid and move across a few cards.",
+    measured:
+      "F6 into the Gallery, then twenty arrow-key moves: repeated ArrowDown scrolls past the Virtualizer's overscan, with Right/Left pairs inside a row.",
+    repetitions: 3,
+    recordsInput: false,
+    skip: {
+      android: "a phone shows the Gallery on its own, with no Pane cycle to F6 into",
+    },
+  },
+  {
     id: "pane-slide",
     title: "Pane frame slide on F6",
     seed: "perfManyChapters",

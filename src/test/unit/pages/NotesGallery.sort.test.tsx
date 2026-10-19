@@ -1,6 +1,13 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { mockVirtualizer } from "@/test/support/virtualizer-layout";
+
+let restoreVirtualizer: () => void = () => {};
+beforeAll(() => {
+  restoreVirtualizer = mockVirtualizer({ rowHeight: 176 });
+});
+afterAll(() => restoreVirtualizer());
 
 vi.mock("@/lib/platform", () => ({
   IS_ANDROID: false,

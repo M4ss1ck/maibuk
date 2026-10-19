@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { GridListItem } from "react-aria-components/GridList";
 import { BookOpen } from "lucide-react";
@@ -21,7 +21,12 @@ interface NoteCardProps {
   tutorialAnchor?: string;
 }
 
-export function NoteCard({
+/**
+ * Memoized because the virtualized Gallery re-renders its mounted rows on
+ * every arrow move (#562); a card whose props are unchanged must not re-read
+ * its tags and layout then.
+ */
+export const NoteCard = memo(function NoteCard({
   note,
   bookTitle,
   onClick,
@@ -50,7 +55,7 @@ export function NoteCard({
       data-tutorial={tutorialAnchor}
       onAction={onClick}
       className={({ isFocusVisible, isHovered, isPressed }) =>
-        `relative h-44 cursor-pointer overflow-hidden rounded-xl border bg-card text-left transition-all duration-200 ${
+        `relative h-44 cursor-pointer overflow-hidden rounded-xl border bg-card text-left transition-colors duration-200 ${
           isFocusVisible ? "border-primary ring-2 ring-primary ring-offset-2" : "border-border"
         } ${isHovered || isPressed ? "shadow-lg" : ""}`
       }
@@ -95,4 +100,4 @@ export function NoteCard({
       )}
     </GridListItem>
   );
-}
+});

@@ -1,7 +1,13 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NotesGallery } from "@/pages/NotesGallery";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { galleryColumnsForWidth, GALLERY_CARD_ESTIMATE, NotesGallery } from "@/pages/NotesGallery";
+import { mockRect } from "@/test/support/drag-events";
+import {
+  mockScrollEventOnScrollTopWrite,
+  mockVirtualizer,
+  mockVirtualizerLayout,
+} from "@/test/support/virtualizer-layout";
 import { installArrowNavigation } from "@/lib/arrow-navigation";
 import { useSettingsStore } from "@/features/settings/store";
 import { DEFAULT_NOTES_FILTERS } from "@/components/notes/notes-list-model";
@@ -89,6 +95,14 @@ vi.mock("../../../components/notes", async () => {
     ),
   };
 });
+
+// The Gallery is virtualized (#562): both sizes and the card height come from
+// the browser, which jsdom reports as 0.
+let restoreVirtualizer: () => void = () => {};
+beforeAll(() => {
+  restoreVirtualizer = mockVirtualizer({ rowHeight: GALLERY_CARD_ESTIMATE });
+});
+afterAll(() => restoreVirtualizer());
 
 describe("NotesGallery", () => {
   beforeEach(() => {
@@ -284,14 +298,83 @@ describe("NotesGallery", () => {
     expect(screen.getByText("Research")).toBeInTheDocument();
   });
 
-  it("marks the gallery as a container and uses container variants for the card grid", () => {
+  it("marks the gallery as a container and keeps the card grid responsive", () => {
     const { container } = render(<NotesGallery />);
 
     expect(container.firstElementChild).toHaveClass("@container");
+    expect(screen.getByRole("grid")).toHaveAttribute("data-layout", "grid");
+
+    // The same container-query widths the CSS grid used: 2 columns up to
+    // @3xl, 3 up to @5xl, then 4.
+    expect([767, 768, 1023, 1024].map(galleryColumnsForWidth)).toEqual([2, 3, 3, 4]);
+  });
+
+  it("keeps the grid's row positions for the arrow edge rules", () => {
+    render(<NotesGallery />);
 
     const grid = screen.getByRole("grid");
-    expect(grid).toHaveClass("grid-cols-2", "@3xl:grid-cols-3", "@5xl:grid-cols-4");
-    expect(grid).not.toHaveClass("lg:grid-cols-3", "xl:grid-cols-4");
+    const rows = screen.getAllByRole("row");
+    expect(grid).toHaveAttribute("aria-rowcount", "2");
+    expect(rows[0]).toHaveAttribute("aria-rowindex", "1");
+    expect(rows[1]).toHaveAttribute("aria-rowindex", "2");
+  });
+
+  it("keeps Right on a row's last card and Down on the last row", async () => {
+    const user = userEvent.setup();
+    noteState.notes = Array.from({ length: 4 }, (_, index) => ({
+      id: `n${index}`,
+      title: `Note ${index}`,
+      bookId: null,
+      tags: [],
+      content: "",
+      pinned: false,
+      order: index,
+      contentUpdatedAt: index,
+      updatedAt: index,
+    }));
+    const uninstall = installArrowNavigation();
+    try {
+      render(<NotesGallery />);
+      const rows = screen.getAllByRole("row");
+      // Two columns, as the measured content box starts at the narrowest one.
+      mockRect(rows[0], 0, 176);
+      mockRect(rows[1], 0, 176);
+      mockRect(rows[2], 192, 368);
+      mockRect(rows[3], 192, 368);
+
+      rows[1].focus();
+      await user.keyboard("{ArrowRight}");
+      expect(rows[1]).toHaveFocus();
+
+      // Down stays inside a grid; at the last row it keeps focus there.
+      rows[3].focus();
+      await user.keyboard("{ArrowDown}");
+      expect(rows[3]).toHaveFocus();
+      await user.keyboard("{ArrowDown}");
+      expect(rows[3]).toHaveFocus();
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("mounts only the cards near the viewport out of 500", () => {
+    noteState.notes = Array.from({ length: 500 }, (_, index) => ({
+      id: `n${index}`,
+      title: `Note ${index}`,
+      bookId: null,
+      tags: [],
+      content: "",
+      pinned: false,
+      order: index,
+      contentUpdatedAt: index,
+      updatedAt: index,
+    }));
+    render(<NotesGallery />);
+
+    const rows = screen.getAllByRole("row");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(50);
+    expect(screen.getByRole("grid")).toHaveAttribute("aria-rowcount", "500");
   });
 
   it("clamps the date picker popover to the viewport", async () => {
@@ -305,5 +388,95 @@ describe("NotesGallery", () => {
       ?.parentElement;
     expect(popover).not.toBeNull();
     expect(popover).toHaveClass("w-72", "max-w-[calc(100vw-2rem)]");
+  });
+});
+
+// A virtualized 2D grid mounts whole visual rows, so an unmounted grid-order
+// neighbor is never on the same visual row. Left/Right must still read the
+// row's side edge as a grid edge (#562).
+describe("virtualized Notes Gallery arrows (#562): 500 Notes, two columns", () => {
+  let restoreTwoColumnLayout: () => void = () => {};
+  let restoreScrollEvents: () => void = () => {};
+  beforeAll(() => {
+    restoreTwoColumnLayout = mockVirtualizerLayout({ width: 767, height: 4000 });
+    restoreScrollEvents = mockScrollEventOnScrollTopWrite();
+  });
+  afterAll(() => {
+    restoreScrollEvents();
+    restoreTwoColumnLayout();
+  });
+  beforeEach(() => {
+    settingsState.setLastNoteId.mockClear();
+    useSettingsStore.setState({ notesFilters: DEFAULT_NOTES_FILTERS });
+    noteState.notes = Array.from({ length: 500 }, (_, index) => ({
+      id: `n${index}`,
+      title: `Note ${index}`,
+      bookId: null,
+      tags: [],
+      content: "",
+      pinned: false,
+      order: index,
+      contentUpdatedAt: index,
+      updatedAt: index,
+    }));
+  });
+
+  // Two columns: card n (1-based aria-rowindex) sits at visual row
+  // floor((n-1)/2), row height 176 + 16 gap.
+  const mockRowRects = (rows: HTMLElement[]) => {
+    for (const row of rows) {
+      const top = Math.floor((Number(row.getAttribute("aria-rowindex")) - 1) / 2) * 192;
+      mockRect(row, top, top + GALLERY_CARD_ESTIMATE);
+    }
+  };
+
+  it("keeps Right on the last mounted card as a grid edge", async () => {
+    const user = userEvent.setup();
+    const uninstall = installArrowNavigation();
+    try {
+      render(<NotesGallery />);
+      const rows = screen.getAllByRole("row");
+      mockRowRects(rows);
+      const last = rows[rows.length - 1];
+      // The mounted window ends on the second column, so Right has no card
+      // beside it: the arrow leaves the grid by position (ADR 0025).
+      expect((Number(last.getAttribute("aria-rowindex")) - 1) % 2).toBe(1);
+
+      last.focus();
+      await user.keyboard("{ArrowRight}");
+      expect(last).toHaveFocus();
+    } finally {
+      uninstall();
+    }
+  });
+
+  it("keeps Left on the first card of a scrolled-down row as a grid edge", async () => {
+    const user = userEvent.setup();
+    const uninstall = installArrowNavigation();
+    try {
+      render(<NotesGallery />);
+      const grid = screen.getByRole("grid");
+      await act(async () => {
+        grid.scrollTop = 192 * 12;
+      });
+      await waitFor(() =>
+        expect(Number(screen.getAllByRole("row")[0].getAttribute("aria-rowindex"))).toBeGreaterThan(
+          1
+        )
+      );
+
+      const rows = screen.getAllByRole("row");
+      mockRowRects(rows);
+      const first = rows[0];
+      // The scrolled window starts on the first column, one row lower than the
+      // top: Left has no card beside it.
+      expect((Number(first.getAttribute("aria-rowindex")) - 1) % 2).toBe(0);
+
+      first.focus();
+      await user.keyboard("{ArrowLeft}");
+      expect(first).toHaveFocus();
+    } finally {
+      uninstall();
+    }
   });
 });

@@ -85,6 +85,28 @@ export const FRAME_BUDGETS: Readonly<Record<string, ScenarioBudget>> = {
         "half the twenty leaves of one run, so a driver whose arrow presses never land is not-measured",
     },
   },
+  "arrow-leave-notes-tree": {
+    overrides: { handlerP95Ms: 2, minHandlerSamples: 10, inputP95Intervals: 1, minInputs: 10 },
+    reasons: {
+      handlerP95Ms:
+        "issue #562: target finding, focus change excluded; the tree view holds the same 500 Notes as the list, so it must find its target in under 2 ms at p95",
+      minHandlerSamples:
+        "half the twenty leaves of one run, so a driver that stopped leaving the tree is not-measured",
+      inputP95Intervals:
+        "issue #562: the focus change excluded from handler time is judged here, keypress to next frame",
+      minInputs:
+        "half the twenty leaves of one run, so a driver whose arrow presses never land is not-measured",
+    },
+  },
+  "notes-gallery-arrows": {
+    overrides: { p95FrameIntervals: 2.5, maxDroppedPct: 10 },
+    reasons: {
+      p95FrameIntervals:
+        "issue #562: repeated ArrowDown scrolls the Virtualizer past its overscan, so a focus move can mount a card row and miss the next vsync; the after runs measure 2 intervals on 180 Hz Chromium and 1.6 on 62 Hz WebKit, against 37 and 11 intervals before",
+      maxDroppedPct:
+        "issue #562: the twenty-move window mounts and unmounts a card row per ArrowDown; the after runs drop 6-7% of frames (before: 27% Chromium, 16% WebKit) while keeping 0 long animation frames over 50 ms",
+    },
+  },
   "pane-slide": { overrides: {}, reasons: {} },
   "plugin-remote-ui": { overrides: {}, reasons: {} },
   "typing-with-highlights": {

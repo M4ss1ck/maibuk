@@ -184,26 +184,53 @@ function nestedOutcome(
 // A 2D card grid moves Left/Right between cards by position and leaves at
 // its side edges, where React Aria would wrap to the next visual row. React
 // Aria Components forces "tab" navigation in `layout="grid"`, so a card's
-// own buttons are Tab stops and their arrows stay React Aria's. Cards flow in
-// DOM order, so the card beside one is its DOM neighbor when the two share a
-// visual row: two rect reads, whatever the gallery's size.
+// own buttons are Tab stops and their arrows stay React Aria's. The card
+// beside one is its grid-order neighbor (aria-rowindex under a Virtualizer,
+// DOM order otherwise); when the two share a visual row, two rect reads move
+// focus, whatever the gallery's size.
 function gridOutcome(el: HTMLElement, widget: Element, key: ArrowKey): ArrowOutcome {
   const item = el.closest('[role="row"], [role="option"]');
   if (!item || !widget.contains(item)) return { kind: "edge" };
   if (el !== item) return { kind: "inside" };
-  const items = [...widget.querySelectorAll('[role="row"], [role="option"]')];
+  const items = gridRows(widget);
   const beside = items[items.indexOf(item) + (key === "ArrowRight" ? 1 : -1)];
   if (!(beside instanceof HTMLElement)) {
-    // A virtualized grid mounts only the rows near the viewport, so no mounted
-    // neighbor does not mean there is none. React Aria sets aria-rowindex (1-based)
-    // on each virtualized row and aria-rowcount on the grid (useGridRow.mjs,
-    // useGrid.mjs). When the true neighbor exists, the grid handles the arrow.
-    return hasUnmountedNeighbor(widget, item, key) ? { kind: "inside" } : { kind: "edge" };
+    // A virtualized grid mounts only whole visual rows near the viewport, so no
+    // mounted neighbor does not mean there is none: React Aria sets
+    // aria-rowindex (1-based) on each row and aria-rowcount on the grid
+    // (useGridRow.mjs, useGrid.mjs). When the true neighbor exists it is on the
+    // next visual row. A single-column grid keeps the arrow inside, as before
+    // (#550); a grid that also mounts a card beside this one is at the row's
+    // side edge (ADR 0025).
+    if (!hasUnmountedNeighbor(widget, item, key)) return { kind: "edge" };
+    return sharesVisualRow(item, items) ? { kind: "edge" } : { kind: "inside" };
   }
   const from = item.getBoundingClientRect();
   const to = beside.getBoundingClientRect();
   const sameRow = Math.min(to.bottom, from.bottom) > Math.max(to.top, from.top);
   return sameRow ? { kind: "move", to: beside } : { kind: "edge" };
+}
+
+// The grid's mounted items in grid order. A Virtualizer appends rows in mount
+// order, not index order, so aria-rowindex sorts them; a grid without it (not
+// virtualized) keeps DOM order, which already is grid order.
+function gridRows(widget: Element): Element[] {
+  const rows = [...widget.querySelectorAll('[role="row"], [role="option"]')];
+  const indexed = rows.map((row) => ({ row, index: Number(row.getAttribute("aria-rowindex")) }));
+  if (!indexed.every(({ index }) => Number.isInteger(index) && index >= 1)) return rows;
+  return indexed.sort((a, b) => a.index - b.index).map(({ row }) => row);
+}
+
+// Whether another mounted item shares this one's visual row: exactly when the
+// grid shows more than one column. Whole rows mount together, so a missing
+// neighbor beside an item with a same-row sibling is the row's side edge.
+function sharesVisualRow(item: Element, items: Element[]): boolean {
+  const from = item.getBoundingClientRect();
+  return items.some((other) => {
+    if (other === item) return false;
+    const to = other.getBoundingClientRect();
+    return Math.min(to.bottom, from.bottom) > Math.max(to.top, from.top);
+  });
 }
 
 // Whether the grid holds a row past `item` in the arrow's direction that is

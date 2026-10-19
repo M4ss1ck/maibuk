@@ -955,9 +955,20 @@ describe("arrow navigation (ADR 0025)", () => {
 // A grid whose rows are virtualized: only rows first..last are mounted, and
 // each carries its position in the whole grid (aria-rowindex, 1-based) out of
 // aria-rowcount. Panes sit on either side, so a leave is observable as focus.
-function VirtualGridFixture({ first, last, count }: { first: number; last: number; count: number }) {
+function VirtualGridFixture({
+  first,
+  last,
+  count,
+  columns = 1,
+}: {
+  first: number;
+  last: number;
+  count: number;
+  columns?: number;
+}) {
   const rows = [];
   for (let i = first; i <= last; i += 1) {
+    const visualRow = Math.floor((i - 1) / columns);
     rows.push(
       // biome-ignore lint/a11y/useSemanticElements: a grid of divs, as the Virtualizer mounts them.
       <div
@@ -966,7 +977,7 @@ function VirtualGridFixture({ first, last, count }: { first: number; last: numbe
         tabIndex={-1}
         aria-label={`Card ${i}`}
         aria-rowindex={i}
-        data-rect={`200 ${(i - 1) * 40} 400 ${i * 40}`}
+        data-rect={`200 ${visualRow * 40} 400 ${visualRow * 40 + 40}`}
       >
         Card {i}
       </div>
@@ -1032,5 +1043,44 @@ describe("virtualized grid rows (aria-rowindex / aria-rowcount)", () => {
     act(() => row("Card 5").focus());
     await user.keyboard("{ArrowUp}");
     expect(row("Card 5")).toHaveFocus();
+  });
+
+  // A multi-column grid mounts whole visual rows, so the unmounted neighbor
+  // beside the row's last (or first) card is on another visual row: the row's
+  // side edge is a true edge even while that neighbor is unmounted (#562).
+  it("leaves a multi-column grid through its right edge while the next row is unmounted", async () => {
+    const user = userEvent.setup();
+    render(<VirtualGridFixture first={5} last={12} count={20} columns={2} />);
+    act(() => row("Card 12").focus());
+
+    await user.keyboard("{ArrowRight}");
+    expect(button("Editor action")).toHaveFocus();
+  });
+
+  it("leaves a multi-column grid through its left edge while the previous row is unmounted", async () => {
+    const user = userEvent.setup();
+    render(<VirtualGridFixture first={5} last={12} count={20} columns={2} />);
+    act(() => row("Card 5").focus());
+
+    await user.keyboard("{ArrowLeft}");
+    expect(button("Sidebar action")).toHaveFocus();
+  });
+
+  it("wraps right inside a multi-column row to the card beside it", async () => {
+    const user = userEvent.setup();
+    render(<VirtualGridFixture first={5} last={12} count={20} columns={2} />);
+    act(() => row("Card 5").focus());
+
+    await user.keyboard("{ArrowRight}");
+    expect(row("Card 6")).toHaveFocus();
+  });
+
+  it("leaves right at the true last card of a multi-column grid", async () => {
+    const user = userEvent.setup();
+    render(<VirtualGridFixture first={17} last={20} count={20} columns={2} />);
+    act(() => row("Card 20").focus());
+
+    await user.keyboard("{ArrowRight}");
+    expect(button("Editor action")).toHaveFocus();
   });
 });
