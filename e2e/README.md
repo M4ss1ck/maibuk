@@ -452,9 +452,9 @@ to the section heading, with no keyboard way back to the outline but Tab
 through every control, while scrolling makes each section current in turn and
 the outline moves at every change. The arrow scenarios (`arrow-leave-notes`,
 `arrow-leave-chapters`) Shift+F6 into a long list and ArrowRight out of it,
-twenty times; the page times each arrow that moves focus
-(`window.__maibukArrowLeaveMs`, set by the driver) and the report judges its
-p95 as the handler-time line. Their in-window focus checks use CSS locators,
+twenty times; the page times each arrow it acts on from keydown until the
+focus target is decided, excluding the focus change (`window.__maibukArrowLeaveMs`,
+set by the driver), and the report judges its p95 as the handler-time line. Their in-window focus checks use CSS locators,
 since a role query walks the whole 500-row list and its cost would land in
 the measured frames. `pane-slide` presses F6 every 250 ms to slide the Pane
 frame. They run on the `perfLongChapter`, `perfDenseCanvas`, `perfManyNotes`

@@ -416,7 +416,7 @@ const ARROW_LEAVES = 20;
 
 declare global {
   interface Window {
-    /** Set here, filled by src/lib/arrow-navigation: one entry per arrow that moved focus. */
+    /** Set here, filled by src/lib/arrow-navigation: one entry per arrow it acted on, up to when the target is decided (focus change excluded). */
     __maibukArrowLeaveMs?: number[];
   }
 }

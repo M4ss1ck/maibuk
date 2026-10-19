@@ -288,22 +288,29 @@ export function stopsIn(scope: Element): Element[] {
   return found.map(({ stop }) => stop);
 }
 
+/** Called once the focus target is decided, just before focus moves. */
+export type BeforeFocus = () => void;
+
 /**
  * Focuses a stop. A list, grid, or tab list lands on its roving item (the
  * one React Aria keeps at tabindex 0), else on the widget, whose own focus
  * handler picks the focused, selected, or first item. A toolbar lands on its
  * first item; React Aria's focus handler restores the last one used.
  */
-export function landOn(stop: Element): void {
+export function landOn(stop: Element, beforeFocus?: BeforeFocus): void {
   if (!(stop instanceof HTMLElement)) return;
   if (!stop.matches(COMPOSITE)) {
+    beforeFocus?.();
     stop.focus();
     return;
   }
   if (stop.getAttribute("role") === "toolbar") {
-    (focusablesIn(stop, false)[0] ?? stop).focus();
+    const first = focusablesIn(stop, false)[0] ?? stop;
+    beforeFocus?.();
+    first.focus();
     return;
   }
-  const roving = stop.querySelector<HTMLElement>(ROVING_ITEM);
-  (roving ?? stop).focus();
+  const roving = stop.querySelector<HTMLElement>(ROVING_ITEM) ?? stop;
+  beforeFocus?.();
+  roving.focus();
 }

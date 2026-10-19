@@ -6,6 +6,7 @@ import { pickInDirection, pickPane } from "@/lib/arrow-navigation/geometry";
 import { installPaneMemory, landInPane, paneOf, visiblePanes } from "@/lib/arrow-navigation/panes";
 import {
   type ArrowKey,
+  type BeforeFocus,
   arrowOutcome,
   DIRECTION,
   isTextEntry,
@@ -40,21 +41,26 @@ function hasArea(el: Element): boolean {
 
 // Nothing focused, or a Pane container itself (ADR 0025 rule 7): Down and
 // Right land on the scope's entry (or its first stop), Up and Left on its last.
-function enterScope(scope: Element, key: ArrowKey): boolean {
+function enterScope(scope: Element, key: ArrowKey, beforeFocus?: BeforeFocus): boolean {
   const forward = key === "ArrowDown" || key === "ArrowRight";
   const entry = forward ? scope.querySelector("[data-focus-pane-entry]") : null;
   if (entry) {
-    landOn(entry);
+    landOn(entry, beforeFocus);
     return true;
   }
   const stops = stopsIn(scope).filter(hasArea);
   const stop = forward ? stops[0] : stops[stops.length - 1];
   if (!stop) return false;
-  landOn(stop);
+  landOn(stop, beforeFocus);
   return true;
 }
 
-function leave(active: HTMLElement, key: ArrowKey, layer: HTMLElement): boolean {
+function leave(
+  active: HTMLElement,
+  key: ArrowKey,
+  layer: HTMLElement,
+  beforeFocus?: BeforeFocus
+): boolean {
   const dir = DIRECTION[key];
   const inDialog = layer !== document.body;
   const panes = inDialog ? [] : visiblePanes();
@@ -66,7 +72,7 @@ function leave(active: HTMLElement, key: ArrowKey, layer: HTMLElement): boolean 
     .map((stop) => ({ rect: stop.getBoundingClientRect(), id: stop }));
   const target = pickInDirection(from, candidates, dir);
   if (target) {
-    landOn(target);
+    landOn(target, beforeFocus);
     return true;
   }
   if (inDialog || pane === layer) return false;
@@ -75,7 +81,7 @@ function leave(active: HTMLElement, key: ArrowKey, layer: HTMLElement): boolean 
     .map((other) => ({ rect: other.getBoundingClientRect(), id: other }));
   const next = pickPane(from, pane.getBoundingClientRect(), others, dir);
   if (!next) return false;
-  landInPane(next);
+  landInPane(next, undefined, beforeFocus);
   return true;
 }
 
@@ -83,7 +89,10 @@ declare global {
   interface Window {
     /**
      * Set by the frame-rate lane's arrow scenarios (e2e/frames): each arrow
-     * that moves focus pushes how long handling it took, in ms.
+     * the handler acts on pushes the time it took to find its focus target,
+     * in ms. The sample stops when the target is decided, before focus
+     * moves, so the focus listeners and style recalculation the focus change
+     * triggers are excluded on purpose (issue #564).
      */
     __maibukArrowLeaveMs?: number[];
   }
@@ -103,11 +112,17 @@ export function handleArrowKey(event: KeyboardEvent): void {
   }
   const handledBefore = event.defaultPrevented;
   const start = performance.now();
-  routeArrowKey(event);
-  if (!handledBefore && event.defaultPrevented) samples.push(performance.now() - start);
+  let decidedAt: number | undefined;
+  const beforeFocus = () => {
+    if (decidedAt === undefined) decidedAt = performance.now();
+  };
+  routeArrowKey(event, beforeFocus);
+  if (!handledBefore && event.defaultPrevented) {
+    samples.push((decidedAt ?? performance.now()) - start);
+  }
 }
 
-function routeArrowKey(event: KeyboardEvent): void {
+function routeArrowKey(event: KeyboardEvent, beforeFocus?: BeforeFocus): void {
   if (!isArrowKey(event.key)) return;
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
   if (event.isComposing || event.defaultPrevented) return;
@@ -117,7 +132,11 @@ function routeArrowKey(event: KeyboardEvent): void {
 
   if (!(active instanceof HTMLElement) || active === document.body || active === layer) {
     if (
-      enterScope(layer === document.body ? (document.querySelector("main") ?? layer) : layer, key)
+      enterScope(
+        layer === document.body ? (document.querySelector("main") ?? layer) : layer,
+        key,
+        beforeFocus
+      )
     ) {
       event.preventDefault();
       event.stopPropagation();
@@ -126,7 +145,7 @@ function routeArrowKey(event: KeyboardEvent): void {
   }
   if (!layer.contains(active)) return;
   if (active.matches("[data-focus-pane]")) {
-    if (enterScope(active, key)) {
+    if (enterScope(active, key, beforeFocus)) {
       event.preventDefault();
       event.stopPropagation();
     }
@@ -147,8 +166,10 @@ function routeArrowKey(event: KeyboardEvent): void {
 
   const outcome = arrowOutcome(active, key);
   if (outcome.kind === "inside") return;
-  if (outcome.kind === "move") outcome.to.focus();
-  else if (!leave(active, key, layer)) {
+  if (outcome.kind === "move") {
+    beforeFocus?.();
+    outcome.to.focus();
+  } else if (!leave(active, key, layer, beforeFocus)) {
     // Nowhere to go: a grid-list row keeps focus rather than letting React
     // Aria wrap Left/Right around the row's controls.
     if ((key === "ArrowLeft" || key === "ArrowRight") && active.closest('[role="row"]')) {

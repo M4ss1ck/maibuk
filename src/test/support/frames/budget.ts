@@ -63,7 +63,7 @@ export const FRAME_BUDGETS: Readonly<Record<string, ScenarioBudget>> = {
     overrides: { handlerP95Ms: 2, minHandlerSamples: 10 },
     reasons: {
       handlerP95Ms:
-        "keyboard arrow navigation plan, criterion 11: an arrow that leaves a widget finds its target in under 2 ms at p95, with 500 Notes in the list",
+        "issue #564: target finding, focus change excluded; keyboard arrow navigation plan, criterion 11: an arrow that leaves a widget finds its target in under 2 ms at p95, with 500 Notes in the list",
       minHandlerSamples:
         "half the twenty leaves of one run, so a driver that stopped leaving the list is not-measured",
     },
@@ -72,7 +72,7 @@ export const FRAME_BUDGETS: Readonly<Record<string, ScenarioBudget>> = {
     overrides: { handlerP95Ms: 2, minHandlerSamples: 10 },
     reasons: {
       handlerP95Ms:
-        "keyboard arrow navigation plan, criterion 11: an arrow that leaves a widget finds its target in under 2 ms at p95, with 100 Chapters in the list",
+        "issue #564: target finding, focus change excluded; keyboard arrow navigation plan, criterion 11: an arrow that leaves a widget finds its target in under 2 ms at p95, with 100 Chapters in the list",
       minHandlerSamples:
         "half the twenty leaves of one run, so a driver that stopped leaving the list is not-measured",
     },
