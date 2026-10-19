@@ -75,14 +75,36 @@ export function CommandPalette() {
   return <OpenCommandPalette />;
 }
 
-// A result row is exactly one 32px line (`min-h-8`, single-line text). A fixed
-// size is not just an estimate: the virtualizer measures estimated rows with a
-// forced layout on every mount, which WebKit cannot afford per keystroke
-// (#552). Padding keeps the last row's focus ring inside the scroll box.
-const LIST_LAYOUT_OPTIONS = { rowSize: 32, estimatedHeadingSize: 22, padding: 4 };
+// A result row is exactly one 32px line on a fine pointer (`min-h-8`,
+// single-line text); a coarse pointer raises the row to 44px (`min-h-11`) for
+// touch. A fixed size is not just an estimate: the virtualizer measures
+// estimated rows with a forced layout on every mount, which WebKit cannot
+// afford per keystroke (#552). On a coarse pointer the row can grow with text
+// scaling, so it stays estimated. Padding keeps the last row's focus ring
+// inside the scroll box.
+const FINE_POINTER_LAYOUT = { rowSize: 32, estimatedHeadingSize: 22, padding: 4 };
+const COARSE_POINTER_LAYOUT = { estimatedRowSize: 44, estimatedHeadingSize: 22, padding: 4 };
+
+/** Whether the primary pointer is a finger, so the rows take their 44px size. */
+function useCoarsePointer(): boolean {
+  const [coarse, setCoarse] = useState(
+    () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true
+  );
+  useEffect(() => {
+    const query = window.matchMedia?.("(pointer: coarse)");
+    if (!query) return;
+    const update = () => setCoarse(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return coarse;
+}
 
 function OpenCommandPalette() {
   const { t, i18n } = useTranslation();
+  const coarsePointer = useCoarsePointer();
+  const layoutOptions = coarsePointer ? COARSE_POINTER_LAYOUT : FINE_POINTER_LAYOUT;
   const close = useCommandPaletteStore((state) => state.close);
   const snapshot = useCommandPaletteStore((state) => state.snapshot);
   const customVoice = useShortcutSettingsStore((state) => state.shortcuts.voice);
@@ -105,6 +127,9 @@ function OpenCommandPalette() {
   const navigate = useNavigate();
   const location = useLocation();
   const openBookId = useMatch("/book/:bookId")?.params.bookId ?? null;
+  const announce = useCallback((message: string) => {
+    if (announcementRef.current) announcementRef.current.textContent = message;
+  }, []);
 
   // One typed local for the builders: they accept registry and Settings keys
   // the i18n `t` type does not know about.
@@ -180,7 +205,8 @@ function OpenCommandPalette() {
 
   // The field shows every keystroke immediately; the ranked list follows in a
   // background render, so the keystroke's frame only carries the input echo.
-  // The results are the same, one frame later (useDeferredValue, #552).
+  // The results are the same, one frame later; a key pressed inside that
+  // window acts on the row the author still sees (useDeferredValue, #552).
   const deferredQuery = useDeferredValue(query);
   const sections = useMemo(
     () =>
@@ -213,19 +239,15 @@ function OpenCommandPalette() {
     // A nested page with an empty query announces the page, not the count the
     // deferred query is about to replace; its own results are "N results".
     if (page !== "root" && deferredQuery === "") return;
-    if (announcementRef.current) {
-      announcementRef.current.textContent = t("commandPalette.resultCount", { count });
-    }
-  }, [count, t, page, deferredQuery]);
+    announce(t("commandPalette.resultCount", { count }));
+  }, [count, t, page, deferredQuery, announce]);
 
   // Entering or leaving a nested page is announced after the count it changes,
   // so this effect sits below the count's on purpose.
   useEffect(() => {
-    if (page === "root" || !announcementRef.current) return;
-    announcementRef.current.textContent = t("commandPalette.pageAnnouncement", {
-      page: t(`commandPalette.chips.${page}`),
-    });
-  }, [page, t]);
+    if (page === "root") return;
+    announce(t("commandPalette.pageAnnouncement", { page: t(`commandPalette.chips.${page}`) }));
+  }, [page, t, announce]);
 
   // The active result lives in React Aria's virtual focus (the caret stays in
   // the field), so read it off the input's active descendant. Only the one
@@ -255,12 +277,10 @@ function OpenCommandPalette() {
   const removeByKey = useCallback(
     (key: string) => {
       removalRef.current = true;
-      if (announcementRef.current) {
-        announcementRef.current.textContent = t("commandPalette.removedFromRecent");
-      }
+      announce(t("commandPalette.removedFromRecent"));
       removeRecent(key);
     },
-    [t, removeRecent]
+    [announce, t, removeRecent]
   );
 
   const changeQuery = useCallback((value: string) => {
@@ -470,7 +490,7 @@ function OpenCommandPalette() {
             </p>
           )
         ) : (
-          <Virtualizer layout={ListLayout} layoutOptions={LIST_LAYOUT_OPTIONS}>
+          <Virtualizer layout={ListLayout} layoutOptions={layoutOptions}>
             <ListBox
               aria-label={t("commandPalette.resultsLabel")}
               className="scrollbar-themed max-h-[min(60dvh,26rem)] min-h-0 pointer-coarse:max-h-[70dvh] overflow-y-auto outline-none"

@@ -17,7 +17,7 @@ import { registerBackDismiss } from "@/lib/platform/backDismiss";
 /**
  * Enter on a native <button> fires a click React Aria reads as virtual (a
  * screen reader's); for those it defers the dialog's autofocus until running
- * CSS transitions end, and drops it once the inert page has blurred the
+ * CSS transitions end, and drops it once the hidden page has blurred the
  * trigger, stranding focus on <body>. Rendered after the dialog content, so a
  * control the content focused itself wins; otherwise the first tabbable one.
  *

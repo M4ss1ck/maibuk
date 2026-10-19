@@ -96,6 +96,15 @@ describe("hideOutsidePortal()", () => {
     expect(isHidden(root)).toBe(true);
   });
 
+  it("can be released more than once", () => {
+    const { root, portal } = portalWithSiblings();
+    const release = hideOutsidePortal(portal);
+
+    release();
+    release();
+    expect(isHidden(root)).toBe(false);
+  });
+
   it("does nothing when the portal is not under the body", () => {
     const { root } = portalWithSiblings();
     const detached = document.createElement("div");

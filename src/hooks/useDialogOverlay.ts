@@ -14,13 +14,16 @@ interface DialogOverlayOptions {
 /**
  * The surface a React Aria modal dialog needs, without `useModalOverlay`'s
  * per-element `ariaHideOutside` walk: the page beside the dialog is hidden
- * from assistive technology with one `aria-hidden` per branch (hide-outside.ts,
- * #552), while the underlay blocks the pointer and FocusScope keeps Tab inside.
+ * from assistive technology with one `aria-hidden` per branch as the dialog
+ * opens (hide-outside.ts, #552). A non-top-layer portal mounted later is left
+ * to its own overlay, and callers still render the underlay (which blocks the
+ * pointer) and a FocusScope around the dialog content.
  *
  * Call it before `useRestoreFocus`: the hidden-page cleanup is a passive
  * effect declared here, so it runs before the restore in the same unmount and
- * the opener is focusable again. `hide-outside.test.ts` and
- * `useRestoreFocus.test.tsx` hold both halves.
+ * the opener is focusable again. `hide-outside.test.ts`,
+ * `useDialogOverlay.test.tsx`, and `useRestoreFocus.test.tsx` hold the three
+ * halves.
  */
 export function useDialogOverlay({
   isOpen,
