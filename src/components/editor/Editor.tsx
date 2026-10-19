@@ -54,13 +54,16 @@ import { useEditorCommandSource } from "@/components/editor/editor-command-sourc
 import { hasActiveSuggestion } from "@/components/editor/suggestion-state";
 
 /**
- * How long a burst of keystrokes coalesces into one serialization. Serializing
- * the document and counting its words costs time proportional to chapter length
- * (~10ms per keystroke on a 150k-character chapter on Android), and every
- * consumer of that work is already debounced far longer than this: the chapter
- * store saves after 1000ms and the word counter is display-only. Explicit flush
- * points (blur, unmount, chapter switch) drain the pending work synchronously,
- * so nothing downstream ever reads a stale document.
+ * How long typing must rest before a burst of keystrokes coalesces into one
+ * serialization. Serializing the document and counting its words costs time
+ * proportional to chapter length (~10ms per keystroke on a 150k-character
+ * chapter on Android), so it is a trailing debounce: a continuous burst never
+ * pauses mid-word to serialize, which on WebKit ran long enough to miss a
+ * vsync every few hundred milliseconds (issue #556). Every consumer of that
+ * work is already debounced far longer than this: the chapter store saves
+ * after 1000ms and the word counter is display-only. Explicit flush points
+ * (blur, unmount, chapter switch, app hidden) drain the pending work
+ * synchronously, so nothing downstream ever reads a stale document.
  */
 const EMIT_COALESCE_MS = 300;
 const EMPTY_INTERNAL_TARGETS: InternalTarget[] = [];
@@ -339,7 +342,9 @@ export function Editor({
     (kind: "content" | "stats") => {
       if (kind === "content") contentDirtyRef.current = true;
       statsDirtyRef.current = true;
-      if (emitTimerRef.current !== null) return;
+      // Restart the wait on every event: serializing mid-burst is what put a
+      // long Chapter's typing frames over budget on WebKit.
+      if (emitTimerRef.current !== null) clearTimeout(emitTimerRef.current);
       emitTimerRef.current = setTimeout(runEmit, EMIT_COALESCE_MS);
     },
     [runEmit]

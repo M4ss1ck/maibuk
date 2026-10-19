@@ -135,6 +135,11 @@ const typing: FrameDriver = {
     await page.keyboard.type(TYPING_WARMUP, { delay: 60 });
     await sleep(500);
   },
+  async arrange() {
+    // Let the previous repetition's coalesced save and its SQLite write land
+    // outside this one: the budget is the typing interaction, not persistence.
+    await sleep(1500);
+  },
   async measure({ page }) {
     await page.keyboard.type(TYPING_TEXT, { delay: 1000 / 12 });
     await sleep(300);
