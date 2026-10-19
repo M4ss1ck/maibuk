@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { GridList } from "react-aria-components/GridList";
+import { GridLayout, Size, Virtualizer } from "react-aria-components";
 import {
   BookOpen,
   CalendarDays,
@@ -43,6 +45,51 @@ import { droppedTextToEditorHtml } from "@/features/markdown";
 import { useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
 import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
+
+/** The card's height (`h-44`), used only until the Virtualizer measures it. */
+export const GALLERY_CARD_ESTIMATE = 176;
+
+/** `gap-4` between cards, both ways. */
+export const GALLERY_GAP = 16;
+
+/**
+ * The Gallery's container-query breakpoints: `@3xl` is 48rem and `@5xl` is
+ * 64rem, the widths at which the CSS grid used to add a column. GridLayout
+ * cannot express "at least two columns", so the caller caps its columns here.
+ */
+export const GALLERY_THREE_COLUMNS_MIN = 768;
+export const GALLERY_FOUR_COLUMNS_MIN = 1024;
+
+export function galleryColumnsForWidth(width: number): 2 | 3 | 4 {
+  if (width >= GALLERY_FOUR_COLUMNS_MIN) return 4;
+  if (width >= GALLERY_THREE_COLUMNS_MIN) return 3;
+  return 2;
+}
+
+/** `maxColumns` for the GridLayout, read from the content box it lays out in. */
+function useGalleryColumns(areaRef: RefObject<HTMLElement | null>, refreshKey: number) {
+  const [columns, setColumns] = useState<2 | 3 | 4>(2);
+
+  useLayoutEffect(() => {
+    const area = areaRef.current;
+    if (!area) return;
+    const measure = () => setColumns(galleryColumnsForWidth(area.clientWidth));
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(area);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [areaRef, refreshKey]);
+
+  return columns;
+}
 
 export function NotesGallery() {
   const { t, i18n } = useTranslation();
@@ -94,6 +141,9 @@ export function NotesGallery() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const tagFilterInputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  // The grid's content box: what the container queries measured before, and
+  // what decides how many columns the virtualized GridLayout may draw.
+  const gridAreaRef = useRef<HTMLDivElement>(null);
   const newNoteButtonRef = useRef<HTMLButtonElement>(null);
   const galleryDropRef = useRef<HTMLDivElement>(null);
   const activatedNoteIdsRef = useRef(new Set<string>());
@@ -172,6 +222,18 @@ export function NotesGallery() {
 
   const hasFilters = Boolean(
     search.trim() || tagFilters.length > 0 || excludeTags.length > 0 || dateFrom || dateTo
+  );
+
+  // The measured width only matters once the grid is on screen; re-measuring
+  // as the result set changes catches the empty state giving way to cards.
+  const galleryColumns = useGalleryColumns(gridAreaRef, filteredNotes.length);
+  const galleryLayoutOptions = useMemo(
+    () => ({
+      minItemSize: new Size(1, GALLERY_CARD_ESTIMATE),
+      minSpace: new Size(GALLERY_GAP, GALLERY_GAP),
+      maxColumns: galleryColumns,
+    }),
+    [galleryColumns]
   );
 
   const openNote = useCallback(
@@ -323,14 +385,25 @@ export function NotesGallery() {
     { enabled: notes.length > 0 }
   );
 
+  // Stable per-card props: the virtualized grid re-renders its mounted rows on
+  // each arrow move, and a memoized card skips the work when these hold.
+  const cardOpen = useMemo(
+    () => new Map(filteredNotes.map((note) => [note.id, () => openNote(note.id)])),
+    [filteredNotes, openNote]
+  );
+  const cardActions = useMemo(
+    () => new Map(filteredNotes.map((note) => [note.id, noteActions(note)])),
+    [filteredNotes, books, t, updateNote, createNote, buildPluginNoteActions]
+  );
+
   return (
     <div
       ref={galleryDropRef}
       {...dropHandlers}
-      className={`@container p-4 sm:p-8 overflow-auto h-full transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
+      className={`@container flex h-full flex-col overflow-hidden p-4 sm:p-8 transition-all duration-200 ${isDraggingFile ? "ring-2 ring-inset ring-primary" : ""}`}
     >
       {isImportingFiles && <FileDropImportStatus />}
-      <div className="mb-6 grid gap-4 @xl:mb-8 @xl:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="mb-6 grid shrink-0 gap-4 @xl:mb-8 @xl:grid-cols-[minmax(0,1fr)_auto]">
         <div className="row-start-1">
           <h1 data-route-heading className="text-xl font-semibold tracking-tight @xl:text-2xl">
             {t("notes.title")}
@@ -487,7 +560,7 @@ export function NotesGallery() {
       {notes.length === 0 && notesError ? (
         <LibraryLoadError error={notesError} onRetry={() => void loadNotes()} />
       ) : notes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 sm:py-28 text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-auto py-20 sm:py-28 text-center">
           <div className="w-20 h-20 mb-8">
             <MaibukLogo className="w-full h-full text-primary opacity-70" />
           </div>
@@ -500,7 +573,7 @@ export function NotesGallery() {
           </Button>
         </div>
       ) : filteredNotes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-auto py-16 text-center">
           <div className="mb-5 rounded-full bg-muted p-4 text-muted-foreground">
             <Search className="h-8 w-8" />
           </div>
@@ -514,27 +587,33 @@ export function NotesGallery() {
           </Button>
         </div>
       ) : (
-        <GridList
-          ref={gridRef}
-          data-tutorial="notes.gallery"
-          aria-label={t("notes.collectionLabel")}
-          data-focus-pane-entry=""
-          items={filteredNotes}
-          layout="grid"
-          selectionMode="none"
-          onAction={(key) => openNote(String(key))}
-          className="grid grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4 gap-4"
-        >
-          {(note) => (
-            <NoteCard
-              note={note}
-              tutorialAnchor={note.id === filteredNotes[0]?.id ? "notes.card" : undefined}
-              bookTitle={note.bookId ? bookTitleById.get(note.bookId) : null}
-              onClick={() => openNote(note.id)}
-              actions={noteActions(note)}
-            />
-          )}
-        </GridList>
+        // One GridList owns the scroll, so the Virtualizer mounts the cards
+        // near the viewport instead of every Note in the Library (#562).
+        <div ref={gridAreaRef} className="min-h-0 flex-1">
+          <Virtualizer layout={GridLayout} layoutOptions={galleryLayoutOptions}>
+            <GridList
+              ref={gridRef}
+              data-tutorial="notes.gallery"
+              aria-label={t("notes.collectionLabel")}
+              data-focus-pane-entry=""
+              items={filteredNotes}
+              layout="grid"
+              selectionMode="none"
+              onAction={(key) => openNote(String(key))}
+              className="h-full overflow-auto"
+            >
+              {(note) => (
+                <NoteCard
+                  note={note}
+                  tutorialAnchor={note.id === filteredNotes[0]?.id ? "notes.card" : undefined}
+                  bookTitle={note.bookId ? bookTitleById.get(note.bookId) : null}
+                  onClick={cardOpen.get(note.id) ?? (() => openNote(note.id))}
+                  actions={cardActions.get(note.id)}
+                />
+              )}
+            </GridList>
+          </Virtualizer>
+        </div>
       )}
 
       <DeleteNoteDialog

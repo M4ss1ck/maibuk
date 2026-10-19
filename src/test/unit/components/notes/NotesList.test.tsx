@@ -245,7 +245,9 @@ describe("NotesList", () => {
         "aria-expanded",
         "true"
       );
-      const rows = within(screen.getByRole("grid", { name: "draft" })).getAllByRole("row");
+      const rows = within(screen.getByRole("grid", { name: "Notes" }))
+        .getAllByRole("row")
+        .filter((row) => row.hasAttribute("data-note-id"));
       rows[0].focus();
       await user.keyboard("{ArrowDown}");
       expect(rows[1]).toHaveFocus();
@@ -256,7 +258,9 @@ describe("NotesList", () => {
     it("tree view: Enter on a Note's Edit button renames, never opens the Note", async () => {
       const user = userEvent.setup();
       const { onSelectNote } = renderTree();
-      const row = within(screen.getByRole("grid", { name: "draft" })).getAllByRole("row")[0];
+      const row = within(screen.getByRole("grid", { name: "Notes" }))
+        .getAllByRole("row")
+        .filter((candidate) => candidate.hasAttribute("data-note-id"))[0];
       await arrowToButton(user, row, "common.edit");
       await user.keyboard("{Enter}");
       await waitFor(() => expect(screen.getByDisplayValue("Alpha")).toHaveFocus());
@@ -1679,6 +1683,86 @@ describe("virtualized Notes list (#550): small viewport", () => {
 
     await user.keyboard("{Home}");
     await waitFor(() => expect(document.activeElement).toHaveAttribute("data-key", "n0"));
+  });
+});
+
+describe("virtualized Notes tree (#562): small viewport", () => {
+  let restoreSmallLayout: () => void = () => {};
+  let restoreScrollEvents: () => void = () => {};
+
+  const savedScrollIntoView = HTMLElement.prototype.scrollIntoView;
+  beforeAll(() => {
+    restoreSmallLayout = mockVirtualizerLayout({ height: 400 });
+    restoreScrollEvents = mockScrollEventOnScrollTopWrite();
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+  afterAll(() => {
+    HTMLElement.prototype.scrollIntoView = savedScrollIntoView;
+    restoreScrollEvents();
+    restoreSmallLayout();
+  });
+
+  const mountedTreeRows = () => [
+    ...document.querySelectorAll<HTMLElement>('[role="row"][data-note-id]'),
+  ];
+
+  it("mounts only the rows near the viewport out of 500", () => {
+    useSettingsStore.setState({ notesListView: "tree", notesTreeGroupMode: "book" });
+    render(<NotesList {...baseProps(longNotes())} />);
+
+    expect(mountedTreeRows().length).toBeGreaterThan(0);
+    expect(mountedTreeRows().length).toBeLessThan(50);
+  });
+
+  it("collapses and expands a group by keyboard", async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ notesListView: "tree", notesTreeGroupMode: "book" });
+    render(
+      <NotesList
+        {...baseProps([
+          buildNote({ id: "a", title: "First" }),
+          buildNote({ id: "b", title: "Second" }),
+        ])}
+      />
+    );
+
+    const toggle = screen.getByRole("button", { name: "Unfiled" });
+    toggle.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByText("First")).not.toBeInTheDocument();
+
+    toggle.focus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("First")).toBeInTheDocument();
+  });
+
+  it("ArrowDown crosses a group boundary and Enter opens that Note", async () => {
+    const user = userEvent.setup();
+    const onSelectNote = vi.fn();
+    const books = [buildBook({ id: "book-a", title: "Novel" })];
+    const inBook = { ...buildNote({ id: "a", title: "Book note" }), bookId: "book-a" };
+    const unfiled = buildNote({ id: "b", title: "Loose note" });
+    useSettingsStore.setState({ notesListView: "tree", notesTreeGroupMode: "book" });
+
+    render(
+      <NotesList
+        notes={[inBook, unfiled]}
+        books={books}
+        currentNoteId={null}
+        onSelectNote={onSelectNote}
+        onCreateNote={vi.fn()}
+        onReorderNotes={vi.fn()}
+      />
+    );
+
+    const rows = mountedTreeRows();
+    expect(rows.map((row) => row.dataset.noteId)).toEqual(["a", "b"]);
+    rows[0].focus();
+    await user.keyboard("{ArrowDown}");
+    expect(rows[1]).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    expect(onSelectNote).toHaveBeenCalledWith(unfiled);
   });
 });
 

@@ -94,6 +94,29 @@ test.describe("Notes Gallery browsing @wf:notes-gallery-browse", () => {
   });
 });
 
+test.describe("Notes Gallery columns @wf:notes-gallery-browse", () => {
+  test.use({ library: "perfManyNotes" });
+
+  // The Gallery's container-query columns, captured for the PR that made the
+  // grid virtualized (#562): the nav sidebar leaves the Gallery narrower than
+  // the window, so each case leaves room for the column count it names.
+  for (const [columns, viewport] of [
+    ["2", { width: 900, height: 800 }],
+    ["3", { width: 1280, height: 800 }],
+    ["4", { width: 1600, height: 800 }],
+  ] as const) {
+    test.describe(`${columns} columns`, () => {
+      test.use({ viewport });
+
+      test(`captures ${columns} columns, light and dark`, async ({ page }) => {
+        await page.goto("/notes");
+        await expect(galleryGrid(page).getByRole("row").first()).toBeVisible();
+        await capture(page, `notes-gallery-${columns}-columns`);
+      });
+    });
+  }
+});
+
 test.describe("Notes creation @wf:notes-create", () => {
   test("creates a Note from the Gallery, reaches its editor and persists the body", async ({
     page,
@@ -318,16 +341,21 @@ test.describe("Notes list grouping, view and sort @wf:notes-list-group-sort", ()
     await tabTo(page, page.getByRole("button", { name: "Tree", exact: true }), { max: 60 });
     await page.keyboard.press("Enter");
 
-    await expect(page.getByTestId(/^book-group-/).first()).toBeVisible();
+    // The virtualized section wrapper has no box of its own; its header is
+    // what proves the group is on screen.
+    await expect(
+      page.getByTestId(/^book-group-/).first().getByRole("button", { name: SEED_BOOK.title })
+    ).toBeVisible();
     await capture(page, "notes-tree-view");
 
-    // Each group is its own grid: Tab reaches it, arrows move inside it.
-    const unfiled = page.getByRole("grid", { name: "Unfiled" });
-    await tabTo(page, unfiled.getByRole("row").first(), { max: 30 });
+    // One virtualized grid holds every group: Tab reaches the selected Note,
+    // and arrows move through the groups' rows.
+    const notesGrid = page.getByRole("grid", { name: "Notes" });
+    await tabTo(page, notesGrid.getByRole("row", { name: SEED_NOTES.keeperLog }), { max: 60 });
     await pressUntilFocused(
       page,
       "ArrowDown",
-      unfiled.getByRole("row", { name: SEED_NOTES.harborNotes })
+      notesGrid.getByRole("row", { name: SEED_NOTES.harborNotes })
     );
     await capture(page, "notes-tree-row-focused");
     await page.keyboard.press("Enter");

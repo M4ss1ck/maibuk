@@ -99,12 +99,42 @@ const NOTE_LIST_LAYOUT = {
   padding: -4,
 } as const;
 
+/** Height of a tree group's header row, before its rows are measured. */
+export const NOTE_TREE_GROUP_HEADING = 40;
+
+/** Space between a tree group's header and its rows, and between rows (`space-y-1`). */
+export const NOTE_TREE_GAP = 4;
+
+/**
+ * React Aria layout for the tree view (#562), the same shape as the list
+ * view: one virtualized GridList sectioned by group, so expanding a group
+ * with 500 Notes mounts only the rows near the viewport.
+ */
+const NOTE_TREE_LAYOUT = {
+  estimatedRowSize: NOTE_ROW_ESTIMATE,
+  estimatedHeadingSize: NOTE_TREE_GROUP_HEADING,
+  gap: NOTE_TREE_GAP,
+  padding: 0,
+} as const;
+
 type DropPlacement = "before" | "after";
 
 interface DropTarget {
   sectionId: NoteSection["id"];
   targetId: string | null;
   placement: DropPlacement;
+}
+
+/** One group of the tree view, whichever mode fills it. */
+interface TreeGroup {
+  id: string;
+  title: string;
+  notes: NoteWithBook[];
+  book: Book | null;
+  tag?: string;
+  icon: "book" | "feather" | "tag" | "date";
+  /** Book groups with no Notes start folded. */
+  defaultCollapsed: boolean;
 }
 
 interface NotesListProps {
@@ -136,7 +166,7 @@ export function NotesList({
 }: NotesListProps) {
   const { t } = useTranslation();
   const listContainerRef = useRef<HTMLDivElement>(null);
-  // The list view's scroll view is the GridList the Virtualizer scrolls.
+  // Both views are virtualized, and the GridList is what each Virtualizer scrolls.
   const gridRef = useRef<HTMLDivElement>(null);
   const newNoteButtonRef = useRef<HTMLButtonElement>(null);
   const activatedNoteIdsRef = useRef(new Set<string>());
@@ -159,15 +189,15 @@ export function NotesList({
   const touchDragGuard = useTouchDragFromHandle();
   const viewMode = useSettingsStore((s) => s.notesListView);
   const setViewMode = useSettingsStore((s) => s.setNotesListView);
-  // The scroll view: the GridList in the list view, the wrapper in the tree.
-  // Read at call time, so a drag or a reorder follows the view that is shown.
+  // The scroll view both views virtualize: the GridList itself. Read at call
+  // time, so a drag or a reorder follows the view that is shown.
   const scrollViewRef = useMemo<RefObject<HTMLElement | null>>(
     () => ({
       get current() {
-        return viewMode === "list" ? gridRef.current : listContainerRef.current;
+        return gridRef.current;
       },
     }),
-    [viewMode]
+    []
   );
   const autoScroll = useDragAutoScroll(scrollViewRef);
   const treeGroupMode = useSettingsStore((s) => s.notesTreeGroupMode);
@@ -492,22 +522,38 @@ export function NotesList({
       : [];
   const moveNote = (note: { id: string }, bookId: string | null) =>
     onReassignNoteBook?.(note.id, bookId);
+  // A tree row's key carries its group, so find the row by the Note it shows.
   const noteRowElement = (id: string): HTMLElement | null =>
     listContainerRef.current?.querySelector<HTMLElement>(
-      `[role="row"][data-key="${CSS.escape(id)}"]`
+      `[role="row"][data-note-id="${CSS.escape(id)}"], [role="row"][data-key="${CSS.escape(id)}"]`
     ) ?? null;
 
   /** Note ids in the order they are shown: the list's sections, or the tree's rendered rows. */
   const shownNoteIds = (): string[] =>
     viewMode === "list"
       ? listSectionsRef.current.flatMap((section) => section.notes.map((note) => note.id))
-      : [...(listContainerRef.current?.querySelectorAll<HTMLElement>("[data-key]") ?? [])].map(
-          (row) => row.dataset.key ?? ""
-        );
+      : [
+          ...new Set(
+            [
+              ...(listContainerRef.current?.querySelectorAll<HTMLElement>("[data-note-id]") ?? []),
+            ].map((row) => row.dataset.noteId ?? "")
+          ),
+        ];
 
   /** Where the Note at `id` sits by estimate, for a row the Virtualizer has not mounted. */
   const estimatedNoteTop = (id: string): number | null => {
-    if (viewMode !== "list") return null;
+    if (viewMode === "tree") {
+      let top = 0;
+      for (const group of treeGroupsRef.current) {
+        top += NOTE_TREE_GROUP_HEADING + NOTE_TREE_GAP;
+        if (isGroupCollapsed(group)) continue;
+        for (const note of group.notes) {
+          if (note.id === id) return top;
+          top += NOTE_ROW_ESTIMATE + NOTE_TREE_GAP;
+        }
+      }
+      return null;
+    }
     const { padding, gap, headingSize, estimatedRowSize } = NOTE_LIST_LAYOUT;
     let top = padding;
     for (const section of listSectionsRef.current) {
@@ -622,6 +668,7 @@ export function NotesList({
   const renderNote = (note: NoteWithBook) => (
     <GridListItem
       id={note.id}
+      data-note-id={note.id}
       textValue={note.title || t("notes.untitled")}
       onAction={() => activateNote(note)}
       className={({ isFocusVisible }) =>
@@ -646,49 +693,12 @@ export function NotesList({
     </GridListItem>
   );
 
-  const renderTreeNotes = (notes: NoteWithBook[], label: string) => (
-    <GridList
-      aria-label={label}
-      selectedKeys={currentNoteId ? [currentNoteId] : []}
-      selectionMode="single"
-      selectionBehavior="replace"
-      className="space-y-1"
-    >
-      {notes.map(renderTreeNote)}
-    </GridList>
-  );
-
-  const renderTreeNote = (note: NoteWithBook) => (
-    <GridListItem
-      key={note.id}
-      id={note.id}
-      textValue={note.title || t("notes.untitled")}
-      onAction={() => activateNote(note)}
-      className={({ isFocusVisible }) =>
-        `rounded-md ${isFocusVisible ? "ring-2 ring-primary ring-offset-1" : ""}`
-      }
-    >
-      <NoteListItem
-        note={note}
-        isSelected={currentNoteId === note.id}
-        onSelect={activateNote}
-        onDelete={requestDelete}
-        onDuplicate={onDuplicateNote}
-        onRename={(targetNote, title) => onRenameNote?.(targetNote.id, title)}
-        onTogglePinned={() => togglePinned(note)}
-        moveTargets={moveTargets}
-        onMove={moveNote}
-        draggable={treeGroupMode === "book" && !isSearchActive ? true : undefined}
-        onDragStart={(e) => handleDragStart(e, note.id)}
-        onDragEnd={handleDragEnd}
-        isDragging={draggedId === note.id}
-      />
-    </GridListItem>
-  );
-
   // Namespace group keys by mode so identical ids across book/tag/date groups
   // (e.g. a tag named "today" and the "today" date bucket) don't share state.
   const groupKey = (id: string) => `${treeGroupMode}:${id}`;
+
+  // A Note can sit in several tag groups, so a row's key carries its group.
+  const treeNoteKey = (groupId: string, noteId: string) => `${groupKey(groupId)}:${noteId}`;
 
   const toggleGroup = (id: string, defaultCollapsed = false) => {
     const key = groupKey(id);
@@ -699,153 +709,172 @@ export function NotesList({
     toggleCollapsed(key);
   };
 
-  const renderTreeGroups = () => {
-    if (treeGroupMode === "book") {
-      return buildBookNoteGroups(filtered, books, treeSort).map((group) => {
-        const defaultCollapsed = Boolean(group.book && group.notes.length === 0);
-        const isCollapsed = defaultCollapsed
-          ? !expandedEmptyGroups.has(groupKey(group.id))
-          : collapsedGroups.has(groupKey(group.id));
-        const title = group.id === "unfiled" ? t("notes.unfiled") : group.title;
-        const GroupIcon = group.id === "unfiled" ? Feather : BookOpen;
+  const isGroupCollapsed = (group: TreeGroup) =>
+    group.defaultCollapsed
+      ? !expandedEmptyGroups.has(groupKey(group.id))
+      : collapsedGroups.has(groupKey(group.id));
 
-        const targetBookId = group.book?.id ?? null;
-        return (
-          <div
-            key={group.id}
-            data-testid={`book-group-${group.id}`}
-            onDragOver={(e) => handleGroupDragOver(e, group.id)}
-            onDragLeave={handleGroupDragLeave}
-            onDrop={(e) => handleGroupDrop(e, targetBookId)}
-            className={`px-2 py-1 rounded-md transition-colors ${
-              dragOverGroupId === group.id ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""
-            }`}
+  const treeGroups: TreeGroup[] =
+    treeGroupMode === "book"
+      ? buildBookNoteGroups(filtered, books, treeSort).map((group) => ({
+          id: group.id,
+          title: group.id === "unfiled" ? t("notes.unfiled") : group.title,
+          notes: group.notes,
+          book: group.book,
+          icon: group.id === "unfiled" ? "feather" : "book",
+          defaultCollapsed: Boolean(group.book && group.notes.length === 0),
+        }))
+      : treeGroupMode === "tag"
+        ? buildTagNoteGroups(filtered, treeSort).map((group) => ({
+            id: group.id,
+            title: group.title,
+            notes: group.notes,
+            book: null,
+            tag: group.tag,
+            icon: "tag",
+            defaultCollapsed: false,
+          }))
+        : buildDateNoteGroups(filtered, undefined, treeSort).map((group) => ({
+            id: group.id,
+            title:
+              group.id === "today"
+                ? t("notes.today")
+                : group.id === "this-week"
+                  ? t("notes.thisWeek")
+                  : group.title,
+            notes: group.notes,
+            book: null,
+            icon: "date",
+            defaultCollapsed: false,
+          }));
+
+  const treeGroupsRef = useRef(treeGroups);
+  treeGroupsRef.current = treeGroups;
+
+  const treeSelectedKeys = currentNoteId
+    ? treeGroups
+        .filter((group) => group.notes.some((note) => note.id === currentNoteId))
+        .map((group) => treeNoteKey(group.id, currentNoteId))
+    : [];
+
+  /** The Book group a native Note drag is over, from the section under the pointer. */
+  const treeGroupIdAt = (target: EventTarget | null): string | null => {
+    const element = target instanceof Element ? target.closest("[data-group-id]") : null;
+    return element?.getAttribute("data-group-id") ?? null;
+  };
+
+  const handleTreeDragOver = (e: DragEvent<HTMLDivElement>) => {
+    const groupId = treeGroupIdAt(e.target);
+    if (groupId) handleGroupDragOver(e, groupId);
+  };
+
+  const handleTreeDrop = (e: DragEvent<HTMLDivElement>) => {
+    const groupId = treeGroupIdAt(e.target);
+    const group = treeGroupsRef.current.find((candidate) => candidate.id === groupId);
+    if (group) handleGroupDrop(e, group.book?.id ?? null);
+  };
+
+  const renderTreeNote = (group: TreeGroup, note: NoteWithBook) => {
+    const key = treeNoteKey(group.id, note.id);
+    return (
+      <GridListItem
+        key={key}
+        id={key}
+        data-note-id={note.id}
+        textValue={note.title || t("notes.untitled")}
+        onAction={() => activateNote(note)}
+        className={({ isFocusVisible }) =>
+          `ml-7 mr-2 rounded-md ${isFocusVisible ? "ring-2 ring-primary ring-offset-1" : ""}`
+        }
+      >
+        <NoteListItem
+          note={note}
+          isSelected={currentNoteId === note.id}
+          onSelect={activateNote}
+          onDelete={requestDelete}
+          onDuplicate={onDuplicateNote}
+          onRename={(targetNote, title) => onRenameNote?.(targetNote.id, title)}
+          onTogglePinned={() => togglePinned(note)}
+          moveTargets={moveTargets}
+          onMove={moveNote}
+          draggable={treeGroupMode === "book" && !isSearchActive ? true : undefined}
+          onDragStart={(e) => handleDragStart(e, note.id)}
+          onDragEnd={handleDragEnd}
+          isDragging={draggedId === note.id}
+        />
+      </GridListItem>
+    );
+  };
+
+  const renderTreeGroupHeader = (group: TreeGroup) => {
+    const isCollapsed = isGroupCollapsed(group);
+    const isBookGroup = group.icon === "book" || group.icon === "feather";
+    const GroupIcon = group.icon === "feather" ? Feather : BookOpen;
+    const isDropTarget = dragOverGroupId === group.id;
+
+    return (
+      <div
+        // The GridList treats focus inside it as a move to its focused row,
+        // which would take these controls' focus the moment they get it.
+        onFocus={(event) => event.stopPropagation()}
+        className={`rounded-md px-2 py-1 transition-colors ${
+          isDropTarget ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""
+        }`}
+      >
+        <div className="group flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50 transition-colors duration-200">
+          <button
+            type="button"
+            onClick={() => toggleGroup(group.id, group.defaultCollapsed)}
+            aria-label={group.title}
+            aria-expanded={!isCollapsed}
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
           >
-            <div className="group flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50 transition-colors duration-200">
-              <button
-                type="button"
-                onClick={() => toggleGroup(group.id, defaultCollapsed)}
-                aria-label={title}
-                aria-expanded={!isCollapsed}
-                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
-              >
-                {isCollapsed ? (
-                  <ChevronRight className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                )}
-              </button>
-              <GroupIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span
-                data-testid={`book-title-action-${group.id}`}
-                className="flex min-w-0 items-center gap-1"
-              >
-                <span className="min-w-0 truncate text-sm font-medium">{title}</span>
-                {group.book && (
-                  <Tooltip content={t("notes.addNoteToBook")}>
-                    <button
-                      type="button"
-                      onClick={() => onCreateNote(group.book?.id ?? null)}
-                      aria-label={t("notes.addNoteToBook")}
-                      className="shrink-0 rounded p-0.5 pointer-coarse:p-1.5 text-muted-foreground opacity-0 transition-all duration-200 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-                    >
-                      <AddIcon className="h-3.5 w-3.5" />
-                    </button>
-                  </Tooltip>
-                )}
-              </span>
-              <span
-                data-testid={`book-count-${group.id}`}
-                className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
-              >
-                {group.notes.length}
-              </span>
-            </div>
-            {!isCollapsed && (
-              <div className="ml-5">
-                {group.notes.length > 0 ? (
-                  renderTreeNotes(group.notes, title)
-                ) : (
-                  <p className="px-2 py-2 text-xs text-muted-foreground">{t("notes.noNotesYet")}</p>
-                )}
-              </div>
+            {isCollapsed ? (
+              <ChevronRight className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
             )}
-          </div>
-        );
-      });
-    }
-
-    if (treeGroupMode === "tag") {
-      const groups = buildTagNoteGroups(filtered, treeSort);
-      return groups.map((group) => {
-        const isCollapsed = collapsedGroups.has(groupKey(group.id));
-        const color = tagColor(group.tag);
-
-        return (
-          <div key={group.id} className="px-2 py-1">
-            <div className="flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50 transition-colors duration-200">
-              <button
-                type="button"
-                onClick={() => toggleGroup(group.id)}
-                aria-label={group.title}
-                aria-expanded={!isCollapsed}
-                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
-              >
-                {isCollapsed ? (
-                  <ChevronRight className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                )}
-              </button>
-              <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: color }} />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">{group.title}</span>
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {group.notes.length}
-              </span>
-            </div>
-            {!isCollapsed && (
-              <div className="ml-5">{renderTreeNotes(group.notes, group.title)}</div>
+          </button>
+          {group.icon === "tag" ? (
+            <span
+              className="h-3 w-3 shrink-0 rounded-sm"
+              style={{ backgroundColor: tagColor(group.tag ?? "") }}
+            />
+          ) : group.icon === "date" ? (
+            <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <GroupIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span
+            data-testid={isBookGroup ? `book-title-action-${group.id}` : undefined}
+            className="flex min-w-0 items-center gap-1"
+          >
+            <span className="min-w-0 truncate text-sm font-medium">{group.title}</span>
+            {group.book && (
+              <Tooltip content={t("notes.addNoteToBook")}>
+                <button
+                  type="button"
+                  onClick={() => onCreateNote(group.book?.id ?? null)}
+                  aria-label={t("notes.addNoteToBook")}
+                  className="shrink-0 rounded p-0.5 pointer-coarse:p-1.5 text-muted-foreground opacity-0 transition-all duration-200 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+                >
+                  <AddIcon className="h-3.5 w-3.5" />
+                </button>
+              </Tooltip>
             )}
-          </div>
-        );
-      });
-    }
-
-    return buildDateNoteGroups(filtered, undefined, treeSort).map((group) => {
-      const isCollapsed = collapsedGroups.has(groupKey(group.id));
-      const title =
-        group.id === "today"
-          ? t("notes.today")
-          : group.id === "this-week"
-            ? t("notes.thisWeek")
-            : group.title;
-
-      return (
-        <div key={group.id} className="px-2 py-1">
-          <div className="flex items-center gap-1 rounded-md px-1 py-1.5 hover:bg-muted/50 transition-colors duration-200">
-            <button
-              type="button"
-              onClick={() => toggleGroup(group.id)}
-              aria-label={title}
-              aria-expanded={!isCollapsed}
-              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-200"
-            >
-              {isCollapsed ? (
-                <ChevronRight className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5" />
-              )}
-            </button>
-            <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{title}</span>
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              {group.notes.length}
-            </span>
-          </div>
-          {!isCollapsed && <div className="ml-5">{renderTreeNotes(group.notes, title)}</div>}
+          </span>
+          <span
+            data-testid={isBookGroup ? `book-count-${group.id}` : undefined}
+            className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+          >
+            {group.notes.length}
+          </span>
         </div>
-      );
-    });
+        {!isCollapsed && group.notes.length === 0 && (
+          <p className="px-2 py-2 text-xs text-muted-foreground">{t("notes.noNotesYet")}</p>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -923,7 +952,55 @@ export function NotesList({
             <p>{t("notes.empty")}</p>
           </div>
         ) : viewMode === "tree" ? (
-          <div className="pb-2">{renderTreeGroups()}</div>
+          // Native Note drops target the Book group under the pointer. The
+          // wrapper, not the GridList, carries them: React Aria's props filter
+          // its DOM events, and the file-drop handlers stay on the outer box.
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            onDragOver={handleTreeDragOver}
+            onDragLeave={handleGroupDragLeave}
+            onDrop={handleTreeDrop}
+          >
+            <Virtualizer layout={ListLayout} layoutOptions={NOTE_TREE_LAYOUT}>
+              <GridList
+                ref={gridRef}
+                aria-label={t("notes.title")}
+                data-focus-pane-entry=""
+                dependencies={[
+                  currentNoteId,
+                  draggedId,
+                  dragOverGroupId,
+                  treeGroupMode,
+                  isSearchActive,
+                  onDeleteNote,
+                  onDuplicateNote,
+                  onRenameNote,
+                  books,
+                ]}
+                selectedKeys={treeSelectedKeys}
+                selectionMode="single"
+                selectionBehavior="replace"
+                disallowEmptySelection
+                className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2"
+              >
+                {treeGroups.map((group) => (
+                  <GridListSection
+                    key={group.id}
+                    id={group.id}
+                    data-group-id={group.id}
+                    data-testid={`book-group-${group.id}`}
+                  >
+                    <GridListHeader>{renderTreeGroupHeader(group)}</GridListHeader>
+                    {!isGroupCollapsed(group) && (
+                      <Collection items={group.notes}>
+                        {(note) => renderTreeNote(group, note)}
+                      </Collection>
+                    )}
+                  </GridListSection>
+                ))}
+              </GridList>
+            </Virtualizer>
+          </div>
         ) : (
           <Virtualizer layout={ListLayout} layoutOptions={NOTE_LIST_LAYOUT}>
             <SectionDropIndicators>

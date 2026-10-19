@@ -476,6 +476,80 @@ async function openFirstNote({ page, open }: FrameDriverContext): Promise<void> 
   await waitVisible(noteText(page), 30_000);
 }
 
+/** Opens the first Note, then switches the sidebar to the tree view (#562). */
+async function openFirstNoteInTree(ctx: FrameDriverContext): Promise<void> {
+  await openFirstNote(ctx);
+  const { page } = ctx;
+  // The controller exposes no click: reach the view toggle by keyboard. The
+  // toggle sits before the search field, so Shift+Tab from the sidebar's entry
+  // walks back to it.
+  await cycleTo(page, "F6", page.locator('[data-focus-pane="notes-sidebar"]'));
+  await tabTo(page, page.getByRole("button", { name: "Tree", exact: true }), {
+    backwards: true,
+    max: 12,
+  });
+  await page.keyboard.press("Enter");
+  await waitVisible(page.locator('[data-testid^="book-group-"]').first(), 10_000);
+  // Leave focus in the note's text, where every measured round starts.
+  await cycleTo(page, "F6", noteText(page));
+}
+
+/** F6 into the Gallery's card grid and back to its first card. */
+async function enterNotesGallery(page: FramePage): Promise<void> {
+  const grid = page.locator('[role="grid"][data-focus-pane-entry]');
+  await cycleTo(page, "F6", grid);
+  await page.keyboard.press("Home");
+  await sleep(150);
+}
+
+/**
+ * Twenty arrow moves inside the Gallery: across a card and back, then down to
+ * the next row. It stays away from the last column, where Right leaves the
+ * grid by position (ADR 0025).
+ */
+const GALLERY_ARROW_SEQUENCE = [
+  "ArrowRight",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowLeft",
+  "ArrowDown",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowUp",
+  "ArrowRight",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowLeft",
+] as const;
+
+const notesGalleryArrows: FrameDriver = {
+  async prepare({ page, open }) {
+    await open("/notes");
+    await waitVisible(page.getByRole("grid", { name: "Notes" }).getByRole("row").first(), 30_000);
+    await enterNotesGallery(page);
+    await sleep(300);
+  },
+  async arrange({ page }) {
+    await enterNotesGallery(page);
+    await sleep(300);
+  },
+  async measure({ page }) {
+    for (let i = 0; i < ARROW_LEAVES; i++) {
+      await page.keyboard.press(GALLERY_ARROW_SEQUENCE[i % GALLERY_ARROW_SEQUENCE.length]);
+      await sleep(60);
+    }
+    await sleep(200);
+  },
+};
+
 const manyChaptersText = (page: FramePage) => page.locator('.ProseMirror[aria-label^="Text of "]');
 const openManyChaptersBook = (ctx: FrameDriverContext) =>
   openBook(ctx, PERF_MANY_CHAPTERS_BOOK.title, manyChaptersText(ctx.page));
@@ -682,6 +756,12 @@ export const FRAME_DRIVERS: Record<string, FrameDriver> = {
     (page) => page.locator('[data-focus-pane="chapter-list"]').visible(),
     manyChaptersText
   ),
+  "arrow-leave-notes-tree": arrowLeave(
+    openFirstNoteInTree,
+    (page) => page.locator('[data-focus-pane="notes-sidebar"]'),
+    noteText
+  ),
+  "notes-gallery-arrows": notesGalleryArrows,
   "pane-slide": paneSlide,
   "plugin-remote-ui": pluginRemoteUi,
   "typing-with-highlights": typingWithHighlights,
