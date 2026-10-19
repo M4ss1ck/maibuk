@@ -1,12 +1,18 @@
-import { it, expect, beforeEach, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { it, expect, beforeEach, afterEach, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
 import { useRef } from "react";
 import { useToolbarOverflow } from "@/components/editor/toolbar/useToolbarOverflow";
 
+let resizeCallbacks: ResizeObserverCallback[] = [];
+
 beforeEach(() => {
+  resizeCallbacks = [];
   vi.stubGlobal(
     "ResizeObserver",
     class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback);
+      }
       observe() {}
       disconnect() {}
       unobserve() {}
@@ -16,6 +22,10 @@ beforeEach(() => {
     cb(0);
     return 0;
   });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function withRect(element: HTMLElement, left: number, width: number): HTMLElement {
@@ -140,4 +150,39 @@ it("does not admit an entry that overflows by a fraction of a pixel", () => {
   const entries = [{ width: 100 }, { width: 120.25 }];
   expect(visibleCountFor({ rootWidth: 300, endWidth: 80, entries })).toBe(1);
   expect(visibleCountFor({ rootWidth: 300.25, endWidth: 80, entries })).toBe(2);
+});
+
+it("waits for a resize burst to settle before re-measuring", () => {
+  // Only the settle timer is faked; rAF stays the immediate stub from above.
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const { root, end, lane, entryCount } = buildLayout({
+    rootWidth: 300,
+    endWidth: 80,
+    entries: [{ width: 100 }, { width: 100 }, { width: 100 }],
+  });
+  const { result } = renderHook(() =>
+    useToolbarOverflow({
+      rootRef: useRef<HTMLElement>(root),
+      endRef: useRef<HTMLElement>(end),
+      measureRef: useRef<HTMLElement>(lane),
+      entryCount,
+      deps: [],
+    })
+  );
+  expect(result.current.visibleCount).toBe(2);
+
+  // A panel drag narrows the row every pointer move. Each observer fire must
+  // not re-measure yet: that forces a layout on every frame (issue #554).
+  withRect(root, 0, 100);
+  act(() => {
+    for (let step = 0; step < 5; step++) resizeCallbacks[0]([], {} as ResizeObserver);
+  });
+  expect(result.current.visibleCount).toBe(2);
+
+  act(() => {
+    // Any wait past the settle delay: the exact value is not the contract.
+    vi.advanceTimersByTime(1000);
+  });
+  // available = 100 - 80 = 20: no entry fits
+  expect(result.current.visibleCount).toBe(0);
 });

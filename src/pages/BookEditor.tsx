@@ -1342,9 +1342,11 @@ export function BookEditor() {
           </>
         )}
 
-        {/* Main editor area */}
+        {/* Main editor area. `relative z-0` gives it its own stacking context;
+            without one the Chapter pane drag cost far more than the pane it
+            moved and missed the WebKit frame budget (issue #554). */}
         <main
-          className="flex-1 flex flex-col min-h-0 min-w-0 @container"
+          className="flex-1 flex flex-col min-h-0 min-w-0 relative z-0"
           data-focus-pane="editor-main"
           tabIndex={-1}
           aria-label={t("panes.editorMain")}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useDebouncedCallback } from "@/hooks/useAutoSave";
 
 export interface OverflowResult {
   visibleCount: number;
@@ -15,6 +16,14 @@ interface UseToolbarOverflowParams {
 
 // Absorbs floating-point noise in subpixel layout without admitting a visible overflow.
 const EPSILON = 0.01;
+
+// A resize that keeps changing (dragging a panel edge) settles before the
+// toolbar re-measures. Measuring on every step forces a layout of the row and
+// its measure lane on every frame, which on WebKit costs more than the resize
+// itself and misses the frame budget (issue #554). Any other resize — the
+// window, a zoom, a late font — waits the same short beat, which the Start
+// lane's `overflow-hidden` already covers.
+const RESIZE_SETTLE_MS = 120;
 
 function px(value: string): number {
   const parsed = Number.parseFloat(value);
@@ -83,13 +92,17 @@ export function useToolbarOverflow({
     setVisibleCount(count);
   }, [rootRef, endRef, measureRef, entryCount]);
 
+  // A burst of resizes (a panel drag) coalesces into one measurement once the
+  // width settles; the mount measurement below stays immediate.
+  const scheduleMeasure = useDebouncedCallback(measure, RESIZE_SETTLE_MS);
+
   useEffect(() => {
     let frame = 0;
-    const scheduleMeasure = () => {
+    const measureNow = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(measure);
     };
-    scheduleMeasure();
+    measureNow();
 
     const observer = new ResizeObserver(scheduleMeasure);
     for (const element of [rootRef.current, endRef.current, measureRef.current]) {
@@ -98,10 +111,11 @@ export function useToolbarOverflow({
 
     return () => {
       cancelAnimationFrame(frame);
+      scheduleMeasure.cancel();
       observer.disconnect();
     };
     // deps are external recompute triggers, spread intentionally alongside measure
-  }, [measure, ...deps]);
+  }, [measure, scheduleMeasure, ...deps]);
 
   return { visibleCount };
 }
