@@ -184,6 +184,10 @@ A freehand mark made on a Canvas.
 _UI_: en "Pen" / es "Lápiz" (the tool that makes it)
 _Avoid_: stroke, sketch
 
+**Watermark**:
+The faint MAIBUK figlet tiled behind a Canvas in Canvas coordinates, so the surface reads at scale as the author pans and zooms.
+_Avoid_: background pattern, grid
+
 ## History
 
 **Version**:

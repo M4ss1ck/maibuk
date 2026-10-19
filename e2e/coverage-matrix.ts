@@ -46,6 +46,13 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "Vitest canvas suites; keyboard tool switching is covered by canvas-tools",
   },
   {
+    kind: "term",
+    items: ["Watermark"],
+    reason:
+      "Decorative: painted behind a Canvas and never an outcome the author acts on, so no keyboard workflow reaches it",
+    owner: "Vitest CanvasBackground.test.tsx + pnpm bench:frames --scenario canvas",
+  },
+  {
     kind: "behavior",
     items: [
       "always on top",

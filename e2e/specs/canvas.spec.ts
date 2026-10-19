@@ -540,6 +540,26 @@ test.describe("Zoom, fit, and lock @wf:canvas-zoom-fit-lock @sc:common.zoomIn @s
     await page.reload();
     await expect(page.locator(".react-flow__viewport")).toHaveAttribute("style", zoomed);
   });
+
+  // PR evidence for the WebKit pan fix (issue #553): the watermark must look
+  // the same at rest and after the viewport moves. A pointer pan is not
+  // expressible in a spec (the keyboard contract forbids `page.mouse`), so the
+  // capture moves the viewport with the zoom shortcuts — which change both the
+  // zoom and the translation — while the pan frame path itself is measured by
+  // `pnpm bench:frames --scenario canvas` and pinned by
+  // CanvasBackground.test.tsx. `capture` is a no-op unless E2E_CAPTURE_DIR is
+  // set (scripts/pr-screenshots.sh).
+  test("the watermark follows a viewport change unchanged", async ({ page }) => {
+    await openMap(page);
+    await capture(page, "canvas-watermark-default");
+
+    const viewport = page.locator(".react-flow__viewport");
+    const before = (await viewport.getAttribute("style")) ?? "";
+    await page.keyboard.press("Control+=");
+    await page.keyboard.press("Control+=");
+    await expect.poll(async () => (await viewport.getAttribute("style")) ?? "").not.toBe(before);
+    await capture(page, "canvas-watermark-zoomed");
+  });
 });
 
 test.describe("Save Status @wf:canvas-save-status", () => {
