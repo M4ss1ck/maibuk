@@ -1,8 +1,14 @@
 export { useDebouncedCallback, useAutoSave } from "@/hooks/useAutoSave";
 export { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 export { useToolbarRegistryRevision } from "@/hooks/useToolbarRegistryRevision";
-export { useInstalledPluginLifecycle, usePluginLaunchScanned, usePluginLifecycleRevision, usePluginSurface } from "@/hooks/usePluginSurface";
+export {
+  useInstalledPluginLifecycle,
+  usePluginLaunchScanned,
+  usePluginLifecycleRevision,
+  usePluginSurface,
+} from "@/hooks/usePluginSurface";
 export { usePluginSecrets } from "@/hooks/usePluginSecrets";
+export { useDialogOverlay } from "@/hooks/useDialogOverlay";
 export { useModalScope } from "@/hooks/useModalScope";
 export { useItemContextMenu, useTouchDragFromHandle } from "@/hooks/useItemContextMenu";
 export { useRestoreFocus } from "@/hooks/useRestoreFocus";

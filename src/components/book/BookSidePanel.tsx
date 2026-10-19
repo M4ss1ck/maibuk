@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SIDE_PANEL_MAX_WIDTH, SIDE_PANEL_MIN_WIDTH } from "@/features/settings/types";
-import { FocusScope, Overlay, useModalOverlay } from "react-aria";
+import { FocusScope, Overlay } from "react-aria";
 import { Dialog, Tab, TabList, TabPanel, TabPanels, Tabs } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
@@ -10,7 +10,7 @@ import type { Note } from "@/features/notes";
 import { FootnotesView } from "@/components/editor/FootnotesView";
 import { BookNotesView } from "@/components/book/BookNotesView";
 import { ResizeHandle, Tooltip } from "@/components/ui";
-import { useModalScope, useRestoreFocus } from "@/hooks";
+import { useDialogOverlay, useModalScope, useRestoreFocus } from "@/hooks";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 
 export type BookSidePanelTab = "footnotes" | "notes";
@@ -85,13 +85,13 @@ export function BookSidePanel({
     }),
     [isMobile, isOpen, onClose]
   );
-  const { modalProps, underlayProps } = useModalOverlay(
-    { isDismissable: true },
-    state,
-    mobilePanelRef
-  );
+  const { overlayProps: modalProps, underlayProps } = useDialogOverlay({
+    isOpen: state.isOpen,
+    onClose: state.close,
+    ref: mobilePanelRef,
+  });
 
-  // After useModalOverlay: its inert cleanup must run before the restore.
+  // After useDialogOverlay: its hidden-page cleanup must run before the restore.
   useRestoreFocus(isOpen, { skipWhenDialogFocused: true });
 
   useEffect(() => {

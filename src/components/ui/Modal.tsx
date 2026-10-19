@@ -6,12 +6,12 @@ import {
   useMemo,
   useRef,
 } from "react";
-import { FocusScope, Overlay, useFocusManager, useModalOverlay } from "react-aria";
+import { FocusScope, Overlay, useFocusManager } from "react-aria";
 import { Dialog, Heading } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { CloseIcon } from "@/components/icons";
 import { useModalStore } from "@/components/ui/modal-store";
-import { useModalScope, useRestoreFocus } from "@/hooks";
+import { useDialogOverlay, useModalScope, useRestoreFocus } from "@/hooks";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 
 /**
@@ -104,13 +104,14 @@ export function Modal({
     }),
     [isOpen, onClose]
   );
-  const { modalProps, underlayProps } = useModalOverlay(
-    { isDismissable: true, isKeyboardDismissDisabled: true },
-    state,
-    modalRef
-  );
+  const { overlayProps, underlayProps } = useDialogOverlay({
+    isOpen: state.isOpen,
+    onClose: state.close,
+    ref: modalRef,
+    isKeyboardDismissDisabled: true,
+  });
 
-  // After useModalOverlay: its inert cleanup must run before the restore.
+  // After useDialogOverlay: its hidden-page cleanup must run before the restore.
   useRestoreFocus(isOpen, { getTarget: restoreFocusTarget });
 
   useEffect(() => {
@@ -153,7 +154,7 @@ export function Modal({
           }
         >
           <div
-            {...modalProps}
+            {...overlayProps}
             ref={modalRef}
             style={panelClassName ? panelStyle : { maxHeight: "90dvh", ...panelStyle }}
             className={

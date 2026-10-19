@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { FocusScope, Overlay, useModalOverlay } from "react-aria";
+import { FocusScope, Overlay } from "react-aria";
 import { Dialog, RouterProvider } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { Outlet, useHref, useLocation, useNavigate } from "react-router-dom";
@@ -12,7 +12,7 @@ import { CloseIcon, MaibukLogo, ProjectsIcon, SettingsIcon } from "@/components/
 import { KeyboardShortcut, ResizeHandle, Tooltip } from "@/components/ui";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
 import { PluginSidebarSurfaces } from "@/components/plugins/PluginSidebarSurfaces";
-import { useRestoreFocus } from "@/hooks";
+import { useDialogOverlay, useRestoreFocus } from "@/hooks";
 import { useSettingsStore } from "@/features/settings/store";
 import {
   getPluginSidebarEntries,
@@ -61,13 +61,13 @@ export function Layout() {
     }),
     [isMobileMenuOpen]
   );
-  const { modalProps: mobileModalProps, underlayProps: mobileUnderlayProps } = useModalOverlay(
-    { isDismissable: true },
-    mobileMenuState,
-    mobileDialogRef
-  );
+  const { overlayProps: mobileModalProps, underlayProps: mobileUnderlayProps } = useDialogOverlay({
+    isOpen: mobileMenuState.isOpen,
+    onClose: mobileMenuState.close,
+    ref: mobileDialogRef,
+  });
 
-  // After useModalOverlay: its inert cleanup must run before the restore.
+  // After useDialogOverlay: its hidden-page cleanup must run before the restore.
   useRestoreFocus(isMobileMenuOpen);
 
   useEffect(() => {

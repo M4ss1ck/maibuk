@@ -8,12 +8,12 @@ import { useEffect, useRef } from "react";
  * `getTarget` is read again on close when the element it first returned is
  * gone, so an action that removes its own row can name the row that survived.
  *
- * The restore runs in a passive effect on purpose. React Aria's
- * useModalOverlay makes the rest of the page `inert` while open and lifts it
- * in a passive-effect cleanup; a layout-effect restore runs first, focuses an
- * inert element, and focus falls to <body>. Call this after useModalOverlay
- * so an unmount while open also lifts `inert` first. jsdom has no `inert`;
- * e2e/specs/books-create.spec.ts proves the timing in real browsers.
+ * The restore runs in a passive effect on purpose. A modal hides the rest of
+ * the page while open and lifts that in a passive-effect cleanup; a
+ * layout-effect restore runs first, focuses a hidden or inert element, and
+ * focus falls to <body>. Call this after the hiding effect so an unmount while
+ * open also lifts it first. jsdom has no `inert`; e2e/specs/books-create.spec.ts
+ * proves the timing in real browsers.
  */
 export function useRestoreFocus(
   isOpen: boolean,
