@@ -236,6 +236,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
     "Opened from any screen with F1 or its button; the Tutorial runs keep the app inert and the palette refuses to open during a run, so no step can show it.",
   "Reset settings":
     "lives inside the Advanced settings section and runs a destructive confirm dialog; steps never open dialogs",
+  Watermark:
+    "decorative: painted behind a Canvas and never an outcome the author acts on, so no step can point at it",
 };
 
 /** The step the Settings → Tutorial row is anchored to; the whole Tutorial ends there. */

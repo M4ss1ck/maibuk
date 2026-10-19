@@ -155,6 +155,12 @@ vi.mock("@xyflow/react", async (importOriginal) => ({
   useViewport: () => ({ x: 0, y: 0, zoom: 1 }),
   useStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ transform: [0, 0, 1], width: 800, height: 600 }),
+  // `CanvasBackground` reads the pane and subscribes to pans through the store
+  // API; the mocked `ReactFlow` renders its children without the provider.
+  useStoreApi: () => ({
+    getState: () => ({ transform: [0, 0, 1], width: 800, height: 600 }),
+    subscribe: () => () => {},
+  }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => children,
 }));
 
