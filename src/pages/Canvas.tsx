@@ -81,9 +81,9 @@ const FIGLET_LINES = maibukArt
   .filter((line) => line.trim().length > 0);
 const FIGLET_COLS = Math.max(...FIGLET_LINES.map((line) => line.length));
 const MONO_ASPECT = 0.6; // monospace glyph advance ÷ font size
-export const CANVAS_PAGE_SIZE = 1200;
+const CANVAS_PAGE_SIZE = 1200;
 const TILE_INSET = 0.1;
-export const CANVAS_BACKGROUND_TILE_ID = "maibuk-canvas-tile";
+const CANVAS_BACKGROUND_TILE_ID = "maibuk-canvas-tile";
 
 export interface CanvasTileGeometry {
   tileWidth: number;
@@ -670,7 +670,11 @@ function CanvasEditor() {
         </Button>
       </header>
 
-      <main ref={surfaceRef} className="relative min-h-0 flex-1" data-tutorial="canvas.surface">
+      <main
+        ref={surfaceRef}
+        className="relative min-h-0 flex-1 overflow-hidden"
+        data-tutorial="canvas.surface"
+      >
         <ReactFlow
           // Arrows move the focused node (ADR 0025: the Canvas surface owns them).
           data-owns-arrows=""

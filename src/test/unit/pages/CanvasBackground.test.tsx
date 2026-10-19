@@ -1,8 +1,6 @@
 import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  CANVAS_BACKGROUND_TILE_ID,
-  CANVAS_PAGE_SIZE,
   CanvasBackground,
   canvasBackgroundOffset,
   canvasTileGeometry,
@@ -62,7 +60,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
 
 const backgroundLayer = () =>
   document.querySelector<HTMLElement>("div.react-flow__background") as HTMLElement;
-const tileGeometry = () => document.getElementById(CANVAS_BACKGROUND_TILE_ID);
+const tileGeometry = () => backgroundLayer().querySelector("defs text");
 const tileMarkup = () => backgroundLayer().querySelector("svg")?.innerHTML ?? "";
 
 describe("canvasBackgroundOffset()", () => {
@@ -87,8 +85,9 @@ describe("canvasBackgroundOffset()", () => {
   });
 
   it("reads the tile from the zoom-scaled geometry", () => {
-    expect(canvasBackgroundOffset(0, canvasTileGeometry(1).tileWidth)).toBe(-CANVAS_PAGE_SIZE);
-    expect(canvasBackgroundOffset(0, canvasTileGeometry(2).tileWidth)).toBe(-2 * CANVAS_PAGE_SIZE);
+    const zoomedInTile = canvasTileGeometry(1).tileWidth;
+    expect(canvasBackgroundOffset(0, zoomedInTile)).toBe(-zoomedInTile);
+    expect(canvasBackgroundOffset(0, canvasTileGeometry(2).tileWidth)).toBe(-2 * zoomedInTile);
   });
 });
 
