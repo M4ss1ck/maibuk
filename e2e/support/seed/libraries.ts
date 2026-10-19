@@ -70,45 +70,78 @@ async function bookShelf(): Promise<void> {
   }
 }
 
+// `notesWithLinksAndTags` Note timestamps. The Gallery's default Sort is Last
+// Edited (newest first), and #525 (ADR 0028) breaks every date tie by Custom
+// Order. The three Notes would otherwise be created within the same second,
+// tie, and show in Custom Order (pinned first) under any Sort. The specs
+// expect the pinned Tide Tables to lead, then Keeper's Log, then Harbor Notes,
+// so stamp each Note with its own fixed wall clock through the real write path
+// below, whatever the machine's clock does while seeding.
+const NOTES_CLOCK = Date.UTC(2025, 0, 1, 12, 0, 0);
+const NOTE_STAMP = {
+  harborNotes: NOTES_CLOCK,
+  keeperLog: NOTES_CLOCK + 60_000,
+  tideTables: NOTES_CLOCK + 120_000,
+} as const;
+
+async function withFixedClock<T>(ms: number, write: () => Promise<T>): Promise<T> {
+  const realNow = Date.now;
+  Date.now = () => ms;
+  try {
+    return await write();
+  } finally {
+    Date.now = realNow;
+  }
+}
+
 async function notesWithLinksAndTags(): Promise<void> {
   const book = await createBookRow({ ...SEED_BOOK }, "local");
   const chapter = await createChapterRow({ bookId: book.id, title: "Arrival" }, "local");
   await updateChapterRow(chapter.id, { content: `<p>${SEED_CHAPTERS[0].text}</p>` }, "local");
   await updateBookWordCountRow(book.id, SEED_CHAPTERS[0].text.split(/\s+/).length);
 
-  const keeperLog = await createNoteRow(
-    {
-      bookId: book.id,
-      title: SEED_NOTES.keeperLog,
-      content:
-        "<h1>Night Watch</h1><p>The lamp holds through the gale.</p><h2>Dawn</h2><p>First light on the water.</p>",
-      tags: [SEED_NOTE_TAGS.research, SEED_NOTE_TAGS.lamp],
-    },
-    "local"
+  const keeperLog = await withFixedClock(NOTE_STAMP.keeperLog, () =>
+    createNoteRow(
+      {
+        bookId: book.id,
+        title: SEED_NOTES.keeperLog,
+        content:
+          "<h1>Night Watch</h1><p>The lamp holds through the gale.</p><h2>Dawn</h2><p>First light on the water.</p>",
+        tags: [SEED_NOTE_TAGS.research, SEED_NOTE_TAGS.lamp],
+      },
+      "local"
+    )
   );
 
-  await createNoteRow(
-    {
-      title: SEED_NOTES.tideTables,
-      content: "<p>High water at six. Low water at noon.</p>",
-      pinned: true,
-      tags: [SEED_NOTE_TAGS.research],
-    },
-    "local"
+  await withFixedClock(NOTE_STAMP.tideTables, () =>
+    createNoteRow(
+      {
+        title: SEED_NOTES.tideTables,
+        content: "<p>High water at six. Low water at noon.</p>",
+        pinned: true,
+        tags: [SEED_NOTE_TAGS.research],
+      },
+      "local"
+    )
   );
 
-  const harborNotes = await createNoteRow(
-    {
-      title: SEED_NOTES.harborNotes,
-      content: `<p>See <a class="wikilink" href="maibuk://note/${keeperLog.id}">${SEED_NOTES.keeperLog}</a> for the watch.</p>`,
-      tags: [SEED_NOTE_TAGS.harbor],
-    },
-    "local"
+  const harborNotes = await withFixedClock(NOTE_STAMP.harborNotes, () =>
+    createNoteRow(
+      {
+        title: SEED_NOTES.harborNotes,
+        content: `<p>See <a class="wikilink" href="maibuk://note/${keeperLog.id}">${SEED_NOTES.keeperLog}</a> for the watch.</p>`,
+        tags: [SEED_NOTE_TAGS.harbor],
+      },
+      "local"
+    )
   );
   // The create path stores content without indexing it; a Note written through
   // the editor indexes its Links on save. Reproduce that save so the seeded
-  // Backlink exists on Keeper's Log.
-  await updateNoteRow({ id: harborNotes.id, content: harborNotes.content }, "local");
+  // Backlink exists on Keeper's Log. Harbor Notes keeps its clock: the content
+  // is unchanged, so this save leaves its Last Edited where it was.
+  await withFixedClock(NOTE_STAMP.harborNotes, () =>
+    updateNoteRow({ id: harborNotes.id, content: harborNotes.content }, "local")
+  );
 }
 
 // Two Books with Chapters and an Unfiled Note: the Command Palette seed, so
