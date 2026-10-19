@@ -87,9 +87,13 @@ function makeScrollEl(): HTMLElement {
   return el as unknown as HTMLElement & { __emit: (type: string) => void };
 }
 
+const originalSavePosition = useReadingPositionStore.getState().savePosition;
+
 describe("useReadingPosition", () => {
   beforeEach(() => {
-    useReadingPositionStore.setState({ positions: {} });
+    // A spy on an action is copied into every later state object, so restore the
+    // original before each test or the previous test's spy keeps counting.
+    useReadingPositionStore.setState({ positions: {}, savePosition: originalSavePosition });
     vi.useFakeTimers();
   });
 
@@ -191,6 +195,7 @@ describe("useReadingPosition", () => {
     );
 
     scrollEl.__emit("scroll");
+    vi.advanceTimersByTime(400);
 
     expect(editor.view.posAtCoords).toHaveBeenCalledWith({
       left: 208,
@@ -198,11 +203,60 @@ describe("useReadingPosition", () => {
     });
   });
 
-  it("flushes the last stashed position on unmount", () => {
+  it("does not read layout on every scroll or selection event", () => {
+    const editor = makeEditor(100, 17);
+    const scrollEl = makeScrollEl() as HTMLElement & {
+      __emit: (type: string) => void;
+    };
+
+    renderHook(() =>
+      useReadingPosition({
+        editor: editor as never,
+        scrollEl,
+        storageKey: "chapter:a",
+      })
+    );
+
+    scrollEl.__emit("scroll");
+    expect(editor.view.posAtCoords).not.toHaveBeenCalled();
+    expect(editor.view.dom.getBoundingClientRect).not.toHaveBeenCalled();
+
+    // Still typing: each event restarts the wait, so layout runs only at rest.
+    vi.advanceTimersByTime(300);
+    const selectionUpdate = editor.on.mock.calls.find(([name]) => name === "selectionUpdate")?.[1];
+    selectionUpdate?.();
+    vi.advanceTimersByTime(300);
+    expect(editor.view.posAtCoords).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(100);
+    expect(editor.view.posAtCoords).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves nothing on unmount when no author activity happened", () => {
+    const editor = makeEditor(100, 5);
+    const scrollEl = makeScrollEl();
+    const savePosition = vi.spyOn(useReadingPositionStore.getState(), "savePosition");
+
+    const { unmount } = renderHook(() =>
+      useReadingPosition({
+        editor: editor as never,
+        scrollEl,
+        storageKey: "chapter:a",
+      })
+    );
+
+    unmount();
+
+    expect(savePosition).not.toHaveBeenCalled();
+    expect(editor.view.posAtCoords).not.toHaveBeenCalled();
+  });
+
+  it("stashes and saves a pending capture exactly once on unmount", () => {
     const editor = makeEditor(100, 5);
     const scrollEl = makeScrollEl() as HTMLElement & {
       __emit: (type: string) => void;
     };
+    const savePosition = vi.spyOn(useReadingPositionStore.getState(), "savePosition");
 
     const { unmount } = renderHook(() =>
       useReadingPosition({
@@ -215,10 +269,34 @@ describe("useReadingPosition", () => {
     scrollEl.__emit("scroll");
     unmount();
 
+    expect(savePosition).toHaveBeenCalledTimes(1);
+    expect(editor.view.posAtCoords).toHaveBeenCalledTimes(1);
     expect(useReadingPositionStore.getState().getPosition("chapter:a")).toMatchObject({
       caret: 5,
       top: 42,
     });
+  });
+
+  it("saves nothing when the effect re-runs without author activity", () => {
+    const editor = makeEditor(100, 5);
+    const scrollEl = makeScrollEl();
+    const savePosition = vi.spyOn(useReadingPositionStore.getState(), "savePosition");
+
+    const { rerender } = renderHook(
+      ({ suppressRestore }) =>
+        useReadingPosition({
+          editor: editor as never,
+          scrollEl,
+          storageKey: "chapter:a",
+          suppressRestore,
+        }),
+      { initialProps: { suppressRestore: false } }
+    );
+
+    rerender({ suppressRestore: true });
+
+    expect(savePosition).not.toHaveBeenCalled();
+    expect(editor.view.posAtCoords).not.toHaveBeenCalled();
   });
 
   describe("while late layout settles", () => {

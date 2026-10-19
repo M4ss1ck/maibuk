@@ -1077,6 +1077,49 @@ describe("Editor", () => {
     expect(onStatsChange.mock.calls).toHaveLength(1);
   });
 
+  it("restarts the coalescing wait on every keystroke", async () => {
+    let editor: TiptapEditor | null = null;
+    const onUpdate = vi.fn();
+    render(
+      <Editor
+        content="<p>Hello</p>"
+        onUpdate={onUpdate}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    onUpdate.mockClear();
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        editor!.commands.insertContent("a");
+      });
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      act(() => {
+        editor!.commands.insertContent("b");
+      });
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      // 400 ms after the first key, but only 200 after the latest: still typing.
+      expect(onUpdate).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(onUpdate).toHaveBeenCalledTimes(1);
+      expect(onUpdate.mock.calls[0][0]).toContain("ab");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("flushes the pending burst on blur so a save never reads a stale document", async () => {
     let editor: TiptapEditor | null = null;
     const onUpdate = vi.fn();

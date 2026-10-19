@@ -97,6 +97,7 @@ export function useReadingPosition({
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const stash = () => {
+      if (editor.isDestroyed) return;
       const scrollRect = scrollEl.getBoundingClientRect();
       const editorRect = editor.view.dom.getBoundingClientRect();
       const probe = editor.view.posAtCoords({
@@ -115,10 +116,18 @@ export function useReadingPosition({
       }
     };
 
-    const scheduleCapture = () => {
+    // Reading the scroll position and probing the top block forces a layout, so
+    // a burst of keystrokes or a scroll must not do it per event: wait for the
+    // author to rest, then capture the place they landed on (issue #556).
+    const capture = () => {
+      timer = undefined;
       stash();
+      flush();
+    };
+
+    const scheduleCapture = () => {
       clearTimeout(timer);
-      timer = setTimeout(flush, CAPTURE_DEBOUNCE_MS);
+      timer = setTimeout(capture, CAPTURE_DEBOUNCE_MS);
     };
 
     scrollEl.addEventListener("scroll", scheduleCapture, { passive: true });
@@ -128,8 +137,17 @@ export function useReadingPosition({
       releaseHold();
       scrollEl.removeEventListener("scroll", scheduleCapture);
       editor.off("selectionUpdate", scheduleCapture);
+      // Only a captured-but-not-yet-saved place is worth flushing. With no
+      // author event since the last capture there is nothing new to save, and
+      // probing layout from a tearing-down effect can overwrite a good saved
+      // place with an unsettled one (e.g. a quick Chapter switch).
+      const capturePending = timer !== undefined;
       clearTimeout(timer);
-      flush();
+      timer = undefined;
+      if (capturePending) {
+        stash();
+        flush();
+      }
     };
   }, [editor, scrollEl, storageKey, suppressRestore]);
 }
