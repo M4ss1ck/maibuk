@@ -199,6 +199,42 @@ function editModeOf(args: EditChapterArgs): EditMode | { result: CallToolResult 
   return { kind: "replace", find, replace };
 }
 
+export async function resolveChapter(
+  client: PluginClient,
+  ref: string,
+  tool: string
+): Promise<
+  | { full: NonNullable<Awaited<ReturnType<PluginClient["library"]["chapters"]["get"]>>> }
+  | { result: CallToolResult }
+> {
+  const books = await client.library.books.list();
+  const booksById = new Map(books.map((book) => [book.id, book]));
+
+  const allChapters: ChapterRow[] = [];
+  for (const book of books) {
+    allChapters.push(...(await client.library.chapters.list({ bookId: book.id })));
+  }
+  const allChapterIds = allChapters.map((chapter) => chapter.id);
+
+  const resolved = resolveRef({
+    ref,
+    rows: allChapters,
+    noun: "Chapter",
+    listTool: "get_book",
+    tool,
+    line: (chapter) => chapterCandidate(chapter, booksById, allChapterIds),
+  });
+  if ("result" in resolved) return resolved;
+
+  const full = await client.library.chapters.get({ chapterId: resolved.row.id });
+  if (!full) {
+    return {
+      result: errorResult(`No Chapter has the id ${ref}; call get_book to see the Chapters.`),
+    };
+  }
+  return { full };
+}
+
 export async function editChapter(
   client: PluginClient,
   args: EditChapterArgs
@@ -208,29 +244,10 @@ export async function editChapter(
   if ("result" in mode) return mode.result;
 
   return libraryCall(async () => {
-    const books = await client.library.books.list();
-    const booksById = new Map(books.map((book) => [book.id, book]));
-
-    const allChapters: ChapterRow[] = [];
-    for (const book of books) {
-      allChapters.push(...(await client.library.chapters.list({ bookId: book.id })));
-    }
-    const allChapterIds = allChapters.map((chapter) => chapter.id);
-
-    const resolved = resolveRef({
-      ref,
-      rows: allChapters,
-      noun: "Chapter",
-      listTool: "get_book",
-      tool: "edit_chapter",
-      line: (chapter) => chapterCandidate(chapter, booksById, allChapterIds),
-    });
+    const resolved = await resolveChapter(client, ref, "edit_chapter");
     if ("result" in resolved) return resolved.result;
 
-    const full = await client.library.chapters.get({ chapterId: resolved.row.id });
-    if (!full) {
-      return errorResult(`No Chapter has the id ${ref}; call get_book to see the Chapters.`);
-    }
+    const full = resolved.full;
 
     const html = full.content.html;
     let updatedHtml: string;
@@ -272,6 +289,56 @@ export async function editChapter(
     const lastEdited = new Date((stored ?? full).updatedAt).toISOString();
     return {
       content: [{ type: "text", text: `${sentence}\nLast Edited: ${lastEdited}` }],
+    };
+  });
+}
+
+/** Arguments for `write_chapter`. */
+export interface WriteChapterArgs {
+  chapter: string;
+  expectedLastEdited: string;
+  text?: string;
+  html?: string;
+}
+
+export async function writeChapter(
+  client: PluginClient,
+  args: WriteChapterArgs
+): Promise<CallToolResult> {
+  if ((args.text !== undefined) === (args.html !== undefined)) {
+    return errorResult(
+      "Give the new content as text or as html, not both; call read_chapter first to get Last Edited."
+    );
+  }
+
+  return libraryCall(async () => {
+    const resolved = await resolveChapter(client, args.chapter.trim(), "write_chapter");
+    if ("result" in resolved) return resolved.result;
+
+    const full = resolved.full;
+
+    const current = new Date(full.updatedAt).toISOString();
+    if (args.expectedLastEdited.trim() !== current) {
+      return errorResult(
+        `The Chapter changed since you read it (Last Edited is now ${current}); call read_chapter again and redo the change.`
+      );
+    }
+
+    await client.library.chapters.updateContent({
+      chapterId: full.id,
+      content: args.text !== undefined ? { text: args.text } : { html: args.html as string },
+    });
+
+    const stored = await client.library.chapters.get({ chapterId: full.id });
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Replaced the whole of Chapter ${titleOrUntitled(full.title)}.\nLast Edited: ${new Date(
+            (stored ?? full).updatedAt
+          ).toISOString()}`,
+        },
+      ],
     };
   });
 }

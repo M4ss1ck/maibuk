@@ -112,6 +112,7 @@ describe("MCP Server protocol", () => {
         "list_notes",
         "read_note",
         "edit_chapter",
+        "write_chapter",
       ]);
     } finally {
       host.stop();
@@ -200,6 +201,15 @@ describe("MCP Server protocol", () => {
               "readOnlyHint": false,
             },
             "name": "edit_chapter",
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+            },
+            "name": "write_chapter",
           },
         ]
       `);

@@ -10,7 +10,7 @@ import { z } from "zod";
 import type { PluginClient } from "@/plugin-sdk";
 import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
-import { editChapter } from "./edits";
+import { editChapter, writeChapter } from "./edits";
 import { listNotes, readNote } from "./notes";
 
 /**
@@ -139,6 +139,27 @@ export function buildMcpServer(client: PluginClient): McpServer {
       },
     },
     async (args) => editChapter(client, args as any)
+  );
+  server.registerTool(
+    "write_chapter",
+    {
+      title: "Write chapter",
+      description:
+        "Replace a Chapter's whole content with text (the host makes paragraphs) or html (the host sanitizes it). Needs expectedLastEdited from read_chapter and is refused if the Chapter changed since. Prefer edit_chapter for small changes.",
+      inputSchema: z.object({
+        chapter: z.string().min(8),
+        expectedLastEdited: z.string(),
+        text: z.string().optional(),
+        html: z.string().optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args) => writeChapter(client, args as any)
   );
   return server;
 }

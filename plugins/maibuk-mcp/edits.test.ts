@@ -500,3 +500,198 @@ describe("edit_chapter", () => {
     }
   });
 });
+
+describe("write_chapter", () => {
+  it("accepted when expectedLastEdited equals the Last Edited read_chapter reported", async () => {
+    const books = [makeBook("bookalpha1", 1000, "The Book")];
+    const chapters = [
+      makeChapter(
+        "chapteralpha",
+        "bookalpha1",
+        "The Chapter",
+        { html: "<p>old</p>", text: "old" },
+        Date.UTC(2026, 0, 1)
+      ),
+    ];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const reread = await callTool(host, key, "read_chapter", { chapter: "chapteralpha" });
+      const lastEdited = textOf(reread)
+        .split("\n")
+        .find((entry) => entry.startsWith("Last Edited: "))!
+        .replace("Last Edited: ", "");
+      const answer = await callTool(host, key, "write_chapter", {
+        chapter: "chapteralpha",
+        expectedLastEdited: lastEdited,
+        html: "<p>new content</p>",
+      });
+      expect(isError(answer)).toBe(false);
+      expect(textOf(answer).startsWith("Replaced the whole of Chapter")).toBe(true);
+      expect(chapters[0].content.html).toBe("<p>new content</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("text content becomes paragraphs", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const chapters = [
+      makeChapter(
+        "chapteralpha",
+        "bookalpha1",
+        "The Chapter",
+        { html: "<p>old</p>", text: "old" },
+        Date.UTC(2026, 0, 1)
+      ),
+    ];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const reread = await callTool(host, key, "read_chapter", { chapter: "chapteralpha" });
+      const lastEdited = textOf(reread)
+        .split("\n")
+        .find((entry) => entry.startsWith("Last Edited: "))!
+        .replace("Last Edited: ", "");
+      const answer = await callTool(host, key, "write_chapter", {
+        chapter: "chapteralpha",
+        expectedLastEdited: lastEdited,
+        text: "One\n\nTwo",
+      });
+      expect(isError(answer)).toBe(false);
+      expect(chapters[0].content.html).toBe("<p>One</p><p>Two</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("html content is stored (sanitized by the kit)", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const chapters = [
+      makeChapter(
+        "chapteralpha",
+        "bookalpha1",
+        "The Chapter",
+        { html: "<p>old</p>", text: "old" },
+        Date.UTC(2026, 0, 1)
+      ),
+    ];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const reread = await callTool(host, key, "read_chapter", { chapter: "chapteralpha" });
+      const lastEdited = textOf(reread)
+        .split("\n")
+        .find((entry) => entry.startsWith("Last Edited: "))!
+        .replace("Last Edited: ", "");
+      const answer = await callTool(host, key, "write_chapter", {
+        chapter: "chapteralpha",
+        expectedLastEdited: lastEdited,
+        html: "<p>Hello <strong>world</strong></p>",
+      });
+      expect(isError(answer)).toBe(false);
+      expect(chapters[0].content.html).toBe("<p>Hello <strong>world</strong></p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("stale write refused", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const chapters = [
+      makeChapter(
+        "chapteralpha",
+        "bookalpha1",
+        "The Chapter",
+        { html: "<p>old</p>", text: "old" },
+        Date.UTC(2026, 0, 1)
+      ),
+    ];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "write_chapter", {
+        chapter: "chapteralpha",
+        expectedLastEdited: new Date(Date.UTC(2020, 0, 1)).toISOString(),
+        html: "<p>new</p>",
+      });
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toContain("changed since you read it");
+      expect(chapters[0].content.html).toBe("<p>old</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("write after an edit_chapter uses the Last Edited edit_chapter returned", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const chapters = [
+      makeChapter(
+        "chapteralpha",
+        "bookalpha1",
+        "The Chapter",
+        { html: "<p>old</p>", text: "old" },
+        Date.UTC(2026, 0, 1)
+      ),
+    ];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const initialIso = new Date(Date.UTC(2026, 0, 1)).toISOString();
+      const editAnswer = await callTool(host, key, "edit_chapter", {
+        chapter: "chapteralpha",
+        append: "more",
+      });
+      expect(isError(editAnswer)).toBe(false);
+      const newLastEdited = textOf(editAnswer)
+        .split("\n")
+        .find((entry) => entry.startsWith("Last Edited: "))!
+        .replace("Last Edited: ", "");
+
+      const stale = await callTool(host, key, "write_chapter", {
+        chapter: "chapteralpha",
+        expectedLastEdited: initialIso,
+        html: "<p>new</p>",
+      });
+      expect(isError(stale)).toBe(true);
+      expect(textOf(stale)).toContain("changed since you read it");
+
+      const ok = await callTool(host, key, "write_chapter", {
+        chapter: "chapteralpha",
+        expectedLastEdited: newLastEdited,
+        html: "<p>new</p>",
+      });
+      expect(isError(ok)).toBe(false);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("both text and html -> error; neither -> error", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const chapters = [
+      makeChapter(
+        "chapteralpha",
+        "bookalpha1",
+        "The Chapter",
+        { html: "<p>old</p>", text: "old" },
+        Date.UTC(2026, 0, 1)
+      ),
+    ];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const both = await callTool(host, key, "write_chapter", {
+        chapter: "chapteralpha",
+        expectedLastEdited: "x",
+        text: "a",
+        html: "<p>a</p>",
+      });
+      expect(isError(both)).toBe(true);
+      expect(textOf(both)).toContain("Give the new content as text or as html");
+
+      const neither = await callTool(host, key, "write_chapter", {
+        chapter: "chapteralpha",
+        expectedLastEdited: "x",
+      });
+      expect(isError(neither)).toBe(true);
+      expect(textOf(neither)).toContain("Give the new content as text or as html");
+    } finally {
+      host.stop();
+    }
+  });
+});
