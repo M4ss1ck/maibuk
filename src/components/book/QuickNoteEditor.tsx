@@ -5,6 +5,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
+import { useOpeningMarksLanguage } from "@/components/editor/opening-marks-language";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
@@ -31,9 +32,16 @@ interface QuickNoteEditorProps {
    * that follow (the Add note button).
    */
   onEscape?: () => void;
+  /** The language of the Book the Note is for; the app language when absent. */
+  bookLanguage?: string;
 }
 
-export function QuickNoteEditor({ onChange, placeholder, onEscape }: QuickNoteEditorProps) {
+export function QuickNoteEditor({
+  onChange,
+  placeholder,
+  onEscape,
+  bookLanguage,
+}: QuickNoteEditorProps) {
   const { t } = useTranslation();
   const [showToolbar, setShowToolbar] = useState(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
@@ -42,6 +50,7 @@ export function QuickNoteEditor({ onChange, placeholder, onEscape }: QuickNoteEd
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
   const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
+  const openingMarksLanguage = useOpeningMarksLanguage(bookLanguage ?? language);
 
   const editor = useEditor({
     extensions: [
@@ -49,6 +58,7 @@ export function QuickNoteEditor({ onChange, placeholder, onEscape }: QuickNoteEd
         onMarkdownPaste: setPendingMarkdownPaste,
         spellCheck: { enabled: spellCheckEnabled, language },
         autoClose: editorAutoClose,
+        openingMarksLanguage,
       }),
       TaskList,
       TaskItem.configure({ nested: true }),

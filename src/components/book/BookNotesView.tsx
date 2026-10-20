@@ -7,13 +7,20 @@ interface BookNotesViewProps {
   notes: Note[];
   onCreateNote: (html: string) => void;
   onOpenNote: (noteId: string) => void;
+  /** The Book's language, which a new Book Note is written in. */
+  bookLanguage?: string;
 }
 
 function hasText(html: string): boolean {
   return html.replace(/<[^>]*>/g, " ").trim().length > 0;
 }
 
-export function BookNotesView({ notes, onCreateNote, onOpenNote }: BookNotesViewProps) {
+export function BookNotesView({
+  notes,
+  onCreateNote,
+  onOpenNote,
+  bookLanguage,
+}: BookNotesViewProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
   const [editorKey, setEditorKey] = useState(0);
@@ -39,6 +46,7 @@ export function BookNotesView({ notes, onCreateNote, onOpenNote }: BookNotesView
             onChange={setDraft}
             placeholder={t("bookNotes.quickPlaceholder")}
             onEscape={handleEditorEscape}
+            bookLanguage={bookLanguage}
           />
         </div>
         <div className="mt-2 flex justify-end">

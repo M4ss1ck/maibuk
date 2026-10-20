@@ -16,6 +16,22 @@ export const SEED_CHAPTERS = [
   { title: "Storm", text: "The storm came in from the west without warning." },
 ] as const;
 
+/** `spanishAndEnglishBooks`: one Book written in Spanish and one in English, a Chapter each. */
+export const LANGUAGE_BOOKS = {
+  spanish: {
+    title: "El Faro",
+    language: "es",
+    chapter: "Llegada",
+    text: "El barco la dejó en las rocas.",
+  },
+  english: {
+    title: "The Harbor",
+    language: "en",
+    chapter: "Arrival",
+    text: "The boat left her on the rocks.",
+  },
+} as const;
+
 /** `bookShelf`: the seed Book above plus one Book per other Book Status. */
 export const SHELF_BOOKS = [
   { title: "Salt and Iron", authorName: "Ada Marsh", status: "draft" },

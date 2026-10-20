@@ -1039,6 +1039,24 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "editor-opening-marks",
+    area: "editor",
+    workflow:
+      "Turn on Spanish opening marks in Settings by Space; type ? and ! in a Spanish Book's Chapter; asserts: ¿/¡ at the question's start, mirrored for runs; persists: yes",
+    edges: [
+      "Backspace right after removes only the opener",
+      "Undo right after removes only the opener",
+      "English Book untouched",
+      "Off by default",
+    ],
+    terms: ["Opening Marks"],
+    shortcuts: [],
+    routes: ["/book/:bookId", "/settings"],
+    fixture: "spanishAndEnglishBooks",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "editor-markdown-paste",
     area: "editor",
     workflow:

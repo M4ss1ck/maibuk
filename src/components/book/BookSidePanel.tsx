@@ -33,6 +33,7 @@ interface BookSidePanelProps {
   notes: Note[];
   onCreateNote: (html: string) => void;
   onOpenNote: (noteId: string) => void;
+  bookLanguage?: string;
 }
 
 export function BookSidePanel({
@@ -49,6 +50,7 @@ export function BookSidePanel({
   notes,
   onCreateNote,
   onOpenNote,
+  bookLanguage,
 }: BookSidePanelProps) {
   const { t } = useTranslation();
   const mobilePanelRef = useRef<HTMLDivElement | null>(null);
@@ -174,7 +176,12 @@ export function BookSidePanel({
           />
         </TabPanel>
         <TabPanel id="notes" className="flex min-h-0 flex-1 flex-col">
-          <BookNotesView notes={notes} onCreateNote={onCreateNote} onOpenNote={onOpenNote} />
+          <BookNotesView
+            notes={notes}
+            onCreateNote={onCreateNote}
+            onOpenNote={onOpenNote}
+            bookLanguage={bookLanguage}
+          />
         </TabPanel>
       </TabPanels>
     </Tabs>

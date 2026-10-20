@@ -181,7 +181,12 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
         "Backup Directory",
       ]),
       step("settings.metrics", ["Metrics Category", "Writing Session", "Streak"]),
-      step("settings.editor", ["Spell Check", "Custom Dictionary", "Paste Cleanup"]),
+      step("settings.editor", [
+        "Spell Check",
+        "Custom Dictionary",
+        "Paste Cleanup",
+        "Opening Marks",
+      ]),
       step("settings.advanced", ["Database File", "Reset"]),
       step("settings.tutorial", ["Tutorial"]),
     ],

@@ -415,6 +415,7 @@ beforeEach(() => {
   } as never);
   useSettingsStore.setState({
     editorAutoClose: false,
+    editorOpeningMarks: false,
     mainSidebarWidth: 280,
     notesSidebarWidth: 280,
     lastNoteId: null,
@@ -554,6 +555,28 @@ describe("Settings page", () => {
     await user.keyboard(" ");
 
     expect(useSettingsStore.getState().editorAutoClose).toBe(true);
+  });
+
+  it("toggles Spanish opening marks with Space", async () => {
+    const user = userEvent.setup();
+    const { Settings } = await import("@/pages/Settings");
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <Routes>
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const toggle = await screen.findByRole("switch", {
+      name: "settings.toggleEditorOpeningMarks",
+    });
+    toggle.focus();
+    await user.keyboard(" ");
+    expect(useSettingsStore.getState().editorOpeningMarks).toBe(true);
+
+    await user.keyboard(" ");
+    expect(useSettingsStore.getState().editorOpeningMarks).toBe(false);
   });
 
   it("hides desktop window settings on Android", async () => {

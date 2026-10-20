@@ -1441,6 +1441,7 @@ export function BookEditor() {
           notes={bookNotes}
           onCreateNote={handleCreateBookNote}
           onOpenNote={handleOpenBookNote}
+          bookLanguage={currentBook.language}
         />
       </div>
 

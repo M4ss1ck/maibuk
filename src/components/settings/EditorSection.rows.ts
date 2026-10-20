@@ -41,6 +41,12 @@ export const EDITOR_SECTION = {
       descriptionKey: "settings.editorAutoCloseDescription",
     },
     {
+      id: "editorOpeningMarks",
+      labelKey: "settings.editorOpeningMarks",
+      descriptionKey: "settings.editorOpeningMarksDescription",
+      keywordsKey: "settings.keywords.editorOpeningMarks",
+    },
+    {
       id: "pasteCleanupPreset",
       labelKey: "settings.pasteCleanup.preset.label",
       descriptionKey: "settings.pasteCleanup.preset.description",

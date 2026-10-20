@@ -78,6 +78,69 @@ describe("QuickNoteEditor", () => {
     expect(editor).toHaveTextContent("()");
   });
 
+  describe("Opening Marks", () => {
+    async function typeInto(bookLanguage: string | undefined, text: string) {
+      const user = userEvent.setup();
+      const { container } = render(
+        <QuickNoteEditor onChange={vi.fn()} bookLanguage={bookLanguage} />
+      );
+      const editor = await waitFor(() => {
+        const el = container.querySelector("[contenteditable='true']");
+        expect(el).not.toBeNull();
+        return el as HTMLElement;
+      });
+      await user.click(editor);
+      await user.type(editor, text);
+      return editor;
+    }
+
+    beforeEach(() => {
+      useSettingsStore.setState({ editorAutoClose: false, language: "en" });
+    });
+
+    it("adds ¿ in a Spanish Book's Note when the setting is on", async () => {
+      useSettingsStore.setState({ editorOpeningMarks: true });
+
+      const editor = await typeInto("es", "Hola. Vienes?");
+
+      expect(editor).toHaveTextContent("Hola. ¿Vienes?");
+    });
+
+    it("leaves an English Book's Note alone", async () => {
+      useSettingsStore.setState({ editorOpeningMarks: true });
+
+      const editor = await typeInto("en", "Vienes?");
+
+      expect(editor).toHaveTextContent(/^Vienes\?$/);
+    });
+
+    it("follows the app language when there is no Book language", async () => {
+      useSettingsStore.setState({ editorOpeningMarks: true, language: "es" });
+
+      const editor = await typeInto(undefined, "Vienes?");
+
+      expect(editor).toHaveTextContent("¿Vienes?");
+    });
+
+    it("does nothing while the setting is off", async () => {
+      useSettingsStore.setState({ editorOpeningMarks: false });
+
+      const editor = await typeInto("es", "Vienes?");
+
+      expect(editor).toHaveTextContent(/^Vienes\?$/);
+    });
+
+    it("applies a setting turned on while the editor is open", async () => {
+      useSettingsStore.setState({ editorOpeningMarks: false });
+      const editor = await typeInto("es", "Vienes?");
+
+      useSettingsStore.setState({ editorOpeningMarks: true });
+      await userEvent.setup().type(editor, " Qué tal!");
+
+      expect(editor).toHaveTextContent("Vienes? ¡Qué tal!");
+    });
+  });
+
   it("Escape leaves the editor so focus can reach the controls after it", async () => {
     const onEscape = vi.fn();
     const { container } = render(<QuickNoteEditor onChange={vi.fn()} onEscape={onEscape} />);

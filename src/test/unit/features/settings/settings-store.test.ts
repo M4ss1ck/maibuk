@@ -118,6 +118,7 @@ describe("useSettingsStore", () => {
       expect(state.lastPath).toBeNull();
       expect(state.lastNoteId).toBeNull();
       expect(state.editorAutoClose).toBe(false);
+      expect(state.editorOpeningMarks).toBe(false);
     });
   });
 
@@ -741,6 +742,11 @@ describe("editor content width settings", () => {
   it("toggles editorAutoClose", () => {
     useSettingsStore.getState().setEditorAutoClose(true);
     expect(useSettingsStore.getState().editorAutoClose).toBe(true);
+  });
+
+  it("toggles editorOpeningMarks", () => {
+    useSettingsStore.getState().setEditorOpeningMarks(true);
+    expect(useSettingsStore.getState().editorOpeningMarks).toBe(true);
   });
 });
 

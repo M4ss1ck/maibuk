@@ -825,6 +825,9 @@
     "editorAutoClose": "Auto-close pairs",
     "editorAutoCloseDescription": "Automatically close brackets and quotes as you type",
     "toggleEditorAutoClose": "Toggle auto-close pairs",
+    "editorOpeningMarks": "Spanish opening marks (¿ ¡)",
+    "editorOpeningMarksDescription": "Add ¿ and ¡ when you type ? or ! in Spanish text",
+    "toggleEditorOpeningMarks": "Toggle Spanish opening marks",
     "customDictionary": "Custom dictionary",
     "customDictionaryDescription": "Words added from the editor won't be flagged as misspelled",
     "customDictionaryCount": "{{count}} words",
@@ -962,6 +965,13 @@
       "pasteCleanupPreset": ["copy", "paste", "clipboard", "formatting"],
       "alwaysOnTop": ["pin", "window", "float"],
       "spellCheck": ["spelling", "dictionary"],
+      "editorOpeningMarks": [
+        "question mark",
+        "exclamation mark",
+        "inverted",
+        "punctuation",
+        "Spanish"
+      ],
       "autoSave": ["save", "automatic"],
       "language": ["locale", "translation", "spanish", "english"],
       "backupsList": ["backup", "restore"],
@@ -1827,7 +1837,7 @@
         },
         "editor": {
           "title": "Editor",
-          "body": "Spell Check, your Custom Dictionary, Paste Cleanup rules and more editor options."
+          "body": "Spell Check, your Custom Dictionary, Paste Cleanup rules, Spanish opening marks and more editor options."
         },
         "advanced": {
           "title": "Advanced",

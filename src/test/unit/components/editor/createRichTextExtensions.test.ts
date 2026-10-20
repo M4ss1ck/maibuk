@@ -64,4 +64,15 @@ describe("createRichTextExtensions", () => {
     const names = createRichTextExtensions({ autoClose: true }).map((extension) => extension.name);
     expect(names).toContain("autoClose");
   });
+
+  it("includes Opening Marks only when given a language getter", () => {
+    const without = createRichTextExtensions().map((extension) => extension.name);
+    const getLanguage = () => "es";
+    const configured = createRichTextExtensions({ openingMarksLanguage: getLanguage }).find(
+      (extension) => extension.name === "openingMarks"
+    );
+
+    expect(without).not.toContain("openingMarks");
+    expect(configured?.options.getLanguage).toBe(getLanguage);
+  });
 });

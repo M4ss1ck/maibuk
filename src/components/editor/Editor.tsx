@@ -51,6 +51,7 @@ import { IS_TAURI } from "@/lib/platform";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
+import { useOpeningMarksLanguage } from "@/components/editor/opening-marks-language";
 import { hasActiveSuggestion } from "@/components/editor/suggestion-state";
 
 /**
@@ -186,6 +187,9 @@ export function Editor({
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const settingsLanguage = useSettingsStore((state) => state.language);
   const activeSpellCheckLanguage = spellCheckLanguage ?? settingsLanguage;
+  const openingMarksLanguage = useOpeningMarksLanguage(
+    pluginLanguage?.trim() || activeSpellCheckLanguage
+  );
   const editorShowBorder = useSettingsStore((state) => state.editorShowBorder);
   const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
   const [showBubbleLinkDialog, setShowBubbleLinkDialog] = useState(false);
@@ -384,6 +388,7 @@ export function Editor({
         footnoteStartIndex,
         spellCheck: { enabled: spellCheckEnabled, language: activeSpellCheckLanguage },
         autoClose: editorAutoClose,
+        openingMarksLanguage,
         dropcursor: !IS_TAURI,
       }),
       Placeholder.configure({
