@@ -6,7 +6,7 @@ status: accepted
 
 Maibuk's MCP server is the Built-in Plugin `maibuk-mcp`, and it uses nothing a third-party Plugin could not use. Maibuk publishes what a Plugin may do; the Plugin decides which part of that to expose as MCP tools and owns the protocol, tool shapes, short ids, read windows, edits, and the activity log. The shipped Plugin starts off and asks for its Permissions like any other, so a user's own MCP Plugin works exactly the same.
 
-Agents reach it over Streamable HTTP at a Plugin Endpoint: Maibuk binds one `127.0.0.1` port, only while an enabled Plugin holds the `serve` Permission, and hands each request under `/plugin/<pluginId>/` to that Plugin, which answers it. The host enforces what the spec asks of every local HTTP server (bind to localhost, refuse an invalid `Origin`, check `Host`) once, for every Plugin. The Plugin checks its own Key, which the Agent sends as a bearer header from the setup snippet. The port is fixed so snippets stay valid, with a setting for when another app holds it.
+Agents reach it over Streamable HTTP at a Plugin Endpoint: Maibuk binds one `127.0.0.1` port, only while an enabled Plugin holds the `serve` Permission, and hands each request under `/plugin/<pluginId>/` to that Plugin, which answers it. The host enforces what the spec asks of every local HTTP server (bind to localhost, refuse an invalid `Origin`, check `Host`) once, for every Plugin. The Plugin checks its own Key, which the Agent sends as a bearer header from the setup snippet. The author never sees or sets the port: Maibuk picks it once, at random from a range outside the operating systems' ephemeral ranges, and keeps it, so snippets stay valid across restarts. Only when another app holds it at launch does Maibuk move to a free port in the same range and keep that one; a Plugin can read the current address and is told when it changes, so it can refill its snippets and ask the author to reconnect their Agents.
 
 Other host changes are limited to Library capabilities any Plugin could want and could not get another way: `books.update`, `books.checkpoint`, Chapter create, Delete, reorder, and metadata updates, and Note Delete and Tag and Book updates.
 
@@ -20,9 +20,12 @@ Decided in the #412 grilling, 2026-10-20. Research: `docs/research/plugins-mcp-f
 - A relay published to npm, or native relay binaries in the zip: rejected. The first ships outside the Plugin; the second breaks ADR 0020.
 - The feasibility research rejected localhost HTTP because stdio covered every client. Any design here opens a localhost port, so that reason no longer applies.
 - Markdown conversion in the Plugin: rejected. Maibuk's converter needs a DOM that Workers lack, and bundling one is an expensive dependency. v1 reads and writes the `text` and `html` the host already provides.
+- A port setting in Settings, with an error when the port is taken (amended the same day, #587): rejected. It hands the author a networking problem; picking the port once and moving it only on a collision needs no setting.
+- A stdio command in the snippet (the Maibuk executable passing bytes to the Plugin), so the snippet holds no port: rejected for v1. It survives any port change but brings back the console bridge rejected above, and the snippet would hold the executable's path, which moving an AppImage breaks.
 - Search in v1: deferred to global search (#584). Searching in the Plugin means one read per item, which the broker's rate limit makes slow on a large Library.
 
 ## Consequences
 
+- A port collision at launch means the author pastes the snippet into each Agent again. The supported Agents read the address from their own configuration, which Maibuk does not write.
 - Claude Desktop is not supported: its local configuration launches stdio commands only. A stdio shim can add it later.
 - Edits are string find-and-replace on stored HTML, so a match that crosses formatting fails and the Agent falls back to sending HTML.
