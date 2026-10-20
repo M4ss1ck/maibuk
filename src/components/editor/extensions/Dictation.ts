@@ -679,7 +679,17 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
               },
               { side: 1, key: `dictation:${shown}` }
             );
-            return DecorationSet.create(state.doc, [widget]);
+            // The Placeholder reads the document, and a widget is not document
+            // text: on an empty line it keeps painting over the partial. This
+            // class on the line lets its CSS step aside.
+            const $pos = state.doc.resolve(pos);
+            if (!$pos.parent.isTextblock) {
+              return DecorationSet.create(state.doc, [widget]);
+            }
+            const line = Decoration.node($pos.before(), $pos.after(), {
+              class: "has-dictation-partial",
+            });
+            return DecorationSet.create(state.doc, [widget, line]);
           },
         },
       }),

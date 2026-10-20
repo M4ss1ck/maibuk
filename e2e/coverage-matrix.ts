@@ -2715,6 +2715,7 @@ export const ROWS: MatrixRow[] = [
     workflow:
       "Open a Chapter, Mod+Shift+Space starts Dictation (live region: Dictation on, English), speech lands at the caret as text, Escape stops (Dictation off), Mod+Z removes the last spoken line",
     edges: [
+      "on an empty Chapter the placeholder steps aside while the spoken line shows",
       "the floating mic button toggles the same session by Enter",
       "the language picker switches language with arrow keys",
       "Cycle Dictation language, bound in the Shortcut Editor, cycles the picker Auto -> en -> Auto and announces each step",

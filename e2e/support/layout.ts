@@ -50,3 +50,26 @@ export async function watchForText(page: Page, text: string): Promise<() => Prom
 export function runningAnimationCount(element: Locator): Promise<number> {
   return element.evaluate((target) => target.getAnimations({ subtree: true }).length);
 }
+
+/**
+ * Starts watching `editor` for a Dictation partial on its still-empty first
+ * line, and returns the placeholder's `::before` content at every moment one
+ * showed. Partials come and go faster than a poll, so each mutation records.
+ */
+export async function watchPlaceholderUnderPartial(
+  editor: Locator
+): Promise<() => Promise<string[]>> {
+  const key = `__placeholderUnderPartial${Math.random().toString(36).slice(2)}`;
+  await editor.evaluate((root, key) => {
+    const seen: string[] = [];
+    (window as unknown as Record<string, string[]>)[key] = seen;
+    new MutationObserver(() => {
+      const line = root.querySelector("p.is-editor-empty:first-child");
+      if (line?.querySelector(".dictation-partial")) {
+        seen.push(getComputedStyle(line, "::before").content);
+      }
+    }).observe(root, { subtree: true, childList: true, attributes: true, characterData: true });
+  }, key);
+  return () =>
+    editor.page().evaluate((key) => (window as unknown as Record<string, string[]>)[key], key);
+}

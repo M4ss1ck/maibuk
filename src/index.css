@@ -888,7 +888,8 @@ option {
   pointer-events: none;
 }
 
-.editor-content p.is-editor-empty:first-child::before {
+/* A Dictation partial is a widget, not text: the line still counts as empty. */
+.editor-content p.is-editor-empty:first-child:not(.has-dictation-partial)::before {
   content: attr(data-placeholder);
   color: var(--color-muted-foreground);
   float: left;
