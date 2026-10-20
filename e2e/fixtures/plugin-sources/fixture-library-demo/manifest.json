@@ -1,0 +1,17 @@
+{
+  "manifestVersion": 1,
+  "id": "fixture-library-demo",
+  "name": "Fixture Library Demo",
+  "description": "The #588 demo Plugin: it creates a Chapter, moves and updates it, takes a Plugin Checkpoint, and deletes a Note in one run, so the Library writes the issue added are proven through the real broker. It is never shipped in a product bundle.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1.5",
+  "entry": "index.js",
+  "platforms": ["web"],
+  "lifecycle": "on-demand",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": ["library:read", "library:write"],
+    "optional": []
+  }
+}

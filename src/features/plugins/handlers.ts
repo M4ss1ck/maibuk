@@ -3,8 +3,8 @@
  * `notifications.show` renders a toast naming the Plugin; the Library reads
  * serve Books, Chapters, Notes, and Canvas metadata; the Library writes
  * (#452, #588) update a Book's details or take a Checkpoint, create, delete,
- * reorder, or update a Chapter, and create or update a Note through the
- * entity's own write path; the editor writes (`editor.insert` /
+ * reorder, or update a Chapter, and create, update, or delete a Note through
+ * the entity's own write path; the editor writes (`editor.insert` /
  * `editor.replace`, #452) edit the focused editor as one undoable step;
  * `storage.*` reads and writes the Plugin's own
  * Library namespace; `navigation.openEntity` opens an entity through the app

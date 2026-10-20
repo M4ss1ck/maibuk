@@ -16,7 +16,7 @@ import { CHAPTER_STATUSES, CHAPTER_TYPES } from "@/features/chapters/types";
 import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.4";
+export const PLUGIN_API_VERSION = "0.1.5";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
