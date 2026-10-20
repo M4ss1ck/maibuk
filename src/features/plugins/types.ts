@@ -7,6 +7,8 @@ import type { z } from "zod";
 import type { PLUGIN_API_EVENTS, PLUGIN_API_TABLE } from "@/features/plugins/api-table";
 import type { pluginManifestSchema } from "@/features/plugins/manifest-schema";
 import type { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-validate";
+import type { BookStatus } from "@/features/books/types";
+import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import type { Language } from "@/features/settings/types";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
@@ -1099,8 +1101,13 @@ export interface PluginBook {
   title: string;
   subtitle: string | null;
   authorName: string;
+  /** Null when the Book has no Genre. */
+  genre: string | null;
   language: string;
   wordCount: number;
+  /** Null when the Book has no Target Word Count. */
+  targetWordCount: number | null;
+  status: BookStatus;
   updatedAt: number;
 }
 
@@ -1111,6 +1118,8 @@ export interface PluginChapterSummary {
   order: number;
   parentId: string | null;
   wordCount: number;
+  chapterType: ChapterType;
+  status: ChapterStatus;
   updatedAt: number;
 }
 

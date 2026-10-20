@@ -28,12 +28,12 @@ describe("Plugin Library reads", () => {
     testDb = await createTestDatabase();
     mockGetDatabase.mockResolvedValue(testDb);
     await testDb.execute(
-      `INSERT INTO books (id, title, subtitle, author_name, language, word_count, created_at, updated_at)
-       VALUES ('b1', 'Dune', NULL, 'Frank', 'en', 10, 100, 1000)`
+      `INSERT INTO books (id, title, subtitle, author_name, genre, status, target_word_count, language, word_count, created_at, updated_at)
+       VALUES ('b1', 'Dune', NULL, 'Frank', 'Space Opera', 'in-progress', 90000, 'en', 10, 100, 1000)`
     );
     await testDb.execute(
-      `INSERT INTO chapters (id, book_id, title, content, "order", parent_id, word_count, created_at, updated_at)
-       VALUES ('c1', 'b1', 'One', '<p>Hello <script>alert(1)</script><span onclick="x()">world</span></p>', 0, NULL, 2, 100, 2000)`
+      `INSERT INTO chapters (id, book_id, title, content, "order", parent_id, chapter_type, word_count, status, created_at, updated_at)
+       VALUES ('c1', 'b1', 'One', '<p>Hello <script>alert(1)</script><span onclick="x()">world</span></p>', 0, NULL, 'part', 2, 'revised', 100, 2000)`
     );
     await testDb.execute(
       `INSERT INTO notes (id, book_id, title, content, tags, language, word_count, "order", created_at, updated_at)
@@ -49,14 +49,17 @@ describe("Plugin Library reads", () => {
     );
   });
 
-  it("maps a Book's row to the API shape with millisecond timestamps", async () => {
+  it("maps a Book's row to the API shape with its Genre and Book Status", async () => {
     expect(await getPluginBook("b1")).toEqual({
       id: "b1",
       title: "Dune",
       subtitle: null,
       authorName: "Frank",
+      genre: "Space Opera",
       language: "en",
       wordCount: 10,
+      targetWordCount: 90_000,
+      status: "in-progress",
       updatedAt: 1_000_000,
     });
     expect(await getPluginBook("absent")).toBeNull();
@@ -72,6 +75,8 @@ describe("Plugin Library reads", () => {
         order: 0,
         parentId: null,
         wordCount: 2,
+        chapterType: "part",
+        status: "revised",
         updatedAt: 2_000_000,
       },
     ]);

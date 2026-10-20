@@ -17,7 +17,9 @@ export const DEFAULT_VERSIONS_PAGE_SIZE = 10;
 
 // Trigger types that represent automatic/system-generated snapshots and are
 // subject to the retention cap. Manual stays uncapped (explicit user intent);
-// pre-restore stays uncapped (safety breadcrumbs around destructive operations).
+// pre-restore and plugin stay uncapped (safety breadcrumbs): a Plugin takes a
+// Checkpoint before it changes a Book, and checksum dedup stops a chatty Plugin
+// from spamming history.
 const PRUNABLE_TRIGGERS = ["auto-idle", "close", "pre-sync"] as const;
 type PrunableTrigger = (typeof PRUNABLE_TRIGGERS)[number];
 
@@ -274,7 +276,7 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
 
     // Retention: cap automatic trigger types per book. Each prunable type has
     // its own quota (so heavy "close" activity can't starve "auto-idle" history).
-    // Manual and pre-restore are never pruned.
+    // Manual, pre-restore, and plugin are never pruned.
     let prunedCount = 0;
     if (isPrunable(input.triggerType)) {
       prunedCount = await pruneTriggerType(

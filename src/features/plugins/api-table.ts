@@ -11,10 +11,12 @@
  */
 
 import { z } from "zod";
+import { BOOK_STATUSES } from "@/features/books/types";
+import { CHAPTER_STATUSES, CHAPTER_TYPES } from "@/features/chapters/types";
 import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.4";
+export const PLUGIN_API_VERSION = "0.1.5";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -63,8 +65,11 @@ const book = z.strictObject({
   title: z.string(),
   subtitle: z.string().nullable(),
   authorName: z.string(),
+  genre: z.string().nullable().describe("Null when the Book has no Genre."),
   language: z.string(),
   wordCount: z.int(),
+  targetWordCount: z.int().nullable().describe("Null when the Book has no Target Word Count."),
+  status: z.enum(BOOK_STATUSES),
   updatedAt: timestamp,
 });
 
@@ -74,7 +79,9 @@ const chapterSummary = z.strictObject({
   title: z.string(),
   order: z.int(),
   parentId: id.nullable(),
+  chapterType: z.enum(CHAPTER_TYPES),
   wordCount: z.int(),
+  status: z.enum(CHAPTER_STATUSES),
   updatedAt: timestamp,
 });
 
@@ -187,9 +194,81 @@ export const PLUGIN_API_TABLE = [
     ...libraryRead,
   }),
   defineApiRow({
+    id: "library.books.update",
+    description:
+      "Updates a Book's title, Author Name, Genre, Book Status, or Target Word Count through the Book write path; give at least one. A null Genre or Target Word Count clears it.",
+    input: z.strictObject({
+      bookId: id,
+      title: z.string().min(1).max(500).optional(),
+      authorName: z.string().max(500).optional(),
+      genre: z.string().max(200).nullable().optional(),
+      status: z.enum(BOOK_STATUSES).optional(),
+      targetWordCount: z.int().min(0).nullable().optional(),
+    }),
+    output: ok,
+    ...libraryWrite,
+  }),
+  defineApiRow({
+    id: "library.books.checkpoint",
+    description:
+      "Takes a Checkpoint of a Book through the normal Version path, named by the label, and returns its id; null when the Book is unchanged since its last Version.",
+    input: z.strictObject({
+      bookId: id,
+      label: z.string().trim().min(1).max(200).describe("The Version's name."),
+    }),
+    output: z.strictObject({ versionId: id.nullable() }),
+    ...libraryWrite,
+  }),
+  defineApiRow({
     id: "library.chapters.updateContent",
     description: "Replaces a Chapter's content through the Chapter write path.",
     input: z.strictObject({ chapterId: id, content: fragment }),
+    output: ok,
+    ...libraryWrite,
+  }),
+  defineApiRow({
+    id: "library.chapters.create",
+    description:
+      "Creates a Chapter in a Book through the Chapter write path, at a 0-based position among its Chapters (omitted appends) and with optional content, and returns its id.",
+    input: z.strictObject({
+      bookId: id,
+      title: z.string().min(1).max(500),
+      position: z
+        .int()
+        .min(0)
+        .optional()
+        .describe("0-based index among the Book's Chapters; omitted appends at the end."),
+      content: fragment.optional(),
+    }),
+    output: z.strictObject({ chapterId: id }),
+    ...libraryWrite,
+  }),
+  defineApiRow({
+    id: "library.chapters.delete",
+    description:
+      "Deletes a Chapter through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made.",
+    input: z.strictObject({ chapterId: id }),
+    output: ok,
+    ...libraryWrite,
+  }),
+  defineApiRow({
+    id: "library.chapters.reorder",
+    description:
+      "Reorders a Book's Chapters to the given ids, which must be exactly the Book's Chapters: no missing, extra, or duplicate id.",
+    input: z.strictObject({ bookId: id, chapterIds: z.array(id) }),
+    output: ok,
+    ...libraryWrite,
+  }),
+  defineApiRow({
+    id: "library.chapters.update",
+    description:
+      "Updates a Chapter's title, Chapter Type, or Chapter Status through the Chapter write path; give at least one.",
+    input: z.strictObject({
+      chapterId: id,
+      title: z.string().min(1).max(500).optional(),
+      chapterType: z.enum(CHAPTER_TYPES).optional(),
+      status: z.enum(CHAPTER_STATUSES).optional(),
+    }),
     output: ok,
     ...libraryWrite,
   }),
@@ -206,12 +285,23 @@ export const PLUGIN_API_TABLE = [
   }),
   defineApiRow({
     id: "library.notes.update",
-    description: "Updates a Note's title or content through the Note write path.",
+    description:
+      "Updates a Note's title, content, Tags, or Book through the Note write path; Tags are trimmed and deduplicated like the Note tags field, and a null bookId moves it to Unfiled.",
     input: z.strictObject({
       noteId: id,
       title: z.string().max(500).optional(),
       content: fragment.optional(),
+      tags: z.array(z.string()).optional(),
+      bookId: id.nullable().optional().describe("Null moves the Note to Unfiled."),
     }),
+    output: ok,
+    ...libraryWrite,
+  }),
+  defineApiRow({
+    id: "library.notes.delete",
+    description:
+      "Deletes a Note through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made.",
+    input: z.strictObject({ noteId: id }),
     output: ok,
     ...libraryWrite,
   }),

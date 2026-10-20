@@ -13,6 +13,7 @@ import {
   payloadJsonSchema,
   projectMcpTools,
 } from "@/features/plugins/api-table";
+import { BOOK_STATUSES } from "@/features/books/types";
 import {
   jsonSchemaToTypeScript,
   renderPluginApiDocs,
@@ -106,6 +107,29 @@ describe("PLUGIN_API_TABLE", () => {
   it("streams the network.fetch response body in chunks", () => {
     const streaming = PLUGIN_API_TABLE.filter((row) => "chunk" in row && row.chunk);
     expect(streaming.map((row) => row.id)).toEqual(["network.fetch"]);
+  });
+
+  it("carries the Book and Chapter fields the author edits (#588)", () => {
+    const bookRow = PLUGIN_API_TABLE.find((row) => row.id === "library.books.list");
+    expect(propertyNames(outputJsonSchema(bookRow!))).toEqual(
+      expect.arrayContaining(["genre", "status", "targetWordCount"])
+    );
+    const chapterRow = PLUGIN_API_TABLE.find((row) => row.id === "library.chapters.list");
+    expect(propertyNames(outputJsonSchema(chapterRow!))).toEqual(
+      expect.arrayContaining(["chapterType", "status"])
+    );
+  });
+
+  it("takes every Book detail as an optional enum-checked field, with the Book id required", () => {
+    const row = PLUGIN_API_TABLE.find((entry) => entry.id === "library.books.update");
+    const input = inputJsonSchema(row!);
+    expect(input.required).toEqual(["bookId"]);
+    const properties = input.properties as Record<string, { enum?: string[] }>;
+    expect(properties.status.enum).toEqual([...BOOK_STATUSES]);
+    expect(properties).toHaveProperty("title");
+    expect(properties).toHaveProperty("authorName");
+    expect(properties).toHaveProperty("genre");
+    expect(properties).toHaveProperty("targetWordCount");
   });
 });
 

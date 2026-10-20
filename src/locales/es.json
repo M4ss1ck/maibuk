@@ -1480,7 +1480,8 @@
       "auto-idle": "Punto de control automático",
       "close": "Al cerrar",
       "pre-sync": "Antes de sincronizar",
-      "pre-restore": "Antes de restaurar"
+      "pre-restore": "Antes de restaurar",
+      "plugin": "Antes de un cambio de Plugin"
     },
     "restoredName": "Antes de restaurar \"{{name}}\""
   },

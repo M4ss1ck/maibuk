@@ -5,10 +5,15 @@
  * the API. Chapters report their containing Book as their Change entity, so a
  * reader that wants Chapter edits subscribes to `library.changed` and pulls.
  *
- * Here too are the `library:write` rows (#452): a Chapter content update and
- * Note create/update, each through the entity's own narrow write path (ADR
- * 0005) with Origin "local", so the write Flushes open editors, normalizes,
- * emits on the Change Feed, and refuses sample ids. No delete is exposed.
+ * Here too are the `library:write` rows (#452, #588): a Book details update and
+ * a Checkpoint, a Chapter content update, Chapter create/delete/reorder/update,
+ * and Note create/update/delete, each through the entity's own narrow write path
+ * (ADR 0005) with Origin "local", so the write Flushes open editors,
+ * normalizes, emits on the Change Feed, and refuses sample ids. The Chapter
+ * and Note deletes take the author's own Delete path (`deleteChapterRow`,
+ * `deleteNoteRow`), so sync and Deletion Review carry them like theirs: a
+ * Chapter has no tombstone of its own, so what another device pulls is its
+ * Book's snapshot without the Chapter, while a Note records its own tombstone.
  *
  * Timestamps are Unix seconds in the Library and milliseconds since the epoch
  * in the API, the one shape every Plugin sees.
@@ -17,9 +22,18 @@
 import DOMPurify from "dompurify";
 import { htmlToPlainText } from "@/components/editor/html-to-text";
 import { plainTextToEditorHtml } from "@/components/editor/plain-text-html";
-import { updateChapterRow } from "@/features/chapters/write";
+import {
+  createChapterRow,
+  deleteChapterRow,
+  reorderChapterRows,
+  updateChapterRow,
+} from "@/features/chapters/write";
+import { updateBookRow } from "@/features/books/write";
+import type { BookStatus } from "@/features/books/types";
+import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import { countWords } from "@/features/metrics/word-count";
-import { createNoteRow, updateNoteRow } from "@/features/notes/write";
+import { normalizeNoteTags } from "@/features/notes/tags";
+import { createNoteRow, deleteNoteRow, updateNoteRow } from "@/features/notes/write";
 import type {
   PluginBook,
   PluginCanvasSummary,
@@ -27,8 +41,12 @@ import type {
   PluginContent,
   PluginNoteSummary,
 } from "@/features/plugins/types";
-import { PendingEditsFlushError } from "@/features/sync/pending-edits";
-import { TutorialIdLeakError } from "@/features/tutorial/library-switch";
+import { PendingEditsFlushError, flushPendingEdits } from "@/features/sync/pending-edits";
+import {
+  TutorialIdLeakError,
+  assertWritableId,
+} from "@/features/tutorial/library-switch";
+import { useVersionStore } from "@/features/versions/store";
 import { getDatabase } from "@/lib/db";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
@@ -61,8 +79,12 @@ function toBook(row: Row): PluginBook {
     title: row.title as string,
     subtitle: (row.subtitle as string | null) ?? null,
     authorName: row.author_name as string,
+    genre: (row.genre as string | null) ?? null,
     language: (row.language as string | null) ?? "en",
     wordCount: (row.word_count as number) ?? 0,
+    targetWordCount: (row.target_word_count as number | null) ?? null,
+    // The column defaults to "draft"; a row from before it existed reads as one.
+    status: (row.status as BookStatus | null) ?? "draft",
     updatedAt: toMillis(row.updated_at),
   };
 }
@@ -75,6 +97,9 @@ function toChapterSummary(row: Row): PluginChapterSummary {
     order: row.order as number,
     parentId: (row.parent_id as string | null) ?? null,
     wordCount: (row.word_count as number) ?? 0,
+    // Both columns have a default; a row without one reads as the default.
+    chapterType: (row.chapter_type as ChapterType | null) ?? "chapter",
+    status: (row.status as ChapterStatus | null) ?? "draft",
     updatedAt: toMillis(row.updated_at),
   };
 }
@@ -204,7 +229,7 @@ export function fragmentToHtml(fragment: PluginContentFragment): string {
 }
 
 /** A write against an id the Library does not hold; the Plugin sees a refusal. */
-function notFound(entity: "Chapter" | "Note", id: string): PluginApiError {
+function notFound(entity: "Book" | "Chapter" | "Note", id: string): PluginApiError {
   return new PluginApiError({ code: "invalid-params", message: `${entity} ${id} does not exist` });
 }
 
@@ -241,6 +266,66 @@ async function libraryWrite<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Updates a Book's title, Author Name, Genre, Book Status, or Target Word
+ * Count through the Book write path. Every field is optional but at least one
+ * must be given, so a call never becomes a bare sync-clock bump; a null Genre
+ * or Target Word Count clears it, and a missing id is refused.
+ */
+export async function updatePluginBook(input: {
+  bookId: string;
+  title?: string;
+  authorName?: string;
+  genre?: string | null;
+  status?: BookStatus;
+  targetWordCount?: number | null;
+}): Promise<null> {
+  const changes = {
+    ...(input.title === undefined ? {} : { title: input.title }),
+    ...(input.authorName === undefined ? {} : { authorName: input.authorName }),
+    // The row writer stores what it is given; a null clears the column.
+    ...(input.genre === undefined ? {} : { genre: input.genre }),
+    ...(input.status === undefined ? {} : { status: input.status }),
+    ...(input.targetWordCount === undefined ? {} : { targetWordCount: input.targetWordCount }),
+  };
+  return libraryWrite(async () => {
+    if (Object.keys(changes).length === 0) {
+      throw new PluginApiError({
+        code: "invalid-params",
+        message: "Give at least one Book field to update",
+      });
+    }
+    const book = await updateBookRow(input.bookId, changes, "local");
+    if (!book) throw notFound("Book", input.bookId);
+    return null;
+  });
+}
+
+/**
+ * Takes a Checkpoint of a Book through the normal Version path (#588). Open
+ * editors flush first, the way the close and pre-sync triggers do, so the
+ * Checkpoint holds what the author already typed; the Version Trigger is
+ * "plugin" and the label becomes the Version's name. `createVersion` dedups by
+ * checksum, so an unchanged Book comes back as a null versionId.
+ */
+export async function checkpointPluginBook(input: {
+  bookId: string;
+  label: string;
+}): Promise<{ versionId: string | null }> {
+  return libraryWrite(async () => {
+    assertWritableId(input.bookId);
+    const book = await getPluginBook(input.bookId);
+    if (!book) throw notFound("Book", input.bookId);
+    await flushPendingEdits();
+    const version = await useVersionStore.getState().createVersion({
+      bookId: input.bookId,
+      triggerType: "plugin",
+      name: input.label,
+    });
+    return { versionId: version?.id ?? null };
+  });
+}
+
 /** Replaces a Chapter's content through the Chapter write path. */
 export async function updatePluginChapterContent(
   chapterId: string,
@@ -249,6 +334,145 @@ export async function updatePluginChapterContent(
   return libraryWrite(async () => {
     const chapter = await updateChapterRow(chapterId, { content: fragmentToHtml(fragment) }, "local");
     if (!chapter) throw notFound("Chapter", chapterId);
+    return null;
+  });
+}
+
+/** The ids of a Book's Chapters in stored order. */
+async function chapterOrder(bookId: string): Promise<string[]> {
+  return (await listPluginChapters(bookId)).map((chapter) => chapter.id);
+}
+
+/**
+ * Creates a Chapter through the Chapter write path (#588) and returns its id.
+ * The row is appended, then the Book is reordered to the requested 0-based
+ * position, the same create-then-reorder pair the UI uses to insert one. A
+ * content fragment lands through the same path as updateContent, which
+ * sanitizes, normalizes, and recounts the words; position is checked against
+ * the Book's Chapter count before anything is written, so a refused position
+ * leaves no row behind. The fragment is turned into HTML before the insert too,
+ * and a failure after the insert deletes the new row, so a Plugin never sees a
+ * half-created Chapter.
+ */
+export async function createPluginChapter(input: {
+  bookId: string;
+  title: string;
+  position?: number;
+  content?: PluginContentFragment;
+}): Promise<{ chapterId: string }> {
+  return libraryWrite(async () => {
+    const book = await getPluginBook(input.bookId);
+    if (!book) throw notFound("Book", input.bookId);
+    const before = await chapterOrder(input.bookId);
+    if (input.position !== undefined && (input.position < 0 || input.position > before.length)) {
+      throw new PluginApiError({
+        code: "invalid-params",
+        message: `position ${input.position} is outside 0 to ${before.length} for Book ${input.bookId}`,
+      });
+    }
+
+    const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
+    const chapter = await createChapterRow(
+      { bookId: input.bookId, title: input.title },
+      "local"
+    );
+    try {
+      if (content !== undefined) {
+        await updateChapterRow(chapter.id, { content }, "local");
+      }
+      if (input.position !== undefined) {
+        // Read the order back after the write: a Chapter added meanwhile belongs
+        // in the list too, and the new one is appended last.
+        const ids = await chapterOrder(input.bookId);
+        const from = ids.indexOf(chapter.id);
+        if (from !== -1 && from !== input.position) {
+          ids.splice(from, 1);
+          ids.splice(input.position, 0, chapter.id);
+          await reorderChapterRows(input.bookId, ids, "local");
+        }
+      }
+    } catch (error) {
+      // Never leave a partial Chapter behind: undo the insert, then surface the
+      // failure to the Plugin. The delete's own failure must not mask the cause.
+      try {
+        await deleteChapterRow(chapter.id, "local");
+      } catch {
+        // The original error is the one the Plugin needs.
+      }
+      throw error;
+    }
+    return { chapterId: chapter.id };
+  });
+}
+
+/**
+ * Deletes a Chapter through the normal Delete path (#588): the same
+ * `deleteChapterRow` call the author's delete makes, so the Book's snapshot
+ * loses the Chapter and the Change Feed carries it as a local content Change.
+ * A missing id is refused; the row writer itself would no-op.
+ */
+export async function deletePluginChapter(chapterId: string): Promise<null> {
+  return libraryWrite(async () => {
+    if (!(await getPluginChapter(chapterId))) throw notFound("Chapter", chapterId);
+    await deleteChapterRow(chapterId, "local");
+    return null;
+  });
+}
+
+/**
+ * Reorders a Book's Chapters to the given ids through the Chapter write path.
+ * The list must be exactly the Book's Chapters — no missing, extra, or
+ * duplicate id — so a Plugin can never move another Book's Chapter or drop
+ * one out of the order by omission.
+ */
+export async function reorderPluginChapters(input: {
+  bookId: string;
+  chapterIds: string[];
+}): Promise<null> {
+  return libraryWrite(async () => {
+    if (!(await getPluginBook(input.bookId))) throw notFound("Book", input.bookId);
+    const stored = await chapterOrder(input.bookId);
+    const given = input.chapterIds;
+    const exact =
+      given.length === stored.length &&
+      new Set(given).size === given.length &&
+      stored.every((chapterId) => given.includes(chapterId));
+    if (!exact) {
+      throw new PluginApiError({
+        code: "invalid-params",
+        message: `chapterIds must be exactly the ${stored.length} Chapters of Book ${input.bookId}, in the new order`,
+      });
+    }
+    await reorderChapterRows(input.bookId, given, "local");
+    return null;
+  });
+}
+
+/**
+ * Updates a Chapter's title, Chapter Type, or Chapter Status through the
+ * Chapter write path. Every field is optional but at least one must be given,
+ * the same rule as a Book update; a missing id comes back as a refusal.
+ */
+export async function updatePluginChapter(input: {
+  chapterId: string;
+  title?: string;
+  chapterType?: ChapterType;
+  status?: ChapterStatus;
+}): Promise<null> {
+  const changes = {
+    ...(input.title === undefined ? {} : { title: input.title }),
+    ...(input.chapterType === undefined ? {} : { chapterType: input.chapterType }),
+    ...(input.status === undefined ? {} : { status: input.status }),
+  };
+  return libraryWrite(async () => {
+    if (Object.keys(changes).length === 0) {
+      throw new PluginApiError({
+        code: "invalid-params",
+        message: "Give at least one Chapter field to update",
+      });
+    }
+    const chapter = await updateChapterRow(input.chapterId, changes, "local");
+    if (!chapter) throw notFound("Chapter", input.chapterId);
     return null;
   });
 }
@@ -276,17 +500,24 @@ export async function createPluginNote(input: {
 }
 
 /**
- * Updates a Note's title or content through the Note write path. No "current"
- * state is read before the write: `updateNoteRow` merges the given fields onto
- * the stored row, so an omitted field (the title, or the bookId it derives) is
- * left as stored, and a missing id comes back as null.
+ * Updates a Note's title, content, Tags, or Book through the Note write path
+ * (#588). No "current" state is read before the write: `updateNoteRow` merges
+ * the given fields onto the stored row, so an omitted field is left as stored,
+ * and a missing id is refused. Tags are normalized the way the Note UI
+ * stores them; a bookId of null moves the Note to Unfiled, and a bookId naming
+ * no Book is refused before anything is written.
  */
 export async function updatePluginNote(input: {
   noteId: string;
   title?: string;
   content?: PluginContentFragment;
+  tags?: string[];
+  bookId?: string | null;
 }): Promise<null> {
   return libraryWrite(async () => {
+    if (input.bookId != null && !(await getPluginBook(input.bookId))) {
+      throw notFound("Book", input.bookId);
+    }
     const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
     const note = await updateNoteRow(
       {
@@ -295,10 +526,27 @@ export async function updatePluginNote(input: {
         ...(content === undefined
           ? {}
           : { content, wordCount: contentWordCount(content) }),
+        ...(input.tags === undefined ? {} : { tags: normalizeNoteTags(input.tags) }),
+        // `undefined` keeps the stored Book; null is Unfiled.
+        ...(input.bookId === undefined ? {} : { bookId: input.bookId }),
       },
       "local"
     );
     if (!note) throw notFound("Note", input.noteId);
+    return null;
+  });
+}
+
+/**
+ * Deletes a Note through the normal Delete path (#588): the same
+ * `deleteNoteRow` call the author's delete makes, so sync records the same
+ * tombstone and the Change Feed carries a local content Change, which is what
+ * Deletion Review queues and pushes. A missing id is refused.
+ */
+export async function deletePluginNote(noteId: string): Promise<null> {
+  return libraryWrite(async () => {
+    if (!(await getPluginNote(noteId))) throw notFound("Note", noteId);
+    await deleteNoteRow(noteId, "local");
     return null;
   });
 }

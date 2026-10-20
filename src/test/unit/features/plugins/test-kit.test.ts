@@ -47,8 +47,11 @@ const BOOK = {
   title: "Dune",
   subtitle: null,
   authorName: "Frank",
+  genre: null,
   language: "en",
   wordCount: 10,
+  targetWordCount: null,
+  status: "draft" as const,
   updatedAt: 0,
 };
 
@@ -144,6 +147,8 @@ describe("createTestHost()", () => {
             order: 0,
             parentId: null,
             wordCount: 2,
+            chapterType: "chapter",
+            status: "draft",
             updatedAt: 1_000,
             content: { text: "Hello", html: "<p>Hello</p>" },
           },
@@ -165,7 +170,17 @@ describe("createTestHost()", () => {
     try {
       const client = createPluginClient(host.port);
       await expect(client.library.chapters.list({ bookId: "b1" })).resolves.toEqual([
-        { id: "c1", bookId: "b1", title: "One", order: 0, parentId: null, wordCount: 2, updatedAt: 1_000 },
+        {
+          id: "c1",
+          bookId: "b1",
+          title: "One",
+          order: 0,
+          parentId: null,
+          wordCount: 2,
+          chapterType: "chapter",
+          status: "draft",
+          updatedAt: 1_000,
+        },
       ]);
       await expect(client.library.chapters.get({ chapterId: "c1" })).resolves.toMatchObject({
         id: "c1",

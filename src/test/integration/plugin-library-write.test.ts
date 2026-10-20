@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Change } from "@/features/sync/change-feed";
+import type { PluginApiInput } from "@/features/plugins/types";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
+import { connectLibraryWritePlugin } from "@/test/support/plugin-broker";
 
 // Data-safety integration tests for the Plugin Library writes (#452, part 3),
 // driven through the real handler entry a Plugin calls. Each write is a local
@@ -35,17 +37,17 @@ const { createEditSession } = await import("@/features/edit-session");
 const { useBookStore } = await import("@/features/books/store");
 const { useChapterStore } = await import("@/features/chapters/store");
 const { useNoteStore } = await import("@/features/notes/store");
-const {
-  flushPendingEdits,
-  registerPendingEditsFlush,
-  resetPendingEditsForTests,
-} = await import("@/features/sync/pending-edits");
+const { flushPendingEdits, registerPendingEditsFlush, resetPendingEditsForTests } = await import(
+  "@/features/sync/pending-edits"
+);
 const { installViewRefresh, resetViewRefreshForTests } = await import(
   "@/features/sync/view-refresh"
 );
 const { isEntityChange, onChange, resetChangeFeedForTests } = await import(
   "@/features/sync/change-feed"
 );
+const { useVersionStore } = await import("@/features/versions/store");
+const librarySwitch = await import("@/features/tutorial/library-switch");
 
 const handlers = createPluginHandlers(PLUGIN_MANIFEST);
 const context = { pluginId: "tracer" };
@@ -66,19 +68,100 @@ function writeNote(input: {
   return write(input, context);
 }
 
-async function seedBook(id: string): Promise<void> {
+/** The #588 Book writes and the reads that carry its fields, all through the handlers. */
+function writeBook(input: PluginApiInput<"library.books.update">) {
+  const write = handlers["library.books.update"];
+  if (!write) throw new Error("library.books.update is not wired");
+  return write(input, context);
+}
+
+function writeCheckpoint(input: PluginApiInput<"library.books.checkpoint">) {
+  const write = handlers["library.books.checkpoint"];
+  if (!write) throw new Error("library.books.checkpoint is not wired");
+  return write(input, context);
+}
+
+function readBook(bookId: string) {
+  const read = handlers["library.books.get"];
+  if (!read) throw new Error("library.books.get is not wired");
+  return read({ bookId }, context);
+}
+
+function readBooks() {
+  const read = handlers["library.books.list"];
+  if (!read) throw new Error("library.books.list is not wired");
+  return read({}, context);
+}
+
+function readChapter(chapterId: string) {
+  const read = handlers["library.chapters.get"];
+  if (!read) throw new Error("library.chapters.get is not wired");
+  return read({ chapterId }, context);
+}
+
+function readChapters(bookId: string) {
+  const read = handlers["library.chapters.list"];
+  if (!read) throw new Error("library.chapters.list is not wired");
+  return read({ bookId }, context);
+}
+
+async function seedBook(
+  id: string,
+  fields: { genre?: string; status?: string; targetWordCount?: number } = {}
+): Promise<void> {
   await testDb.execute(
-    `INSERT INTO books (id, title, author_name, language, created_at, updated_at, content_updated_at)
-     VALUES (?, ?, ?, 'en', 1000, 1000, 1000)`,
-    [id, `Book ${id}`, "Author"]
+    `INSERT INTO books (id, title, author_name, genre, status, target_word_count, language, created_at, updated_at, content_updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'en', 1000, 1000, 1000)`,
+    [
+      id,
+      `Book ${id}`,
+      "Author",
+      fields.genre ?? null,
+      fields.status ?? "draft",
+      fields.targetWordCount ?? null,
+    ]
   );
 }
 
-async function seedChapter(id: string, bookId: string, content = "<p>Stored</p>"): Promise<void> {
+async function seedChapter(
+  id: string,
+  bookId: string,
+  content = "<p>Stored</p>",
+  fields: { chapterType?: string; status?: string } = {}
+): Promise<void> {
   await testDb.execute(
     `INSERT INTO chapters (id, book_id, title, content, "order", chapter_type, word_count, status, is_included_in_export, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 0, 'chapter', 1, 'draft', 1, 1000, 1000)`,
-    [id, bookId, `Title ${id}`, content]
+     VALUES (?, ?, ?, ?, 0, ?, 1, ?, 1, 1000, 1000)`,
+    [id, bookId, `Title ${id}`, content, fields.chapterType ?? "chapter", fields.status ?? "draft"]
+  );
+}
+
+interface BookRow {
+  title: string;
+  author_name: string;
+  genre: string | null;
+  status: string;
+  target_word_count: number | null;
+}
+
+async function bookRow(id: string): Promise<BookRow | null> {
+  const rows = await testDb.select<BookRow[]>(
+    "SELECT title, author_name, genre, status, target_word_count FROM books WHERE id = ?",
+    [id]
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
+interface VersionRow {
+  id: string;
+  name: string | null;
+  trigger_type: string;
+}
+
+async function versionRows(bookId: string): Promise<VersionRow[]> {
+  return testDb.select<VersionRow[]>(
+    "SELECT id, name, trigger_type FROM book_versions WHERE book_id = ? ORDER BY created_at ASC, id ASC",
+    [bookId]
   );
 }
 
@@ -106,32 +189,42 @@ async function noteContent(id: string): Promise<string | null> {
   return rows.length > 0 ? rows[0].content : null;
 }
 
+beforeEach(async () => {
+  testDb = await createTestDatabase();
+  mockGetDatabase.mockReset().mockResolvedValue(testDb);
+  mockReindex.mockReset().mockResolvedValue(undefined);
+  resetChangeFeedForTests();
+  resetViewRefreshForTests();
+  resetPendingEditsForTests();
+  installViewRefresh();
+  useBookStore.setState({ books: [], currentBook: null, isLoading: false, error: null });
+  useChapterStore.setState({
+    chapters: [],
+    currentChapter: null,
+    currentBookId: null,
+    isLoading: false,
+    error: null,
+  });
+  useNoteStore.setState({ notes: [], currentNote: null, isLoading: false, error: null });
+  useVersionStore.setState({
+    versions: [],
+    totalCount: 0,
+    currentBookId: null,
+    currentPage: 1,
+    pageSize: 10,
+    isLoading: false,
+    error: null,
+  });
+});
+
+afterEach(() => {
+  resetViewRefreshForTests();
+  resetChangeFeedForTests();
+  resetPendingEditsForTests();
+  librarySwitch.resetLibrarySwitchForTests();
+});
+
 describe("Plugin Library writes reach the open view", () => {
-  beforeEach(async () => {
-    testDb = await createTestDatabase();
-    mockGetDatabase.mockReset().mockResolvedValue(testDb);
-    mockReindex.mockReset().mockResolvedValue(undefined);
-    resetChangeFeedForTests();
-    resetViewRefreshForTests();
-    resetPendingEditsForTests();
-    installViewRefresh();
-    useBookStore.setState({ books: [], currentBook: null, isLoading: false, error: null });
-    useChapterStore.setState({
-      chapters: [],
-      currentChapter: null,
-      currentBookId: null,
-      isLoading: false,
-      error: null,
-    });
-    useNoteStore.setState({ notes: [], currentNote: null, isLoading: false, error: null });
-  });
-
-  afterEach(() => {
-    resetViewRefreshForTests();
-    resetChangeFeedForTests();
-    resetPendingEditsForTests();
-  });
-
   it("refreshes an open Chapter when a Plugin updates its content through the handler", async () => {
     await seedBook("book-1");
     await seedChapter("ch-1", "book-1", "<p>Stored</p>");
@@ -314,5 +407,323 @@ describe("Plugin Library writes reach the open view", () => {
     expect(session.getContent()).toBe("<p>Precious</p>");
     expect(session.hasUnsavedChanges()).toBe(true);
     expect(changes).toEqual([]);
+  });
+});
+
+// #588: the Book fields the author edits in Maibuk's own Book settings, read and
+// written through the Plugin API. Target Word Count is a Book field; Chapters
+// have no such column, so their reads add Chapter Type and Chapter Status only.
+describe("Plugin Book fields through the handlers (#588)", () => {
+  it("reads a Book's Genre, Book Status, and Target Word Count", async () => {
+    await seedBook("book-1", {
+      genre: "Science Fiction",
+      status: "in-progress",
+      targetWordCount: 90_000,
+    });
+
+    expect(await readBook("book-1")).toMatchObject({
+      id: "book-1",
+      genre: "Science Fiction",
+      status: "in-progress",
+      targetWordCount: 90_000,
+    });
+    expect(await readBooks()).toEqual([
+      expect.objectContaining({
+        id: "book-1",
+        genre: "Science Fiction",
+        status: "in-progress",
+        targetWordCount: 90_000,
+      }),
+    ]);
+  });
+
+  it("reads an unset Genre and Target Word Count as null", async () => {
+    await seedBook("book-1");
+    expect(await readBook("book-1")).toMatchObject({
+      genre: null,
+      status: "draft",
+      targetWordCount: null,
+    });
+  });
+
+  it("reads a Chapter's Chapter Type and Chapter Status", async () => {
+    await seedBook("book-1");
+    await seedChapter("ch-1", "book-1", "<p>Text</p>", {
+      chapterType: "prologue",
+      status: "revised",
+    });
+
+    expect(await readChapters("book-1")).toEqual([
+      expect.objectContaining({ id: "ch-1", chapterType: "prologue", status: "revised" }),
+    ]);
+    expect(await readChapter("ch-1")).toMatchObject({ chapterType: "prologue", status: "revised" });
+  });
+
+  it("updates a Book through the handler and refreshes the open view", async () => {
+    await seedBook("book-1");
+    await useBookStore.getState().loadBooks();
+
+    await expect(
+      writeBook({
+        bookId: "book-1",
+        title: "A New Title",
+        authorName: "Ada",
+        genre: "Fantasy",
+        status: "in-progress",
+        targetWordCount: 60_000,
+      })
+    ).resolves.toBeNull();
+
+    expect(await bookRow("book-1")).toMatchObject({
+      title: "A New Title",
+      author_name: "Ada",
+      genre: "Fantasy",
+      status: "in-progress",
+      target_word_count: 60_000,
+    });
+    // The open view refreshed on the local Change, like any outside write.
+    expect(useBookStore.getState().books[0]).toMatchObject({
+      title: "A New Title",
+      authorName: "Ada",
+      genre: "Fantasy",
+      status: "in-progress",
+      targetWordCount: 60_000,
+    });
+
+    // An omitted field keeps what the row holds.
+    await writeBook({ bookId: "book-1", status: "completed" });
+    expect(await bookRow("book-1")).toMatchObject({
+      title: "A New Title",
+      genre: "Fantasy",
+      status: "completed",
+    });
+  });
+
+  it("clears a Genre and a Target Word Count with null", async () => {
+    await seedBook("book-1", { genre: "Fantasy", targetWordCount: 60_000 });
+    await writeBook({ bookId: "book-1", genre: null, targetWordCount: null });
+    expect(await bookRow("book-1")).toMatchObject({ genre: null, target_word_count: null });
+  });
+
+  it("refuses a Book update that names no field", async () => {
+    await seedBook("book-1");
+    await expect(writeBook({ bookId: "book-1" })).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "invalid-params",
+    });
+    expect(await bookRow("book-1")).toMatchObject({ title: "Book book-1" });
+  });
+
+  it("refuses an unknown Book", async () => {
+    await expect(writeBook({ bookId: "absent", title: "Nowhere" })).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "invalid-params",
+      message: "Book absent does not exist",
+    });
+  });
+
+  it("refuses library.books.update without library:write", async () => {
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:read"] });
+    try {
+      await expect(
+        client.library.books.update({ bookId: "book-1", title: "Mine" })
+      ).rejects.toMatchObject({ code: "permission-denied", permission: "library:write" });
+    } finally {
+      close();
+    }
+  });
+
+  it("refuses library.books.update with the real Tutorial Library switch", async () => {
+    await seedBook("book-1");
+    librarySwitch.activateTutorialDatabase(testDb);
+    const { client, close } = connectLibraryWritePlugin({
+      granted: ["library:write"],
+      isLibraryAvailable: () => !librarySwitch.isTutorialLibraryActive(),
+    });
+    try {
+      await expect(
+        client.library.books.update({ bookId: "book-1", title: "Mine" })
+      ).rejects.toMatchObject({ code: "library-unavailable" });
+    } finally {
+      close();
+    }
+    // Nothing was written.
+    expect(await bookRow("book-1")).toMatchObject({ title: "Book book-1" });
+  });
+});
+
+// #588: a Checkpoint is the Version a Plugin takes before it changes a Book,
+// through the normal Version path with the "plugin" Version Trigger and the
+// label as the Version name.
+describe("Plugin Checkpoints through the handlers (#588)", () => {
+  it("creates a Version with trigger plugin and the given label", async () => {
+    await seedBook("book-1");
+
+    const { versionId } = await writeCheckpoint({
+      bookId: "book-1",
+      label: "Before a Plugin change",
+    });
+
+    expect(versionId).toEqual(expect.any(String));
+    const rows = await versionRows("book-1");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: versionId,
+      name: "Before a Plugin change",
+      trigger_type: "plugin",
+    });
+  });
+
+  it("returns null and creates no row when the Book is unchanged since its last Version", async () => {
+    await seedBook("book-1");
+
+    const first = await writeCheckpoint({ bookId: "book-1", label: "First" });
+    expect(first.versionId).not.toBeNull();
+
+    const second = await writeCheckpoint({ bookId: "book-1", label: "Second" });
+    expect(second.versionId).toBeNull();
+    expect(await versionRows("book-1")).toHaveLength(1);
+  });
+
+  it("creates a new Version after the Book changes", async () => {
+    await seedBook("book-1");
+
+    const first = await writeCheckpoint({ bookId: "book-1", label: "First" });
+    await testDb.execute("UPDATE books SET title = ?, updated_at = ? WHERE id = ?", [
+      "Changed",
+      2000,
+      "book-1",
+    ]);
+
+    const second = await writeCheckpoint({ bookId: "book-1", label: "Second" });
+
+    expect(second.versionId).not.toBeNull();
+    expect(second.versionId).not.toBe(first.versionId);
+    const rows = await versionRows("book-1");
+    expect(rows.map((row) => row.name).sort()).toEqual(["First", "Second"]);
+    expect(rows.every((row) => row.trigger_type === "plugin")).toBe(true);
+  });
+
+  it("trims the label and refuses a blank one", async () => {
+    await seedBook("book-1");
+
+    // The one place the label bound lives is the method schema, so this goes
+    // through the broker a Plugin calls rather than the bare handler.
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:write"] });
+    try {
+      await client.library.books.checkpoint({ bookId: "book-1", label: "  Padded  " });
+      expect((await versionRows("book-1"))[0].name).toBe("Padded");
+
+      await expect(
+        client.library.books.checkpoint({ bookId: "book-1", label: "   " })
+      ).rejects.toMatchObject({ code: "invalid-params" });
+    } finally {
+      close();
+    }
+    expect(await versionRows("book-1")).toHaveLength(1);
+  });
+
+  it("flushes open editors before taking the Checkpoint", async () => {
+    await seedBook("book-1");
+    const off = registerPendingEditsFlush(async () => {
+      await testDb.execute("UPDATE books SET title = ? WHERE id = ?", ["Flushed", "book-1"]);
+    });
+
+    try {
+      const { versionId } = await writeCheckpoint({ bookId: "book-1", label: "After flush" });
+      const rows = await testDb.select<{ snapshot: string }[]>(
+        "SELECT snapshot FROM book_versions WHERE id = ?",
+        [versionId]
+      );
+      const snapshot = JSON.parse(rows[0].snapshot) as { book: { title: string } };
+      // The Flush ran first, so the Checkpoint holds what it saved.
+      expect(snapshot.book.title).toBe("Flushed");
+    } finally {
+      off();
+    }
+  });
+
+  it("refuses an unknown Book", async () => {
+    await expect(
+      writeCheckpoint({ bookId: "absent", label: "Nowhere" })
+    ).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "invalid-params",
+      message: "Book absent does not exist",
+    });
+  });
+
+  it("refuses a Tutorial sample Book id at the write path", async () => {
+    // The broker already refuses while the Tutorial Library is active; this is
+    // the second defence, for a sample id that reaches the handler directly.
+    await expect(
+      writeCheckpoint({ bookId: "tutorial-book-1", label: "Mine" })
+    ).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "library-unavailable",
+      message: "The Tutorial Library is read-only; nothing was written.",
+    });
+    expect(await versionRows("tutorial-book-1")).toHaveLength(0);
+  });
+
+  it("refuses library.books.checkpoint without library:write", async () => {
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:read"] });
+    try {
+      await expect(
+        client.library.books.checkpoint({ bookId: "book-1", label: "Mine" })
+      ).rejects.toMatchObject({ code: "permission-denied", permission: "library:write" });
+    } finally {
+      close();
+    }
+  });
+
+  it("refuses library.books.checkpoint with the real Tutorial Library switch", async () => {
+    await seedBook("book-1");
+    librarySwitch.activateTutorialDatabase(testDb);
+    const { client, close } = connectLibraryWritePlugin({
+      granted: ["library:write"],
+      isLibraryAvailable: () => !librarySwitch.isTutorialLibraryActive(),
+    });
+    try {
+      await expect(
+        client.library.books.checkpoint({ bookId: "book-1", label: "Mine" })
+      ).rejects.toMatchObject({ code: "library-unavailable" });
+    } finally {
+      close();
+    }
+    expect(await versionRows("book-1")).toHaveLength(0);
+  });
+});
+
+// A local write from outside the open view flushes the editors first. When an
+// open editor cannot save, the write is refused before anything lands.
+describe("Book writes refuse when an open editor cannot save (#588)", () => {
+  type LibraryClient = ReturnType<typeof connectLibraryWritePlugin>["client"];
+  const cases: [string, (client: LibraryClient) => Promise<unknown>][] = [
+    [
+      "library.books.update",
+      (client) => client.library.books.update({ bookId: "book-1", title: "Changed", genre: "Fantasy" }),
+    ],
+    [
+      "library.books.checkpoint",
+      (client) => client.library.books.checkpoint({ bookId: "book-1", label: "Before" }),
+    ],
+  ];
+
+  it.each(cases)("%s refuses and writes nothing", async (_method, call) => {
+    await seedBook("book-1");
+    // `flushPendingEdits` wraps this rejection in `PendingEditsFlushError`.
+    const off = registerPendingEditsFlush(() => {
+      throw new Error("disk full");
+    });
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:write"] });
+    try {
+      await expect(call(client)).rejects.toMatchObject({ code: "library-unavailable" });
+    } finally {
+      close();
+      off();
+    }
+    expect(await bookRow("book-1")).toMatchObject({ title: "Book book-1", genre: null });
+    expect(await versionRows("book-1")).toHaveLength(0);
   });
 });

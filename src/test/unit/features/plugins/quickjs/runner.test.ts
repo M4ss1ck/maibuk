@@ -28,8 +28,11 @@ const BOOK = {
   title: "Dune",
   subtitle: null,
   authorName: "Frank",
+  genre: null,
   language: "en",
   wordCount: 10,
+  targetWordCount: null,
+  status: "draft" as const,
   updatedAt: 0,
 };
 

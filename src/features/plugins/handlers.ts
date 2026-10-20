@@ -2,11 +2,14 @@
  * The host-side Plugin API handlers this app wires (ADR 0022, #440):
  * `notifications.show` renders a toast naming the Plugin; the Library reads
  * serve Books, Chapters, Notes, and Canvas metadata; the Library writes
- * (#452) update a Chapter's content and create or update a Note through the
- * entity's own write path; the editor writes (`editor.insert` / `editor.replace`,
- * #452) edit the focused editor as one undoable step; `storage.*` reads and
- * writes the Plugin's own Library namespace; `navigation.openEntity` opens an
- * entity through the app shell; `navigation.openPage` opens a Plugin page;
+ * (#452, #588) update a Book's details or take a Checkpoint, create, delete,
+ * reorder, or update a Chapter, and create, update, or delete a Note through
+ * the entity's own write path; the editor writes (`editor.insert` /
+ * `editor.replace`, #452) edit the focused editor as one undoable step;
+ * `storage.*` reads and writes the Plugin's own
+ * Library namespace; `navigation.openEntity` opens an entity through the app
+ * shell;
+ * `navigation.openPage` opens a Plugin page;
  * `language.get` reads the app language; `endpoint.address` reads this Plugin's
  * Plugin Endpoint address; `secrets.*` writes the calling
  * Plugin's credentials through the registered store; `network.fetch` fetches
@@ -29,7 +32,11 @@ import {
 import { endpointUrlFor } from "@/features/plugins/endpoint";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
+  checkpointPluginBook,
+  createPluginChapter,
   createPluginNote,
+  deletePluginChapter,
+  deletePluginNote,
   getPluginBook,
   getPluginCanvas,
   getPluginChapter,
@@ -38,6 +45,9 @@ import {
   listPluginCanvases,
   listPluginChapters,
   listPluginNotes,
+  reorderPluginChapters,
+  updatePluginBook,
+  updatePluginChapter,
   updatePluginChapterContent,
   updatePluginNote,
 } from "@/features/plugins/library";
@@ -121,16 +131,28 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     },
     "library.books.list": () => listPluginBooks(),
     "library.books.get": ({ bookId }) => getPluginBook(bookId),
+    "library.books.update": ({ bookId, title, authorName, genre, status, targetWordCount }) =>
+      updatePluginBook({ bookId, title, authorName, genre, status, targetWordCount }),
+    "library.books.checkpoint": ({ bookId, label }) =>
+      checkpointPluginBook({ bookId, label }),
     "library.chapters.list": ({ bookId }) => listPluginChapters(bookId),
     "library.chapters.get": ({ chapterId }) => getPluginChapter(chapterId),
     "library.notes.list": ({ bookId }) => listPluginNotes(bookId),
     "library.notes.get": ({ noteId }) => getPluginNote(noteId),
     "library.chapters.updateContent": ({ chapterId, content }) =>
       updatePluginChapterContent(chapterId, content),
+    "library.chapters.create": ({ bookId, title, position, content }) =>
+      createPluginChapter({ bookId, title, position, content }),
+    "library.chapters.delete": ({ chapterId }) => deletePluginChapter(chapterId),
+    "library.chapters.reorder": ({ bookId, chapterIds }) =>
+      reorderPluginChapters({ bookId, chapterIds }),
+    "library.chapters.update": ({ chapterId, title, chapterType, status }) =>
+      updatePluginChapter({ chapterId, title, chapterType, status }),
     "library.notes.create": ({ title, bookId, content }) =>
       createPluginNote({ title, bookId, content }),
-    "library.notes.update": ({ noteId, title, content }) =>
-      updatePluginNote({ noteId, title, content }),
+    "library.notes.update": ({ noteId, title, content, tags, bookId }) =>
+      updatePluginNote({ noteId, title, content, tags, bookId }),
+    "library.notes.delete": ({ noteId }) => deletePluginNote(noteId),
     "library.canvases.list": ({ bookId }) => listPluginCanvases(bookId),
     "library.canvases.get": ({ canvasId }) => getPluginCanvas(canvasId),
     "editor.getContent": () => getPluginEditorContent(),

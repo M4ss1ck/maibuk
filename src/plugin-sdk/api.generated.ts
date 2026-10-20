@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.4";
+export const PLUGIN_API_VERSION = "0.1.5";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -13,9 +13,16 @@ export const PLUGIN_API_METHODS = [
   "library.notes.get",
   "library.canvases.list",
   "library.canvases.get",
+  "library.books.update",
+  "library.books.checkpoint",
   "library.chapters.updateContent",
+  "library.chapters.create",
+  "library.chapters.delete",
+  "library.chapters.reorder",
+  "library.chapters.update",
   "library.notes.create",
   "library.notes.update",
+  "library.notes.delete",
   "editor.getContent",
   "editor.getSelection",
   "editor.reveal",
@@ -56,8 +63,13 @@ export interface PluginApiMethods {
       title: string;
       subtitle: string | null;
       authorName: string;
+      /** Null when the Book has no Genre. */
+      genre: string | null;
       language: string;
       wordCount: number;
+      /** Null when the Book has no Target Word Count. */
+      targetWordCount: number | null;
+      status: "draft" | "in-progress" | "completed" | "archived";
       /** Milliseconds since the Unix epoch. */
       updatedAt: number;
     }[];
@@ -72,8 +84,13 @@ export interface PluginApiMethods {
       title: string;
       subtitle: string | null;
       authorName: string;
+      /** Null when the Book has no Genre. */
+      genre: string | null;
       language: string;
       wordCount: number;
+      /** Null when the Book has no Target Word Count. */
+      targetWordCount: number | null;
+      status: "draft" | "in-progress" | "completed" | "archived";
       /** Milliseconds since the Unix epoch. */
       updatedAt: number;
     } | null;
@@ -89,7 +106,9 @@ export interface PluginApiMethods {
       title: string;
       order: number;
       parentId: string | null;
+      chapterType: "chapter" | "prologue" | "epilogue" | "part" | "frontmatter" | "backmatter";
       wordCount: number;
+      status: "draft" | "revised" | "final";
       /** Milliseconds since the Unix epoch. */
       updatedAt: number;
     }[];
@@ -105,7 +124,9 @@ export interface PluginApiMethods {
       title: string;
       order: number;
       parentId: string | null;
+      chapterType: "chapter" | "prologue" | "epilogue" | "part" | "frontmatter" | "backmatter";
       wordCount: number;
+      status: "draft" | "revised" | "final";
       /** Milliseconds since the Unix epoch. */
       updatedAt: number;
       content: {
@@ -180,6 +201,29 @@ export interface PluginApiMethods {
       updatedAt: number;
     } | null;
   };
+  /** Updates a Book's title, Author Name, Genre, Book Status, or Target Word Count through the Book write path; give at least one. A null Genre or Target Word Count clears it. */
+  "library.books.update": {
+    input: {
+      bookId: string;
+      title?: string;
+      authorName?: string;
+      genre?: string | null;
+      status?: "draft" | "in-progress" | "completed" | "archived";
+      targetWordCount?: number | null;
+    };
+    output: null;
+  };
+  /** Takes a Checkpoint of a Book through the normal Version path, named by the label, and returns its id; null when the Book is unchanged since its last Version. */
+  "library.books.checkpoint": {
+    input: {
+      bookId: string;
+      /** The Version's name. */
+      label: string;
+    };
+    output: {
+      versionId: string | null;
+    };
+  };
   /** Replaces a Chapter's content through the Chapter write path. */
   "library.chapters.updateContent": {
     input: {
@@ -191,6 +235,50 @@ export interface PluginApiMethods {
         /** Sanitized by the host before it lands. */
         html: string;
       };
+    };
+    output: null;
+  };
+  /** Creates a Chapter in a Book through the Chapter write path, at a 0-based position among its Chapters (omitted appends) and with optional content, and returns its id. */
+  "library.chapters.create": {
+    input: {
+      bookId: string;
+      title: string;
+      /** 0-based index among the Book's Chapters; omitted appends at the end. */
+      position?: number;
+      /** Plain text, or an HTML fragment the host sanitizes. */
+      content?: {
+        text: string;
+      } | {
+        /** Sanitized by the host before it lands. */
+        html: string;
+      };
+    };
+    output: {
+      chapterId: string;
+    };
+  };
+  /** Deletes a Chapter through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made. */
+  "library.chapters.delete": {
+    input: {
+      chapterId: string;
+    };
+    output: null;
+  };
+  /** Reorders a Book's Chapters to the given ids, which must be exactly the Book's Chapters: no missing, extra, or duplicate id. */
+  "library.chapters.reorder": {
+    input: {
+      bookId: string;
+      chapterIds: string[];
+    };
+    output: null;
+  };
+  /** Updates a Chapter's title, Chapter Type, or Chapter Status through the Chapter write path; give at least one. */
+  "library.chapters.update": {
+    input: {
+      chapterId: string;
+      title?: string;
+      chapterType?: "chapter" | "prologue" | "epilogue" | "part" | "frontmatter" | "backmatter";
+      status?: "draft" | "revised" | "final";
     };
     output: null;
   };
@@ -211,7 +299,7 @@ export interface PluginApiMethods {
       noteId: string;
     };
   };
-  /** Updates a Note's title or content through the Note write path. */
+  /** Updates a Note's title, content, Tags, or Book through the Note write path; Tags are trimmed and deduplicated like the Note tags field, and a null bookId moves it to Unfiled. */
   "library.notes.update": {
     input: {
       noteId: string;
@@ -223,6 +311,16 @@ export interface PluginApiMethods {
         /** Sanitized by the host before it lands. */
         html: string;
       };
+      tags?: string[];
+      /** Null moves the Note to Unfiled. */
+      bookId?: string | null;
+    };
+    output: null;
+  };
+  /** Deletes a Note through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made. */
+  "library.notes.delete": {
+    input: {
+      noteId: string;
     };
     output: null;
   };
@@ -531,6 +629,10 @@ export interface PluginApi {
       list(params?: PluginApiMethods["library.books.list"]["input"]): Promise<PluginApiMethods["library.books.list"]["output"]>;
       /** Reads one Book's details, or null when it does not exist. */
       get(params: PluginApiMethods["library.books.get"]["input"]): Promise<PluginApiMethods["library.books.get"]["output"]>;
+      /** Updates a Book's title, Author Name, Genre, Book Status, or Target Word Count through the Book write path; give at least one. A null Genre or Target Word Count clears it. */
+      update(params: PluginApiMethods["library.books.update"]["input"]): Promise<PluginApiMethods["library.books.update"]["output"]>;
+      /** Takes a Checkpoint of a Book through the normal Version path, named by the label, and returns its id; null when the Book is unchanged since its last Version. */
+      checkpoint(params: PluginApiMethods["library.books.checkpoint"]["input"]): Promise<PluginApiMethods["library.books.checkpoint"]["output"]>;
     };
     chapters: {
       /** Lists a Book's Chapters in order, without their content. */
@@ -539,6 +641,14 @@ export interface PluginApi {
       get(params: PluginApiMethods["library.chapters.get"]["input"]): Promise<PluginApiMethods["library.chapters.get"]["output"]>;
       /** Replaces a Chapter's content through the Chapter write path. */
       updateContent(params: PluginApiMethods["library.chapters.updateContent"]["input"]): Promise<PluginApiMethods["library.chapters.updateContent"]["output"]>;
+      /** Creates a Chapter in a Book through the Chapter write path, at a 0-based position among its Chapters (omitted appends) and with optional content, and returns its id. */
+      create(params: PluginApiMethods["library.chapters.create"]["input"]): Promise<PluginApiMethods["library.chapters.create"]["output"]>;
+      /** Deletes a Chapter through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made. */
+      delete(params: PluginApiMethods["library.chapters.delete"]["input"]): Promise<PluginApiMethods["library.chapters.delete"]["output"]>;
+      /** Reorders a Book's Chapters to the given ids, which must be exactly the Book's Chapters: no missing, extra, or duplicate id. */
+      reorder(params: PluginApiMethods["library.chapters.reorder"]["input"]): Promise<PluginApiMethods["library.chapters.reorder"]["output"]>;
+      /** Updates a Chapter's title, Chapter Type, or Chapter Status through the Chapter write path; give at least one. */
+      update(params: PluginApiMethods["library.chapters.update"]["input"]): Promise<PluginApiMethods["library.chapters.update"]["output"]>;
     };
     notes: {
       /** Lists Notes, all of them or one Book's, without their content. */
@@ -547,8 +657,10 @@ export interface PluginApi {
       get(params: PluginApiMethods["library.notes.get"]["input"]): Promise<PluginApiMethods["library.notes.get"]["output"]>;
       /** Creates a Note through the Note write path and returns its id. */
       create(params: PluginApiMethods["library.notes.create"]["input"]): Promise<PluginApiMethods["library.notes.create"]["output"]>;
-      /** Updates a Note's title or content through the Note write path. */
+      /** Updates a Note's title, content, Tags, or Book through the Note write path; Tags are trimmed and deduplicated like the Note tags field, and a null bookId moves it to Unfiled. */
       update(params: PluginApiMethods["library.notes.update"]["input"]): Promise<PluginApiMethods["library.notes.update"]["output"]>;
+      /** Deletes a Note through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made. */
+      delete(params: PluginApiMethods["library.notes.delete"]["input"]): Promise<PluginApiMethods["library.notes.delete"]["output"]>;
     };
     canvases: {
       /** Lists Canvases with their metadata. Canvas content is not part of the API. */
