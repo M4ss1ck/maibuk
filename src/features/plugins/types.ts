@@ -10,7 +10,7 @@ import type { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-valida
 import type { Language } from "@/features/settings/types";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
-import type { PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
+import type { EndpointRequest, PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
 
 // Identity (ids.ts)
 
@@ -1190,6 +1190,24 @@ export interface PluginBrokerOptions {
   events?: readonly PluginApiEventRow[];
 }
 
+/**
+ * Where one Endpoint request's answer goes. `respond` is called once: with the
+ * whole answer when it is not streamed, or with `streaming: true` on the head
+ * before the first `chunk`. `chunk` receives base64 of one body piece and
+ * returns false once the caller hung up, so the broker drops the rest. `end`
+ * closes the answer, whether it finished or not.
+ */
+export interface PluginEndpointSink {
+  respond(
+    status: number,
+    headers: [string, string][],
+    body: string | undefined,
+    streaming: boolean
+  ): void;
+  chunk(chunk: string): boolean | Promise<boolean>;
+  end(): void;
+}
+
 export interface PluginBroker {
   /**
    * Sends a host to Plugin request; settles on the Plugin's first reply with
@@ -1197,6 +1215,13 @@ export interface PluginBroker {
    * message, such as the MessagePort of a Remote UI mount.
    */
   request(method: string, params: unknown, transfer?: Transferable[]): Promise<unknown>;
+  /**
+   * Delivers one Endpoint request to this Plugin and pipes its answer into
+   * `sink`. Without the `serve` Plugin Permission (read live) the Plugin is
+   * never asked and the sink is answered 404. The Plugin's handler answering
+   * 404, or throwing (answered 500), reaches the sink as that answer.
+   */
+  requestEndpoint(request: EndpointRequest, sink: PluginEndpointSink): void;
   /**
    * Delivers an event if the Plugin subscribed to it and still holds its
    * Plugin Permission. Returns whether it was sent. Throws when the payload

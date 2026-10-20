@@ -27,20 +27,24 @@ import type {
   PluginApiRow,
   PluginBroker,
   PluginBrokerOptions,
+  PluginEndpointSink,
   PluginHandlerContext,
   PluginPermissionId,
   PluginStopReason,
   PluginStreamResult,
 } from "@/features/plugins/types";
 import {
+  type EndpointAnswer,
   type HostToPluginMessage,
   PLUGIN_COMMAND_RUN_REQUEST,
+  PLUGIN_ENDPOINT_REQUEST,
   PLUGIN_MESSAGE_MAX_BYTES,
   PLUGIN_STREAM_CHUNK_MAX_BYTES,
   PluginApiError,
   type PluginApiErrorCode,
   type PluginApiErrorData,
   type PendingReplies,
+  base64DecodedLength,
   isPluginApiErrorCode,
   messageTooLarge,
   utf8ByteLength,
@@ -66,7 +70,7 @@ export const THROTTLE_GAP_MS = (CALL_BURST / CALL_RATE_PER_SECOND) * 1000;
 // The SDK writes `kind`, `id`, then `method` or `event` first, so a refused
 // message can be answered, with the method named, without decoding it.
 const MESSAGE_HEAD =
-  /^\{"kind":"(call|subscribe|unsubscribe|reply)","id":(\d{1,15})(?:,"(?:method|event)":"([A-Za-z0-9.]{1,128})")?/;
+  /^\{"kind":"(call|subscribe|unsubscribe|reply|chunk|end)","id":(\d{1,15})(?:,"(?:method|event)":"([A-Za-z0-9.]{1,128})")?/;
 
 interface MessageHead {
   kind: string;
@@ -121,6 +125,59 @@ function isStreamResult(value: unknown): value is PluginStreamResult<unknown, un
   );
 }
 
+function readEndpointHeaders(value: unknown): [string, string][] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const headers: [string, string][] = [];
+  for (const pair of value) {
+    if (
+      !Array.isArray(pair) ||
+      pair.length !== 2 ||
+      typeof pair[0] !== "string" ||
+      typeof pair[1] !== "string"
+    ) {
+      return null;
+    }
+    headers.push([pair[0], pair[1]]);
+  }
+  return headers;
+}
+
+/** Reads a Plugin's Endpoint answer, or null when its shape is not the wire shape. */
+function readEndpointAnswer(value: unknown): EndpointAnswer | null {
+  if (typeof value !== "object" || value === null) return null;
+  const answer = value as Record<string, unknown>;
+  const status = answer.status;
+  if (
+    typeof status !== "number" ||
+    !Number.isInteger(status) ||
+    status < 100 ||
+    status > 599 ||
+    typeof answer.streaming !== "boolean"
+  ) {
+    return null;
+  }
+  const headers = readEndpointHeaders(answer.headers);
+  if (headers === null) return null;
+  if (answer.streaming) return { status, headers, streaming: true };
+  if (answer.body === undefined) return { status, headers, streaming: false };
+  if (typeof answer.body !== "string" || base64DecodedLength(answer.body) < 0) return null;
+  return { status, headers, body: answer.body, streaming: false };
+}
+
+/**
+ * One Endpoint request the Plugin has not finished answering. `chain` keeps
+ * the sink's calls in message order even when `sink.chunk` returns a promise
+ * (the Tauri sink crosses IPC). `responded` tells a stop whether the answer
+ * head already went out, so it ends the stream rather than answering 500.
+ */
+interface OpenEndpoint {
+  sink: PluginEndpointSink;
+  responded: boolean;
+  closed: boolean;
+  chain: Promise<void>;
+}
+
 export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   const { pluginId, port, declared, granted, handlers = {}, onStop, onCall } = options;
   const now = options.now ?? (() => performance.now());
@@ -154,6 +211,8 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
    * longer counts, so the exemption ends with the run or its window.
    */
   const inFlightCommandRuns = new Map<number, number>();
+  /** Endpoint requests whose answer has not finished, by host request id. */
+  const endpoints = new Map<number, OpenEndpoint>();
 
   function hasRecentCommandRun(): boolean {
     const time = now();
@@ -202,6 +261,15 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     // instead of at its next chunk.
     for (const iterator of openBodies) void iterator.return?.();
     openBodies.clear();
+    // An answer already streaming can only be ended; one still waiting for its
+    // head is answered 500, the same as a Plugin that stopped before answering.
+    for (const open of endpoints.values()) {
+      if (open.closed) continue;
+      open.closed = true;
+      if (open.responded) open.sink.end();
+      else open.sink.respond(500, [], undefined, false);
+    }
+    endpoints.clear();
     onStop?.(reason);
   }
 
@@ -275,6 +343,76 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     }
     console.error(`Plugin ${pluginId}: ${method} failed`, error);
     return refusal("internal-error", `${method} failed in Maibuk`, { method });
+  }
+
+  function queueEndpoint(open: OpenEndpoint, step: () => void | Promise<void>) {
+    open.chain = open.chain.then(step).catch((error: unknown) => {
+      console.error(`Plugin ${pluginId}: an endpoint answer failed`, error);
+    });
+  }
+
+  /** Ends an open answer once, keeping it behind any chunk already queued. */
+  function closeEndpoint(id: number) {
+    const open = endpoints.get(id);
+    if (!open || open.closed) return;
+    endpoints.delete(id);
+    queueEndpoint(open, () => {
+      if (open.closed) return;
+      open.closed = true;
+      open.sink.end();
+    });
+  }
+
+  function handleEndpointReply(id: number, ok: boolean, value: unknown) {
+    const open = endpoints.get(id);
+    if (!open || open.closed) return;
+    const answer = ok ? readEndpointAnswer(value) : null;
+    if (answer === null) {
+      endpoints.delete(id);
+      open.closed = true;
+      open.sink.respond(500, [], undefined, false);
+      return;
+    }
+    if (answer.streaming) {
+      open.responded = true;
+      open.sink.respond(answer.status, answer.headers, undefined, true);
+      return;
+    }
+    endpoints.delete(id);
+    open.closed = true;
+    open.sink.respond(answer.status, answer.headers, answer.body, false);
+  }
+
+  function handleEndpointChunk(id: number, chunk: unknown) {
+    const open = endpoints.get(id);
+    // A chunk before the answer's head, or after it closed, is dropped: the
+    // protocol says chunks follow a `reply` that said `streaming`.
+    if (!open || open.closed || !open.responded) return;
+    const length = typeof chunk === "string" ? base64DecodedLength(chunk) : -1;
+    if (length < 0 || length > PLUGIN_STREAM_CHUNK_MAX_BYTES) {
+      closeEndpoint(id);
+      return;
+    }
+    queueEndpoint(open, async () => {
+      if (open.closed) return;
+      if ((await open.sink.chunk(chunk as string)) === false) {
+        open.closed = true;
+        endpoints.delete(id);
+      }
+    });
+  }
+
+  function handleEndpointEnd(id: number) {
+    const open = endpoints.get(id);
+    if (!open || open.closed || !open.responded) return;
+    closeEndpoint(id);
+  }
+
+  function handleEndpointMessage(message: Record<string, unknown>) {
+    if (typeof message.id !== "number") return;
+    if (!endpoints.has(message.id)) return;
+    if (message.kind === "chunk") handleEndpointChunk(message.id, message.chunk);
+    else if (message.kind === "end") handleEndpointEnd(message.id);
   }
 
   async function handleCall(id: number, method: string, params: unknown) {
@@ -417,12 +555,20 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     const text = typeof data === "string" ? data : null;
     const head = text === null ? null : readHead(text);
     // A reply the host is waiting for passes even while throttled: the host asked
-    // for it. The free pass settles that request whatever the message turns out
-    // to be, so each host request buys at most one unmetered message.
-    const awaitedReply = head?.kind === "reply" && pending.has(head.id) ? head : null;
+    // for it. The same goes for an Endpoint answer's `chunk`/`end`, keyed by the
+    // request the host sent. The free pass settles that request whatever the
+    // message turns out to be, so each host request buys at most one unmetered
+    // message per kind.
+    const awaited =
+      head !== null &&
+      (head.kind === "reply"
+        ? pending.has(head.id) || endpoints.has(head.id)
+        : (head.kind === "chunk" || head.kind === "end") && endpoints.has(head.id))
+        ? head
+        : null;
     const refusable = head !== null && head.kind !== "reply" ? head : null;
 
-    if (!awaitedReply && !takeToken()) {
+    if (!awaited && !takeToken()) {
       if (throttledSince !== null && now() - throttledSince >= THROTTLE_STOP_MS) {
         stop("throttled");
         return;
@@ -439,7 +585,12 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       utf8ByteLength(text) > PLUGIN_MESSAGE_MAX_BYTES
     ) {
       if (refusable) fail(refusable.id, messageTooLarge(refusable.method));
-      if (awaitedReply) handleReply({ id: awaitedReply.id, ok: false, error: messageTooLarge() });
+      if (awaited?.kind === "reply") {
+        if (endpoints.has(awaited.id)) handleEndpointReply(awaited.id, false, undefined);
+        else handleReply({ id: awaited.id, ok: false, error: messageTooLarge() });
+      } else if (awaited !== null) {
+        closeEndpoint(awaited.id);
+      }
       return;
     }
 
@@ -451,11 +602,25 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     }
     const record =
       typeof message === "object" && message !== null ? (message as Record<string, unknown>) : null;
-    if (awaitedReply) {
+    if (awaited !== null) {
       // The head is read by a regex and the body by JSON.parse, which keeps the
       // last of duplicate keys; only a body that agrees with its head counts.
-      const agrees = record?.kind === "reply" && record.id === awaitedReply.id;
-      handleReply(agrees ? record : { id: awaitedReply.id, ok: false, error: malformedReply() });
+      const agrees = record?.kind === awaited.kind && record.id === awaited.id;
+      if (awaited.kind === "reply") {
+        if (endpoints.has(awaited.id)) {
+          handleEndpointReply(awaited.id, agrees && record?.ok === true, record?.result);
+        } else {
+          handleReply(
+            agrees
+              ? (record as Record<string, unknown>)
+              : { id: awaited.id, ok: false, error: malformedReply() }
+          );
+        }
+      } else if (!agrees) {
+        closeEndpoint(awaited.id);
+      } else {
+        handleEndpointMessage(record as Record<string, unknown>);
+      }
       return;
     }
     if (record === null) return;
@@ -463,6 +628,9 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       handleReply(record);
       return;
     }
+    // A chunk or end with no open endpoint request behind it (an unknown id, a
+    // duplicate, or a late one) is dropped.
+    if (record.kind === "chunk" || record.kind === "end") return;
     if (typeof record.id !== "number") return;
     if (record.kind === "call" && typeof record.method === "string") {
       void handleCall(record.id, record.method, record.params);
@@ -489,6 +657,27 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
           transfer ?? []
         );
       });
+    },
+    requestEndpoint(request, sink) {
+      // The grant is read again here, on the one path an outside caller can
+      // reach, so a revoked `serve` stops new requests without a restart.
+      if (stopped || !holds("serve")) {
+        sink.respond(404, [], undefined, false);
+        return;
+      }
+      const id = nextRequestId++;
+      endpoints.set(id, {
+        sink,
+        responded: false,
+        closed: false,
+        chain: Promise.resolve(),
+      });
+      port.postMessage({
+        kind: "request",
+        id,
+        method: PLUGIN_ENDPOINT_REQUEST,
+        params: request,
+      } satisfies HostToPluginMessage);
     },
     emit(event, payload) {
       if (stopped || !subscriptions.has(event)) return false;
