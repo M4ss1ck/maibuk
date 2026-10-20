@@ -8,10 +8,11 @@ A **Plugin** is a packaged addition to Maibuk that adds its own Commands, pages,
 2. [Host-rendered UI](host-rendered-ui.md): the default path, where Maibuk draws your interface.
 3. [Frame UI](frame-ui.md): the custom-UI path, where the Plugin draws its own document.
 4. [Testing](testing.md): the test kit and what it runs for real.
-5. [Development mode](development-mode.md): reload on a build, and troubleshooting.
-6. [Packaging](packaging.md): the built folder, the zip, and versions.
-7. [Plugin API reference](api-reference.md): every method, generated from the code.
-8. [Plugin UI component reference](ui-reference.md): every host-rendered component, generated from the code.
+5. [Plugin Endpoint](endpoint.md): the local HTTP address an outside program reaches the Plugin on, desktop only.
+6. [Development mode](development-mode.md): reload on a build, and troubleshooting.
+7. [Packaging](packaging.md): the built folder, the zip, and versions.
+8. [Plugin API reference](api-reference.md): every method, generated from the code.
+9. [Plugin UI component reference](ui-reference.md): every host-rendered component, generated from the code.
 
 Which devices run a Plugin is set by its `platforms` list: omit it for desktop and the web, or list `"android"` to run on Android too. See [Platforms](host-rendered-ui.md#platforms).
 
