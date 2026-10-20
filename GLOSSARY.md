@@ -397,6 +397,11 @@ _UI_: es "Mayúsculas y minúsculas"
 The rules that reshape pasted text before it lands in a Chapter or Note, such as "Match my book".
 _UI_: en "Paste cleanup" / es "Limpieza al pegar"
 
+**Opening Marks**:
+Maibuk adding the Spanish ¿ or ¡ at the start of a question or exclamation when the author types its closing ? or ! in Spanish text. A run of closing marks gets its opening marks in mirrored order ("¡¿Qué haces?!"). Off unless the author turns it on, on this device.
+_UI_: en "Spanish opening marks (¿ ¡)" / es "Signos de apertura (¿ ¡)"
+_Avoid_: auto-close (that is Auto-close pairs), inverted marks
+
 **Dictation**:
 Turning the author's speech into text in the editor or text field that has the caret, offline, with a downloaded Dictation Model.
 _UI_: en "Dictation" / es "Dictado"

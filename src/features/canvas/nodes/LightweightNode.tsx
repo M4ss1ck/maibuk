@@ -15,6 +15,7 @@ import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { NodeFormatBubble } from "@/features/canvas/nodes/NodeFormatBubble";
 import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
 import { prepareStaticCanvasHtml } from "@/features/canvas/nodes/staticRichText";
+import { useOpeningMarksLanguage } from "@/components/editor/opening-marks-language";
 
 type LightweightFlowNode = Node<CanvasFlowNodeData, "text">;
 
@@ -44,6 +45,8 @@ function ActiveNodeEditor({
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
   const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
+  // A Canvas has no language of its own; its text follows the app's, like Spell Check.
+  const openingMarksLanguage = useOpeningMarksLanguage(language);
   const overlayOpen = useRef(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const editor = useEditor({
@@ -52,6 +55,7 @@ function ActiveNodeEditor({
       footnoteStartIndex: 1,
       spellCheck: { enabled: spellCheckEnabled, language },
       autoClose: editorAutoClose,
+      openingMarksLanguage,
       // Leaving the node writes its HTML back, so opening must not change it.
       nameHeadingsOnOpen: false,
     }),

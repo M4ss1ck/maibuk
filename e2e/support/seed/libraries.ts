@@ -18,6 +18,7 @@ import {
   SEED_NOTES,
   SEED_NOTE_TAGS,
   SHELF_BOOKS,
+  LANGUAGE_BOOKS,
 } from "./names";
 import { checkpointHistory } from "./checkpoint-history";
 import { metricsHistory } from "./metrics-history";
@@ -38,6 +39,19 @@ async function oneBookThreeChapters(): Promise<void> {
   // The Book's total is derived; the editor's store recomputes it the same way.
   await updateBookWordCountRow(book.id, words);
   await updateBookRow(book.id, { status: "in-progress" }, "local");
+}
+
+// Opening Marks act on Spanish text only, so the specs need a Book in each language.
+async function spanishAndEnglishBooks(): Promise<void> {
+  for (const seed of [LANGUAGE_BOOKS.spanish, LANGUAGE_BOOKS.english]) {
+    const book = await createBookRow(
+      { title: seed.title, authorName: SEED_BOOK.authorName, language: seed.language },
+      "local"
+    );
+    const created = await createChapterRow({ bookId: book.id, title: seed.chapter }, "local");
+    const saved = await updateChapterRow(created.id, { content: `<p>${seed.text}</p>` }, "local");
+    await updateBookWordCountRow(book.id, saved?.wordCount ?? 0);
+  }
 }
 
 // A Book with exactly two Chapters (issue #446). The target-Command specs open
@@ -337,6 +351,7 @@ export const SEED_LIBRARIES = {
   empty: async () => {},
   oneBookThreeChapters,
   oneBookTwoChapters,
+  spanishAndEnglishBooks,
   echoesBook,
   echoesLargeBook,
   bookShelf,

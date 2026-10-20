@@ -31,6 +31,7 @@ import { HeadingId } from "@/components/editor/extensions/HeadingId";
 import { SymbolAutocomplete } from "@/components/editor/extensions/SymbolAutocomplete";
 import { SelectionKept } from "@/components/editor/extensions/SelectionKept";
 import { AutoClose } from "@/components/editor/extensions/AutoClose";
+import { OpeningMarks } from "@/components/editor/extensions/OpeningMarks";
 import { ShortcutOverrides } from "@/components/editor/extensions/ShortcutOverrides";
 import { Dictation } from "@/components/editor/extensions/Dictation";
 import { DomSelectionSync } from "@/components/editor/extensions/DomSelectionSync";
@@ -41,6 +42,8 @@ export interface RichTextExtensionsOptions {
   footnoteStartIndex?: number;
   spellCheck?: { enabled: boolean; language: Language };
   autoClose?: boolean;
+  /** The editor's text language while Opening Marks are on, else null. Read per keystroke. */
+  openingMarksLanguage?: () => string | null;
   dropcursor?: boolean;
   /** See `HeadingId`'s `nameOnOpen`. */
   nameHeadingsOnOpen?: boolean;
@@ -57,6 +60,7 @@ export function createRichTextExtensions({
   footnoteStartIndex = 1,
   spellCheck,
   autoClose = false,
+  openingMarksLanguage,
   dropcursor = true,
   nameHeadingsOnOpen = true,
 }: RichTextExtensionsOptions = {}): Extensions {
@@ -76,6 +80,9 @@ export function createRichTextExtensions({
     CustomCode,
     SmartItalic,
     ...(autoClose ? [AutoClose] : []),
+    ...(openingMarksLanguage
+      ? [OpeningMarks.configure({ getLanguage: openingMarksLanguage })]
+      : []),
     HeadingId.configure({ nameOnOpen: nameHeadingsOnOpen }),
     Underline,
     TextAlign.configure({ types: ["heading", "paragraph"] }),

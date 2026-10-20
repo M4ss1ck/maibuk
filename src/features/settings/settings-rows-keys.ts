@@ -39,6 +39,7 @@ export const SETTINGS_KEY_ROWS = {
   editorPagePadding: "internal",
   editorShowBorder: "internal",
   editorAutoClose: "editorAutoClose",
+  editorOpeningMarks: "editorOpeningMarks",
   chapterListView: "internal",
   showChapterOutline: "internal",
   notesListView: "internal",

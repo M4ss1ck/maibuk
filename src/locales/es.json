@@ -825,6 +825,9 @@
     "editorAutoClose": "Cerrar pares automáticamente",
     "editorAutoCloseDescription": "Cierra automáticamente corchetes, llaves, paréntesis y comillas mientras escribes",
     "toggleEditorAutoClose": "Activar cierre automático de pares",
+    "editorOpeningMarks": "Signos de apertura (¿ ¡)",
+    "editorOpeningMarksDescription": "Añade ¿ y ¡ al escribir ? o ! en textos en español",
+    "toggleEditorOpeningMarks": "Activar signos de apertura",
     "customDictionary": "Diccionario personalizado",
     "customDictionaryDescription": "Las palabras añadidas no se marcarán como incorrectas",
     "customDictionaryCount": "{{count}} palabras",
@@ -962,6 +965,12 @@
       "pasteCleanupPreset": ["copiar", "pegar", "portapapeles", "formato"],
       "alwaysOnTop": ["fijar", "ventana", "flotante"],
       "spellCheck": ["ortografía", "diccionario"],
+      "editorOpeningMarks": [
+        "signo de interrogación",
+        "signo de exclamación",
+        "puntuación",
+        "español"
+      ],
       "autoSave": ["guardar", "automático"],
       "language": ["idioma", "traducción", "español", "inglés"],
       "backupsList": ["copia de seguridad", "restaurar"],
@@ -1827,7 +1836,7 @@
         },
         "editor": {
           "title": "Editor",
-          "body": "Corrector ortográfico, tu Diccionario personalizado, las reglas de Limpieza al pegar y más opciones del editor."
+          "body": "Corrector ortográfico, tu Diccionario personalizado, las reglas de Limpieza al pegar, los Signos de apertura y más opciones del editor."
         },
         "advanced": {
           "title": "Avanzado",

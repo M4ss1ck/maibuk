@@ -23,6 +23,8 @@ export function EditorSection() {
     setHideKeyboardHints,
     editorAutoClose,
     setEditorAutoClose,
+    editorOpeningMarks,
+    setEditorOpeningMarks,
   } = useSettings();
   const [customDictionaryOpen, setCustomDictionaryOpen] = useState(false);
 
@@ -93,6 +95,14 @@ export function EditorSection() {
           checked={editorAutoClose}
           onChange={setEditorAutoClose}
           label={t("settings.toggleEditorAutoClose")}
+        />
+      </SettingRow>
+
+      <SettingRow id="editorOpeningMarks" className={SETTINGS_ROW_CLASS}>
+        <Switch
+          checked={editorOpeningMarks}
+          onChange={setEditorOpeningMarks}
+          label={t("settings.toggleEditorOpeningMarks")}
         />
       </SettingRow>
 
