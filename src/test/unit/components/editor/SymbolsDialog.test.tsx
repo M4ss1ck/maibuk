@@ -3,13 +3,33 @@ import userEvent from "@testing-library/user-event";
 import StarterKit from "@tiptap/starter-kit";
 import { Editor } from "@tiptap/react";
 import { useState } from "react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SymbolEntry } from "@/features/symbols/types";
 import { useSymbolsStore } from "@/features/symbols/store";
+import { toast } from "@/components/ui/Toast";
+import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
+import { DEFAULT_SHORTCUT_SETTINGS } from "@/lib/shortcut-resolve";
 
-const { catalogState, i18nState } = vi.hoisted(() => ({
+const { catalogState, i18nState, clipboard } = vi.hoisted(() => ({
   catalogState: { entryCount: null as number | null },
   i18nState: { language: "en" as "en" | "es" },
+  clipboard: { written: [] as string[], fail: false },
+}));
+
+vi.mock("@/lib/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/platform")>()),
+  getClipboard: async () => ({
+    readText: async () => clipboard.written.at(-1) ?? "",
+    writeText: async (text: string) => {
+      if (clipboard.fail) throw new Error("Clipboard refused");
+      clipboard.written.push(text);
+    },
+  }),
+}));
+
+vi.mock("@/lib/platform/detect", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/platform/detect")>()),
+  isMac: () => false,
 }));
 
 vi.mock("react-i18next", async (importOriginal) => ({
@@ -120,6 +140,9 @@ describe("SymbolsDialog", () => {
     i18nState.language = "en";
     vi.mocked(loadSymbolsCatalog).mockClear();
     useSymbolsStore.setState({ recentGlyphs: [] });
+    useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
+    clipboard.written = [];
+    clipboard.fail = false;
   });
 
   it("autofocuses search and filters as the user types", async () => {
@@ -439,5 +462,166 @@ describe("SymbolsDialog", () => {
     render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
     await screen.findByText("symbols.loadError");
     expect(screen.queryByText("symbols.loading")).not.toBeInTheDocument();
+  });
+  describe("copying a Symbol", () => {
+    let success: ReturnType<typeof vi.spyOn>;
+    let error: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      success = vi.spyOn(toast, "success").mockImplementation(() => {});
+      error = vi.spyOn(toast, "error").mockImplementation(() => {});
+    });
+    afterEach(() => {
+      success.mockRestore();
+      error.mockRestore();
+    });
+
+    const renderDialog = () => {
+      const spy = makeInsertSpyEditor();
+      render(<SymbolsDialog editor={spy.editor} isOpen onClose={() => {}} />);
+      return spy;
+    };
+
+    it("copies a clicked Symbol as well as inserting it, and says so", async () => {
+      const user = userEvent.setup();
+      const { inserted } = renderDialog();
+
+      const emoji = await screen.findByRole("option", { name: /grinning face/ });
+      await user.click(within(emoji).getByText("\uD83D\uDE00"));
+
+      expect(inserted).toEqual(["\uD83D\uDE00"]);
+      await waitFor(() => expect(clipboard.written).toEqual(["\uD83D\uDE00"]));
+      await waitFor(() => expect(success).toHaveBeenCalledWith("common.copied"));
+      expect(useSymbolsStore.getState().recentGlyphs).toEqual(["\uD83D\uDE00"]);
+    });
+
+    it("copies a Symbol picked with Enter, from the grid and from Recent", async () => {
+      useSymbolsStore.setState({ recentGlyphs: ["\u2020"] });
+      const user = userEvent.setup();
+      const { inserted } = renderDialog();
+      const recents = await screen.findByRole("listbox", { name: /recent/i });
+      const results = screen.getByRole("listbox", { name: "symbols.grid" });
+
+      within(results).getByRole("option", { name: /EN DASH/ }).focus();
+      await user.keyboard("{Enter}");
+      within(recents).getByRole("option", { name: /DAGGER/ }).focus();
+      await user.keyboard("{Enter}");
+
+      expect(inserted).toEqual(["\u2013", "\u2020"]);
+      await waitFor(() => expect(clipboard.written).toEqual(["\u2013", "\u2020"]));
+    });
+
+    it("still inserts when the clipboard refuses, and reports the failed copy", async () => {
+      clipboard.fail = true;
+      const user = userEvent.setup();
+      const { inserted } = renderDialog();
+
+      const option = await screen.findByRole("option", { name: /EM DASH/ });
+      option.focus();
+      await user.keyboard("{Enter}");
+
+      expect(inserted).toEqual(["\u2014"]);
+      await waitFor(() => expect(error).toHaveBeenCalledWith("symbols.copyFailed"));
+      expect(success).not.toHaveBeenCalled();
+    });
+
+    it("copies the focused Symbol with Ctrl+C without inserting it", async () => {
+      const user = userEvent.setup();
+      const { inserted } = renderDialog();
+
+      const option = await screen.findByRole("option", { name: /DAGGER/ });
+      option.focus();
+      await user.keyboard("{Control>}c{/Control}");
+
+      await waitFor(() => expect(clipboard.written).toEqual(["\u2020"]));
+      expect(inserted).toEqual([]);
+      expect(useSymbolsStore.getState().recentGlyphs).toEqual(["\u2020"]);
+      await waitFor(() => expect(success).toHaveBeenCalledWith("common.copied"));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    it("leaves Ctrl+C in the search field to the field", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      const search = await screen.findByRole("searchbox");
+      await waitFor(() => expect(search).toHaveFocus());
+
+      // Focus a Symbol first, so a stale focused Symbol cannot leak into the search field.
+      screen.getByRole("option", { name: /DAGGER/ }).focus();
+      search.focus();
+      await user.keyboard("{Control>}c{/Control}");
+
+      expect(clipboard.written).toEqual([]);
+    });
+
+    it("follows a Custom Shortcut for copying the focused Symbol", async () => {
+      useShortcutSettingsStore.setState({
+        shortcuts: {
+          ...structuredClone(DEFAULT_SHORTCUT_SETTINGS),
+          custom: { "symbolItem.copy": [["Mod+Shift+k"]] },
+        },
+      });
+      const user = userEvent.setup();
+      renderDialog();
+
+      const option = await screen.findByRole("option", { name: /DAGGER/ });
+      option.focus();
+      await user.keyboard("{Control>}c{/Control}");
+      expect(clipboard.written).toEqual([]);
+
+      await user.keyboard("{Control>}{Shift>}k{/Shift}{/Control}");
+      await waitFor(() => expect(clipboard.written).toEqual(["\u2020"]));
+    });
+
+    it("opens a Symbol's Item Menu on right click and copies without inserting", async () => {
+      const user = userEvent.setup();
+      const { inserted } = renderDialog();
+
+      const option = await screen.findByRole("option", { name: /DAGGER/ });
+      await user.pointer({ keys: "[MouseRight]", target: option });
+      const menu = await screen.findByRole("menu");
+      expect(within(menu).getByRole("menuitem", { name: /common.insert/ })).toBeInTheDocument();
+      await user.click(within(menu).getByRole("menuitem", { name: /common.copy/ }));
+
+      await waitFor(() => expect(clipboard.written).toEqual(["\u2020"]));
+      expect(inserted).toEqual([]);
+      expect(useSymbolsStore.getState().recentGlyphs).toEqual(["\u2020"]);
+      await waitFor(() => expect(success).toHaveBeenCalledWith("common.copied"));
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    it("opens the Item Menu with Shift+F10 and inserts from it by keyboard", async () => {
+      const user = userEvent.setup();
+      const { inserted } = renderDialog();
+
+      const option = await screen.findByRole("option", { name: /EM DASH/ });
+      option.focus();
+      await user.keyboard("{Shift>}{F10}{/Shift}");
+      const menu = await screen.findByRole("menu");
+      await waitFor(() =>
+        expect(within(menu).getByRole("menuitem", { name: /common.insert/ })).toHaveFocus()
+      );
+      await user.keyboard("{Enter}");
+
+      expect(inserted).toEqual(["\u2014"]);
+      await waitFor(() => expect(clipboard.written).toEqual(["\u2014"]));
+    });
+
+    it("closes only the Item Menu on Escape and returns focus to the Symbol", async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      const { editor } = makeInsertSpyEditor();
+      render(<SymbolsDialog editor={editor} isOpen onClose={onClose} />);
+
+      const option = await screen.findByRole("option", { name: /EM DASH/ });
+      option.focus();
+      await user.keyboard("{Shift>}{F10}{/Shift}");
+      await screen.findByRole("menu");
+      await user.keyboard("{Escape}");
+
+      await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+      expect(onClose).not.toHaveBeenCalled();
+      expect(option).toHaveFocus();
+    });
   });
 });

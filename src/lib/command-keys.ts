@@ -5,8 +5,11 @@ import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { type CommandId, type Shortcut } from "@/lib/shortcut-registry";
 import {
   formatShortcut,
+  isIgnoredKeyEvent,
   isSingleKey,
+  normalizeStep,
   shortcutKey,
+  stepsFromEvent,
   type FormattedShortcut,
 } from "@/lib/shortcut-keys";
 import { effectiveShortcuts, isFixedShortcut, type ShortcutSettings } from "@/lib/shortcut-resolve";
@@ -28,6 +31,22 @@ export function liveShortcuts(
 /** Read outside React, at the moment a key is pressed or a menu opens. */
 export function getLiveShortcuts(id: CommandId): Shortcut[] {
   return liveShortcuts(id, useShortcutSettingsStore.getState().shortcuts);
+}
+
+/**
+ * Whether a key press is one of a Command's live single-step Shortcuts. For
+ * keys a component handles itself while `useShortcuts` is paused (inside a
+ * Modal): matching the live Shortcuts keeps the author's Custom Shortcuts
+ * working there. Two-step sequences never match.
+ */
+export function pressRunsCommand(event: KeyboardEvent, id: CommandId): boolean {
+  if (isIgnoredKeyEvent(event)) return false;
+  const steps = stepsFromEvent(event, isMac());
+  return getLiveShortcuts(id).some((shortcut) => {
+    if (shortcut.length !== 1) return false;
+    const step = normalizeStep(shortcut[0]);
+    return step !== null && steps.includes(step);
+  });
 }
 
 /** The live Shortcuts of a Command, re-rendering when the author changes them. */

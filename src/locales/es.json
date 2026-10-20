@@ -5,6 +5,10 @@
     "description": "Una aplicación de escritura multiplataforma para autores"
   },
   "commands": {
+    "symbolItem": {
+      "insert": "Insertar este símbolo",
+      "copy": "Copiar este símbolo"
+    },
     "noteItem": {
       "togglePinned": "Fijar o desfijar la nota"
     },
@@ -714,6 +718,7 @@
   },
   "symbols": {
     "title": "Insertar símbolo",
+    "copyFailed": "No se pudo copiar el símbolo",
     "searchPlaceholder": "Buscar por nombre, carácter o punto de código…",
     "searchLabel": "Buscar símbolos",
     "category": "Categoría",

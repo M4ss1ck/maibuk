@@ -5,6 +5,10 @@
     "description": "A cross-platform writing app for authors"
   },
   "commands": {
+    "symbolItem": {
+      "insert": "Insert this symbol",
+      "copy": "Copy this symbol"
+    },
     "noteItem": {
       "togglePinned": "Pin or unpin note"
     },
@@ -714,6 +718,7 @@
   },
   "symbols": {
     "title": "Insert symbol",
+    "copyFailed": "Couldn't copy the symbol",
     "searchPlaceholder": "Search by name, character, or code point…",
     "searchLabel": "Search symbols",
     "category": "Category",

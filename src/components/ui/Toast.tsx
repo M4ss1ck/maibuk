@@ -88,19 +88,21 @@ export function forceToastError(message: string): void {
 export function ToastViewport() {
   const toasts = useToastStore((state) => state.toasts);
 
-  // Toasts paint above an open Modal, so they join React Aria's top layer:
-  // the Modal leaves them visible to assistive technology, as React Aria's
-  // own toast region does.
+  // Toasts paint above an open Modal: z-60 clears the Modal's z-50 backdrop,
+  // which is portaled after this viewport and would otherwise cover it. They
+  // also join React Aria's top layer, so the Modal leaves them visible to
+  // assistive technology, as React Aria's own toast region does. No toast has
+  // a control, so none catches a click or tap meant for what lies beneath.
   return (
     <div
       data-react-aria-top-layer
-      className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-50 flex flex-col gap-2 pointer-events-none"
+      className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-60 flex flex-col gap-2 pointer-events-none"
       aria-live="polite"
     >
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="pointer-events-auto flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-lg text-sm text-foreground toast-enter"
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-lg text-sm text-foreground toast-enter"
           role="status"
         >
           {toast.variant === "success" && <CheckIcon className="h-4 w-4 text-success" />}
