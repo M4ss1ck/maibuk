@@ -38,7 +38,7 @@ export interface GetBookArgs {
 
 type BookRow = Awaited<ReturnType<PluginClient["library"]["books"]["list"]>>[number];
 
-function bookLine(book: BookRow, allIds: readonly string[]): string {
+export function bookLine(book: BookRow, allIds: readonly string[]): string {
   const sid = shortId(book.id, allIds);
   const title = titleOrUntitled(book.title);
   return `${sid}  ${title}  ${book.wordCount} words  ${isoDate(book.updatedAt)}`;

@@ -9,6 +9,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { PluginClient } from "@/plugin-sdk";
 import { listBooks, getBook } from "./books";
+import { listNotes } from "./notes";
 
 /**
  * What the server tells every Agent about the Library: what it holds, and
@@ -65,6 +66,23 @@ export function buildMcpServer(client: PluginClient): McpServer {
       annotations: { readOnlyHint: true },
     },
     async (args) => getBook(client, args as any)
+  );
+  server.registerTool(
+    "list_notes",
+    {
+      title: "List notes",
+      description:
+        "List Notes, optionally only one Book's or the Unfiled ones and only those with a Tag, at most 50 per page.",
+      inputSchema: z.object({
+        book: z.string().optional(),
+        tag: z.string().optional(),
+        cursor: z.string().optional(),
+        limit: z.number().int().min(1).optional(),
+        detail: z.enum(["titles", "excerpts"]).optional(),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => listNotes(client, args as any)
   );
   return server;
 }
