@@ -19,6 +19,7 @@ import { ThreadMessagePort } from "@quilted/threads";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { createPluginBroker } from "@/features/plugins/broker";
+import { dispatchEndpointRequest } from "@/features/plugins/endpoint";
 import { assertToggleButton } from "@/features/plugins/handlers";
 import { applyPluginLocale } from "@/features/plugins/manifest-validate";
 import { pluginFetch } from "@/features/plugins/network";
@@ -27,10 +28,20 @@ import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import { PluginRemoteUiSurface } from "@/features/plugins/remote-ui/surface";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { PluginSecretStore } from "@/features/plugins/secret-store";
-import { PLUGIN_INIT_MESSAGE, type PluginUiMountKind } from "@/plugin-sdk/protocol";
+import {
+  PLUGIN_INIT_MESSAGE,
+  base64ToBytes,
+  bytesToBase64,
+  type PluginUiMountKind,
+} from "@/plugin-sdk/protocol";
 import type {
   PluginApiHandlers,
+  PluginApproval,
+  PluginManifest,
   PluginPermissionId,
+  PluginRuntime,
+  TestEndpointAnswer,
+  TestEndpointRequest,
   TestHost,
   TestHostOptions,
   TestNavigation,
@@ -47,6 +58,40 @@ import type {
 function inAct(step: () => void): void {
   if ((globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT) act(step);
   else step();
+}
+
+/** Joins a streamed answer's pieces into the one body the answer carries. */
+function joinBytes(pieces: readonly Uint8Array[]): Uint8Array {
+  const joined = new Uint8Array(pieces.reduce((total, piece) => total + piece.length, 0));
+  let offset = 0;
+  for (const piece of pieces) {
+    joined.set(piece, offset);
+    offset += piece.length;
+  }
+  return joined;
+}
+
+/**
+ * The approval record the Plugin Endpoint dispatcher reads in a test: enabled,
+ * holding the grants this host has right now. The pinned hash and the approved
+ * files play no part in routing, so they are placeholders.
+ */
+function endpointApproval(
+  manifest: PluginManifest,
+  granted: ReadonlySet<PluginPermissionId>
+): PluginApproval {
+  return {
+    pluginId: manifest.id,
+    pinnedHash: "h1:test",
+    granted: [...granted],
+    enabled: true,
+    approvedVersion: manifest.version,
+    approvedPermissions: {
+      required: [...manifest.permissions.required],
+      optional: [...manifest.permissions.optional],
+    },
+    approvedFiles: {},
+  };
 }
 
 export function createTestHost(options: TestHostOptions): TestHost {
@@ -196,6 +241,95 @@ export function createTestHost(options: TestHostOptions): TestHost {
   // and exposes it as `client.activation` (#445).
   channel.port1.postMessage({ kind: PLUGIN_INIT_MESSAGE.kind, startReason });
 
+  // The Plugin Endpoint's host side routes with a runtime and an approval, as
+  // the app does; here both are this host: the manifest behind the broker,
+  // always enabled, with whatever `setGranted` holds at that moment.
+  const endpointRuntime: PluginRuntime = {
+    manifest: options.manifest,
+    broker,
+    files: [],
+    sendFrame: () => {},
+    stop: () => {},
+  };
+  let nextEndpointRequestId = 1;
+
+  /**
+   * Hands the Plugin one request on its Plugin Endpoint through the very
+   * dispatcher the app routes with, and resolves with the answer once it is
+   * complete: a streamed answer resolves after its `end`, and its chunks are
+   * joined into `body`. Without the `serve` grant the dispatcher answers 404
+   * and the request never reaches the Plugin.
+   */
+  function endpoint(request: TestEndpointRequest): Promise<TestEndpointAnswer> {
+    const tail = request.path.startsWith("/") ? request.path : `/${request.path}`;
+    const headers: [string, string][] = Array.isArray(request.headers)
+      ? request.headers.map(([name, value]) => [name, value])
+      : Object.entries(request.headers ?? {});
+    const bytes =
+      request.body === undefined
+        ? new Uint8Array()
+        : typeof request.body === "string"
+          ? new TextEncoder().encode(request.body)
+          : request.body;
+
+    return new Promise((resolve) => {
+      let status = 0;
+      let answerHeaders: [string, string][] = [];
+      const chunks: Uint8Array[] = [];
+      let streamed = false;
+      let whole: Uint8Array = new Uint8Array();
+      let settled = false;
+
+      function settle() {
+        if (settled) return;
+        settled = true;
+        const body = streamed ? joinBytes(chunks) : whole;
+        resolve({
+          status,
+          headers: answerHeaders,
+          body,
+          chunks: streamed ? chunks : [],
+          streamed,
+          text: () => new TextDecoder().decode(body),
+        });
+      }
+
+      dispatchEndpointRequest(
+        {
+          runtime: () => endpointRuntime,
+          approval: () => endpointApproval(options.manifest, granted),
+        },
+        {
+          requestId: String(nextEndpointRequestId++),
+          pluginId: options.manifest.id,
+          request: {
+            method: request.method ?? "GET",
+            path: `/plugin/${options.manifest.id}${tail}`,
+            headers,
+            body: bytesToBase64(bytes),
+          },
+        },
+        {
+          respond(nextStatus, nextHeaders, body, streaming) {
+            status = nextStatus;
+            answerHeaders = nextHeaders;
+            streamed = streaming;
+            if (streaming) return;
+            whole = body === undefined ? new Uint8Array() : base64ToBytes(body);
+            settle();
+          },
+          chunk(chunk) {
+            chunks.push(base64ToBytes(chunk));
+            return true;
+          },
+          end() {
+            settle();
+          },
+        }
+      );
+    });
+  }
+
   /** Every page `renderPage` opened and has not unmounted yet. */
   const openPages = new Set<TestPage>();
   /** The live mount behind each open page, so `stopWorker` can sever it. */
@@ -284,6 +418,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
     setLibraryAvailable(available) {
       libraryAvailable = available;
     },
+    endpoint,
     renderPage(page: string) {
       return renderSurface(page, "page");
     },

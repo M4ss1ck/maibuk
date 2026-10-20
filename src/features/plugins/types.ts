@@ -804,6 +804,36 @@ export interface TestPage {
   unmount(): void;
 }
 
+/** One request `endpoint()` hands the Plugin on its Plugin Endpoint. */
+export interface TestEndpointRequest {
+  /** Defaults to `GET`. */
+  method?: string;
+  /**
+   * The path relative to the Plugin Endpoint, such as `/mcp` or `mcp?x=1`. The
+   * helper prefixes `/plugin/<pluginId>`, so the Plugin sees the full path.
+   */
+  path: string;
+  /** Request headers, as a record or as pairs; duplicates survive as pairs. */
+  headers?: Record<string, string> | [string, string][];
+  /** The request body; a string is sent as UTF-8, the way an HTTP body arrives. */
+  body?: string | Uint8Array;
+}
+
+/** The answer one Plugin Endpoint request produced. */
+export interface TestEndpointAnswer {
+  status: number;
+  /** Response headers, duplicates kept in order. */
+  headers: [string, string][];
+  /** The whole body: the answer's bytes, or every streamed chunk joined. */
+  body: Uint8Array;
+  /** The streamed pieces in order; empty when the Plugin did not stream. */
+  chunks: Uint8Array[];
+  /** Whether the Plugin answered with a stream, which the helper waited out. */
+  streamed: boolean;
+  /** The body decoded as UTF-8 text. */
+  text(): string;
+}
+
 export interface TestHost {
   /** The Plugin-side port: hand it to the Plugin's setup. */
   port: MessagePort;
@@ -835,6 +865,14 @@ export interface TestHost {
   setLanguage(language: string): void;
   /** Makes the Library available or unavailable, as the Tutorial does. */
   setLibraryAvailable(available: boolean): void;
+  /**
+   * Hands the Plugin one request on its Plugin Endpoint through the same
+   * dispatcher the app uses, and resolves with the answer once it is complete:
+   * a streamed answer resolves after its `end`. Without the `serve` Plugin
+   * Permission the host answers 404 and the Plugin's handler never runs, so a
+   * test can prove grant handling with `setGranted`.
+   */
+  endpoint(request: TestEndpointRequest): Promise<TestEndpointAnswer>;
   /**
    * Renders one of the Plugin's pages through the real host renderer, over a
    * fresh Remote UI mount, and resolves once the Plugin accepts it. Rejects when
