@@ -10,6 +10,7 @@ import {
   CLIENT_INFO_META_KEY,
   createMcpHandler,
   type McpHttpHandler,
+  type McpRequestContext,
 } from "@modelcontextprotocol/server";
 import {
   PLUGIN_COMMAND_RUN_REQUEST,
@@ -18,6 +19,8 @@ import {
   type PluginEndpointRequest,
 } from "@/plugin-sdk";
 import { isLibraryUnavailable, LIBRARY_UNAVAILABLE_TEXT } from "./books";
+import type { WriteGuard } from "./edits";
+import { errorResult } from "./library";
 import { buildMcpServer } from "./server";
 
 /** The storage key holding the Connection's Key. */
@@ -38,6 +41,21 @@ const CONNECTION_WRITE_MS = 60_000;
 
 /** The only Plugin Endpoint path this Plugin answers; anything else is a 404. */
 const MCP_PATH = "/plugin/maibuk-mcp/mcp";
+
+/**
+ * The internal header carrying one request's resolved Connection name to the
+ * MCP server factory. A legacy `tools/call` carries no client info itself
+ * (only the `initialize` does; later requests borrow its name), so the tool
+ * handlers cannot read the Connection from the SDK's request context on both
+ * eras. Instead the entry resolves the name once per request — reusing the
+ * borrowed-name logic below — and stamps it here; the factory (which the SDK
+ * invokes once per HTTP request on both the modern and the legacy legs, with
+ * the request attached) reads it back and binds the write tools' guard to
+ * that Connection. Because the binding rides the per-request factory call and
+ * never the handler's lifetime, it keeps working when `createMcpHandler` is
+ * hoisted to module scope as one long-lived handler.
+ */
+const CALLER_HEADER = "x-maibuk-caller";
 
 /** The 401 body sentence: the Key is missing or old, and where to copy a new one. */
 const KEY_REFUSED_MESSAGE =
@@ -135,9 +153,14 @@ function tutorialRefusal(): PluginEndpointAnswer {
 }
 
 /** Converts one Plugin Endpoint request into a web Request for the MCP SDK. */
-function toWebRequest(request: PluginEndpointRequest): Request {
+function toWebRequest(request: PluginEndpointRequest, caller: string | null): Request {
   const headers = new Headers();
   for (const [name, value] of request.headers) headers.append(name, value);
+  // The factory reads the resolved Connection off this header (see
+  // `CALLER_HEADER`): an Agent's own header of that name is dropped first, so
+  // only the entry's resolution reaches the tools.
+  headers.delete(CALLER_HEADER);
+  if (caller !== null) headers.set(CALLER_HEADER, caller);
   const init: RequestInit = { method: request.method, headers };
   if (request.method !== "GET" && request.method !== "HEAD" && request.body.length > 0) {
     init.body = request.text();
@@ -218,11 +241,36 @@ function readCaller(body: string): Caller | null {
  * so the MCP Server page can show who is connected, and ended after
  * `CONNECTION_IDLE_MS` without a request. Two Agents reporting the same name
  * at once share one Connection.
+ *
+ * Each Connection also remembers which Books it already checkpointed (#591):
+ * the write tools take one Checkpoint per Book per Connection, and the memory
+ * goes when the Connection ends, so a new Connection checkpoints again.
+ * Requests that name no Agent share one separate memory instead, keyed by no
+ * name at all: it is not a Connection, so it never reaches the live list or
+ * storage, and it is cleared after the same idle time without a nameless
+ * request, so a nameless Agent does not fill the Version history either.
  */
-function createConnections(client: PluginClient): { count: (caller: Caller | null) => void } {
+function createConnections(client: PluginClient): {
+  count: (caller: Caller | null) => void;
+  /** The Connection one request belongs to, with the legacy borrow applied. */
+  resolve: (caller: Caller | null) => string | null;
+  /** Whether the Connection (or the nameless memory) still owes the Book a Checkpoint. */
+  needsCheckpoint: (name: string | null, bookId: string) => boolean;
+  /** Remembers the Book checkpointed, whether the host took one or not. */
+  markCheckpointed: (name: string | null, bookId: string) => void;
+} {
   const live = new Map<string, Connection>();
   /** The name of the Connection the most recent legacy `initialize` opened. */
   let borrowed: string | null = null;
+  /** The Books each live Connection already checkpointed, by Connection name. */
+  const checkpointed = new Map<string, Set<string>>();
+  /**
+   * The Books the nameless requests already checkpointed. A private set, not a
+   * Connection name an Agent could report; the idle timer below clears it.
+   */
+  const anonymousCheckpointed = new Set<string>();
+  /** The idle timer that clears the nameless memory. */
+  let anonymousTimer: ReturnType<typeof setTimeout> | null = null;
   // Writes queue behind each other, so storage always ends on the latest list.
   let writes: Promise<unknown> = Promise.resolve();
 
@@ -254,6 +302,7 @@ function createConnections(client: PluginClient): { count: (caller: Caller | nul
     if (connection === undefined) return;
     if (connection.timer !== null) clearTimeout(connection.timer);
     live.delete(name);
+    checkpointed.delete(name);
     if (borrowed === name) borrowed = null;
     write();
   }
@@ -262,6 +311,19 @@ function createConnections(client: PluginClient): { count: (caller: Caller | nul
   function arm(connection: Connection): void {
     if (connection.timer !== null) clearTimeout(connection.timer);
     connection.timer = setTimeout(() => end(connection.name), CONNECTION_IDLE_MS);
+  }
+
+  /**
+   * Restarts the nameless memory's idle timer from now: the books it holds are
+   * forgotten once no request without a name arrives for `CONNECTION_IDLE_MS`,
+   * the same window a named Connection lasts.
+   */
+  function armAnonymous(): void {
+    if (anonymousTimer !== null) clearTimeout(anonymousTimer);
+    anonymousTimer = setTimeout(() => {
+      anonymousTimer = null;
+      anonymousCheckpointed.clear();
+    }, CONNECTION_IDLE_MS);
   }
 
   /** Counts one request: opens its Connection, or moves the one it shares. */
@@ -289,15 +351,42 @@ function createConnections(client: PluginClient): { count: (caller: Caller | nul
   // No Connection survives a restart: the first write replaces the old list.
   write();
 
+  // A legacy request after `initialize` names no Agent: it is credited to
+  // the Connection that initialize opened, while that one is still live.
+  function resolve(caller: Caller | null): string | null {
+    if (caller === null) return null;
+    return caller.name ?? (caller.legacy && borrowed !== null && live.has(borrowed) ? borrowed : null);
+  }
+
   return {
+    resolve,
     count(caller: Caller | null): void {
       if (caller === null) return;
-      // A legacy request after `initialize` names no Agent: it is credited to
-      // the Connection that initialize opened, while that one is still live.
-      const name = caller.name ?? (caller.legacy ? borrowed : null);
-      if (name === null) return;
+      const name = resolve(caller);
+      // A nameless request shares the anonymous memory instead of a
+      // Connection: it keeps that memory alive, but appears nowhere.
+      if (name === null) {
+        armAnonymous();
+        return;
+      }
       if (caller.initialize) borrowed = name;
       touch(name);
+    },
+    needsCheckpoint(name: string | null, bookId: string): boolean {
+      if (name === null) return !anonymousCheckpointed.has(bookId);
+      return !checkpointed.get(name)?.has(bookId);
+    },
+    markCheckpointed(name: string | null, bookId: string): void {
+      if (name === null) {
+        anonymousCheckpointed.add(bookId);
+        return;
+      }
+      // The Connection may have ended while the Checkpoint call was in
+      // flight; its memory went with it, so nothing is remembered for it.
+      if (!live.has(name)) return;
+      const books = checkpointed.get(name);
+      if (books === undefined) checkpointed.set(name, new Set([bookId]));
+      else books.add(bookId);
     },
   };
 }
@@ -315,10 +404,49 @@ function createConnections(client: PluginClient): { count: (caller: Caller | nul
  * Only a request that passes both refusals counts toward a Connection.
  */
 export function startMcp(client: PluginClient): void {
+  const connections = createConnections(client);
+
+  /**
+   * The write tools' guard for one request's Connection (#591): the first
+   * write to a Book takes a Checkpoint named after the Agent, later writes in
+   * the same Connection skip it, and a failed Checkpoint refuses the write.
+   * A request that named no Agent shares the anonymous memory instead, so
+   * those requests also take one Checkpoint per Book, not one per write.
+   */
+  function writeGuardFor(caller: string | null): WriteGuard {
+    const agentName = caller ?? "an Agent";
+    return {
+      async ensureCheckpoint(bookId: string) {
+        if (!connections.needsCheckpoint(caller, bookId)) return null;
+        try {
+          await client.library.books.checkpoint({ bookId, label: `Before ${agentName} edits` });
+        } catch (error) {
+          if (isLibraryUnavailable(error)) throw error;
+          return errorResult(
+            "Could not take a Checkpoint of the Book before writing, so nothing changed; try again."
+          );
+        }
+        // The Book is done whether the host took a Version or reported null
+        // (unchanged since its last one).
+        connections.markCheckpointed(caller, bookId);
+        return null;
+      },
+    };
+  }
+
+  /** The Connection name the factory's request carries, or null when nameless. */
+  function callerOf(context: McpRequestContext): string | null {
+    const name = context.requestInfo?.headers.get(CALLER_HEADER)?.trim();
+    return name === undefined || name === "" ? null : name;
+  }
+
   // One factory for both eras, so the two can never drift apart.
-  const handler: McpHttpHandler = createMcpHandler(() => buildMcpServer(client), {
-    legacy: "stateless",
-  });
+  const handler: McpHttpHandler = createMcpHandler(
+    (context) => buildMcpServer(client, writeGuardFor(callerOf(context))),
+    {
+      legacy: "stateless",
+    }
+  );
   // The Tutorial flips availability through this event; a refusal from any
   // library call flips it too (see the per-request probe below).
   let libraryAvailable = true;
@@ -332,7 +460,6 @@ export function startMcp(client: PluginClient): void {
     });
   // Requests that arrive before the Key exists wait for it here.
   const ready = ensureKey(client);
-  const connections = createConnections(client);
 
   // The `newKey` Command, answered the way Echoes answers its Commands: a
   // `command.run` with the Command's id makes a fresh Key and stores it, so
@@ -377,8 +504,10 @@ export function startMcp(client: PluginClient): void {
     if (!libraryAvailable) {
       return tutorialRefusal();
     }
-    // Only a request that passed both refusals counts toward a Connection.
-    connections.count(readCaller(body));
-    return fromWebResponse(await handler.fetch(toWebRequest(request)));
+    // Only a request that passed both refusals counts toward a Connection,
+    // and only such a request carries its Connection to the write tools.
+    const caller = readCaller(body);
+    connections.count(caller);
+    return fromWebResponse(await handler.fetch(toWebRequest(request, connections.resolve(caller))));
   });
 }

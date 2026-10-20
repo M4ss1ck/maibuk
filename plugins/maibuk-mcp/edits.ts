@@ -235,9 +235,21 @@ export async function resolveChapter(
   return { full };
 }
 
+/**
+ * The Connection's pre-write Checkpoint (#591), bound per request by the
+ * Plugin entry (see `./server`): the entry remembers which Books this
+ * Connection already checkpointed, so `ensureCheckpoint` calls the host only
+ * for the Connection's first write to a Book. Null means the write may
+ * proceed; a result refuses it instead.
+ */
+export interface WriteGuard {
+  ensureCheckpoint(bookId: string): Promise<CallToolResult | null>;
+}
+
 export async function editChapter(
   client: PluginClient,
-  args: EditChapterArgs
+  args: EditChapterArgs,
+  writeGuard: WriteGuard
 ): Promise<CallToolResult> {
   const ref = (args.chapter ?? "").trim();
   const mode = editModeOf(args);
@@ -278,6 +290,12 @@ export async function editChapter(
       sentence = `Appended to Chapter ${titleOrUntitled(full.title)}.`;
     }
 
+    // After every refusal (validation, no match, several matches) and before
+    // the write, so a refused write takes no Checkpoint and a failed
+    // Checkpoint leaves the content unchanged.
+    const checkpoint = await writeGuard.ensureCheckpoint(full.bookId);
+    if (checkpoint !== null) return checkpoint;
+
     await client.library.chapters.updateContent({
       chapterId: full.id,
       content: { html: updatedHtml },
@@ -303,7 +321,8 @@ export interface WriteChapterArgs {
 
 export async function writeChapter(
   client: PluginClient,
-  args: WriteChapterArgs
+  args: WriteChapterArgs,
+  writeGuard: WriteGuard
 ): Promise<CallToolResult> {
   if ((args.text !== undefined) === (args.html !== undefined)) {
     return errorResult(
@@ -323,6 +342,11 @@ export async function writeChapter(
         `The Chapter changed since you read it (Last Edited is now ${current}); call read_chapter again and redo the change.`
       );
     }
+
+    // After the expectedLastEdited check and before the write: a refused
+    // write takes no Checkpoint, and a failed Checkpoint refuses the write.
+    const checkpoint = await writeGuard.ensureCheckpoint(full.bookId);
+    if (checkpoint !== null) return checkpoint;
 
     await client.library.chapters.updateContent({
       chapterId: full.id,

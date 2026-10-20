@@ -785,6 +785,12 @@ export interface TestHostOptions {
   /** The clipboard text `clipboard.readText` serves; defaults to empty. */
   clipboard?: string;
   /**
+   * Makes `library.books.checkpoint` reject with `internal-error` carrying
+   * this message (#591): proves a Plugin refuses its write when no Checkpoint
+   * could be taken, without touching any other Library row.
+   */
+  checkpointError?: string;
+  /**
    * The fetch `network.fetch` uses. Give one to test a Plugin against a fake
    * server; without it the row refuses `not-implemented`, like any unwired row.
    * The host still injects a `secretHeaders` value from `secrets` and never

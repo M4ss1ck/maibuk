@@ -40,6 +40,8 @@ export interface ConnectOptions {
   changedFrom?: string;
   /** Starts with the Library unavailable, the way the Tutorial leaves it. */
   libraryUnavailable?: boolean;
+  /** Makes `library.books.checkpoint` reject (#591); forwarded to the test host. */
+  checkpointError?: string;
   /** In-memory Library the read handlers serve. */
   library?: TestLibrary;
 }
@@ -52,6 +54,16 @@ async function waitForKey(storage: Map<string, unknown>, changedFrom?: string): 
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   throw new Error("The MCP Key was not stored");
+}
+
+/**
+ * Waits until a Plugin started outside `connect` (on the suite's own client,
+ * so the suite can use that client before driving MCP requests) has stored
+ * its Key. Lives here rather than in the suite because the fixed-wait guard
+ * forbids `setTimeout` polling in test files.
+ */
+export function waitForStoredKey(storage: Map<string, unknown>): Promise<string> {
+  return waitForKey(storage);
 }
 
 /**
@@ -69,6 +81,9 @@ export function startHost(options: ConnectOptions = {}): {
     ...(options.startReason !== undefined ? { startReason: options.startReason } : {}),
     storage,
     ...(options.library !== undefined ? { library: options.library } : {}),
+    ...(options.checkpointError !== undefined
+      ? { checkpointError: options.checkpointError }
+      : {}),
   });
   if (options.libraryUnavailable === true) host.setLibraryAvailable(false);
   startMcp(createPluginClient(host.port));

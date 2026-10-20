@@ -10,7 +10,7 @@ import { z } from "zod";
 import type { PluginClient } from "@/plugin-sdk";
 import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
-import { editChapter, writeChapter } from "./edits";
+import { editChapter, writeChapter, type WriteGuard } from "./edits";
 import { listNotes, readNote } from "./notes";
 
 /**
@@ -27,8 +27,13 @@ const SERVER_INSTRUCTIONS =
  * `tools/list` and `server/discover` results carry the SDK's cache hints
  * (`ttlMs`, `cacheScope`); the values repeat the SDK defaults, stated here so
  * the advertised caching is a choice rather than an accident.
+ *
+ * `writeGuard` is bound per request by the Plugin entry: the server instance
+ * itself is fresh per request, but the guard carries the current request's
+ * Connection (see `./plugin`), so the write tools checkpoint the right Book
+ * no matter how long the serving handler lives.
  */
-export function buildMcpServer(client: PluginClient): McpServer {
+export function buildMcpServer(client: PluginClient, writeGuard: WriteGuard): McpServer {
   const server = new McpServer(
     { name: "maibuk", version: "0.1.0" },
     {
@@ -138,7 +143,7 @@ export function buildMcpServer(client: PluginClient): McpServer {
         openWorldHint: false,
       },
     },
-    async (args) => editChapter(client, args as any)
+    async (args) => editChapter(client, args as any, writeGuard)
   );
   server.registerTool(
     "write_chapter",
@@ -159,7 +164,7 @@ export function buildMcpServer(client: PluginClient): McpServer {
         openWorldHint: false,
       },
     },
-    async (args) => writeChapter(client, args as any)
+    async (args) => writeChapter(client, args as any, writeGuard)
   );
   return server;
 }

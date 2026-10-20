@@ -197,6 +197,14 @@ export function createTestHost(options: TestHostOptions): TestHost {
       return null;
     },
     "library.books.checkpoint": ({ bookId, label }) => {
+      // A test-only failure hook (#591): proves a Plugin refuses its write
+      // when no Checkpoint could be taken, without touching any other row.
+      if (options.checkpointError !== undefined) {
+        throw new PluginApiError({
+          code: "internal-error",
+          message: options.checkpointError,
+        });
+      }
       if (!books.some((book) => book.id === bookId)) {
         throw new PluginApiError({
           code: "invalid-params",

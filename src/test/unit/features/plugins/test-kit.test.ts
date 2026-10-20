@@ -1208,4 +1208,26 @@ describe("createTestHost() Library writes", () => {
       host.stop();
     }
   });
+
+  it("rejects a Checkpoint with checkpointError, recording nothing", async () => {
+    const chapter = chapterFixture();
+    const host = createTestHost({
+      manifest: writeManifest(),
+      permissions: ["library:read", "library:write"],
+      library: { books: [BOOK], chapters: [chapter] },
+      checkpointError: "The Versions shelf is stuck.",
+    });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(
+        client.library.books.checkpoint({ bookId: "b1", label: "Before edits" })
+      ).rejects.toMatchObject({
+        code: "internal-error",
+        message: "The Versions shelf is stuck.",
+      });
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
 });
