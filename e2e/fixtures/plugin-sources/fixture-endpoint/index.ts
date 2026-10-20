@@ -7,8 +7,9 @@
 // It declares `serve` as optional, so one device can grant it (the Plugin
 // answers) and another can leave it off (the host answers 404) while the same
 // Plugin runs. `/hello` answers a whole body, `/stream` streams three pieces,
-// and `/received` reports the paths the Plugin was handed, so the spec can
-// prove another Plugin's request never reached this handler. Built from this
+// `/address` answers this Plugin's own Endpoint address as JSON, and
+// `/received` reports the paths the Plugin was handed, so the spec can prove
+// another Plugin's request never reached this handler. Built from this
 // source into e2e/.output/plugins/fixture-endpoint by the E2E global setup; the
 // bundle is never committed and never shipped.
 //
@@ -17,7 +18,7 @@
 // fixture-everything fixtures do.
 
 import { servePluginUi } from "@/plugin-sdk/worker-ui";
-import { createPluginClient } from "@/plugin-sdk";
+import { createPluginClient, type PluginClient } from "@/plugin-sdk";
 
 /** The pieces `/stream` yields, in order: the spec asserts exactly these. */
 const STREAM_CHUNKS = ["one ", "two ", "three "];
@@ -41,13 +42,18 @@ async function* streamed(): AsyncGenerator<string> {
  * taken before its own path is recorded, so the spec reads exactly what arrived
  * earlier: this Plugin's requests, and never another Plugin's.
  */
-function answer(request: { path: string }) {
+async function answer(client: PluginClient, request: { method: string; path: string }) {
   const pathname = new URL(request.path, "http://127.0.0.1").pathname;
   const seen = [...received];
   received.push(pathname);
   const path = pathname.startsWith(PREFIX) ? pathname.slice(PREFIX.length) : pathname;
   if (path === "/hello") return { status: 200, headers: TEXT, body: "hello" };
   if (path === "/stream") return { status: 200, headers: TEXT, body: streamed() };
+  if (path === "/address" && request.method === "GET") {
+    const { url } = await client.endpoint.address();
+    const headers = { "content-type": "application/json" };
+    return { status: 200, headers, body: JSON.stringify({ url }) };
+  }
   if (path === "/received") {
     const headers = { "content-type": "application/json" };
     return { status: 200, headers, body: JSON.stringify(seen) };
@@ -79,7 +85,7 @@ if (
         return "pong";
       },
     });
-    client.onEndpointRequest(answer);
+    client.onEndpointRequest((request) => answer(client, request));
     self.postMessage({ kind: "maibuk:plugin-ready" });
   };
 }

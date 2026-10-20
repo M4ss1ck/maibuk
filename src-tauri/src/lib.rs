@@ -17,7 +17,6 @@ pub fn run() {
     let builder = builder
         .manage(window_restore::PendingWindowRestore::default())
         .manage(plugins::watch::PluginWatcher::default())
-        .manage(plugins::endpoint::EndpointState::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             window_restore::show_main_window(app);
         }))
@@ -133,6 +132,21 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 use tauri::Manager;
+
+                // The Plugin Endpoint keeps one port across launches, so an
+                // address an author pasted into an Agent still works after a
+                // restart (ADR 0031). Without an app data folder it still
+                // picks a port for this run.
+                let endpoint = match app.path().app_data_dir() {
+                    Ok(data) => {
+                        plugins::endpoint::EndpointState::new(data.join("plugin-endpoint-port"))
+                    }
+                    Err(error) => {
+                        eprintln!("Plugin Endpoint port not kept: {error}");
+                        plugins::endpoint::EndpointState::default()
+                    }
+                };
+                app.manage(endpoint);
 
                 #[cfg(any(target_os = "linux", target_os = "windows"))]
                 {

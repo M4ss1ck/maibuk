@@ -44,6 +44,20 @@ function declaresServe(manifest: PluginManifest): boolean {
   return required.includes("serve") || optional.includes("serve");
 }
 
+/** The port a Plugin's Endpoint address depends on, or null while the listener is not bound. */
+export function boundEndpointPort(state: EndpointListenerState): number | null {
+  return state.state === "listening" ? state.port : null;
+}
+
+/**
+ * The address one Plugin answers on (#587). The port belongs to Maibuk, so a
+ * move shows up as a different string with no "moved" state kept anywhere.
+ */
+export function endpointUrlFor(state: EndpointListenerState, pluginId: string): string | null {
+  const port = boundEndpointPort(state);
+  return port === null ? null : `http://127.0.0.1:${port}/plugin/${pluginId}/`;
+}
+
 /** Answers the caller 404: no Plugin is serving this path (or may not). */
 function notFound(sink: PluginEndpointSink): void {
   sink.respond(404, [], undefined, false);

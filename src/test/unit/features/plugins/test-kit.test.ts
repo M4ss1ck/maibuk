@@ -889,3 +889,78 @@ describe("createTestHost() endpoint", () => {
     }
   });
 });
+
+describe("createTestHost() endpoint address", () => {
+  function serveManifest(): PluginManifest {
+    return { ...fixtureManifest(), permissions: { required: ["serve"], optional: [] } };
+  }
+
+  function addressOf(host: ReturnType<typeof createTestHost>, port: number): string {
+    return `http://127.0.0.1:${port}/plugin/${host.manifest.id}/`;
+  }
+
+  it("reads the address the Plugin Endpoint is listening on", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.endpoint.address()).resolves.toEqual({ url: null });
+
+      host.setEndpointAddress(41000);
+      await expect(client.endpoint.address()).resolves.toEqual({ url: addressOf(host, 41000) });
+
+      host.setEndpointAddress(null);
+      await expect(client.endpoint.address()).resolves.toEqual({ url: null });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses the address read to a Plugin without serve", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      host.setGranted([]);
+
+      await expect(client.endpoint.address()).rejects.toMatchObject({
+        code: "permission-denied",
+        permission: "serve",
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("delivers the address to a subscribed serve Plugin, once per real change", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const seen: (string | null)[] = [];
+      const off = await client.on("endpoint.addressChanged", (payload) => seen.push(payload.url));
+
+      // The replay says the endpoint is not bound yet.
+      await vi.waitFor(() => expect(seen).toEqual([null]));
+      host.setEndpointAddress(41000);
+      // The same address again is not a move and fires nothing.
+      host.setEndpointAddress(41000);
+      await vi.waitFor(() => expect(seen).toEqual([null, addressOf(host, 41000)]));
+      await off();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("hands a Plugin that subscribes after the move the current address", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      host.setEndpointAddress(42000);
+
+      const client = createPluginClient(host.port);
+      const seen: (string | null)[] = [];
+      await client.on("endpoint.addressChanged", (payload) => seen.push(payload.url));
+
+      await vi.waitFor(() => expect(seen).toEqual([addressOf(host, 42000)]));
+    } finally {
+      host.stop();
+    }
+  });
+});

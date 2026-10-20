@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.3";
+export const PLUGIN_API_VERSION = "0.1.4";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -25,6 +25,7 @@ export const PLUGIN_API_METHODS = [
   "navigation.openEntity",
   "navigation.openPage",
   "language.get",
+  "endpoint.address",
   "secrets.set",
   "secrets.delete",
   "secrets.listNames",
@@ -366,6 +367,13 @@ export interface PluginApiMethods {
       language: string;
     };
   };
+  /** Reads this Plugin's own base URL on the Plugin Endpoint, http://127.0.0.1:<port>/plugin/<pluginId>/, or null while the Plugin Endpoint is not listening. Compare it with the URL you last showed to notice a move. */
+  "endpoint.address": {
+    input: Record<string, never>;
+    output: {
+      url: string | null;
+    };
+  };
   /** Stores a secret by name. Secrets are never read back into the Plugin. */
   "secrets.set": {
     input: {
@@ -467,6 +475,7 @@ export const PLUGIN_API_EVENT_IDS = [
   "library.changed",
   "library.availabilityChanged",
   "language.changed",
+  "endpoint.addressChanged",
   "editor.contentChanged",
   "editor.focusChanged",
 ] as const;
@@ -494,6 +503,10 @@ export interface PluginApiEvents {
   /** Maibuk's language changed. The current value is delivered on subscription, so a Plugin that starts after a change never misses it. */
   "language.changed": {
     language: string;
+  };
+  /** This Plugin's Plugin Endpoint address changed: the listener moved to another port or stopped. The current address is delivered on subscription, so a Plugin that starts after a change never misses it. */
+  "endpoint.addressChanged": {
+    url: string | null;
   };
   /** The target editor's content or language changed; sent once per typing burst. */
   "editor.contentChanged": {
@@ -567,6 +580,10 @@ export interface PluginApi {
   language: {
     /** Reads the language Maibuk runs in. No permission is required. */
     get(params?: PluginApiMethods["language.get"]["input"]): Promise<PluginApiMethods["language.get"]["output"]>;
+  };
+  endpoint: {
+    /** Reads this Plugin's own base URL on the Plugin Endpoint, http://127.0.0.1:<port>/plugin/<pluginId>/, or null while the Plugin Endpoint is not listening. Compare it with the URL you last showed to notice a move. */
+    address(params?: PluginApiMethods["endpoint.address"]["input"]): Promise<PluginApiMethods["endpoint.address"]["output"]>;
   };
   secrets: {
     /** Stores a secret by name. Secrets are never read back into the Plugin. */

@@ -12,6 +12,8 @@ import type { PluginManifest } from "@/features/plugins/types";
 // 0.1.2 adds the editor's language and the Ephemeral editor entity (ADR 0030).
 // 0.1.3 adds the Plugin Endpoint request and its client.onEndpointRequest
 // handler, which a Plugin holding `serve` answers (#586, ADR 0031).
+// 0.1.4 adds the Plugin Endpoint address a Plugin reads and the event that
+// tells it when that address moved (#587).
 
 function manifestWith(apiVersion: string): PluginManifest {
   const result = validateManifestValue({
@@ -35,21 +37,29 @@ function manifestWith(apiVersion: string): PluginManifest {
 const APP = "0.12.0";
 
 describe("Plugin API patch compatibility (ADR 0029)", () => {
-  it("the host reports Plugin API 0.1.3", () => {
-    expect(PLUGIN_API_VERSION).toBe("0.1.3");
+  it("the host reports Plugin API 0.1.4", () => {
+    expect(PLUGIN_API_VERSION).toBe("0.1.4");
   });
 
-  it("a ^0.1.2 Plugin still loads against the 0.1.3 host", () => {
-    const verdict = checkPluginCompatibility(manifestWith("^0.1.2"), {
-      apiVersion: "0.1.3",
+  it("a ^0.1.3 Plugin still loads against the 0.1.4 host", () => {
+    const verdict = checkPluginCompatibility(manifestWith("^0.1.3"), {
+      apiVersion: "0.1.4",
       appVersion: APP,
     });
     expect(verdict.verdict).toBe("ok");
   });
 
-  it("a ^0.1.1 Plugin still loads against the 0.1.3 host", () => {
+  it("a ^0.1.2 Plugin still loads against the 0.1.4 host", () => {
+    const verdict = checkPluginCompatibility(manifestWith("^0.1.2"), {
+      apiVersion: "0.1.4",
+      appVersion: APP,
+    });
+    expect(verdict.verdict).toBe("ok");
+  });
+
+  it("a ^0.1.1 Plugin still loads against the 0.1.4 host", () => {
     const verdict = checkPluginCompatibility(manifestWith("^0.1.1"), {
-      apiVersion: "0.1.3",
+      apiVersion: "0.1.4",
       appVersion: APP,
     });
     expect(verdict.verdict).toBe("ok");

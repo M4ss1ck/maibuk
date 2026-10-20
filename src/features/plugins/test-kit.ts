@@ -19,7 +19,11 @@ import { ThreadMessagePort } from "@quilted/threads";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { createPluginBroker } from "@/features/plugins/broker";
-import { collectEndpointAnswer, dispatchEndpointRequest } from "@/features/plugins/endpoint";
+import {
+  collectEndpointAnswer,
+  dispatchEndpointRequest,
+  endpointUrlFor,
+} from "@/features/plugins/endpoint";
 import { assertToggleButton } from "@/features/plugins/handlers";
 import { applyPluginLocale } from "@/features/plugins/manifest-validate";
 import { pluginFetch } from "@/features/plugins/network";
@@ -34,6 +38,7 @@ import {
   type PluginUiMountKind,
 } from "@/plugin-sdk/protocol";
 import type {
+  EndpointListenerState,
   PluginApiHandlers,
   PluginApproval,
   PluginManifest,
@@ -99,6 +104,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const toolbarPressedState = new Map<string, boolean>();
   let language = options.language ?? "en";
   let libraryAvailable = true;
+  // The Plugin Endpoint's listener as this host fakes it: off until the test
+  // gives the Plugin an address, then bound on that port.
+  let endpointState: EndpointListenerState = { state: "off" };
   const startReason = options.startReason ?? "enable";
   const declared = [
     ...options.manifest.permissions.required,
@@ -206,6 +214,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
       return { status: "opened" };
     },
     "language.get": () => ({ language }),
+    "endpoint.address": (_params, { pluginId }) => ({
+      url: endpointUrlFor(endpointState, pluginId),
+    }),
     // Refuses what the host refuses (the same rule as the app's handler), then records the state.
     "toolbar.setPressed": ({ button, pressed }) => {
       assertToggleButton(options.manifest, button);
@@ -221,7 +232,13 @@ export function createTestHost(options: TestHostOptions): TestHost {
     granted: () => granted,
     handlers,
     isLibraryAvailable: () => libraryAvailable,
-    eventSnapshot: (event) => (event === "language.changed" ? { language } : undefined),
+    eventSnapshot: (event) => {
+      if (event === "language.changed") return { language };
+      if (event === "endpoint.addressChanged") {
+        return { url: endpointUrlFor(endpointState, options.manifest.id) };
+      }
+      return undefined;
+    },
   });
 
   // Deliver the activation's start reason over the Plugin's own port, the way
@@ -365,6 +382,14 @@ export function createTestHost(options: TestHostOptions): TestHost {
     setLanguage(next) {
       language = next;
       broker.emit("language.changed", { language });
+    },
+    setEndpointAddress(port) {
+      const next: EndpointListenerState =
+        port === null ? { state: "off" } : { state: "listening", port };
+      const before = endpointUrlFor(endpointState, options.manifest.id);
+      endpointState = next;
+      const after = endpointUrlFor(next, options.manifest.id);
+      if (after !== before) broker.emit("endpoint.addressChanged", { url: after });
     },
     setLibraryAvailable(available) {
       libraryAvailable = available;

@@ -578,7 +578,7 @@ One kind of access a Plugin declares, such as reading the Library or reaching a 
 _Avoid_: grant, scope, capability (Tauri's word in code)
 
 **Plugin Endpoint**:
-The local address `http://127.0.0.1:<port>/plugin/<pluginId>/` where Maibuk hands each request to the Plugin its path names; only a Plugin holding the `serve` Plugin Permission answers, and Maibuk binds the one port only while an enabled Plugin holds `serve`, on the desktop app only. A request from a foreign Origin is refused (403), and so is one naming a foreign Host. (ADR 0031)
+The local address `http://127.0.0.1:<port>/plugin/<pluginId>/` where Maibuk hands each request to the Plugin its path names; only a Plugin holding the `serve` Plugin Permission answers, and Maibuk binds the one port only while an enabled Plugin holds `serve`, on the desktop app only. Maibuk picks that port once and keeps it across launches, moving it only when another program holds it at launch; a Plugin holding `serve` reads the address with `endpoint.address` and hears a move as `endpoint.addressChanged`. A request from a foreign Origin is refused (403), and so is one naming a foreign Host. (ADR 0031)
 _Avoid_: plugin server, MCP port, local API
 
 **Host-rendered UI**:

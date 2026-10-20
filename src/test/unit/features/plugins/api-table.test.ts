@@ -117,22 +117,23 @@ function propertyNames(schema: unknown): string[] {
 }
 
 describe("PLUGIN_API_EVENTS", () => {
-  it("lists the v1 events: library.changed, availability, language, and the two editor events", () => {
+  it("lists the events: library, availability, language, the endpoint address, and the two editor events", () => {
     expect(PLUGIN_API_EVENTS.map((event) => event.id)).toEqual([
       "library.changed",
       "library.availabilityChanged",
       "language.changed",
+      "endpoint.addressChanged",
       "editor.contentChanged",
       "editor.focusChanged",
     ]);
   });
 
-  it("gates each event by its namespace's read permission, availability and language by none", () => {
+  it("gates each event by its namespace's read permission, availability and language by none, and the endpoint by serve", () => {
     for (const event of PLUGIN_API_EVENTS) {
       const namespace = event.id.split(".")[0];
       expect(PLUGIN_API_NAMESPACES).toContain(namespace);
       const ungated = event.id === "library.availabilityChanged" || event.id === "language.changed";
-      const expected = ungated ? null : `${namespace}:read`;
+      const expected = ungated ? null : namespace === "endpoint" ? "serve" : `${namespace}:read`;
       expect(event.permission, event.id).toBe(expected);
     }
   });
