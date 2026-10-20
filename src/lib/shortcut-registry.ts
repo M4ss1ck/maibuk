@@ -41,6 +41,7 @@ export const CORE_CONTEXTS = [
   "canvasNode",
   "image",
   "footnoteItem",
+  "symbolItem",
   "commandPalette",
   "settings",
 ] as const;
@@ -997,6 +998,17 @@ export const COMMANDS = {
     defaults: [],
   },
 
+  "symbolItem.insert": {
+    labelKey: "commands.symbolItem.insert",
+    contexts: ["symbolItem"],
+    defaults: [],
+  },
+  "symbolItem.copy": {
+    labelKey: "commands.symbolItem.copy",
+    contexts: ["symbolItem"],
+    defaults: [["Mod+c"]],
+  },
+
   "canvasNode.connect": { labelKey: "canvas.connectTo", contexts: ["canvasNode"], defaults: [] },
   "canvasNode.delete": {
     labelKey: "common.delete",
@@ -1754,10 +1766,18 @@ export function isNavigatingCommand(id: CommandId): boolean {
 export const ROUTE_CONTEXTS: Readonly<Record<string, readonly ShortcutContext[]>> = {
   "/": ["bookList", "commandPalette"],
   "/notes": ["notes", "noteItem", "commandPalette"],
-  "/notes/:noteId": ["notes", "noteItem", "editor", "image", "footnoteItem", "commandPalette"],
+  "/notes/:noteId": [
+    "notes",
+    "noteItem",
+    "editor",
+    "image",
+    "footnoteItem",
+    "symbolItem",
+    "commandPalette",
+  ],
   "/canvas": ["canvas", "commandPalette"],
-  "/canvas/:canvasId": ["canvas", "canvasNode", "editor", "commandPalette"],
-  "/ephemeral": ["ephemeral", "editor", "image", "footnoteItem", "commandPalette"],
+  "/canvas/:canvasId": ["canvas", "canvasNode", "editor", "symbolItem", "commandPalette"],
+  "/ephemeral": ["ephemeral", "editor", "image", "footnoteItem", "symbolItem", "commandPalette"],
   "/metrics": ["commandPalette"],
   "/settings": ["settings", "commandPalette"],
   // A Plugin page is its own runtime-derived Context (`plugin.<id>.<page>`),
@@ -1772,6 +1792,7 @@ export const ROUTE_CONTEXTS: Readonly<Record<string, readonly ShortcutContext[]>
     "editor",
     "image",
     "footnoteItem",
+    "symbolItem",
     "commandPalette",
   ],
   "/book/:bookId/cover": ["coverDesigner", "commandPalette"],
@@ -1798,7 +1819,7 @@ export const SHORTCUT_SECTIONS = [
   {
     id: "editor",
     labelKey: "shortcuts.sections.editor",
-    contexts: ["editor", "image", "footnoteItem"],
+    contexts: ["editor", "image", "footnoteItem", "symbolItem"],
   },
   {
     id: "commandPalette",

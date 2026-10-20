@@ -976,6 +976,22 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "editor-symbols-copy",
+    area: "editor",
+    workflow:
+      "Symbols dialog: Enter on a Symbol inserts it and copies it; asserts: clipboard text, Copied toast over the dialog; persists: yes",
+    edges: [
+      "Shift+F10 opens the Symbol's Item Menu; Copy copies without inserting and returns focus to the Symbol",
+      "Mod+C copies the focused Symbol without inserting it",
+    ],
+    terms: ["Symbol", "Item Menu"],
+    shortcuts: ["symbolItem.copy"],
+    routes: ["/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "editor-text-case",
     area: "editor",
     workflow: "Text Case menu: upper, lower, mirrored on selection; persists: yes",
@@ -2973,6 +2989,7 @@ export const ROWS: MatrixRow[] = [
     edges: [
       "A tap on a Chapter opens it, not its Item Menu",
       "A long-press on a Notes Gallery card opens its Item Menu without opening the Note",
+      "A long-press on a Symbol in the Symbols dialog opens its Item Menu; Copy says Copied",
     ],
     terms: ["Item Menu"],
     shortcuts: [],

@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { readClipboard, writeClipboard } from "../support/clipboard";
-import { tabTo } from "../support/keyboard";
+import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { seedSettings, seedPasteCleanupPreset } from "../support/storage";
 import { expect, test } from "../support/test";
 
@@ -129,5 +130,83 @@ test.describe("copy @wf:editor-copy @chromium-only", () => {
     const clipboard = await readClipboard(page);
     expect(clipboard.text).toContain("storm");
     expect(clipboard.html ?? "").toMatch(/<(strong|b)\b/i);
+  });
+});
+
+/** Opens the Symbols dialog, searches, and focuses the first result; returns it and its glyph. */
+async function focusFirstSymbol(page: Page, query: string) {
+  await page.keyboard.press("Control+Shift+o");
+  const dialog = page.getByRole("dialog", { name: "Insert symbol" });
+  await expect(dialog.getByRole("searchbox", { name: "Search symbols" })).toBeFocused();
+  await page.keyboard.type(query);
+  const option = dialog.getByRole("listbox", { name: "Symbols" }).getByRole("option").first();
+  await expect(option).toBeVisible();
+  await pressUntilFocused(page, "ArrowDown", option);
+  const glyph = (await option.textContent())?.trim() ?? "";
+  expect(glyph).not.toBe("");
+  return { dialog, option, glyph };
+}
+
+test.describe("symbol copy @wf:editor-symbols-copy @chromium-only", () => {
+  test("Enter on a Symbol inserts it and copies it, with a Copied toast", async ({ page }) => {
+    await openEditor(page);
+    await writeClipboard(page, { text: "before" });
+    await page.keyboard.press("End");
+    const { dialog, glyph } = await focusFirstSymbol(page, "dagger");
+
+    await page.keyboard.press("Enter");
+
+    const copied = page.getByRole("status").filter({ hasText: "Copied!" });
+    await expect(copied).toBeVisible();
+    await capture(page, "symbols-copy-toast", { around: [dialog, copied] });
+    await expect.poll(async () => (await readClipboard(page)).text).toBe(glyph);
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await saveNow(page);
+    await page.reload();
+    await expect(editorText(page)).toContainText(glyph);
+  });
+
+  test("Shift+F10 opens a Symbol's Item Menu and Copy copies without inserting", async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await writeClipboard(page, { text: "before" });
+    const before = await editorText(page).textContent();
+    const { dialog, option, glyph } = await focusFirstSymbol(page, "dagger");
+
+    await page.keyboard.press("Shift+F10");
+    const menu = page.getByRole("menu");
+    await expect(menu.getByRole("menuitem", { name: "Insert" })).toBeFocused();
+    await capture(page, "symbols-item-menu", { around: [dialog] });
+    await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: "Copy" }));
+    await page.keyboard.press("Enter");
+
+    await expect(menu).toBeHidden();
+    await expect(option).toBeFocused();
+    await expect(page.getByRole("status").filter({ hasText: "Copied!" })).toBeVisible();
+    await expect.poll(async () => (await readClipboard(page)).text).toBe(glyph);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(editorText(page)).toHaveText(before ?? "");
+  });
+
+  test("Mod+C copies the focused Symbol without inserting it @sc:symbolItem.copy", async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await writeClipboard(page, { text: "before" });
+    const before = await editorText(page).textContent();
+    const { dialog, option, glyph } = await focusFirstSymbol(page, "dagger");
+
+    await page.keyboard.press("ControlOrMeta+c");
+
+    await expect(page.getByRole("status").filter({ hasText: "Copied!" })).toBeVisible();
+    await expect.poll(async () => (await readClipboard(page)).text).toBe(glyph);
+    await expect(option).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(editorText(page)).toHaveText(before ?? "");
   });
 });

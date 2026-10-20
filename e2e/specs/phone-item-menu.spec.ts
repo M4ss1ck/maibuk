@@ -106,6 +106,34 @@ test.describe("phone Item Menu long-press, Notes Gallery @touch @wf:phone-item-m
   });
 });
 
+test.describe("phone Item Menu long-press, Symbols @touch @wf:phone-item-menu-long-press", () => {
+  test.use({ library: "oneBookThreeChapters", permissions: ["clipboard-write"] });
+
+  test("a long-press on a Symbol opens its Item Menu and Copy says Copied", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("row", { name: SEED_BOOK.title }).tap();
+    const editor = page.getByRole("textbox", { name: /^Text of / });
+    await editor.tap();
+    const before = await editor.textContent();
+    await page.keyboard.press("Control+Shift+o");
+    const dialog = page.getByRole("dialog", { name: "Insert symbol" });
+    const symbol = dialog.getByRole("listbox", { name: "Symbols" }).getByRole("option").first();
+    await expect(symbol).toBeVisible();
+
+    await longPress(page, symbol);
+    const menu = page.getByRole("menu");
+    await expect(menu.getByRole("menuitem", { name: "Insert" })).toBeVisible();
+    await menu.getByRole("menuitem", { name: "Copy" }).tap();
+
+    await expect(menu).toHaveCount(0);
+    await expect(page.getByRole("status").filter({ hasText: "Copied!" })).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(editor).toHaveText(before ?? "");
+  });
+});
+
 test.describe("phone drag handle @touch @wf:phone-drag-handle", () => {
   test.use({ library: "oneBookThreeChapters" });
 

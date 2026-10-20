@@ -1,11 +1,26 @@
-import { type KeyboardEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { GridLayout, ListBox, ListBoxItem, Size, Virtualizer } from "react-aria-components";
 import type { Editor } from "@tiptap/react";
+import { Copy, CornerDownLeft } from "lucide-react";
 import { Input } from "@/components/ui/Input";
+import { type ItemAction, ItemActionsPopover } from "@/components/ui/ItemActionsMenu";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
+import { toast } from "@/components/ui/Toast";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { useItemContextMenu } from "@/hooks/useItemContextMenu";
+import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import { pressRunsCommand } from "@/lib/command-keys";
+import { getClipboard } from "@/lib/platform";
 import {
   entriesForCategory,
   loadSymbolsCatalog,
@@ -30,6 +45,55 @@ function symbolTooltip(entry: SymbolEntry): string {
   return entry.code ? `${entry.label} \u00b7 ${entry.code}` : entry.label;
 }
 
+interface SymbolOptionProps {
+  /** The glyph; React Aria reads the collection key from this prop. */
+  id: string;
+  label: string;
+  className: string;
+  onAction: () => void;
+  onFocus: () => void;
+  /** Opens the Symbol's Item Menu anchored to its option; absent when it has none. */
+  onOpenMenu?: (anchor: HTMLElement) => void;
+  children: ReactNode;
+}
+
+/**
+ * One Symbol in the grid or the Recent row. Right click, the Context Menu key,
+ * Shift+F10, and a touch long-press open its Item Menu.
+ */
+function SymbolOption({
+  id,
+  label,
+  className,
+  onAction,
+  onFocus,
+  onOpenMenu,
+  children,
+}: SymbolOptionProps) {
+  const anchorRef = useRef<HTMLElement | null>(null);
+  const { itemProps, setOwnerRef } = useItemContextMenu({
+    onOpen: () => {
+      if (anchorRef.current) onOpenMenu?.(anchorRef.current);
+    },
+    isDisabled: !onOpenMenu,
+    anchorRef,
+  });
+  return (
+    <ListBoxItem
+      ref={setOwnerRef}
+      {...itemProps}
+      id={id}
+      textValue={label}
+      aria-label={label}
+      onAction={onAction}
+      onFocus={onFocus}
+      className={className}
+    >
+      {children}
+    </ListBoxItem>
+  );
+}
+
 function titleCaseCategory(label: string, locale: string): string {
   return label.replace(
     /(^|[\s&/-])(\p{L})/gu,
@@ -51,6 +115,13 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
   const deferredQuery = useDeferredValue(query);
   const recentGlyphs = useSymbolsStore((state) => state.recentGlyphs);
   const addRecentGlyph = useSymbolsStore((state) => state.addRecentGlyph);
+  const [menuEntry, setMenuEntry] = useState<SymbolEntry | null>(null);
+  const menuAnchorRef = useRef<HTMLElement | null>(null);
+
+  // useShortcuts pauses while this Modal is open, so the dialog matches its
+  // Symbol Commands itself (handleSymbolCommandKeyDown); the ids are declared
+  // for the shortcut help.
+  useBoundShortcutIds(["symbolItem.insert", "symbolItem.copy"], isOpen);
 
   useEffect(() => {
     const wasOpen = wasOpenRef.current;
@@ -106,9 +177,76 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
       ? lookupByCodePoint(catalog, glyph.codePointAt(0) as number)
       : null);
 
+  const copy = async (entry: SymbolEntry) => {
+    addRecentGlyph(entry.glyph);
+    try {
+      const clipboard = await getClipboard();
+      await clipboard.writeText(entry.glyph);
+      toast.success(t("common.copied"));
+    } catch {
+      toast.error(t("symbols.copyFailed"));
+    }
+  };
+
+  // A pick inserts the Symbol and copies it too, so it can be pasted elsewhere.
   const insert = (entry: SymbolEntry) => {
     editor.chain().focus().insertContent(entry.glyph).run();
-    addRecentGlyph(entry.glyph);
+    void copy(entry);
+  };
+
+  const openMenu = (entry: SymbolEntry, anchor: HTMLElement) => {
+    menuAnchorRef.current = anchor;
+    setMenuEntry(entry);
+  };
+
+  const closeMenu = () => {
+    setMenuEntry(null);
+    // The menu's Popover has no trigger to return to; the Symbol takes focus back.
+    menuAnchorRef.current?.focus();
+  };
+
+  const menuActions: ItemAction[] = menuEntry
+    ? [
+        {
+          id: "insert",
+          label: t("common.insert"),
+          icon: CornerDownLeft,
+          commandId: "symbolItem.insert",
+          onAction: () => insert(menuEntry),
+        },
+        {
+          id: "copy",
+          label: t("common.copy"),
+          icon: Copy,
+          commandId: "symbolItem.copy",
+          onAction: () => void copy(menuEntry),
+        },
+      ]
+    : [];
+
+  const focusedSymbol = (target: EventTarget): SymbolEntry | null => {
+    if (!(target instanceof HTMLElement) || target.getAttribute("role") !== "option") return null;
+    if (!recentListRef.current?.contains(target) && !resultListRef.current?.contains(target)) {
+      return null;
+    }
+    const glyph = target.getAttribute("data-key");
+    return glyph ? resolveGlyph(glyph) : null;
+  };
+
+  const handleSymbolCommandKeyDown = (event: KeyboardEvent<HTMLElement>): boolean => {
+    const entry = focusedSymbol(event.target);
+    if (!entry) return false;
+    const native = event.nativeEvent;
+    const run = pressRunsCommand(native, "symbolItem.copy")
+      ? () => void copy(entry)
+      : pressRunsCommand(native, "symbolItem.insert")
+        ? () => insert(entry)
+        : null;
+    if (!run) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    run();
+    return true;
   };
 
   const focusOption = (list: HTMLDivElement | null, index = 0) => {
@@ -156,6 +294,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
   };
 
   const handleDialogKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (handleSymbolCommandKeyDown(event)) return;
     const target = event.target as Node;
     if (target === searchRef.current) {
       handleSearchKeyDown(event);
@@ -239,15 +378,15 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
               {recentGlyphs.map((glyph) => {
                 const entry = resolveGlyph(glyph);
                 return (
-                  <ListBoxItem
+                  <SymbolOption
                     key={glyph}
                     id={glyph}
-                    textValue={entry?.label ?? glyph}
-                    aria-label={entry?.label ?? glyph}
+                    label={entry?.label ?? glyph}
                     onAction={() => {
                       if (entry) insert(entry);
                     }}
                     onFocus={() => setFocusedEntry(entry)}
+                    onOpenMenu={entry ? (anchor) => openMenu(entry, anchor) : undefined}
                     className="w-9 h-9 flex items-center justify-center text-lg rounded border border-border data-focus-visible:ring-2 data-focus-visible:ring-primary hover:bg-muted cursor-pointer"
                   >
                     {entry ? (
@@ -259,7 +398,7 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                     ) : (
                       glyph
                     )}
-                  </ListBoxItem>
+                  </SymbolOption>
                 );
               })}
             </ListBox>
@@ -281,12 +420,12 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                 className="flex-1 overflow-auto outline-none"
               >
                 {(entry: SymbolEntry) => (
-                  <ListBoxItem
+                  <SymbolOption
                     id={entry.glyph}
-                    textValue={entry.label}
-                    aria-label={entry.label}
+                    label={entry.label}
                     onAction={() => insert(entry)}
                     onFocus={() => setFocusedEntry(entry)}
+                    onOpenMenu={(anchor) => openMenu(entry, anchor)}
                     className="flex items-center justify-center text-lg rounded data-focus-visible:ring-2 data-focus-visible:ring-primary hover:bg-muted cursor-pointer"
                   >
                     <Tooltip content={symbolTooltip(entry)} side="bottom">
@@ -294,13 +433,22 @@ export function SymbolsDialog({ editor, isOpen, onClose }: SymbolsDialogProps) {
                         {entry.glyph}
                       </span>
                     </Tooltip>
-                  </ListBoxItem>
+                  </SymbolOption>
                 )}
               </ListBox>
             </Virtualizer>
           )}
         </div>
       )}
+      <ItemActionsPopover
+        triggerRef={menuAnchorRef}
+        label={menuEntry ? t("common.moreActionsFor", { title: menuEntry.label }) : ""}
+        actions={menuActions}
+        isOpen={menuEntry !== null}
+        onOpenChange={(open) => {
+          if (!open) closeMenu();
+        }}
+      />
     </Modal>
   );
 }
