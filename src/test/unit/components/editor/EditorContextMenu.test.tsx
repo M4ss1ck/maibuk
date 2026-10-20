@@ -78,6 +78,11 @@ function renderRealEditor(content: string) {
   return editor;
 }
 
+// Lets every pending animation frame run (TipTap and React Aria move focus in one).
+function waitForFrames() {
+  return act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+}
+
 describe("EditorContextMenu", () => {
   it("Shift+F10 opens the menu at the caret and Esc returns focus to the editor", async () => {
     const user = userEvent.setup();
@@ -118,7 +123,9 @@ describe("EditorContextMenu", () => {
     vi.mocked(spellCheckService.suggest).mockImplementation(
       () => new Promise<string[]>((resolve) => resolvers.push(resolve))
     );
-    const user = userEvent.setup();
+    // No delay between presses: the reopen lands inside the frame after the
+    // first menu closes, the timing that once let a late refocus close it.
+    const user = userEvent.setup({ delay: null });
     const editor = renderRealEditor("<p>teh</p>");
     editor.storage.spellCheck = {
       getMisspellingAt: () => ({ from: 1, to: 4, word: "teh" }),
@@ -127,7 +134,9 @@ describe("EditorContextMenu", () => {
     await user.keyboard("{Shift>}{F10}{/Shift}");
     editor.view.dom.focus();
     await user.keyboard("{Shift>}{F10}{/Shift}");
+    await waitForFrames();
     expect(resolvers).toHaveLength(2);
+    expect(screen.getByRole("menu", { name: "editor.contextMenu" })).toBeInTheDocument();
 
     await act(async () => resolvers[1](["the", "ten"]));
     await screen.findByRole("menuitem", { name: "the" });
@@ -138,6 +147,24 @@ describe("EditorContextMenu", () => {
       .map((item) => item.textContent)
       .filter((text) => text === "the" || text === "ten");
     expect(items).toEqual(["the", "ten"]);
+  });
+
+  it("leaves focus on the control the author moved to when the menu closes", async () => {
+    // Regression: closing on blur refocused the editor a frame later, pulling
+    // focus back from wherever the author had clicked or tabbed to.
+    const user = userEvent.setup();
+    renderRealEditor("<p>Plain text</p>");
+    render(<button type="button">Elsewhere</button>);
+    const elsewhere = screen.getByRole("button", { name: "Elsewhere" });
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    expect(screen.getByRole("menu", { name: "editor.contextMenu" })).toBeInTheDocument();
+
+    act(() => elsewhere.focus());
+    await waitForFrames();
+
+    expect(screen.queryByRole("menu", { name: "editor.contextMenu" })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(elsewhere);
   });
 
   it("shows no suggestions after loading when the lookup finds none", async () => {

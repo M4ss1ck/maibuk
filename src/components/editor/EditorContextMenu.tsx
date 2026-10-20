@@ -372,7 +372,15 @@ export function EditorContextMenu({
         onOpenChange={(open) => {
           if (!open) {
             close();
-            editor.commands.focus();
+            // Reclaim focus only when closing lost it (Escape, an action). A
+            // close on blur leaves focus where the author moved it, and a menu
+            // reopened in the meantime keeps its focus. Checked a frame later,
+            // once the move has landed and the Popover has unmounted.
+            requestAnimationFrame(() => {
+              if (editor.isDestroyed) return;
+              const active = document.activeElement;
+              if (!active || active === document.body) editor.commands.focus();
+            });
           }
         }}
       >
