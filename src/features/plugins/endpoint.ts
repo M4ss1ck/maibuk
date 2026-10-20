@@ -44,6 +44,17 @@ function declaresServe(manifest: PluginManifest): boolean {
   return required.includes("serve") || optional.includes("serve");
 }
 
+/**
+ * The address one Plugin answers on, derived from the listener's state: its own
+ * reserved path on the bound port, or null while the endpoint is not listening
+ * (#587). The port belongs to Maibuk, not the Plugin: a Plugin reads this and
+ * compares it with the address it last showed, and a move shows up as a
+ * different string with no "moved" state kept anywhere.
+ */
+export function endpointUrlFor(state: EndpointListenerState, pluginId: string): string | null {
+  return state.state === "listening" ? `http://127.0.0.1:${state.port}/plugin/${pluginId}/` : null;
+}
+
 /** Answers the caller 404: no Plugin is serving this path (or may not). */
 function notFound(sink: PluginEndpointSink): void {
   sink.respond(404, [], undefined, false);

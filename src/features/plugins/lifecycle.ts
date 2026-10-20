@@ -39,7 +39,7 @@ import {
   onEditorContentChanged,
   onEditorFocusChanged,
 } from "@/features/plugins/editor-host";
-import { startPluginEndpoint } from "@/features/plugins/endpoint";
+import { endpointUrlFor, startPluginEndpoint } from "@/features/plugins/endpoint";
 import { createPluginHandlers } from "@/features/plugins/handlers";
 import { manifestRunsOn, pluginsRunOn } from "@/features/plugins/host-platform";
 import { currentPluginLanguage, onPluginLanguageChange } from "@/features/plugins/language";
@@ -57,6 +57,7 @@ import { clearToolbarPressed } from "@/features/plugins/toolbar-pressed";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
 import { isTutorialLibraryActive, settleAuthorLibraryWork, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
+  EndpointListenerState,
   InstalledPlugin,
   PluginActivationRefusal,
   PluginActivationResult,
@@ -208,6 +209,14 @@ async function defaultWhenLaunchSettled(): Promise<void> {
 function defaultScheduleIdle(work: () => void): void {
   if (typeof requestIdleCallback === "function") requestIdleCallback(() => work());
   else setTimeout(work, 0);
+}
+
+/**
+ * The port a Plugin's Endpoint address depends on, or null while the listener
+ * is not bound. The address moves only when this value does (#587).
+ */
+function boundEndpointPort(state: EndpointListenerState): number | null {
+  return state.state === "listening" ? state.port : null;
 }
 
 interface Entry {
@@ -574,8 +583,13 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         createFrame: options.createFrame,
         isLibraryAvailable,
         trackLibraryWork,
-        eventSnapshot: (event) =>
-          event === "language.changed" ? { language: currentPluginLanguage() } : undefined,
+        eventSnapshot: (event) => {
+          if (event === "language.changed") return { language: currentPluginLanguage() };
+          if (event === "endpoint.addressChanged") {
+            return { url: endpointUrlFor(usePluginManagementStore.getState().endpoint, pluginId) };
+          }
+          return undefined;
+        },
         // The remaining budget, so the handshake cannot grant itself a fresh 10 s.
         timeoutMs: Math.max(0, deadline - Date.now()),
         onWorkerError: (message) => workerError(entry, message),
@@ -781,6 +795,21 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   const offLanguage = onPluginLanguageChange((language) => {
     for (const entry of entries.values()) {
       entry.runtime?.broker.emit("language.changed", { language });
+    }
+  });
+  // The Plugin Endpoint's port belongs to Maibuk and can move (#587): each
+  // running Plugin hears its own address only when the bound port changes, so
+  // recording the same port again costs no event. The broker drops it for a
+  // Plugin that is not subscribed or does not hold `serve`.
+  let boundPort = boundEndpointPort(usePluginManagementStore.getState().endpoint);
+  const offEndpointAddress = usePluginManagementStore.subscribe((state) => {
+    const port = boundEndpointPort(state.endpoint);
+    if (port === boundPort) return;
+    boundPort = port;
+    for (const entry of entries.values()) {
+      entry.runtime?.broker.emit("endpoint.addressChanged", {
+        url: endpointUrlFor(state.endpoint, entry.installed.pluginId),
+      });
     }
   });
   // The focused editor's content and focus changes reach subscribed Plugins the
@@ -1045,6 +1074,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       offBeforeBulkReplace();
       offBulkReplaceCancelled();
       offLanguage();
+      offEndpointAddress();
       offEditorContent();
       offEditorFocus();
       pendingBulkReplace = null;

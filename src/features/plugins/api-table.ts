@@ -14,13 +14,14 @@ import { z } from "zod";
 import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.3";
+export const PLUGIN_API_VERSION = "0.1.4";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
   "editor",
   "navigation",
   "language",
+  "endpoint",
   "secrets",
   "network",
   "clipboard",
@@ -328,6 +329,16 @@ export const PLUGIN_API_TABLE = [
     effect: "read",
   }),
   defineApiRow({
+    id: "endpoint.address",
+    description:
+      "Reads this Plugin's own base URL on the Plugin Endpoint, http://127.0.0.1:<port>/plugin/<pluginId>/, or null while the Plugin Endpoint is not listening. Compare it with the URL you last showed to notice a move.",
+    input: none,
+    output: z.strictObject({ url: z.string().nullable() }),
+    permission: "serve",
+    effect: "read",
+    requiresLibrary: false,
+  }),
+  defineApiRow({
     id: "secrets.set",
     description: "Stores a secret by name. Secrets are never read back into the Plugin.",
     input: z.strictObject({ name: z.string().min(1).max(64), value: z.string().max(4096) }),
@@ -498,6 +509,14 @@ export const PLUGIN_API_EVENTS = [
       "Maibuk's language changed. The current value is delivered on subscription, so a Plugin that starts after a change never misses it.",
     payload: z.strictObject({ language: z.string() }),
     permission: null,
+    replays: true,
+  }),
+  defineApiEvent({
+    id: "endpoint.addressChanged",
+    description:
+      "This Plugin's Plugin Endpoint address changed: the listener moved to another port or stopped. The current address is delivered on subscription, so a Plugin that starts after a change never misses it.",
+    payload: z.strictObject({ url: z.string().nullable() }),
+    permission: "serve",
     replays: true,
   }),
   defineApiEvent({

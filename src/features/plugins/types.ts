@@ -863,6 +863,12 @@ export interface TestHost {
   toolbarPressed(button: string): boolean;
   /** Publishes a language change to every subscribed Plugin. */
   setLanguage(language: string): void;
+  /**
+   * Moves the faked Plugin Endpoint to `port`, or turns it off with null, and
+   * publishes `endpoint.addressChanged` to a subscribed Plugin that holds
+   * `serve`; setting the same address again fires nothing.
+   */
+  setEndpointAddress(port: number | null): void;
   /** Makes the Library available or unavailable, as the Tutorial does. */
   setLibraryAvailable(available: boolean): void;
   /**

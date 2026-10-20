@@ -14,6 +14,12 @@ Declare `serve` in the manifest, under `permissions.required` or `permissions.op
 
 A required entry makes the author approve `serve` to enable the Plugin. An optional entry lets the author revoke it on its own, and a revoke takes effect at once with no restart: while another enabled Plugin still holds `serve` and keeps the port bound, the next request for the revoked Plugin is answered 404; when it was the last one, Maibuk unbinds the port and the connection is refused. A Plugin that is enabled and holds `serve` keeps the port bound whether or not its Worker is running, though a request it cannot answer yet is a 404 until it runs. The endpoint is desktop only, so on Android and in the web build a Plugin that holds `serve` still runs, but no port is bound and no request arrives.
 
+## Reading the address
+
+A Plugin holding `serve` reads its own base URL with `client.endpoint.address()`: `http://127.0.0.1:<port>/plugin/<pluginId>/`, or null while the Plugin Endpoint is not listening. Maibuk keeps no "moved" state: compare the address with the one you last showed and treat a different string as a move, such as showing "reconnect your Agents" or refilling pasted snippets.
+
+Subscribe with `client.on("endpoint.addressChanged", listener)` to hear it whenever the bound port changes, including the endpoint going off and coming back. The current address arrives on subscription, so a Plugin that starts after a move never misses it. A Plugin without `serve` is refused both the read and the subscription with `permission-denied`.
+
 ## Answering a request
 
 Register one handler with `client.onEndpointRequest`. The request comes from Maibuk, like a Command run, so it is not a Plugin-called method and it does not appear in the [Plugin API reference](api-reference.md). The one handler answers every request that reaches the Plugin, whatever the method and path:
@@ -94,4 +100,4 @@ Stream any body that can grow, such as a long document, a page of results, or a 
 
 ## The port
 
-The port is not stable yet. This release binds `29217` on every install. A later release picks one port once per install and keeps it, moving only when another program holds it at launch, so treat the port as something Maibuk owns. Do not hardcode the number in anything you ship, and write setup text so an address that changes can be replaced.
+Maibuk picks the port once, keeps it, moves it only when another app holds it at launch, and binds the kept port again on every launch. The author never sees or sets it, and there is no port setting. Treat the port as something Maibuk owns: do not hardcode the number in anything you ship, and write setup text so an address that changes can be replaced. Read `endpoint.address` and listen to `endpoint.addressChanged` as described above.

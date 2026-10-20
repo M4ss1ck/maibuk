@@ -7,6 +7,7 @@ A Plugin tests itself with the kit `@maibuk/plugin-test-kit`, the supported entr
 - The broker: the same broker the app uses, with this Plugin's declared and granted Plugin Permissions.
 - The method table: the same handlers the app wires, over an in-memory Library, storage, secrets, clipboard, and navigation.
 - The Plugin Endpoint: `endpoint()` reads the `serve` grant the way the app does, so a request without it is answered 404, a Plugin with no handler answers 404, and a throwing handler answers 500.
+- The Plugin Endpoint address: `setEndpointAddress()` fakes the bound port, so `endpoint.address` and `endpoint.addressChanged` behave as they do in the app.
 - The host renderer: `renderPage(pageId)` and `renderSettingsRow(rowId)` mount the page or Settings row the way the app does, and the records the host keeps (notifications, navigations, page navigations, toolbar pressed state) are what the test asserts against.
 
 The kit does not simulate the sandbox; the browser lanes prove that. It proves the host logic around a Plugin in the same jsdom the app's other suites use.
@@ -18,6 +19,10 @@ A Plugin holding the `serve` Permission answers the requests an outside Agent se
 The answer it resolves with carries the `status`, `headers` as pairs, the whole `body` as bytes, the `chunks` a streamed answer sent in order, and `text()` for the common UTF-8 case. An `AsyncIterable` body streams: `endpoint()` resolves after the stream's end, with `chunks` joined into `body` and `streamed` true.
 
 The grant is read live, exactly as in the app. `host.setGranted([])` makes the same call come back 404 without the Plugin's handler running, and granting it again lets the next request through. A Plugin that never called `onEndpointRequest` answers 404, and one whose handler throws answers 500.
+
+## Reading the Plugin Endpoint address
+
+`host.setEndpointAddress(port)` fakes the listener bound on that port, as if Maibuk had picked it; `host.setEndpointAddress(null)` turns it off. A Plugin holding `serve` reads it with `client.endpoint.address()` and hears a move through `client.on("endpoint.addressChanged", listener)`, which delivers the current address on subscription. Setting the same address again fires nothing, so a test can prove a Plugin notices only real moves. Both are refused with `permission-denied` without the `serve` grant, like the read and the subscription in the app.
 
 ## A walk through the template test
 

@@ -7,7 +7,8 @@
  * #452) edit the focused editor as one undoable step; `storage.*` reads and
  * writes the Plugin's own Library namespace; `navigation.openEntity` opens an
  * entity through the app shell; `navigation.openPage` opens a Plugin page;
- * `language.get` reads the app language; `secrets.*` writes the calling
+ * `language.get` reads the app language; `endpoint.address` reads this Plugin's
+ * Plugin Endpoint address; `secrets.*` writes the calling
  * Plugin's credentials through the registered store; `network.fetch` fetches
  * on a granted host and streams the body, injecting a named secret into a
  * declared header; `clipboard.*` reads and writes the platform clipboard; and
@@ -25,6 +26,7 @@ import {
   revealInFocusedEditor,
   setPluginEditorHighlights,
 } from "@/features/plugins/editor-host";
+import { endpointUrlFor } from "@/features/plugins/endpoint";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
   createPluginNote,
@@ -39,6 +41,7 @@ import {
   updatePluginChapterContent,
   updatePluginNote,
 } from "@/features/plugins/library";
+import { usePluginManagementStore } from "@/features/plugins/management";
 import { openPluginEntity, openPluginPage } from "@/features/plugins/navigation";
 import { pluginFetch } from "@/features/plugins/network";
 import { getPluginSecretStore, type PluginSecretStore } from "@/features/plugins/secret-store";
@@ -154,6 +157,9 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "navigation.openPage": ({ pageId, pluginId }, context) =>
       openPluginPage(pluginId ?? context.pluginId, pageId),
     "language.get": async () => ({ language: currentPluginLanguage() }),
+    "endpoint.address": (_params, { pluginId }) => ({
+      url: endpointUrlFor(usePluginManagementStore.getState().endpoint, pluginId),
+    }),
     "secrets.set": async ({ name, value }, { pluginId }) => {
       await pluginSecretStore().set(pluginId, name, value);
       return null;
