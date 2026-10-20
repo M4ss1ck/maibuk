@@ -108,7 +108,9 @@ describe("MCP Server protocol", () => {
       expect(answer.json.result.tools.map((tool: any) => tool.name)).toEqual([
         "list_books",
         "get_book",
+        "read_chapter",
         "list_notes",
+        "read_note",
       ]);
     } finally {
       host.stop();
@@ -175,7 +177,19 @@ describe("MCP Server protocol", () => {
             "annotations": {
               "readOnlyHint": true,
             },
+            "name": "read_chapter",
+          },
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
             "name": "list_notes",
+          },
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "read_note",
           },
         ]
       `);

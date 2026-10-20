@@ -6,10 +6,12 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import type { PluginClient } from "@/plugin-sdk";
 import {
+  errorResult,
   excerptOf,
   isoDate,
   libraryCall,
   pageLines,
+  readWindow,
   resolveRef,
   shortId,
   titleOrUntitled,
@@ -32,6 +34,82 @@ function noteLine(note: NoteRow, allIds: readonly string[]): string {
   const base = `${sid}  ${title}  ${note.wordCount} words  ${isoDate(note.updatedAt)}`;
   if (note.tags.length === 0) return base;
   return `${base}  Tags: ${note.tags.join(", ")}`;
+}
+
+export interface ReadNoteArgs {
+  note: string;
+  format?: "text" | "html";
+  offset?: number;
+  length?: number;
+}
+
+export async function readNote(client: PluginClient, args: ReadNoteArgs): Promise<CallToolResult> {
+  const ref = (args.note ?? "").trim();
+  const format = args.format ?? "text";
+
+  return libraryCall(async () => {
+    const notes = await client.library.notes.list();
+    const allIds = notes.map((note) => note.id);
+
+    const resolved = resolveRef({
+      ref,
+      rows: notes,
+      noun: "Note",
+      listTool: "list_notes",
+      tool: "read_note",
+      line: (note) => noteLine(note, allIds),
+    });
+    if ("result" in resolved) return resolved.result;
+
+    const full = await client.library.notes.get({ noteId: resolved.row.id });
+    if (!full) {
+      return errorResult(`No Note has the id ${ref}; call list_notes to see the Notes.`);
+    }
+
+    const content = format === "html" ? full.content.html : full.content.text;
+    const windowed = readWindow(content, args.offset, args.length);
+    if ("pastEnd" in windowed) {
+      return errorResult(
+        `The offset ${args.offset} is past the end of the Note (${windowed.total} characters); call read_note with a smaller offset.`
+      );
+    }
+
+    const noteSid = shortId(full.id, allIds);
+    const title = titleOrUntitled(full.title);
+    let bookHeaderLine: string;
+    if (full.bookId === null) {
+      bookHeaderLine = "Book: Unfiled";
+    } else {
+      const books = await client.library.books.list();
+      const book = books.find((entry) => entry.id === full.bookId);
+      bookHeaderLine =
+        book !== undefined
+          ? `Book: ${shortId(
+              book.id,
+              books.map((entry) => entry.id)
+            )}  ${titleOrUntitled(book.title)}`
+          : `Book: ${full.bookId}`;
+    }
+    const tagsLine = full.tags.length === 0 ? "Tags: none" : `Tags: ${full.tags.join(", ")}`;
+
+    const header = [
+      `Note ${noteSid}: ${title}`,
+      bookHeaderLine,
+      tagsLine,
+      `Words: ${full.wordCount}`,
+      `Last Edited: ${new Date(full.updatedAt).toISOString()}`,
+      `Format: ${format}`,
+      `Characters ${windowed.start}-${windowed.end} of ${windowed.total}`,
+      windowed.nextOffset === null ? "End of Note." : `Next offset: ${windowed.nextOffset}`,
+    ].join("\n");
+
+    return {
+      content: [
+        { type: "text", text: header },
+        { type: "text", text: windowed.window },
+      ],
+    };
+  });
 }
 
 export async function listNotes(
