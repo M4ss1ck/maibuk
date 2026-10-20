@@ -190,6 +190,16 @@ printing `PASS <step>` or `FAIL <step>`:
 8. package: the zip
 9. layout: the packaged zip against the layout rules
 
+A Built-in (`plugins/<id>/` checked out with this repo) runs the same steps
+with four small changes. Validate uses the host validator with the Built-in
+rules, so the `maibuk-` id prefix is allowed. The import boundary lets shipped
+files import `@/plugin-sdk` and its subpaths, and lets test files import any
+`@/` module, since the tests run inside this repo's own suite. Typecheck runs
+the repo's own `tsconfig.json` instead of the generated external config. Test
+runs the repo's own vitest config from the repo root with the Plugin folder as
+the filter, so `@/` and the repo defines like `__APP_VERSION__` resolve the
+same way they do for the rest of the suite.
+
 It exits `0` only when every step passed, and `1` on the first failure. The
 steps without their own script (typecheck, lint, boundary, layout) run through
 `tsx scripts/plugin/cli.ts <command> <path>`.

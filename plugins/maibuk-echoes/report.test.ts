@@ -30,11 +30,27 @@ describe("buildReport()", () => {
   it("orders each kind by count descending, then word ascending", () => {
     const text = "alpha beta gamma alpha beta alpha delta delta echo echo";
     const echoes: Echo[] = [
-      { kind: "overused", normalized: "alpha", occurrences: [occurrence(0, 0, 5), occurrence(0, 17, 22), occurrence(0, 28, 33)] },
-      { kind: "overused", normalized: "beta", occurrences: [occurrence(0, 6, 10), occurrence(0, 23, 27)] },
+      {
+        kind: "overused",
+        normalized: "alpha",
+        occurrences: [occurrence(0, 0, 5), occurrence(0, 17, 22), occurrence(0, 28, 33)],
+      },
+      {
+        kind: "overused",
+        normalized: "beta",
+        occurrences: [occurrence(0, 6, 10), occurrence(0, 23, 27)],
+      },
       { kind: "overused", normalized: "gamma", occurrences: [occurrence(0, 11, 16)] },
-      { kind: "overused", normalized: "delta", occurrences: [occurrence(0, 34, 39), occurrence(0, 40, 45)] },
-      { kind: "overused", normalized: "echo", occurrences: [occurrence(0, 46, 50), occurrence(0, 51, 55)] },
+      {
+        kind: "overused",
+        normalized: "delta",
+        occurrences: [occurrence(0, 34, 39), occurrence(0, 40, 45)],
+      },
+      {
+        kind: "overused",
+        normalized: "echo",
+        occurrences: [occurrence(0, 46, 50), occurrence(0, 51, 55)],
+      },
     ];
 
     const report = buildReport(echoes, [text]);
@@ -107,8 +123,7 @@ describe("buildReport()", () => {
 
 describe("occurrenceContext()", () => {
   it("shows about six words on each side with the match in place, eliding a mid-sentence cut", () => {
-    const text =
-      "one two three four five six seven harbor eight nine ten eleven twelve thirteen";
+    const text = "one two three four five six seven harbor eight nine ten eleven twelve thirteen";
     const from = text.indexOf("harbor");
     const context = occurrenceContext(text, occurrence(0, from, from + "harbor".length));
 
@@ -125,7 +140,9 @@ describe("occurrenceContext()", () => {
     const from = text.indexOf("harbor");
     const context = occurrenceContext(text, occurrence(0, from, from + "harbor".length));
 
-    expect(context).toBe("…beta gamma delta epsilon zeta eta harbor theta iota kappa lambda mu nu…");
+    expect(context).toBe(
+      "…beta gamma delta epsilon zeta eta harbor theta iota kappa lambda mu nu…"
+    );
   });
 
   it("does not elide a cut that lands on a sentence boundary", () => {
@@ -187,7 +204,9 @@ describe("fitChapterTitles()", () => {
   });
 
   it("names no title when even the first does not fit", () => {
-    expect(fitChapterTitles(["A very long title", "B"], render, more, 20)).toBe("3 times · +2 more");
+    expect(fitChapterTitles(["A very long title", "B"], render, more, 20)).toBe(
+      "3 times · +2 more"
+    );
   });
 
   it("clamps a summary that cannot fit at all", () => {
@@ -261,7 +280,8 @@ describe("computeReport()", () => {
   });
 
   it("uses the Chapter threshold when the scope is one Chapter", async () => {
-    const text = "The harbor was calm. The harbor was empty. The harbor was quiet. The harbor again.";
+    const text =
+      "The harbor was calm. The harbor was empty. The harbor was quiet. The harbor again.";
     const one = source([{ id: "c1", text }]);
 
     const chapter = await computeReport(one, "en", DEFAULT_ECHO_SETTINGS, { scope: "chapter" });

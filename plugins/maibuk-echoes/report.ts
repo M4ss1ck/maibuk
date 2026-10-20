@@ -151,9 +151,7 @@ function toRow(
   group: readonly Echo[],
   texts: readonly string[]
 ): EchoReportRow {
-  const occurrences = group
-    .flatMap((echo) => echo.occurrences)
-    .sort(compareOccurrences);
+  const occurrences = group.flatMap((echo) => echo.occurrences).sort(compareOccurrences);
   const first = occurrences[0];
   const chapterText = texts[first.chapter] ?? "";
   return {

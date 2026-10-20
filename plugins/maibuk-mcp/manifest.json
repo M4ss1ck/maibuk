@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 1,
+  "id": "maibuk-mcp",
+  "name": "MCP Server",
+  "description": "Let outside AI tools read and change the Library through the Model Context Protocol.",
+  "author": "Maibuk",
+  "version": "0.1.0",
+  "apiVersion": "^0.1.2",
+  "entry": "index.js",
+  "platforms": ["desktop"],
+  "lifecycle": "persistent",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": ["serve", "library:read", "library:write"],
+    "optional": []
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "newKey",
+        "label": "Make a New MCP Server Key",
+        "contexts": ["global"]
+      }
+    ]
+  }
+}

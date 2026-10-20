@@ -25,7 +25,9 @@ import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { buildPlugin } from "../../../scripts/build-plugin";
+import { isBuiltInPlugin } from "../../../scripts/plugin/builtin";
 import { externalAliases, writeGeneratedConfigs } from "../../../scripts/plugin/config";
+import { checkImportBoundary } from "../../../scripts/plugin/import-boundary";
 import { checkFolderLayout } from "../../../scripts/plugin/layout";
 import { linkSkill } from "../../../templates/plugin/scripts/setup.mjs";
 
@@ -135,6 +137,112 @@ describe("linkSkill()", () => {
     expect(calls[0]).toContain(join(checkout, "skills/maibuk-plugin"));
     expect(existsSync(join(pluginRoot, ".agents/skills/maibuk-plugin"))).toBe(false);
     expect(existsSync(join(pluginRoot, ".claude/skills/maibuk-plugin"))).toBe(false);
+  });
+});
+
+describe("isBuiltInPlugin()", () => {
+  /** A temp checkout holding `plugins/<dir>/manifest.json` with `id`. */
+  function checkoutWith(dir: string, id: string): { maibukRoot: string; pluginRoot: string } {
+    const maibukRoot = tempRoot("maibuk checkout ");
+    const pluginRoot = join(maibukRoot, "plugins", dir);
+    mkdirSync(pluginRoot, { recursive: true });
+    writeFileSync(pluginRoot + "/manifest.json", `${JSON.stringify({ id })}\n`);
+    return { maibukRoot, pluginRoot };
+  }
+
+  it("is a Built-in for a plugins/<id> child whose folder matches the manifest id", () => {
+    const { maibukRoot, pluginRoot } = checkoutWith("maibuk-echoes", "maibuk-echoes");
+
+    expect(isBuiltInPlugin(pluginRoot, maibukRoot)).toBe(true);
+  });
+
+  it("is not a Built-in for a folder elsewhere", () => {
+    const maibukRoot = tempRoot("maibuk checkout elsewhere ");
+    const pluginRoot = join(tempRoot("third party plugin "), "maibuk-echoes");
+    mkdirSync(pluginRoot, { recursive: true });
+    writeFileSync(pluginRoot + "/manifest.json", `${JSON.stringify({ id: "maibuk-echoes" })}\n`);
+
+    expect(isBuiltInPlugin(pluginRoot, maibukRoot)).toBe(false);
+  });
+
+  it("is not a Built-in when the folder name differs from the manifest id", () => {
+    const { maibukRoot, pluginRoot } = checkoutWith("other-name", "maibuk-echoes");
+
+    expect(isBuiltInPlugin(pluginRoot, maibukRoot)).toBe(false);
+  });
+
+  it("is not a Built-in when the manifest is missing", () => {
+    const maibukRoot = tempRoot("maibuk checkout no manifest ");
+    const pluginRoot = join(maibukRoot, "plugins", "maibuk-echoes");
+    mkdirSync(pluginRoot, { recursive: true });
+
+    expect(isBuiltInPlugin(pluginRoot, maibukRoot)).toBe(false);
+  });
+});
+
+describe("checkImportBoundary() for a Built-in", () => {
+  /** A temp Plugin folder with `relPath` holding `text`. */
+  function writePluginFile(root: string, relPath: string, text: string): void {
+    const target = join(root, relPath);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, text);
+  }
+
+  it("accepts @/plugin-sdk in a shipped file and refuses other @/ modules there", () => {
+    const root = tempRoot("maibuk builtin boundary ");
+    writePluginFile(
+      root,
+      "index.ts",
+      [
+        'import { createPluginClient } from "@/plugin-sdk";',
+        'import { servePluginUi } from "@/plugin-sdk/worker-ui";',
+        'import { helper } from "./helper";',
+        "",
+      ].join("\n")
+    );
+    writePluginFile(root, "helper.ts", "export const helper = 1;\n");
+    writePluginFile(root, "bad.ts", 'import "@/features/plugins/thing";\n');
+
+    const { violations } = checkImportBoundary(root, { builtIn: true });
+
+    expect(violations.map((violation) => violation.file)).toEqual(["bad.ts"]);
+    expect(violations[0].specifier).toBe("@/features/plugins/thing");
+  });
+
+  it("accepts any @/ module in a Built-in test file", () => {
+    const root = tempRoot("maibuk builtin boundary tests ");
+    writePluginFile(
+      root,
+      "entry.test.ts",
+      [
+        'import { createTestHost } from "@/features/plugins/test-kit";',
+        'import "@/i18n";',
+        'import { helper } from "./helper";',
+        "",
+      ].join("\n")
+    );
+    writePluginFile(root, "helper.ts", "export const helper = 1;\n");
+
+    expect(checkImportBoundary(root, { builtIn: true }).violations).toEqual([]);
+  });
+
+  it("still refuses @/plugin-sdk for a third-party Plugin", () => {
+    const root = tempRoot("maibuk third party boundary ");
+    writePluginFile(root, "index.ts", 'import { createPluginClient } from "@/plugin-sdk";\n');
+
+    const { violations } = checkImportBoundary(root, {});
+
+    expect(violations).toHaveLength(1);
+    expect(violations[0].specifier).toBe("@/plugin-sdk");
+  });
+
+  it("accepts a relative import that stays inside a Built-in under the checkout", () => {
+    const maibukRoot = tempRoot("maibuk checkout boundary ");
+    const root = join(maibukRoot, "plugins", "maibuk-sample");
+    writePluginFile(root, "index.ts", 'import { helper } from "./helper";\n');
+    writePluginFile(root, "helper.ts", "export const helper = 1;\n");
+
+    expect(checkImportBoundary(root, { maibukRoot, builtIn: true }).violations).toEqual([]);
   });
 });
 
