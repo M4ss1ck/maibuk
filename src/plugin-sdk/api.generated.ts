@@ -16,6 +16,10 @@ export const PLUGIN_API_METHODS = [
   "library.books.update",
   "library.books.checkpoint",
   "library.chapters.updateContent",
+  "library.chapters.create",
+  "library.chapters.delete",
+  "library.chapters.reorder",
+  "library.chapters.update",
   "library.notes.create",
   "library.notes.update",
   "editor.getContent",
@@ -230,6 +234,50 @@ export interface PluginApiMethods {
         /** Sanitized by the host before it lands. */
         html: string;
       };
+    };
+    output: null;
+  };
+  /** Creates a Chapter in a Book through the Chapter write path, at a 0-based position among its Chapters (omitted appends) and with optional content, and returns its id. */
+  "library.chapters.create": {
+    input: {
+      bookId: string;
+      title: string;
+      /** 0-based index among the Book's Chapters; omitted appends at the end. */
+      position?: number;
+      /** Plain text, or an HTML fragment the host sanitizes. */
+      content?: {
+        text: string;
+      } | {
+        /** Sanitized by the host before it lands. */
+        html: string;
+      };
+    };
+    output: {
+      chapterId: string;
+    };
+  };
+  /** Deletes a Chapter through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made. */
+  "library.chapters.delete": {
+    input: {
+      chapterId: string;
+    };
+    output: null;
+  };
+  /** Reorders a Book's Chapters to the given ids, which must be exactly the Book's Chapters: no missing, extra, or duplicate id. */
+  "library.chapters.reorder": {
+    input: {
+      bookId: string;
+      chapterIds: string[];
+    };
+    output: null;
+  };
+  /** Updates a Chapter's title, Chapter Type, or Chapter Status through the Chapter write path; give at least one. */
+  "library.chapters.update": {
+    input: {
+      chapterId: string;
+      title?: string;
+      chapterType?: "chapter" | "prologue" | "epilogue" | "part" | "frontmatter" | "backmatter";
+      status?: "draft" | "revised" | "final";
     };
     output: null;
   };
@@ -582,6 +630,14 @@ export interface PluginApi {
       get(params: PluginApiMethods["library.chapters.get"]["input"]): Promise<PluginApiMethods["library.chapters.get"]["output"]>;
       /** Replaces a Chapter's content through the Chapter write path. */
       updateContent(params: PluginApiMethods["library.chapters.updateContent"]["input"]): Promise<PluginApiMethods["library.chapters.updateContent"]["output"]>;
+      /** Creates a Chapter in a Book through the Chapter write path, at a 0-based position among its Chapters (omitted appends) and with optional content, and returns its id. */
+      create(params: PluginApiMethods["library.chapters.create"]["input"]): Promise<PluginApiMethods["library.chapters.create"]["output"]>;
+      /** Deletes a Chapter through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made. */
+      delete(params: PluginApiMethods["library.chapters.delete"]["input"]): Promise<PluginApiMethods["library.chapters.delete"]["output"]>;
+      /** Reorders a Book's Chapters to the given ids, which must be exactly the Book's Chapters: no missing, extra, or duplicate id. */
+      reorder(params: PluginApiMethods["library.chapters.reorder"]["input"]): Promise<PluginApiMethods["library.chapters.reorder"]["output"]>;
+      /** Updates a Chapter's title, Chapter Type, or Chapter Status through the Chapter write path; give at least one. */
+      update(params: PluginApiMethods["library.chapters.update"]["input"]): Promise<PluginApiMethods["library.chapters.update"]["output"]>;
     };
     notes: {
       /** Lists Notes, all of them or one Book's, without their content. */

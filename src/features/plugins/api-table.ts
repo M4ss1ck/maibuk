@@ -227,6 +227,52 @@ export const PLUGIN_API_TABLE = [
     ...libraryWrite,
   }),
   defineApiRow({
+    id: "library.chapters.create",
+    description:
+      "Creates a Chapter in a Book through the Chapter write path, at a 0-based position among its Chapters (omitted appends) and with optional content, and returns its id.",
+    input: z.strictObject({
+      bookId: id,
+      title: z.string().max(500),
+      position: z
+        .int()
+        .min(0)
+        .optional()
+        .describe("0-based index among the Book's Chapters; omitted appends at the end."),
+      content: fragment.optional(),
+    }),
+    output: z.strictObject({ chapterId: id }),
+    ...libraryWrite,
+  }),
+  defineApiRow({
+    id: "library.chapters.delete",
+    description:
+      "Deletes a Chapter through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made.",
+    input: z.strictObject({ chapterId: id }),
+    output: ok,
+    ...libraryWrite,
+  }),
+  defineApiRow({
+    id: "library.chapters.reorder",
+    description:
+      "Reorders a Book's Chapters to the given ids, which must be exactly the Book's Chapters: no missing, extra, or duplicate id.",
+    input: z.strictObject({ bookId: id, chapterIds: z.array(id) }),
+    output: ok,
+    ...libraryWrite,
+  }),
+  defineApiRow({
+    id: "library.chapters.update",
+    description:
+      "Updates a Chapter's title, Chapter Type, or Chapter Status through the Chapter write path; give at least one.",
+    input: z.strictObject({
+      chapterId: id,
+      title: z.string().max(500).optional(),
+      chapterType: z.enum(CHAPTER_TYPES).optional(),
+      status: z.enum(CHAPTER_STATUSES).optional(),
+    }),
+    output: ok,
+    ...libraryWrite,
+  }),
+  defineApiRow({
     id: "library.notes.create",
     description: "Creates a Note through the Note write path and returns its id.",
     input: z.strictObject({

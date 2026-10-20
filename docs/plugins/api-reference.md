@@ -369,6 +369,110 @@ Output:
 null
 ```
 
+### `library.chapters.create`
+
+Creates a Chapter in a Book through the Chapter write path, at a 0-based position among its Chapters (omitted appends) and with optional content, and returns its id.
+
+- Plugin Permission: `library:write`
+- Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
+
+Input:
+
+```ts
+{
+  bookId: string;
+  title: string;
+  /** 0-based index among the Book's Chapters; omitted appends at the end. */
+  position?: number;
+  /** Plain text, or an HTML fragment the host sanitizes. */
+  content?: {
+    text: string;
+  } | {
+    /** Sanitized by the host before it lands. */
+    html: string;
+  };
+}
+```
+
+Output:
+
+```ts
+{
+  chapterId: string;
+}
+```
+
+### `library.chapters.delete`
+
+Deletes a Chapter through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made.
+
+- Plugin Permission: `library:write`
+- Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
+
+Input:
+
+```ts
+{
+  chapterId: string;
+}
+```
+
+Output:
+
+```ts
+null
+```
+
+### `library.chapters.reorder`
+
+Reorders a Book's Chapters to the given ids, which must be exactly the Book's Chapters: no missing, extra, or duplicate id.
+
+- Plugin Permission: `library:write`
+- Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
+
+Input:
+
+```ts
+{
+  bookId: string;
+  chapterIds: string[];
+}
+```
+
+Output:
+
+```ts
+null
+```
+
+### `library.chapters.update`
+
+Updates a Chapter's title, Chapter Type, or Chapter Status through the Chapter write path; give at least one.
+
+- Plugin Permission: `library:write`
+- Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
+
+Input:
+
+```ts
+{
+  chapterId: string;
+  title?: string;
+  chapterType?: "chapter" | "prologue" | "epilogue" | "part" | "frontmatter" | "backmatter";
+  status?: "draft" | "revised" | "final";
+}
+```
+
+Output:
+
+```ts
+null
+```
+
 ### `library.notes.create`
 
 Creates a Note through the Note write path and returns its id.

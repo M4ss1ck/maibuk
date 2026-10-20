@@ -2,10 +2,11 @@
  * The host-side Plugin API handlers this app wires (ADR 0022, #440):
  * `notifications.show` renders a toast naming the Plugin; the Library reads
  * serve Books, Chapters, Notes, and Canvas metadata; the Library writes
- * (#452, #588) update a Book's details or take a Checkpoint, update a Chapter's
- * content, and create or update a Note through the entity's own write path; the
- * editor writes (`editor.insert` / `editor.replace`, #452) edit the focused
- * editor as one undoable step; `storage.*` reads and writes the Plugin's own
+ * (#452, #588) update a Book's details or take a Checkpoint, create, delete,
+ * reorder, or update a Chapter, and create or update a Note through the
+ * entity's own write path; the editor writes (`editor.insert` /
+ * `editor.replace`, #452) edit the focused editor as one undoable step;
+ * `storage.*` reads and writes the Plugin's own
  * Library namespace; `navigation.openEntity` opens an entity through the app
  * shell;
  * `navigation.openPage` opens a Plugin page;
@@ -32,7 +33,9 @@ import { endpointUrlFor } from "@/features/plugins/endpoint";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
   checkpointPluginBook,
+  createPluginChapter,
   createPluginNote,
+  deletePluginChapter,
   getPluginBook,
   getPluginCanvas,
   getPluginChapter,
@@ -41,7 +44,9 @@ import {
   listPluginCanvases,
   listPluginChapters,
   listPluginNotes,
+  reorderPluginChapters,
   updatePluginBook,
+  updatePluginChapter,
   updatePluginChapterContent,
   updatePluginNote,
 } from "@/features/plugins/library";
@@ -135,6 +140,13 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "library.notes.get": ({ noteId }) => getPluginNote(noteId),
     "library.chapters.updateContent": ({ chapterId, content }) =>
       updatePluginChapterContent(chapterId, content),
+    "library.chapters.create": ({ bookId, title, position, content }) =>
+      createPluginChapter({ bookId, title, position, content }),
+    "library.chapters.delete": ({ chapterId }) => deletePluginChapter(chapterId),
+    "library.chapters.reorder": ({ bookId, chapterIds }) =>
+      reorderPluginChapters({ bookId, chapterIds }),
+    "library.chapters.update": ({ chapterId, title, chapterType, status }) =>
+      updatePluginChapter({ chapterId, title, chapterType, status }),
     "library.notes.create": ({ title, bookId, content }) =>
       createPluginNote({ title, bookId, content }),
     "library.notes.update": ({ noteId, title, content }) =>
