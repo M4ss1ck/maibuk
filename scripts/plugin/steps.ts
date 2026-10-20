@@ -20,6 +20,7 @@ import type { PluginManifest } from "@/features/plugins/types";
 import { TEST_TIMEOUT_MS } from "@/test/time-budget";
 import { buildPlugin } from "../build-plugin";
 import { checkAndroidEntry } from "./android";
+import { isBuiltInPlugin } from "./builtin";
 import type { CheckStep, StepResult } from "./cli";
 import { externalAliases, testFallbackResolver, writeGeneratedConfigs } from "./config";
 import { listFiles } from "./files";
@@ -47,12 +48,23 @@ export const CHECK_ORDER = [
 /** The name of one tooling step. */
 export type PluginStepName = (typeof CHECK_ORDER)[number];
 
-/** The two roots every step reads. */
+/** The two roots every step reads, plus whether the Plugin is a Built-in. */
 export interface PluginStepContext {
   /** The external Plugin repo root (holds `manifest.json`, the entry, tests). */
   pluginRoot: string;
   /** The Maibuk checkout the tooling runs from. */
   maibukRoot: string;
+  /**
+   * Whether the Plugin is a Built-in shipping with the checkout
+   * (`plugins/<id>/`). When absent, the step detects it with
+   * {@link isBuiltInPlugin}, so direct callers keep working.
+   */
+  builtIn?: boolean;
+}
+
+/** Whether `context` is a Built-in check, detecting it when the caller did not say. */
+function isBuiltIn(context: PluginStepContext): boolean {
+  return context.builtIn ?? isBuiltInPlugin(context.pluginRoot, context.maibukRoot);
 }
 
 /** A finished external program. */
@@ -94,10 +106,16 @@ function zipPathFor(pluginRoot: string, id: string, version: string): string {
   return join(pluginRoot, "dist", `${id}-${version}.zip`);
 }
 
-/** Runs `bin args...` in `cwd` with the inherited environment, capturing output. */
-function run(bin: string, args: readonly string[], cwd: string): Promise<RunResult> {
+/** Runs `bin args...` in `cwd` with the inherited environment plus `env`, capturing output. */
+export function run(
+  bin: string,
+  args: readonly string[],
+  cwd: string,
+  env?: Record<string, string | undefined>
+): Promise<RunResult> {
+  const mergedEnv = env ? { ...process.env, ...env } : process.env;
   return new Promise((settle) => {
-    const child = spawn(bin, [...args], { cwd, env: process.env });
+    const child = spawn(bin, [...args], { cwd, env: mergedEnv });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk: Buffer) => {
@@ -120,8 +138,13 @@ function run(bin: string, args: readonly string[], cwd: string): Promise<RunResu
  * rather than the `node_modules/.bin` shim: the shim is a shell script on POSIX
  * and a `.cmd` on Windows, and going through it would reintroduce a shell.
  */
-function runNode(jsBin: string, args: readonly string[], cwd: string): Promise<RunResult> {
-  return run(process.execPath, [jsBin, ...args], cwd);
+export function runNode(
+  jsBin: string,
+  args: readonly string[],
+  cwd: string,
+  env?: Record<string, string | undefined>
+): Promise<RunResult> {
+  return run(process.execPath, [jsBin, ...args], cwd, env);
 }
 
 /** The non-empty output lines of a finished program. */
@@ -154,7 +177,7 @@ export async function buildStep(context: PluginStepContext): Promise<StepResult>
 export async function validateStep(context: PluginStepContext): Promise<StepResult> {
   const { pluginRoot } = context;
   const text = readFileSync(manifestPathFile(pluginRoot), "utf8");
-  const validation = parsePluginManifest(text, { builtIn: false });
+  const validation = parsePluginManifest(text, { builtIn: isBuiltIn(context) });
   if (!validation.ok) {
     return {
       ok: false,
@@ -189,9 +212,17 @@ function formatProblem(file: string, problem: { path: string; message: string })
     : `${file}: ${problem.path}: ${problem.message}`;
 }
 
-/** 3a typecheck: write the generated tsconfig and run Maibuk's tsc against it. */
+/** 3a typecheck: Maibuk's tsc against a Built-in, else tsc with a generated tsconfig. */
 export async function typecheckStep(context: PluginStepContext): Promise<StepResult> {
   const { pluginRoot, maibukRoot } = context;
+  if (isBuiltIn(context)) {
+    // A Built-in typechecks under the repo's own tsconfig, so `@/` resolves
+    // exactly the way the checkout resolves it, with no duplicated settings.
+    const tsc = join(maibukRoot, "node_modules", "typescript", "bin", "tsc");
+    const result = await runNode(tsc, ["-p", join(maibukRoot, "tsconfig.json"), "--pretty", "false"], maibukRoot);
+    if (result.code === 0) return { ok: true, details: ["tsc reported no type errors"] };
+    return { ok: false, details: outputLines(result) };
+  }
   const { checkConfigPath } = await writeGeneratedConfigs(pluginRoot, maibukRoot);
   const tsc = join(maibukRoot, "node_modules", "typescript", "bin", "tsc");
   const result = await runNode(tsc, ["-p", checkConfigPath, "--pretty", "false"], pluginRoot);
@@ -212,9 +243,25 @@ export async function lintStep(context: PluginStepContext): Promise<StepResult> 
   return { ok: false, details: outputLines(result) };
 }
 
-/** 4 test: the Plugin's tests through the kit, with jsdom and Maibuk's setup file. */
+/** 4 test: the repo's vitest config over a Built-in, else the isolated external run. */
 export async function testStep(context: PluginStepContext): Promise<StepResult> {
   const { pluginRoot, maibukRoot } = context;
+  if (isBuiltIn(context)) {
+    // A Built-in's tests run through the repo's own vitest config from the
+    // repo root, with the Plugin folder as the filter: `@/` and the repo's
+    // defines (like `__APP_VERSION__`) resolve the same way they do for the
+    // rest of the suite, with no duplicated settings.
+    const vitestBin = join(maibukRoot, "node_modules", "vitest", "vitest.mjs");
+    const result = await runNode(vitestBin, ["run", relative(maibukRoot, pluginRoot)], maibukRoot, {
+      TEST: "true",
+      VITEST: "true",
+      // A Vite `build` (the build step) leaves NODE_ENV=production; Vitest needs
+      // the test mode here, so it is set outright, not defaulted.
+      NODE_ENV: "test",
+    });
+    if (result.code === 0) return { ok: true, details: ["all plugin tests passed"] };
+    return { ok: false, details: outputLines(result) };
+  }
   process.env.TEST = "true";
   process.env.VITEST = "true";
   // A Vite `build` (the build step) leaves NODE_ENV=production, which makes the
@@ -266,7 +313,7 @@ export async function testStep(context: PluginStepContext): Promise<StepResult> 
 /** 5 boundary: the Plugin's imports against the import boundary. */
 export async function boundaryStep(context: PluginStepContext): Promise<StepResult> {
   const { pluginRoot, maibukRoot } = context;
-  const { violations } = checkImportBoundary(pluginRoot, { maibukRoot });
+  const { violations } = checkImportBoundary(pluginRoot, { maibukRoot, builtIn: isBuiltIn(context) });
   if (violations.length === 0) return { ok: true, details: ["no refused imports"] };
   return {
     ok: false,
@@ -295,7 +342,7 @@ export async function androidStep(context: PluginStepContext): Promise<StepResul
   const { pluginRoot } = context;
   try {
     const validation = parsePluginManifest(readFileSync(manifestPathFile(pluginRoot), "utf8"), {
-      builtIn: false,
+      builtIn: isBuiltIn(context),
     });
     if (!validation.ok) {
       return {
@@ -385,9 +432,14 @@ const STEP_FACTORIES: Record<PluginStepName, StepFn> = {
 
 /**
  * The steps in the order `plugin:check` runs them: build, validate, typecheck,
- * lint, test, boundary, android, package, layout.
+ * lint, test, boundary, android, package, layout. The Built-in flag is detected
+ * once here and threaded through the steps that need it.
  */
 export function pluginSteps(pluginRoot: string, maibukRoot: string): CheckStep[] {
-  const context: PluginStepContext = { pluginRoot, maibukRoot };
+  const context: PluginStepContext = {
+    pluginRoot,
+    maibukRoot,
+    builtIn: isBuiltInPlugin(pluginRoot, maibukRoot),
+  };
   return CHECK_ORDER.map((name) => ({ name, run: () => STEP_FACTORIES[name](context) }));
 }

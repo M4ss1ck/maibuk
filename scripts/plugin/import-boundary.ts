@@ -8,9 +8,16 @@
  * `@maibuk/plugin-test-kit` is allowed in test files (`*.test.*`,
  * `test-support.*`), and Node builtins are allowed only there, never in shipped
  * source. The bare `maibuk` package, and (when `maibukRoot` is given) a relative
- * specifier that resolves inside the checkout, are refused as reaching into
- * Maibuk. `node_modules`, `dist`, `.git`, `.maibuk`, and the root-level
- * `scripts/` are never walked, so a repo with a large `node_modules` scans fast.
+ * specifier that resolves inside the checkout but outside the Plugin folder,
+ * are refused as reaching into Maibuk. `node_modules`, `dist`, `.git`,
+ * `.maibuk`, and the root-level `scripts/` are never walked, so a repo with a
+ * large `node_modules` scans fast.
+ *
+ * A Built-in (`builtIn: true`) ships with the checkout, so its shipped files
+ * may also import `@/plugin-sdk` and one safe subpath segment of it (the same
+ * shape the public subpaths allow), and its test files may import any `@/...`
+ * module (they run inside the checkout's own test suite). Shipped files still
+ * may not import other `@/...` modules, and every other rule is unchanged.
  *
  * The specifier extraction matches `plugins/maibuk-echoes/import-boundary.test.ts`
  * (static `from`, side-effect `import`, dynamic `import()`, `export ... from`,
@@ -24,6 +31,8 @@ import { listFiles, TEST_FILE_PATTERN } from "./files";
 const SOURCE_PATTERN = /\.(ts|tsx|mts|cts|js|mjs|cjs|jsx)$/;
 const SDK_PACKAGE = "@maibuk/plugin-sdk";
 const TEST_KIT_PACKAGE = "@maibuk/plugin-test-kit";
+/** The SDK entry a Built-in imports from the checkout: `@/plugin-sdk`. */
+const BUILT_IN_SDK = "@/plugin-sdk";
 const MAIBUK_CHECKOUT_REASON = "reaches into the Maibuk checkout";
 /** Directories the walk never descends into; `scripts/` is pruned at the root only. */
 const PRUNED_DIRECTORIES = new Set(["node_modules", "dist", ".git", ".maibuk"]);
@@ -61,6 +70,8 @@ export interface ImportBoundaryResult {
 export interface ImportBoundaryOptions {
   /** The Maibuk checkout path, when known. */
   maibukRoot?: string;
+  /** Whether the Plugin is a Built-in shipping with the checkout. */
+  builtIn?: boolean;
 }
 
 interface Specifier {
@@ -131,7 +142,8 @@ function refusalReason(
   isTestFile: boolean,
   fromFile: string,
   pluginRoot: string,
-  maibukRoot: string | undefined
+  maibukRoot: string | undefined,
+  builtIn: boolean
 ): string | null {
   if (specifier === SDK_PACKAGE) return null;
   if (specifier.startsWith(`${SDK_PACKAGE}/`)) {
@@ -147,6 +159,16 @@ function refusalReason(
     return `${specifier} is not an allowed package; only ${SDK_PACKAGE} and ${TEST_KIT_PACKAGE} resolve`;
   }
   if (specifier.startsWith("@/")) {
+    if (builtIn) {
+      if (specifier === BUILT_IN_SDK) return null;
+      if (specifier.startsWith(`${BUILT_IN_SDK}/`)) {
+        const subpath = specifier.slice(BUILT_IN_SDK.length + 1);
+        return isSafeSubpath(subpath)
+          ? null
+          : `${specifier} is not an allowed ${BUILT_IN_SDK} subpath; import only ${BUILT_IN_SDK} or a relative file inside the Plugin`;
+      }
+      if (isTestFile) return null;
+    }
     return `${specifier} is private; import only ${SDK_PACKAGE} or a relative file inside the Plugin`;
   }
   if (isAbsolute(specifier) || /^[a-zA-Z]:[\\/]/.test(specifier)) {
@@ -157,7 +179,11 @@ function refusalReason(
   }
   if (specifier.startsWith(".")) {
     const target = resolve(dirname(fromFile), specifier);
-    if (maibukRoot !== undefined && isInside(maibukRoot, target)) {
+    if (
+      maibukRoot !== undefined &&
+      isInside(maibukRoot, target) &&
+      !isInside(pluginRoot, target)
+    ) {
       return `${specifier} ${MAIBUK_CHECKOUT_REASON}`;
     }
     return staysInside(fromFile, specifier, pluginRoot)
@@ -181,7 +207,7 @@ export function checkImportBoundary(
   pluginRoot: string,
   options: ImportBoundaryOptions = {}
 ): ImportBoundaryResult {
-  const { maibukRoot } = options;
+  const { maibukRoot, builtIn = false } = options;
   const files = listFiles(pluginRoot, { prune: PRUNED_DIRECTORIES, pruneRootScripts: true }).filter(
     (relPath) => SOURCE_PATTERN.test(relPath)
   );
@@ -196,7 +222,8 @@ export function checkImportBoundary(
         isTestFile,
         join(pluginRoot, relPath),
         pluginRoot,
-        maibukRoot
+        maibukRoot,
+        builtIn
       );
       if (reason !== null) {
         violations.push({
