@@ -340,3 +340,133 @@ describe("get_book", () => {
     }
   });
 });
+
+describe("list_books detail", () => {
+  const bookId = "book-excerpt-0001";
+
+  function chapterWithContent(id: string, order: number, title: string, text: string) {
+    return {
+      ...makeChapter(id, bookId, order, title, 5),
+      content: { text, html: `<p>${text}</p>` },
+    };
+  }
+
+  it("excerpts: first Chapter by order, whitespace collapsed", async () => {
+    const books = [makeBook(bookId, 1000, { title: "ExcerptBook" })];
+    const chapters = [
+      chapterWithContent("chapter-0002", 2, "Second", "Second chapter text here"),
+      chapterWithContent("chapter-0001", 1, "First", "  Once   upon\n\ta   time  "),
+    ];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "list_books", { detail: "excerpts" });
+      expect(isError(answer)).toBe(false);
+      const lines = textOf(answer).split("\n");
+      expect(lines[0]).toBe("Books 1-1 of 1");
+      expect(lines[1]).toContain("ExcerptBook");
+      expect(lines[2]).toBe("  Once upon a time");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("excerpts: cuts text longer than 150 chars with …", async () => {
+    const books = [makeBook(bookId, 1000, { title: "LongBook" })];
+    const chapters = [chapterWithContent("chapter-0001", 1, "First", "a".repeat(200))];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "list_books", { detail: "excerpts" });
+      expect(isError(answer)).toBe(false);
+      const lines = textOf(answer).split("\n");
+      expect(lines[2]).toBe(`  ${"a".repeat(150)}…`);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("excerpts: Book without Chapters has no excerpt line", async () => {
+    const books = [makeBook(bookId, 1000, { title: "LonelyBook" })];
+    const { host, key } = await connect({ library: { books, chapters: [] } as any });
+    try {
+      const answer = await callTool(host, key, "list_books", { detail: "excerpts" });
+      expect(isError(answer)).toBe(false);
+      const lines = textOf(answer).split("\n");
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toBe("Books 1-1 of 1");
+      expect(lines[1]).toContain("LonelyBook");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("titles default prints no excerpt", async () => {
+    const books = [makeBook(bookId, 1000, { title: "PlainBook" })];
+    const chapters = [chapterWithContent("chapter-0001", 1, "First", "Chapter body here")];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "list_books", {});
+      expect(isError(answer)).toBe(false);
+      const lines = textOf(answer).split("\n");
+      expect(lines).toHaveLength(2);
+      expect(textOf(answer)).not.toContain("Chapter body here");
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+describe("get_book detail", () => {
+  const bookId = "book-excerpt-0002";
+
+  it("excerpts: Chapter and Note lines gain excerpts", async () => {
+    const books = [makeBook(bookId, 1000, { title: "DetailBook" })];
+    const chapters = [
+      {
+        ...makeChapter("chapter-0001", bookId, 1, "First", 5),
+        content: { text: "Chapter body here", html: "<p>Chapter body here</p>" },
+      },
+    ];
+    const notes = [
+      {
+        ...makeNote("note-0001", bookId, "Note One"),
+        content: { text: "Note body here", html: "<p>Note body here</p>" },
+      },
+    ];
+    const { host, key } = await connect({ library: { books, chapters, notes } as any });
+    try {
+      const answer = await callTool(host, key, "get_book", { book: bookId, detail: "excerpts" });
+      expect(isError(answer)).toBe(false);
+      const text = textOf(answer);
+      expect(text).toContain("  Chapter body here");
+      expect(text).toContain("  Note body here");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("titles default prints no excerpt", async () => {
+    const books = [makeBook(bookId, 1000, { title: "DetailBook" })];
+    const chapters = [
+      {
+        ...makeChapter("chapter-0001", bookId, 1, "First", 5),
+        content: { text: "Chapter body here", html: "<p>Chapter body here</p>" },
+      },
+    ];
+    const notes = [
+      {
+        ...makeNote("note-0001", bookId, "Note One"),
+        content: { text: "Note body here", html: "<p>Note body here</p>" },
+      },
+    ];
+    const { host, key } = await connect({ library: { books, chapters, notes } as any });
+    try {
+      const answer = await callTool(host, key, "get_book", { book: bookId });
+      expect(isError(answer)).toBe(false);
+      const text = textOf(answer);
+      expect(text).not.toContain("Chapter body here");
+      expect(text).not.toContain("Note body here");
+    } finally {
+      host.stop();
+    }
+  });
+});

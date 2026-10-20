@@ -47,6 +47,7 @@ export function buildMcpServer(client: PluginClient): McpServer {
         status: z.enum(["draft", "in-progress", "completed", "archived"]).optional(),
         cursor: z.string().optional(),
         limit: z.number().int().min(1).optional(),
+        detail: z.enum(["titles", "excerpts"]).optional(),
       }),
       annotations: { readOnlyHint: true },
     },
@@ -59,6 +60,7 @@ export function buildMcpServer(client: PluginClient): McpServer {
       description: "Read one Book with its ordered Chapter list and its Note titles.",
       inputSchema: z.object({
         book: z.string().min(8),
+        detail: z.enum(["titles", "excerpts"]).optional(),
       }),
       annotations: { readOnlyHint: true },
     },
