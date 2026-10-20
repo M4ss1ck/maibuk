@@ -217,6 +217,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
     "endpoint.address": (_params, { pluginId }) => ({
       url: endpointUrlFor(endpointState, pluginId),
     }),
+    "permissions.granted": () => ({ permissions: [...granted] }),
     // Refuses what the host refuses (the same rule as the app's handler), then records the state.
     "toolbar.setPressed": ({ button, pressed }) => {
       assertToggleButton(options.manifest, button);
@@ -237,6 +238,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
       if (event === "endpoint.addressChanged") {
         return { url: endpointUrlFor(endpointState, options.manifest.id) };
       }
+      if (event === "permissions.changed") return { permissions: [...granted] };
       return undefined;
     },
   });
@@ -377,7 +379,13 @@ export function createTestHost(options: TestHostOptions): TestHost {
       clipboard = next;
     },
     setGranted(permissions) {
-      granted = new Set(permissions);
+      const next = new Set(permissions);
+      const unchanged =
+        next.size === granted.size && [...next].every((permission) => granted.has(permission));
+      granted = next;
+      // Like setLanguage: only a real change reaches a subscribed Plugin, so
+      // recording the same set again costs no event.
+      if (!unchanged) broker.emit("permissions.changed", { permissions: [...granted] });
     },
     setLanguage(next) {
       language = next;

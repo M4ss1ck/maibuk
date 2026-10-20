@@ -16,7 +16,7 @@ import { CHAPTER_STATUSES, CHAPTER_TYPES } from "@/features/chapters/types";
 import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.5";
+export const PLUGIN_API_VERSION = "0.1.6";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -24,6 +24,7 @@ export const PLUGIN_API_NAMESPACES = [
   "navigation",
   "language",
   "endpoint",
+  "permissions",
   "secrets",
   "network",
   "clipboard",
@@ -429,6 +430,15 @@ export const PLUGIN_API_TABLE = [
     requiresLibrary: false,
   }),
   defineApiRow({
+    id: "permissions.granted",
+    description:
+      "Lists the Plugin Permissions this Plugin holds right now. No permission is required.",
+    input: none,
+    output: z.strictObject({ permissions: z.array(z.string()) }),
+    permission: null,
+    effect: "read",
+  }),
+  defineApiRow({
     id: "secrets.set",
     description: "Stores a secret by name. Secrets are never read back into the Plugin.",
     input: z.strictObject({ name: z.string().min(1).max(64), value: z.string().max(4096) }),
@@ -607,6 +617,14 @@ export const PLUGIN_API_EVENTS = [
       "This Plugin's Plugin Endpoint address changed: the listener moved to another port or stopped. The current address is delivered on subscription, so a Plugin that starts after a change never misses it.",
     payload: z.strictObject({ url: z.string().nullable() }),
     permission: "serve",
+    replays: true,
+  }),
+  defineApiEvent({
+    id: "permissions.changed",
+    description:
+      "This Plugin's Plugin Permissions changed: one was granted or revoked. The current list is delivered on subscription, so a Plugin that starts after a change never misses it.",
+    payload: z.strictObject({ permissions: z.array(z.string()) }),
+    permission: null,
     replays: true,
   }),
   defineApiEvent({

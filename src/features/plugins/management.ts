@@ -271,6 +271,19 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
     return state !== null && state.status !== "stopped";
   }
 
+  /**
+   * Tells a running Plugin its Plugin Permissions changed (#591). The broker
+   * drops the event when the Plugin never subscribed, exactly like the
+   * language and endpoint events the lifecycle emits host-side. Called by
+   * every path that writes a new grant set while the Plugin may keep running.
+   */
+  function emitPermissionsChanged(pluginId: string): void {
+    const broker = getLifecycle()?.runtime(pluginId)?.broker;
+    const approval = getPluginApproval(pluginId);
+    if (!broker || !approval) return;
+    broker.emit("permissions.changed", { permissions: [...approval.granted] });
+  }
+
   /** The stop Settings shows as Stopped for an installed Plugin, or null. */
   function stoppedOf(pluginId: string): PluginManagementEntry["stopped"] {
     const state = getLifecycle()?.state(pluginId) ?? null;
@@ -849,6 +862,9 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         savePluginApproval(approval);
         await applyApproval(pluginId, copy, approval, builtIn);
         await start(pluginId);
+        // A re-approval may rewrite the grant set of a Plugin that keeps
+        // running (its start is a no-op once ready): it hears the new list (#591).
+        emitPermissionsChanged(pluginId);
         return { ok: true };
       },
 
@@ -861,6 +877,10 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         if (!next.enabled) {
           // A required grant is gone: the Plugin is disabled and unregistered.
           getLifecycle()?.uninstall(pluginId);
+        } else {
+          // An optional grant is gone but the Plugin keeps running: it hears
+          // the new list now, and the broker refuses the next gated call (#591).
+          emitPermissionsChanged(pluginId);
         }
         set((state) => ({
           plugins: {
@@ -960,6 +980,9 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         savePluginApproval(next);
         await applyApproval(pluginId, copy, next, builtIn);
         await start(pluginId);
+        // The review may grant or drop an optional Permission of a Plugin that
+        // keeps running: it hears the new list (#591).
+        emitPermissionsChanged(pluginId);
       },
 
       async keepMyCopy(pluginId) {

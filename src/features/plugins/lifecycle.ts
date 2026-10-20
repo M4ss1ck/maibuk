@@ -583,6 +583,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
           if (event === "endpoint.addressChanged") {
             return { url: endpointUrlFor(usePluginManagementStore.getState().endpoint, pluginId) };
           }
+          if (event === "permissions.changed") {
+            return { permissions: [...(getPluginApproval(pluginId)?.granted ?? [])] };
+          }
           return undefined;
         },
         // The remaining budget, so the handshake cannot grant itself a fresh 10 s.

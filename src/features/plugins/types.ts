@@ -859,7 +859,10 @@ export interface TestHost {
   setClipboard(text: string): void;
   /** The UI-string overrides this host carries, before they are applied. */
   locale: PluginLocale | null;
-  /** Changes the granted Plugin Permissions; the next call reads them again. */
+  /**
+   * Changes the granted Plugin Permissions; the next call reads them again,
+   * and a subscribed Plugin hears `permissions.changed` when the set changed.
+   */
   setGranted(permissions: readonly PluginPermissionId[]): void;
   /** Whether the Plugin last set this Toggle Button on with `toolbar.setPressed`; off until it does. */
   toolbarPressed(button: string): boolean;

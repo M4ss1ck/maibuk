@@ -467,6 +467,61 @@ describe("createTestHost() events and language", () => {
   });
 });
 
+describe("createTestHost() permissions", () => {
+  function permissionsManifest(): PluginManifest {
+    return {
+      ...fixtureManifest(),
+      permissions: { required: ["library:read"], optional: ["editor:read"] },
+    };
+  }
+
+  it("lists the Plugin's granted permissions, and the new list after setGranted (#591)", async () => {
+    const host = createTestHost({ manifest: permissionsManifest(), permissions: ["library:read"] });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.permissions.granted()).resolves.toEqual({
+        permissions: ["library:read"],
+      });
+      host.setGranted(["library:read", "editor:read"]);
+      await expect(client.permissions.granted()).resolves.toEqual({
+        permissions: ["library:read", "editor:read"],
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("delivers the current list on subscription, then the new list, and nothing when the set is unchanged (#591)", async () => {
+    const host = createTestHost({ manifest: permissionsManifest(), permissions: ["library:read"] });
+    try {
+      const client = createPluginClient(host.port);
+      const seen: string[][] = [];
+      const off = await client.on("permissions.changed", (payload) =>
+        seen.push(payload.permissions)
+      );
+
+      // The current list arrives on subscription, so a Plugin that starts after
+      // a change never misses it.
+      await vi.waitFor(() => expect(seen).toEqual([["library:read"]]));
+      host.setGranted(["library:read", "editor:read"]);
+      await vi.waitFor(() =>
+        expect(seen).toEqual([["library:read"], ["library:read", "editor:read"]])
+      );
+      // The same set again, in another order, is not a change and fires nothing:
+      // the round-tripped call below settles after any event would have been
+      // delivered, since the port delivers in order.
+      host.setGranted(["editor:read", "library:read"]);
+      await expect(client.permissions.granted()).resolves.toEqual({
+        permissions: ["editor:read", "library:read"],
+      });
+      expect(seen).toEqual([["library:read"], ["library:read", "editor:read"]]);
+      await off();
+    } finally {
+      host.stop();
+    }
+  });
+});
+
 describe("renderPage", () => {
   it("renders a Plugin page through the real host renderer, by keyboard alone", async () => {
     const host = createTestHost({ manifest: fixtureManifest() });

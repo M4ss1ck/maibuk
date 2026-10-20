@@ -11,7 +11,8 @@
  * shell;
  * `navigation.openPage` opens a Plugin page;
  * `language.get` reads the app language; `endpoint.address` reads this Plugin's
- * Plugin Endpoint address; `secrets.*` writes the calling
+ * Plugin Endpoint address; `permissions.granted` lists the calling Plugin's own
+ * grants; `secrets.*` writes the calling
  * Plugin's credentials through the registered store; `network.fetch` fetches
  * on a granted host and streams the body, injecting a named secret into a
  * declared header; `clipboard.*` reads and writes the platform clipboard; and
@@ -21,6 +22,7 @@
  */
 
 import { toast } from "@/components/ui/Toast";
+import { getPluginApproval } from "@/features/plugins/approvals";
 import {
   getPluginEditorContent,
   getPluginEditorSelection,
@@ -181,6 +183,9 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "language.get": async () => ({ language: currentPluginLanguage() }),
     "endpoint.address": (_params, { pluginId }) => ({
       url: endpointUrlFor(usePluginManagementStore.getState().endpoint, pluginId),
+    }),
+    "permissions.granted": (_params, { pluginId }) => ({
+      permissions: [...(getPluginApproval(pluginId)?.granted ?? [])],
     }),
     "secrets.set": async ({ name, value }, { pluginId }) => {
       await pluginSecretStore().set(pluginId, name, value);
