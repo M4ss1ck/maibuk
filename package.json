@@ -12,7 +12,7 @@
     "test:coverage": "vitest run --coverage",
     "test:stress": "node scripts/test-stress.mjs",
     "test:guards": "node scripts/test-guards.mjs",
-    "test:release": "bash scripts/test-changelog.sh",
+    "test:release": "bash scripts/test-changelog.sh && bash scripts/test-release.sh",
     "test:e2e": "node e2e/run.mjs",
     "test:e2e:sync": "node e2e/run-sync.mjs",
     "test:e2e:headed": "bash scripts/e2e-headed.sh",

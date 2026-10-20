@@ -202,7 +202,11 @@ describe("Dictation extension", () => {
     expect(dictationPluginKey.getState(editor.state)?.partial).toBe("mun");
     const plugin = dictationPluginKey.get(editor.state)!;
     const decorations = plugin.props.decorations!.call(plugin, editor.state);
-    const [widget] = (decorations as DecorationSet).find();
+    // The set also holds the has-dictation-partial line decoration, which
+    // starts before the caret; pick the widget by its key.
+    const [widget] = (decorations as DecorationSet).find(undefined, undefined, (spec) =>
+      String(spec.key).startsWith("dictation:")
+    );
     expect(widget.from).toBe(editor.state.selection.to);
     targets[0].showPartial("mundo");
     editor.commands.insertContent(" o");
