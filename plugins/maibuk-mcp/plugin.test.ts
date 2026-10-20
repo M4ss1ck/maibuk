@@ -108,6 +108,9 @@ describe("MCP Server protocol", () => {
       expect(answer.json.result.tools.map((tool: any) => tool.name)).toEqual([
         "list_books",
         "get_book",
+        "read_chapter",
+        "list_notes",
+        "read_note",
       ]);
     } finally {
       host.stop();
@@ -148,7 +151,7 @@ describe("MCP Server protocol", () => {
     }
   });
 
-  it("advertises exactly list_books then get_book, both read-only and without output schemas", async () => {
+  it("advertises the tools in order, all read-only and without output schemas", async () => {
     const { host, key } = await connect();
     try {
       const answer = await mcpRequest(host, key, toolsListBody());
@@ -169,6 +172,24 @@ describe("MCP Server protocol", () => {
               "readOnlyHint": true,
             },
             "name": "get_book",
+          },
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "read_chapter",
+          },
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "list_notes",
+          },
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "read_note",
           },
         ]
       `);
