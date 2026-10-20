@@ -13,6 +13,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
+use std::future::Future;
 use std::net::Ipv4Addr;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -41,6 +42,10 @@ pub const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 
 /// How long a Plugin has to answer before the Agent gets 504.
 pub const ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How long `shutdown` waits for the accept task to drop the socket: long
+/// enough for a scheduled task, short enough never to hang the caller.
+const CLOSE_WAIT: Duration = Duration::from_millis(250);
 
 /// One inbound HTTP request, as a Plugin receives it.
 ///
@@ -88,28 +93,51 @@ where
     }
 }
 
-/// The state of one request: waiting for `respond`, or streaming chunks.
 enum Stage {
     Waiting(oneshot::Sender<AnswerStart>),
     Streaming(mpsc::UnboundedSender<Bytes>),
+    /// `end`ed, and kept only until its body drops, so a `chunk` that races
+    /// the end still reads as an error rather than as a hung-up client.
+    Ended,
 }
 
-/// The answer a Plugin started: everything the HTTP layer needs, including the
-/// open chunk channel for a streamed one.
+/// Owns one pending entry: whoever holds it keeps the entry, and dropping it
+/// removes the entry unless the answer moved the guard into its body.
+struct PendingGuard {
+    shared: Arc<Shared>,
+    id: u64,
+}
+
+impl PendingGuard {
+    fn forget(&self) {
+        self.shared.forget(self.id);
+    }
+}
+
+impl Drop for PendingGuard {
+    fn drop(&mut self) {
+        self.forget();
+    }
+}
+
 struct AnswerStart {
     status: StatusCode,
     headers: Vec<(HeaderName, HeaderValue)>,
-    /// The whole body of a non-streamed answer.
     body: Option<Bytes>,
-    /// Chunks of a streamed answer.
     chunks: Option<mpsc::UnboundedReceiver<Bytes>>,
 }
 
 /// The response body: one buffer with a known length, or chunks of unknown
-/// length (hyper then frames with chunked transfer encoding).
+/// length (hyper then frames with chunked transfer encoding). A chunked body
+/// owns the pending entry and ends the stream when the Plugin goes idle.
 enum AnswerBody {
     Whole(Option<Bytes>),
-    Chunks(mpsc::UnboundedReceiver<Bytes>),
+    Chunks {
+        chunks: mpsc::UnboundedReceiver<Bytes>,
+        guard: PendingGuard,
+        idle: Duration,
+        deadline: Pin<Box<tokio::time::Sleep>>,
+    },
 }
 
 impl HttpBody for AnswerBody {
@@ -124,9 +152,25 @@ impl HttpBody for AnswerBody {
             AnswerBody::Whole(bytes) => {
                 Poll::Ready(bytes.take().map(|bytes| Ok(Frame::data(bytes))))
             }
-            AnswerBody::Chunks(chunks) => chunks
-                .poll_recv(cx)
-                .map(|chunk| chunk.map(|bytes| Ok(Frame::data(bytes)))),
+            AnswerBody::Chunks {
+                chunks,
+                guard,
+                idle,
+                deadline,
+            } => match chunks.poll_recv(cx) {
+                Poll::Ready(Some(bytes)) => {
+                    deadline.as_mut().reset(tokio::time::Instant::now() + *idle);
+                    Poll::Ready(Some(Ok(Frame::data(bytes))))
+                }
+                Poll::Ready(None) => Poll::Ready(None),
+                Poll::Pending => match deadline.as_mut().poll(cx) {
+                    Poll::Ready(()) => {
+                        guard.forget();
+                        Poll::Ready(None)
+                    }
+                    Poll::Pending => Poll::Pending,
+                },
+            },
         }
     }
 
@@ -154,6 +198,8 @@ struct Shared {
     /// Swappable: the webview re-sends its Channel on every sync, and a reload
     /// leaves the old one dead.
     sink: RwLock<Arc<dyn RequestSink>>,
+    /// Taken by `shutdown` to wait for the accept task to close the socket.
+    closed: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
 }
 
 impl Shared {
@@ -172,11 +218,24 @@ impl Shared {
         Some(id.to_string())
     }
 
-    /// Removes a request nobody can answer any more.
     fn forget(&self, id: u64) {
         if let Ok(mut pending) = self.pending.lock() {
             pending.remove(&id);
         }
+    }
+
+    /// Blocks until the accept task dropped the listening socket, so a bind on
+    /// the same port right after `shutdown` cannot race it into `EADDRINUSE`.
+    fn await_closed(&self) {
+        let closed = self.closed.lock().ok().and_then(|mut closed| closed.take());
+        if let Some(closed) = closed {
+            let _ = closed.recv_timeout(CLOSE_WAIT);
+        }
+    }
+
+    #[cfg(test)]
+    fn pending_len(&self) -> usize {
+        self.pending.lock().map_or(0, |pending| pending.len())
     }
 
     /// Answers every waiting request with `status` and ends every open stream.
@@ -232,6 +291,7 @@ impl Listener {
             .map_err(|error| format!("cannot read the endpoint address: {error}"))?
             .port();
         let (stop, stopped) = watch::channel(false);
+        let (closed, closing) = std::sync::mpsc::channel();
         let shared = Arc::new(Shared {
             port,
             answer_timeout,
@@ -240,8 +300,9 @@ impl Listener {
             next_id: AtomicU64::new(1),
             stop,
             sink: RwLock::new(Arc::new(sink)),
+            closed: Mutex::new(Some(closing)),
         });
-        tokio::spawn(accept(Arc::clone(&shared), socket, stopped));
+        tokio::spawn(accept(Arc::clone(&shared), socket, stopped, closed));
         Ok(Self { shared })
     }
 
@@ -286,6 +347,7 @@ impl Listener {
             "The Plugin Endpoint is off",
         );
         self.shared.stop.send_replace(true);
+        self.shared.await_closed();
     }
 
     /// Answers a waiting request. `body` is base64; `streaming` sends the
@@ -314,7 +376,7 @@ impl Listener {
             .map_err(|_| "the Plugin Endpoint is unavailable".to_string())?;
         match pending.get(&id) {
             Some(Stage::Waiting(_)) => {}
-            Some(Stage::Streaming(_)) => {
+            Some(Stage::Streaming(_) | Stage::Ended) => {
                 return Err(format!("request {request_id} was already answered"));
             }
             None => return Err(format!("unknown request {request_id}")),
@@ -367,8 +429,10 @@ impl Listener {
             .pending
             .lock()
             .map_err(|_| "the Plugin Endpoint is unavailable".to_string())?;
+        // The body takes its entry with it when the client goes away; no entry
+        // means nobody is there to read the chunk.
         let Some(stage) = pending.get_mut(&id) else {
-            return Err(format!("unknown request {request_id}"));
+            return Ok(false);
         };
         let Stage::Streaming(chunks) = stage else {
             return Err(format!("request {request_id} is not streaming"));
@@ -389,15 +453,21 @@ impl Listener {
             .pending
             .lock()
             .map_err(|_| "the Plugin Endpoint is unavailable".to_string())?;
-        let Some(stage) = pending.get(&id) else {
+        let Some(stage) = pending.get_mut(&id) else {
             return Err(format!("unknown request {request_id}"));
         };
         if matches!(stage, Stage::Waiting(_)) {
             return Err(format!("request {request_id} has no answer yet"));
         }
-        // Dropping the sender ends the chunked body.
-        pending.remove(&id);
+        // Dropping the sender ends the chunked body; the entry outlives it
+        // only until the body drops.
+        *stage = Stage::Ended;
         Ok(())
+    }
+
+    #[cfg(test)]
+    fn pending_len(&self) -> usize {
+        self.shared.pending_len()
     }
 }
 
@@ -439,12 +509,14 @@ fn plugin_headers(headers: Vec<(String, String)>) -> Vec<(HeaderName, HeaderValu
         .collect()
 }
 
-/// Accepts until `shutdown`. A shutdown wins over a racing accept: the port
-/// must be closed, not reopened by one more request.
+/// Accepts until `shutdown`, then drops the socket and reports that it did so.
+/// A shutdown wins over a racing accept: the port must be closed, not reopened
+/// by one more request.
 async fn accept(
     shared: Arc<Shared>,
     socket: tokio::net::TcpListener,
     mut stopped: watch::Receiver<bool>,
+    closed: std::sync::mpsc::Sender<()>,
 ) {
     loop {
         tokio::select! {
@@ -471,6 +543,8 @@ async fn accept(
             }
         }
     }
+    drop(socket);
+    let _ = closed.send(());
 }
 
 /// One request, checked in the order the design fixes: Host, Origin, path,
@@ -511,7 +585,7 @@ async fn answer(shared: Arc<Shared>, request: Request<Incoming>) -> Response<Ans
     let id = shared.next_id.fetch_add(1, Ordering::Relaxed);
     let request_id = id.to_string();
     let (answered, answer) = oneshot::channel();
-    {
+    let guard = {
         let Ok(mut pending) = shared.pending.lock() else {
             return plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -519,10 +593,13 @@ async fn answer(shared: Arc<Shared>, request: Request<Incoming>) -> Response<Ans
             );
         };
         pending.insert(id, Stage::Waiting(answered));
-    }
+        PendingGuard {
+            shared: Arc::clone(&shared),
+            id,
+        }
+    };
     let sink = shared.sink.read().ok().map(|sink| Arc::clone(&sink));
     let Some(sink) = sink else {
-        shared.forget(id);
         return plain(
             StatusCode::INTERNAL_SERVER_ERROR,
             "The Plugin Endpoint is unavailable",
@@ -540,18 +617,15 @@ async fn answer(shared: Arc<Shared>, request: Request<Incoming>) -> Response<Ans
     });
 
     match tokio::time::timeout(shared.answer_timeout, answer).await {
-        Ok(Ok(start)) => start.into_response(),
+        Ok(Ok(start)) => start.into_response(guard),
         Ok(Err(_)) => plain(
             StatusCode::SERVICE_UNAVAILABLE,
             "The Plugin Endpoint is off",
         ),
-        Err(_) => {
-            shared.forget(id);
-            plain(
-                StatusCode::GATEWAY_TIMEOUT,
-                "The Plugin did not answer in time",
-            )
-        }
+        Err(_) => plain(
+            StatusCode::GATEWAY_TIMEOUT,
+            "The Plugin did not answer in time",
+        ),
     }
 }
 
@@ -594,16 +668,31 @@ async fn drain(incoming: &mut Incoming, limit: usize) {
 }
 
 impl AnswerStart {
-    fn into_response(self) -> Response<AnswerBody> {
-        let mut response = Response::new(match self.chunks {
-            Some(chunks) => AnswerBody::Chunks(chunks),
-            None => AnswerBody::Whole(Some(self.body.unwrap_or_default())),
-        });
-        *response.status_mut() = self.status;
+    fn into_response(self, guard: PendingGuard) -> Response<AnswerBody> {
+        let status = self.status;
+        let body = match self.chunks {
+            Some(chunks) => {
+                let idle = guard.shared.answer_timeout;
+                AnswerBody::Chunks {
+                    chunks,
+                    guard,
+                    idle,
+                    deadline: Box::pin(tokio::time::sleep(idle)),
+                }
+            }
+            None => {
+                drop(guard);
+                AnswerBody::Whole(Some(self.body.unwrap_or_default()))
+            }
+        };
+        let mut response = Response::new(body);
+        *response.status_mut() = status;
         for (name, value) in self.headers {
             response.headers_mut().append(name, value);
         }
-        if let AnswerBody::Whole(Some(bytes)) = response.body() {
+        if forbids_body(status) {
+            *response.body_mut() = AnswerBody::Whole(None);
+        } else if let AnswerBody::Whole(Some(bytes)) = response.body() {
             let length = bytes.len() as u64;
             response
                 .headers_mut()
@@ -611,6 +700,12 @@ impl AnswerStart {
         }
         response
     }
+}
+
+/// RFC 9110: a 1xx, 204, or 304 answer carries neither a body nor a
+/// `Content-Length`.
+fn forbids_body(status: StatusCode) -> bool {
+    status.is_informational() || matches!(status, StatusCode::NO_CONTENT | StatusCode::NOT_MODIFIED)
 }
 
 fn plain(status: StatusCode, message: &'static str) -> Response<AnswerBody> {
@@ -761,6 +856,11 @@ impl EndpointState {
         self.slot()
             .clone()
             .ok_or_else(|| "the Plugin Endpoint is not listening".to_string())
+    }
+
+    #[cfg(test)]
+    fn pending_len(&self) -> usize {
+        self.listener().map_or(0, |listener| listener.pending_len())
     }
 }
 
@@ -1402,6 +1502,174 @@ mod tests {
         assert_eq!(reply.header("transfer-encoding"), Some("chunked"));
         assert_eq!(reply.header("content-length"), None);
         assert_eq!(reply.body, b"firstsecond");
+    }
+
+    #[tokio::test]
+    async fn forgets_a_request_when_the_client_disconnects_before_the_answer() {
+        let mut endpoint = Endpoint::serving(&["acme"]).await;
+        let port = endpoint.port;
+        let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .expect("the endpoint must accept");
+        stream
+            .write_all(&raw(
+                "GET",
+                "/plugin/acme/mcp",
+                &format!("127.0.0.1:{port}"),
+                None,
+                &[],
+                b"",
+            ))
+            .await
+            .expect("the request writes");
+        let _message = endpoint.next().await;
+        assert_eq!(
+            endpoint.state.pending_len(),
+            1,
+            "the request waits for an answer"
+        );
+        drop(stream);
+
+        let mut gone = false;
+        for _ in 0..100 {
+            if endpoint.state.pending_len() == 0 {
+                gone = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert!(
+            gone,
+            "a client that hangs up must not leave a pending entry"
+        );
+    }
+
+    #[tokio::test]
+    async fn forgets_a_stream_when_the_client_hangs_up_mid_stream() {
+        let mut endpoint = Endpoint::serving(&["acme"]).await;
+        let port = endpoint.port;
+        let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .expect("the endpoint must accept");
+        stream
+            .write_all(&raw(
+                "GET",
+                "/plugin/acme/mcp",
+                &format!("127.0.0.1:{port}"),
+                None,
+                &[],
+                b"",
+            ))
+            .await
+            .expect("the request writes");
+        let message = endpoint.next().await;
+        endpoint
+            .state
+            .respond(&message.request_id, 200, Vec::new(), None, true)
+            .expect("the stream starts");
+        drop(stream);
+
+        let mut gone = false;
+        for _ in 0..100 {
+            if endpoint.state.pending_len() == 0 {
+                gone = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert!(
+            gone,
+            "the streaming body must drop its pending entry when the client hangs up"
+        );
+        assert!(
+            !endpoint
+                .state
+                .chunk(&message.request_id, &sample_base64(b"chunk"))
+                .unwrap_or(false),
+            "chunk must report a client that hung up"
+        );
+    }
+
+    #[tokio::test]
+    async fn ends_an_idle_stream_at_the_answer_timeout() {
+        let mut endpoint = Endpoint::on(0, Duration::from_millis(300), &["acme"]).await;
+        let port = endpoint.port;
+        let client = tokio::spawn(async move {
+            send_raw(
+                port,
+                &raw(
+                    "GET",
+                    "/plugin/acme/mcp",
+                    &format!("127.0.0.1:{port}"),
+                    None,
+                    &[],
+                    b"",
+                ),
+            )
+            .await
+        });
+        let message = endpoint.next().await;
+        endpoint
+            .state
+            .respond(&message.request_id, 200, Vec::new(), None, true)
+            .expect("the stream starts");
+
+        let reply = tokio::time::timeout(Duration::from_secs(5), client)
+            .await
+            .expect("an idle stream must end")
+            .expect("the client answers");
+        assert_eq!(reply.status, 200);
+        assert!(reply.body.is_empty());
+        assert_eq!(
+            endpoint.state.pending_len(),
+            0,
+            "an idle stream must not leave its entry behind"
+        );
+    }
+
+    #[tokio::test]
+    async fn answers_204_without_a_content_length() {
+        let mut endpoint = Endpoint::serving(&["acme"]).await;
+        let port = endpoint.port;
+        let client = tokio::spawn(async move {
+            send_raw(
+                port,
+                &raw(
+                    "GET",
+                    "/plugin/acme/mcp",
+                    &format!("127.0.0.1:{port}"),
+                    None,
+                    &[],
+                    b"",
+                ),
+            )
+            .await
+        });
+        let message = endpoint.next().await;
+        endpoint
+            .state
+            .respond(&message.request_id, 204, Vec::new(), None, false)
+            .expect("the answer reaches the request");
+        let reply = client.await.expect("the client answers");
+        assert_eq!(reply.status, 204);
+        assert_eq!(
+            reply.header("content-length"),
+            None,
+            "RFC 9110 forbids Content-Length on a 204"
+        );
+        assert!(reply.body.is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn binds_the_same_port_again_right_after_shutdown() {
+        let mut port = 0;
+        for _ in 0..20 {
+            let listener =
+                Listener::bind(port, |_: EndpointRequestMsg| {}).expect("the port is free again");
+            port = listener.port();
+            tokio::task::yield_now().await;
+            listener.shutdown();
+        }
     }
 
     #[tokio::test]
