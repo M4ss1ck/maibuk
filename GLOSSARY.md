@@ -201,12 +201,12 @@ _UI_: en "Named" / es "Nombrada"
 _Avoid_: manual version, milestone
 
 **Checkpoint**:
-A Version Maibuk took on its own (after idle time, on close, before a Pull of that Book, before a Restore), even when it carries an automatic name.
+A Version Maibuk took on its own (after idle time, on close, before a Pull of that Book, before a Restore, before a Plugin changes that Book), even when it carries an automatic name.
 _UI_: en "Auto checkpoint", "On close", "Before sync", "Before restore"
 _Avoid_: autosave version
 
 **Version Trigger**:
-The reason a Version was taken: the author, idle time, closing, before a Pull, or before a Restore.
+The reason a Version was taken: the author, idle time, closing, before a Pull, before a Restore, or a Plugin before it changes the Book.
 
 **Backup**:
 A saved copy of the Library at a moment in time. Restoring it brings back Books, Notes, Canvases, and Version history; settings and metrics stay as they are.
