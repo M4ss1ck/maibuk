@@ -13,5 +13,14 @@
   "permissions": {
     "required": ["serve", "library:read", "library:write"],
     "optional": []
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "newKey",
+        "label": "Make a New MCP Server Key",
+        "contexts": ["global"]
+      }
+    ]
   }
 }

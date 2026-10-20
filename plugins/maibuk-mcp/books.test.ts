@@ -85,6 +85,7 @@ describe("list_books", () => {
       const firstLines = firstText.split("\n");
       expect(firstLines[0]).toBe("Books 1-20 of 25");
       expect(firstLines).toHaveLength(22); // header + 20 + more
+      expect(first.json?.result?.structuredContent).toBeUndefined();
       const moreLine = firstLines[firstLines.length - 1];
       const m = moreLine.match(/cursor "([^"]+)"/);
       expect(m).not.toBeNull();
@@ -101,7 +102,7 @@ describe("list_books", () => {
     }
   });
 
-  it("limit 50 cap: 60 books, limit 50 -> 50 lines; limit 51 refused", async () => {
+  it("limit 51 clamps to 50 lines on 60 books", async () => {
     const books = Array.from({ length: 60 }, (_, i) =>
       makeBook(`book-${String(i).padStart(4, "0")}`, Date.UTC(2026, 0, 1))
     );
@@ -112,8 +113,11 @@ describe("list_books", () => {
       expect(lines[0]).toBe("Books 1-50 of 60");
       expect(lines.filter((l) => /\d+ words/.test(l))).toHaveLength(50);
 
-      const bad = await callTool(host, key, "list_books", { limit: 51 });
-      expect(isError(bad)).toBe(true);
+      const over = await callTool(host, key, "list_books", { limit: 51 });
+      expect(isError(over)).toBe(false);
+      const overLines = textOf(over).split("\n");
+      expect(overLines[0]).toBe("Books 1-50 of 60");
+      expect(overLines.filter((l) => /\d+ words/.test(l))).toHaveLength(50);
     } finally {
       host.stop();
     }
@@ -193,6 +197,28 @@ describe("list_books", () => {
       expect(text).toContain("abcdefghi0  ");
       expect(text).toContain("abcdefghi1  ");
       expect(text).toContain("zbcdefgh  ");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("short ids with real UUID ids sharing a 9-character prefix", async () => {
+    const books = [
+      makeBook("3f2a9c1b-1a2b-4a2b-8a2b-aaaaaaaaaaaa", 1000, { title: "Alpha" }),
+      makeBook("3f2a9c1b-2b3c-4b3c-8b3c-bbbbbbbbbbbb", 2000, { title: "Beta" }),
+      makeBook("9e4d2a67-3c4d-4c4d-8c4d-cccccccccccc", 3000, { title: "Gamma" }),
+    ];
+    const { host, key } = await connect({ library: { books } as any });
+    try {
+      const answer = await callTool(host, key, "list_books", {});
+      const text = textOf(answer);
+      expect(text).toContain("3f2a9c1b-1  Alpha");
+      expect(text).toContain("3f2a9c1b-2  Beta");
+      expect(text).toContain("9e4d2a67  Gamma");
+
+      const byPrefix = await callTool(host, key, "get_book", { book: "9e4d2a67" });
+      expect(isError(byPrefix)).toBe(false);
+      expect(textOf(byPrefix)).toContain("Gamma");
     } finally {
       host.stop();
     }
@@ -280,6 +306,7 @@ describe("get_book", () => {
     try {
       const answer = await callTool(host, key, "get_book", { book: "abcdefghi0-foo" });
       const text = textOf(answer);
+      expect(answer.json?.result?.structuredContent).toBeUndefined();
       expect(text).toContain("Book ");
       expect(text).toContain("MyBook");
       expect(text).toContain("Subtitle: Sub");

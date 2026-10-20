@@ -3,12 +3,11 @@
  * kit: the real broker and method table over an in-process channel, driven
  * only through the Plugin Endpoint the way an Agent reaches it. Every test
  * asserts what the Agent sees (status, headers, JSON-RPC result); no test
- * imports Plugin internals other than `startMcp` (through `test-support`)
- * and `SERVER_INSTRUCTIONS`.
+ * imports Plugin internals other than `startMcp` (through `test-support`).
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SERVER_INSTRUCTIONS } from "./server";
+import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
 import {
   answerHeader,
   connect,
@@ -74,13 +73,16 @@ function gateOf(answer: McpAnswer) {
 }
 
 describe("MCP Server protocol", () => {
-  it("answers the legacy initialize handshake with the server name and instructions", async () => {
+  it("answers the legacy initialize handshake with the server name and short Library instructions", async () => {
     const { host, key } = await connect();
     try {
       const answer = await mcpRequest(host, key, initializeBody());
       expect(answer.status).toBe(200);
       expect(answer.json.result.serverInfo.name).toBe("maibuk");
-      expect(answer.json.result.instructions).toBe(SERVER_INSTRUCTIONS);
+      const instructions = answer.json.result.instructions as string;
+      expect(instructions.length).toBeLessThan(500);
+      expect(instructions).toContain("Library");
+      expect(instructions).toContain("Book");
     } finally {
       host.stop();
     }
@@ -112,13 +114,16 @@ describe("MCP Server protocol", () => {
     }
   });
 
-  it("answers a modern server/discover request with versions, instructions, and cache hints", async () => {
+  it("answers a modern server/discover request with versions, short Library instructions, and cache hints", async () => {
     const { host, key } = await connect();
     try {
       const answer = await mcpRequest(host, key, discoverBody(), modernHeaders("server/discover"));
       expect(answer.status).toBe(200);
       expect(answer.json.result.supportedVersions).toContain("2026-07-28");
-      expect(answer.json.result.instructions).toBe(SERVER_INSTRUCTIONS);
+      const instructions = answer.json.result.instructions as string;
+      expect(instructions.length).toBeLessThan(500);
+      expect(instructions).toContain("Library");
+      expect(instructions).toContain("Book");
       expect(answer.json.result.ttlMs).toBe(0);
       expect(answer.json.result.cacheScope).toBe("private");
     } finally {
@@ -143,15 +148,14 @@ describe("MCP Server protocol", () => {
     }
   });
 
-  it("keeps the server instructions under 500 characters", () => {
-    expect(SERVER_INSTRUCTIONS.length).toBeLessThan(500);
-  });
-
-  it("advertises exactly list_books then get_book, both read-only", async () => {
+  it("advertises exactly list_books then get_book, both read-only and without output schemas", async () => {
     const { host, key } = await connect();
     try {
       const answer = await mcpRequest(host, key, toolsListBody());
       expect(answer.status).toBe(200);
+      for (const tool of answer.json.result.tools) {
+        expect(tool.outputSchema).toBeUndefined();
+      }
       expect(gateOf(answer)).toMatchInlineSnapshot(`
         [
           {
@@ -269,6 +273,25 @@ describe("MCP Server Key", () => {
       }
     } finally {
       first.host.stop();
+    }
+  });
+
+  it("makes a new Key on the newKey Command: the old Key fails and the new Key works", async () => {
+    const { host, storage, key } = await connect();
+    try {
+      const oldKey = key;
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: "newKey" });
+      const fresh = storage.get("key");
+      expect(fresh).toEqual(expect.stringMatching(/^[0-9a-f]{64}$/));
+      expect(fresh).not.toBe(oldKey);
+      const refused = await mcpRequest(host, oldKey, initializeBody(11));
+      expect(refused.status).toBe(401);
+      expect(refused.json.error.code).toBe(-32001);
+      const accepted = await mcpRequest(host, fresh as string, initializeBody(12));
+      expect(accepted.status).toBe(200);
+      expect(accepted.json.result.serverInfo.name).toBe("maibuk");
+    } finally {
+      host.stop();
     }
   });
 });

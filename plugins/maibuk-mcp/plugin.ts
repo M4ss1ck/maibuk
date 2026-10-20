@@ -12,10 +12,12 @@ import {
   type McpHttpHandler,
 } from "@modelcontextprotocol/server";
 import {
+  PLUGIN_COMMAND_RUN_REQUEST,
   type PluginClient,
   type PluginEndpointAnswer,
   type PluginEndpointRequest,
 } from "@/plugin-sdk";
+import { isLibraryUnavailable, LIBRARY_UNAVAILABLE_TEXT } from "./books";
 import { buildMcpServer } from "./server";
 
 /** The storage key holding the Connection's Key. */
@@ -41,23 +43,10 @@ const MCP_PATH = "/plugin/maibuk-mcp/mcp";
 const KEY_REFUSED_MESSAGE =
   "The Key is missing or old; copy the setup snippet from the MCP Server page again.";
 
-/** The 503 body sentence: the Library is unavailable while the Tutorial runs. */
-const LIBRARY_UNAVAILABLE_MESSAGE =
-  "The Library is unavailable while the Tutorial runs; try again when it ends.";
-
 /** Makes a fresh Key: 32 random bytes, hex-encoded to 64 characters. */
 function makeKey(): string {
   const bytes = globalThis.crypto.getRandomValues(new Uint8Array(32));
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-/** Whether a Plugin API failure refuses with `library-unavailable`. */
-function isLibraryUnavailable(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: unknown }).code === "library-unavailable"
-  );
 }
 
 /** Makes a fresh Key and stores it; a Library failure leaves it for the next request. */
@@ -140,7 +129,7 @@ function tutorialRefusal(): PluginEndpointAnswer {
     body: JSON.stringify({
       jsonrpc: "2.0",
       id: null,
-      error: { code: -32603, message: LIBRARY_UNAVAILABLE_MESSAGE },
+      error: { code: -32603, message: LIBRARY_UNAVAILABLE_TEXT },
     }),
   };
 }
@@ -344,6 +333,18 @@ export function startMcp(client: PluginClient): void {
   // Requests that arrive before the Key exists wait for it here.
   const ready = ensureKey(client);
   const connections = createConnections(client);
+
+  // The `newKey` Command, answered the way Echoes answers its Commands: a
+  // `command.run` with the Command's id makes a fresh Key and stores it, so
+  // the old Key is refused from the next request on.
+  client.onHostRequest(async (method, params) => {
+    if (method === PLUGIN_COMMAND_RUN_REQUEST) {
+      const { id } = (params ?? {}) as { id?: string };
+      if (id === "newKey") await storeFreshKey(client);
+      return null;
+    }
+    throw new Error(`No handler for ${method}`);
+  });
 
   client.onEndpointRequest(async (request: PluginEndpointRequest) => {
     await ready;

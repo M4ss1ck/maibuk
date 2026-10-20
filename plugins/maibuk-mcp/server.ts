@@ -16,7 +16,7 @@ import { listBooks, getBook } from "./books";
  * on both the legacy `initialize` result and the modern `server/discover`
  * result.
  */
-export const SERVER_INSTRUCTIONS =
+const SERVER_INSTRUCTIONS =
   "Maibuk MCP Server. The Library holds the author's Books; each Book holds ordered Chapters and Notes with Tags. Tools take a Book, Chapter, or Note id, or an 8+ character prefix of one; an ambiguous prefix answers with its candidates. Lists are plain-text lines with a cursor and a total.";
 
 /**
@@ -41,11 +41,12 @@ export function buildMcpServer(client: PluginClient): McpServer {
     "list_books",
     {
       title: "List books",
-      description: "List Books in the Library, optionally filtered by Book Status.",
+      description:
+        "List Books in the Library, optionally filtered by Book Status, at most 50 per page.",
       inputSchema: z.object({
         status: z.enum(["draft", "in-progress", "completed", "archived"]).optional(),
         cursor: z.string().optional(),
-        limit: z.number().int().min(1).max(50).optional(),
+        limit: z.number().int().min(1).optional(),
       }),
       annotations: { readOnlyHint: true },
     },

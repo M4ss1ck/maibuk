@@ -5,8 +5,8 @@
  * error and any other failure propagates.
  */
 
-import type { PluginClient } from "@/plugin-sdk";
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import type { PluginClient } from "@/plugin-sdk";
 
 /** Arguments for `list_books`. */
 export interface ListBooksArgs {
@@ -24,7 +24,8 @@ type BookRow = Awaited<ReturnType<PluginClient["library"]["books"]["list"]>>[num
 type ChapterRow = Awaited<ReturnType<PluginClient["library"]["chapters"]["list"]>>[number];
 type NoteRow = Awaited<ReturnType<PluginClient["library"]["notes"]["list"]>>[number];
 
-function isLibraryUnavailable(error: unknown): boolean {
+/** Whether a Plugin API failure refuses with `library-unavailable`. */
+export function isLibraryUnavailable(error: unknown): boolean {
   return (
     typeof error === "object" &&
     error !== null &&
@@ -32,7 +33,7 @@ function isLibraryUnavailable(error: unknown): boolean {
   );
 }
 
-const LIBRARY_UNAVAILABLE_TEXT =
+export const LIBRARY_UNAVAILABLE_TEXT =
   "The Library is unavailable while the Tutorial runs; try again when it ends.";
 
 function libraryUnavailableResult(): CallToolResult {
