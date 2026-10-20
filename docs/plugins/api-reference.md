@@ -507,7 +507,7 @@ Output:
 
 ### `library.notes.update`
 
-Updates a Note's title or content through the Note write path.
+Updates a Note's title, content, Tags, or Book through the Note write path; Tags are trimmed and deduplicated like the Note tags field, and a null bookId moves it to Unfiled.
 
 - Plugin Permission: `library:write`
 - Effect: write
@@ -526,6 +526,31 @@ Input:
     /** Sanitized by the host before it lands. */
     html: string;
   };
+  tags?: string[];
+  /** Null moves the Note to Unfiled. */
+  bookId?: string | null;
+}
+```
+
+Output:
+
+```ts
+null
+```
+
+### `library.notes.delete`
+
+Deletes a Note through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made.
+
+- Plugin Permission: `library:write`
+- Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
+
+Input:
+
+```ts
+{
+  noteId: string;
 }
 ```
 

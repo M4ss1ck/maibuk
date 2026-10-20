@@ -22,6 +22,7 @@ export const PLUGIN_API_METHODS = [
   "library.chapters.update",
   "library.notes.create",
   "library.notes.update",
+  "library.notes.delete",
   "editor.getContent",
   "editor.getSelection",
   "editor.reveal",
@@ -298,7 +299,7 @@ export interface PluginApiMethods {
       noteId: string;
     };
   };
-  /** Updates a Note's title or content through the Note write path. */
+  /** Updates a Note's title, content, Tags, or Book through the Note write path; Tags are trimmed and deduplicated like the Note tags field, and a null bookId moves it to Unfiled. */
   "library.notes.update": {
     input: {
       noteId: string;
@@ -310,6 +311,16 @@ export interface PluginApiMethods {
         /** Sanitized by the host before it lands. */
         html: string;
       };
+      tags?: string[];
+      /** Null moves the Note to Unfiled. */
+      bookId?: string | null;
+    };
+    output: null;
+  };
+  /** Deletes a Note through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made. */
+  "library.notes.delete": {
+    input: {
+      noteId: string;
     };
     output: null;
   };
@@ -646,8 +657,10 @@ export interface PluginApi {
       get(params: PluginApiMethods["library.notes.get"]["input"]): Promise<PluginApiMethods["library.notes.get"]["output"]>;
       /** Creates a Note through the Note write path and returns its id. */
       create(params: PluginApiMethods["library.notes.create"]["input"]): Promise<PluginApiMethods["library.notes.create"]["output"]>;
-      /** Updates a Note's title or content through the Note write path. */
+      /** Updates a Note's title, content, Tags, or Book through the Note write path; Tags are trimmed and deduplicated like the Note tags field, and a null bookId moves it to Unfiled. */
       update(params: PluginApiMethods["library.notes.update"]["input"]): Promise<PluginApiMethods["library.notes.update"]["output"]>;
+      /** Deletes a Note through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made. */
+      delete(params: PluginApiMethods["library.notes.delete"]["input"]): Promise<PluginApiMethods["library.notes.delete"]["output"]>;
     };
     canvases: {
       /** Lists Canvases with their metadata. Canvas content is not part of the API. */

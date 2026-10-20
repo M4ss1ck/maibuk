@@ -9,6 +9,7 @@ import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "@/features/notes";
 import { useEditSession } from "@/features/edit-session";
 import { useNoteStore } from "@/features/notes/store";
+import { normalizeNoteTags } from "@/features/notes/tags";
 import { Editor, SaveStatus } from "@/components/editor";
 import type { EditorHandle, EditorTutorialAnchors } from "@/components/editor/Editor";
 import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
@@ -576,10 +577,7 @@ export function NoteEditor({
 
   const handleTagsChange = useCallback(
     (tags: string[]) => {
-      const cleanTags = tags
-        .map((tag) => tag.trim())
-        .filter((tag, idx, arr) => tag.length > 0 && arr.indexOf(tag) === idx);
-      saveNoteFields({ tags: cleanTags });
+      saveNoteFields({ tags: normalizeNoteTags(tags) });
     },
     [saveNoteFields]
   );

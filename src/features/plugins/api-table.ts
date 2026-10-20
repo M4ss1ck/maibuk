@@ -285,12 +285,23 @@ export const PLUGIN_API_TABLE = [
   }),
   defineApiRow({
     id: "library.notes.update",
-    description: "Updates a Note's title or content through the Note write path.",
+    description:
+      "Updates a Note's title, content, Tags, or Book through the Note write path; Tags are trimmed and deduplicated like the Note tags field, and a null bookId moves it to Unfiled.",
     input: z.strictObject({
       noteId: id,
       title: z.string().max(500).optional(),
       content: fragment.optional(),
+      tags: z.array(z.string()).optional(),
+      bookId: id.nullable().optional().describe("Null moves the Note to Unfiled."),
     }),
+    output: ok,
+    ...libraryWrite,
+  }),
+  defineApiRow({
+    id: "library.notes.delete",
+    description:
+      "Deletes a Note through the normal Delete path, so sync and Deletion Review carry it the way they carry a delete the author made.",
+    input: z.strictObject({ noteId: id }),
     output: ok,
     ...libraryWrite,
   }),

@@ -6,13 +6,14 @@
  * reader that wants Chapter edits subscribes to `library.changed` and pulls.
  *
  * Here too are the `library:write` rows (#452, #588): a Book details update and
- * a Checkpoint, Chapter create/delete/reorder/update, and Note create/update,
- * each through the entity's own narrow write path (ADR 0005) with Origin
- * "local", so the write Flushes open editors, normalizes, emits on the Change
- * Feed, and refuses sample ids. The Chapter delete takes the author's own
- * Delete path (`deleteChapterRow`), so sync and Deletion Review carry it like
- * theirs: a Chapter has no tombstone of its own, so what another device pulls
- * is its Book's snapshot without the Chapter.
+ * a Checkpoint, Chapter create/delete/reorder/update, and Note
+ * create/update/delete, each through the entity's own narrow write path
+ * (ADR 0005) with Origin "local", so the write Flushes open editors,
+ * normalizes, emits on the Change Feed, and refuses sample ids. The Chapter
+ * and Note deletes take the author's own Delete path (`deleteChapterRow`,
+ * `deleteNoteRow`), so sync and Deletion Review carry them like theirs: a
+ * Chapter has no tombstone of its own, so what another device pulls is its
+ * Book's snapshot without the Chapter, while a Note records its own tombstone.
  *
  * Timestamps are Unix seconds in the Library and milliseconds since the epoch
  * in the API, the one shape every Plugin sees.
@@ -31,7 +32,8 @@ import { updateBookRow } from "@/features/books/write";
 import type { BookStatus } from "@/features/books/types";
 import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import { countWords } from "@/features/metrics/word-count";
-import { createNoteRow, updateNoteRow } from "@/features/notes/write";
+import { normalizeNoteTags } from "@/features/notes/tags";
+import { createNoteRow, deleteNoteRow, updateNoteRow } from "@/features/notes/write";
 import type {
   PluginBook,
   PluginCanvasSummary,
@@ -498,17 +500,24 @@ export async function createPluginNote(input: {
 }
 
 /**
- * Updates a Note's title or content through the Note write path. No "current"
- * state is read before the write: `updateNoteRow` merges the given fields onto
- * the stored row, so an omitted field (the title, or the bookId it derives) is
- * left as stored, and a missing id comes back as null.
+ * Updates a Note's title, content, Tags, or Book through the Note write path
+ * (#588). No "current" state is read before the write: `updateNoteRow` merges
+ * the given fields onto the stored row, so an omitted field is left as stored,
+ * and a missing id comes back as null. Tags are normalized the way the Note UI
+ * stores them; a bookId of null moves the Note to Unfiled, and a bookId naming
+ * no Book is refused before anything is written.
  */
 export async function updatePluginNote(input: {
   noteId: string;
   title?: string;
   content?: PluginContentFragment;
+  tags?: string[];
+  bookId?: string | null;
 }): Promise<null> {
   return libraryWrite(async () => {
+    if (input.bookId != null && !(await getPluginBook(input.bookId))) {
+      throw notFound("Book", input.bookId);
+    }
     const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
     const note = await updateNoteRow(
       {
@@ -517,10 +526,34 @@ export async function updatePluginNote(input: {
         ...(content === undefined
           ? {}
           : { content, wordCount: contentWordCount(content) }),
+        ...(input.tags === undefined ? {} : { tags: normalizeNoteTags(input.tags) }),
+        // `undefined` keeps the stored Book; null is Unfiled.
+        ...(input.bookId === undefined ? {} : { bookId: input.bookId }),
       },
       "local"
     );
     if (!note) throw notFound("Note", input.noteId);
+    return null;
+  });
+}
+
+/** Whether a Note row exists; `deleteNoteRow` would still delete and emit for a missing one. */
+async function noteExists(noteId: string): Promise<boolean> {
+  const db = await getDatabase();
+  const rows = await db.select<{ id: string }[]>("SELECT id FROM notes WHERE id = ?", [noteId]);
+  return rows.length > 0;
+}
+
+/**
+ * Deletes a Note through the normal Delete path (#588): the same
+ * `deleteNoteRow` call the author's delete makes, so sync records the same
+ * tombstone and the Change Feed carries a local content Change, which is what
+ * Deletion Review queues and pushes. A missing id is refused.
+ */
+export async function deletePluginNote(noteId: string): Promise<null> {
+  return libraryWrite(async () => {
+    if (!(await noteExists(noteId))) throw notFound("Note", noteId);
+    await deleteNoteRow(noteId, "local");
     return null;
   });
 }
