@@ -13,6 +13,7 @@
 #      (AI-assisted if configured, otherwise a grouped commit list).
 #   5. Commits the bump + changelog, creates an annotated tag, and pushes
 #      the release branch and the tag (the tag triggers the GitHub release workflow).
+#   6. Prints the gh command that opens the release PR into BASE_BRANCH.
 #
 # AI changelog is fully optional: with no .env config it falls back to a
 # plain grouped commit list and never errors out.
@@ -91,6 +92,7 @@ fi
 
 RELEASE_BRANCH="release/v$VERSION"
 TAG="v$VERSION"
+BASE_BRANCH="main"
 
 if [ "$DRY_RUN" = true ]; then
     print_warning "Running in --dry-run mode: no files, commits, tags or pushes will be made."
@@ -102,6 +104,9 @@ fi
 # it without running a real release.
 # shellcheck source=scripts/lib/changelog.sh
 source "$REPO_ROOT/scripts/lib/changelog.sh"
+
+# shellcheck source=scripts/lib/release.sh
+source "$REPO_ROOT/scripts/lib/release.sh"
 
 # --- Determine commit range ------------------------------------------------
 LAST_TAG="$(git tag --list 'v*' --sort=-version:refname | head -n1)"
@@ -129,6 +134,9 @@ if [ "$DRY_RUN" = true ]; then
     echo -e "${BLUE}=== Generated CHANGELOG entry ===${NC}"
     echo
     printf '%s\n' "$NEW_ENTRY"
+    echo
+    print_status "Create the PR:"
+    release_pr_command "$VERSION" "$BASE_BRANCH"
     echo
     print_warning "Dry run complete. Nothing was changed."
     exit 0
@@ -223,9 +231,12 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     print_status "   automatically once all the binaries are attached."
     echo
     print_status "Next steps:"
-    print_status "  1. Open a PR from $RELEASE_BRANCH into main and merge it."
+    print_status "  1. Open a PR from $RELEASE_BRANCH into $BASE_BRANCH and merge it."
     print_status "  2. Watch the Release workflow. No manual publish step is needed."
     print_status "     If a build fails the release stays a draft; fix the build and re-run."
+    echo
+    print_status "Create the PR:"
+    release_pr_command "$VERSION" "$BASE_BRANCH"
 else
     print_warning "Release cancelled. No changes were pushed."
     print_warning "To undo local changes, run:"
