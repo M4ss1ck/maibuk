@@ -39,6 +39,7 @@ import {
   onEditorContentChanged,
   onEditorFocusChanged,
 } from "@/features/plugins/editor-host";
+import { startPluginEndpoint } from "@/features/plugins/endpoint";
 import { createPluginHandlers } from "@/features/plugins/handlers";
 import { manifestRunsOn, pluginsRunOn } from "@/features/plugins/host-platform";
 import { currentPluginLanguage, onPluginLanguageChange } from "@/features/plugins/language";
@@ -1065,6 +1066,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       entries.clear();
       reachable.clear();
       listeners.clear();
+      options.onDispose?.();
     },
   };
 }
@@ -1079,8 +1081,19 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
 export function installPluginLifecycle(options: PluginLifecycleOptions = {}): PluginLifecycle {
   const existing = getPluginLifecycle();
   if (existing) return existing;
-  const lifecycle = createPluginLifecycle(options);
+  // The Endpoint supervisor is a host service beside the lifecycle: it starts
+  // once the instance is in place (it reads runtimes from it) and stops with it.
+  let stopEndpoint: (() => void) | null = null;
+  const lifecycle = createPluginLifecycle({
+    ...options,
+    onDispose: () => {
+      stopEndpoint?.();
+      stopEndpoint = null;
+      options.onDispose?.();
+    },
+  });
   setPluginLifecycleInstance(lifecycle);
+  stopEndpoint = startPluginEndpoint();
   void lifecycle.launch().then(() => {
     // Development mode at launch: a copy whose files changed while the app was
     // closed must go through the dev reload policy, and the folder watcher must

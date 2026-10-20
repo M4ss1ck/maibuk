@@ -449,6 +449,14 @@ export interface PluginManagement {
   notifications: PluginNotification[];
   /** Each Plugin's stored data size in bytes, as `refreshDataSize` last read it. */
   dataSizes: Record<string, number>;
+  /**
+   * The Plugin Endpoint's listener as the last `sync` reported it (#586): off,
+   * listening on a port, or a failed bind. Plugin host code writes it; Settings
+   * reads it to explain why a Plugin that serves is not reachable.
+   */
+  endpoint: EndpointListenerState;
+  /** Records the listener's latest state (#586). */
+  setEndpoint(state: EndpointListenerState): void;
   /** Re-reads the Plugin Directory and each copy's review state. */
   refresh(): Promise<void>;
   /**
@@ -669,6 +677,8 @@ export interface PluginLifecycleOptions {
   scheduleIdle?: (work: () => void) => void;
   /** The stop toast text, or null for a silent stop. Defaults to the localized copy. */
   stopMessage?: (name: string, reason: PluginLifecycleStopReason) => string | null;
+  /** Runs once when the lifecycle is disposed, after every Plugin stopped (host services the app started with it). */
+  onDispose?: () => void;
 }
 
 export interface PluginLifecycle {
@@ -1206,6 +1216,27 @@ export interface PluginEndpointSink {
   ): void;
   chunk(chunk: string): boolean | Promise<boolean>;
   end(): void;
+}
+
+/**
+ * What the Plugin Endpoint's listener reports to the host: not bound (`off`),
+ * bound on `port`, or a bind that failed and is never retried. Mirrors the Rust
+ * `ListenerState` serde shape (tag `state`, camelCase elsewhere).
+ */
+export type EndpointListenerState =
+  | { state: "off" }
+  | { state: "listening"; port: number }
+  | { state: "failed"; port: number; reason: string };
+
+/**
+ * One inbound request the listener hands the host: the id the answer commands
+ * are keyed by, the Plugin the request's path named, and the request itself.
+ * Mirrors the Rust `EndpointRequestMsg` serde shape.
+ */
+export interface EndpointRequestMessage {
+  requestId: string;
+  pluginId: string;
+  request: EndpointRequest;
 }
 
 export interface PluginBroker {

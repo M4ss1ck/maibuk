@@ -76,6 +76,14 @@ export {
   createPluginBroker,
 } from "@/features/plugins/broker";
 export {
+  dispatchEndpointRequest,
+  startPluginEndpoint,
+} from "@/features/plugins/endpoint";
+export type {
+  EndpointDispatchDeps,
+  PluginEndpointSupervisorOptions,
+} from "@/features/plugins/endpoint";
+export {
   PLUGIN_APPROVALS_STORAGE_KEY,
   approveBuiltInCopy,
   approvePluginCopy,
