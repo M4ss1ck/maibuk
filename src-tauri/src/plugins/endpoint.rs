@@ -14,7 +14,9 @@
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::future::Future;
+use std::hash::BuildHasher;
 use std::net::Ipv4Addr;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -33,9 +35,15 @@ use hyper_util::rt::TokioIo;
 use serde::Serialize;
 use tokio::sync::{mpsc, oneshot, watch};
 
-/// The Plugin Endpoint port. Below every OS ephemeral range, so an Agent's
+/// The ports the Plugin Endpoint picks from. Below Linux's ephemeral range
+/// (32768-60999) and the IANA/Windows/macOS one (49152-65535), so an Agent's
 /// `curl` reaches the app and never some other program's socket.
-pub const DEFAULT_PORT: u16 = 29217;
+pub const PORT_RANGE: std::ops::RangeInclusive<u16> = 20000..=32000;
+
+/// How many free ports one bind moves through when the kept one is held. A
+/// range this wide is never legitimately full, so a picker that keeps naming
+/// taken ports is a bug, not a reason to loop forever.
+const PORT_MOVE_LIMIT: usize = 32;
 
 /// A request body larger than this is refused with 413 before reaching a Plugin.
 pub const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
@@ -760,20 +768,108 @@ fn lower_headers(headers: &HeaderMap) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Where the next random port comes from. Tests inject their own picker so a
+/// move is provable; the app keeps [`random_port`].
+type PortPicker = Arc<dyn Fn() -> u16 + Send + Sync>;
+
+/// A port from [`PORT_RANGE`], with no crate: `RandomState` seeds from the OS
+/// and advances per value, so a counter and the clock are enough for a port
+/// nobody needs to predict.
+fn random_port() -> u16 {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let seed = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos() as u64);
+    let hash = std::collections::hash_map::RandomState::new().hash_one((seed, now));
+    port_in_range(hash)
+}
+
+/// Maps a hash onto [`PORT_RANGE`]. The range is narrower than a `u16`, so a
+/// modulo is all the spread a port needs.
+fn port_in_range(hash: u64) -> u16 {
+    let size = u64::from(*PORT_RANGE.end() - *PORT_RANGE.start()) + 1;
+    PORT_RANGE.start() + (hash % size) as u16
+}
+
+/// The file that keeps the chosen port across launches. No path keeps the
+/// port for this run only, which is what tests and a device with no app data
+/// folder get.
+struct KeptPort {
+    path: Option<PathBuf>,
+}
+
+impl KeptPort {
+    fn new(path: PathBuf) -> Self {
+        Self { path: Some(path) }
+    }
+
+    fn in_memory() -> Self {
+        Self { path: None }
+    }
+
+    /// The port a previous launch kept. A missing, unreadable, garbage, or
+    /// out-of-range file reads as no port at all: picking fresh is safer than
+    /// trusting a value this app never wrote.
+    fn load(&self) -> Option<u16> {
+        let text = std::fs::read_to_string(self.path.as_ref()?).ok()?;
+        let port = text.trim().parse::<u16>().ok()?;
+        PORT_RANGE.contains(&port).then_some(port)
+    }
+
+    /// Writes the port for the next launch. A read-only folder returns the
+    /// error for the caller to log: this run still serves, it just moves on
+    /// the next one.
+    fn save(&self, port: u16) -> Result<(), String> {
+        let Some(path) = self.path.as_ref() else {
+            return Ok(());
+        };
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+        }
+        std::fs::write(path, port.to_string())
+            .map_err(|error| format!("cannot write {}: {error}", path.display()))
+    }
+}
+
+/// A sink shared across the bind attempts: a collision retries with the same
+/// sink, which each attempt would otherwise take by value.
+#[derive(Clone)]
+struct SharedSink(Arc<dyn RequestSink>);
+
+impl RequestSink for SharedSink {
+    fn deliver(&self, message: EndpointRequestMsg) {
+        self.0.deliver(message);
+    }
+}
+
 /// The listener behind `plugin_endpoint_*`, plus the set of Plugins that serve.
 /// The commands are thin wrappers over this, so the state machine is testable
 /// without a Tauri app.
 pub struct EndpointState {
-    port: u16,
+    /// Serialises [`EndpointState::sync`]. The slot check and the bind it may
+    /// trigger are one step: two syncs that both saw an empty slot would bind
+    /// twice, and the second would move off the port the first listener still
+    /// holds, overwrite the slot, and leave that first listener serving.
+    sync_lock: Mutex<()>,
+    /// The port this run keeps, loaded from [`KeptPort`] on first use.
+    port: Mutex<Option<u16>>,
+    kept: KeptPort,
+    pick_port: PortPicker,
     /// `None` uses [`ANSWER_TIMEOUT`]; tests shrink it.
     answer_timeout: Option<Duration>,
     listener: Mutex<Option<Listener>>,
 }
 
 impl Default for EndpointState {
+    /// No file, so the port is picked for this run only.
     fn default() -> Self {
         Self {
-            port: DEFAULT_PORT,
+            sync_lock: Mutex::new(()),
+            port: Mutex::new(None),
+            kept: KeptPort::in_memory(),
+            pick_port: Arc::new(random_port),
             answer_timeout: None,
             listener: Mutex::new(None),
         }
@@ -781,12 +877,25 @@ impl Default for EndpointState {
 }
 
 impl EndpointState {
-    #[cfg(test)]
-    fn for_tests(port: u16, answer_timeout: Duration) -> Self {
+    /// Keeps one port in `path` across launches (ADR 0031), so an address an
+    /// author pasted into an Agent still works after a restart.
+    pub fn new(path: PathBuf) -> Self {
         Self {
-            port,
+            kept: KeptPort::new(path),
+            ..Self::default()
+        }
+    }
+
+    #[cfg(test)]
+    fn for_tests(
+        path: PathBuf,
+        answer_timeout: Duration,
+        pick_port: impl Fn() -> u16 + Send + Sync + 'static,
+    ) -> Self {
+        Self {
             answer_timeout: Some(answer_timeout),
-            listener: Mutex::new(None),
+            pick_port: Arc::new(pick_port),
+            ..Self::new(path)
         }
     }
 
@@ -797,11 +906,67 @@ impl EndpointState {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// The port this run keeps, loaded from the file on first use. A poisoned
+    /// lock still holds it: there is nothing to undo.
+    fn kept_port(&self) -> Option<u16> {
+        let mut port = self
+            .port
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if port.is_none() {
+            *port = self.kept.load();
+        }
+        *port
+    }
+
+    fn pick(&self) -> u16 {
+        (*self.pick_port)()
+    }
+
+    /// A port this bind has not tried yet. The picker is injectable, so a bug
+    /// in it must not hang the bind: after as many misses as moves it gives up.
+    fn untried(&self, tried: &[u16]) -> Option<u16> {
+        for _ in 0..PORT_MOVE_LIMIT {
+            let port = self.pick();
+            if !tried.contains(&port) {
+                return Some(port);
+            }
+        }
+        None
+    }
+
+    fn bind_once(&self, port: u16, sink: impl RequestSink) -> Result<Listener, String> {
+        match self.answer_timeout {
+            Some(timeout) => Listener::bind_with_timeout(port, timeout, sink),
+            None => Listener::bind(port, sink),
+        }
+    }
+
+    /// Makes `port` the one this run keeps, and writes it for the next launch
+    /// when the file did not already hold it (or was missing).
+    fn keep(&self, port: u16, stored: Option<u16>) {
+        *self
+            .port
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(port);
+        if stored == Some(port) {
+            return;
+        }
+        if let Err(error) = self.kept.save(port) {
+            eprintln!("Plugin Endpoint port not kept for the next launch: {error}");
+        }
+    }
+
     /// Binds while some Plugin serves, unbinds when none does, and otherwise
     /// replaces the set *and* the sink: a webview reload opens a fresh Channel,
-    /// and later requests must reach that one. A failed bind is reported once
-    /// and never retried: the host logs it and the author fixes the port.
+    /// and later requests must reach that one. The port is the kept one; when
+    /// something else holds it, the Endpoint moves to a free port in
+    /// [`PORT_RANGE`] and keeps that one (ADR 0031).
     pub fn sync(&self, ids: Vec<String>, sink: impl RequestSink) -> ListenerState {
+        let _sync = self
+            .sync_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if ids.is_empty() {
             let listener = self.slot().take();
             if let Some(listener) = listener {
@@ -814,20 +979,41 @@ impl EndpointState {
             listener.set_serving(ids);
             return listener.state();
         }
-        let bound = match self.answer_timeout {
-            Some(timeout) => Listener::bind_with_timeout(self.port, timeout, sink),
-            None => Listener::bind(self.port, sink),
-        };
+        self.bind(ids, sink)
+    }
+
+    /// Binds the kept port, or moves to a free one in [`PORT_RANGE`] when
+    /// something else holds it, and keeps whatever bound. Every later bind in
+    /// this run starts from the kept port again.
+    fn bind(&self, ids: Vec<String>, sink: impl RequestSink) -> ListenerState {
+        let sink = SharedSink(Arc::new(sink));
+        // What the file says now: a save that failed last time is retried.
+        let stored = self.kept.load();
+        let first = self.kept_port().unwrap_or_else(|| self.pick());
+        let mut tried = vec![first];
+        let mut bound = self.bind_once(first, sink.clone());
+        let first_error = bound.as_ref().err().cloned();
+
+        while bound.is_err() && tried.len() <= PORT_MOVE_LIMIT {
+            let Some(port) = self.untried(&tried) else {
+                break;
+            };
+            tried.push(port);
+            bound = self.bind_once(port, sink.clone());
+        }
+
         match bound {
             Ok(listener) => {
+                let port = listener.port();
                 listener.set_serving(ids);
                 let state = listener.state();
                 *self.slot() = Some(listener);
+                self.keep(port, stored);
                 state
             }
-            Err(reason) => ListenerState::Failed {
-                port: self.port,
-                reason,
+            Err(_) => ListenerState::Failed {
+                port: first,
+                reason: first_error.unwrap_or_default(),
             },
         }
     }
@@ -931,21 +1117,74 @@ mod tests {
         }
     }
 
+    /// A private port file under the system temp folder, removed on drop. The
+    /// tests run in parallel, so the name carries the process and a counter.
+    struct PortFile(PathBuf);
+
+    impl PortFile {
+        fn new(name: &str) -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "maibuk-endpoint-port-{name}-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let _ = std::fs::remove_file(&path);
+            Self(path)
+        }
+
+        fn path(&self) -> PathBuf {
+            self.0.clone()
+        }
+
+        fn write(&self, port: u16) {
+            std::fs::write(&self.0, port.to_string()).expect("the port file writes");
+        }
+
+        fn read(&self) -> Option<u16> {
+            std::fs::read_to_string(&self.0).ok()?.trim().parse().ok()
+        }
+    }
+
+    impl Drop for PortFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    /// A picker that walks [`PORT_RANGE`] from a clock-derived start, so
+    /// successive calls land on different, mostly free ports.
+    fn scanning_picker() -> impl Fn() -> u16 + Send + Sync + 'static {
+        let size = u64::from(*PORT_RANGE.end() - *PORT_RANGE.start()) + 1;
+        let start = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| u64::from(elapsed.subsec_millis()));
+        let next = AtomicU64::new(start % size);
+        move || {
+            let offset = next.fetch_add(1, Ordering::Relaxed) % size;
+            PORT_RANGE.start() + offset as u16
+        }
+    }
+
     /// A bound endpoint, the queue of what reached its sink, and the port.
     struct Endpoint {
         state: EndpointState,
         sink: Sink,
         inbox: inbox::UnboundedReceiver<EndpointRequestMsg>,
         port: u16,
+        /// Kept alive for the endpoint's lifetime: the state may read or write
+        /// it again.
+        _file: PortFile,
     }
 
     impl Endpoint {
         async fn serving(ids: &[&str]) -> Self {
-            Self::on(0, Duration::from_secs(5), ids).await
+            Self::on(Duration::from_secs(5), ids).await
         }
 
-        async fn on(port: u16, answer_timeout: Duration, ids: &[&str]) -> Self {
-            let state = EndpointState::for_tests(port, answer_timeout);
+        async fn on(answer_timeout: Duration, ids: &[&str]) -> Self {
+            let file = PortFile::new("endpoint");
+            let state = EndpointState::for_tests(file.path(), answer_timeout, random_port);
             let (sender, inbox) = inbox::unbounded_channel();
             let sink = Sink(sender);
             let ids: Vec<String> = ids.iter().map(|id| (*id).to_string()).collect();
@@ -958,6 +1197,7 @@ mod tests {
                 sink,
                 inbox,
                 port,
+                _file: file,
             }
         }
 
@@ -1010,9 +1250,30 @@ mod tests {
         base64::engine::general_purpose::STANDARD.encode(text)
     }
 
-    fn free_port() -> u16 {
-        let socket = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("a free port");
-        socket.local_addr().expect("the bound address").port()
+    /// The first [`PORT_RANGE`] port that binds, as a live listener and its
+    /// port. Binding port 0 hands out an ephemeral port outside the range,
+    /// which [`KeptPort::load`] must refuse, so these tests scan from a
+    /// clock-derived start instead.
+    fn held_port_in_range() -> (std::net::TcpListener, u16) {
+        let size = u32::from(*PORT_RANGE.end() - *PORT_RANGE.start()) + 1;
+        let start = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.subsec_nanos() % size);
+        for offset in 0..size {
+            let port = *PORT_RANGE.start() + ((start + offset) % size) as u16;
+            if let Ok(socket) = std::net::TcpListener::bind(("127.0.0.1", port)) {
+                return (socket, port);
+            }
+        }
+        panic!("no free port in {PORT_RANGE:?}");
+    }
+
+    /// [`held_port_in_range`] with the socket dropped: the port is free, but
+    /// still inside the range a kept file accepts.
+    fn free_port_in_range() -> u16 {
+        let (socket, port) = held_port_in_range();
+        drop(socket);
+        port
     }
 
     fn raw(
@@ -1172,8 +1433,10 @@ mod tests {
 
     #[tokio::test]
     async fn binds_only_while_a_plugin_serves() {
-        let port = free_port();
-        let state = EndpointState::for_tests(port, Duration::from_secs(5));
+        let port = free_port_in_range();
+        let file = PortFile::new("bind-only");
+        file.write(port);
+        let state = EndpointState::for_tests(file.path(), Duration::from_secs(5), random_port);
         let (sender, _inbox) = inbox::unbounded_channel();
         let sink = Sink(sender);
 
@@ -1592,7 +1855,7 @@ mod tests {
 
     #[tokio::test]
     async fn ends_an_idle_stream_at_the_answer_timeout() {
-        let mut endpoint = Endpoint::on(0, Duration::from_millis(300), &["acme"]).await;
+        let mut endpoint = Endpoint::on(Duration::from_millis(300), &["acme"]).await;
         let port = endpoint.port;
         let client = tokio::spawn(async move {
             send_raw(
@@ -1714,7 +1977,7 @@ mod tests {
 
     #[tokio::test]
     async fn answers_504_when_the_plugin_never_answers() {
-        let mut endpoint = Endpoint::on(0, Duration::from_millis(150), &["acme"]).await;
+        let mut endpoint = Endpoint::on(Duration::from_millis(150), &["acme"]).await;
         let reply = endpoint.get("/plugin/acme/mcp").await;
         assert_eq!(reply.status, 504);
         let message = endpoint
@@ -1753,17 +2016,23 @@ mod tests {
             Listener::bind(port, Sink(sender.clone())).is_err(),
             "a taken port is a bind error"
         );
-        let state = EndpointState::for_tests(port, Duration::from_secs(5));
+        // The picker keeps naming the held port, so every move attempt fails
+        // too: the report names the candidate the kept port started with, and
+        // the file is left untouched.
+        let file = PortFile::new("taken");
+        file.write(port);
+        let state = EndpointState::for_tests(file.path(), Duration::from_secs(5), move || port);
         match state.sync(vec![PLUGIN.to_string()], Sink(sender)) {
             ListenerState::Failed {
                 port: failed,
                 reason,
             } => {
                 assert_eq!(failed, port);
-                assert!(!reason.is_empty());
+                assert!(reason.contains(&port.to_string()), "{reason}");
             }
             other => panic!("expected a failed bind, got {other:?}"),
         }
+        assert_eq!(file.read(), Some(port), "a failed bind keeps nothing");
     }
 
     #[tokio::test]
@@ -1788,5 +2057,169 @@ mod tests {
         let sink = endpoint.sink.clone();
         assert_eq!(endpoint.state.sync(Vec::new(), sink), ListenerState::Off);
         assert_eq!(client.await.expect("the client answers").status, 503);
+    }
+
+    #[tokio::test]
+    async fn kept_port_is_reused() {
+        let port = free_port_in_range();
+        let file = PortFile::new("kept");
+        file.write(port);
+        let state = EndpointState::for_tests(file.path(), Duration::from_secs(5), random_port);
+        let (sender, _inbox) = inbox::unbounded_channel();
+
+        assert_eq!(
+            state.sync(vec![PLUGIN.to_string()], Sink(sender)),
+            ListenerState::Listening { port }
+        );
+        assert!(!refused(port).await, "the kept port listens");
+        assert_eq!(file.read(), Some(port), "the kept port stays in the file");
+    }
+
+    #[tokio::test]
+    async fn held_port_moves_to_a_free_one_in_the_range() {
+        // The kept port is in the range and held by another app, which is the
+        // collision the move exists for. `_held` keeps it bound all test long.
+        let (_held, port) = held_port_in_range();
+        let file = PortFile::new("moved");
+        file.write(port);
+        let state =
+            EndpointState::for_tests(file.path(), Duration::from_secs(5), scanning_picker());
+        let (sender, _inbox) = inbox::unbounded_channel();
+
+        let moved = match state.sync(vec![PLUGIN.to_string()], Sink(sender)) {
+            ListenerState::Listening { port } => port,
+            other => panic!("expected a moved listener, got {other:?}"),
+        };
+
+        assert_ne!(moved, port, "a held port must be left alone");
+        assert!(
+            PORT_RANGE.contains(&moved),
+            "{moved} is outside {PORT_RANGE:?}"
+        );
+        assert!(!refused(moved).await, "the moved port listens");
+        assert_eq!(file.read(), Some(moved), "the move is kept");
+    }
+
+    #[tokio::test]
+    async fn moved_port_is_kept_on_next_launch() {
+        let (held, port) = held_port_in_range();
+        let file = PortFile::new("next-launch");
+        file.write(port);
+
+        let first =
+            EndpointState::for_tests(file.path(), Duration::from_secs(5), scanning_picker());
+        let (sender, _inbox) = inbox::unbounded_channel();
+        let moved = match first.sync(vec![PLUGIN.to_string()], Sink(sender)) {
+            ListenerState::Listening { port } => port,
+            other => panic!("expected a moved listener, got {other:?}"),
+        };
+        assert_ne!(moved, port);
+
+        // The first launch closes its socket before the next one binds it, and
+        // the port it moved away from is free again.
+        let (sender, _inbox) = inbox::unbounded_channel();
+        assert_eq!(
+            first.sync(Vec::new(), Sink(sender)),
+            ListenerState::Off,
+            "the last Plugin stops serving"
+        );
+        drop(first);
+        drop(held);
+        assert!(eventually_refused(moved).await);
+
+        let second =
+            EndpointState::for_tests(file.path(), Duration::from_secs(5), scanning_picker());
+        let (sender, _inbox) = inbox::unbounded_channel();
+        assert_eq!(
+            second.sync(vec![PLUGIN.to_string()], Sink(sender)),
+            ListenerState::Listening { port: moved },
+            "the moved port is what the next launch keeps"
+        );
+    }
+
+    #[tokio::test]
+    async fn first_launch_picks_and_saves_a_port_in_the_range() {
+        let file = PortFile::new("first-launch");
+        // No file yet: the folders on the way are the save's to create.
+        let path = file.path().join("data").join("plugin-endpoint-port");
+        let state =
+            EndpointState::for_tests(path.clone(), Duration::from_secs(5), scanning_picker());
+        let (sender, _inbox) = inbox::unbounded_channel();
+
+        let port = match state.sync(vec![PLUGIN.to_string()], Sink(sender)) {
+            ListenerState::Listening { port } => port,
+            other => panic!("expected a picked listener, got {other:?}"),
+        };
+
+        assert!(
+            PORT_RANGE.contains(&port),
+            "{port} is outside {PORT_RANGE:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&path).ok(),
+            Some(port.to_string()),
+            "the picked port is kept"
+        );
+        let _ = std::fs::remove_dir_all(file.path());
+    }
+
+    #[test]
+    fn kept_port_load_ignores_garbage_and_out_of_range_values() {
+        let file = PortFile::new("load");
+
+        assert_eq!(
+            KeptPort::new(file.path()).load(),
+            None,
+            "a missing file keeps no port"
+        );
+
+        for text in ["", "not a port", "0", "999", "40000", "-1", "29217x"] {
+            std::fs::write(file.path(), text).expect("the port file writes");
+            assert_eq!(KeptPort::new(file.path()).load(), None, "{text:?}");
+        }
+
+        let port = *PORT_RANGE.start();
+        std::fs::write(file.path(), format!(" {port}\n")).expect("the port file writes");
+        assert_eq!(KeptPort::new(file.path()).load(), Some(port));
+    }
+
+    /// Two syncs racing on a fresh state must make one listener, not two: the
+    /// second used to see the port its sibling had just bound, move off it,
+    /// and overwrite the slot while the first listener kept serving.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn concurrent_first_syncs_bind_one_listener() {
+        let file = PortFile::new("concurrent");
+        let state = Arc::new(EndpointState::for_tests(
+            file.path(),
+            Duration::from_secs(5),
+            random_port,
+        ));
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+
+        let mut tasks = Vec::new();
+        for _ in 0..2 {
+            let state = Arc::clone(&state);
+            let barrier = Arc::clone(&barrier);
+            tasks.push(tokio::task::spawn_blocking(move || {
+                let (sender, _inbox) = inbox::unbounded_channel();
+                barrier.wait();
+                state.sync(vec![PLUGIN.to_string()], Sink(sender))
+            }));
+        }
+
+        let mut ports = Vec::new();
+        for task in tasks {
+            match task.await.expect("the sync task runs") {
+                ListenerState::Listening { port } => ports.push(port),
+                other => panic!("expected a bound listener, got {other:?}"),
+            }
+        }
+
+        assert_eq!(ports[0], ports[1], "one listener, one port");
+        assert_eq!(
+            file.read(),
+            Some(ports[0]),
+            "the kept file holds the bound port"
+        );
     }
 }
