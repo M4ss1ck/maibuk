@@ -27,8 +27,11 @@ const BOOK = {
   title: "Dune",
   subtitle: null,
   authorName: "Frank",
+  genre: null,
   language: "en",
   wordCount: 10,
+  targetWordCount: null,
+  status: "draft" as const,
   updatedAt: 0,
 };
 
@@ -220,6 +223,7 @@ describe("Plugin Permission checks", () => {
 
 describe("Library write Plugin Permissions", () => {
   const WRITE_HANDLERS: PluginApiHandlers = {
+    "library.books.update": async () => null,
     "library.chapters.updateContent": async () => null,
     "library.notes.create": async () => ({ noteId: "n1" }),
     "library.notes.update": async () => null,
@@ -231,6 +235,11 @@ describe("Library write Plugin Permissions", () => {
       grantedAtStart: [],
       handlers: WRITE_HANDLERS,
     });
+
+    const book = await refusal(client.library.books.update({ bookId: "b1", title: "T" }));
+    expect(book.code).toBe("permission-denied");
+    expect(book.permission).toBe("library:write");
+    expect(book.method).toBe("library.books.update");
 
     const chapter = await refusal(
       client.library.chapters.updateContent({ chapterId: "c1", content: { text: "x" } })
@@ -251,6 +260,7 @@ describe("Library write Plugin Permissions", () => {
   it("applies a revoked library:write on the next call (T11)", async () => {
     const { client, granted } = setup({ declared: ["library:write"], handlers: WRITE_HANDLERS });
 
+    await expect(client.library.books.update({ bookId: "b1", title: "T" })).resolves.toBeNull();
     await expect(
       client.library.chapters.updateContent({ chapterId: "c1", content: { text: "x" } })
     ).resolves.toBeNull();
@@ -259,6 +269,9 @@ describe("Library write Plugin Permissions", () => {
 
     granted.delete("library:write");
 
+    expect((await refusal(client.library.books.update({ bookId: "b1", title: "T" }))).code).toBe(
+      "permission-denied"
+    );
     expect(
       (
         await refusal(

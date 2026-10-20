@@ -13,6 +13,7 @@ export const PLUGIN_API_METHODS = [
   "library.notes.get",
   "library.canvases.list",
   "library.canvases.get",
+  "library.books.update",
   "library.chapters.updateContent",
   "library.notes.create",
   "library.notes.update",
@@ -56,8 +57,13 @@ export interface PluginApiMethods {
       title: string;
       subtitle: string | null;
       authorName: string;
+      /** Null when the Book has no Genre. */
+      genre: string | null;
       language: string;
       wordCount: number;
+      /** Null when the Book has no Target Word Count. */
+      targetWordCount: number | null;
+      status: "draft" | "in-progress" | "completed" | "archived";
       /** Milliseconds since the Unix epoch. */
       updatedAt: number;
     }[];
@@ -72,8 +78,13 @@ export interface PluginApiMethods {
       title: string;
       subtitle: string | null;
       authorName: string;
+      /** Null when the Book has no Genre. */
+      genre: string | null;
       language: string;
       wordCount: number;
+      /** Null when the Book has no Target Word Count. */
+      targetWordCount: number | null;
+      status: "draft" | "in-progress" | "completed" | "archived";
       /** Milliseconds since the Unix epoch. */
       updatedAt: number;
     } | null;
@@ -89,7 +100,9 @@ export interface PluginApiMethods {
       title: string;
       order: number;
       parentId: string | null;
+      chapterType: "chapter" | "prologue" | "epilogue" | "part" | "frontmatter" | "backmatter";
       wordCount: number;
+      status: "draft" | "revised" | "final";
       /** Milliseconds since the Unix epoch. */
       updatedAt: number;
     }[];
@@ -105,7 +118,9 @@ export interface PluginApiMethods {
       title: string;
       order: number;
       parentId: string | null;
+      chapterType: "chapter" | "prologue" | "epilogue" | "part" | "frontmatter" | "backmatter";
       wordCount: number;
+      status: "draft" | "revised" | "final";
       /** Milliseconds since the Unix epoch. */
       updatedAt: number;
       content: {
@@ -179,6 +194,18 @@ export interface PluginApiMethods {
       /** Milliseconds since the Unix epoch. */
       updatedAt: number;
     } | null;
+  };
+  /** Updates a Book's title, Author Name, Genre, Book Status, or Target Word Count through the Book write path; give at least one. A null Genre or Target Word Count clears it. */
+  "library.books.update": {
+    input: {
+      bookId: string;
+      title?: string;
+      authorName?: string;
+      genre?: string | null;
+      status?: "draft" | "in-progress" | "completed" | "archived";
+      targetWordCount?: number | null;
+    };
+    output: null;
   };
   /** Replaces a Chapter's content through the Chapter write path. */
   "library.chapters.updateContent": {
@@ -531,6 +558,8 @@ export interface PluginApi {
       list(params?: PluginApiMethods["library.books.list"]["input"]): Promise<PluginApiMethods["library.books.list"]["output"]>;
       /** Reads one Book's details, or null when it does not exist. */
       get(params: PluginApiMethods["library.books.get"]["input"]): Promise<PluginApiMethods["library.books.get"]["output"]>;
+      /** Updates a Book's title, Author Name, Genre, Book Status, or Target Word Count through the Book write path; give at least one. A null Genre or Target Word Count clears it. */
+      update(params: PluginApiMethods["library.books.update"]["input"]): Promise<PluginApiMethods["library.books.update"]["output"]>;
     };
     chapters: {
       /** Lists a Book's Chapters in order, without their content. */

@@ -34,8 +34,11 @@ function book(id: string, title: string) {
     title,
     subtitle: null,
     authorName: "Maibuk",
+    genre: null,
     language: "en",
     wordCount: 0,
+    targetWordCount: null,
+    status: "draft" as const,
     updatedAt: 0,
   };
 }
@@ -54,6 +57,8 @@ function chapter(
     order,
     parentId: null,
     wordCount: text.split(/\s+/).length,
+    chapterType: "chapter",
+    status: "draft",
     updatedAt: 0,
     content: { text, html: `<p>${text}</p>` },
   };

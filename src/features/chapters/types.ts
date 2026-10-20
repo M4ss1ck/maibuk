@@ -1,12 +1,17 @@
-export type ChapterType =
-  | "chapter"
-  | "prologue"
-  | "epilogue"
-  | "part"
-  | "frontmatter"
-  | "backmatter";
+export const CHAPTER_TYPES = [
+  "chapter",
+  "prologue",
+  "epilogue",
+  "part",
+  "frontmatter",
+  "backmatter",
+] as const;
 
-export type ChapterStatus = "draft" | "revised" | "final";
+export type ChapterType = (typeof CHAPTER_TYPES)[number];
+
+export const CHAPTER_STATUSES = ["draft", "revised", "final"] as const;
+
+export type ChapterStatus = (typeof CHAPTER_STATUSES)[number];
 
 export interface Chapter {
   id: string;

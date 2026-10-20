@@ -11,6 +11,8 @@
  */
 
 import { z } from "zod";
+import { BOOK_STATUSES } from "@/features/books/types";
+import { CHAPTER_STATUSES, CHAPTER_TYPES } from "@/features/chapters/types";
 import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
@@ -63,8 +65,11 @@ const book = z.strictObject({
   title: z.string(),
   subtitle: z.string().nullable(),
   authorName: z.string(),
+  genre: z.string().nullable().describe("Null when the Book has no Genre."),
   language: z.string(),
   wordCount: z.int(),
+  targetWordCount: z.int().nullable().describe("Null when the Book has no Target Word Count."),
+  status: z.enum(BOOK_STATUSES),
   updatedAt: timestamp,
 });
 
@@ -74,7 +79,9 @@ const chapterSummary = z.strictObject({
   title: z.string(),
   order: z.int(),
   parentId: id.nullable(),
+  chapterType: z.enum(CHAPTER_TYPES),
   wordCount: z.int(),
+  status: z.enum(CHAPTER_STATUSES),
   updatedAt: timestamp,
 });
 
@@ -185,6 +192,21 @@ export const PLUGIN_API_TABLE = [
     input: z.strictObject({ canvasId: id }),
     output: canvasSummary.nullable(),
     ...libraryRead,
+  }),
+  defineApiRow({
+    id: "library.books.update",
+    description:
+      "Updates a Book's title, Author Name, Genre, Book Status, or Target Word Count through the Book write path; give at least one. A null Genre or Target Word Count clears it.",
+    input: z.strictObject({
+      bookId: id,
+      title: z.string().max(500).optional(),
+      authorName: z.string().max(500).optional(),
+      genre: z.string().max(200).nullable().optional(),
+      status: z.enum(BOOK_STATUSES).optional(),
+      targetWordCount: z.int().min(0).nullable().optional(),
+    }),
+    output: ok,
+    ...libraryWrite,
   }),
   defineApiRow({
     id: "library.chapters.updateContent",

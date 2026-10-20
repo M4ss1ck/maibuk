@@ -35,8 +35,11 @@ const BOOK = {
   title: "Dune",
   subtitle: null,
   authorName: "Frank",
+  genre: null,
   language: "en",
   wordCount: 10,
+  targetWordCount: null,
+  status: "draft" as const,
   updatedAt: 0,
 };
 
@@ -47,6 +50,8 @@ const CHAPTER = {
   order: 0,
   parentId: null,
   wordCount: 2,
+  chapterType: "chapter" as const,
+  status: "draft" as const,
   updatedAt: 1_000,
   content: { text: "Hello", html: "<p>Hello</p>" },
 };

@@ -43,8 +43,13 @@ Output:
   title: string;
   subtitle: string | null;
   authorName: string;
+  /** Null when the Book has no Genre. */
+  genre: string | null;
   language: string;
   wordCount: number;
+  /** Null when the Book has no Target Word Count. */
+  targetWordCount: number | null;
+  status: "draft" | "in-progress" | "completed" | "archived";
   /** Milliseconds since the Unix epoch. */
   updatedAt: number;
 }[]
@@ -74,8 +79,13 @@ Output:
   title: string;
   subtitle: string | null;
   authorName: string;
+  /** Null when the Book has no Genre. */
+  genre: string | null;
   language: string;
   wordCount: number;
+  /** Null when the Book has no Target Word Count. */
+  targetWordCount: number | null;
+  status: "draft" | "in-progress" | "completed" | "archived";
   /** Milliseconds since the Unix epoch. */
   updatedAt: number;
 } | null
@@ -106,7 +116,9 @@ Output:
   title: string;
   order: number;
   parentId: string | null;
+  chapterType: "chapter" | "prologue" | "epilogue" | "part" | "frontmatter" | "backmatter";
   wordCount: number;
+  status: "draft" | "revised" | "final";
   /** Milliseconds since the Unix epoch. */
   updatedAt: number;
 }[]
@@ -137,7 +149,9 @@ Output:
   title: string;
   order: number;
   parentId: string | null;
+  chapterType: "chapter" | "prologue" | "epilogue" | "part" | "frontmatter" | "backmatter";
   wordCount: number;
+  status: "draft" | "revised" | "final";
   /** Milliseconds since the Unix epoch. */
   updatedAt: number;
   content: {
@@ -271,6 +285,33 @@ Output:
   /** Milliseconds since the Unix epoch. */
   updatedAt: number;
 } | null
+```
+
+### `library.books.update`
+
+Updates a Book's title, Author Name, Genre, Book Status, or Target Word Count through the Book write path; give at least one. A null Genre or Target Word Count clears it.
+
+- Plugin Permission: `library:write`
+- Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
+
+Input:
+
+```ts
+{
+  bookId: string;
+  title?: string;
+  authorName?: string;
+  genre?: string | null;
+  status?: "draft" | "in-progress" | "completed" | "archived";
+  targetWordCount?: number | null;
+}
+```
+
+Output:
+
+```ts
+null
 ```
 
 ### `library.chapters.updateContent`

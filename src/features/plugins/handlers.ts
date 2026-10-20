@@ -2,11 +2,12 @@
  * The host-side Plugin API handlers this app wires (ADR 0022, #440):
  * `notifications.show` renders a toast naming the Plugin; the Library reads
  * serve Books, Chapters, Notes, and Canvas metadata; the Library writes
- * (#452) update a Chapter's content and create or update a Note through the
- * entity's own write path; the editor writes (`editor.insert` / `editor.replace`,
- * #452) edit the focused editor as one undoable step; `storage.*` reads and
- * writes the Plugin's own Library namespace; `navigation.openEntity` opens an
- * entity through the app shell; `navigation.openPage` opens a Plugin page;
+ * (#452, #588) update a Book's details, update a Chapter's content, and create
+ * or update a Note through the entity's own write path; the editor writes
+ * (`editor.insert` / `editor.replace`, #452) edit the focused editor as one
+ * undoable step; `storage.*` reads and writes the Plugin's own Library
+ * namespace; `navigation.openEntity` opens an entity through the app shell;
+ * `navigation.openPage` opens a Plugin page;
  * `language.get` reads the app language; `endpoint.address` reads this Plugin's
  * Plugin Endpoint address; `secrets.*` writes the calling
  * Plugin's credentials through the registered store; `network.fetch` fetches
@@ -38,6 +39,7 @@ import {
   listPluginCanvases,
   listPluginChapters,
   listPluginNotes,
+  updatePluginBook,
   updatePluginChapterContent,
   updatePluginNote,
 } from "@/features/plugins/library";
@@ -121,6 +123,8 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     },
     "library.books.list": () => listPluginBooks(),
     "library.books.get": ({ bookId }) => getPluginBook(bookId),
+    "library.books.update": ({ bookId, title, authorName, genre, status, targetWordCount }) =>
+      updatePluginBook({ bookId, title, authorName, genre, status, targetWordCount }),
     "library.chapters.list": ({ bookId }) => listPluginChapters(bookId),
     "library.chapters.get": ({ chapterId }) => getPluginChapter(chapterId),
     "library.notes.list": ({ bookId }) => listPluginNotes(bookId),

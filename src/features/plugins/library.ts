@@ -5,10 +5,11 @@
  * the API. Chapters report their containing Book as their Change entity, so a
  * reader that wants Chapter edits subscribes to `library.changed` and pulls.
  *
- * Here too are the `library:write` rows (#452): a Chapter content update and
- * Note create/update, each through the entity's own narrow write path (ADR
- * 0005) with Origin "local", so the write Flushes open editors, normalizes,
- * emits on the Change Feed, and refuses sample ids. No delete is exposed.
+ * Here too are the `library:write` rows (#452, #588): a Book details update, a
+ * Chapter content update, and Note create/update, each through the entity's
+ * own narrow write path (ADR 0005) with Origin "local", so the write Flushes
+ * open editors, normalizes, emits on the Change Feed, and refuses sample ids.
+ * No delete is exposed.
  *
  * Timestamps are Unix seconds in the Library and milliseconds since the epoch
  * in the API, the one shape every Plugin sees.
@@ -18,6 +19,9 @@ import DOMPurify from "dompurify";
 import { htmlToPlainText } from "@/components/editor/html-to-text";
 import { plainTextToEditorHtml } from "@/components/editor/plain-text-html";
 import { updateChapterRow } from "@/features/chapters/write";
+import { updateBookRow } from "@/features/books/write";
+import type { BookStatus } from "@/features/books/types";
+import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import { countWords } from "@/features/metrics/word-count";
 import { createNoteRow, updateNoteRow } from "@/features/notes/write";
 import type {
@@ -61,8 +65,12 @@ function toBook(row: Row): PluginBook {
     title: row.title as string,
     subtitle: (row.subtitle as string | null) ?? null,
     authorName: row.author_name as string,
+    genre: (row.genre as string | null) ?? null,
     language: (row.language as string | null) ?? "en",
     wordCount: (row.word_count as number) ?? 0,
+    targetWordCount: (row.target_word_count as number | null) ?? null,
+    // The column defaults to "draft"; a row from before it existed reads as one.
+    status: (row.status as BookStatus | null) ?? "draft",
     updatedAt: toMillis(row.updated_at),
   };
 }
@@ -75,6 +83,9 @@ function toChapterSummary(row: Row): PluginChapterSummary {
     order: row.order as number,
     parentId: (row.parent_id as string | null) ?? null,
     wordCount: (row.word_count as number) ?? 0,
+    // Both columns have a default; a row without one reads as the default.
+    chapterType: (row.chapter_type as ChapterType | null) ?? "chapter",
+    status: (row.status as ChapterStatus | null) ?? "draft",
     updatedAt: toMillis(row.updated_at),
   };
 }
@@ -204,7 +215,7 @@ export function fragmentToHtml(fragment: PluginContentFragment): string {
 }
 
 /** A write against an id the Library does not hold; the Plugin sees a refusal. */
-function notFound(entity: "Chapter" | "Note", id: string): PluginApiError {
+function notFound(entity: "Book" | "Chapter" | "Note", id: string): PluginApiError {
   return new PluginApiError({ code: "invalid-params", message: `${entity} ${id} does not exist` });
 }
 
@@ -239,6 +250,43 @@ async function libraryWrite<T>(run: () => Promise<T>): Promise<T> {
     }
     throw error;
   }
+}
+
+/**
+ * Updates a Book's title, Author Name, Genre, Book Status, or Target Word
+ * Count through the Book write path. Every field is optional but at least one
+ * must be given, so a call never becomes a bare sync-clock bump; a null Genre
+ * or Target Word Count clears it, and a missing id comes back as null.
+ */
+export async function updatePluginBook(input: {
+  bookId: string;
+  title?: string;
+  authorName?: string;
+  genre?: string | null;
+  status?: BookStatus;
+  targetWordCount?: number | null;
+}): Promise<null> {
+  const changes = {
+    ...(input.title === undefined ? {} : { title: input.title }),
+    ...(input.authorName === undefined ? {} : { authorName: input.authorName }),
+    // The row writer stores what it is given; a null clears the column.
+    ...(input.genre === undefined ? {} : { genre: input.genre as string }),
+    ...(input.status === undefined ? {} : { status: input.status }),
+    ...(input.targetWordCount === undefined
+      ? {}
+      : { targetWordCount: input.targetWordCount as number }),
+  };
+  return libraryWrite(async () => {
+    if (Object.keys(changes).length === 0) {
+      throw new PluginApiError({
+        code: "invalid-params",
+        message: "Give at least one Book field to update",
+      });
+    }
+    const book = await updateBookRow(input.bookId, changes, "local");
+    if (!book) throw notFound("Book", input.bookId);
+    return null;
+  });
 }
 
 /** Replaces a Chapter's content through the Chapter write path. */
