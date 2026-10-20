@@ -39,7 +39,11 @@ import {
   onEditorContentChanged,
   onEditorFocusChanged,
 } from "@/features/plugins/editor-host";
-import { endpointUrlFor, startPluginEndpoint } from "@/features/plugins/endpoint";
+import {
+  boundEndpointPort,
+  endpointUrlFor,
+  startPluginEndpoint,
+} from "@/features/plugins/endpoint";
 import { createPluginHandlers } from "@/features/plugins/handlers";
 import { manifestRunsOn, pluginsRunOn } from "@/features/plugins/host-platform";
 import { currentPluginLanguage, onPluginLanguageChange } from "@/features/plugins/language";
@@ -57,7 +61,6 @@ import { clearToolbarPressed } from "@/features/plugins/toolbar-pressed";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
 import { isTutorialLibraryActive, settleAuthorLibraryWork, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
-  EndpointListenerState,
   InstalledPlugin,
   PluginActivationRefusal,
   PluginActivationResult,
@@ -209,14 +212,6 @@ async function defaultWhenLaunchSettled(): Promise<void> {
 function defaultScheduleIdle(work: () => void): void {
   if (typeof requestIdleCallback === "function") requestIdleCallback(() => work());
   else setTimeout(work, 0);
-}
-
-/**
- * The port a Plugin's Endpoint address depends on, or null while the listener
- * is not bound. The address moves only when this value does (#587).
- */
-function boundEndpointPort(state: EndpointListenerState): number | null {
-  return state.state === "listening" ? state.port : null;
 }
 
 interface Entry {

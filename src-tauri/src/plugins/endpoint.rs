@@ -772,9 +772,8 @@ fn lower_headers(headers: &HeaderMap) -> Vec<(String, String)> {
 /// move is provable; the app keeps [`random_port`].
 type PortPicker = Arc<dyn Fn() -> u16 + Send + Sync>;
 
-/// A port from [`PORT_RANGE`], with no crate: `RandomState` seeds from the OS
-/// and advances per value, so a counter and the clock are enough for a port
-/// nobody needs to predict.
+/// No crate: `RandomState` seeds from the OS and advances per value, so a
+/// counter and the clock are enough for a port nobody needs to predict.
 fn random_port() -> u16 {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let seed = COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -785,8 +784,8 @@ fn random_port() -> u16 {
     port_in_range(hash)
 }
 
-/// Maps a hash onto [`PORT_RANGE`]. The range is narrower than a `u16`, so a
-/// modulo is all the spread a port needs.
+/// The range is narrower than a `u16`, so a modulo is all the spread a port
+/// needs.
 fn port_in_range(hash: u64) -> u16 {
     let size = u64::from(*PORT_RANGE.end() - *PORT_RANGE.start()) + 1;
     PORT_RANGE.start() + (hash % size) as u16
@@ -817,9 +816,8 @@ impl KeptPort {
         PORT_RANGE.contains(&port).then_some(port)
     }
 
-    /// Writes the port for the next launch. A read-only folder returns the
-    /// error for the caller to log: this run still serves, it just moves on
-    /// the next one.
+    /// A read-only folder returns the error for the caller to log: this run
+    /// still serves, it just moves on the next one.
     fn save(&self, port: u16) -> Result<(), String> {
         let Some(path) = self.path.as_ref() else {
             return Ok(());
@@ -828,7 +826,12 @@ impl KeptPort {
             std::fs::create_dir_all(parent)
                 .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
         }
-        std::fs::write(path, port.to_string())
+        // Rename, so a crash mid-write leaves the old port, not a half one the
+        // next launch trusts.
+        let temp = path.with_extension("tmp");
+        std::fs::write(&temp, port.to_string())
+            .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+        std::fs::rename(&temp, path)
             .map_err(|error| format!("cannot write {}: {error}", path.display()))
     }
 }
@@ -923,8 +926,8 @@ impl EndpointState {
         (*self.pick_port)()
     }
 
-    /// A port this bind has not tried yet. The picker is injectable, so a bug
-    /// in it must not hang the bind: after as many misses as moves it gives up.
+    /// The picker is injectable, so a bug in it must not hang the bind: after
+    /// as many misses as moves it gives up.
     fn untried(&self, tried: &[u16]) -> Option<u16> {
         for _ in 0..PORT_MOVE_LIMIT {
             let port = self.pick();
@@ -991,31 +994,39 @@ impl EndpointState {
         let stored = self.kept.load();
         let first = self.kept_port().unwrap_or_else(|| self.pick());
         let mut tried = vec![first];
-        let mut bound = self.bind_once(first, sink.clone());
-        let first_error = bound.as_ref().err().cloned();
+        // A Windows excluded port range refuses with an access error, not an
+        // address-in-use one, so every bind error moves.
+        let first_error = match self.bind_once(first, sink.clone()) {
+            Ok(listener) => return self.install(listener, ids, stored),
+            Err(error) => error,
+        };
 
-        while bound.is_err() && tried.len() <= PORT_MOVE_LIMIT {
+        while tried.len() <= PORT_MOVE_LIMIT {
             let Some(port) = self.untried(&tried) else {
                 break;
             };
             tried.push(port);
-            bound = self.bind_once(port, sink.clone());
+            if let Ok(listener) = self.bind_once(port, sink.clone()) {
+                eprintln!("Plugin Endpoint moved from {first} to {port}: {first_error}");
+                return self.install(listener, ids, stored);
+            }
         }
 
-        match bound {
-            Ok(listener) => {
-                let port = listener.port();
-                listener.set_serving(ids);
-                let state = listener.state();
-                *self.slot() = Some(listener);
-                self.keep(port, stored);
-                state
-            }
-            Err(_) => ListenerState::Failed {
-                port: first,
-                reason: first_error.unwrap_or_default(),
-            },
+        ListenerState::Failed {
+            port: first,
+            reason: first_error,
         }
+    }
+
+    /// Installs a listener that just bound, keeps its port for the next
+    /// launch, and reports the state the host records.
+    fn install(&self, listener: Listener, ids: Vec<String>, stored: Option<u16>) -> ListenerState {
+        let port = listener.port();
+        listener.set_serving(ids);
+        let state = listener.state();
+        *self.slot() = Some(listener);
+        self.keep(port, stored);
+        state
     }
 
     pub fn respond(
@@ -2076,6 +2087,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rebinds_the_kept_port_after_an_unbind_in_the_same_run() {
+        let port = free_port_in_range();
+        let file = PortFile::new("rebind");
+        file.write(port);
+        let state = EndpointState::for_tests(file.path(), Duration::from_secs(5), random_port);
+        let (sender, _inbox) = inbox::unbounded_channel();
+        let sink = Sink(sender);
+
+        assert_eq!(
+            state.sync(vec![PLUGIN.to_string()], sink.clone()),
+            ListenerState::Listening { port }
+        );
+        assert_eq!(state.sync(Vec::new(), sink.clone()), ListenerState::Off);
+        assert!(eventually_refused(port).await, "the unbind closed the port");
+        assert_eq!(
+            state.sync(vec![PLUGIN.to_string()], sink),
+            ListenerState::Listening { port },
+            "the same run finds the kept port again"
+        );
+        assert!(!refused(port).await, "the kept port listens again");
+        assert_eq!(file.read(), Some(port), "the port is still the kept one");
+    }
+
+    #[tokio::test]
     async fn held_port_moves_to_a_free_one_in_the_range() {
         // The kept port is in the range and held by another app, which is the
         // collision the move exists for. `_held` keeps it bound all test long.
@@ -2181,6 +2216,30 @@ mod tests {
         let port = *PORT_RANGE.start();
         std::fs::write(file.path(), format!(" {port}\n")).expect("the port file writes");
         assert_eq!(KeptPort::new(file.path()).load(), Some(port));
+    }
+
+    #[test]
+    fn kept_port_save_leaves_no_temp_file() {
+        let file = PortFile::new("atomic-save");
+        let dir = file.path().join("data");
+        let path = dir.join("plugin-endpoint-port");
+        let port = *PORT_RANGE.start();
+
+        KeptPort::new(path.clone())
+            .save(port)
+            .expect("the port saves");
+
+        let names: Vec<std::ffi::OsString> = std::fs::read_dir(&dir)
+            .expect("the folder is there")
+            .map(|entry| entry.expect("an entry").file_name())
+            .collect();
+        assert_eq!(
+            names,
+            vec![std::ffi::OsString::from("plugin-endpoint-port")],
+            "the rename leaves no temp file behind"
+        );
+        assert_eq!(std::fs::read_to_string(&path).ok(), Some(port.to_string()));
+        let _ = std::fs::remove_dir_all(file.path());
     }
 
     /// Two syncs racing on a fresh state must make one listener, not two: the

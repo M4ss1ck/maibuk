@@ -39,21 +39,6 @@ describe("endpointUrlFor()", () => {
   });
 });
 
-// jsdom's MessagePort delivers on a task the fake timers do not control; a real
-// macrotask flush lets each broker round trip land while timers stay fake.
-const realSetTimeout = globalThis.setTimeout;
-
-function flushTasks(): Promise<void> {
-  return new Promise((resolve) => realSetTimeout(resolve, 0));
-}
-
-async function advance(ms = 0): Promise<void> {
-  await vi.advanceTimersByTimeAsync(ms);
-  await flushTasks();
-  await vi.advanceTimersByTimeAsync(0);
-  await flushTasks();
-}
-
 /** One message a Plugin's port received, as the fake Plugin sees it. */
 type PortMessage = {
   kind?: string;
@@ -149,9 +134,7 @@ async function launchAll(h: Harness): Promise<void> {
   void h.lifecycle.launch().then(() => {
     settled = true;
   });
-  for (let pass = 0; pass < 500 && !settled; pass += 1) await advance(0);
-  if (!settled) throw new Error("lifecycle.launch() did not settle");
-  await advance(0);
+  await vi.waitFor(() => expect(settled).toBe(true));
 }
 
 function serveFolder(pluginId: string): PluginFolder {
@@ -199,12 +182,11 @@ describe("Plugin Endpoint address events", () => {
     const beta = watchPort(h.port("beta"));
     alpha.subscribe(1, "endpoint.addressChanged");
     beta.subscribe(1, "endpoint.addressChanged");
-    await advance(0);
 
     // The replay says the endpoint is not bound yet; the unprivileged Plugin
     // is refused the subscription itself, so no event can ever reach it.
-    expect(alpha.urls()).toEqual([null]);
-    expect(beta.messages).toHaveLength(1);
+    await vi.waitFor(() => expect(alpha.urls()).toEqual([null]));
+    await vi.waitFor(() => expect(beta.messages).toHaveLength(1));
     expect(beta.messages[0]).toMatchObject({
       kind: "result",
       ok: false,
@@ -212,24 +194,31 @@ describe("Plugin Endpoint address events", () => {
     });
 
     usePluginManagementStore.getState().setEndpoint({ state: "listening", port: 41000 });
-    await advance(0);
-    expect(alpha.urls()).toEqual([null, "http://127.0.0.1:41000/plugin/alpha/"]);
+    await vi.waitFor(() =>
+      expect(alpha.urls()).toEqual([null, "http://127.0.0.1:41000/plugin/alpha/"])
+    );
 
-    // The same port recorded again is not a move: no second event.
+    // The same port recorded again is not a move: no second event. The move
+    // that follows is the later event that proves it.
     usePluginManagementStore.getState().setEndpoint({ state: "listening", port: 41000 });
-    await advance(0);
-    expect(alpha.urls()).toEqual([null, "http://127.0.0.1:41000/plugin/alpha/"]);
-
     usePluginManagementStore.getState().setEndpoint({ state: "listening", port: 42000 });
-    await advance(0);
+    await vi.waitFor(() =>
+      expect(alpha.urls()).toEqual([
+        null,
+        "http://127.0.0.1:41000/plugin/alpha/",
+        "http://127.0.0.1:42000/plugin/alpha/",
+      ])
+    );
+
     usePluginManagementStore.getState().setEndpoint({ state: "off" });
-    await advance(0);
-    expect(alpha.urls()).toEqual([
-      null,
-      "http://127.0.0.1:41000/plugin/alpha/",
-      "http://127.0.0.1:42000/plugin/alpha/",
-      null,
-    ]);
+    await vi.waitFor(() =>
+      expect(alpha.urls()).toEqual([
+        null,
+        "http://127.0.0.1:41000/plugin/alpha/",
+        "http://127.0.0.1:42000/plugin/alpha/",
+        null,
+      ])
+    );
 
     // A Plugin without `serve` heard nothing the whole time.
     expect(beta.messages.filter((message) => message.kind === "event")).toEqual([]);
