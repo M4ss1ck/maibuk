@@ -78,9 +78,15 @@ function renderRealEditor(content: string) {
   return editor;
 }
 
-// Lets every pending animation frame run (TipTap and React Aria move focus in one).
+// Resolves after the frames already scheduled have run, and the one they
+// schedule: the close refocuses in a frame, and TipTap's focus in the next.
 function waitForFrames() {
-  return act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+  return act(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  );
 }
 
 describe("EditorContextMenu", () => {
