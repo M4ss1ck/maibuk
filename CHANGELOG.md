@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.2] - 2026-10-20
+
+### Added
+- Add a Spanish Opening Marks setting that inserts ¿ and ¡ around typed questions and exclamations
+- Copy a picked Symbol from the Symbols dialog and access Insert and Copy actions from its Item Menu
+
+### Fixed
+- Prevent the placeholder from showing behind a dictation partial on an empty Chapter or Quick Note
+
 ## [0.13.1] - 2026-10-19
 
 ### Added
