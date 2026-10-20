@@ -19,6 +19,7 @@ const PERMISSION_COPY_KEYS: Record<string, string> = {
   secrets: "secrets",
   clipboard: "clipboard",
   process: "process",
+  serve: "serve",
 };
 
 /** The title and detail of one Plugin Permission, in the author's language. */

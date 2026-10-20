@@ -126,6 +126,8 @@ async function runCommand(client: PluginClient, params: unknown): Promise<null> 
 }
 ```
 
+A Plugin holding the `serve` Plugin Permission answers one more host request: `endpoint.request`, which carries one HTTP request that reached its [Plugin Endpoint](endpoint.md). Handle it with `client.onEndpointRequest`, not `onHostRequest`, because its answer may stream.
+
 The Worker entry, templates/plugin/index.tsx, is the only file that imports `@maibuk/plugin-sdk/worker-ui`, and it imports it before anything else from the SDK. `@maibuk/plugin-sdk` touches `HTMLElement` when it is evaluated, and a Worker has no DOM until that Remote DOM polyfill runs, so an entry that imports the SDK first fails to start. The entry creates the client on the host's init message and calls `start()`. A host-side test imports plugin.tsx with the polyfill-free `@maibuk/plugin-sdk/ui-serve` entry instead, so the polyfill stays out of jsdom. See [Testing](testing.md).
 
 ## Events
@@ -154,4 +156,4 @@ A locale file that fails validation is ignored with a warning, so one bad locale
 
 ## Plugin Permissions
 
-A Plugin declares the Plugin Permissions it needs under `permissions.required` (the author must approve them to enable the Plugin) and `permissions.optional` (the author may deny them one by one). The known names are `library:read`, `library:write`, `editor:read`, `editor:decorate`, `editor:write`, `secrets`, `clipboard`, `process`, and `network:<host>` for a named web host. Every API method lists the Plugin Permission it needs in [api-reference.md](api-reference.md). A refused call rejects with `permission-denied`, whose `permission` field names the missing Plugin Permission.
+A Plugin declares the Plugin Permissions it needs under `permissions.required` (the author must approve them to enable the Plugin) and `permissions.optional` (the author may deny them one by one). The known names are `library:read`, `library:write`, `editor:read`, `editor:decorate`, `editor:write`, `secrets`, `clipboard`, `process`, `serve`, and `network:<host>` for a named web host. Every API method lists the Plugin Permission it needs in [api-reference.md](api-reference.md). A refused call rejects with `permission-denied`, whose `permission` field names the missing Plugin Permission. `serve` is the one name that opens a port rather than a host capability: it lets outside programs reach the Plugin at its [Plugin Endpoint](endpoint.md).

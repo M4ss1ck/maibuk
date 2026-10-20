@@ -2188,7 +2188,9 @@
       "editorWrite": "Modificar el editor enfocado",
       "editorWriteDetail": "Escribir, dar formato y reemplazar texto en el editor que tengas abierto.",
       "clipboard": "Usar el portapapeles",
-      "clipboardDetail": "Leer y escribir en tu portapapeles cuando copies o pegues."
+      "clipboardDetail": "Leer y escribir en tu portapapeles cuando copies o pegues.",
+      "serve": "Responder a solicitudes de aplicaciones de este equipo",
+      "serveDetail": "Las aplicaciones de este equipo pueden enviar solicitudes a este Plugin mientras está activo. Solo en escritorio."
     },
     "stopped": {
       "startupTimeout": "{{name}} tardó demasiado en iniciarse y se detuvo.",

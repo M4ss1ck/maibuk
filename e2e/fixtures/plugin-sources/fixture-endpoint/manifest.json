@@ -1,0 +1,17 @@
+{
+  "manifestVersion": 1,
+  "id": "fixture-endpoint",
+  "name": "Fixture Endpoint",
+  "description": "The E2E fixture for the Plugin Endpoint (#586): it declares the optional serve Plugin Permission and answers one whole request and one streamed request on its own path, so the @wf spec can prove routing, the grant gate, and that another Plugin's request never reaches it. The desktop listener and its socket are proven by the Rust tests in src-tauri/src/plugins/endpoint.rs. It is never shipped in a product bundle.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web", "desktop"],
+  "lifecycle": "persistent",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": [],
+    "optional": ["serve"]
+  }
+}

@@ -16,9 +16,13 @@ import {
   type PluginApiEvents,
 } from "@/plugin-sdk/api.generated";
 import {
+  type EndpointAnswer,
+  type EndpointRequest,
   type HostToPluginMessage,
+  PLUGIN_ENDPOINT_REQUEST,
   PLUGIN_FRAME_MESSAGE,
   PLUGIN_MESSAGE_MAX_BYTES,
+  PLUGIN_STREAM_CHUNK_MAX_BYTES,
   PluginApiError,
   type PluginApiErrorData,
   type PluginFrame,
@@ -27,6 +31,8 @@ import {
   type PluginStartReason,
   type PendingReplies,
   type PluginStreamListener,
+  base64ToBytes,
+  bytesToBase64,
   isPluginInitMessage,
   messageTooLarge,
   utf8ByteLength,
@@ -37,6 +43,37 @@ export * from "@/plugin-sdk/protocol";
 export * from "@/plugin-sdk/ui";
 
 export type HostRequestHandler = (method: string, params: unknown) => unknown;
+
+/**
+ * One Endpoint request as the SDK hands it to an author's handler: the raw
+ * request body as bytes, with `text()` for the common UTF-8 case.
+ */
+export interface PluginEndpointRequest {
+  method: string;
+  /** The full request path including the query, e.g. `/plugin/acme/mcp?x=1`. */
+  path: string;
+  /** Request headers, names lower-cased, duplicates kept in order. */
+  headers: [string, string][];
+  /** The raw request bytes. */
+  body: Uint8Array;
+  /** The body decoded as UTF-8 text. */
+  text(): string;
+}
+
+/** An Endpoint answer's body: bytes, text, or a stream of either. */
+export type PluginEndpointBody = string | Uint8Array | AsyncIterable<string | Uint8Array>;
+
+/** What an Endpoint handler returns. An `AsyncIterable` body streams. */
+export interface PluginEndpointAnswer {
+  status: number;
+  /** Response headers; duplicates are kept when given as pairs. */
+  headers?: Record<string, string> | [string, string][];
+  body?: PluginEndpointBody;
+}
+
+export type EndpointRequestHandler = (
+  request: PluginEndpointRequest
+) => PluginEndpointAnswer | Promise<PluginEndpointAnswer>;
 
 /** Why the host activated this Plugin, as the host announced it (#400, #445). */
 export interface PluginActivation {
@@ -54,6 +91,15 @@ export type PluginClient = PluginApi & {
   readonly activation: PluginActivation | null;
   /** Answers the host's requests to this Plugin (health checks, migrateData, Command runs). */
   onHostRequest(handler: HostRequestHandler): void;
+  /**
+   * Answers the host's Endpoint requests: one handler for every request that
+   * reaches `/plugin/<pluginId>/…` while the Plugin holds the `serve` Plugin
+   * Permission. With no handler registered every request is answered 404.
+   * Answer with a `status`, optional `headers`, and `body`; an `AsyncIterable`
+   * body streams, and the handler then must not `await` the request's
+   * completion — the host follows the chunks with one `end`.
+   */
+  onEndpointRequest(handler: EndpointRequestHandler): void;
   /**
    * Subscribes to an event. Rejects `permission-denied` when the event's
    * Plugin Permission is not granted. Resolves with the unsubscribe function.
@@ -81,6 +127,7 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
   let nextId = 1;
   let stopReason: string | null = null;
   let hostRequestHandler: HostRequestHandler | null = null;
+  let endpointRequestHandler: EndpointRequestHandler | null = null;
   let activationContext: PluginActivation | null = null;
   const pending: PendingReplies = new Map();
   const streams = new Map<number, PluginStreamListener<unknown>>();
@@ -155,7 +202,117 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
     };
   }
 
+  function postAnswer(id: number, answer: EndpointAnswer) {
+    port.postMessage(JSON.stringify({ kind: "reply", id, ok: true, result: answer }));
+  }
+
+  function headersOf(headers: PluginEndpointAnswer["headers"]): [string, string][] {
+    if (headers === undefined) return [];
+    if (Array.isArray(headers)) return headers.map(([name, value]) => [name, value]);
+    return Object.entries(headers);
+  }
+
+  function isAsyncIterable(value: unknown): value is AsyncIterable<string | Uint8Array> {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function"
+    );
+  }
+
+  function bytesOf(body: string | Uint8Array): Uint8Array {
+    return typeof body === "string" ? new TextEncoder().encode(body) : body;
+  }
+
+  /** Posts one body piece as `chunk`s, none over the stream cap (the host caps each). */
+  function postChunks(id: number, bytes: Uint8Array) {
+    for (let offset = 0; offset < bytes.length; offset += PLUGIN_STREAM_CHUNK_MAX_BYTES) {
+      const slice = bytes.subarray(offset, offset + PLUGIN_STREAM_CHUNK_MAX_BYTES);
+      port.postMessage(JSON.stringify({ kind: "chunk", id, chunk: bytesToBase64(slice) }));
+    }
+  }
+
+  /**
+   * Answers one Endpoint request. A streamed body is a `reply` saying
+   * `streaming`, then its `chunk`s and one `end`; a handler that throws fails
+   * the reply (the host answers 500), and a stream that throws still ends, so
+   * the host closes its response instead of waiting.
+   */
+  async function answerEndpoint(id: number, request: EndpointRequest) {
+    const handler = endpointRequestHandler;
+    if (!handler) {
+      postAnswer(id, { status: 404, headers: [], streaming: false });
+      return;
+    }
+    let answer: PluginEndpointAnswer;
+    try {
+      const body = base64ToBytes(request.body);
+      const input: PluginEndpointRequest = {
+        method: request.method,
+        path: request.path,
+        headers: request.headers.map(([name, value]) => [name, value]),
+        body,
+        text: () => new TextDecoder().decode(body),
+      };
+      answer = await handler(input);
+    } catch (error) {
+      const data: PluginApiErrorData =
+        error instanceof PluginApiError
+          ? { code: error.code, message: error.message, permission: error.permission }
+          : {
+              code: "internal-error",
+              message: error instanceof Error ? error.message : String(error),
+            };
+      port.postMessage(
+        JSON.stringify({
+          kind: "reply",
+          id,
+          ok: false,
+          error: { ...data, method: PLUGIN_ENDPOINT_REQUEST },
+        })
+      );
+      return;
+    }
+    if (typeof answer !== "object" || answer === null || typeof answer.status !== "number") {
+      port.postMessage(
+        JSON.stringify({
+          kind: "reply",
+          id,
+          ok: false,
+          error: {
+            code: "internal-error",
+            message: "The endpoint handler returned no answer",
+            method: PLUGIN_ENDPOINT_REQUEST,
+          },
+        })
+      );
+      return;
+    }
+    const headers = headersOf(answer.headers);
+    if (isAsyncIterable(answer.body)) {
+      postAnswer(id, { status: answer.status, headers, streaming: true });
+      try {
+        for await (const piece of answer.body) postChunks(id, bytesOf(piece));
+      } catch {
+        // The answer is already open; ending it closes the host's response.
+      }
+      port.postMessage(JSON.stringify({ kind: "end", id }));
+      return;
+    }
+    const body = answer.body === undefined ? null : bytesOf(answer.body);
+    postAnswer(id, {
+      status: answer.status,
+      headers,
+      ...(body === null ? {} : { body: bytesToBase64(body) }),
+      streaming: false,
+    });
+  }
+
   async function answer(id: number, method: string, params: unknown) {
+    if (method === PLUGIN_ENDPOINT_REQUEST) {
+      await answerEndpoint(id, params as EndpointRequest);
+      return;
+    }
     try {
       if (!hostRequestHandler) throw new Error(`No handler for ${method}`);
       const result = await hostRequestHandler(method, params);
@@ -247,6 +404,7 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
         listeners.clear();
         hostSubscriptions.clear();
         frameHandlers.clear();
+        endpointRequestHandler = null;
         return;
       }
     }
@@ -261,6 +419,9 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
     },
     onHostRequest(handler: HostRequestHandler) {
       hostRequestHandler = handler;
+    },
+    onEndpointRequest(handler: EndpointRequestHandler) {
+      endpointRequestHandler = handler;
     },
     on: subscribe,
     onFrame,

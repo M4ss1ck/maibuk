@@ -645,6 +645,11 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       plugins: {},
       notifications: [],
       dataSizes: {},
+      endpoint: { state: "off" },
+
+      setEndpoint(state) {
+        set({ endpoint: state });
+      },
 
       async refresh() {
         ensureSubscribed();

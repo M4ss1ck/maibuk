@@ -7,6 +7,7 @@ import type {
   WebDialogAdapter,
   BackupAdapter,
   ClipboardAdapter,
+  EndpointAdapter,
   PluginDirectoryAdapter,
   PluginFetchAdapter,
 } from "@/lib/platform/types";
@@ -42,6 +43,9 @@ export type {
   BackupAdapter,
   BackupEntry,
   ClipboardAdapter,
+  EndpointAdapter,
+  EndpointListenerState,
+  EndpointRequestMessage,
   PluginDirectoryAdapter,
   PluginFetchAdapter,
 } from "@/lib/platform/types";
@@ -194,6 +198,18 @@ export async function getPluginDirectory(): Promise<PluginDirectoryAdapter> {
   }
   const { createTauriPluginDirectory } = await import("@/lib/platform/tauri/plugins");
   return createTauriPluginDirectory();
+}
+
+// Plugin Endpoint factory. Only the desktop build binds an HTTP socket (the
+// Rust listener, #586); Android's commands are desktop-only and the web has no
+// socket, so both get the adapter that stays off and never delivers.
+export async function getPluginEndpoint(): Promise<EndpointAdapter> {
+  if (!IS_DESKTOP) {
+    const { webPluginEndpoint } = await import("@/lib/platform/web/endpoint");
+    return webPluginEndpoint;
+  }
+  const { tauriPluginEndpoint } = await import("@/lib/platform/tauri/endpoint");
+  return tauriPluginEndpoint;
 }
 
 // The directory Backups live in when the author has not chosen one. Null on

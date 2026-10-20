@@ -17,6 +17,7 @@ pub fn run() {
     let builder = builder
         .manage(window_restore::PendingWindowRestore::default())
         .manage(plugins::watch::PluginWatcher::default())
+        .manage(plugins::endpoint::EndpointState::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             window_restore::show_main_window(app);
         }))
@@ -77,6 +78,14 @@ pub fn run() {
             plugins::watch_plugin_directory,
             #[cfg(desktop)]
             plugins::unwatch_plugin_directory,
+            #[cfg(desktop)]
+            plugins::endpoint::plugin_endpoint_sync,
+            #[cfg(desktop)]
+            plugins::endpoint::plugin_endpoint_respond,
+            #[cfg(desktop)]
+            plugins::endpoint::plugin_endpoint_chunk,
+            #[cfg(desktop)]
+            plugins::endpoint::plugin_endpoint_end,
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             plugins::secrets::plugin_secret_set,
             #[cfg(any(target_os = "linux", target_os = "windows"))]

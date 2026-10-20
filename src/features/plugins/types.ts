@@ -10,7 +10,7 @@ import type { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-valida
 import type { Language } from "@/features/settings/types";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
-import type { PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
+import type { EndpointRequest, PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
 
 // Identity (ids.ts)
 
@@ -449,6 +449,14 @@ export interface PluginManagement {
   notifications: PluginNotification[];
   /** Each Plugin's stored data size in bytes, as `refreshDataSize` last read it. */
   dataSizes: Record<string, number>;
+  /**
+   * The Plugin Endpoint's listener as the last `sync` reported it (#586): off,
+   * listening on a port, or a failed bind. Plugin host code writes it, and a
+   * failed bind is also logged; nothing renders it yet.
+   */
+  endpoint: EndpointListenerState;
+  /** Records the listener's latest state (#586). */
+  setEndpoint(state: EndpointListenerState): void;
   /** Re-reads the Plugin Directory and each copy's review state. */
   refresh(): Promise<void>;
   /**
@@ -669,6 +677,8 @@ export interface PluginLifecycleOptions {
   scheduleIdle?: (work: () => void) => void;
   /** The stop toast text, or null for a silent stop. Defaults to the localized copy. */
   stopMessage?: (name: string, reason: PluginLifecycleStopReason) => string | null;
+  /** Runs once when the lifecycle is disposed, after every Plugin stopped (host services the app started with it). */
+  onDispose?: () => void;
 }
 
 export interface PluginLifecycle {
@@ -794,6 +804,36 @@ export interface TestPage {
   unmount(): void;
 }
 
+/** One request `endpoint()` hands the Plugin on its Plugin Endpoint. */
+export interface TestEndpointRequest {
+  /** Defaults to `GET`. */
+  method?: string;
+  /**
+   * The path relative to the Plugin Endpoint, such as `/mcp` or `mcp?x=1`. The
+   * helper prefixes `/plugin/<pluginId>`, so the Plugin sees the full path.
+   */
+  path: string;
+  /** Request headers, as a record or as pairs; duplicates survive as pairs. */
+  headers?: Record<string, string> | [string, string][];
+  /** The request body; a string is sent as UTF-8, the way an HTTP body arrives. */
+  body?: string | Uint8Array;
+}
+
+/** The answer one Plugin Endpoint request produced. */
+export interface TestEndpointAnswer {
+  status: number;
+  /** Response headers, duplicates kept in order. */
+  headers: [string, string][];
+  /** The whole body: the answer's bytes, or every streamed chunk joined. */
+  body: Uint8Array;
+  /** The streamed pieces in order; empty when the Plugin did not stream. */
+  chunks: Uint8Array[];
+  /** Whether the Plugin answered with a stream, which the helper waited out. */
+  streamed: boolean;
+  /** The body decoded as UTF-8 text. */
+  text(): string;
+}
+
 export interface TestHost {
   /** The Plugin-side port: hand it to the Plugin's setup. */
   port: MessagePort;
@@ -825,6 +865,14 @@ export interface TestHost {
   setLanguage(language: string): void;
   /** Makes the Library available or unavailable, as the Tutorial does. */
   setLibraryAvailable(available: boolean): void;
+  /**
+   * Hands the Plugin one request on its Plugin Endpoint through the same
+   * dispatcher the app uses, and resolves with the answer once it is complete:
+   * a streamed answer resolves after its `end`. Without the `serve` Plugin
+   * Permission the host answers 404 and the Plugin's handler never runs, so a
+   * test can prove grant handling with `setGranted`.
+   */
+  endpoint(request: TestEndpointRequest): Promise<TestEndpointAnswer>;
   /**
    * Renders one of the Plugin's pages through the real host renderer, over a
    * fresh Remote UI mount, and resolves once the Plugin accepts it. Rejects when
@@ -915,7 +963,7 @@ export type PluginToolbarButtonContribution = NonNullable<Contributions["toolbar
 export type PluginItemMenuEntryContribution = NonNullable<Contributions["itemMenuEntries"]>[number];
 export type PluginDeclaredLifecycle = PluginManifest["lifecycle"];
 
-/** One of the eight exact Plugin Permission names. */
+/** One of the nine exact Plugin Permission names. */
 export type PluginPermissionName = (typeof PLUGIN_PERMISSION_NAMES)[number];
 
 /** A Plugin Permission as a manifest declares it: an exact name or `network:<host>`. */
@@ -1190,6 +1238,45 @@ export interface PluginBrokerOptions {
   events?: readonly PluginApiEventRow[];
 }
 
+/**
+ * Where one Endpoint request's answer goes. `respond` is called once: with the
+ * whole answer when it is not streamed, or with `streaming: true` on the head
+ * before the first `chunk`. `chunk` receives base64 of one body piece and
+ * returns false once the caller hung up, so the broker drops the rest. `end`
+ * closes the answer, whether it finished or not.
+ */
+export interface PluginEndpointSink {
+  respond(
+    status: number,
+    headers: [string, string][],
+    body: string | undefined,
+    streaming: boolean
+  ): void;
+  chunk(chunk: string): boolean | Promise<boolean>;
+  end(): void;
+}
+
+/**
+ * What the Plugin Endpoint's listener reports to the host: not bound (`off`),
+ * bound on `port`, or a bind that failed and is never retried. Mirrors the Rust
+ * `ListenerState` serde shape (tag `state`, camelCase elsewhere).
+ */
+export type EndpointListenerState =
+  | { state: "off" }
+  | { state: "listening"; port: number }
+  | { state: "failed"; port: number; reason: string };
+
+/**
+ * One inbound request the listener hands the host: the id the answer commands
+ * are keyed by, the Plugin the request's path named, and the request itself.
+ * Mirrors the Rust `EndpointRequestMsg` serde shape.
+ */
+export interface EndpointRequestMessage {
+  requestId: string;
+  pluginId: string;
+  request: EndpointRequest;
+}
+
 export interface PluginBroker {
   /**
    * Sends a host to Plugin request; settles on the Plugin's first reply with
@@ -1197,6 +1284,13 @@ export interface PluginBroker {
    * message, such as the MessagePort of a Remote UI mount.
    */
   request(method: string, params: unknown, transfer?: Transferable[]): Promise<unknown>;
+  /**
+   * Delivers one Endpoint request to this Plugin and pipes its answer into
+   * `sink`. Without the `serve` Plugin Permission (read live) the Plugin is
+   * never asked and the sink is answered 404. The Plugin's handler answering
+   * 404, or throwing (answered 500), reaches the sink as that answer.
+   */
+  requestEndpoint(request: EndpointRequest, sink: PluginEndpointSink): void;
   /**
    * Delivers an event if the Plugin subscribed to it and still holds its
    * Plugin Permission. Returns whether it was sent. Throws when the payload

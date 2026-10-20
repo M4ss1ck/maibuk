@@ -1,14 +1,23 @@
 # Testing
 
-A Plugin tests itself with the kit `@maibuk/plugin-test-kit`, the supported entry point for Plugin tests (src/features/plugins/test-kit.ts). `createTestHost()` runs the real broker and method table over an in-process MessageChannel with in-memory platform adapters, so a test hands the returned port to the Plugin's own setup and asserts against the host's records. `renderPage()` goes further: it draws one of the Plugin's pages through the real host renderer, over a real Remote UI mount, so a test drives the page with the keyboard and asserts what the host drew.
+A Plugin tests itself with the kit `@maibuk/plugin-test-kit`, the supported entry point for Plugin tests (src/features/plugins/test-kit.ts). `createTestHost()` runs the real broker and method table over an in-process MessageChannel with in-memory platform adapters, so a test hands the returned port to the Plugin's own setup and asserts against the host's records. `renderPage()` goes further: it draws one of the Plugin's pages through the real host renderer, over a real Remote UI mount, so a test drives the page with the keyboard and asserts what the host drew. `endpoint()` hands the Plugin one request on its Plugin Endpoint, through the same dispatcher the app routes outside requests with, and answers with what the Plugin returned.
 
 ## What it runs for real
 
 - The broker: the same broker the app uses, with this Plugin's declared and granted Plugin Permissions.
 - The method table: the same handlers the app wires, over an in-memory Library, storage, secrets, clipboard, and navigation.
+- The Plugin Endpoint: `endpoint()` reads the `serve` grant the way the app does, so a request without it is answered 404, a Plugin with no handler answers 404, and a throwing handler answers 500.
 - The host renderer: `renderPage(pageId)` and `renderSettingsRow(rowId)` mount the page or Settings row the way the app does, and the records the host keeps (notifications, navigations, page navigations, toolbar pressed state) are what the test asserts against.
 
 The kit does not simulate the sandbox; the browser lanes prove that. It proves the host logic around a Plugin in the same jsdom the app's other suites use.
+
+## Requesting the Plugin Endpoint
+
+A Plugin holding the `serve` Permission answers the requests an outside Agent sends to `http://127.0.0.1:<port>/plugin/<pluginId>/…`. `endpoint()` hands the Plugin one such request without a socket: call `host.endpoint({ method, path, headers, body })`, where `path` is relative to the Plugin Endpoint (`/mcp`, `mcp?x=1`) and the kit prefixes `/plugin/<pluginId>`, so the Plugin sees the full path. `method` defaults to `GET`, headers may be a record or `[name, value]` pairs (pairs keep duplicates), and a string body arrives as UTF-8 bytes, with `text()` on the Plugin side for the common case.
+
+The answer it resolves with carries the `status`, `headers` as pairs, the whole `body` as bytes, the `chunks` a streamed answer sent in order, and `text()` for the common UTF-8 case. An `AsyncIterable` body streams: `endpoint()` resolves after the stream's end, with `chunks` joined into `body` and `streamed` true.
+
+The grant is read live, exactly as in the app. `host.setGranted([])` makes the same call come back 404 without the Plugin's handler running, and granting it again lets the next request through. A Plugin that never called `onEndpointRequest` answers 404, and one whose handler throws answers 500.
 
 ## A walk through the template test
 

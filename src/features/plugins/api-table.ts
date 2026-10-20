@@ -14,7 +14,7 @@ import { z } from "zod";
 import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.2";
+export const PLUGIN_API_VERSION = "0.1.3";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",

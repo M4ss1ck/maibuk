@@ -1,6 +1,11 @@
 // Platform adapter interfaces for cross-platform compatibility
 
-import type { PluginFolder, PluginFolderFile } from "@/features/plugins/types";
+import type {
+  EndpointListenerState,
+  EndpointRequestMessage,
+  PluginFolder,
+  PluginFolderFile,
+} from "@/features/plugins/types";
 
 export interface DatabaseAdapter {
   execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }>;
@@ -175,5 +180,41 @@ export interface PluginDirectoryAdapter {
   supportsFolderPicker?: boolean;
 }
 
+/**
+ * The Plugin Endpoint's listener, as the host drives it. Desktop binds
+ * `127.0.0.1` in Rust and hands every inbound request to `onRequest`; the web
+ * and Android adapters report `off` and never deliver. The host decides which
+ * Plugins serve, not this adapter.
+ */
+export interface EndpointAdapter {
+  /**
+   * Replaces the serving set and the `onRequest` sink. A non-empty set binds
+   * when nothing is bound; an empty one unbinds, failing requests still
+   * waiting for an answer. Resolves the listener's state; a failed bind is
+   * reported once and never retried.
+   */
+  sync(
+    ids: readonly string[],
+    onRequest: (message: EndpointRequestMessage) => void
+  ): Promise<EndpointListenerState>;
+  /** Answers one request with its whole body, or with `streaming: true` before the first chunk. */
+  respond(
+    requestId: string,
+    status: number,
+    headers: [string, string][],
+    body: string | undefined,
+    streaming: boolean
+  ): Promise<void>;
+  /** One base64 body piece of a streamed answer; false once the caller hung up. */
+  chunk(requestId: string, chunk: string): Promise<boolean>;
+  /** Closes a streamed answer, whether it finished or not. */
+  end(requestId: string): Promise<void>;
+}
+
 export type { ModelFiles, RecognizerHost } from "@/features/dictation/types";
-export type { PluginFolder, PluginFolderFile } from "@/features/plugins/types";
+export type {
+  EndpointListenerState,
+  EndpointRequestMessage,
+  PluginFolder,
+  PluginFolderFile,
+} from "@/features/plugins/types";

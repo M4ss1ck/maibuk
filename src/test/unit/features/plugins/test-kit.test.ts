@@ -15,8 +15,9 @@ import { describe, expect, it, vi } from "vitest";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { createTestHost } from "@/features/plugins/test-kit";
+import type { PluginManifest } from "@/features/plugins/types";
 import { PLUGIN_READY_MESSAGE } from "@/plugin-sdk/protocol";
-import { createPluginClient } from "@/plugin-sdk";
+import { createPluginClient, type PluginEndpointRequest } from "@/plugin-sdk";
 import { ui } from "@/plugin-sdk/ui";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import "@/i18n";
@@ -710,6 +711,179 @@ describe("createTestHost() toolbar.setPressed", () => {
       );
       expect(host.toolbarPressed("missing")).toBe(false);
       expect(host.toolbarPressed("plain")).toBe(false);
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+describe("createTestHost() endpoint", () => {
+  /** A manifest that may serve: `serve` is the Plugin Endpoint's own Plugin Permission. */
+  function serveManifest(): PluginManifest {
+    return { ...fixtureManifest(), permissions: { required: ["serve"], optional: [] } };
+  }
+
+  it("hands the Plugin a request on its Plugin Endpoint and returns its answer", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      client.onEndpointRequest(() => ({
+        status: 200,
+        headers: { "content-type": "text/plain" },
+        body: "pong",
+      }));
+
+      const answer = await host.endpoint({ path: "/mcp" });
+
+      expect(answer.status).toBe(200);
+      expect(answer.headers).toEqual([["content-type", "text/plain"]]);
+      expect(answer.streamed).toBe(false);
+      expect(answer.chunks).toEqual([]);
+      expect(Array.from(answer.body)).toEqual([112, 111, 110, 103]);
+      expect(answer.text()).toBe("pong");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("collects a streamed answer's chunks in order and joins them in text()", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      client.onEndpointRequest(() => ({
+        status: 200,
+        body: (async function* () {
+          yield "one ";
+          yield new TextEncoder().encode("two");
+          yield " three";
+        })(),
+      }));
+
+      const answer = await host.endpoint({ path: "/stream" });
+
+      expect(answer.status).toBe(200);
+      expect(answer.streamed).toBe(true);
+      expect(answer.chunks.map((chunk) => new TextDecoder().decode(chunk))).toEqual([
+        "one ",
+        "two",
+        " three",
+      ]);
+      expect(new TextDecoder().decode(answer.body)).toBe("one two three");
+      expect(answer.text()).toBe("one two three");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("joins a multi-byte character split across streamed chunks", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      // "é" is two bytes; one chunk ends inside it.
+      const bytes = new TextEncoder().encode("é");
+      client.onEndpointRequest(() => ({
+        status: 200,
+        body: (async function* () {
+          yield bytes.slice(0, 1);
+          yield bytes.slice(1);
+        })(),
+      }));
+
+      const answer = await host.endpoint({ path: "/split" });
+
+      expect(answer.chunks.map((chunk) => Array.from(chunk))).toEqual([[195], [169]]);
+      expect(Array.from(answer.body)).toEqual(Array.from(bytes));
+      expect(answer.text()).toBe("é");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("reaches the Plugin as sent: method, prefixed path, headers, and body", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const handler = vi.fn((_request: PluginEndpointRequest) => ({ status: 204 }));
+      client.onEndpointRequest(handler);
+
+      await host.endpoint({
+        method: "POST",
+        path: "mcp?x=1",
+        headers: [
+          ["x-tag", "a"],
+          ["x-tag", "b"],
+        ],
+        body: new TextEncoder().encode("hello"),
+      });
+      await host.endpoint({ path: "/mcp" });
+
+      const [first, second] = handler.mock.calls.map(([request]) => request);
+      expect(first.method).toBe("POST");
+      expect(first.path).toBe(`/plugin/${host.manifest.id}/mcp?x=1`);
+      expect(first.headers).toEqual([
+        ["x-tag", "a"],
+        ["x-tag", "b"],
+      ]);
+      expect(first.text()).toBe("hello");
+      expect(Array.from(first.body)).toEqual([104, 101, 108, 108, 111]);
+      expect(second.method).toBe("GET");
+      expect(second.path).toBe(`/plugin/${host.manifest.id}/mcp`);
+      expect(second.headers).toEqual([]);
+      expect(second.body.length).toBe(0);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("answers 404 without asking the Plugin when serve is not granted", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const handler = vi.fn((_request: PluginEndpointRequest) => ({ status: 200 }));
+      client.onEndpointRequest(handler);
+      host.setGranted([]);
+
+      const denied = await host.endpoint({ path: "/mcp" });
+
+      expect(denied.status).toBe(404);
+      expect(denied.text()).toBe("");
+      // The grant is read live: granting it again lets the same handler answer,
+      // which proves the refused request never reached it.
+      host.setGranted(["serve"]);
+      await expect(host.endpoint({ path: "/mcp" })).resolves.toMatchObject({ status: 200 });
+      expect(handler).toHaveBeenCalledTimes(1);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("answers 404 when the Plugin registered no Endpoint handler", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      // The Plugin is live but never called `onEndpointRequest`.
+      createPluginClient(host.port);
+      const answer = await host.endpoint({ path: "/mcp" });
+
+      expect(answer.status).toBe(404);
+      expect(answer.streamed).toBe(false);
+      expect(answer.text()).toBe("");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("answers 500 when the Endpoint handler throws", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      client.onEndpointRequest(() => {
+        throw new Error("boom");
+      });
+
+      const answer = await host.endpoint({ path: "/mcp" });
+
+      expect(answer.status).toBe(500);
+      expect(answer.text()).toBe("");
     } finally {
       host.stop();
     }

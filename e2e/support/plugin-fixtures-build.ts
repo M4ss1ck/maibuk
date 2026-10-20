@@ -66,6 +66,7 @@ const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
     output: "fixture-everything-on-demand",
   },
   { source: "fixture-bench", manifest: "manifest.json", output: "fixture-bench" },
+  { source: "fixture-endpoint", manifest: "manifest.json", output: "fixture-endpoint" },
   {
     source: "fixture-frame",
     manifest: "manifest.json",

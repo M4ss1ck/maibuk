@@ -5,6 +5,7 @@ import {
   MAX_INLINE_ICON_ELEMENTS,
   MAX_LOCALE_BYTES,
   MAX_MANIFEST_BYTES,
+  PLUGIN_PERMISSION_NAMES,
   applyPluginLocale,
   parsePluginLocale,
   parsePluginManifest,
@@ -583,12 +584,23 @@ describe("validateManifestValue: permissions", () => {
       "secrets",
       "clipboard",
       "process",
+      "serve",
     ]) {
       const result = validateManifestValue(
         baseManifestWith((m) => (m.permissions = { required: [permission], optional: [] }))
       );
       expect(result.ok, permission).toBe(true);
     }
+  });
+
+  it("names serve in the permission list, for a Plugin that answers Endpoint requests", () => {
+    expect(PLUGIN_PERMISSION_NAMES).toContain("serve");
+    const result = validateManifestValue(
+      baseManifestWith(
+        (m) => (m.permissions = { required: ["library:read"], optional: ["serve"] })
+      )
+    );
+    expect(result.ok, JSON.stringify(result)).toBe(true);
   });
 
   it("accepts network hosts, including a leading wildcard label", () => {

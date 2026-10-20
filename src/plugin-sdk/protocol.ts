@@ -41,7 +41,11 @@ export function isPluginApiErrorCode(value: unknown): value is PluginApiErrorCod
 /** Largest Plugin to host message, in UTF-8 bytes (the broker decodes on the main thread). */
 export const PLUGIN_MESSAGE_MAX_BYTES = 4 * 1024 * 1024;
 
-/** Largest streamed body chunk, serialized, in UTF-8 bytes (keeps typing smooth during downloads). */
+/**
+ * Largest streamed body chunk, serialized, in UTF-8 bytes (keeps typing smooth
+ * during downloads). A Plugin's Endpoint answer also caps each chunk at this
+ * many decoded bytes; its SDK splits a bigger piece.
+ */
 export const PLUGIN_STREAM_CHUNK_MAX_BYTES = 64 * 1024;
 
 export function messageTooLarge(method?: string): PluginApiErrorData {
@@ -53,13 +57,18 @@ export type PluginToHostMessage =
   | { kind: "subscribe"; id: number; event: string }
   | { kind: "unsubscribe"; id: number; event: string }
   | { kind: "reply"; id: number; ok: true; result: unknown }
-  | { kind: "reply"; id: number; ok: false; error: PluginApiErrorData };
+  | { kind: "reply"; id: number; ok: false; error: PluginApiErrorData }
+  | { kind: "chunk"; id: number; chunk: string }
+  | { kind: "end"; id: number };
 
 /**
  * `result` settles a call, subscribe, or unsubscribe. A streaming call's
  * `result` is followed by its `chunk`s and one `end` with the same id.
  * `request` is the host asking the Plugin something (health checks, Command
- * runs), answered with a `reply`.
+ * runs, Endpoint requests), answered with a `reply`. A streamed Endpoint
+ * answer's `reply` is followed by its `chunk`s, each base64, and one `end`,
+ * all keyed by the host request's id — the mirror of the host's own
+ * `chunk`/`end` for a streaming call.
  */
 export type HostToPluginMessage =
   | { kind: "result"; id: number; ok: true; result: unknown }
@@ -129,6 +138,44 @@ export const PLUGIN_UI_UNMOUNT_REQUEST = "ui.unmount";
 
 export interface PluginUiUnmountParams {
   surface: string;
+}
+
+/**
+ * The host request a Plugin that holds the `serve` Permission answers: one HTTP
+ * request that reached the Plugin Endpoint at `/plugin/<pluginId>/…`. `params`
+ * is an {@link EndpointRequest}. The reply's result is an
+ * {@link EndpointAnswer}; when it says `streaming`, the `reply` is followed by
+ * Plugin to host `chunk`s, each base64, and one `end`, all keyed by the host
+ * request's id.
+ */
+export const PLUGIN_ENDPOINT_REQUEST = "endpoint.request";
+
+/**
+ * One inbound Endpoint request, over the wire. `path` is the full request path
+ * including the query (`/plugin/acme/mcp?x=1`), `headers` keeps names
+ * lower-cased and duplicates in order, and `body` is base64 of the raw request
+ * bytes (`""` when there is no body).
+ */
+export interface EndpointRequest {
+  method: string;
+  path: string;
+  headers: [string, string][];
+  /** Base64 of the raw request bytes; `""` when none. */
+  body: string;
+}
+
+/**
+ * The answer to one Endpoint request. `headers` keeps duplicates in order and
+ * `body` is base64 of the raw response bytes, omitted when there are none.
+ * `streaming` is true when the body follows as `chunk`s and an `end`;
+ * otherwise the whole answer is this one message.
+ */
+export interface EndpointAnswer {
+  status: number;
+  headers: [string, string][];
+  /** Base64 of the raw response bytes; omitted when there are none. */
+  body?: string;
+  streaming: boolean;
 }
 
 /**
@@ -301,4 +348,73 @@ export function utf8ByteLength(text: string): number {
     } else bytes += 3;
   }
   return bytes;
+}
+
+const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const BASE64_VALUES: Record<string, number> = {};
+for (let i = 0; i < BASE64_ALPHABET.length; i++) BASE64_VALUES[BASE64_ALPHABET[i]] = i;
+
+/**
+ * Decodes base64 without `atob`, which not every Plugin engine has (the Android
+ * QuickJS engine does not). Throws on anything that is not base64.
+ */
+export function base64ToBytes(text: string): Uint8Array {
+  const length = base64DecodedLength(text);
+  if (length < 0) throw new Error("Invalid base64");
+  const bytes = new Uint8Array(length);
+  let buffer = 0;
+  let bits = 0;
+  let written = 0;
+  for (let i = 0; i < text.length; i++) {
+    const value = BASE64_VALUES[text[i]];
+    if (value === undefined) break;
+    buffer = (buffer << 6) | value;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes[written++] = (buffer >> bits) & 0xff;
+    }
+  }
+  return bytes;
+}
+
+/**
+ * The byte length base64 `text` decodes to, or -1 when it is not base64 or its
+ * length is not a multiple of four. Checks the characters, so a caller can
+ * refuse an oversized or malformed payload without allocating its bytes.
+ */
+export function base64DecodedLength(text: string): number {
+  if (text.length === 0) return 0;
+  if (text.length % 4 !== 0) return -1;
+  let padding = 0;
+  if (text.charCodeAt(text.length - 1) === 61) {
+    padding = text.charCodeAt(text.length - 2) === 61 ? 2 : 1;
+  }
+  for (let i = 0; i < text.length - padding; i++) {
+    if (BASE64_VALUES[text[i]] === undefined) return -1;
+  }
+  return (text.length / 4) * 3 - padding;
+}
+
+/** Encodes bytes as base64 without `btoa`, for the same reason. */
+export function bytesToBase64(bytes: Uint8Array): string {
+  let output = "";
+  let i = 0;
+  for (; i + 2 < bytes.length; i += 3) {
+    const value = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+    output +=
+      BASE64_ALPHABET[(value >> 18) & 63] +
+      BASE64_ALPHABET[(value >> 12) & 63] +
+      BASE64_ALPHABET[(value >> 6) & 63] +
+      BASE64_ALPHABET[value & 63];
+  }
+  const rest = bytes.length - i;
+  if (rest === 1) {
+    const value = bytes[i] << 16;
+    output += `${BASE64_ALPHABET[(value >> 18) & 63]}${BASE64_ALPHABET[(value >> 12) & 63]}==`;
+  } else if (rest === 2) {
+    const value = (bytes[i] << 16) | (bytes[i + 1] << 8);
+    output += `${BASE64_ALPHABET[(value >> 18) & 63]}${BASE64_ALPHABET[(value >> 12) & 63]}${BASE64_ALPHABET[(value >> 6) & 63]}=`;
+  }
+  return output;
 }
