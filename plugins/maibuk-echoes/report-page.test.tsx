@@ -366,10 +366,10 @@ describe("Echoes report page", () => {
       expect(shore).toHaveFocus();
       await user.keyboard("{Enter}");
 
-      const shoreOccurrences = buildReport(findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS), [
-        HARBOR,
-        SHORE,
-      ]).nearby[1].occurrences;
+      const shoreOccurrences = buildReport(
+        findEchoes([HARBOR, SHORE], "en", DEFAULT_ECHO_SETTINGS),
+        [HARBOR, SHORE]
+      ).nearby[1].occurrences;
       await waitFor(() =>
         expect(screen.getAllByRole("option")).toHaveLength(2 + shoreOccurrences.length)
       );
@@ -1071,7 +1071,9 @@ describe("Echoes report page", () => {
       first.unmount();
 
       const second = await host.renderPage(REPORT_PAGE_ID);
-      await waitFor(() => expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Emma"));
+      await waitFor(() =>
+        expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Emma")
+      );
       expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
 
       second.unmount();

@@ -346,8 +346,7 @@ export function findEchoesWithTokens(
   const window = clampWindow(settings.nearbyWindow);
   const phraseThreshold =
     typeof text === "string" ? PHRASE_CHAPTER_MIN_COUNT : PHRASE_BOOK_MIN_COUNT;
-  const keys =
-    settings.nearby || settings.overused ? matchKeys(chapters, analyzer, ignore) : [];
+  const keys = settings.nearby || settings.overused ? matchKeys(chapters, analyzer, ignore) : [];
 
   // concat, not push(...): a Book can yield more Echoes than a call accepts arguments.
   const echoes = [
