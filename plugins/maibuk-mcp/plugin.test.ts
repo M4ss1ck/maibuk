@@ -111,6 +111,7 @@ describe("MCP Server protocol", () => {
         "read_chapter",
         "list_notes",
         "read_note",
+        "edit_chapter",
       ]);
     } finally {
       host.stop();
@@ -151,7 +152,7 @@ describe("MCP Server protocol", () => {
     }
   });
 
-  it("advertises the tools in order, all read-only and without output schemas", async () => {
+  it("advertises the tools in order with their annotations and without output schemas", async () => {
     const { host, key } = await connect();
     try {
       const answer = await mcpRequest(host, key, toolsListBody());
@@ -190,6 +191,15 @@ describe("MCP Server protocol", () => {
               "readOnlyHint": true,
             },
             "name": "read_note",
+          },
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+            },
+            "name": "edit_chapter",
           },
         ]
       `);

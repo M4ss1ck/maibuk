@@ -10,6 +10,7 @@ import { z } from "zod";
 import type { PluginClient } from "@/plugin-sdk";
 import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
+import { editChapter } from "./edits";
 import { listNotes, readNote } from "./notes";
 
 /**
@@ -116,6 +117,28 @@ export function buildMcpServer(client: PluginClient): McpServer {
       annotations: { readOnlyHint: true },
     },
     async (args) => readNote(client, args as any)
+  );
+  server.registerTool(
+    "edit_chapter",
+    {
+      title: "Edit chapter",
+      description:
+        "Replace one exact piece of a Chapter's text, or append to its end, without sending the whole Chapter back.",
+      inputSchema: z.object({
+        chapter: z.string().min(8),
+        find: z.string().optional(),
+        replace: z.string().optional(),
+        append: z.string().optional(),
+        format: z.enum(["text", "html"]).optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args) => editChapter(client, args as any)
   );
   return server;
 }

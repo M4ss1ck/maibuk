@@ -756,6 +756,13 @@ export interface TestNotification {
   message: string;
 }
 
+/** One Checkpoint the test host recorded, in the order the Plugin took it (#591). */
+export interface TestCheckpoint {
+  bookId: string;
+  label: string;
+  versionId: string;
+}
+
 export interface TestHostOptions {
   manifest: PluginManifest;
   /** Granted Plugin Permissions; defaults to every declared one. */
@@ -851,6 +858,8 @@ export interface TestHost {
   navigations: TestNavigation[];
   /** Every `navigation.openPage` the Plugin asked for, in order. */
   pageNavigations: TestPageNavigation[];
+  /** Every Checkpoint the Plugin took, in order; a null one is not recorded. */
+  readonly checkpoints: ReadonlyArray<TestCheckpoint>;
   /** The app language the host serves right now. */
   language: string;
   /** The clipboard text the host holds; `clipboard.writeText` replaces it. */

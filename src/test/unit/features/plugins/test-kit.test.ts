@@ -438,7 +438,9 @@ describe("createTestHost() events and language", () => {
       const changes: unknown[] = [];
       const availability: boolean[] = [];
       await client.on("library.changed", (payload) => changes.push(payload));
-      await client.on("library.availabilityChanged", (payload) => availability.push(payload.available));
+      await client.on("library.availabilityChanged", (payload) =>
+        availability.push(payload.available)
+      );
 
       expect(
         host.broker.emit("library.changed", {
@@ -776,9 +778,12 @@ describe("createTestHost() toolbar.setPressed", () => {
       await expect(
         client.toolbar.setPressed({ button: "missing", pressed: true })
       ).rejects.toMatchObject({ code: "invalid-params", message: "No toolbar button missing" });
-      await expect(client.toolbar.setPressed({ button: "plain", pressed: true })).rejects.toMatchObject(
-        { code: "invalid-params", message: "Toolbar button plain is not a Toggle Button" }
-      );
+      await expect(
+        client.toolbar.setPressed({ button: "plain", pressed: true })
+      ).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Toolbar button plain is not a Toggle Button",
+      });
       expect(host.toolbarPressed("missing")).toBe(false);
       expect(host.toolbarPressed("plain")).toBe(false);
     } finally {
@@ -1029,6 +1034,176 @@ describe("createTestHost() endpoint address", () => {
       await client.on("endpoint.addressChanged", (payload) => seen.push(payload.url));
 
       await vi.waitFor(() => expect(seen).toEqual([addressOf(host, 42000)]));
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+// #591: the two writes an editing Plugin test needs. Both mutate the in-memory
+// Library the reads serve, so a test asserts the state the write produced.
+describe("createTestHost() Library writes", () => {
+  function writeManifest(): PluginManifest {
+    return {
+      ...fixtureManifest(),
+      permissions: { required: ["library:read", "library:write"], optional: [] },
+    };
+  }
+
+  function chapterFixture() {
+    return {
+      id: "c1",
+      bookId: "b1",
+      title: "One",
+      order: 0,
+      parentId: null,
+      wordCount: 2,
+      chapterType: "chapter" as const,
+      status: "draft" as const,
+      updatedAt: 1_000,
+      content: { text: "Hello", html: "<p>Hello</p>" },
+    };
+  }
+
+  function writeHost(chapter: ReturnType<typeof chapterFixture>) {
+    return createTestHost({
+      manifest: writeManifest(),
+      permissions: ["library:read", "library:write"],
+      library: { books: [BOOK], chapters: [chapter] },
+    });
+  }
+
+  it("stores a Chapter content write as the host reads it back, with a later Last Edited", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+
+      await expect(
+        client.library.chapters.updateContent({
+          chapterId: "c1",
+          content: { html: "<p>Hello <em>world</em></p>" },
+        })
+      ).resolves.toBeNull();
+
+      const written = { html: "<p>Hello <em>world</em></p>", text: "Hello world" };
+      expect(chapter.content).toEqual(written);
+      expect(chapter.updatedAt).toBeGreaterThan(1_000);
+      await expect(client.library.chapters.get({ chapterId: "c1" })).resolves.toMatchObject({
+        content: written,
+        updatedAt: chapter.updatedAt,
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("sanitizes HTML the way the host does", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+
+      await client.library.chapters.updateContent({
+        chapterId: "c1",
+        content: { html: '<p onclick="steal()">Hi<script>alert(1)</script></p>' },
+      });
+
+      expect(chapter.content?.html).toBe("<p>Hi</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("turns a text fragment into the host's paragraphs", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+
+      await client.library.chapters.updateContent({
+        chapterId: "c1",
+        content: { text: "One & two\nthree\n\nFour <five>" },
+      });
+
+      expect(chapter.content?.html).toBe("<p>One &amp; two<br>three</p><p>Four &lt;five&gt;</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses an unknown Chapter with the host's not-found refusal, writing nothing", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+      const before = chapter.content;
+
+      await expect(
+        client.library.chapters.updateContent({
+          chapterId: "absent",
+          content: { html: "<p>x</p>" },
+        })
+      ).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Chapter absent does not exist",
+      });
+      expect(chapter.content).toEqual(before);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a Chapter write without library:write and leaves the Library alone", async () => {
+    const chapter = chapterFixture();
+    const host = createTestHost({
+      manifest: writeManifest(),
+      permissions: ["library:read"],
+      library: { books: [BOOK], chapters: [chapter] },
+    });
+    try {
+      const client = createPluginClient(host.port);
+      const before = chapter.content;
+
+      await expect(
+        client.library.chapters.updateContent({ chapterId: "c1", content: { html: "<p>Mine</p>" } })
+      ).rejects.toMatchObject({ code: "permission-denied", permission: "library:write" });
+      expect(chapter.content).toEqual(before);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("takes a Checkpoint only while the Book changed since the last one", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+
+      // A Book starts out changed: it has no Version yet.
+      const first = await client.library.books.checkpoint({ bookId: "b1", label: "Before edits" });
+      expect(first.versionId).toEqual(expect.any(String));
+
+      const second = await client.library.books.checkpoint({ bookId: "b1", label: "Again" });
+      expect(second.versionId).toBeNull();
+      expect(host.checkpoints).toEqual([
+        { bookId: "b1", label: "Before edits", versionId: first.versionId },
+      ]);
+
+      // A Chapter content write marks the Book changed again.
+      await client.library.chapters.updateContent({
+        chapterId: "c1",
+        content: { html: "<p>Changed</p>" },
+      });
+      const third = await client.library.books.checkpoint({ bookId: "b1", label: "After edits" });
+      expect(third.versionId).toEqual(expect.any(String));
+      expect(third.versionId).not.toBe(first.versionId);
+
+      // Only the taken Checkpoints are recorded, in order.
+      expect(host.checkpoints).toEqual([
+        { bookId: "b1", label: "Before edits", versionId: first.versionId },
+        { bookId: "b1", label: "After edits", versionId: third.versionId },
+      ]);
     } finally {
       host.stop();
     }

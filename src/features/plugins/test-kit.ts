@@ -25,6 +25,7 @@ import {
   endpointUrlFor,
 } from "@/features/plugins/endpoint";
 import { assertToggleButton } from "@/features/plugins/handlers";
+import { fragmentToHtml, htmlToPlainText } from "@/features/plugins/library";
 import { applyPluginLocale } from "@/features/plugins/manifest-validate";
 import { pluginFetch } from "@/features/plugins/network";
 import { openPluginUiMount, type PluginUiMount } from "@/features/plugins/remote-ui/mount";
@@ -34,6 +35,7 @@ import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { PluginSecretStore } from "@/features/plugins/secret-store";
 import {
   PLUGIN_INIT_MESSAGE,
+  PluginApiError,
   bytesToBase64,
   type PluginUiMountKind,
 } from "@/plugin-sdk/protocol";
@@ -44,6 +46,7 @@ import type {
   PluginManifest,
   PluginPermissionId,
   PluginRuntime,
+  TestCheckpoint,
   TestEndpointAnswer,
   TestEndpointRequest,
   TestHost,
@@ -87,6 +90,17 @@ function endpointApproval(
   };
 }
 
+/**
+ * The refusal the app's handler gives for a Chapter no row holds, so a test
+ * sees the same error the real Library write produces.
+ */
+function chapterNotFound(chapterId: string): PluginApiError {
+  return new PluginApiError({
+    code: "invalid-params",
+    message: `Chapter ${chapterId} does not exist`,
+  });
+}
+
 export function createTestHost(options: TestHostOptions): TestHost {
   const channel = new MessageChannel();
   const notifications: TestNotification[] = [];
@@ -96,6 +110,15 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const chapters = [...(options.library?.chapters ?? [])];
   const notes = [...(options.library?.notes ?? [])];
   const canvases = [...(options.library?.canvases ?? [])];
+  // Library writes (#591). The kit keeps the Library a Plugin writes in memory,
+  // so a test asserts the state its write produced. Content conversion and the
+  // plain-text read are the host's own helpers, so no escaping rule is
+  // re-implemented here. A Book starts out changed (it has no Version yet) and
+  // is marked changed again by any Chapter content write, like the real
+  // Version path sees it; only taken Checkpoints are recorded.
+  const checkpoints: TestCheckpoint[] = [];
+  const unchangedBooks = new Set<string>();
+  let nextVersion = 1;
   const storage = options.storage ?? new Map<string, unknown>();
   const secrets = options.secrets ?? new Map<string, string>();
   const testFetch = options.fetch;
@@ -158,6 +181,34 @@ export function createTestHost(options: TestHostOptions): TestHost {
       if (!chapter) return null;
       const { content, ...summary } = chapter;
       return { ...summary, content: content ?? { text: "", html: "" } };
+    },
+    // The two writes a test of an editing Plugin needs (#591): a Chapter
+    // content write keeps the host's conversion, and a Checkpoint records
+    // itself only when the Book changed since the last one.
+    "library.chapters.updateContent": ({ chapterId, content }) => {
+      const chapter = chapters.find((entry) => entry.id === chapterId);
+      if (!chapter) throw chapterNotFound(chapterId);
+      const html = fragmentToHtml(content);
+      chapter.content = { html, text: htmlToPlainText(html) };
+      // Strictly increasing, so Last Edited always moves forward even when two
+      // writes land in the same millisecond.
+      chapter.updatedAt = Math.max(Date.now(), chapter.updatedAt + 1);
+      unchangedBooks.delete(chapter.bookId);
+      return null;
+    },
+    "library.books.checkpoint": ({ bookId, label }) => {
+      if (!books.some((book) => book.id === bookId)) {
+        throw new PluginApiError({
+          code: "invalid-params",
+          message: `Book ${bookId} does not exist`,
+        });
+      }
+      if (unchangedBooks.has(bookId)) return { versionId: null };
+      const versionId = `version-${nextVersion}`;
+      nextVersion += 1;
+      checkpoints.push({ bookId, label, versionId });
+      unchangedBooks.add(bookId);
+      return { versionId };
     },
     "library.notes.list": ({ bookId }) =>
       notes
@@ -371,6 +422,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
     },
     get clipboard() {
       return clipboard;
+    },
+    get checkpoints() {
+      return checkpoints.slice();
     },
     toolbarPressed(button) {
       return toolbarPressedState.get(button) ?? false;
