@@ -353,7 +353,7 @@ describe("useVersionStore", () => {
         expect(Number(rows[0].c)).toBe(MAX_KEEP);
       });
 
-      it("prunes plugin backlog to its own quota and never prunes manual versions", async () => {
+      it("never prunes plugin Versions, like manual and pre-restore", async () => {
         const baseTime = Math.floor(Date.now() / 1000) - 50_000;
         for (let i = 0; i < 30; i++) {
           await testDb.execute(
@@ -390,7 +390,9 @@ describe("useVersionStore", () => {
            WHERE book_id = ? AND trigger_type = 'plugin'`,
           ["book-1"]
         );
-        expect(Number(pluginRows[0].c)).toBe(MAX_KEEP);
+        // A Plugin Checkpoint is a safety breadcrumb, so it stays uncapped:
+        // checksum dedup is what keeps a chatty Plugin from spamming history.
+        expect(Number(pluginRows[0].c)).toBe(31);
 
         const manualRows = await testDb.select<Record<string, unknown>[]>(
           "SELECT id FROM book_versions WHERE id = ?",

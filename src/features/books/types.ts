@@ -37,10 +37,12 @@ export interface UpdateBookInput {
   subtitle?: string;
   authorName?: string;
   description?: string;
-  genre?: string;
+  /** Null clears the column. */
+  genre?: string | null;
   language?: string;
   status?: BookStatus;
-  targetWordCount?: number;
+  /** Null clears the column. */
+  targetWordCount?: number | null;
   coverImagePath?: string;
   coverData?: string;
   lastChapterId?: string;

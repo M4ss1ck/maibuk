@@ -6,8 +6,8 @@
  * reader that wants Chapter edits subscribes to `library.changed` and pulls.
  *
  * Here too are the `library:write` rows (#452, #588): a Book details update and
- * a Checkpoint, Chapter create/delete/reorder/update, and Note
- * create/update/delete, each through the entity's own narrow write path
+ * a Checkpoint, a Chapter content update, Chapter create/delete/reorder/update,
+ * and Note create/update/delete, each through the entity's own narrow write path
  * (ADR 0005) with Origin "local", so the write Flushes open editors,
  * normalizes, emits on the Change Feed, and refuses sample ids. The Chapter
  * and Note deletes take the author's own Delete path (`deleteChapterRow`,
@@ -42,7 +42,10 @@ import type {
   PluginNoteSummary,
 } from "@/features/plugins/types";
 import { PendingEditsFlushError, flushPendingEdits } from "@/features/sync/pending-edits";
-import { TutorialIdLeakError } from "@/features/tutorial/library-switch";
+import {
+  TutorialIdLeakError,
+  assertWritableId,
+} from "@/features/tutorial/library-switch";
 import { useVersionStore } from "@/features/versions/store";
 import { getDatabase } from "@/lib/db";
 import { PluginApiError } from "@/plugin-sdk/protocol";
@@ -267,7 +270,7 @@ async function libraryWrite<T>(run: () => Promise<T>): Promise<T> {
  * Updates a Book's title, Author Name, Genre, Book Status, or Target Word
  * Count through the Book write path. Every field is optional but at least one
  * must be given, so a call never becomes a bare sync-clock bump; a null Genre
- * or Target Word Count clears it, and a missing id comes back as null.
+ * or Target Word Count clears it, and a missing id is refused.
  */
 export async function updatePluginBook(input: {
   bookId: string;
@@ -281,11 +284,9 @@ export async function updatePluginBook(input: {
     ...(input.title === undefined ? {} : { title: input.title }),
     ...(input.authorName === undefined ? {} : { authorName: input.authorName }),
     // The row writer stores what it is given; a null clears the column.
-    ...(input.genre === undefined ? {} : { genre: input.genre as string }),
+    ...(input.genre === undefined ? {} : { genre: input.genre }),
     ...(input.status === undefined ? {} : { status: input.status }),
-    ...(input.targetWordCount === undefined
-      ? {}
-      : { targetWordCount: input.targetWordCount as number }),
+    ...(input.targetWordCount === undefined ? {} : { targetWordCount: input.targetWordCount }),
   };
   return libraryWrite(async () => {
     if (Object.keys(changes).length === 0) {
@@ -312,20 +313,14 @@ export async function checkpointPluginBook(input: {
   label: string;
 }): Promise<{ versionId: string | null }> {
   return libraryWrite(async () => {
+    assertWritableId(input.bookId);
     const book = await getPluginBook(input.bookId);
     if (!book) throw notFound("Book", input.bookId);
-    const label = input.label.trim();
-    if (label.length === 0 || label.length > 200) {
-      throw new PluginApiError({
-        code: "invalid-params",
-        message: "Give a label of 1 to 200 characters for the Checkpoint",
-      });
-    }
     await flushPendingEdits();
     const version = await useVersionStore.getState().createVersion({
       bookId: input.bookId,
       triggerType: "plugin",
-      name: label,
+      name: input.label,
     });
     return { versionId: version?.id ?? null };
   });
@@ -343,15 +338,6 @@ export async function updatePluginChapterContent(
   });
 }
 
-/** Whether a Chapter row exists; the delete path itself no-ops on a missing one. */
-async function chapterExists(chapterId: string): Promise<boolean> {
-  const db = await getDatabase();
-  const rows = await db.select<{ id: string }[]>("SELECT id FROM chapters WHERE id = ?", [
-    chapterId,
-  ]);
-  return rows.length > 0;
-}
-
 /** The ids of a Book's Chapters in stored order. */
 async function chapterOrder(bookId: string): Promise<string[]> {
   return (await listPluginChapters(bookId)).map((chapter) => chapter.id);
@@ -364,7 +350,9 @@ async function chapterOrder(bookId: string): Promise<string[]> {
  * content fragment lands through the same path as updateContent, which
  * sanitizes, normalizes, and recounts the words; position is checked against
  * the Book's Chapter count before anything is written, so a refused position
- * leaves no row behind.
+ * leaves no row behind. The fragment is turned into HTML before the insert too,
+ * and a failure after the insert deletes the new row, so a Plugin never sees a
+ * half-created Chapter.
  */
 export async function createPluginChapter(input: {
   bookId: string;
@@ -383,23 +371,35 @@ export async function createPluginChapter(input: {
       });
     }
 
+    const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
     const chapter = await createChapterRow(
       { bookId: input.bookId, title: input.title },
       "local"
     );
-    if (input.content !== undefined) {
-      await updateChapterRow(chapter.id, { content: fragmentToHtml(input.content) }, "local");
-    }
-    if (input.position !== undefined) {
-      // Read the order back after the write: a Chapter added meanwhile belongs
-      // in the list too, and the new one is appended last.
-      const ids = await chapterOrder(input.bookId);
-      const from = ids.indexOf(chapter.id);
-      if (from !== -1 && from !== input.position) {
-        ids.splice(from, 1);
-        ids.splice(input.position, 0, chapter.id);
-        await reorderChapterRows(input.bookId, ids, "local");
+    try {
+      if (content !== undefined) {
+        await updateChapterRow(chapter.id, { content }, "local");
       }
+      if (input.position !== undefined) {
+        // Read the order back after the write: a Chapter added meanwhile belongs
+        // in the list too, and the new one is appended last.
+        const ids = await chapterOrder(input.bookId);
+        const from = ids.indexOf(chapter.id);
+        if (from !== -1 && from !== input.position) {
+          ids.splice(from, 1);
+          ids.splice(input.position, 0, chapter.id);
+          await reorderChapterRows(input.bookId, ids, "local");
+        }
+      }
+    } catch (error) {
+      // Never leave a partial Chapter behind: undo the insert, then surface the
+      // failure to the Plugin. The delete's own failure must not mask the cause.
+      try {
+        await deleteChapterRow(chapter.id, "local");
+      } catch {
+        // The original error is the one the Plugin needs.
+      }
+      throw error;
     }
     return { chapterId: chapter.id };
   });
@@ -413,7 +413,7 @@ export async function createPluginChapter(input: {
  */
 export async function deletePluginChapter(chapterId: string): Promise<null> {
   return libraryWrite(async () => {
-    if (!(await chapterExists(chapterId))) throw notFound("Chapter", chapterId);
+    if (!(await getPluginChapter(chapterId))) throw notFound("Chapter", chapterId);
     await deleteChapterRow(chapterId, "local");
     return null;
   });
@@ -503,7 +503,7 @@ export async function createPluginNote(input: {
  * Updates a Note's title, content, Tags, or Book through the Note write path
  * (#588). No "current" state is read before the write: `updateNoteRow` merges
  * the given fields onto the stored row, so an omitted field is left as stored,
- * and a missing id comes back as null. Tags are normalized the way the Note UI
+ * and a missing id is refused. Tags are normalized the way the Note UI
  * stores them; a bookId of null moves the Note to Unfiled, and a bookId naming
  * no Book is refused before anything is written.
  */
@@ -537,13 +537,6 @@ export async function updatePluginNote(input: {
   });
 }
 
-/** Whether a Note row exists; `deleteNoteRow` would still delete and emit for a missing one. */
-async function noteExists(noteId: string): Promise<boolean> {
-  const db = await getDatabase();
-  const rows = await db.select<{ id: string }[]>("SELECT id FROM notes WHERE id = ?", [noteId]);
-  return rows.length > 0;
-}
-
 /**
  * Deletes a Note through the normal Delete path (#588): the same
  * `deleteNoteRow` call the author's delete makes, so sync records the same
@@ -552,7 +545,7 @@ async function noteExists(noteId: string): Promise<boolean> {
  */
 export async function deletePluginNote(noteId: string): Promise<null> {
   return libraryWrite(async () => {
-    if (!(await noteExists(noteId))) throw notFound("Note", noteId);
+    if (!(await getPluginNote(noteId))) throw notFound("Note", noteId);
     await deleteNoteRow(noteId, "local");
     return null;
   });

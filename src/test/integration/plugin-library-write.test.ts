@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Change } from "@/features/sync/change-feed";
-import type { PluginApiInput, PluginManifest, PluginPermissionId } from "@/features/plugins/types";
+import type { PluginApiInput } from "@/features/plugins/types";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
+import { connectLibraryWritePlugin } from "@/test/support/plugin-broker";
 
 // Data-safety integration tests for the Plugin Library writes (#452, part 3),
 // driven through the real handler entry a Plugin calls. Each write is a local
@@ -45,47 +46,11 @@ const { installViewRefresh, resetViewRefreshForTests } = await import(
 const { isEntityChange, onChange, resetChangeFeedForTests } = await import(
   "@/features/sync/change-feed"
 );
-const { createPluginBroker } = await import("@/features/plugins/broker");
-const { createPluginClient } = await import("@/plugin-sdk");
 const { useVersionStore } = await import("@/features/versions/store");
+const librarySwitch = await import("@/features/tutorial/library-switch");
 
 const handlers = createPluginHandlers(PLUGIN_MANIFEST);
 const context = { pluginId: "tracer" };
-
-/** The manifest a Plugin writing to the Library declares, so the broker can refuse it. */
-const WRITE_MANIFEST: PluginManifest = {
-  ...PLUGIN_MANIFEST,
-  permissions: { required: ["library:read", "library:write"], optional: [] },
-};
-
-/**
- * The real broker over the real handlers and the in-memory Library, driven by
- * the SDK client the way a Plugin calls: the only way to prove the refusals
- * the row declares (its Plugin Permission, Library availability) happen before
- * the handler runs.
- */
-function connectWritePlugin(options: {
-  granted: readonly PluginPermissionId[];
-  libraryAvailable?: boolean;
-}) {
-  const channel = new MessageChannel();
-  createPluginBroker({
-    pluginId: WRITE_MANIFEST.id,
-    port: channel.port1,
-    declared: ["library:read", "library:write"],
-    granted: () => options.granted,
-    isLibraryAvailable: () => options.libraryAvailable ?? true,
-    handlers: createPluginHandlers(WRITE_MANIFEST),
-  });
-  const client = createPluginClient(channel.port2);
-  return {
-    client,
-    close() {
-      channel.port1.close();
-      channel.port2.close();
-    },
-  };
-}
 
 function writeChapterContent(chapterId: string, content: { text: string } | { html: string }) {
   const write = handlers["library.chapters.updateContent"];
@@ -256,6 +221,7 @@ afterEach(() => {
   resetViewRefreshForTests();
   resetChangeFeedForTests();
   resetPendingEditsForTests();
+  librarySwitch.resetLibrarySwitchForTests();
 });
 
 describe("Plugin Library writes reach the open view", () => {
@@ -557,7 +523,7 @@ describe("Plugin Book fields through the handlers (#588)", () => {
   });
 
   it("refuses library.books.update without library:write", async () => {
-    const { client, close } = connectWritePlugin({ granted: ["library:read"] });
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:read"] });
     try {
       await expect(
         client.library.books.update({ bookId: "book-1", title: "Mine" })
@@ -567,11 +533,12 @@ describe("Plugin Book fields through the handlers (#588)", () => {
     }
   });
 
-  it("refuses library.books.update while the Tutorial Library is active", async () => {
+  it("refuses library.books.update with the real Tutorial Library switch", async () => {
     await seedBook("book-1");
-    const { client, close } = connectWritePlugin({
+    librarySwitch.activateTutorialDatabase(testDb);
+    const { client, close } = connectLibraryWritePlugin({
       granted: ["library:write"],
-      libraryAvailable: false,
+      isLibraryAvailable: () => !librarySwitch.isTutorialLibraryActive(),
     });
     try {
       await expect(
@@ -640,12 +607,19 @@ describe("Plugin Checkpoints through the handlers (#588)", () => {
   it("trims the label and refuses a blank one", async () => {
     await seedBook("book-1");
 
-    await writeCheckpoint({ bookId: "book-1", label: "  Padded  " });
-    expect((await versionRows("book-1"))[0].name).toBe("Padded");
+    // The one place the label bound lives is the method schema, so this goes
+    // through the broker a Plugin calls rather than the bare handler.
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:write"] });
+    try {
+      await client.library.books.checkpoint({ bookId: "book-1", label: "  Padded  " });
+      expect((await versionRows("book-1"))[0].name).toBe("Padded");
 
-    await expect(
-      writeCheckpoint({ bookId: "book-1", label: "   " })
-    ).rejects.toMatchObject({ name: "PluginApiError", code: "invalid-params" });
+      await expect(
+        client.library.books.checkpoint({ bookId: "book-1", label: "   " })
+      ).rejects.toMatchObject({ code: "invalid-params" });
+    } finally {
+      close();
+    }
     expect(await versionRows("book-1")).toHaveLength(1);
   });
 
@@ -679,8 +653,21 @@ describe("Plugin Checkpoints through the handlers (#588)", () => {
     });
   });
 
+  it("refuses a Tutorial sample Book id at the write path", async () => {
+    // The broker already refuses while the Tutorial Library is active; this is
+    // the second defence, for a sample id that reaches the handler directly.
+    await expect(
+      writeCheckpoint({ bookId: "tutorial-book-1", label: "Mine" })
+    ).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "library-unavailable",
+      message: "The Tutorial Library is read-only; nothing was written.",
+    });
+    expect(await versionRows("tutorial-book-1")).toHaveLength(0);
+  });
+
   it("refuses library.books.checkpoint without library:write", async () => {
-    const { client, close } = connectWritePlugin({ granted: ["library:read"] });
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:read"] });
     try {
       await expect(
         client.library.books.checkpoint({ bookId: "book-1", label: "Mine" })
@@ -690,11 +677,12 @@ describe("Plugin Checkpoints through the handlers (#588)", () => {
     }
   });
 
-  it("refuses library.books.checkpoint while the Tutorial Library is active", async () => {
+  it("refuses library.books.checkpoint with the real Tutorial Library switch", async () => {
     await seedBook("book-1");
-    const { client, close } = connectWritePlugin({
+    librarySwitch.activateTutorialDatabase(testDb);
+    const { client, close } = connectLibraryWritePlugin({
       granted: ["library:write"],
-      libraryAvailable: false,
+      isLibraryAvailable: () => !librarySwitch.isTutorialLibraryActive(),
     });
     try {
       await expect(
@@ -703,6 +691,39 @@ describe("Plugin Checkpoints through the handlers (#588)", () => {
     } finally {
       close();
     }
+    expect(await versionRows("book-1")).toHaveLength(0);
+  });
+});
+
+// A local write from outside the open view flushes the editors first. When an
+// open editor cannot save, the write is refused before anything lands.
+describe("Book writes refuse when an open editor cannot save (#588)", () => {
+  type LibraryClient = ReturnType<typeof connectLibraryWritePlugin>["client"];
+  const cases: [string, (client: LibraryClient) => Promise<unknown>][] = [
+    [
+      "library.books.update",
+      (client) => client.library.books.update({ bookId: "book-1", title: "Changed", genre: "Fantasy" }),
+    ],
+    [
+      "library.books.checkpoint",
+      (client) => client.library.books.checkpoint({ bookId: "book-1", label: "Before" }),
+    ],
+  ];
+
+  it.each(cases)("%s refuses and writes nothing", async (_method, call) => {
+    await seedBook("book-1");
+    // `flushPendingEdits` wraps this rejection in `PendingEditsFlushError`.
+    const off = registerPendingEditsFlush(() => {
+      throw new Error("disk full");
+    });
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:write"] });
+    try {
+      await expect(call(client)).rejects.toMatchObject({ code: "library-unavailable" });
+    } finally {
+      close();
+      off();
+    }
+    expect(await bookRow("book-1")).toMatchObject({ title: "Book book-1", genre: null });
     expect(await versionRows("book-1")).toHaveLength(0);
   });
 });

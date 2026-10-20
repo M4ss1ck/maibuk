@@ -1,13 +1,12 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginManifest, PluginPermissionId } from "@/features/plugins/types";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
+import { connectPluginBroker } from "@/test/support/plugin-broker";
 
 // The demo Plugin of #588, part 5: one fixture Plugin source under
-// e2e/fixtures/plugin-sources/, run once through the real broker over the
+// src/test/support/plugins/, run once through the real broker over the
 // in-memory Library, the way the other fixture Plugins are driven. The run
 // creates a Chapter, reorders it to the front, sets its title, Chapter Type,
 // and Chapter Status, takes a Checkpoint with the "plugin" Version Trigger, and
@@ -34,7 +33,6 @@ vi.mock("../../features/links/link-index", () => ({
   reindexSource: mockReindex,
 }));
 
-const { createPluginHandlers } = await import("@/features/plugins/handlers");
 const { useNoteStore } = await import("@/features/notes/store");
 const { useVersionStore } = await import("@/features/versions/store");
 const { installViewRefresh, resetViewRefreshForTests } = await import(
@@ -42,50 +40,19 @@ const { installViewRefresh, resetViewRefreshForTests } = await import(
 );
 const { resetPendingEditsForTests } = await import("@/features/sync/pending-edits");
 const { resetChangeFeedForTests } = await import("@/features/sync/change-feed");
-const { createPluginBroker } = await import("@/features/plugins/broker");
-const { createPluginClient } = await import("@/plugin-sdk");
-const { runLibraryDemo } = await import(
-  "../../../e2e/fixtures/plugin-sources/fixture-library-demo"
-);
+
+const { runLibraryDemo } = await import("@/test/support/plugins/fixture-library-demo");
+const demoManifestJson = (await import("@/test/support/plugins/fixture-library-demo/manifest.json"))
+  .default;
 
 /** The manifest the demo fixture ships, parsed with the real validator. */
-const DEMO_DIR = join(process.cwd(), "e2e/fixtures/plugin-sources/fixture-library-demo");
-
 function demoManifest(): PluginManifest {
-  const result = parsePluginManifest(readFileSync(join(DEMO_DIR, "manifest.json"), "utf8"));
+  const result = parsePluginManifest(JSON.stringify(demoManifestJson));
   if (!result.ok) throw new Error(`manifest.json: ${JSON.stringify(result.problems, null, 2)}`);
   return result.manifest;
 }
 
 const DEMO_MANIFEST = demoManifest();
-
-/**
- * The real broker over the real handlers and the in-memory Library, handing
- * the fixture's code the SDK client a Plugin calls.
- */
-function connectDemoPlugin() {
-  const channel = new MessageChannel();
-  const declared = [
-    ...DEMO_MANIFEST.permissions.required,
-    ...DEMO_MANIFEST.permissions.optional,
-  ] as PluginPermissionId[];
-  createPluginBroker({
-    pluginId: DEMO_MANIFEST.id,
-    port: channel.port1,
-    declared,
-    granted: () => declared,
-    isLibraryAvailable: () => true,
-    handlers: createPluginHandlers(DEMO_MANIFEST),
-  });
-  const client = createPluginClient(channel.port2);
-  return {
-    client,
-    close() {
-      channel.port1.close();
-      channel.port2.close();
-    },
-  };
-}
 
 async function seedBook(id: string): Promise<void> {
   await testDb.execute(
@@ -185,7 +152,15 @@ describe("the #588 demo Plugin", () => {
     await seedChapter("ch-2", "book-1", 1);
     await seedNote("note-1");
 
-    const { client, close } = connectDemoPlugin();
+    const declared = [
+      ...DEMO_MANIFEST.permissions.required,
+      ...DEMO_MANIFEST.permissions.optional,
+    ] as PluginPermissionId[];
+    const { client, close } = connectPluginBroker({
+      manifest: DEMO_MANIFEST,
+      declared,
+      granted: () => declared,
+    });
     let chapterId: string;
     let versionId: string | null;
     try {

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Change } from "@/features/sync/change-feed";
-import type { PluginApiInput, PluginManifest, PluginPermissionId } from "@/features/plugins/types";
+import type { PluginApiInput } from "@/features/plugins/types";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
+import { connectLibraryWritePlugin } from "@/test/support/plugin-broker";
 
 // Data-safety integration tests for the Plugin Chapter writes (#588, part 3),
 // driven through the real handler entry a Plugin calls, over the in-memory
@@ -38,52 +39,18 @@ const { useChapterStore } = await import("@/features/chapters/store");
 const { installViewRefresh, resetViewRefreshForTests } = await import(
   "@/features/sync/view-refresh"
 );
-const { resetPendingEditsForTests } = await import("@/features/sync/pending-edits");
+const { registerPendingEditsFlush, resetPendingEditsForTests } = await import(
+  "@/features/sync/pending-edits"
+);
 const { isEntityChange, onChange, resetChangeFeedForTests } = await import(
   "@/features/sync/change-feed"
 );
-const { createPluginBroker } = await import("@/features/plugins/broker");
-const { createPluginClient } = await import("@/plugin-sdk");
 const { bookAdapter } = await import("@/features/sync/sync-engine");
 const { normalizeBookSnapshotJson } = await import("@/features/sync/sync-codec-handlers");
+const librarySwitch = await import("@/features/tutorial/library-switch");
 
 const handlers = createPluginHandlers(PLUGIN_MANIFEST);
 const context = { pluginId: "tracer" };
-
-/** The manifest a Plugin writing to the Library declares, so the broker can refuse it. */
-const WRITE_MANIFEST: PluginManifest = {
-  ...PLUGIN_MANIFEST,
-  permissions: { required: ["library:read", "library:write"], optional: [] },
-};
-
-/**
- * The real broker over the real handlers and the in-memory Library, driven by
- * the SDK client the way a Plugin calls: the only way to prove the refusals
- * the row declares (its Plugin Permission, Library availability) happen before
- * the handler runs.
- */
-function connectWritePlugin(options: {
-  granted: readonly PluginPermissionId[];
-  libraryAvailable?: boolean;
-}) {
-  const channel = new MessageChannel();
-  createPluginBroker({
-    pluginId: WRITE_MANIFEST.id,
-    port: channel.port1,
-    declared: ["library:read", "library:write"],
-    granted: () => options.granted,
-    isLibraryAvailable: () => options.libraryAvailable ?? true,
-    handlers: createPluginHandlers(WRITE_MANIFEST),
-  });
-  const client = createPluginClient(channel.port2);
-  return {
-    client,
-    close() {
-      channel.port1.close();
-      channel.port2.close();
-    },
-  };
-}
 
 function createChapter(input: PluginApiInput<"library.chapters.create">) {
   const write = handlers["library.chapters.create"];
@@ -191,6 +158,7 @@ afterEach(() => {
   resetViewRefreshForTests();
   resetChangeFeedForTests();
   resetPendingEditsForTests();
+  librarySwitch.resetLibrarySwitchForTests();
 });
 
 describe("library.chapters.create (#588)", () => {
@@ -277,6 +245,26 @@ describe("library.chapters.create (#588)", () => {
 
     const last = await createChapter({ bookId: "book-1", title: "Last", position: 3 });
     expect(await chapterIds("book-1")).toEqual([first.chapterId, "ch-1", "ch-2", last.chapterId]);
+  });
+
+  it("deletes the new Chapter and rethrows when a later step fails", async () => {
+    await seedBook("book-1");
+    await seedChapter("ch-1", "book-1", 0);
+    const chapterWrite = await import("@/features/chapters/write");
+    const reorder = vi
+      .spyOn(chapterWrite, "reorderChapterRows")
+      .mockRejectedValueOnce(new Error("disk full"));
+
+    try {
+      await expect(
+        createChapter({ bookId: "book-1", title: "Half-written", position: 0 })
+      ).rejects.toThrow("disk full");
+    } finally {
+      reorder.mockRestore();
+    }
+
+    // No partial Chapter: the row the create made is gone again.
+    expect(await chapterIds("book-1")).toEqual(["ch-1"]);
   });
 
   it("refuses a position past the end and writes nothing", async () => {
@@ -420,11 +408,49 @@ describe("library.chapters.delete (#588)", () => {
   });
 });
 
+// A local write from outside the open view flushes the editors first. When an
+// open editor cannot save, the write is refused before anything lands.
+describe("Chapter writes refuse when an open editor cannot save (#588)", () => {
+  type LibraryClient = ReturnType<typeof connectLibraryWritePlugin>["client"];
+  const cases: [string, (client: LibraryClient) => Promise<unknown>][] = [
+    ["library.chapters.create", (client) => client.library.chapters.create({ bookId: "book-1", title: "New" })],
+    ["library.chapters.delete", (client) => client.library.chapters.delete({ chapterId: "ch-1" })],
+    [
+      "library.chapters.reorder",
+      (client) =>
+        client.library.chapters.reorder({ bookId: "book-1", chapterIds: ["ch-2", "ch-1"] }),
+    ],
+    [
+      "library.chapters.update",
+      (client) => client.library.chapters.update({ chapterId: "ch-1", title: "Changed" }),
+    ],
+  ];
+
+  it.each(cases)("%s refuses and writes nothing", async (_method, call) => {
+    await seedBook("book-1");
+    await seedChapter("ch-1", "book-1", 0);
+    await seedChapter("ch-2", "book-1", 1);
+    // `flushPendingEdits` wraps this rejection in `PendingEditsFlushError`.
+    const off = registerPendingEditsFlush(() => {
+      throw new Error("disk full");
+    });
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:write"] });
+    try {
+      await expect(call(client)).rejects.toMatchObject({ code: "library-unavailable" });
+    } finally {
+      close();
+      off();
+    }
+    expect(await chapterIds("book-1")).toEqual(["ch-1", "ch-2"]);
+    expect(await chapterRow("ch-1")).toMatchObject({ title: "Title ch-1", status: "draft" });
+  });
+});
+
 // Every new write is refused by the broker before its handler runs: without
 // `library:write`, and while the Tutorial makes the Library unavailable. The
 // prior art for the same issue proves the Book writes this way.
 describe("Chapter writes refuse without the Permission or the Library (#588)", () => {
-  const calls = (client: ReturnType<typeof connectWritePlugin>["client"]) => [
+  const calls = (client: ReturnType<typeof connectLibraryWritePlugin>["client"]) => [
     () => client.library.chapters.create({ bookId: "book-1", title: "Mine" }),
     () => client.library.chapters.delete({ chapterId: "ch-1" }),
     () => client.library.chapters.reorder({ bookId: "book-1", chapterIds: ["ch-1"] }),
@@ -435,7 +461,7 @@ describe("Chapter writes refuse without the Permission or the Library (#588)", (
     await seedBook("book-1");
     await seedChapter("ch-1", "book-1", 0);
 
-    const { client, close } = connectWritePlugin({ granted: ["library:read"] });
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:read"] });
     try {
       for (const call of calls(client)) {
         await expect(call()).rejects.toMatchObject({
@@ -449,13 +475,14 @@ describe("Chapter writes refuse without the Permission or the Library (#588)", (
     expect(await chapterIds("book-1")).toEqual(["ch-1"]);
   });
 
-  it("refuses every Chapter write while the Tutorial Library is active", async () => {
+  it("refuses every Chapter write with the real Tutorial Library switch", async () => {
     await seedBook("book-1");
     await seedChapter("ch-1", "book-1", 0);
+    librarySwitch.activateTutorialDatabase(testDb);
 
-    const { client, close } = connectWritePlugin({
+    const { client, close } = connectLibraryWritePlugin({
       granted: ["library:write"],
-      libraryAvailable: false,
+      isLibraryAvailable: () => !librarySwitch.isTutorialLibraryActive(),
     });
     try {
       for (const call of calls(client)) {

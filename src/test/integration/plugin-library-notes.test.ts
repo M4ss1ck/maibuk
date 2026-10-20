@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Change } from "@/features/sync/change-feed";
 import type { SyncAction, SyncDeletionReviewItem } from "@/features/sync/types";
-import type { PluginApiInput, PluginManifest, PluginPermissionId } from "@/features/plugins/types";
+import type { PluginApiInput } from "@/features/plugins/types";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
+import { connectLibraryWritePlugin } from "@/test/support/plugin-broker";
 
 // Data-safety integration tests for the Plugin Note writes (#588, part 4),
 // driven through the real handler entry a Plugin calls, over the in-memory
@@ -39,52 +40,18 @@ const { useNoteStore } = await import("@/features/notes/store");
 const { installViewRefresh, resetViewRefreshForTests } = await import(
   "@/features/sync/view-refresh"
 );
-const { resetPendingEditsForTests } = await import("@/features/sync/pending-edits");
+const { registerPendingEditsFlush, resetPendingEditsForTests } = await import(
+  "@/features/sync/pending-edits"
+);
 const { isEntityChange, onChange, resetChangeFeedForTests } = await import(
   "@/features/sync/change-feed"
 );
 const { listPendingTombstones } = await import("@/features/sync/tombstones");
 const { processPendingDeletions } = await import("@/features/sync/entity-sync");
-const { createPluginBroker } = await import("@/features/plugins/broker");
-const { createPluginClient } = await import("@/plugin-sdk");
+const librarySwitch = await import("@/features/tutorial/library-switch");
 
 const handlers = createPluginHandlers(PLUGIN_MANIFEST);
 const context = { pluginId: "tracer" };
-
-/** The manifest a Plugin writing to the Library declares, so the broker can refuse it. */
-const WRITE_MANIFEST: PluginManifest = {
-  ...PLUGIN_MANIFEST,
-  permissions: { required: ["library:read", "library:write"], optional: [] },
-};
-
-/**
- * The real broker over the real handlers and the in-memory Library, driven by
- * the SDK client the way a Plugin calls: the only way to prove the refusals
- * the row declares (its Plugin Permission, Library availability) happen before
- * the handler runs.
- */
-function connectWritePlugin(options: {
-  granted: readonly PluginPermissionId[];
-  libraryAvailable?: boolean;
-}) {
-  const channel = new MessageChannel();
-  createPluginBroker({
-    pluginId: WRITE_MANIFEST.id,
-    port: channel.port1,
-    declared: ["library:read", "library:write"],
-    granted: () => options.granted,
-    isLibraryAvailable: () => options.libraryAvailable ?? true,
-    handlers: createPluginHandlers(WRITE_MANIFEST),
-  });
-  const client = createPluginClient(channel.port2);
-  return {
-    client,
-    close() {
-      channel.port1.close();
-      channel.port2.close();
-    },
-  };
-}
 
 function updateNote(input: PluginApiInput<"library.notes.update">) {
   const write = handlers["library.notes.update"];
@@ -172,6 +139,7 @@ afterEach(() => {
   resetViewRefreshForTests();
   resetChangeFeedForTests();
   resetPendingEditsForTests();
+  librarySwitch.resetLibrarySwitchForTests();
 });
 
 describe("library.notes.update (#588)", () => {
@@ -274,11 +242,50 @@ describe("library.notes.delete (#588)", () => {
   });
 });
 
+// A local write from outside the open view flushes the editors first. When an
+// open editor cannot save, the write is refused before anything lands.
+describe("Note writes refuse when an open editor cannot save (#588)", () => {
+  type LibraryClient = ReturnType<typeof connectLibraryWritePlugin>["client"];
+  const cases: [string, (client: LibraryClient) => Promise<unknown>][] = [
+    [
+      "library.notes.update tags",
+      (client) => client.library.notes.update({ noteId: "note-1", tags: ["voice", "voice"] }),
+    ],
+    [
+      "library.notes.update bookId",
+      (client) => client.library.notes.update({ noteId: "note-1", bookId: "book-2" }),
+    ],
+    ["library.notes.delete", (client) => client.library.notes.delete({ noteId: "note-1" })],
+  ];
+
+  it.each(cases)("%s refuses and writes nothing", async (_method, call) => {
+    await seedBook("book-2");
+    await seedNote("note-1");
+    // `flushPendingEdits` wraps this rejection in `PendingEditsFlushError`.
+    const off = registerPendingEditsFlush(() => {
+      throw new Error("disk full");
+    });
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:write"] });
+    try {
+      await expect(call(client)).rejects.toMatchObject({ code: "library-unavailable" });
+    } finally {
+      close();
+      off();
+    }
+    expect(await noteIds()).toEqual(["note-1"]);
+    expect(await noteRow("note-1")).toMatchObject({
+      book_id: null,
+      title: "Note note-1",
+      tags: "[]",
+    });
+  });
+});
+
 // Every new write is refused by the broker before its handler runs: without
 // `library:write`, and while the Tutorial makes the Library unavailable. The
 // prior art for the same issue proves the Book and Chapter writes this way.
 describe("Note writes refuse without the Permission or the Library (#588)", () => {
-  const calls = (client: ReturnType<typeof connectWritePlugin>["client"]) => [
+  const calls = (client: ReturnType<typeof connectLibraryWritePlugin>["client"]) => [
     () => client.library.notes.update({ noteId: "note-1", tags: ["voice"] }),
     () => client.library.notes.update({ noteId: "note-1", bookId: null }),
     () => client.library.notes.delete({ noteId: "note-1" }),
@@ -287,7 +294,7 @@ describe("Note writes refuse without the Permission or the Library (#588)", () =
   it("refuses every Note write without library:write", async () => {
     await seedNote("note-1");
 
-    const { client, close } = connectWritePlugin({ granted: ["library:read"] });
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:read"] });
     try {
       for (const call of calls(client)) {
         await expect(call()).rejects.toMatchObject({
@@ -301,12 +308,13 @@ describe("Note writes refuse without the Permission or the Library (#588)", () =
     expect(await noteIds()).toEqual(["note-1"]);
   });
 
-  it("refuses every Note write while the Tutorial Library is active", async () => {
+  it("refuses every Note write with the real Tutorial Library switch", async () => {
     await seedNote("note-1");
+    librarySwitch.activateTutorialDatabase(testDb);
 
-    const { client, close } = connectWritePlugin({
+    const { client, close } = connectLibraryWritePlugin({
       granted: ["library:write"],
-      libraryAvailable: false,
+      isLibraryAvailable: () => !librarySwitch.isTutorialLibraryActive(),
     });
     try {
       for (const call of calls(client)) {

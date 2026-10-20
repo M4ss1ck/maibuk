@@ -199,7 +199,7 @@ export const PLUGIN_API_TABLE = [
       "Updates a Book's title, Author Name, Genre, Book Status, or Target Word Count through the Book write path; give at least one. A null Genre or Target Word Count clears it.",
     input: z.strictObject({
       bookId: id,
-      title: z.string().max(500).optional(),
+      title: z.string().min(1).max(500).optional(),
       authorName: z.string().max(500).optional(),
       genre: z.string().max(200).nullable().optional(),
       status: z.enum(BOOK_STATUSES).optional(),
@@ -232,7 +232,7 @@ export const PLUGIN_API_TABLE = [
       "Creates a Chapter in a Book through the Chapter write path, at a 0-based position among its Chapters (omitted appends) and with optional content, and returns its id.",
     input: z.strictObject({
       bookId: id,
-      title: z.string().max(500),
+      title: z.string().min(1).max(500),
       position: z
         .int()
         .min(0)
@@ -265,7 +265,7 @@ export const PLUGIN_API_TABLE = [
       "Updates a Chapter's title, Chapter Type, or Chapter Status through the Chapter write path; give at least one.",
     input: z.strictObject({
       chapterId: id,
-      title: z.string().max(500).optional(),
+      title: z.string().min(1).max(500).optional(),
       chapterType: z.enum(CHAPTER_TYPES).optional(),
       status: z.enum(CHAPTER_STATUSES).optional(),
     }),

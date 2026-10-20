@@ -239,10 +239,12 @@ export async function updateBookRow(
     ...(input.subtitle !== undefined ? { subtitle: input.subtitle } : {}),
     ...(input.authorName !== undefined ? { authorName: input.authorName } : {}),
     ...(input.description !== undefined ? { description: input.description } : {}),
-    ...(input.genre !== undefined ? { genre: input.genre } : {}),
+    ...(input.genre !== undefined ? { genre: input.genre ?? undefined } : {}),
     ...(input.language !== undefined ? { language: input.language } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}),
-    ...(input.targetWordCount !== undefined ? { targetWordCount: input.targetWordCount } : {}),
+    ...(input.targetWordCount !== undefined
+      ? { targetWordCount: input.targetWordCount ?? undefined }
+      : {}),
     ...(input.coverImagePath !== undefined ? { coverImagePath: input.coverImagePath } : {}),
     ...(input.coverData !== undefined ? { coverData: input.coverData } : {}),
     ...(input.lastChapterId !== undefined ? { lastChapterId: input.lastChapterId } : {}),
