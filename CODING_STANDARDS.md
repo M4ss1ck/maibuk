@@ -99,6 +99,8 @@ Every user-visible string must use `useTranslation()` and have keys in both `src
 
 There is no ESLint or Prettier. Two gates run in CI's fast `checks` job: `pnpm typecheck` (TypeScript strict mode, `tsconfig.json`) and `pnpm lint` (Biome, `biome.json`), which fails the build on any error, scripts included. Vitest strips types without checking them, so a type error in a test file passes `pnpm test:run` and fails only `pnpm typecheck`. Run both before pushing.
 
+`pnpm test:guards` is the third gate. It runs every test whose input is repo files rather than imports (`test-fixed-waits`, `test-time-budget`, `e2e-coverage-guard`, the Tutorial gates, command coverage), selected by `scripts/test-guards.mjs` from their `node:fs`, `e2e/guards/`, or `scripts/` imports. Vitest relates a test to a change only through imports, so a run narrowed to the touched files skips these guards, and they fail in CI on a file they read but never import. Run it with every narrowed run; it takes seconds. A new test that reads the repo some other way joins the lane by importing `node:fs`.
+
 CI runs the Vitest suite in three shards (`--shard`, `--reporter=blob`) with the coverage thresholds off, then a `coverage` job merges the blobs (`vitest run --mergeReports --coverage`) and enforces `coverage.thresholds` on the whole. `src/test/unit/ci-workflow.test.ts` fails if that layout changes.
 
 ## Area rules
