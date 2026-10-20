@@ -1,4 +1,5 @@
 import { Editor } from "@tiptap/core";
+import Placeholder from "@tiptap/extension-placeholder";
 import { undo, undoDepth } from "@tiptap/pm/history";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
@@ -28,6 +29,9 @@ function fakeHost() {
     emitFinal(text: string) {
       listener?.({ type: "final", text, latencyMs: 1 });
     },
+    emitPartial(text: string) {
+      listener?.({ type: "partial", text });
+    },
     isSupported: async () => ({ supported: true as const }),
     load: async () => {},
     start: async (onEvent: (event: DictationEvent) => void) => {
@@ -39,7 +43,7 @@ function fakeHost() {
     setContext: async () => {},
     inputDevice: async () => null,
     dispose: async () => {},
-  } satisfies RecognizerHost & { emitFinal(text: string): void };
+  } satisfies RecognizerHost & { emitFinal(text: string): void; emitPartial(text: string): void };
 }
 
 afterEach(() => resetDictationHubForTests());
@@ -543,6 +547,46 @@ describe("Dictation line to rich-text document", () => {
       ]);
       undo(editor.state, editor.view.dispatch);
       expect(editor.getHTML()).toBe(`<p>${"a".repeat(BEFORE_CARET_LIMIT + 40)} uno</p>`);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("marks the empty line a partial shows in, so the placeholder steps aside", async () => {
+    const host = fakeHost();
+    const session = createDictationSession({
+      host,
+      modelFor: () => model,
+      route: createRouter(),
+      notify: vi.fn(),
+      copyText: vi.fn(async () => {}),
+      stats: createLineStats(),
+    });
+    resetDictationHubForTests();
+    attachSession(session);
+    const editor = new Editor({
+      extensions: [
+        ...createRichTextExtensions({ spellCheck: { enabled: false, language: "es" } }),
+        Placeholder.configure({ placeholder: "Start writing your chapter..." }),
+      ],
+      content: "<p></p>",
+    });
+    try {
+      await new Promise<void>((resolve) => editor.on("create", () => resolve()));
+      document.body.appendChild(editor.view.dom);
+      const focused = new Promise<void>((resolve) => editor.on("focus", () => resolve()));
+      editor.commands.focus();
+      await focused;
+      await session.start();
+      const line = () => editor.view.dom.querySelector("p");
+      // The Placeholder still sees an empty document: the partial is a widget, not text.
+      host.emitPartial("hola mun");
+      expect(line()?.querySelector(".dictation-partial")?.textContent).toBe("hola mun");
+      expect(line()?.classList.contains("is-editor-empty")).toBe(true);
+      expect(line()?.classList.contains("has-dictation-partial")).toBe(true);
+      host.emitPartial("");
+      expect(line()?.querySelector(".dictation-partial")).toBeNull();
+      expect(line()?.classList.contains("has-dictation-partial")).toBe(false);
     } finally {
       editor.destroy();
     }

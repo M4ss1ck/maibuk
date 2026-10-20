@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { watchPlaceholderUnderPartial } from "../support/layout";
 import { seedWebBackups } from "../support/storage";
 import { expect, test } from "../support/test";
 
@@ -292,6 +293,26 @@ test.describe("@wf:dictation-toggle @wf:dictation-interpreter-stats @sc:dictatio
     await expect(page.getByText(/Interpreter: typical delay/)).toBeVisible();
   });
 
+  test("on an empty Chapter the placeholder steps aside while the spoken line shows", async ({
+    page,
+  }) => {
+    await downloadEnglishFast(page);
+    await openChapter(page);
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("Backspace");
+    await expect(editorText(page).locator("p.is-editor-empty")).toHaveCount(1);
+    const placeholderUnderPartial = await watchPlaceholderUnderPartial(editorText(page));
+
+    await page.keyboard.press("ControlOrMeta+Shift+Space");
+    await expect(editorText(page)).toContainText("best of times", { timeout: 20_000 });
+    await page.keyboard.press("Escape");
+    await expect(announcement(page)).toHaveText("Dictation off");
+
+    const seen = await placeholderUnderPartial();
+    expect(seen.length).toBeGreaterThan(0);
+    expect(new Set(seen)).toEqual(new Set(["none"]));
+  });
+
   test("the floating mic button toggles the same session by Enter", async ({ page }) => {
     await downloadEnglishFast(page);
     await openChapter(page);
@@ -394,7 +415,9 @@ test.describe("@wf:dictation-toggle @wf:dictation-interpreter-stats @sc:dictatio
     await page.keyboard.press("Enter");
     await expectDictationSettingsShown(page);
     // The heading sits at the top of the screen, not under the Editor section.
-    const heading = await page.getByRole("heading", { name: "Dictation", exact: true }).boundingBox();
+    const heading = await page
+      .getByRole("heading", { name: "Dictation", exact: true })
+      .boundingBox();
     const viewport = page.viewportSize();
     expect(heading && viewport && heading.y < viewport.height / 4).toBe(true);
     await capture(page, "dictation-settings-from-bar");
