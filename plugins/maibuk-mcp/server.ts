@@ -7,6 +7,8 @@
 
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import type { PluginClient } from "@/plugin-sdk";
+import { listBooks, getBook } from "./books";
 
 /**
  * What the server tells every Agent about the Library: what it holds, and
@@ -17,21 +19,13 @@ import { z } from "zod";
 export const SERVER_INSTRUCTIONS =
   "Maibuk MCP Server. The Library holds the author's Books; each Book holds ordered Chapters and Notes with Tags. Tools take a Book, Chapter, or Note id, or an 8+ character prefix of one; an ambiguous prefix answers with its candidates. Lists are plain-text lines with a cursor and a total.";
 
-/** The stub every tool answers with until its unit implements it. */
-function notImplemented() {
-  return {
-    content: [{ type: "text" as const, text: "Not implemented yet." }],
-    isError: true,
-  };
-}
-
 /**
  * Builds a fresh MCP server named `maibuk` with the final tool set. The
  * `tools/list` and `server/discover` results carry the SDK's cache hints
  * (`ttlMs`, `cacheScope`); the values repeat the SDK defaults, stated here so
  * the advertised caching is a choice rather than an accident.
  */
-export function buildMcpServer(): McpServer {
+export function buildMcpServer(client: PluginClient): McpServer {
   const server = new McpServer(
     { name: "maibuk", version: "0.1.0" },
     {
@@ -55,7 +49,7 @@ export function buildMcpServer(): McpServer {
       }),
       annotations: { readOnlyHint: true },
     },
-    async () => notImplemented()
+    async (args) => listBooks(client, args as any)
   );
   server.registerTool(
     "get_book",
@@ -67,7 +61,7 @@ export function buildMcpServer(): McpServer {
       }),
       annotations: { readOnlyHint: true },
     },
-    async () => notImplemented()
+    async (args) => getBook(client, args as any)
   );
   return server;
 }

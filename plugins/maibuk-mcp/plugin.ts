@@ -327,7 +327,7 @@ function createConnections(client: PluginClient): { count: (caller: Caller | nul
  */
 export function startMcp(client: PluginClient): void {
   // One factory for both eras, so the two can never drift apart.
-  const handler: McpHttpHandler = createMcpHandler(() => buildMcpServer(), {
+  const handler: McpHttpHandler = createMcpHandler(() => buildMcpServer(client), {
     legacy: "stateless",
   });
   // The Tutorial flips availability through this event; a refusal from any

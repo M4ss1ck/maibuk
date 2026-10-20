@@ -18,6 +18,7 @@ import type {
   TestHost,
   TestHostOptions,
   TestEndpointAnswer,
+  TestLibrary,
 } from "@/features/plugins/types";
 import { createPluginClient } from "@/plugin-sdk";
 import { startMcp } from "./plugin";
@@ -39,6 +40,8 @@ export interface ConnectOptions {
   changedFrom?: string;
   /** Starts with the Library unavailable, the way the Tutorial leaves it. */
   libraryUnavailable?: boolean;
+  /** In-memory Library the read handlers serve. */
+  library?: TestLibrary;
 }
 
 /** Waits until the Plugin has stored its Key, so the suite can send it back. */
@@ -65,6 +68,7 @@ export function startHost(options: ConnectOptions = {}): {
     manifest: mcpManifest(),
     ...(options.startReason !== undefined ? { startReason: options.startReason } : {}),
     storage,
+    ...(options.library !== undefined ? { library: options.library } : {}),
   });
   if (options.libraryUnavailable === true) host.setLibraryAvailable(false);
   startMcp(createPluginClient(host.port));
