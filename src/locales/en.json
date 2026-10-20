@@ -2189,7 +2189,9 @@
       "editorWrite": "Change the focused editor",
       "editorWriteDetail": "Type, format, and replace text in the editor you have open.",
       "clipboard": "Use the clipboard",
-      "clipboardDetail": "Read from and write to your clipboard when you copy or paste."
+      "clipboardDetail": "Read from and write to your clipboard when you copy or paste.",
+      "serve": "Answer requests from apps on this computer",
+      "serveDetail": "Apps on this computer can send requests to this Plugin while it runs. Desktop only."
     },
     "stopped": {
       "startupTimeout": "{{name}} took too long to start and was stopped.",

@@ -915,7 +915,7 @@ export type PluginToolbarButtonContribution = NonNullable<Contributions["toolbar
 export type PluginItemMenuEntryContribution = NonNullable<Contributions["itemMenuEntries"]>[number];
 export type PluginDeclaredLifecycle = PluginManifest["lifecycle"];
 
-/** One of the eight exact Plugin Permission names. */
+/** One of the nine exact Plugin Permission names. */
 export type PluginPermissionName = (typeof PLUGIN_PERMISSION_NAMES)[number];
 
 /** A Plugin Permission as a manifest declares it: an exact name or `network:<host>`. */

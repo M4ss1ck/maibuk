@@ -43,6 +43,7 @@ describe("Plugin permission copy", () => {
       "secrets",
       "clipboard",
       "process",
+      "serve",
     ] as const;
     for (const key of keys) {
       expect(en.plugins.permissions[key].length, key).toBeGreaterThan(0);
@@ -52,6 +53,10 @@ describe("Plugin permission copy", () => {
     }
     expect(en.plugins.permissions.process).toBe("Run programs on your computer");
     expect(es.plugins.permissions.process).toBe("Ejecutar programas en tu equipo");
+    expect(en.plugins.permissions.serve).toBe("Answer requests from apps on this computer");
+    expect(es.plugins.permissions.serve).toBe(
+      "Responder a solicitudes de aplicaciones de este equipo"
+    );
     expect(en.plugins.permissions.read).toBe("Read your Library");
     expect(es.plugins.permissions.read).toBe("Leer tu Biblioteca");
   });
