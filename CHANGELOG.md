@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.1] - 2026-10-19
+
+### Added
+- Show each Plugin's version beside its name in Settings
+
+### Changed
+- Virtualize the Notes list, Notes tree, Gallery, and Chapter list to keep large libraries responsive
+- Debounce editor serialization until typing settles for smoother WebKit typing
+- Reduce command palette layout work when opening and typing
+- Keep Chapter list resizing smoother on WebKit
+- Rasterize the canvas watermark once per zoom for smoother panning on WebKit
+- Shield the editor during keyboard Chapter reordering to avoid restyling stalls
+
+### Fixed
+- Prevent closing the editor context menu from stealing focus or closing a newly reopened menu
+- Preserve keyboard navigation at Notes tree and Gallery edges when rows are virtualized
+- Make Notes tree group headers focusable and toggleable with Enter, and restore inline rename focus
+- Keep command palette touch rows at 44px so they cannot overlap
+- Allow Chapter delete focus to reach off-screen neighbors
+- Make drag-and-drop reorder targets and FLIP animations tolerate virtualized rows
+
 ## [0.13.0] - 2026-10-18
 
 ### Added
