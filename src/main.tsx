@@ -35,6 +35,13 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 // build (issue #448) seeds its approvals and runs its measurement.
 const BENCH_DRIVER_ENABLED = import.meta.env.VITE_PLUGIN_BENCH_DRIVER === "1";
 
+// The E2E lane's Plugin Endpoint seam (#586) rides the E2E-only flag
+// `e2e/run-steps.mjs` sets on the web build: the build has no socket, so the
+// `@wf:plugins-endpoint` spec drives the real dispatcher through it. Read inline
+// for the same reason as the bench flag, so a normal build drops it with the
+// dynamic import inside `loadPlugins`.
+const ENDPOINT_SEAM_ENABLED = import.meta.env.VITE_E2E_BUILTIN_SEED === "1";
+
 const loadPlugins = async () => {
   // A Plugin credential store is always present: the OS keychain on desktop
   // (ADR 0023), the browser store with an opt-in "remember on this device" on
@@ -57,6 +64,10 @@ const loadPlugins = async () => {
   }
   const { installPluginLifecycle } = await import("@/features/plugins/lifecycle");
   installPluginLifecycle();
+  if (ENDPOINT_SEAM_ENABLED) {
+    const { installEndpointSeam } = await import("@/features/plugins/endpoint-seam");
+    installEndpointSeam();
+  }
   if (BENCH_DRIVER_ENABLED) {
     const { runPluginsBenchDriver } = await import("@/features/plugins/bench");
     void runPluginsBenchDriver();

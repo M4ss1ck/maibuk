@@ -577,6 +577,10 @@ _Avoid_: targets, supported OS
 One kind of access a Plugin declares, such as reading the Library or reaching a named web host, and that the author grants or revokes.
 _Avoid_: grant, scope, capability (Tauri's word in code)
 
+**Plugin Endpoint**:
+The local address `http://127.0.0.1:<port>/plugin/<pluginId>/` where Maibuk hands each request to the Plugin its path names; only a Plugin holding the `serve` Plugin Permission answers, and Maibuk binds the one port only while an enabled Plugin holds `serve`, on the desktop app only. A request from a foreign Origin is refused (403), and so is one naming a foreign Host. (ADR 0031)
+_Avoid_: plugin server, MCP port, local API
+
 **Host-rendered UI**:
 A Plugin's interface drawn by Maibuk from the React/JSX the Plugin writes against the SDK's component counterparts, so Maibuk owns focus, keyboard behavior, and typing. The other path is a custom `Frame`. (ADR 0021)
 _Avoid_: extension UI, add-on UI, mod UI

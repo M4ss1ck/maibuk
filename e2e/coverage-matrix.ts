@@ -2480,6 +2480,24 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-endpoint",
+    area: "plugins",
+    workflow:
+      "The Plugin Endpoint (ADR 0031), driven through the E2E lane's test-only seam because the web build has no socket: an enabled Plugin granted the serve Plugin Permission answers one request on its own path /plugin/<pluginId>/… — a whole answer (200 \"hello\") and a streamed one (three chunks in order) — while the same Plugin without the grant answers 404 although it runs, and a request naming another Plugin answers 404 and never reaches the endpoint fixture's handler; asserts: the status, the headers, the streamed chunks in order, the joined text, and the fixture's own record of the paths it was handed; persists: no. The socket itself (the bind, the Host and Origin checks, 421 and 403) is proven by the Rust tests in src-tauri/src/plugins/endpoint.rs, not here",
+    edges: [
+      "A Plugin granted serve answers 200 with its whole body",
+      "A streamed answer arrives as three chunks in order and joins to the whole body",
+      "A Plugin that was not granted serve answers 404 while it runs",
+      "A request naming another Plugin answers 404 and never reaches the endpoint fixture",
+    ],
+    terms: ["Plugin Endpoint", "Plugin Permission", "Plugin"],
+    shortcuts: [],
+    routes: ["/"],
+    fixture: "empty",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "settings-reset-all",
     area: "settings",
     workflow:
