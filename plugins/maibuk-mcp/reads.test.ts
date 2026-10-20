@@ -520,4 +520,20 @@ describe("read_note", () => {
       host.stop();
     }
   });
+
+  it("a Note whose Book is gone reports the raw book id on the Book line", async () => {
+    const notes = [
+      makeNote("notealpha1", "book-gone-0001", "The Note", {
+        content: { text: "body", html: "<p>body</p>" },
+      }),
+    ];
+    const { host, key } = await connect({ library: { notes } as any });
+    try {
+      const answer = await callTool(host, key, "read_note", { note: "notealpha1" });
+      expect(isError(answer)).toBe(false);
+      expect(headerOf(answer).split("\n")[1]).toBe("Book: book-gone-0001");
+    } finally {
+      host.stop();
+    }
+  });
 });
