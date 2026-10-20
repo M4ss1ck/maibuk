@@ -353,6 +353,52 @@ describe("useVersionStore", () => {
         expect(Number(rows[0].c)).toBe(MAX_KEEP);
       });
 
+      it("prunes plugin backlog to its own quota and never prunes manual versions", async () => {
+        const baseTime = Math.floor(Date.now() / 1000) - 50_000;
+        for (let i = 0; i < 30; i++) {
+          await testDb.execute(
+            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              `plugin-${String(i).padStart(4, "0")}`,
+              "book-1",
+              "Plugin checkpoint",
+              "{}",
+              i,
+              `plugin-${i}`,
+              "plugin",
+              baseTime + i,
+            ]
+          );
+        }
+        await testDb.execute(
+          `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          ["manual-keepme", "book-1", "Important", "{}", 0, "manual-chk", "manual", baseTime + 10_000]
+        );
+
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
+
+        await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          name: "Plugin checkpoint",
+          triggerType: "plugin",
+        });
+
+        const pluginRows = await testDb.select<Record<string, unknown>[]>(
+          `SELECT COUNT(*) AS c FROM book_versions
+           WHERE book_id = ? AND trigger_type = 'plugin'`,
+          ["book-1"]
+        );
+        expect(Number(pluginRows[0].c)).toBe(MAX_KEEP);
+
+        const manualRows = await testDb.select<Record<string, unknown>[]>(
+          "SELECT id FROM book_versions WHERE id = ?",
+          ["manual-keepme"]
+        );
+        expect(manualRows).toHaveLength(1);
+      });
+
       it("each trigger type has its own quota — inserting close does not touch auto-idle", async () => {
         await seedAutoIdle(MAX_KEEP);
 

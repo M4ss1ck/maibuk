@@ -47,6 +47,7 @@ const { isEntityChange, onChange, resetChangeFeedForTests } = await import(
 );
 const { createPluginBroker } = await import("@/features/plugins/broker");
 const { createPluginClient } = await import("@/plugin-sdk");
+const { useVersionStore } = await import("@/features/versions/store");
 
 const handlers = createPluginHandlers(PLUGIN_MANIFEST);
 const context = { pluginId: "tracer" };
@@ -102,10 +103,16 @@ function writeNote(input: {
   return write(input, context);
 }
 
-/** The #588 Book write and the reads that carry its fields, all through the handlers. */
+/** The #588 Book writes and the reads that carry its fields, all through the handlers. */
 function writeBook(input: PluginApiInput<"library.books.update">) {
   const write = handlers["library.books.update"];
   if (!write) throw new Error("library.books.update is not wired");
+  return write(input, context);
+}
+
+function writeCheckpoint(input: PluginApiInput<"library.books.checkpoint">) {
+  const write = handlers["library.books.checkpoint"];
+  if (!write) throw new Error("library.books.checkpoint is not wired");
   return write(input, context);
 }
 
@@ -180,6 +187,19 @@ async function bookRow(id: string): Promise<BookRow | null> {
   return rows.length > 0 ? rows[0] : null;
 }
 
+interface VersionRow {
+  id: string;
+  name: string | null;
+  trigger_type: string;
+}
+
+async function versionRows(bookId: string): Promise<VersionRow[]> {
+  return testDb.select<VersionRow[]>(
+    "SELECT id, name, trigger_type FROM book_versions WHERE book_id = ? ORDER BY created_at ASC, id ASC",
+    [bookId]
+  );
+}
+
 async function seedNote(id: string, content = "<p>Stored</p>"): Promise<void> {
   await testDb.execute(
     `INSERT INTO notes (id, title, content, language, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
@@ -221,6 +241,15 @@ beforeEach(async () => {
     error: null,
   });
   useNoteStore.setState({ notes: [], currentNote: null, isLoading: false, error: null });
+  useVersionStore.setState({
+    versions: [],
+    totalCount: 0,
+    currentBookId: null,
+    currentPage: 1,
+    pageSize: 10,
+    isLoading: false,
+    error: null,
+  });
 });
 
 afterEach(() => {
@@ -553,5 +582,127 @@ describe("Plugin Book fields through the handlers (#588)", () => {
     }
     // Nothing was written.
     expect(await bookRow("book-1")).toMatchObject({ title: "Book book-1" });
+  });
+});
+
+// #588: a Checkpoint is the Version a Plugin takes before it changes a Book,
+// through the normal Version path with the "plugin" Version Trigger and the
+// label as the Version name.
+describe("Plugin Checkpoints through the handlers (#588)", () => {
+  it("creates a Version with trigger plugin and the given label", async () => {
+    await seedBook("book-1");
+
+    const { versionId } = await writeCheckpoint({
+      bookId: "book-1",
+      label: "Before a Plugin change",
+    });
+
+    expect(versionId).toEqual(expect.any(String));
+    const rows = await versionRows("book-1");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: versionId,
+      name: "Before a Plugin change",
+      trigger_type: "plugin",
+    });
+  });
+
+  it("returns null and creates no row when the Book is unchanged since its last Version", async () => {
+    await seedBook("book-1");
+
+    const first = await writeCheckpoint({ bookId: "book-1", label: "First" });
+    expect(first.versionId).not.toBeNull();
+
+    const second = await writeCheckpoint({ bookId: "book-1", label: "Second" });
+    expect(second.versionId).toBeNull();
+    expect(await versionRows("book-1")).toHaveLength(1);
+  });
+
+  it("creates a new Version after the Book changes", async () => {
+    await seedBook("book-1");
+
+    const first = await writeCheckpoint({ bookId: "book-1", label: "First" });
+    await testDb.execute("UPDATE books SET title = ?, updated_at = ? WHERE id = ?", [
+      "Changed",
+      2000,
+      "book-1",
+    ]);
+
+    const second = await writeCheckpoint({ bookId: "book-1", label: "Second" });
+
+    expect(second.versionId).not.toBeNull();
+    expect(second.versionId).not.toBe(first.versionId);
+    const rows = await versionRows("book-1");
+    expect(rows.map((row) => row.name).sort()).toEqual(["First", "Second"]);
+    expect(rows.every((row) => row.trigger_type === "plugin")).toBe(true);
+  });
+
+  it("trims the label and refuses a blank one", async () => {
+    await seedBook("book-1");
+
+    await writeCheckpoint({ bookId: "book-1", label: "  Padded  " });
+    expect((await versionRows("book-1"))[0].name).toBe("Padded");
+
+    await expect(
+      writeCheckpoint({ bookId: "book-1", label: "   " })
+    ).rejects.toMatchObject({ name: "PluginApiError", code: "invalid-params" });
+    expect(await versionRows("book-1")).toHaveLength(1);
+  });
+
+  it("flushes open editors before taking the Checkpoint", async () => {
+    await seedBook("book-1");
+    const off = registerPendingEditsFlush(async () => {
+      await testDb.execute("UPDATE books SET title = ? WHERE id = ?", ["Flushed", "book-1"]);
+    });
+
+    try {
+      const { versionId } = await writeCheckpoint({ bookId: "book-1", label: "After flush" });
+      const rows = await testDb.select<{ snapshot: string }[]>(
+        "SELECT snapshot FROM book_versions WHERE id = ?",
+        [versionId]
+      );
+      const snapshot = JSON.parse(rows[0].snapshot) as { book: { title: string } };
+      // The Flush ran first, so the Checkpoint holds what it saved.
+      expect(snapshot.book.title).toBe("Flushed");
+    } finally {
+      off();
+    }
+  });
+
+  it("refuses an unknown Book", async () => {
+    await expect(
+      writeCheckpoint({ bookId: "absent", label: "Nowhere" })
+    ).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "invalid-params",
+      message: "Book absent does not exist",
+    });
+  });
+
+  it("refuses library.books.checkpoint without library:write", async () => {
+    const { client, close } = connectWritePlugin({ granted: ["library:read"] });
+    try {
+      await expect(
+        client.library.books.checkpoint({ bookId: "book-1", label: "Mine" })
+      ).rejects.toMatchObject({ code: "permission-denied", permission: "library:write" });
+    } finally {
+      close();
+    }
+  });
+
+  it("refuses library.books.checkpoint while the Tutorial Library is active", async () => {
+    await seedBook("book-1");
+    const { client, close } = connectWritePlugin({
+      granted: ["library:write"],
+      libraryAvailable: false,
+    });
+    try {
+      await expect(
+        client.library.books.checkpoint({ bookId: "book-1", label: "Mine" })
+      ).rejects.toMatchObject({ code: "library-unavailable" });
+    } finally {
+      close();
+    }
+    expect(await versionRows("book-1")).toHaveLength(0);
   });
 });

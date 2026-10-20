@@ -1481,7 +1481,8 @@
       "auto-idle": "Auto checkpoint",
       "close": "On close",
       "pre-sync": "Before sync",
-      "pre-restore": "Before restore"
+      "pre-restore": "Before restore",
+      "plugin": "Before a Plugin change"
     },
     "restoredName": "Before restoring \"{{name}}\""
   },

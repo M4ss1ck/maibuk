@@ -14,6 +14,7 @@ export const PLUGIN_API_METHODS = [
   "library.canvases.list",
   "library.canvases.get",
   "library.books.update",
+  "library.books.checkpoint",
   "library.chapters.updateContent",
   "library.notes.create",
   "library.notes.update",
@@ -206,6 +207,17 @@ export interface PluginApiMethods {
       targetWordCount?: number | null;
     };
     output: null;
+  };
+  /** Takes a Checkpoint of a Book through the normal Version path, named by the label, and returns its id; null when the Book is unchanged since its last Version. */
+  "library.books.checkpoint": {
+    input: {
+      bookId: string;
+      /** The Version's name. */
+      label: string;
+    };
+    output: {
+      versionId: string | null;
+    };
   };
   /** Replaces a Chapter's content through the Chapter write path. */
   "library.chapters.updateContent": {
@@ -560,6 +572,8 @@ export interface PluginApi {
       get(params: PluginApiMethods["library.books.get"]["input"]): Promise<PluginApiMethods["library.books.get"]["output"]>;
       /** Updates a Book's title, Author Name, Genre, Book Status, or Target Word Count through the Book write path; give at least one. A null Genre or Target Word Count clears it. */
       update(params: PluginApiMethods["library.books.update"]["input"]): Promise<PluginApiMethods["library.books.update"]["output"]>;
+      /** Takes a Checkpoint of a Book through the normal Version path, named by the label, and returns its id; null when the Book is unchanged since its last Version. */
+      checkpoint(params: PluginApiMethods["library.books.checkpoint"]["input"]): Promise<PluginApiMethods["library.books.checkpoint"]["output"]>;
     };
     chapters: {
       /** Lists a Book's Chapters in order, without their content. */

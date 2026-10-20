@@ -209,6 +209,17 @@ export const PLUGIN_API_TABLE = [
     ...libraryWrite,
   }),
   defineApiRow({
+    id: "library.books.checkpoint",
+    description:
+      "Takes a Checkpoint of a Book through the normal Version path, named by the label, and returns its id; null when the Book is unchanged since its last Version.",
+    input: z.strictObject({
+      bookId: id,
+      label: z.string().trim().min(1).max(200).describe("The Version's name."),
+    }),
+    output: z.strictObject({ versionId: id.nullable() }),
+    ...libraryWrite,
+  }),
+  defineApiRow({
     id: "library.chapters.updateContent",
     description: "Replaces a Chapter's content through the Chapter write path.",
     input: z.strictObject({ chapterId: id, content: fragment }),

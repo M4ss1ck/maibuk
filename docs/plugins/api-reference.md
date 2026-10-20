@@ -314,6 +314,32 @@ Output:
 null
 ```
 
+### `library.books.checkpoint`
+
+Takes a Checkpoint of a Book through the normal Version path, named by the label, and returns its id; null when the Book is unchanged since its last Version.
+
+- Plugin Permission: `library:write`
+- Effect: write
+- Refused with `library-unavailable` while the Library cannot be read or written
+
+Input:
+
+```ts
+{
+  bookId: string;
+  /** The Version's name. */
+  label: string;
+}
+```
+
+Output:
+
+```ts
+{
+  versionId: string | null;
+}
+```
+
 ### `library.chapters.updateContent`
 
 Replaces a Chapter's content through the Chapter write path.

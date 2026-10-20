@@ -5,11 +5,11 @@
  * the API. Chapters report their containing Book as their Change entity, so a
  * reader that wants Chapter edits subscribes to `library.changed` and pulls.
  *
- * Here too are the `library:write` rows (#452, #588): a Book details update, a
- * Chapter content update, and Note create/update, each through the entity's
- * own narrow write path (ADR 0005) with Origin "local", so the write Flushes
- * open editors, normalizes, emits on the Change Feed, and refuses sample ids.
- * No delete is exposed.
+ * Here too are the `library:write` rows (#452, #588): a Book details update and
+ * a Checkpoint, a Chapter content update, and Note create/update, each through
+ * the entity's own narrow write path (ADR 0005) with Origin "local", so the
+ * write Flushes open editors, normalizes, emits on the Change Feed, and refuses
+ * sample ids. No delete is exposed.
  *
  * Timestamps are Unix seconds in the Library and milliseconds since the epoch
  * in the API, the one shape every Plugin sees.
@@ -31,8 +31,9 @@ import type {
   PluginContent,
   PluginNoteSummary,
 } from "@/features/plugins/types";
-import { PendingEditsFlushError } from "@/features/sync/pending-edits";
+import { PendingEditsFlushError, flushPendingEdits } from "@/features/sync/pending-edits";
 import { TutorialIdLeakError } from "@/features/tutorial/library-switch";
+import { useVersionStore } from "@/features/versions/store";
 import { getDatabase } from "@/lib/db";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
@@ -286,6 +287,37 @@ export async function updatePluginBook(input: {
     const book = await updateBookRow(input.bookId, changes, "local");
     if (!book) throw notFound("Book", input.bookId);
     return null;
+  });
+}
+
+/**
+ * Takes a Checkpoint of a Book through the normal Version path (#588). Open
+ * editors flush first, the way the close and pre-sync triggers do, so the
+ * Checkpoint holds what the author already typed; the Version Trigger is
+ * "plugin" and the label becomes the Version's name. `createVersion` dedups by
+ * checksum, so an unchanged Book comes back as a null versionId.
+ */
+export async function checkpointPluginBook(input: {
+  bookId: string;
+  label: string;
+}): Promise<{ versionId: string | null }> {
+  return libraryWrite(async () => {
+    const book = await getPluginBook(input.bookId);
+    if (!book) throw notFound("Book", input.bookId);
+    const label = input.label.trim();
+    if (label.length === 0 || label.length > 200) {
+      throw new PluginApiError({
+        code: "invalid-params",
+        message: "Give a label of 1 to 200 characters for the Checkpoint",
+      });
+    }
+    await flushPendingEdits();
+    const version = await useVersionStore.getState().createVersion({
+      bookId: input.bookId,
+      triggerType: "plugin",
+      name: label,
+    });
+    return { versionId: version?.id ?? null };
   });
 }
 

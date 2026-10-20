@@ -18,7 +18,7 @@ export const DEFAULT_VERSIONS_PAGE_SIZE = 10;
 // Trigger types that represent automatic/system-generated snapshots and are
 // subject to the retention cap. Manual stays uncapped (explicit user intent);
 // pre-restore stays uncapped (safety breadcrumbs around destructive operations).
-const PRUNABLE_TRIGGERS = ["auto-idle", "close", "pre-sync"] as const;
+const PRUNABLE_TRIGGERS = ["auto-idle", "close", "pre-sync", "plugin"] as const;
 type PrunableTrigger = (typeof PRUNABLE_TRIGGERS)[number];
 
 function isPrunable(trigger: VersionTrigger): trigger is PrunableTrigger {
