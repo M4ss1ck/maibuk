@@ -147,6 +147,12 @@ export function runNode(
   return run(process.execPath, [jsBin, ...args], cwd, env);
 }
 
+/** Maibuk's version from the checkout's `package.json`, as its Vite config reads it. */
+function appVersion(maibukRoot: string): string {
+  return (JSON.parse(readFileSync(join(maibukRoot, "package.json"), "utf8")) as { version: string })
+    .version;
+}
+
 /** The non-empty output lines of a finished program. */
 function outputLines(result: RunResult): string[] {
   return `${result.stdout}\n${result.stderr}`
@@ -219,7 +225,11 @@ export async function typecheckStep(context: PluginStepContext): Promise<StepRes
     // A Built-in typechecks under the repo's own tsconfig, so `@/` resolves
     // exactly the way the checkout resolves it, with no duplicated settings.
     const tsc = join(maibukRoot, "node_modules", "typescript", "bin", "tsc");
-    const result = await runNode(tsc, ["-p", join(maibukRoot, "tsconfig.json"), "--pretty", "false"], maibukRoot);
+    const result = await runNode(
+      tsc,
+      ["-p", join(maibukRoot, "tsconfig.json"), "--pretty", "false"],
+      maibukRoot
+    );
     if (result.code === 0) return { ok: true, details: ["tsc reported no type errors"] };
     return { ok: false, details: outputLines(result) };
   }
@@ -278,6 +288,9 @@ export async function testStep(context: PluginStepContext): Promise<StepResult> 
     {
       logLevel: "warn",
       plugins: [testFallbackResolver(maibukRoot)],
+      // The kit reaches Maibuk modules that read `__APP_VERSION__`, which
+      // Maibuk's own Vite config defines; define it the same way here.
+      define: { __APP_VERSION__: JSON.stringify(`v${appVersion(maibukRoot)}`) },
       server: { fs: { allow: [pluginRoot, maibukRoot] } },
       test: {
         root: pluginRoot,
@@ -313,7 +326,10 @@ export async function testStep(context: PluginStepContext): Promise<StepResult> 
 /** 5 boundary: the Plugin's imports against the import boundary. */
 export async function boundaryStep(context: PluginStepContext): Promise<StepResult> {
   const { pluginRoot, maibukRoot } = context;
-  const { violations } = checkImportBoundary(pluginRoot, { maibukRoot, builtIn: isBuiltIn(context) });
+  const { violations } = checkImportBoundary(pluginRoot, {
+    maibukRoot,
+    builtIn: isBuiltIn(context),
+  });
   if (violations.length === 0) return { ok: true, details: ["no refused imports"] };
   return {
     ok: false,
