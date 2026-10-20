@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CALL_BURST, createPluginBroker } from "@/features/plugins/broker";
+import {
+  CALL_BURST,
+  ENDPOINT_ANSWER_DEADLINE_MS,
+  createPluginBroker,
+} from "@/features/plugins/broker";
 import type {
   PluginApiHandlers,
   PluginBrokerOptions,
@@ -285,6 +289,95 @@ describe("endpoint requests", () => {
     broker.requestEndpoint(request(), sink.sink);
     await vi.waitFor(() => expect(sink.end).toHaveBeenCalledTimes(1));
     expect(sink.chunk).not.toHaveBeenCalled();
+  });
+
+  it("answers 500 and forgets the request when the Plugin never replies", async () => {
+    // Only the deadline is virtual: the port still delivers on its own.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { broker, port, hostPort } = setup({ declared: ["serve"] });
+      const requestId = new Promise<number>((resolve) => {
+        port.onmessage = (event) => {
+          const message = event.data as HostToPluginMessage;
+          if (message.kind === "request") resolve(message.id);
+        };
+      });
+      const sink = recordingSink();
+      broker.requestEndpoint(request(), sink.sink);
+      const id = await requestId;
+
+      vi.advanceTimersByTime(ENDPOINT_ANSWER_DEADLINE_MS);
+
+      expect(sink.respond).toHaveBeenCalledWith(500, [], undefined, false);
+      expect(sink.end).not.toHaveBeenCalled();
+
+      // The entry is gone: a late chunk or end for it is dropped.
+      vi.useRealTimers();
+      await deliver(
+        hostPort,
+        port,
+        JSON.stringify({ kind: "chunk", id, chunk: bytesToBase64(new Uint8Array([1])) })
+      );
+      await deliver(hostPort, port, JSON.stringify({ kind: "end", id }));
+      expect(sink.chunk).not.toHaveBeenCalled();
+      expect(sink.end).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the deadline once the Plugin answered", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { broker, client } = setup({ declared: ["serve"] });
+      client.onEndpointRequest(() => ({ status: 200 }));
+      const sink = recordingSink();
+      broker.requestEndpoint(request(), sink.sink);
+      await vi.waitFor(() =>
+        expect(sink.respond).toHaveBeenCalledWith(200, [], undefined, false)
+      );
+
+      vi.advanceTimersByTime(ENDPOINT_ANSWER_DEADLINE_MS);
+
+      expect(sink.respond).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops the stream when the caller hung up, ignoring its later chunks", async () => {
+    const { broker, port } = setup({ declared: ["serve"] });
+    port.onmessage = (event) => {
+      const message = event.data as HostToPluginMessage;
+      if (message.kind !== "request") return;
+      port.postMessage(
+        JSON.stringify({
+          kind: "reply",
+          id: message.id,
+          ok: true,
+          result: { status: 200, headers: [], streaming: true },
+        })
+      );
+      for (const byte of [1, 2, 3]) {
+        port.postMessage(
+          JSON.stringify({
+            kind: "chunk",
+            id: message.id,
+            chunk: bytesToBase64(new Uint8Array([byte])),
+          })
+        );
+      }
+      port.postMessage(JSON.stringify({ kind: "end", id: message.id }));
+    };
+    const chunk = vi.fn(async () => false);
+    const sink = { respond: vi.fn(), chunk, end: vi.fn() } as unknown as PluginEndpointSink;
+    broker.requestEndpoint(request(), sink);
+
+    await vi.waitFor(() => expect(chunk).toHaveBeenCalledTimes(1));
+    // Give the queued chunks and the end their turn before asserting they never land.
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+    expect(chunk).toHaveBeenCalledTimes(1);
+    expect(sink.end).not.toHaveBeenCalled();
   });
 
   it("ends the sink when the runtime stops mid-stream", async () => {

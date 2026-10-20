@@ -2,7 +2,7 @@
 
 The **Plugin Endpoint** is the local HTTP address where an outside program reaches a running Plugin: `http://127.0.0.1:<port>/plugin/<pluginId>/`. Maibuk accepts an HTTP request on that address and hands it to the Plugin its path names, and the Plugin answers it. An Agent, a script, or any other HTTP client on the same machine reaches the Plugin this way, so the Plugin needs no socket of its own.
 
-The Plugin Endpoint exists on the desktop app only, and only while an enabled Plugin holds the `serve` Plugin Permission. With no such Plugin, Maibuk binds no port at all, so a request is refused at the connection instead of answered. When the port is bound, a request never reaches a Plugin that is stopped, disabled, or without the grant: Maibuk answers it 404 itself.
+The Plugin Endpoint exists on the desktop app only, and only while an enabled Plugin holds the `serve` Plugin Permission. With no such Plugin, Maibuk unbinds the port, so a request is refused at the connection instead of answered. When the port is bound, a request never reaches the wrong Plugin: one that is disabled, holds no `serve` grant, or is not running is answered 404 by Maibuk itself.
 
 ## Requesting `serve`
 
@@ -12,7 +12,7 @@ Declare `serve` in the manifest, under `permissions.required` or `permissions.op
 "permissions": { "required": ["serve"], "optional": [] }
 ```
 
-A required entry makes the author approve `serve` to enable the Plugin. An optional entry lets the author revoke it on its own, and a revoke takes effect at once with no restart: the next request is answered 404. The endpoint is desktop only, so on Android and in the web build a Plugin that holds `serve` still runs, but no port is bound and no request arrives.
+A required entry makes the author approve `serve` to enable the Plugin. An optional entry lets the author revoke it on its own, and a revoke takes effect at once with no restart: while another enabled Plugin still holds `serve` and keeps the port bound, the next request for the revoked Plugin is answered 404; when it was the last one, Maibuk unbinds the port and the connection is refused. A Plugin that is enabled and holds `serve` keeps the port bound whether or not its Worker is running, though a request it cannot answer yet is a 404 until it runs. The endpoint is desktop only, so on Android and in the web build a Plugin that holds `serve` still runs, but no port is bound and no request arrives.
 
 ## Answering a request
 
@@ -67,7 +67,8 @@ Maibuk enforces the HTTP rules once, for every Plugin, before the Plugin sees an
 | --------------------------------------------------------------------------------------- | ------ |
 | `Host` is missing, or names anything other than `127.0.0.1:<port>` or `localhost:<port>`       | 421    |
 | `Origin` is present and is neither `http://127.0.0.1:<port>` nor `http://localhost:<port>` | 403    |
-| the path names no Plugin that is running, enabled, and holds `serve`                     | 404    |
+| the path names a Plugin that is disabled, holds no `serve` grant, or does not declare it | 404    |
+| the path names an enabled Plugin that holds `serve` but is not running                   | 404    |
 | the request body is over 4 MiB                                                           | 413    |
 
 Then, once the request reaches the Plugin:

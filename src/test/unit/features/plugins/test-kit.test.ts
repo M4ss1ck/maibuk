@@ -775,6 +775,30 @@ describe("createTestHost() endpoint", () => {
     }
   });
 
+  it("joins a multi-byte character split across streamed chunks", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      // "é" is two bytes; one chunk ends inside it.
+      const bytes = new TextEncoder().encode("é");
+      client.onEndpointRequest(() => ({
+        status: 200,
+        body: (async function* () {
+          yield bytes.slice(0, 1);
+          yield bytes.slice(1);
+        })(),
+      }));
+
+      const answer = await host.endpoint({ path: "/split" });
+
+      expect(answer.chunks.map((chunk) => Array.from(chunk))).toEqual([[195], [169]]);
+      expect(Array.from(answer.body)).toEqual(Array.from(bytes));
+      expect(answer.text()).toBe("é");
+    } finally {
+      host.stop();
+    }
+  });
+
   it("reaches the Plugin as sent: method, prefixed path, headers, and body", async () => {
     const host = createTestHost({ manifest: serveManifest() });
     try {

@@ -451,8 +451,8 @@ export interface PluginManagement {
   dataSizes: Record<string, number>;
   /**
    * The Plugin Endpoint's listener as the last `sync` reported it (#586): off,
-   * listening on a port, or a failed bind. Plugin host code writes it; Settings
-   * reads it to explain why a Plugin that serves is not reachable.
+   * listening on a port, or a failed bind. Plugin host code writes it, and a
+   * failed bind is also logged; nothing renders it yet.
    */
   endpoint: EndpointListenerState;
   /** Records the listener's latest state (#586). */

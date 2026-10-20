@@ -19,7 +19,7 @@ import { ThreadMessagePort } from "@quilted/threads";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { createPluginBroker } from "@/features/plugins/broker";
-import { dispatchEndpointRequest } from "@/features/plugins/endpoint";
+import { collectEndpointAnswer, dispatchEndpointRequest } from "@/features/plugins/endpoint";
 import { assertToggleButton } from "@/features/plugins/handlers";
 import { applyPluginLocale } from "@/features/plugins/manifest-validate";
 import { pluginFetch } from "@/features/plugins/network";
@@ -30,7 +30,6 @@ import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { PluginSecretStore } from "@/features/plugins/secret-store";
 import {
   PLUGIN_INIT_MESSAGE,
-  base64ToBytes,
   bytesToBase64,
   type PluginUiMountKind,
 } from "@/plugin-sdk/protocol";
@@ -58,17 +57,6 @@ import type {
 function inAct(step: () => void): void {
   if ((globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT) act(step);
   else step();
-}
-
-/** Joins a streamed answer's pieces into the one body the answer carries. */
-function joinBytes(pieces: readonly Uint8Array[]): Uint8Array {
-  const joined = new Uint8Array(pieces.reduce((total, piece) => total + piece.length, 0));
-  let offset = 0;
-  for (const piece of pieces) {
-    joined.set(piece, offset);
-    offset += piece.length;
-  }
-  return joined;
 }
 
 /**
@@ -272,28 +260,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
           ? new TextEncoder().encode(request.body)
           : request.body;
 
-    return new Promise((resolve) => {
-      let status = 0;
-      let answerHeaders: [string, string][] = [];
-      const chunks: Uint8Array[] = [];
-      let streamed = false;
-      let whole: Uint8Array = new Uint8Array();
-      let settled = false;
-
-      function settle() {
-        if (settled) return;
-        settled = true;
-        const body = streamed ? joinBytes(chunks) : whole;
-        resolve({
-          status,
-          headers: answerHeaders,
-          body,
-          chunks: streamed ? chunks : [],
-          streamed,
-          text: () => new TextDecoder().decode(body),
-        });
-      }
-
+    return collectEndpointAnswer((sink) =>
       dispatchEndpointRequest(
         {
           runtime: () => endpointRuntime,
@@ -309,25 +276,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
             body: bytesToBase64(bytes),
           },
         },
-        {
-          respond(nextStatus, nextHeaders, body, streaming) {
-            status = nextStatus;
-            answerHeaders = nextHeaders;
-            streamed = streaming;
-            if (streaming) return;
-            whole = body === undefined ? new Uint8Array() : base64ToBytes(body);
-            settle();
-          },
-          chunk(chunk) {
-            chunks.push(base64ToBytes(chunk));
-            return true;
-          },
-          end() {
-            settle();
-          },
-        }
-      );
-    });
+        sink
+      )
+    ).then((answer) => ({ ...answer, text: () => new TextDecoder().decode(answer.body) }));
   }
 
   /** Every page `renderPage` opened and has not unmounted yet. */

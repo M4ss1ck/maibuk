@@ -66,6 +66,13 @@ export const COMMAND_RUN_EXEMPTION_MS = 10_000;
  * burst. A shorter pause is still sustained throttling.
  */
 export const THROTTLE_GAP_MS = (CALL_BURST / CALL_RATE_PER_SECOND) * 1000;
+/**
+ * How long one Endpoint request may wait for the Plugin's answer head. The
+ * socket gives up at 30 s (#586), so a Plugin that never replies is answered
+ * 500 here and forgotten before that: an unanswered request must not sit in the
+ * map for the rest of the session.
+ */
+export const ENDPOINT_ANSWER_DEADLINE_MS = 35_000;
 
 // The SDK writes `kind`, `id`, then `method` or `event` first, so a refused
 // message can be answered, with the method named, without decoding it.
@@ -170,12 +177,15 @@ function readEndpointAnswer(value: unknown): EndpointAnswer | null {
  * the sink's calls in message order even when `sink.chunk` returns a promise
  * (the Tauri sink crosses IPC). `responded` tells a stop whether the answer
  * head already went out, so it ends the stream rather than answering 500.
+ * `deadline` is the host's own timer for the answer head; null once the head is
+ * out or the entry is gone.
  */
 interface OpenEndpoint {
   sink: PluginEndpointSink;
   responded: boolean;
   closed: boolean;
   chain: Promise<void>;
+  deadline: ReturnType<typeof setTimeout> | null;
 }
 
 export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
@@ -266,6 +276,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     for (const open of endpoints.values()) {
       if (open.closed) continue;
       open.closed = true;
+      clearDeadline(open);
       if (open.responded) open.sink.end();
       else open.sink.respond(500, [], undefined, false);
     }
@@ -351,11 +362,25 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     });
   }
 
+  function clearDeadline(open: OpenEndpoint) {
+    if (open.deadline === null) return;
+    clearTimeout(open.deadline);
+    open.deadline = null;
+  }
+
+  /** Takes an open answer out of the map for good: its deadline is cleared too. */
+  function forgetEndpoint(id: number): OpenEndpoint | undefined {
+    const open = endpoints.get(id);
+    if (!open) return undefined;
+    endpoints.delete(id);
+    clearDeadline(open);
+    return open;
+  }
+
   /** Ends an open answer once, keeping it behind any chunk already queued. */
   function closeEndpoint(id: number) {
-    const open = endpoints.get(id);
+    const open = forgetEndpoint(id);
     if (!open || open.closed) return;
-    endpoints.delete(id);
     queueEndpoint(open, () => {
       if (open.closed) return;
       open.closed = true;
@@ -363,22 +388,36 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     });
   }
 
+  /**
+   * The Plugin never answered: the caller gets a 500 and the entry is dropped,
+   * so nothing later reaches a connection that is already gone.
+   */
+  function expireEndpoint(id: number) {
+    const open = forgetEndpoint(id);
+    if (!open || open.closed) return;
+    open.closed = true;
+    open.sink.respond(500, [], undefined, false);
+  }
+
   function handleEndpointReply(id: number, ok: boolean, value: unknown) {
     const open = endpoints.get(id);
     if (!open || open.closed) return;
     const answer = ok ? readEndpointAnswer(value) : null;
     if (answer === null) {
-      endpoints.delete(id);
+      forgetEndpoint(id);
       open.closed = true;
       open.sink.respond(500, [], undefined, false);
       return;
     }
     if (answer.streaming) {
       open.responded = true;
+      // The head is out: the deadline was for the answer, not for a stream
+      // that is now the caller's to read.
+      clearDeadline(open);
       open.sink.respond(answer.status, answer.headers, undefined, true);
       return;
     }
-    endpoints.delete(id);
+    forgetEndpoint(id);
     open.closed = true;
     open.sink.respond(answer.status, answer.headers, answer.body, false);
   }
@@ -396,8 +435,10 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     queueEndpoint(open, async () => {
       if (open.closed) return;
       if ((await open.sink.chunk(chunk as string)) === false) {
+        // The caller hung up: the rest of this stream is dropped, so the Plugin
+        // cannot keep writing bytes into a closed connection.
         open.closed = true;
-        endpoints.delete(id);
+        forgetEndpoint(id);
       }
     });
   }
@@ -557,8 +598,9 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     // A reply the host is waiting for passes even while throttled: the host asked
     // for it. The same goes for an Endpoint answer's `chunk`/`end`, keyed by the
     // request the host sent. The free pass settles that request whatever the
-    // message turns out to be, so each host request buys at most one unmetered
-    // message per kind.
+    // message turns out to be, so an unanswered `command.run` buys one unmetered
+    // reply. An Endpoint answer is not one message: every `chunk` of a stream the
+    // host opened passes unmetered, bounded by the stream the Plugin itself ends.
     const awaited =
       head !== null &&
       (head.kind === "reply"
@@ -666,12 +708,15 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
         return;
       }
       const id = nextRequestId++;
-      endpoints.set(id, {
+      const open: OpenEndpoint = {
         sink,
         responded: false,
         closed: false,
         chain: Promise.resolve(),
-      });
+        deadline: null,
+      };
+      endpoints.set(id, open);
+      open.deadline = setTimeout(() => expireEndpoint(id), ENDPOINT_ANSWER_DEADLINE_MS);
       port.postMessage({
         kind: "request",
         id,

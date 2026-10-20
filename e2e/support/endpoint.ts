@@ -7,16 +7,13 @@
 // like the storage helpers: a spec asserts on the answer it returns.
 
 import type { Page } from "@playwright/test";
+import type { EndpointSeamAnswer } from "@/features/plugins/endpoint-seam";
 
-/** The answer one seam request produced. */
-export interface EndpointAnswer {
-  status: number;
-  headers: [string, string][];
-  /** The streamed pieces, decoded, in order; empty when the answer was whole. */
-  chunks: string[];
-  /** The whole body: the answer itself, or every streamed chunk joined. */
-  text: string;
-}
+/**
+ * The answer one seam request produced, as the seam declares it: one type for
+ * both sides, so the spec cannot assert a shape the app stopped producing.
+ */
+export type EndpointAnswer = EndpointSeamAnswer;
 
 interface EndpointSeamWindow {
   __maibukEndpointSeam?: (

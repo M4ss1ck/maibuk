@@ -20,9 +20,9 @@
  */
 
 import { getPluginApproval } from "@/features/plugins/approvals";
-import { dispatchEndpointRequest } from "@/features/plugins/endpoint";
+import { collectEndpointAnswer, dispatchEndpointRequest } from "@/features/plugins/endpoint";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
-import { base64ToBytes, bytesToBase64 } from "@/plugin-sdk/protocol";
+import { bytesToBase64 } from "@/plugin-sdk/protocol";
 
 /** One request the seam hands the Plugin Endpoint. */
 export interface EndpointSeamRequest {
@@ -58,31 +58,14 @@ let nextRequestId = 1;
 /**
  * Routes one request through the app's real dispatcher and resolves with the
  * whole answer: a streamed one settles on its `end`, a whole one on its reply.
+ * The text is decoded once from the whole body, and the chunks through one
+ * streaming decoder, so a character that straddles two chunks stays intact.
  */
-export function dispatchSeamEndpointRequest(
+export async function dispatchSeamEndpointRequest(
   pluginId: string,
   request: EndpointSeamRequest
 ): Promise<EndpointSeamAnswer> {
-  const decoder = new TextDecoder();
-  return new Promise((resolve) => {
-    let status = 0;
-    let headers: [string, string][] = [];
-    let streaming = false;
-    const chunks: string[] = [];
-    let whole = "";
-    let settled = false;
-
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      resolve({
-        status,
-        headers,
-        chunks: [...chunks],
-        text: streaming ? chunks.join("") : whole,
-      });
-    };
-
+  const answer = await collectEndpointAnswer((sink) => {
     dispatchEndpointRequest(
       {
         runtime: (id) => getPluginLifecycle()?.runtime(id) ?? null,
@@ -98,25 +81,16 @@ export function dispatchSeamEndpointRequest(
           body: bytesToBase64(new Uint8Array()),
         },
       },
-      {
-        respond(nextStatus, nextHeaders, body, nextStreaming) {
-          status = nextStatus;
-          headers = nextHeaders;
-          streaming = nextStreaming;
-          if (nextStreaming) return;
-          whole = body === undefined ? "" : decoder.decode(base64ToBytes(body));
-          settle();
-        },
-        chunk(chunk) {
-          chunks.push(decoder.decode(base64ToBytes(chunk)));
-          return true;
-        },
-        end() {
-          settle();
-        },
-      }
+      sink
     );
   });
+  const chunkDecoder = new TextDecoder();
+  return {
+    status: answer.status,
+    headers: answer.headers,
+    chunks: answer.chunks.map((chunk) => chunkDecoder.decode(chunk, { stream: true })),
+    text: new TextDecoder().decode(answer.body),
+  };
 }
 
 /** Puts the seam on the page. Only the E2E lane's build calls this. */
