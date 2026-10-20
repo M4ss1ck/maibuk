@@ -3,10 +3,14 @@
  * Endpoint with the MCP SDK: one fresh MCP server per request on
  * `/plugin/maibuk-mcp/mcp`, behind the Connection's Key and the Tutorial
  * refusal. Tool behavior lives in `./server`; this module owns only the
- * request path (path, Key, Tutorial, SDK bridging).
+ * request path (path, Key, Connections, Tutorial, SDK bridging).
  */
 
-import { createMcpHandler, type McpHttpHandler } from "@modelcontextprotocol/server";
+import {
+  CLIENT_INFO_META_KEY,
+  createMcpHandler,
+  type McpHttpHandler,
+} from "@modelcontextprotocol/server";
 import {
   type PluginClient,
   type PluginEndpointAnswer,
@@ -16,6 +20,19 @@ import { buildMcpServer } from "./server";
 
 /** The storage key holding the Connection's Key. */
 const KEY_STORAGE_KEY = "key";
+
+/** The storage key holding the live Connections. */
+const CONNECTIONS_STORAGE_KEY = "connections";
+
+/** How long a Connection stays live without a request, and then ends. */
+export const CONNECTION_IDLE_MS = 600_000;
+
+/**
+ * How far a live Connection's stored `lastActivityAt` may fall behind its
+ * latest request before storage is rewritten. A start and an end write at
+ * once; activity is throttled to stay under the broker's call rate.
+ */
+const CONNECTION_WRITE_MS = 60_000;
 
 /** The only Plugin Endpoint path this Plugin answers; anything else is a 404. */
 const MCP_PATH = "/plugin/maibuk-mcp/mcp";
@@ -43,11 +60,21 @@ function isLibraryUnavailable(error: unknown): boolean {
   );
 }
 
+/** Makes a fresh Key and stores it; a Library failure leaves it for the next request. */
+async function storeFreshKey(client: PluginClient): Promise<void> {
+  const fresh = makeKey();
+  try {
+    await client.storage.set({ key: KEY_STORAGE_KEY, value: fresh });
+  } catch (error) {
+    if (!isLibraryUnavailable(error)) throw error;
+  }
+}
+
 /**
  * Reads the stored Key, making one first when the Plugin was just turned on
  * (`enable`) or none is stored yet. Requests that arrive before the Key
  * exists wait on the returned promise; a Tutorial running at startup leaves
- * the Key for the per-request probe to refuse.
+ * the Key for the per-request probe to make.
  */
 async function ensureKey(client: PluginClient): Promise<void> {
   // The host posts its init message before any other host message, but the
@@ -63,12 +90,7 @@ async function ensureKey(client: PluginClient): Promise<void> {
     if (!isLibraryUnavailable(error)) throw error;
   }
   if (client.activation?.startReason === "enable" || typeof stored !== "string" || stored === "") {
-    const fresh = makeKey();
-    try {
-      await client.storage.set({ key: KEY_STORAGE_KEY, value: fresh });
-    } catch (error) {
-      if (!isLibraryUnavailable(error)) throw error;
-    }
+    await storeFreshKey(client);
   }
 }
 
@@ -81,6 +103,20 @@ function bearerKey(request: PluginEndpointRequest): string | null {
     return value.slice(prefix.length);
   }
   return null;
+}
+
+/**
+ * Whether the Agent's Key is the stored one. The comparison runs in constant
+ * time (a length check, then an XOR over every character code) so the timing
+ * of a refusal reveals nothing about how much of the Key matched.
+ */
+function keysMatch(candidate: string | null, stored: string): boolean {
+  if (candidate === null || candidate.length !== stored.length) return false;
+  let difference = 0;
+  for (let index = 0; index < stored.length; index += 1) {
+    difference |= candidate.charCodeAt(index) ^ stored.charCodeAt(index);
+  }
+  return difference === 0;
 }
 
 /** The 401 answer for a missing or old Key. */
@@ -129,6 +165,154 @@ async function fromWebResponse(response: Response): Promise<PluginEndpointAnswer
   return { status: response.status, headers, body: new Uint8Array(await response.arrayBuffer()) };
 }
 
+/** One live Connection as Plugin storage holds it, in ms since the epoch. */
+interface ConnectionRecord {
+  name: string;
+  startedAt: number;
+  lastActivityAt: number;
+}
+
+/** A live Connection: its stored record plus what tracking needs. */
+interface Connection extends ConnectionRecord {
+  /** The `lastActivityAt` the last write attempt carried, for the throttle. */
+  writtenAt: number;
+  /** The idle timer that ends this Connection. */
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+/** What one request body says about its Agent. */
+interface Caller {
+  /** The self-reported name, or null when the body names no Agent. */
+  name: string | null;
+  /** A legacy `initialize`: it opens the Connection later legacy requests borrow. */
+  initialize: boolean;
+  /** Whether the request is legacy-era, where a request without a name may borrow one. */
+  legacy: boolean;
+}
+
+/** Whether a parsed JSON value is an object (and not an array). */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** A non-blank `name` on a `{ name }` object, or null. */
+function reportedName(value: unknown): string | null {
+  if (!isRecord(value) || typeof value.name !== "string") return null;
+  const name = value.name.trim();
+  return name === "" ? null : name;
+}
+
+/**
+ * Reads the Agent's self-reported name from one request body. The body is
+ * parsed once here, before the SDK sees it, so both eras name their Connection
+ * the same way: a legacy `initialize` carries `params.clientInfo`, a modern
+ * request carries it under `_meta`; a batch or an unparsable body names none.
+ */
+function readCaller(body: string): Caller | null {
+  let message: unknown;
+  try {
+    message = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  if (!isRecord(message)) return null;
+  const params = isRecord(message.params) ? message.params : {};
+  const meta = isRecord(params._meta) ? params._meta : null;
+  const name =
+    reportedName(params.clientInfo) ??
+    (meta === null ? null : reportedName(meta[CLIENT_INFO_META_KEY]));
+  return { name, initialize: message.method === "initialize", legacy: meta === null };
+}
+
+/**
+ * Tracks the live Connections: one per Agent name, published in Plugin storage
+ * so the MCP Server page can show who is connected, and ended after
+ * `CONNECTION_IDLE_MS` without a request. Two Agents reporting the same name
+ * at once share one Connection.
+ */
+function createConnections(client: PluginClient): { count: (caller: Caller | null) => void } {
+  const live = new Map<string, Connection>();
+  /** The name of the Connection the most recent legacy `initialize` opened. */
+  let borrowed: string | null = null;
+  // Writes queue behind each other, so storage always ends on the latest list.
+  let writes: Promise<unknown> = Promise.resolve();
+
+  /** The live Connections, sorted by name, as storage holds them. */
+  function records(): ConnectionRecord[] {
+    return [...live.values()]
+      .map(({ name, startedAt, lastActivityAt }) => ({ name, startedAt, lastActivityAt }))
+      .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
+  }
+
+  /**
+   * Stores the current list, and moves the activity throttle forward so a
+   * burst of requests writes once per `CONNECTION_WRITE_MS`, not once per
+   * request. A failed write (the Tutorial) is repeated by the next one.
+   */
+  function write(): void {
+    const value = records();
+    for (const connection of live.values()) connection.writtenAt = connection.lastActivityAt;
+    writes = writes
+      .then(() => client.storage.set({ key: CONNECTIONS_STORAGE_KEY, value }))
+      .catch(() => {
+        // The Library is unavailable (the Tutorial): the next write repeats the list.
+      });
+  }
+
+  /** Ends one Connection: its idle timer ran out, so it leaves the list. */
+  function end(name: string): void {
+    const connection = live.get(name);
+    if (connection === undefined) return;
+    if (connection.timer !== null) clearTimeout(connection.timer);
+    live.delete(name);
+    if (borrowed === name) borrowed = null;
+    write();
+  }
+
+  /** Restarts a Connection's idle timer from now. */
+  function arm(connection: Connection): void {
+    if (connection.timer !== null) clearTimeout(connection.timer);
+    connection.timer = setTimeout(() => end(connection.name), CONNECTION_IDLE_MS);
+  }
+
+  /** Counts one request: opens its Connection, or moves the one it shares. */
+  function touch(name: string): void {
+    const now = Date.now();
+    const connection = live.get(name);
+    if (connection === undefined) {
+      const started: Connection = {
+        name,
+        startedAt: now,
+        lastActivityAt: now,
+        writtenAt: now,
+        timer: null,
+      };
+      live.set(name, started);
+      arm(started);
+      write();
+      return;
+    }
+    connection.lastActivityAt = now;
+    arm(connection);
+    if (now - connection.writtenAt >= CONNECTION_WRITE_MS) write();
+  }
+
+  // No Connection survives a restart: the first write replaces the old list.
+  write();
+
+  return {
+    count(caller: Caller | null): void {
+      if (caller === null) return;
+      // A legacy request after `initialize` names no Agent: it is credited to
+      // the Connection that initialize opened, while that one is still live.
+      const name = caller.name ?? (caller.legacy ? borrowed : null);
+      if (name === null) return;
+      if (caller.initialize) borrowed = name;
+      touch(name);
+    },
+  };
+}
+
 /**
  * Starts the MCP Server on the Plugin Endpoint. One fresh MCP server answers
  * every request through the SDK handler, which serves both the legacy
@@ -139,6 +323,7 @@ async function fromWebResponse(response: Response): Promise<PluginEndpointAnswer
  * The Key check runs before the Tutorial check, so a missing Key is refused
  * even while the Library is available; when the Library is unavailable the
  * stored Key cannot be read, and the Tutorial refusal is answered instead.
+ * Only a request that passes both refusals counts toward a Connection.
  */
 export function startMcp(client: PluginClient): void {
   // One factory for both eras, so the two can never drift apart.
@@ -158,6 +343,7 @@ export function startMcp(client: PluginClient): void {
     });
   // Requests that arrive before the Key exists wait for it here.
   const ready = ensureKey(client);
+  const connections = createConnections(client);
 
   client.onEndpointRequest(async (request: PluginEndpointRequest) => {
     await ready;
@@ -165,6 +351,7 @@ export function startMcp(client: PluginClient): void {
     if (pathname !== MCP_PATH) {
       return { status: 404, headers: { "content-type": "text/plain" }, body: "Not found" };
     }
+    const body = request.text();
     let stored: unknown;
     try {
       stored = await client.storage.get({ key: KEY_STORAGE_KEY });
@@ -176,12 +363,21 @@ export function startMcp(client: PluginClient): void {
       libraryAvailable = false;
       return tutorialRefusal();
     }
-    if (typeof stored !== "string" || stored === "" || bearerKey(request) !== stored) {
+    if (typeof stored !== "string" || stored === "") {
+      // The Key could not be stored at start (the Library was unavailable):
+      // make one now, so the next setup snippet works, and refuse this request,
+      // which cannot carry a Key made this moment.
+      await storeFreshKey(client);
+      return keyRefusal();
+    }
+    if (!keysMatch(bearerKey(request), stored)) {
       return keyRefusal();
     }
     if (!libraryAvailable) {
       return tutorialRefusal();
     }
+    // Only a request that passed both refusals counts toward a Connection.
+    connections.count(readCaller(body));
     return fromWebResponse(await handler.fetch(toWebRequest(request)));
   });
 }

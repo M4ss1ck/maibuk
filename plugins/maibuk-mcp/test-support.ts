@@ -37,6 +37,8 @@ export interface ConnectOptions {
   startReason?: TestHostOptions["startReason"];
   /** Resolves only with a Key different from this one (for rotation tests). */
   changedFrom?: string;
+  /** Starts with the Library unavailable, the way the Tutorial leaves it. */
+  libraryUnavailable?: boolean;
 }
 
 /** Waits until the Plugin has stored its Key, so the suite can send it back. */
@@ -49,19 +51,33 @@ async function waitForKey(storage: Map<string, unknown>, changedFrom?: string): 
   throw new Error("The MCP Key was not stored");
 }
 
-/** Starts the MCP Plugin on a test host and resolves with the host and its Key. */
-export async function connect(options: ConnectOptions = {}): Promise<{
+/**
+ * Starts the MCP Plugin on a test host and resolves with the host and its
+ * storage, without waiting for the Key: a start with the Library unavailable
+ * stores none until a request asks for one.
+ */
+export function startHost(options: ConnectOptions = {}): {
   host: TestHost;
   storage: Map<string, unknown>;
-  key: string;
-}> {
+} {
   const storage = options.storage ?? new Map<string, unknown>();
   const host = createTestHost({
     manifest: mcpManifest(),
     ...(options.startReason !== undefined ? { startReason: options.startReason } : {}),
     storage,
   });
+  if (options.libraryUnavailable === true) host.setLibraryAvailable(false);
   startMcp(createPluginClient(host.port));
+  return { host, storage };
+}
+
+/** Starts the MCP Plugin on a test host and resolves with the host and its Key. */
+export async function connect(options: ConnectOptions = {}): Promise<{
+  host: TestHost;
+  storage: Map<string, unknown>;
+  key: string;
+}> {
+  const { host, storage } = startHost(options);
   return { host, storage, key: await waitForKey(storage, options.changedFrom) };
 }
 

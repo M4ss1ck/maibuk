@@ -7,7 +7,7 @@
  * and `SERVER_INSTRUCTIONS`.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SERVER_INSTRUCTIONS } from "./server";
 import {
   answerHeader,
@@ -15,6 +15,7 @@ import {
   mcpRequest,
   modernHeaders,
   modernParams,
+  startHost,
   type McpAnswer,
 } from "./test-support";
 
@@ -32,6 +33,13 @@ function initializeBody(id: unknown = 1) {
   };
 }
 
+/** The Agent's legacy `initialize` body, self-reporting `name`. */
+function initializeFrom(name: string, id: unknown = 1) {
+  const body = initializeBody(id);
+  body.params.clientInfo.name = name;
+  return body;
+}
+
 /** The Agent's legacy `tools/list` body. */
 function toolsListBody(id: unknown = 2) {
   return { jsonrpc: "2.0", id, method: "tools/list", params: {} };
@@ -45,6 +53,16 @@ function discoverBody(id: unknown = 1) {
     method: "server/discover",
     params: modernParams(),
   };
+}
+
+/** The Agent's modern `server/discover` body, self-reporting `name` under `_meta`. */
+function discoverFrom(name: string, id: unknown = 1) {
+  const body = discoverBody(id);
+  (body.params._meta as Record<string, unknown>)["io.modelcontextprotocol/clientInfo"] = {
+    name,
+    version: "1.0.0",
+  };
+  return body;
 }
 
 /** The tools/list result the Agent sees, as name/annotation pairs. */
@@ -212,6 +230,26 @@ describe("MCP Server Key", () => {
     }
   });
 
+  it("makes a Key on the first request when none could be stored at start", async () => {
+    const { host, storage } = startHost({ libraryUnavailable: true });
+    try {
+      // Startup could not store a Key, and answers the Tutorial refusal.
+      const unavailable = await mcpRequest(host, null, initializeBody());
+      expect(unavailable.status).toBe(503);
+      expect(storage.has("key")).toBe(false);
+      host.setLibraryAvailable(true);
+      const refused = await mcpRequest(host, null, initializeBody());
+      expect(refused.status).toBe(401);
+      const key = storage.get("key");
+      expect(key).toEqual(expect.stringMatching(/^[0-9a-f]{64}$/));
+      const accepted = await mcpRequest(host, key as string, initializeBody(2));
+      expect(accepted.status).toBe(200);
+      expect(accepted.json.result.serverInfo.name).toBe("maibuk");
+    } finally {
+      host.stop();
+    }
+  });
+
   it("rotates the Key on enable: the old Key fails and the new Key works", async () => {
     const storage = new Map<string, unknown>();
     const first = await connect({ storage });
@@ -250,6 +288,197 @@ describe("MCP Server Tutorial refusal", () => {
       host.setLibraryAvailable(true);
       const after = await mcpRequest(host, key, toolsListBody());
       expect(after.status).toBe(200);
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+/** One Connection as storage holds it, in ms since the epoch. */
+interface StoredConnection {
+  name: string;
+  startedAt: number;
+  lastActivityAt: number;
+}
+
+/** The Connections the Plugin published, or none. */
+function connectionsOf(storage: Map<string, unknown>): StoredConnection[] {
+  return (storage.get("connections") as StoredConnection[] | undefined) ?? [];
+}
+
+/** The names of the live Connections, in storage order. */
+function namesOf(storage: Map<string, unknown>): string[] {
+  return connectionsOf(storage).map((connection) => connection.name);
+}
+
+const MINUTE_MS = 60_000;
+/** The fake clock every Connections test starts at. */
+const START = Date.UTC(2026, 9, 20, 9, 0, 0);
+
+/**
+ * Takes over the clock and the Connections' own timers. The port's macrotasks
+ * stay real, so a write the assertions wait on can land without moving the
+ * clock they measure (`vi.waitFor` would advance it).
+ */
+function freezeClock(at: number): void {
+  vi.useFakeTimers({
+    now: at,
+    toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"],
+  });
+}
+
+/** Waits until the Plugin's storage write lands, yielding a real macrotask per turn. */
+async function untilWritten(check: () => boolean): Promise<void> {
+  for (let turn = 0; turn < 100 && !check(); turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  if (!check()) throw new Error("The Plugin's storage write did not land");
+}
+
+describe("MCP Server Connections", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("opens a Connection named by the legacy initialize handshake", async () => {
+    const { host, storage, key } = await connect();
+    try {
+      freezeClock(START);
+      const answer = await mcpRequest(host, key, initializeFrom("Claude Code"));
+      expect(answer.status).toBe(200);
+      await untilWritten(() => connectionsOf(storage).length === 1);
+      expect(connectionsOf(storage)).toEqual([
+        { name: "Claude Code", startedAt: START, lastActivityAt: START },
+      ]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("opens a Connection named by a modern request's clientInfo meta", async () => {
+    const { host, storage, key } = await connect();
+    try {
+      freezeClock(START);
+      const answer = await mcpRequest(
+        host,
+        key,
+        discoverFrom("Codex"),
+        modernHeaders("server/discover")
+      );
+      expect(answer.status).toBe(200);
+      await untilWritten(() => connectionsOf(storage).length === 1);
+      expect(connectionsOf(storage)).toEqual([
+        { name: "Codex", startedAt: START, lastActivityAt: START },
+      ]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("ends a Connection after ten minutes without a request", async () => {
+    const { host, storage, key } = await connect();
+    try {
+      freezeClock(START);
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      await untilWritten(() => namesOf(storage).length === 1);
+      await vi.advanceTimersByTimeAsync(10 * MINUTE_MS - 1_000);
+      expect(namesOf(storage)).toEqual(["Claude Code"]);
+      await vi.advanceTimersByTimeAsync(1_001);
+      await untilWritten(() => connectionsOf(storage).length === 0);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("restarts the idle timer on every request", async () => {
+    const { host, storage, key } = await connect();
+    try {
+      freezeClock(START);
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      await untilWritten(() => namesOf(storage).length === 1);
+      await vi.advanceTimersByTimeAsync(9 * MINUTE_MS);
+      await mcpRequest(host, key, toolsListBody());
+      await untilWritten(() => connectionsOf(storage).length === 1);
+      expect(connectionsOf(storage)).toEqual([
+        { name: "Claude Code", startedAt: START, lastActivityAt: START + 9 * MINUTE_MS },
+      ]);
+      await vi.advanceTimersByTimeAsync(9 * MINUTE_MS + 59_000);
+      expect(namesOf(storage)).toEqual(["Claude Code"]);
+      await vi.advanceTimersByTimeAsync(1_001);
+      await untilWritten(() => connectionsOf(storage).length === 0);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("shares one Connection between two Agents reporting the same name, and ends it once", async () => {
+    const { host, storage, key } = await connect();
+    try {
+      freezeClock(START);
+      await mcpRequest(host, key, initializeFrom("Codex", 1));
+      await untilWritten(() => namesOf(storage).length === 1);
+      await vi.advanceTimersByTimeAsync(2 * MINUTE_MS);
+      await mcpRequest(host, key, initializeFrom("Codex", 2));
+      await untilWritten(() => connectionsOf(storage)[0]?.lastActivityAt === START + 2 * MINUTE_MS);
+      expect(connectionsOf(storage)).toEqual([
+        { name: "Codex", startedAt: START, lastActivityAt: START + 2 * MINUTE_MS },
+      ]);
+      await vi.advanceTimersByTimeAsync(10 * MINUTE_MS - 1);
+      expect(namesOf(storage)).toEqual(["Codex"]);
+      await vi.advanceTimersByTimeAsync(2);
+      await untilWritten(() => connectionsOf(storage).length === 0);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("opens no Connection for a refused request", async () => {
+    const { host, storage } = await connect();
+    try {
+      freezeClock(START);
+      // The start's own empty list lands first, so the assertion below is about
+      // what the refused request did, not about the write it raced.
+      await untilWritten(() => storage.has("connections"));
+      const refused = await mcpRequest(host, "0".repeat(64), initializeFrom("Mallory"));
+      expect(refused.status).toBe(401);
+      expect(connectionsOf(storage)).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("keeps the initialize's Connection alive on a legacy follow-up without a name", async () => {
+    const { host, storage, key } = await connect();
+    try {
+      freezeClock(START);
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      await untilWritten(() => namesOf(storage).length === 1);
+      await vi.advanceTimersByTimeAsync(9 * MINUTE_MS);
+      const followUp = await mcpRequest(host, key, toolsListBody());
+      expect(followUp.status).toBe(200);
+      await untilWritten(() => connectionsOf(storage).length === 1);
+      expect(connectionsOf(storage)).toEqual([
+        { name: "Claude Code", startedAt: START, lastActivityAt: START + 9 * MINUTE_MS },
+      ]);
+      await vi.advanceTimersByTimeAsync(9 * MINUTE_MS + 59_000);
+      expect(namesOf(storage)).toEqual(["Claude Code"]);
+      await vi.advanceTimersByTimeAsync(1_001);
+      await untilWritten(() => connectionsOf(storage).length === 0);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("credits a legacy follow-up to no Connection once the initialize's one has ended", async () => {
+    const { host, storage, key } = await connect();
+    try {
+      freezeClock(START);
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      await untilWritten(() => namesOf(storage).length === 1);
+      await vi.advanceTimersByTimeAsync(10 * MINUTE_MS + 1_000);
+      await untilWritten(() => connectionsOf(storage).length === 0);
+      await mcpRequest(host, key, toolsListBody());
+      expect(connectionsOf(storage)).toEqual([]);
     } finally {
       host.stop();
     }
