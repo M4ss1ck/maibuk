@@ -5,7 +5,7 @@
   "description": "Let outside AI tools read and change the Library through the Model Context Protocol.",
   "author": "Maibuk",
   "version": "0.1.0",
-  "apiVersion": "^0.1.2",
+  "apiVersion": "^0.1.7",
   "entry": "index.js",
   "platforms": ["desktop"],
   "lifecycle": "persistent",

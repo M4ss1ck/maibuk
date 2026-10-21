@@ -1,6 +1,8 @@
 /**
- * The `list_notes` tool for the maibuk-mcp Plugin: a paged, filtered list of
- * Notes. Pure-ish handler over a `PluginClient`, like `list_books`.
+ * The Note tools for the maibuk-mcp Plugin: `list_notes` and `read_note`, plus
+ * `write_note`, which creates a Note in a Book or as an Unfiled Note, or
+ * replaces one Note's whole content, title, Tags, and Book. Pure-ish handlers
+ * over a `PluginClient`, like `list_books`.
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
@@ -8,6 +10,7 @@ import type { PluginClient } from "@/plugin-sdk";
 import {
   errorResult,
   excerptOf,
+  isConflict,
   isoDate,
   libraryCall,
   pageLines,
@@ -17,6 +20,7 @@ import {
   titleOrUntitled,
 } from "./library";
 import { bookLine } from "./books";
+import type { WriteGuard } from "./edits";
 
 export interface ListNotesArgs {
   book?: string;
@@ -27,6 +31,7 @@ export interface ListNotesArgs {
 }
 
 type NoteRow = Awaited<ReturnType<PluginClient["library"]["notes"]["list"]>>[number];
+type FullNote = NonNullable<Awaited<ReturnType<PluginClient["library"]["notes"]["get"]>>>;
 
 function noteLine(note: NoteRow, allIds: readonly string[]): string {
   const sid = shortId(note.id, allIds);
@@ -107,6 +112,245 @@ export async function readNote(client: PluginClient, args: ReadNoteArgs): Promis
       content: [
         { type: "text", text: header },
         { type: "text", text: windowed.window },
+      ],
+    };
+  });
+}
+
+/** Arguments for `write_note`: replace mode names `note`, create mode names `book` or none. */
+export interface WriteNoteArgs {
+  note?: string;
+  book?: string | null;
+  title?: string;
+  expectedLastEdited?: string;
+  text?: string;
+  html?: string;
+  tags?: string[];
+}
+
+function changedSinceMessage(lastEdited: string): string {
+  return `The Note changed since you read it (Last Edited is now ${lastEdited}); call read_note again and redo the change.`;
+}
+
+/** The Note an Agent named, by full id or an 8+ character prefix. */
+async function resolveNote(
+  client: PluginClient,
+  ref: string,
+  tool: string
+): Promise<{ full: FullNote } | { result: CallToolResult }> {
+  const notes = await client.library.notes.list();
+  const allIds = notes.map((note) => note.id);
+
+  const resolved = resolveRef({
+    ref,
+    rows: notes,
+    noun: "Note",
+    listTool: "list_notes",
+    tool,
+    line: (note) => noteLine(note, allIds),
+  });
+  if ("result" in resolved) return resolved;
+
+  const full = await client.library.notes.get({ noteId: resolved.row.id });
+  if (!full) {
+    return { result: errorResult(`No Note has the id ${ref}; call list_notes to see the Notes.`) };
+  }
+  return { full };
+}
+
+/** The Book an Agent named as a Note's place, or null for an Unfiled Note. */
+async function resolveBook(
+  client: PluginClient,
+  ref: string,
+  tool: string
+): Promise<{ bookId: string; bookTitle: string } | { result: CallToolResult }> {
+  const books = await client.library.books.list();
+  const allBookIds = books.map((book) => book.id);
+  const resolved = resolveRef({
+    ref: ref.trim(),
+    rows: books,
+    noun: "Book",
+    listTool: "list_books",
+    tool,
+    line: (book) => bookLine(book, allBookIds),
+  });
+  if ("result" in resolved) return resolved;
+  return { bookId: resolved.row.id, bookTitle: resolved.row.title };
+}
+
+/**
+ * Creates a Note in a Book or as an Unfiled Note, or replaces one Note's whole
+ * content, title, Tags, and Book. Mirrors `write_chapter`: a replace needs
+ * `expectedLastEdited` from `read_note`, every Book the write touches takes its
+ * Checkpoint first, and an Unfiled Note touches none.
+ */
+export async function writeNote(
+  client: PluginClient,
+  args: WriteNoteArgs,
+  writeGuard: WriteGuard
+): Promise<CallToolResult> {
+  const hasNote = args.note !== undefined;
+
+  if (args.text !== undefined && args.html !== undefined) {
+    return errorResult(
+      "Give the new content as text or as html, not both; call write_note again with only one of them."
+    );
+  }
+  if (args.title !== undefined && args.title.trim().length > 500) {
+    return errorResult(
+      "A title can be at most 500 characters; call write_note with a shorter one."
+    );
+  }
+
+  if (!hasNote) {
+    if (args.expectedLastEdited !== undefined) {
+      return errorResult(
+        "expectedLastEdited is only for replacing a Note's content; to create, call write_note with title and no expectedLastEdited."
+      );
+    }
+
+    const title = args.title === undefined ? "" : args.title.trim();
+    const bookRef = args.book ?? null;
+
+    return libraryCall(async () => {
+      let bookId: string | null = null;
+      let bookTitle = "";
+      if (bookRef !== null) {
+        const resolved = await resolveBook(client, bookRef, "write_note");
+        if ("result" in resolved) return resolved.result;
+        bookId = resolved.bookId;
+        bookTitle = resolved.bookTitle;
+      }
+
+      // After all validation and the Book resolve, before the create: a
+      // refused create takes no Checkpoint, and a failed Checkpoint refuses it.
+      if (bookId !== null) {
+        const checkpoint = await writeGuard.ensureCheckpoint(bookId);
+        if (checkpoint !== null) return checkpoint;
+      }
+
+      const { noteId: newId } = await client.library.notes.create({
+        title,
+        ...(bookId === null ? {} : { bookId }),
+        ...(args.text !== undefined
+          ? { content: { text: args.text } }
+          : args.html !== undefined
+            ? { content: { html: args.html } }
+            : {}),
+      });
+
+      // The Note write path creates with no Tags, so a create that names them
+      // sets them through the same update a replace uses.
+      if (args.tags !== undefined) {
+        await client.library.notes.update({ noteId: newId, tags: args.tags });
+      }
+
+      const stored = await client.library.notes.get({ noteId: newId });
+      const allIds = (await client.library.notes.list()).map((note) => note.id);
+      const lastEdited = new Date(stored?.updatedAt ?? Date.now()).toISOString();
+      const place =
+        bookId === null ? "as an Unfiled Note" : `in Book ${titleOrUntitled(bookTitle)}`;
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created Note ${titleOrUntitled(title)} ${place}; its id is ${shortId(newId, allIds)}.\nLast Edited: ${lastEdited}`,
+          },
+        ],
+      };
+    });
+  }
+
+  if (args.expectedLastEdited === undefined) {
+    return errorResult(
+      "Give expectedLastEdited from read_note; call read_note first to get Last Edited."
+    );
+  }
+  const wantsChange =
+    args.text !== undefined ||
+    args.html !== undefined ||
+    args.title !== undefined ||
+    args.tags !== undefined ||
+    args.book !== undefined;
+  if (!wantsChange) {
+    return errorResult(
+      "Give text or html content, a title, Tags, or a Book to change the Note; call read_note to see it."
+    );
+  }
+  const expectedLastEdited = args.expectedLastEdited;
+
+  return libraryCall(async () => {
+    const resolved = await resolveNote(client, (args.note as string).trim(), "write_note");
+    if ("result" in resolved) return resolved.result;
+
+    const full = resolved.full;
+
+    const current = new Date(full.updatedAt).toISOString();
+    if (expectedLastEdited.trim() !== current) {
+      return errorResult(changedSinceMessage(current));
+    }
+
+    // The Note's place after the write: its Book unchanged, the named Book, or
+    // null for Unfiled.
+    let destinationId = full.bookId;
+    let destinationTitle = "";
+    if (args.book === null) {
+      destinationId = null;
+    } else if (args.book !== undefined) {
+      const destination = await resolveBook(client, args.book, "write_note");
+      if ("result" in destination) return destination.result;
+      destinationId = destination.bookId;
+      destinationTitle = destination.bookTitle;
+    }
+    const moved = destinationId !== full.bookId;
+
+    // After the expectedLastEdited check and the destination resolve, before
+    // the write: a move touches the Book the Note leaves and the Book it joins,
+    // each once, and an Unfiled Note touches none.
+    const touched = new Set(
+      [full.bookId, destinationId].filter((bookId): bookId is string => bookId !== null)
+    );
+    for (const bookId of touched) {
+      const checkpoint = await writeGuard.ensureCheckpoint(bookId);
+      if (checkpoint !== null) return checkpoint;
+    }
+
+    const title = args.title === undefined ? undefined : args.title.trim();
+    try {
+      await client.library.notes.update({
+        noteId: full.id,
+        ...(args.text !== undefined
+          ? { content: { text: args.text } }
+          : args.html !== undefined
+            ? { content: { html: args.html } }
+            : {}),
+        ...(title === undefined ? {} : { title }),
+        ...(args.tags === undefined ? {} : { tags: args.tags }),
+        ...(args.book === undefined ? {} : { bookId: destinationId }),
+        expectedUpdatedAt: full.updatedAt,
+      });
+    } catch (error) {
+      if (!isConflict(error)) throw error;
+      const fresh = await client.library.notes.get({ noteId: full.id });
+      const freshLastEdited = new Date((fresh ?? full).updatedAt).toISOString();
+      return errorResult(changedSinceMessage(freshLastEdited));
+    }
+
+    const stored = await client.library.notes.get({ noteId: full.id });
+    const newTitle = title ?? full.title;
+    const place = moved
+      ? destinationId === null
+        ? " It is now an Unfiled Note."
+        : ` It is now in Book ${titleOrUntitled(destinationTitle)}.`
+      : "";
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Replaced the whole of Note ${titleOrUntitled(newTitle)}.${place}\nLast Edited: ${new Date(
+            (stored ?? full).updatedAt
+          ).toISOString()}`,
+        },
       ],
     };
   });

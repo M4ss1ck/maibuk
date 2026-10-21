@@ -11,7 +11,7 @@ import type { PluginClient } from "@/plugin-sdk";
 import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
 import { editChapter, writeChapter, type WriteGuard } from "./edits";
-import { listNotes, readNote } from "./notes";
+import { listNotes, readNote, writeNote } from "./notes";
 import {
   BOOK_STATUSES,
   CHAPTER_STATUSES,
@@ -276,6 +276,43 @@ export function buildMcpServer(
         },
       },
       async (args) => updateBook(client, args as any, writeGuard)
+    );
+    server.registerTool(
+      "write_note",
+      {
+        title: "Write note",
+        description:
+          "Replace a Note's whole content, title, Tags, or Book with note and expectedLastEdited from read_note, or create a Note with title, Tags, and optional content in a Book, or as an Unfiled Note when book is null or absent, as text (the host makes paragraphs) or html (the host sanitizes it). A replace is refused if the Note changed since it was read.",
+        inputSchema: z.object({
+          note: z
+            .string()
+            .min(8)
+            .optional()
+            .describe("The Note to replace; replace mode needs this with expectedLastEdited."),
+          book: z
+            .string()
+            .nullable()
+            .optional()
+            .describe(
+              "The Book to create the Note in, or to move it to; null or absent creates an Unfiled Note, and null on a replace moves it to Unfiled."
+            ),
+          title: z.string().optional().describe("The Note's title."),
+          expectedLastEdited: z.string().optional(),
+          text: z.string().optional(),
+          html: z.string().optional(),
+          tags: z
+            .array(z.string())
+            .optional()
+            .describe("The Tags to set, replacing the Note's own."),
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async (args) => writeNote(client, args as any, writeGuard)
     );
   }
   return server;

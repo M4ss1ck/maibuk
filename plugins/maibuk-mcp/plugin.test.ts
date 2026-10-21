@@ -115,6 +115,7 @@ describe("MCP Server protocol", () => {
         "write_chapter",
         "manage_chapter",
         "update_book",
+        "write_note",
       ]);
     } finally {
       host.stop();
@@ -230,6 +231,15 @@ describe("MCP Server protocol", () => {
               "readOnlyHint": false,
             },
             "name": "update_book",
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+            },
+            "name": "write_note",
           },
         ]
       `);
@@ -681,6 +691,7 @@ describe("MCP Server read-only mode", () => {
         "write_chapter",
         "manage_chapter",
         "update_book",
+        "write_note",
       ]);
 
       host.setGranted(["serve", "library:read"]);
@@ -708,6 +719,7 @@ describe("MCP Server read-only mode", () => {
           "write_chapter",
           "manage_chapter",
           "update_book",
+          "write_note",
         ]);
       });
     } finally {
@@ -754,6 +766,32 @@ describe("MCP Server read-only mode", () => {
       expect(refused(reread)).toBe(false);
       const blocks = reread.json.result.content.map((block: any) => block.text).join("\n");
       expect(blocks).toContain("Alpha body.");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses write_note while read-only as an unknown tool", async () => {
+    const library = readOnlyLibrary();
+    const { host, key } = await connect({ library });
+    try {
+      host.setGranted(["serve", "library:read"]);
+      await vi.waitFor(async () => {
+        const listed = await mcpRequest(host, key, toolsListBody(3));
+        expect(listed.json.result.tools.map((tool: any) => tool.name)).not.toContain("write_note");
+      });
+
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCallBody("write_note", { book: "bookalpha1", title: "Ideas" }, 4)
+      );
+      expect(answer.json).toEqual({
+        jsonrpc: "2.0",
+        id: 4,
+        error: { code: -32602, message: "Tool write_note not found" },
+      });
+      expect(host.checkpoints).toEqual([]);
     } finally {
       host.stop();
     }
