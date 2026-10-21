@@ -18,6 +18,7 @@ import type { RemoteMutationRecord } from "@remote-dom/core";
 import { ThreadMessagePort } from "@quilted/threads";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
+import { countWords } from "@/features/metrics/word-count";
 import { createPluginBroker } from "@/features/plugins/broker";
 import {
   collectEndpointAnswer,
@@ -103,6 +104,17 @@ function chapterNotFound(chapterId: string): PluginApiError {
   });
 }
 
+/**
+ * The refusal the app's handler gives for a Book no row holds, so a test sees
+ * the same error the real Library write produces.
+ */
+function bookNotFound(bookId: string): PluginApiError {
+  return new PluginApiError({
+    code: "invalid-params",
+    message: `Book ${bookId} does not exist`,
+  });
+}
+
 export function createTestHost(options: TestHostOptions): TestHost {
   const channel = new MessageChannel();
   const notifications: TestNotification[] = [];
@@ -122,6 +134,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const unchangedBooks = new Set<string>();
   const pendingEdits = new Map<string, string>();
   let nextVersion = 1;
+  let nextCreatedChapter = 1;
   const storage = options.storage ?? new Map<string, unknown>();
   const secrets = options.secrets ?? new Map<string, string>();
   const testFetch = options.fetch;
@@ -148,6 +161,37 @@ export function createTestHost(options: TestHostOptions): TestHost {
     }
     pendingEdits.clear();
     return changed;
+  }
+
+  /** The Book's Chapters in stored order: the sequence a position or a reorder names. */
+  function chapterOrder(bookId: string): string[] {
+    return chapters
+      .filter((chapter) => chapter.bookId === bookId)
+      .sort((a, b) => a.order - b.order)
+      .map((chapter) => chapter.id);
+  }
+
+  /** Moves one row's Last Edited forward, the way the row writer stamps it. */
+  function stampRow(row: { updatedAt: number }): void {
+    row.updatedAt = Math.max(Date.now(), row.updatedAt + 1);
+  }
+
+  /** Writes a Book's new Chapter order the way the row writer does: 0-based. */
+  function applyChapterOrder(bookId: string, chapterIds: readonly string[]): void {
+    for (const [index, chapterId] of chapterIds.entries()) {
+      const chapter = chapters.find((entry) => entry.id === chapterId && entry.bookId === bookId);
+      if (chapter === undefined) continue;
+      chapter.order = index;
+      stampRow(chapter);
+    }
+    unchangedBooks.delete(bookId);
+  }
+
+  /** Moves a Book's Last Edited and marks it changed for the Version path. */
+  function touchBook(bookId: string): void {
+    const book = books.find((entry) => entry.id === bookId);
+    if (book !== undefined) stampRow(book);
+    unchangedBooks.delete(bookId);
   }
   // The Plugin Endpoint's listener as this host fakes it: off until the test
   // gives the Plugin an address, then bound on that port.
@@ -194,9 +238,32 @@ export function createTestHost(options: TestHostOptions): TestHost {
     },
     "library.books.list": () => books,
     "library.books.get": ({ bookId }) => books.find((book) => book.id === bookId) ?? null,
+    // The Book field write (#592): a null Genre or Target Word Count clears it,
+    // and a call naming no field is refused before anything is touched.
+    "library.books.update": ({ bookId, title, authorName, genre, status, targetWordCount }) => {
+      const changes = {
+        ...(title === undefined ? {} : { title }),
+        ...(authorName === undefined ? {} : { authorName }),
+        ...(genre === undefined ? {} : { genre }),
+        ...(status === undefined ? {} : { status }),
+        ...(targetWordCount === undefined ? {} : { targetWordCount }),
+      };
+      if (Object.keys(changes).length === 0) {
+        throw new PluginApiError({
+          code: "invalid-params",
+          message: "Give at least one Book field to update",
+        });
+      }
+      const book = books.find((entry) => entry.id === bookId);
+      if (book === undefined) throw bookNotFound(bookId);
+      Object.assign(book, changes);
+      touchBook(bookId);
+      return null;
+    },
     "library.chapters.list": ({ bookId }) =>
       chapters
         .filter((chapter) => chapter.bookId === bookId)
+        .sort((a, b) => a.order - b.order)
         .map(({ content: _content, ...summary }) => summary),
     "library.chapters.get": ({ chapterId }) => {
       const chapter = chapters.find((entry) => entry.id === chapterId);
@@ -226,6 +293,98 @@ export function createTestHost(options: TestHostOptions): TestHost {
       // writes land in the same millisecond.
       chapter.updatedAt = Math.max(Date.now(), chapter.updatedAt + 1);
       unchangedBooks.delete(chapter.bookId);
+      return null;
+    },
+    // The remaining Chapter writes (#592): create, delete, reorder, and the
+    // title/Chapter Type/Chapter Status update, each through the same rules the
+    // app's handlers apply, so a test asserts the Library state they produced.
+    "library.chapters.create": ({ bookId, title, position, content }) => {
+      if (!books.some((entry) => entry.id === bookId)) throw bookNotFound(bookId);
+      const before = chapterOrder(bookId);
+      if (position !== undefined && (position < 0 || position > before.length)) {
+        throw new PluginApiError({
+          code: "invalid-params",
+          message: `position ${position} is outside 0 to ${before.length} for Book ${bookId}`,
+        });
+      }
+      const html = content === undefined ? undefined : fragmentToHtml(content);
+      const chapterId = `chapter-created-${nextCreatedChapter}`;
+      nextCreatedChapter += 1;
+      const nextOrder = chapters
+        .filter((chapter) => chapter.bookId === bookId)
+        .reduce((max, chapter) => Math.max(max, chapter.order), -1) + 1;
+      chapters.push({
+        id: chapterId,
+        bookId,
+        title,
+        order: nextOrder,
+        parentId: null,
+        chapterType: "chapter",
+        wordCount: html === undefined ? 0 : countWords(htmlToPlainText(html)),
+        status: "draft",
+        updatedAt: Date.now(),
+        ...(html === undefined
+          ? {}
+          : { content: { html, text: htmlToPlainText(html) } }),
+      });
+      // The row is appended, then the Book is put in the requested order, the
+      // create-then-reorder pair the app uses to insert one.
+      const ids = chapterOrder(bookId);
+      const from = ids.indexOf(chapterId);
+      if (from !== position && position !== undefined) {
+        ids.splice(from, 1);
+        ids.splice(position, 0, chapterId);
+        applyChapterOrder(bookId, ids);
+      }
+      touchBook(bookId);
+      return { chapterId };
+    },
+    "library.chapters.delete": ({ chapterId }) => {
+      const index = chapters.findIndex((entry) => entry.id === chapterId);
+      if (index === -1) throw chapterNotFound(chapterId);
+      const [removed] = chapters.splice(index, 1);
+      pendingEdits.delete(chapterId);
+      touchBook(removed.bookId);
+      return null;
+    },
+    "library.chapters.reorder": ({ bookId, chapterIds }) => {
+      if (!books.some((entry) => entry.id === bookId)) throw bookNotFound(bookId);
+      const stored = chapterOrder(bookId);
+      const given = chapterIds;
+      const exact =
+        given.length === stored.length &&
+        new Set(given).size === given.length &&
+        stored.every((chapterId) => given.includes(chapterId));
+      if (!exact) {
+        throw new PluginApiError({
+          code: "invalid-params",
+          message: `chapterIds must be exactly the ${stored.length} Chapters of Book ${bookId}, in the new order`,
+        });
+      }
+      applyChapterOrder(bookId, given);
+      return null;
+    },
+    "library.chapters.update": ({ chapterId, title, chapterType, status }) => {
+      const changes = {
+        ...(title === undefined ? {} : { title }),
+        ...(chapterType === undefined ? {} : { chapterType }),
+        ...(status === undefined ? {} : { status }),
+      };
+      if (Object.keys(changes).length === 0) {
+        throw new PluginApiError({
+          code: "invalid-params",
+          message: "Give at least one Chapter field to update",
+        });
+      }
+      const chapter = chapters.find((entry) => entry.id === chapterId);
+      if (chapter === undefined) throw chapterNotFound(chapterId);
+      const titleChanged = title !== undefined && title !== chapter.title;
+      Object.assign(chapter, changes);
+      stampRow(chapter);
+      // A title is Book content, so it moves the Book's Last Edited; every
+      // Chapter write marks the Book changed for the Version path.
+      if (titleChanged) touchBook(chapter.bookId);
+      else unchangedBooks.delete(chapter.bookId);
       return null;
     },
     "library.books.checkpoint": ({ bookId, label }) => {

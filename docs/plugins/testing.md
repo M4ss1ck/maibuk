@@ -6,7 +6,7 @@ A Plugin tests itself with the kit `@maibuk/plugin-test-kit`, the supported entr
 
 - The broker: the same broker the app uses, with this Plugin's declared and granted Plugin Permissions.
 - The method table: the same handlers the app wires, over an in-memory Library, storage, secrets, clipboard, and navigation.
-- Library writes: `library.chapters.updateContent` and `library.books.checkpoint` change the in-memory Library through the host's own content conversion, so a test asserts the stored HTML a write produced; `host.checkpoints` lists the Checkpoints taken, and a Book unchanged since its last one gets none.
+- Library writes: `library.chapters.updateContent`, `library.chapters.create`, `library.chapters.update`, `library.chapters.delete`, `library.chapters.reorder`, `library.books.update`, and `library.books.checkpoint` change the in-memory Library through the host's own content conversion, so a test asserts the stored HTML, title, Chapter Type, Chapter Status, or order a write produced; a deleted Chapter is gone from `library.chapters.list` and `get`; `host.checkpoints` lists the Checkpoints taken, and a Book unchanged since its last one gets none.
 - The Plugin Endpoint: `endpoint()` reads the `serve` grant the way the app does, so a request without it is answered 404, a Plugin with no handler answers 404, and a throwing handler answers 500.
 - The Plugin Endpoint address: `setEndpointAddress()` fakes the bound port, so `endpoint.address` and `endpoint.addressChanged` behave as they do in the app.
 - The host renderer: `renderPage(pageId)` and `renderSettingsRow(rowId)` mount the page or Settings row the way the app does, and the records the host keeps (notifications, navigations, page navigations, toolbar pressed state) are what the test asserts against.
@@ -28,6 +28,8 @@ The grant is read live, exactly as in the app. `host.setGranted([])` makes the s
 `host.setEndpointAddress(port)` fakes the listener bound on that port, as if Maibuk had picked it; `host.setEndpointAddress(null)` turns it off. A Plugin holding `serve` reads it with `client.endpoint.address()` and hears a move through `client.on("endpoint.addressChanged", listener)`, which delivers the current address on subscription. Setting the same address again fires nothing, so a test can prove a Plugin notices only real moves. Both are refused with `permission-denied` without the `serve` grant, like the read and the subscription in the app.
 
 ## Library writes and the open editor
+
+Every Chapter and Book write the Plugin API exposes changes the in-memory Library the reads serve, with the app's own rules: `chapters.create` appends then moves to its 0-based `position` (later Chapters shift), `chapters.reorder` refuses ids that are not exactly the Book's Chapters, `chapters.update` refuses an unknown id or a call naming no field, and a title change moves the Book's Last Edited. `books.update` clears a null Genre or Target Word Count.
 
 `host.setPendingEdit(chapterId, html)` records unsaved author typing in an open editor; the next Chapter write or Checkpoint flushes it first, like the app does. An `updateContent` call with `expectedUpdatedAt` is refused with `conflict` when that flush landed typing in the Chapter or the Chapter changed since the read, so a test proves a Plugin never overwrites the author's typing.
 

@@ -1347,4 +1347,278 @@ describe("createTestHost() Library writes", () => {
       host.stop();
     }
   });
+
+  // #592: the Chapter field, ordering, create, and delete writes, plus the Book
+  // field write, so a Plugin test drives every write the MCP Server exposes.
+  function orderedLibrary() {
+    const books = [{ ...BOOK }];
+    const chapters = ["c1", "c2", "c3"].map((id, index) => ({
+      ...chapterFixture(),
+      id,
+      title: id,
+      order: index,
+      updatedAt: 1_000 + index,
+    }));
+    return { books, chapters };
+  }
+
+  function orderedHost() {
+    const library = orderedLibrary();
+    const host = createTestHost({
+      manifest: writeManifest(),
+      permissions: ["library:read", "library:write"],
+      library,
+    });
+    return { host, ...library };
+  }
+
+  it("updates a Chapter's title, Chapter Type, and Chapter Status, moving Last Edited", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+      await expect(
+        client.library.chapters.update({
+          chapterId: "c1",
+          title: "Renamed",
+          chapterType: "prologue",
+          status: "final",
+        })
+      ).resolves.toBeNull();
+
+      expect(chapter).toMatchObject({ title: "Renamed", chapterType: "prologue", status: "final" });
+      expect(chapter.updatedAt).toBeGreaterThan(1_000);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a Chapter update naming no field and an unknown Chapter, changing nothing", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.library.chapters.update({ chapterId: "c1" })).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Give at least one Chapter field to update",
+      });
+      await expect(
+        client.library.chapters.update({ chapterId: "absent", title: "Renamed" })
+      ).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Chapter absent does not exist",
+      });
+      expect(chapter.title).toBe("One");
+      expect(chapter.updatedAt).toBe(1_000);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("reorders a Book's Chapters to the given ids", async () => {
+    const { host, chapters } = orderedHost();
+    try {
+      const client = createPluginClient(host.port);
+      await expect(
+        client.library.chapters.reorder({ bookId: "b1", chapterIds: ["c3", "c1", "c2"] })
+      ).resolves.toBeNull();
+
+      await expect(client.library.chapters.list({ bookId: "b1" })).resolves.toMatchObject([
+        { id: "c3", order: 0 },
+        { id: "c1", order: 1 },
+        { id: "c2", order: 2 },
+      ]);
+      expect(chapters.map((chapter) => chapter.order)).toEqual([1, 2, 0]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a reorder with a missing, extra, or duplicate id, and an unknown Book", async () => {
+    const { host, chapters } = orderedHost();
+    try {
+      const client = createPluginClient(host.port);
+      const before = chapters.map((chapter) => chapter.order);
+      for (const chapterIds of [
+        ["c1", "c2"],
+        ["c1", "c2", "c3", "absent"],
+        ["c1", "c2", "c2"],
+      ]) {
+        await expect(client.library.chapters.reorder({ bookId: "b1", chapterIds })).rejects
+          .toMatchObject({ code: "invalid-params" });
+      }
+      await expect(
+        client.library.chapters.reorder({ bookId: "absent", chapterIds: ["c1", "c2", "c3"] })
+      ).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Book absent does not exist",
+      });
+      expect(chapters.map((chapter) => chapter.order)).toEqual(before);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates a Chapter at its 0-based position, shifting the later ones", async () => {
+    const { host } = orderedHost();
+    try {
+      const client = createPluginClient(host.port);
+      const { chapterId } = await client.library.chapters.create({
+        bookId: "b1",
+        title: "Inserted",
+        position: 1,
+        content: { text: "Two words" },
+      });
+
+      await expect(client.library.chapters.list({ bookId: "b1" })).resolves.toMatchObject([
+        { id: "c1", order: 0 },
+        { id: chapterId, title: "Inserted", order: 1, wordCount: 2 },
+        { id: "c2", order: 2 },
+        { id: "c3", order: 3 },
+      ]);
+      await expect(client.library.chapters.get({ chapterId })).resolves.toMatchObject({
+        content: { text: "Two words", html: "<p>Two words</p>" },
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates a Chapter at the end when position is omitted", async () => {
+    const { host } = orderedHost();
+    try {
+      const client = createPluginClient(host.port);
+      const { chapterId } = await client.library.chapters.create({
+        bookId: "b1",
+        title: "Last",
+      });
+
+      await expect(client.library.chapters.list({ bookId: "b1" })).resolves.toMatchObject([
+        { id: "c1", order: 0 },
+        { id: "c2", order: 1 },
+        { id: "c3", order: 2 },
+        { id: chapterId, order: 3 },
+      ]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a create past the Book's Chapter count and an unknown Book, adding no row", async () => {
+    const { host } = orderedHost();
+    try {
+      const client = createPluginClient(host.port);
+      await expect(
+        client.library.chapters.create({ bookId: "b1", title: "Too far", position: 4 })
+      ).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "position 4 is outside 0 to 3 for Book b1",
+      });
+      await expect(
+        client.library.chapters.create({ bookId: "absent", title: "Nowhere" })
+      ).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Book absent does not exist",
+      });
+      await expect(client.library.chapters.list({ bookId: "b1" })).resolves.toHaveLength(3);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("deletes a Chapter, so the reads no longer serve it", async () => {
+    const { host } = orderedHost();
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.library.chapters.delete({ chapterId: "c2" })).resolves.toBeNull();
+
+      await expect(client.library.chapters.get({ chapterId: "c2" })).resolves.toBeNull();
+      await expect(client.library.chapters.list({ bookId: "b1" })).resolves.toMatchObject([
+        { id: "c1" },
+        { id: "c3" },
+      ]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a delete of an unknown Chapter, leaving the Book alone", async () => {
+    const { host } = orderedHost();
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.library.chapters.delete({ chapterId: "absent" })).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Chapter absent does not exist",
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("updates Book fields, and a null Genre or Target Word Count clears it", async () => {
+    const book = { ...BOOK, genre: "Sci-fi", targetWordCount: 500 };
+    const host = createTestHost({
+      manifest: writeManifest(),
+      permissions: ["library:read", "library:write"],
+      library: { books: [book] },
+    });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.library.books.update({ bookId: "b1", title: "Dune Messiah" })).resolves
+        .toBeNull();
+      expect(book.title).toBe("Dune Messiah");
+
+      await expect(
+        client.library.books.update({ bookId: "b1", genre: null, targetWordCount: null })
+      ).resolves.toBeNull();
+      expect(book.genre).toBeNull();
+      expect(book.targetWordCount).toBeNull();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a Book update naming no field and an unknown Book", async () => {
+    const host = createTestHost({
+      manifest: writeManifest(),
+      permissions: ["library:read", "library:write"],
+      library: { books: [{ ...BOOK }] },
+    });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.library.books.update({ bookId: "b1" })).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Give at least one Book field to update",
+      });
+      await expect(
+        client.library.books.update({ bookId: "absent", title: "Nowhere" })
+      ).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Book absent does not exist",
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("marks the Book changed on a Chapter field, order, create, or delete write", async () => {
+    const { host } = orderedHost();
+    try {
+      const client = createPluginClient(host.port);
+      await client.library.books.checkpoint({ bookId: "b1", label: "Before" });
+      expect(host.checkpoints).toHaveLength(1);
+
+      await client.library.chapters.update({ chapterId: "c1", status: "revised" });
+      await expect(client.library.books.checkpoint({ bookId: "b1", label: "After" })).resolves
+        .toMatchObject({ versionId: expect.any(String) });
+      await client.library.chapters.reorder({ bookId: "b1", chapterIds: ["c2", "c1", "c3"] });
+      await expect(client.library.books.checkpoint({ bookId: "b1", label: "After" })).resolves
+        .toMatchObject({ versionId: expect.any(String) });
+      await client.library.chapters.delete({ chapterId: "c3" });
+      await expect(client.library.books.checkpoint({ bookId: "b1", label: "After" })).resolves
+        .toMatchObject({ versionId: expect.any(String) });
+    } finally {
+      host.stop();
+    }
+  });
 });

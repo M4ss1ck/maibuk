@@ -12,6 +12,13 @@ import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
 import { editChapter, writeChapter, type WriteGuard } from "./edits";
 import { listNotes, readNote } from "./notes";
+import {
+  BOOK_STATUSES,
+  CHAPTER_STATUSES,
+  CHAPTER_TYPES,
+  manageChapter,
+  updateBook,
+} from "./structure";
 
 /**
  * What the server tells every Agent about the Library: what it holds, and
@@ -70,7 +77,7 @@ export function buildMcpServer(
       description:
         "List Books in the Library, optionally filtered by Book Status, at most 50 per page.",
       inputSchema: z.object({
-        status: z.enum(["draft", "in-progress", "completed", "archived"]).optional(),
+        status: z.enum(BOOK_STATUSES).optional(),
         cursor: z.string().optional(),
         limit: z.number().int().min(1).optional(),
         detail: z.enum(["titles", "excerpts"]).optional(),
@@ -172,10 +179,25 @@ export function buildMcpServer(
       {
         title: "Write chapter",
         description:
-          "Replace a Chapter's whole content with text (the host makes paragraphs) or html (the host sanitizes it). Needs expectedLastEdited from read_chapter and is refused if the Chapter changed since. Prefer edit_chapter for small changes.",
+          "Replace a Chapter's whole content with chapter and expectedLastEdited from read_chapter, or create a new Chapter with book, title, and optional position and content, as text (the host makes paragraphs) or html (the host sanitizes it). A replace is refused if the Chapter changed since it was read; prefer edit_chapter for small changes.",
         inputSchema: z.object({
-          chapter: z.string().min(8),
-          expectedLastEdited: z.string(),
+          chapter: z
+            .string()
+            .min(8)
+            .optional()
+            .describe("The Chapter to replace; replace mode needs this with expectedLastEdited."),
+          book: z
+            .string()
+            .optional()
+            .describe("The Book to create in; create mode needs this with title."),
+          title: z.string().optional().describe("The new Chapter's title; create mode needs this."),
+          position: z
+            .number()
+            .optional()
+            .describe(
+              "The new Chapter's 1-based position among its Book's Chapters, the numbering get_book prints; omitted appends."
+            ),
+          expectedLastEdited: z.string().optional(),
           text: z.string().optional(),
           html: z.string().optional(),
         }),
@@ -187,6 +209,73 @@ export function buildMcpServer(
         },
       },
       async (args) => writeChapter(client, args as any, writeGuard)
+    );
+    server.registerTool(
+      "manage_chapter",
+      {
+        title: "Manage chapter",
+        description:
+          "Change one Chapter's title, Chapter Type, or Chapter Status, move it to a new position among its Book's Chapters, or delete it. A delete goes through the normal Delete path, so the author confirms it in Deletion Review before a sync carries it, and the Checkpoint taken before the first write still holds the Chapter.",
+        inputSchema: z.object({
+          chapter: z.string().min(8),
+          title: z.string().optional().describe("The new title; at least one character."),
+          chapterType: z
+            .string()
+            .optional()
+            .describe(`One of: ${CHAPTER_TYPES.join(", ")}.`),
+          status: z
+            .string()
+            .optional()
+            .describe(`One of: ${CHAPTER_STATUSES.join(", ")}.`),
+          position: z
+            .number()
+            .optional()
+            .describe(
+              "The Chapter's new 1-based position among its Book's Chapters, the numbering get_book prints."
+            ),
+          delete: z
+            .boolean()
+            .optional()
+            .describe("Delete the Chapter; give no other field with it."),
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async (args) => manageChapter(client, args as any, writeGuard)
+    );
+    server.registerTool(
+      "update_book",
+      {
+        title: "Update book",
+        description:
+          "Change a Book's title, Author Name, Genre, Book Status, or Target Word Count. A null targetWordCount or an empty genre clears it.",
+        inputSchema: z.object({
+          book: z.string().min(8),
+          title: z.string().optional().describe("The new title; at least one character."),
+          authorName: z.string().optional().describe("The new Author Name."),
+          genre: z.string().optional().describe("The new Genre; an empty string clears it."),
+          status: z
+            .string()
+            .optional()
+            .describe(`One of: ${BOOK_STATUSES.join(", ")}.`),
+          targetWordCount: z
+            .number()
+            .nullable()
+            .optional()
+            .describe("A whole number of words of at least 1, or null to clear it."),
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (args) => updateBook(client, args as any, writeGuard)
     );
   }
   return server;
