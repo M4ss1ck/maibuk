@@ -455,7 +455,7 @@ export const EVAL_TASKS: readonly EvalTask[] = [
   {
     id: "5",
     title: "Whole replace refused after the author typed, then recovered",
-    prompt: `I am still writing in Maibuk while you work, so never lose anything I type. In my Book "The Lighthouse Keeper", read the Chapter "The Lamp Room", then replace its whole content with this new version, as two paragraphs:\n\n${LAMP_ROOM_REWRITE.join("\n\n")}`,
+    prompt: `I am still writing in this Chapter in Maibuk while you work: keep anything I type in the Chapter itself, never somewhere else. In my Book "The Lighthouse Keeper", read the Chapter "The Lamp Room", then replace its whole content with this new version, as two paragraphs:\n\n${LAMP_ROOM_REWRITE.join("\n\n")}`,
     authorTypes: { chapterId: IDS.lampRoom, html: LAMP_ROOM_AFTER_AUTHOR },
     // get_book (~100), read (~60), the refused replace (~80 arguments, ~30
     // refusal), the re-read (~75), the replace that keeps the author's
@@ -465,8 +465,11 @@ export const EVAL_TASKS: readonly EvalTask[] = [
     check(run) {
       const after = chapterOf(run, IDS.lampRoom);
       const text = normalize(after?.text ?? "");
-      // Refused first, then a fresh read, then a replace that landed: the
-      // recovery the refusal's own sentence asks for, in that order.
+      // Refused first, then a fresh read, then a Chapter write that landed:
+      // the recovery the refusal's own sentence asks for, in that order. The
+      // landing write may be a whole replace or edits (edit_chapter), which
+      // the tool descriptions prefer for small changes; the content checks
+      // below judge what it produced.
       const refusedAt = run.calls.findIndex(
         (call) => call.name === "write_chapter" && call.isError && /changed/i.test(call.text)
       );
@@ -474,12 +477,15 @@ export const EVAL_TASKS: readonly EvalTask[] = [
         (call, index) => index > refusedAt && call.name === "read_chapter" && !call.isError
       );
       const landedAt = run.calls.findIndex(
-        (call, index) => index > rereadAt && call.name === "write_chapter" && !call.isError
+        (call, index) =>
+          index > rereadAt &&
+          (call.name === "write_chapter" || call.name === "edit_chapter") &&
+          !call.isError
       );
       const refused = refusedAt !== -1 && rereadAt !== -1 && landedAt !== -1;
       return [
         check(
-          "refused, re-read, then replaced",
+          "refused, re-read, then written",
           refused,
           run.calls.map((call) => `${call.name}${call.isError ? "!" : ""}`).join(", ")
         ),

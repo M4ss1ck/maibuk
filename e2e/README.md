@@ -666,7 +666,7 @@ port checks) is covered by its own tests.
 | 2 | Append a scene to "Storm" | The old HTML kept byte for byte, then the two scene paragraphs; no whole replace; one Checkpoint | 2,866 |
 | 3 | Fix the one typo in "Arrival" | The HTML equals the original with that one word fixed, formatting intact; `edit_chapter`, never `write_chapter` | 3,166 |
 | 4 | Create "Interlude", then move it after "Arrival" | The Chapter exists with its text, and the order is Arrival, Interlude, Storm, The Lamp Room, Epilogue | 2,866 |
-| 5 | Replace "The Lamp Room" whole while the author types | The stale replace was refused, then the Chapter was re-read and replaced; the new version and the author's typed paragraph are both in the Chapter | 3,066 |
+| 5 | Replace "The Lamp Room" whole while the author types | The stale replace was refused, then the Chapter was re-read and written (a whole replace or edits); the new version and the author's typed paragraph are both in the Chapter | 3,066 |
 | 6 | Rename a Book in read-only mode | Only the five read tools were offered; nothing changed; the answer says it cannot write | 1,181 |
 
 In task 5 the author's typing is simulated. Right after the Agent's first
