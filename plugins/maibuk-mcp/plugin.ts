@@ -26,6 +26,7 @@ import { recordActivity, startActivityLog, type ActivityRecorder } from "./activ
 import { isLibraryUnavailable, LIBRARY_UNAVAILABLE_TEXT } from "./books";
 import type { WriteGuard } from "./edits";
 import { errorResult, isWritePermissionDenied, readOnlyResult } from "./library";
+import { publishConnections, type ConnectionRecord } from "./live";
 import {
   CONNECT_PAGE_ID,
   createConnectPage,
@@ -253,44 +254,12 @@ async function* streamBody(body: ReadableStream<Uint8Array>): AsyncIterable<Uint
   }
 }
 
-/** One live Connection as Plugin storage holds it, in ms since the epoch. */
-export interface ConnectionRecord {
-  name: string;
-  startedAt: number;
-  lastActivityAt: number;
-}
-
 /** A live Connection: its stored record plus what tracking needs. */
 interface Connection extends ConnectionRecord {
   /** The `lastActivityAt` the last write attempt carried, for the throttle. */
   writtenAt: number;
   /** The idle timer that ends this Connection. */
   timer: ReturnType<typeof setTimeout> | null;
-}
-
-/** The live Connections the Plugin page in this Worker reads, sorted by name. */
-let connectionSnapshot: readonly ConnectionRecord[] = [];
-
-/** The page's re-renders, told whenever a Connection opens, moves, or ends. */
-const connectionListeners = new Set<() => void>();
-
-/** The live Connections, sorted by name; the array changes identity on a change. */
-export function liveConnections(): readonly ConnectionRecord[] {
-  return connectionSnapshot;
-}
-
-/** Calls `listener` whenever the live Connections change; returns the stopper. */
-export function subscribeConnections(listener: () => void): () => void {
-  connectionListeners.add(listener);
-  return () => {
-    connectionListeners.delete(listener);
-  };
-}
-
-/** Publishes the live list to the page. */
-function publishConnections(records: readonly ConnectionRecord[]): void {
-  connectionSnapshot = records;
-  for (const listener of connectionListeners) listener();
 }
 
 /** What one request body says about its Agent. */

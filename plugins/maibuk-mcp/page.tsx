@@ -8,13 +8,14 @@
  * made from the page or from the `newKey` Command, and an
  * `endpoint.addressChanged` event, re-render the snippets in place.
  *
- * This module imports only `@/plugin-sdk` and its own files. Part 2 adds the
- * live Connections list, the live indicator, and the Activity log where
- * `ConnectionsSection` sits.
+ * This module imports only `@/plugin-sdk` and its own files. The live half —
+ * the connected count, the Connections list, and the Activity log — lives in
+ * `./connections-panel`, mounted at the bottom of the page.
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import { ui, type PluginClient } from "@/plugin-sdk";
+import { LiveIndicator, LiveSections } from "./connections-panel";
 import { translate, type McpKey } from "./i18n";
 import { mcpUrl, snippet, SNIPPET_KINDS, type SnippetKind } from "./snippets";
 
@@ -153,7 +154,10 @@ export function createConnectPage(
 
     return (
       <ui.View direction="column" gap="lg" padding="md">
-        <ui.Heading level={2}>{t("heading")}</ui.Heading>
+        <ui.View direction="row" gap="md" align="center" wrap>
+          <ui.Heading level={2}>{t("heading")}</ui.Heading>
+          <LiveIndicator language={language} />
+        </ui.View>
         <ui.Text>{t("intro")}</ui.Text>
 
         {notice ? (
@@ -199,18 +203,10 @@ export function createConnectPage(
           </ui.Text>
         </ui.View>
 
-        <ConnectionsSection />
+        <LiveSections language={language} />
       </ui.View>
     );
   };
-}
-
-/**
- * Part 2 (#594) mounts the live Connections list, the live indicator, and the
- * Activity log here. Nothing renders until then.
- */
-function ConnectionsSection(): null {
-  return null;
 }
 
 /** The app language as the SDK signals it: the current value, then every change. */
