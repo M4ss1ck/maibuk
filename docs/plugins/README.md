@@ -30,3 +30,5 @@ pnpm generate:plugin-ui
 ## Complete example
 
 [plugins/maibuk-echoes/](../../plugins/maibuk-echoes/) is the complete example Plugin. It is a Built-in, host-rendered, and declares a page, a sidebar entry, an editor toolbar button, a Settings row, an Item Menu entry, several Commands, its own locales, and its own tests. Read it beside these pages.
+
+[plugins/maibuk-mcp/](../../plugins/maibuk-mcp/) is the other Built-in: MCP Server, a desktop-only Plugin that holds `serve` and answers the [Plugin Endpoint](endpoint.md), so an outside AI tool reaches the Library through the Model Context Protocol.
