@@ -196,6 +196,34 @@ describe("MCP Server live page", () => {
     }
   });
 
+  it("never puts an Agent's last activity in the future when it connects between repaints", async () => {
+    const { host, storage } = pageHost({ library: liveLibrary() });
+    try {
+      const key = await waitForStoredKey(storage);
+      freezeClock(START);
+      const page = await host.renderPage(CONNECT_PAGE_ID);
+      await untilVisible(() => {
+        expect(screen.getByText(en.noConnections)).toBeInTheDocument();
+      });
+
+      // The clock moves on inside one repaint window, then the Agent calls.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+
+      await untilVisible(() => {
+        const connections = screen.getByRole("table", { name: en.connectionsLabel });
+        expect(within(connections).getByText(relativeLabel(0, "second"))).toBeInTheDocument();
+      });
+      expect(screen.queryByText(relativeLabel(5, "second"))).toBeNull();
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
   it("lists a tool call with its tool, item, and result, under the Agent that made it", async () => {
     const { host, storage } = pageHost({ library: liveLibrary() });
     try {

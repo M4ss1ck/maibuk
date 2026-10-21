@@ -17,6 +17,7 @@
 // that raises the reconnect notice, come from the same seam's listener state.
 
 import type { Locator, Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { readClipboard } from "../support/clipboard";
 import { dispatchEndpoint, setEndpointAddress } from "../support/endpoint";
 import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
@@ -283,6 +284,7 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
     page,
   }) => {
     await turnOn(page);
+    await capture(page, "mcp-settings-card");
 
     // The Built-in card lists the three required grants and the optional
     // `library:write` it was pre-granted, so the write tools work out of the box.
@@ -303,6 +305,7 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
       page.getByText("The Plugin Endpoint is not available, so there is no address to connect to yet.")
     ).toBeVisible();
     await bindAddress(page, ADDRESS_PORT);
+    await capture(page, "mcp-page-snippets");
 
     const snippetText = await copyFirstSnippet(page);
     const key = snippetKey(snippetText);
@@ -344,6 +347,8 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
     });
     await expect(call).toHaveCount(1);
     await expect(call.getByRole("cell", { name: "OK", exact: true })).toBeVisible();
+    await connections.scrollIntoViewIfNeeded();
+    await capture(page, "mcp-page-live");
   });
 
   test("a write through the Endpoint changes the Library, and the open Chapter shows it", async ({
@@ -412,6 +417,7 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
       { exact: true }
     );
     await expect(notice).toBeVisible();
+    await capture(page, "mcp-reconnect-notice");
     // Every snippet was refreshed in place with the new address, Key unchanged.
     for (const text of await snippets(page).allTextContents()) {
       expect(text).toContain(`http://127.0.0.1:${MOVED_PORT}/`);

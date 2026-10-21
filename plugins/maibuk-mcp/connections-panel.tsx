@@ -19,14 +19,18 @@ import { liveConnections, subscribeConnections, type ConnectionRecord } from "./
 /** How often the Connections table repaints its relative labels. */
 export const RELATIVE_TICK_MS = 30_000;
 
-/** The clock, read again every `intervalMs` for as long as the caller stays mounted. */
+/**
+ * The clock at this render, with a repaint every `intervalMs` for as long as
+ * the caller stays mounted. It is read on every render, not kept from the last
+ * tick, so a Connection that moves between ticks never reads as in the future.
+ */
 function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now());
+  const [, setTick] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    const timer = setInterval(() => setTick((tick) => tick + 1), intervalMs);
     return () => clearInterval(timer);
   }, [intervalMs]);
-  return now;
+  return Date.now();
 }
 
 /** One runtime string lookup, bound to the page's language. */
@@ -192,7 +196,8 @@ function relativeTime(at: number, language: string, now: number): string {
     formatter = new Intl.RelativeTimeFormat(language, { numeric: "auto" });
     relativeFormatters.set(language, formatter);
   }
-  const seconds = Math.round((at - now) / 1_000);
+  // An instant past `now` is clock skew, never a call yet to come.
+  const seconds = Math.min(0, Math.round((at - now) / 1_000));
   for (const [unit, size] of RELATIVE_UNITS) {
     if (Math.abs(seconds) >= size) return formatter.format(Math.round(seconds / size), unit);
   }
