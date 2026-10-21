@@ -18,6 +18,7 @@ import {
   type PluginEndpointAnswer,
   type PluginEndpointRequest,
 } from "@/plugin-sdk";
+import { recordActivity, startActivityLog, type ActivityRecorder } from "./activity";
 import { isLibraryUnavailable, LIBRARY_UNAVAILABLE_TEXT } from "./books";
 import type { WriteGuard } from "./edits";
 import { errorResult, isWritePermissionDenied, readOnlyResult } from "./library";
@@ -35,9 +36,10 @@ export const CONNECTION_IDLE_MS = 600_000;
 /**
  * How far a live Connection's stored `lastActivityAt` may fall behind its
  * latest request before storage is rewritten. A start and an end write at
- * once; activity is throttled to stay under the broker's call rate.
+ * once; activity is throttled to stay under the broker's call rate. The
+ * Activity log writes on the same window (see `./activity`).
  */
-const CONNECTION_WRITE_MS = 60_000;
+export const CONNECTION_WRITE_MS = 60_000;
 
 /** The only Plugin Endpoint path this Plugin answers; anything else is a 404. */
 const MCP_PATH = "/plugin/maibuk-mcp/mcp";
@@ -204,7 +206,7 @@ async function* streamBody(body: ReadableStream<Uint8Array>): AsyncIterable<Uint
 }
 
 /** One live Connection as Plugin storage holds it, in ms since the epoch. */
-interface ConnectionRecord {
+export interface ConnectionRecord {
   name: string;
   startedAt: number;
   lastActivityAt: number;
@@ -216,6 +218,31 @@ interface Connection extends ConnectionRecord {
   writtenAt: number;
   /** The idle timer that ends this Connection. */
   timer: ReturnType<typeof setTimeout> | null;
+}
+
+/** The live Connections the Plugin page in this Worker reads, sorted by name. */
+let connectionSnapshot: readonly ConnectionRecord[] = [];
+
+/** The page's re-renders, told whenever a Connection opens, moves, or ends. */
+const connectionListeners = new Set<() => void>();
+
+/** The live Connections, sorted by name; the array changes identity on a change. */
+export function liveConnections(): readonly ConnectionRecord[] {
+  return connectionSnapshot;
+}
+
+/** Calls `listener` whenever the live Connections change; returns the stopper. */
+export function subscribeConnections(listener: () => void): () => void {
+  connectionListeners.add(listener);
+  return () => {
+    connectionListeners.delete(listener);
+  };
+}
+
+/** Publishes the live list to the page. */
+function publishConnections(records: readonly ConnectionRecord[]): void {
+  connectionSnapshot = records;
+  for (const listener of connectionListeners) listener();
 }
 
 /** What one request body says about its Agent. */
@@ -314,6 +341,7 @@ function createConnections(client: PluginClient): {
    */
   function write(): void {
     const value = records();
+    publishConnections(value);
     for (const connection of live.values()) connection.writtenAt = connection.lastActivityAt;
     writes = writes
       .then(() => client.storage.set({ key: CONNECTIONS_STORAGE_KEY, value }))
@@ -372,6 +400,7 @@ function createConnections(client: PluginClient): {
     connection.lastActivityAt = now;
     arm(connection);
     if (now - connection.writtenAt >= CONNECTION_WRITE_MS) write();
+    else publishConnections(records());
   }
 
   // No Connection survives a restart: the first write replaces the old list.
@@ -474,6 +503,13 @@ export function startMcp(client: PluginClient): void {
     return name === undefined || name === "" ? null : name;
   }
 
+  /** The Activity recorder for one request's Connection, named when it has a name. */
+  function recorderFor(agent: string | null): ActivityRecorder {
+    return (call) => {
+      recordActivity({ at: Date.now(), agent, ...call });
+    };
+  }
+
   // One factory for both eras, so the two can never drift apart.
   // Whether the author grants the write Plugin Permission right now: the
   // `permissions.changed` subscription below replays the current list on
@@ -487,7 +523,10 @@ export function startMcp(client: PluginClient): void {
   let lastPermissions: readonly string[] | null = null;
 
   const handler: McpHttpHandler = createMcpHandler(
-    (context) => buildMcpServer(client, writeGuardFor(callerOf(context)), canWrite ?? false),
+    (context) => {
+      const caller = callerOf(context);
+      return buildMcpServer(client, writeGuardFor(caller), recorderFor(caller), canWrite ?? false);
+    },
     {
       legacy: "stateless",
     }
@@ -532,8 +571,9 @@ export function startMcp(client: PluginClient): void {
       // No subscription (denied or stopped): the per-request probe still
       // notices the Tutorial, so startup continues without it.
     });
-  // Requests that arrive before the Key exists wait for it here.
-  const ready = ensureKey(client);
+  // Requests that arrive before the Key exists, or before the stored Activity
+  // log is back in memory, wait for it here.
+  const ready = Promise.all([ensureKey(client), startActivityLog(client, CONNECTION_WRITE_MS)]);
 
   // The `newKey` Command, answered the way Echoes answers its Commands: a
   // `command.run` with the Command's id makes a fresh Key and stores it, so

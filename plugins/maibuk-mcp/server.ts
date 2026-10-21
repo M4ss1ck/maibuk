@@ -5,9 +5,10 @@
  * each one; both eras serve the same tools, so they can never drift apart.
  */
 
-import { McpServer } from "@modelcontextprotocol/server";
+import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { PluginClient } from "@/plugin-sdk";
+import type { ActivityRecorder } from "./activity";
 import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
 import { editChapter, writeChapter, type WriteGuard } from "./edits";
@@ -28,6 +29,44 @@ import {
  */
 const SERVER_INSTRUCTIONS =
   "Maibuk MCP Server. The Library holds the author's Books; each Book holds ordered Chapters and Notes with Tags. Tools take a Book, Chapter, or Note id, or an 8+ character prefix of one; an ambiguous prefix answers with its candidates. Lists are plain-text lines with a cursor and a total. Reads come in windows of characters; pass the returned next offset to continue.";
+
+/**
+ * The id of the most specific item the call names: a Note over its Chapter
+ * over its Book. Nothing else from the arguments is kept, so no Chapter or
+ * Note text, title, find string, or tool output reaches the Activity log.
+ */
+function itemOf(args: unknown): string | null {
+  if (typeof args !== "object" || args === null) return null;
+  const named = args as Record<string, unknown>;
+  for (const key of ["note", "chapter", "book"]) {
+    const id = named[key];
+    if (typeof id === "string" && id !== "") return id;
+  }
+  return null;
+}
+
+/**
+ * Wraps one tool handler so every call lands in the Activity log: the entry is
+ * written once the answer is known, and a handler that throws is logged as an
+ * error before the throw carries on.
+ */
+function recorded(
+  record: ActivityRecorder,
+  tool: string,
+  run: (args: any) => Promise<CallToolResult>
+): (args: any) => Promise<CallToolResult> {
+  return async (args: any) => {
+    const item = itemOf(args);
+    try {
+      const result = await run(args);
+      record({ tool, item, result: result.isError === true ? "error" : "ok" });
+      return result;
+    } catch (error) {
+      record({ tool, item, result: "error" });
+      throw error;
+    }
+  };
+}
 
 /**
  * Builds a fresh MCP server named `maibuk` with the final tool set. The
@@ -52,10 +91,15 @@ const SERVER_INSTRUCTIONS =
  * author grants `library:write`. The SDK refuses a call to a tool that is not
  * listed as an unknown tool, so a read-only Agent cannot reach the write path
  * at all.
+ *
+ * `record` is the Activity recorder bound to the same request's Connection:
+ * every handler runs through it, so each answered call becomes one Activity
+ * with none of the author's text (see `./activity`).
  */
 export function buildMcpServer(
   client: PluginClient,
   writeGuard: WriteGuard,
+  record: ActivityRecorder,
   canWrite = true
 ): McpServer {
   const server = new McpServer(
@@ -84,7 +128,7 @@ export function buildMcpServer(
       }),
       annotations: { readOnlyHint: true },
     },
-    async (args) => listBooks(client, args as any)
+    recorded(record, "list_books", async (args) => listBooks(client, args as any))
   );
   server.registerTool(
     "get_book",
@@ -97,7 +141,7 @@ export function buildMcpServer(
       }),
       annotations: { readOnlyHint: true },
     },
-    async (args) => getBook(client, args as any)
+    recorded(record, "get_book", async (args) => getBook(client, args as any))
   );
   server.registerTool(
     "read_chapter",
@@ -113,7 +157,7 @@ export function buildMcpServer(
       }),
       annotations: { readOnlyHint: true },
     },
-    async (args) => readChapter(client, args as any)
+    recorded(record, "read_chapter", async (args) => readChapter(client, args as any))
   );
   server.registerTool(
     "list_notes",
@@ -130,7 +174,7 @@ export function buildMcpServer(
       }),
       annotations: { readOnlyHint: true },
     },
-    async (args) => listNotes(client, args as any)
+    recorded(record, "list_notes", async (args) => listNotes(client, args as any))
   );
   server.registerTool(
     "read_note",
@@ -146,7 +190,7 @@ export function buildMcpServer(
       }),
       annotations: { readOnlyHint: true },
     },
-    async (args) => readNote(client, args as any)
+    recorded(record, "read_note", async (args) => readNote(client, args as any))
   );
   // The write tools register only while the author grants `library:write`
   // (see `canWrite` above): a read-only Agent lists and calls the read tools
@@ -172,7 +216,7 @@ export function buildMcpServer(
           openWorldHint: false,
         },
       },
-      async (args) => editChapter(client, args as any, writeGuard)
+      recorded(record, "edit_chapter", async (args) => editChapter(client, args as any, writeGuard))
     );
     server.registerTool(
       "write_chapter",
@@ -208,7 +252,9 @@ export function buildMcpServer(
           openWorldHint: false,
         },
       },
-      async (args) => writeChapter(client, args as any, writeGuard)
+      recorded(record, "write_chapter", async (args) =>
+        writeChapter(client, args as any, writeGuard)
+      )
     );
     server.registerTool(
       "manage_chapter",
@@ -245,7 +291,9 @@ export function buildMcpServer(
           openWorldHint: false,
         },
       },
-      async (args) => manageChapter(client, args as any, writeGuard)
+      recorded(record, "manage_chapter", async (args) =>
+        manageChapter(client, args as any, writeGuard)
+      )
     );
     server.registerTool(
       "update_book",
@@ -275,7 +323,7 @@ export function buildMcpServer(
           openWorldHint: false,
         },
       },
-      async (args) => updateBook(client, args as any, writeGuard)
+      recorded(record, "update_book", async (args) => updateBook(client, args as any, writeGuard))
     );
     server.registerTool(
       "edit_note",
@@ -297,7 +345,7 @@ export function buildMcpServer(
           openWorldHint: false,
         },
       },
-      async (args) => editNote(client, args as any, writeGuard)
+      recorded(record, "edit_note", async (args) => editNote(client, args as any, writeGuard))
     );
     server.registerTool(
       "write_note",
@@ -334,7 +382,7 @@ export function buildMcpServer(
           openWorldHint: false,
         },
       },
-      async (args) => writeNote(client, args as any, writeGuard)
+      recorded(record, "write_note", async (args) => writeNote(client, args as any, writeGuard))
     );
     server.registerTool(
       "delete_note",
@@ -352,7 +400,7 @@ export function buildMcpServer(
           openWorldHint: false,
         },
       },
-      async (args) => deleteNote(client, args as any, writeGuard)
+      recorded(record, "delete_note", async (args) => deleteNote(client, args as any, writeGuard))
     );
   }
   return server;
