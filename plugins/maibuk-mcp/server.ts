@@ -12,7 +12,13 @@ import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
 import { editChapter, writeChapter, type WriteGuard } from "./edits";
 import { listNotes, readNote } from "./notes";
-import { CHAPTER_STATUSES, CHAPTER_TYPES, manageChapter } from "./structure";
+import {
+  BOOK_STATUSES,
+  CHAPTER_STATUSES,
+  CHAPTER_TYPES,
+  manageChapter,
+  updateBook,
+} from "./structure";
 
 /**
  * What the server tells every Agent about the Library: what it holds, and
@@ -225,6 +231,36 @@ export function buildMcpServer(
         },
       },
       async (args) => manageChapter(client, args as any, writeGuard)
+    );
+    server.registerTool(
+      "update_book",
+      {
+        title: "Update book",
+        description:
+          "Change a Book's title, Author Name, Genre, Book Status, or Target Word Count. A null targetWordCount or an empty genre clears it.",
+        inputSchema: z.object({
+          book: z.string().min(8),
+          title: z.string().optional().describe("The new title; at least one character."),
+          authorName: z.string().optional().describe("The new Author Name."),
+          genre: z.string().optional().describe("The new Genre; an empty string clears it."),
+          status: z
+            .string()
+            .optional()
+            .describe(`One of: ${BOOK_STATUSES.join(", ")}.`),
+          targetWordCount: z
+            .number()
+            .nullable()
+            .optional()
+            .describe("A whole number of words of at least 1, or null to clear it."),
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async (args) => updateBook(client, args as any, writeGuard)
     );
   }
   return server;

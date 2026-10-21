@@ -114,6 +114,7 @@ describe("MCP Server protocol", () => {
         "edit_chapter",
         "write_chapter",
         "manage_chapter",
+        "update_book",
       ]);
     } finally {
       host.stop();
@@ -220,6 +221,15 @@ describe("MCP Server protocol", () => {
               "readOnlyHint": false,
             },
             "name": "manage_chapter",
+          },
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": true,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+            },
+            "name": "update_book",
           },
         ]
       `);
@@ -670,6 +680,7 @@ describe("MCP Server read-only mode", () => {
         "edit_chapter",
         "write_chapter",
         "manage_chapter",
+        "update_book",
       ]);
 
       host.setGranted(["serve", "library:read"]);
@@ -696,6 +707,7 @@ describe("MCP Server read-only mode", () => {
           "edit_chapter",
           "write_chapter",
           "manage_chapter",
+          "update_book",
         ]);
       });
     } finally {
