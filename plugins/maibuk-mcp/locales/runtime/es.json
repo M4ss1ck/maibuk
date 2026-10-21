@@ -1,0 +1,16 @@
+{
+  "heading": "Conecta un Agente",
+  "intro": "Pega uno de estos fragmentos en cada Agente que deba acceder a Maibuk. El fragmento incluye la dirección de este Plugin y la clave.",
+  "claudeCode": "Claude Code",
+  "codex": "Codex, en ~/.codex/config.toml",
+  "openCode": "OpenCode, en opencode.json",
+  "cursor": "Cursor, en ~/.cursor/mcp.json",
+  "copy": "Copiar",
+  "copied": "Copiado",
+  "newKey": "Crear una clave nueva",
+  "newKeyNote": "Los Agentes que usen la clave anterior dejarán de funcionar hasta que pegues la nueva.",
+  "loading": "Cargando los fragmentos de configuración…",
+  "unavailable": "El Endpoint del Plugin no está disponible, así que todavía no hay una dirección a la que conectarse.",
+  "reconnect": "La dirección de Maibuk cambió. Copia el fragmento actualizado en cada Agente para reconectar.",
+  "done": "Hecho"
+}

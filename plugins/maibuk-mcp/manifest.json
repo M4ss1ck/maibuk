@@ -11,16 +11,44 @@
   "lifecycle": "persistent",
   "defaultLanguage": "en",
   "permissions": {
-    "required": ["serve", "library:read"],
+    "required": ["serve", "library:read", "clipboard"],
     "optional": ["library:write"]
   },
   "contributes": {
     "commands": [
       {
+        "id": "openConnect",
+        "label": "Open MCP Server",
+        "contexts": ["global"],
+        "navigates": true
+      },
+      {
         "id": "newKey",
         "label": "Make a New MCP Server Key",
         "contexts": ["global"]
+      },
+      {
+        "id": "copyClaudeCode",
+        "label": "Copy the Claude Code setup snippet",
+        "contexts": ["global"]
+      },
+      {
+        "id": "copyCodex",
+        "label": "Copy the Codex setup snippet",
+        "contexts": ["global"]
+      },
+      {
+        "id": "copyOpenCode",
+        "label": "Copy the OpenCode setup snippet",
+        "contexts": ["global"]
+      },
+      {
+        "id": "copyCursor",
+        "label": "Copy the Cursor setup snippet",
+        "contexts": ["global"]
       }
-    ]
+    ],
+    "pages": [{ "id": "connect", "title": "MCP Server", "command": "openConnect" }],
+    "sidebarEntries": [{ "page": "connect", "icon": "plug" }]
   }
 }

@@ -4,9 +4,10 @@ import { describe, expect, it } from "vitest";
 import { parsePluginLocale, parsePluginManifest } from "@/features/plugins/manifest-validate";
 
 // The MCP Server manifest: desktop-only and persistent, asking only for the
-// Plugin Endpoint and Library reads and writes. It contributes one Command,
-// `newKey`, which makes a new Key; an Agent reaches this Plugin only through
-// HTTP.
+// Plugin Endpoint, Library reads and writes, and the clipboard. It contributes
+// the MCP Server page with the Commands that open it and copy each Agent's
+// setup snippet, and `newKey`, which makes a new Key; an Agent reaches this
+// Plugin through HTTP.
 describe("MCP Server manifest", () => {
   const text = readFileSync(join(__dirname, "manifest.json"), "utf8");
 
@@ -31,8 +32,8 @@ describe("MCP Server manifest", () => {
     expect(manifest().lifecycle).toBe("persistent");
   });
 
-  it("asks only for the endpoint and Library reads, with writes optional", () => {
-    expect(manifest().permissions.required).toEqual(["serve", "library:read"]);
+  it("asks for the endpoint, Library reads, and the clipboard, with writes optional", () => {
+    expect(manifest().permissions.required).toEqual(["serve", "library:read", "clipboard"]);
     expect(manifest().permissions.optional).toEqual(["library:write"]);
   });
 
@@ -48,6 +49,31 @@ describe("MCP Server manifest", () => {
   it("localizes the newKey Command title in Spanish", () => {
     const locale = JSON.parse(readFileSync(join(__dirname, "locales", "es.json"), "utf8"));
     expect(locale["commands.newKey.label"]).toBe("Crear una clave nueva del servidor MCP");
+  });
+
+  it("opens the MCP Server page from a navigating Command behind a sidebar entry", () => {
+    const contributes = manifest().contributes;
+    const open = contributes?.commands?.find((command) => command.id === "openConnect");
+    expect(open?.navigates).toBe(true);
+    const page = contributes?.pages?.find((candidate) => candidate.id === "connect");
+    expect(page?.title).toBe("MCP Server");
+    expect(page?.command).toBe("openConnect");
+    expect(contributes?.sidebarEntries?.find((entry) => entry.page === "connect")?.icon).toBe("plug");
+  });
+
+  it("contributes one global copy Command per Agent snippet", () => {
+    const commands = manifest().contributes?.commands ?? [];
+    expect(commands.map((command) => command.id)).toEqual([
+      "openConnect",
+      "newKey",
+      "copyClaudeCode",
+      "copyCodex",
+      "copyOpenCode",
+      "copyCursor",
+    ]);
+    for (const id of ["copyClaudeCode", "copyCodex", "copyOpenCode", "copyCursor"]) {
+      expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["global"]);
+    }
   });
 
   it("localizes its host-visible strings through locales/<lang>.json", () => {

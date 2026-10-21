@@ -11,6 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type userEvent from "@testing-library/user-event";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import type {
@@ -78,8 +79,15 @@ export function noteLibrary() {
   return { books, notes };
 }
 
-/** The MCP Server manifest the build ships, parsed with the host's Built-in rules. */
-export function mcpManifest(): PluginManifest {
+/** A `user-event` instance, as `userEvent.setup()` returns it. */
+export type User = ReturnType<typeof userEvent.setup>;
+
+/** Tabs forward until `element` has focus, so every action is reached by keyboard. */
+export async function tabTo(user: User, element: HTMLElement, max = 40): Promise<void> {
+  for (let i = 0; i < max && document.activeElement !== element; i++) await user.tab();
+}
+
+/** The MCP Server manifest the build ships, parsed with the host's Built-in rules. */export function mcpManifest(): PluginManifest {
   const result = parsePluginManifest(readFileSync(join(__dirname, "manifest.json"), "utf8"), {
     builtIn: true,
   });

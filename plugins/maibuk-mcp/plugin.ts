@@ -2,10 +2,13 @@
  * The MCP Server runtime (Built-in Plugin). `startMcp` answers the Plugin
  * Endpoint with the MCP SDK: one fresh MCP server per request on
  * `/plugin/maibuk-mcp/mcp`, behind the Connection's Key and the Tutorial
- * refusal. Tool behavior lives in `./server`; this module owns only the
- * request path (path, Key, Connections, Tutorial, SDK bridging).
+ * refusal. It also serves the MCP Server page and answers its Commands in the
+ * same Worker. Tool behavior lives in `./server`; this module owns the request
+ * path (path, Key, Connections, Tutorial, SDK bridging) and the Command
+ * handlers the page and the page's Commands share.
  */
 
+import type { ComponentType } from "react";
 import {
   CLIENT_INFO_META_KEY,
   createMcpHandler,
@@ -14,6 +17,7 @@ import {
 } from "@modelcontextprotocol/server";
 import {
   PLUGIN_COMMAND_RUN_REQUEST,
+  type HostRequestHandler,
   type PluginClient,
   type PluginEndpointAnswer,
   type PluginEndpointRequest,
@@ -22,7 +26,13 @@ import { recordActivity, startActivityLog, type ActivityRecorder } from "./activ
 import { isLibraryUnavailable, LIBRARY_UNAVAILABLE_TEXT } from "./books";
 import type { WriteGuard } from "./edits";
 import { errorResult, isWritePermissionDenied, readOnlyResult } from "./library";
+import {
+  CONNECT_PAGE_ID,
+  createConnectPage,
+  createConnectStore,
+} from "./page";
 import { buildMcpServer } from "./server";
+import { mcpUrl, snippet, type SnippetKind } from "./snippets";
 
 /** The storage key holding the Connection's Key. */
 const KEY_STORAGE_KEY = "key";
@@ -43,6 +53,34 @@ export const CONNECTION_WRITE_MS = 60_000;
 
 /** The only Plugin Endpoint path this Plugin answers; anything else is a 404. */
 const MCP_PATH = "/plugin/maibuk-mcp/mcp";
+
+/** The Command-local ids the manifest declares. */
+export const OPEN_CONNECT = "openConnect";
+export const NEW_KEY = "newKey";
+export const COPY_CLAUDE_CODE = "copyClaudeCode";
+export const COPY_CODEX = "copyCodex";
+export const COPY_OPEN_CODE = "copyOpenCode";
+export const COPY_CURSOR = "copyCursor";
+
+/** The Agent each copy Command copies a snippet for. */
+export const COPY_COMMAND_SNIPPETS: Readonly<Record<string, SnippetKind>> = {
+  [COPY_CLAUDE_CODE]: "claudeCode",
+  [COPY_CODEX]: "codex",
+  [COPY_OPEN_CODE]: "openCode",
+  [COPY_CURSOR]: "cursor",
+};
+
+/**
+ * The host's Remote UI entry (`servePluginUi`), Worker or test. The two SDK
+ * entries share this shape, so the runtime takes whichever the caller supplies.
+ */
+export type McpServe = (
+  client: Pick<PluginClient, "onHostRequest">,
+  options: {
+    pages: Record<string, ComponentType>;
+    onHostRequest?: HostRequestHandler;
+  }
+) => void;
 
 /**
  * The internal header carrying one request's resolved Connection name to the
@@ -69,23 +107,31 @@ function makeKey(): string {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-/** Makes a fresh Key and stores it; a Library failure leaves it for the next request. */
-async function storeFreshKey(client: PluginClient): Promise<void> {
+/**
+ * Makes a fresh Key and stores it; a Library failure leaves it for the next
+ * request. Returns the Key when it was stored, or null while the Library is
+ * unavailable (the Tutorial), so the page never shows a Key an Agent cannot use.
+ */
+async function storeFreshKey(client: PluginClient): Promise<string | null> {
   const fresh = makeKey();
   try {
     await client.storage.set({ key: KEY_STORAGE_KEY, value: fresh });
   } catch (error) {
     if (!isLibraryUnavailable(error)) throw error;
+    return null;
   }
+  return fresh;
 }
 
 /**
  * Reads the stored Key, making one first when the Plugin was just turned on
- * (`enable`) or none is stored yet. Requests that arrive before the Key
- * exists wait on the returned promise; a Tutorial running at startup leaves
- * the Key for the per-request probe to make.
+ * (`enable`) or none is stored yet. Returns the Key now in storage, or null
+ * while the Library is unavailable (the Tutorial), so the page knows when there
+ * is one to show. Requests that arrive before the Key exists wait on the
+ * returned promise; a Tutorial running at startup leaves the Key for the
+ * per-request probe to make.
  */
-async function ensureKey(client: PluginClient): Promise<void> {
+async function ensureKey(client: PluginClient): Promise<string | null> {
   // The host posts its init message before any other host message, but the
   // SDK exposes it asynchronously; wait briefly so a fresh `enable` still
   // rotates the Key instead of keeping a stale one.
@@ -97,10 +143,12 @@ async function ensureKey(client: PluginClient): Promise<void> {
     stored = await client.storage.get({ key: KEY_STORAGE_KEY });
   } catch (error) {
     if (!isLibraryUnavailable(error)) throw error;
+    return null;
   }
   if (client.activation?.startReason === "enable" || typeof stored !== "string" || stored === "") {
-    await storeFreshKey(client);
+    return storeFreshKey(client);
   }
+  return stored;
 }
 
 /** The Bearer Key the Agent sent, or null when the header is missing or malformed. */
@@ -460,8 +508,10 @@ function createConnections(client: PluginClient): {
  * stored Key cannot be read, and the Tutorial refusal is answered instead.
  * Only a request that passes both refusals counts toward a Connection.
  */
-export function startMcp(client: PluginClient): void {
+export function startMcp(client: PluginClient, serve?: McpServe): void {
   const connections = createConnections(client);
+  // The page's Key and address; the runtime fills it so the snippets repaint.
+  const connect = createConnectStore();
 
   /**
    * The write tools' guard for one request's Connection (#591): the first
@@ -574,18 +624,96 @@ export function startMcp(client: PluginClient): void {
   // Requests that arrive before the Key exists, or before the stored Activity
   // log is back in memory, wait for it here.
   const ready = Promise.all([ensureKey(client), startActivityLog(client, CONNECTION_WRITE_MS)]);
+  // The page shows the Key the start made or found; a new Key replaces it.
+  void ready
+    .then(([key]) => {
+      if (key !== null) connect.setKey(key);
+    })
+    .catch(() => {});
 
-  // The `newKey` Command, answered the way Echoes answers its Commands: a
-  // `command.run` with the Command's id makes a fresh Key and stores it, so
-  // the old Key is refused from the next request on.
-  client.onHostRequest(async (method, params) => {
-    if (method === PLUGIN_COMMAND_RUN_REQUEST) {
-      const { id } = (params ?? {}) as { id?: string };
-      if (id === "newKey") await storeFreshKey(client);
+  // The page shows the address the Plugin Endpoint is bound to, and refreshes
+  // its snippets when a move raises `endpoint.addressChanged`. Without `serve`
+  // both reads are refused; the page then shows its unavailable Status.
+  void client.endpoint
+    .address()
+    .then(({ url }) => connect.setAddress(url))
+    .catch(() => {});
+  void client
+    .on("endpoint.addressChanged", ({ url }) => connect.setAddress(url))
+    .catch(() => {});
+
+  /** Makes a fresh Key, so the open page's snippets refresh and the old Key stops working. */
+  async function makeNewKey(): Promise<void> {
+    const fresh = await storeFreshKey(client);
+    if (fresh !== null) connect.setKey(fresh);
+  }
+
+  /**
+   * Copies one Agent's current snippet. The page's store holds what it shows;
+   * a Command may run before the page ever opened, so an empty store reads the
+   * address and Key live instead.
+   */
+  async function copyCurrentSnippet(kind: SnippetKind): Promise<void> {
+    let { address, key } = connect.get();
+    if (address === null) {
+      try {
+        address = (await client.endpoint.address()).url;
+      } catch {
+        return;
+      }
+    }
+    if (key === null) {
+      try {
+        const stored = await client.storage.get({ key: KEY_STORAGE_KEY });
+        if (typeof stored === "string" && stored !== "") key = stored;
+      } catch {
+        return;
+      }
+    }
+    if (address === null || key === null) return;
+    await client.clipboard.writeText({ text: snippet(kind, { url: mcpUrl(address), key }) });
+  }
+
+  /** Answers one Command: open the page, make a new Key, or copy a snippet. */
+  async function runCommand(params: unknown): Promise<null> {
+    const { id } = (params ?? {}) as { id?: string };
+    if (id === OPEN_CONNECT) {
+      await client.navigation.openPage({ pageId: CONNECT_PAGE_ID });
       return null;
     }
+    if (id === NEW_KEY) {
+      await makeNewKey();
+      // The page shows the Key, so a run from the Command Palette lands there.
+      await client.navigation.openPage({ pageId: CONNECT_PAGE_ID });
+      return null;
+    }
+    const kind = id === undefined ? undefined : COPY_COMMAND_SNIPPETS[id];
+    if (kind !== undefined) await copyCurrentSnippet(kind);
+    return null;
+  }
+
+  function handleHostRequest(method: string, params: unknown): unknown {
+    if (method === "health.check") return "pong";
+    if (method === PLUGIN_COMMAND_RUN_REQUEST) return runCommand(params);
     throw new Error(`No handler for ${method}`);
-  });
+  }
+
+  // One host request handler answers the page's mount requests through the
+  // supplied `serve`, then this Plugin's own health check and Commands. A test
+  // that only drives the Endpoint may start this Plugin without a page.
+  if (serve === undefined) {
+    client.onHostRequest(handleHostRequest);
+  } else {
+    serve(client, {
+      pages: {
+        [CONNECT_PAGE_ID]: createConnectPage(client, connect, {
+          makeNewKey,
+          copy: copyCurrentSnippet,
+        }),
+      },
+      onHostRequest: handleHostRequest,
+    });
+  }
 
   client.onEndpointRequest(async (request: PluginEndpointRequest) => {
     await ready;
@@ -609,9 +737,12 @@ export function startMcp(client: PluginClient): void {
       // The Key could not be stored at start (the Library was unavailable):
       // make one now, so the next setup snippet works, and refuse this request,
       // which cannot carry a Key made this moment.
-      await storeFreshKey(client);
+      await makeNewKey();
       return keyRefusal();
     }
+    // The page may have opened while the Library was unavailable; a stored Key
+    // read here is the one its snippets should show.
+    connect.setKey(stored);
     if (!keysMatch(bearerKey(request), stored)) {
       return keyRefusal();
     }

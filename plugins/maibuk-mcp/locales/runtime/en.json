@@ -1,0 +1,16 @@
+{
+  "heading": "Connect an Agent",
+  "intro": "Paste one of these into each Agent that should reach Maibuk. The snippet carries this Plugin's address and Key.",
+  "claudeCode": "Claude Code",
+  "codex": "Codex, in ~/.codex/config.toml",
+  "openCode": "OpenCode, in opencode.json",
+  "cursor": "Cursor, in ~/.cursor/mcp.json",
+  "copy": "Copy",
+  "copied": "Copied",
+  "newKey": "Make a new Key",
+  "newKeyNote": "Agents using the old Key stop working until you paste the new one again.",
+  "loading": "Loading the setup snippets…",
+  "unavailable": "The Plugin Endpoint is not available, so there is no address to connect to yet.",
+  "reconnect": "Maibuk's address changed. Copy the refreshed snippet into each Agent to reconnect.",
+  "done": "Done"
+}

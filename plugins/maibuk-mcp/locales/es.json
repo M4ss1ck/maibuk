@@ -1,3 +1,11 @@
 {
-  "commands.newKey.label": "Crear una clave nueva del servidor MCP"
+  "name": "Servidor MCP",
+  "description": "Permite que herramientas de IA externas lean y cambien la Biblioteca a través del Model Context Protocol.",
+  "commands.openConnect.label": "Abrir el servidor MCP",
+  "commands.newKey.label": "Crear una clave nueva del servidor MCP",
+  "commands.copyClaudeCode.label": "Copiar el fragmento de configuración de Claude Code",
+  "commands.copyCodex.label": "Copiar el fragmento de configuración de Codex",
+  "commands.copyOpenCode.label": "Copiar el fragmento de configuración de OpenCode",
+  "commands.copyCursor.label": "Copiar el fragmento de configuración de Cursor",
+  "pages.connect.title": "Servidor MCP"
 }
