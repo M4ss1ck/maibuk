@@ -6,6 +6,7 @@ A Plugin tests itself with the kit `@maibuk/plugin-test-kit`, the supported entr
 
 - The broker: the same broker the app uses, with this Plugin's declared and granted Plugin Permissions.
 - The method table: the same handlers the app wires, over an in-memory Library, storage, secrets, clipboard, and navigation.
+- Library writes: `library.chapters.updateContent` and `library.books.checkpoint` change the in-memory Library through the host's own content conversion, so a test asserts the stored HTML a write produced; `host.checkpoints` lists the Checkpoints taken, and a Book unchanged since its last one gets none.
 - The Plugin Endpoint: `endpoint()` reads the `serve` grant the way the app does, so a request without it is answered 404, a Plugin with no handler answers 404, and a throwing handler answers 500.
 - The Plugin Endpoint address: `setEndpointAddress()` fakes the bound port, so `endpoint.address` and `endpoint.addressChanged` behave as they do in the app.
 - The host renderer: `renderPage(pageId)` and `renderSettingsRow(rowId)` mount the page or Settings row the way the app does, and the records the host keeps (notifications, navigations, page navigations, toolbar pressed state) are what the test asserts against.
@@ -18,11 +19,29 @@ A Plugin holding the `serve` Permission answers the requests an outside Agent se
 
 The answer it resolves with carries the `status`, `headers` as pairs, the whole `body` as bytes, the `chunks` a streamed answer sent in order, and `text()` for the common UTF-8 case. An `AsyncIterable` body streams: `endpoint()` resolves after the stream's end, with `chunks` joined into `body` and `streamed` true.
 
-The grant is read live, exactly as in the app. `host.setGranted([])` makes the same call come back 404 without the Plugin's handler running, and granting it again lets the next request through. A Plugin that never called `onEndpointRequest` answers 404, and one whose handler throws answers 500.
+For a streamed answer that never ends, such as a `subscriptions/listen` SSE stream, `host.endpointStream(request)` reads it chunk by chunk without waiting for its end: `head` resolves with the head, `waitForText(match)` resolves once the body contains `match`, and `close()` stops reading.
+
+The grant is read live, exactly as in the app. `host.setGranted([])` makes the same call come back 404 without the Plugin's handler running, and granting it again lets the next request through. A Plugin that never called `onEndpointRequest` answers 404, and one whose handler throws answers 500. It also delivers `permissions.changed` to a subscribed Plugin when the set changed.
 
 ## Reading the Plugin Endpoint address
 
 `host.setEndpointAddress(port)` fakes the listener bound on that port, as if Maibuk had picked it; `host.setEndpointAddress(null)` turns it off. A Plugin holding `serve` reads it with `client.endpoint.address()` and hears a move through `client.on("endpoint.addressChanged", listener)`, which delivers the current address on subscription. Setting the same address again fires nothing, so a test can prove a Plugin notices only real moves. Both are refused with `permission-denied` without the `serve` grant, like the read and the subscription in the app.
+
+## Library writes and the open editor
+
+`host.setPendingEdit(chapterId, html)` records unsaved author typing in an open editor; the next Chapter write or Checkpoint flushes it first, like the app does. An `updateContent` call with `expectedUpdatedAt` is refused with `conflict` when that flush landed typing in the Chapter or the Chapter changed since the read, so a test proves a Plugin never overwrites the author's typing.
+
+~~~ts
+host.setPendingEdit("ch-1", "<p>Typed</p>");
+
+await expect(
+  client.library.chapters.updateContent({
+    chapterId: "ch-1",
+    content: { html: "<p>Written</p>" },
+    expectedUpdatedAt: expected,
+  })
+).rejects.toMatchObject({ code: "conflict" });
+~~~
 
 ## A walk through the template test
 

@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.5";
+export const PLUGIN_API_VERSION = "0.1.6";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -33,6 +33,7 @@ export const PLUGIN_API_METHODS = [
   "navigation.openPage",
   "language.get",
   "endpoint.address",
+  "permissions.granted",
   "secrets.set",
   "secrets.delete",
   "secrets.listNames",
@@ -235,6 +236,8 @@ export interface PluginApiMethods {
         /** Sanitized by the host before it lands. */
         html: string;
       };
+      /** Milliseconds since the Unix epoch: the updatedAt the Plugin read. When given, the write is refused with code conflict if the Chapter changed since, including by the author's typing flushed just before the write. */
+      expectedUpdatedAt?: number;
     };
     output: null;
   };
@@ -472,6 +475,13 @@ export interface PluginApiMethods {
       url: string | null;
     };
   };
+  /** Lists the Plugin Permissions this Plugin holds right now. No permission is required. */
+  "permissions.granted": {
+    input: Record<string, never>;
+    output: {
+      permissions: string[];
+    };
+  };
   /** Stores a secret by name. Secrets are never read back into the Plugin. */
   "secrets.set": {
     input: {
@@ -574,6 +584,7 @@ export const PLUGIN_API_EVENT_IDS = [
   "library.availabilityChanged",
   "language.changed",
   "endpoint.addressChanged",
+  "permissions.changed",
   "editor.contentChanged",
   "editor.focusChanged",
 ] as const;
@@ -605,6 +616,10 @@ export interface PluginApiEvents {
   /** This Plugin's Plugin Endpoint address changed: the listener moved to another port or stopped. The current address is delivered on subscription, so a Plugin that starts after a change never misses it. */
   "endpoint.addressChanged": {
     url: string | null;
+  };
+  /** This Plugin's Plugin Permissions changed: one was granted or revoked. The current list is delivered on subscription, so a Plugin that starts after a change never misses it. */
+  "permissions.changed": {
+    permissions: string[];
   };
   /** The target editor's content or language changed; sent once per typing burst. */
   "editor.contentChanged": {
@@ -696,6 +711,10 @@ export interface PluginApi {
   endpoint: {
     /** Reads this Plugin's own base URL on the Plugin Endpoint, http://127.0.0.1:<port>/plugin/<pluginId>/, or null while the Plugin Endpoint is not listening. Compare it with the URL you last showed to notice a move. */
     address(params?: PluginApiMethods["endpoint.address"]["input"]): Promise<PluginApiMethods["endpoint.address"]["output"]>;
+  };
+  permissions: {
+    /** Lists the Plugin Permissions this Plugin holds right now. No permission is required. */
+    granted(params?: PluginApiMethods["permissions.granted"]["input"]): Promise<PluginApiMethods["permissions.granted"]["output"]>;
   };
   secrets: {
     /** Stores a secret by name. Secrets are never read back into the Plugin. */

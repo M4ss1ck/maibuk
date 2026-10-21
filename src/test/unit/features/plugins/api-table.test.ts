@@ -41,7 +41,7 @@ import {
   type PluginApiMethods,
 } from "@/plugin-sdk/api.generated";
 
-const UNGATED = new Set(["storage", "notifications", "navigation", "language", "toolbar"]);
+const UNGATED = new Set(["storage", "notifications", "navigation", "language", "permissions", "toolbar"]);
 
 describe("PLUGIN_API_TABLE", () => {
   it("names every method <namespace>.<verb> with unique ids", () => {
@@ -120,6 +120,14 @@ describe("PLUGIN_API_TABLE", () => {
     );
   });
 
+  it("takes an optional expectedUpdatedAt on library.chapters.updateContent", () => {
+    const row = PLUGIN_API_TABLE.find((entry) => entry.id === "library.chapters.updateContent");
+    const input = inputJsonSchema(row!);
+    expect(input.required).toEqual(["chapterId", "content"]);
+    const properties = input.properties as Record<string, { type?: string }>;
+    expect(properties.expectedUpdatedAt.type).toBe("number");
+  });
+
   it("takes every Book detail as an optional enum-checked field, with the Book id required", () => {
     const row = PLUGIN_API_TABLE.find((entry) => entry.id === "library.books.update");
     const input = inputJsonSchema(row!);
@@ -141,22 +149,26 @@ function propertyNames(schema: unknown): string[] {
 }
 
 describe("PLUGIN_API_EVENTS", () => {
-  it("lists the events: library, availability, language, the endpoint address, and the two editor events", () => {
+  it("lists the events: library, availability, language, the endpoint address, permissions, and the two editor events", () => {
     expect(PLUGIN_API_EVENTS.map((event) => event.id)).toEqual([
       "library.changed",
       "library.availabilityChanged",
       "language.changed",
       "endpoint.addressChanged",
+      "permissions.changed",
       "editor.contentChanged",
       "editor.focusChanged",
     ]);
   });
 
-  it("gates each event by its namespace's read permission, availability and language by none, and the endpoint by serve", () => {
+  it("gates each event by its namespace's read permission, availability, language, and permissions by none, and the endpoint by serve", () => {
     for (const event of PLUGIN_API_EVENTS) {
       const namespace = event.id.split(".")[0];
       expect(PLUGIN_API_NAMESPACES).toContain(namespace);
-      const ungated = event.id === "library.availabilityChanged" || event.id === "language.changed";
+      const ungated =
+        event.id === "library.availabilityChanged" ||
+        event.id === "language.changed" ||
+        event.id === "permissions.changed";
       const expected = ungated ? null : namespace === "endpoint" ? "serve" : `${namespace}:read`;
       expect(event.permission, event.id).toBe(expected);
     }

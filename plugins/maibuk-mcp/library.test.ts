@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { excerptOf, readWindow } from "./library";
+import { PluginApiError } from "@/plugin-sdk";
+import { excerptOf, libraryCall, readWindow } from "./library";
 
 describe("excerptOf", () => {
   it("collapses whitespace runs and trims", () => {
@@ -96,5 +97,46 @@ describe("readWindow", () => {
         nextOffset: null,
       });
     }
+  });
+});
+
+describe("libraryCall", () => {
+  const READ_ONLY_TEXT =
+    "The author made this Plugin read-only, so it cannot change the Library; use the read tools.";
+
+  it("answers the read-only text when the host refuses a write as permission-denied", async () => {
+    const result = await libraryCall(() => {
+      throw new PluginApiError({
+        code: "permission-denied",
+        permission: "library:write",
+        message: "Library write needs library:write.",
+      });
+    });
+    expect(result).toEqual({
+      content: [{ type: "text", text: READ_ONLY_TEXT }],
+      isError: true,
+    });
+  });
+
+  it("still answers the Tutorial refusal on library-unavailable", async () => {
+    const result = await libraryCall(() => {
+      throw new PluginApiError({ code: "library-unavailable", message: "Tutorial runs." });
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]).toMatchObject({ type: "text" });
+  });
+
+  it("rethrows a permission-denied for any other permission", async () => {
+    const refusal = new PluginApiError({
+      code: "permission-denied",
+      permission: "library:read",
+      message: "Library read needs library:read.",
+    });
+    await expect(libraryCall(() => Promise.reject(refusal))).rejects.toBe(refusal);
+  });
+
+  it("rethrows any other failure", async () => {
+    const failure = new Error("The shelf collapsed.");
+    await expect(libraryCall(() => Promise.reject(failure))).rejects.toBe(failure);
   });
 });

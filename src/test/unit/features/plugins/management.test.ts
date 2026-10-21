@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PLUGIN_APPROVALS_STORAGE_KEY,
   getPluginApproval,
@@ -192,6 +192,60 @@ describe("Plugin management: revoke", () => {
     expect(h.lifecycle.state("tracer")).toBeNull();
     expect(h.frames[0].stopped).toBe(true);
     expect(h.store.getState().plugins.tracer.running).toBe(false);
+  });
+
+  it("emits permissions.changed to a running Plugin when an optional grant is revoked (#591)", async () => {
+    const h = await setup({
+      manifest: { permissions: { required: ["library:read"], optional: ["editor:read"] } },
+      approve: true,
+      granted: ["library:read", "editor:read"],
+    });
+    await h.lifecycle.launch();
+    expect(h.lifecycle.state("tracer")?.status).toBe("ready");
+    await h.store.getState().refresh();
+    const port = h.frames[0].pluginPort;
+    if (!port) throw new Error("tracer has no plugin port");
+
+    // Records the host's events, forwarding everything else to the fake Plugin.
+    const events: { event: string; payload: unknown }[] = [];
+    const original = port.onmessage;
+    port.onmessage = (event) => {
+      const data = event.data as { kind?: string; event?: string; payload?: unknown } | null;
+      if (data && data.kind === "event" && data.event) {
+        events.push({ event: data.event, payload: data.payload });
+        return;
+      }
+      original?.call(port, event);
+    };
+    port.postMessage(JSON.stringify({ kind: "subscribe", id: 1001, event: "permissions.changed" }));
+
+    // The replay delivers the current grants on subscription.
+    await vi.waitFor(() =>
+      expect(events).toEqual([
+        {
+          event: "permissions.changed",
+          payload: { permissions: ["library:read", "editor:read"] },
+        },
+      ])
+    );
+
+    await h.store.getState().revoke("tracer", "editor:read");
+
+    expect(getPluginApproval("tracer")?.granted).toEqual(["library:read"]);
+    expect(h.lifecycle.state("tracer")?.status).toBe("ready");
+    await vi.waitFor(() =>
+      expect(events).toEqual([
+        {
+          event: "permissions.changed",
+          payload: { permissions: ["library:read", "editor:read"] },
+        },
+        { event: "permissions.changed", payload: { permissions: ["library:read"] } },
+      ])
+    );
+    // The method reads the new list through the public surface too.
+    await expect(h.frames[0].call("permissions.granted", {})).resolves.toEqual({
+      permissions: ["library:read"],
+    });
   });
 });
 

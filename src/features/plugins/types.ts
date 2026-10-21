@@ -756,6 +756,13 @@ export interface TestNotification {
   message: string;
 }
 
+/** One Checkpoint the test host recorded, in the order the Plugin took it (#591). */
+export interface TestCheckpoint {
+  bookId: string;
+  label: string;
+  versionId: string;
+}
+
 export interface TestHostOptions {
   manifest: PluginManifest;
   /** Granted Plugin Permissions; defaults to every declared one. */
@@ -777,6 +784,12 @@ export interface TestHostOptions {
   secrets?: Map<string, string>;
   /** The clipboard text `clipboard.readText` serves; defaults to empty. */
   clipboard?: string;
+  /**
+   * Makes `library.books.checkpoint` reject with `internal-error` carrying
+   * this message (#591): proves a Plugin refuses its write when no Checkpoint
+   * could be taken, without touching any other Library row.
+   */
+  checkpointError?: string;
   /**
    * The fetch `network.fetch` uses. Give one to test a Plugin against a fake
    * server; without it the row refuses `not-implemented`, like any unwired row.
@@ -836,6 +849,33 @@ export interface TestEndpointAnswer {
   text(): string;
 }
 
+/**
+ * One in-progress streamed Endpoint answer, read chunk by chunk.
+ * `endpoint()` waits for the stream to end; this instead hands each chunk to
+ * the test as it arrives, so a test can open a long-lived stream (a
+ * `subscriptions/listen` SSE stream never ends on its own) and assert what it
+ * carries mid-stream.
+ */
+export interface TestEndpointStream {
+  /** Resolves with the head once the Plugin responds. */
+  readonly head: Promise<{ status: number; headers: [string, string][] }>;
+  /** The chunks received so far, in order. */
+  chunks(): Uint8Array[];
+  /** The body received so far, decoded as UTF-8 text. */
+  text(): string;
+  /**
+   * Resolves with the body text once it contains `match`; rejects when the
+   * stream ends without it, or after `timeoutMs` (defaults to 5 seconds).
+   */
+  waitForText(match: string, timeoutMs?: number): Promise<string>;
+  /**
+   * Stops reading: later chunks are dropped (the broker is told the caller
+   * hung up), and waiting readers reject. The stream itself ends when the
+   * test stops the host.
+   */
+  close(): void;
+}
+
 export interface TestHost {
   /** The Plugin-side port: hand it to the Plugin's setup. */
   port: MessagePort;
@@ -851,6 +891,8 @@ export interface TestHost {
   navigations: TestNavigation[];
   /** Every `navigation.openPage` the Plugin asked for, in order. */
   pageNavigations: TestPageNavigation[];
+  /** Every Checkpoint the Plugin took, in order; a null one is not recorded. */
+  readonly checkpoints: ReadonlyArray<TestCheckpoint>;
   /** The app language the host serves right now. */
   language: string;
   /** The clipboard text the host holds; `clipboard.writeText` replaces it. */
@@ -859,7 +901,10 @@ export interface TestHost {
   setClipboard(text: string): void;
   /** The UI-string overrides this host carries, before they are applied. */
   locale: PluginLocale | null;
-  /** Changes the granted Plugin Permissions; the next call reads them again. */
+  /**
+   * Changes the granted Plugin Permissions; the next call reads them again,
+   * and a subscribed Plugin hears `permissions.changed` when the set changed.
+   */
   setGranted(permissions: readonly PluginPermissionId[]): void;
   /** Whether the Plugin last set this Toggle Button on with `toolbar.setPressed`; off until it does. */
   toolbarPressed(button: string): boolean;
@@ -873,6 +918,8 @@ export interface TestHost {
   setEndpointAddress(port: number | null): void;
   /** Makes the Library available or unavailable, as the Tutorial does. */
   setLibraryAvailable(available: boolean): void;
+  /** Records unsaved author typing in an open editor; the next Library write or Checkpoint flushes it first, like the app's pending-edits flush. */
+  setPendingEdit(chapterId: string, html: string): void;
   /**
    * Hands the Plugin one request on its Plugin Endpoint through the same
    * dispatcher the app uses, and resolves with the answer once it is complete:
@@ -881,6 +928,14 @@ export interface TestHost {
    * test can prove grant handling with `setGranted`.
    */
   endpoint(request: TestEndpointRequest): Promise<TestEndpointAnswer>;
+  /**
+   * Hands the Plugin one request on its Plugin Endpoint and reads a streamed
+   * answer chunk by chunk, without waiting for its `end`: a long-lived stream
+   * (a `subscriptions/listen` SSE stream never ends on its own) would hang
+   * `endpoint()`. Without the `serve` Plugin Permission the head is 404 and
+   * the Plugin's handler never runs.
+   */
+  endpointStream(request: TestEndpointRequest): TestEndpointStream;
   /**
    * Renders one of the Plugin's pages through the real host renderer, over a
    * fresh Remote UI mount, and resolves once the Plugin accepts it. Rejects when

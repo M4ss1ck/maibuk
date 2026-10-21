@@ -25,6 +25,7 @@ import {
   endpointUrlFor,
 } from "@/features/plugins/endpoint";
 import { assertToggleButton } from "@/features/plugins/handlers";
+import { fragmentToHtml, htmlToPlainText } from "@/features/plugins/library";
 import { applyPluginLocale } from "@/features/plugins/manifest-validate";
 import { pluginFetch } from "@/features/plugins/network";
 import { openPluginUiMount, type PluginUiMount } from "@/features/plugins/remote-ui/mount";
@@ -34,6 +35,8 @@ import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { PluginSecretStore } from "@/features/plugins/secret-store";
 import {
   PLUGIN_INIT_MESSAGE,
+  PluginApiError,
+  base64ToBytes,
   bytesToBase64,
   type PluginUiMountKind,
 } from "@/plugin-sdk/protocol";
@@ -44,8 +47,10 @@ import type {
   PluginManifest,
   PluginPermissionId,
   PluginRuntime,
+  TestCheckpoint,
   TestEndpointAnswer,
   TestEndpointRequest,
+  TestEndpointStream,
   TestHost,
   TestHostOptions,
   TestNavigation,
@@ -87,6 +92,17 @@ function endpointApproval(
   };
 }
 
+/**
+ * The refusal the app's handler gives for a Chapter no row holds, so a test
+ * sees the same error the real Library write produces.
+ */
+function chapterNotFound(chapterId: string): PluginApiError {
+  return new PluginApiError({
+    code: "invalid-params",
+    message: `Chapter ${chapterId} does not exist`,
+  });
+}
+
 export function createTestHost(options: TestHostOptions): TestHost {
   const channel = new MessageChannel();
   const notifications: TestNotification[] = [];
@@ -96,6 +112,16 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const chapters = [...(options.library?.chapters ?? [])];
   const notes = [...(options.library?.notes ?? [])];
   const canvases = [...(options.library?.canvases ?? [])];
+  // Library writes (#591). The kit keeps the Library a Plugin writes in memory,
+  // so a test asserts the state its write produced. Content conversion and the
+  // plain-text read are the host's own helpers, so no escaping rule is
+  // re-implemented here. A Book starts out changed (it has no Version yet) and
+  // is marked changed again by any Chapter content write, like the real
+  // Version path sees it; only taken Checkpoints are recorded.
+  const checkpoints: TestCheckpoint[] = [];
+  const unchangedBooks = new Set<string>();
+  const pendingEdits = new Map<string, string>();
+  let nextVersion = 1;
   const storage = options.storage ?? new Map<string, unknown>();
   const secrets = options.secrets ?? new Map<string, string>();
   const testFetch = options.fetch;
@@ -104,6 +130,25 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const toolbarPressedState = new Map<string, boolean>();
   let language = options.language ?? "en";
   let libraryAvailable = true;
+
+  /**
+   * Flushes every pending author edit into the in-memory Library, the way the
+   * app's pending-edits flush does before a Library write or Checkpoint. Returns
+   * the set of Chapter ids whose stored content moved.
+   */
+  function flushPendingEdits(): Set<string> {
+    const changed = new Set<string>();
+    for (const [chapterId, html] of pendingEdits) {
+      const chapter = chapters.find((entry) => entry.id === chapterId);
+      if (!chapter) continue;
+      chapter.content = { html, text: htmlToPlainText(html) };
+      chapter.updatedAt = Math.max(Date.now(), chapter.updatedAt + 1);
+      unchangedBooks.delete(chapter.bookId);
+      changed.add(chapterId);
+    }
+    pendingEdits.clear();
+    return changed;
+  }
   // The Plugin Endpoint's listener as this host fakes it: off until the test
   // gives the Plugin an address, then bound on that port.
   let endpointState: EndpointListenerState = { state: "off" };
@@ -158,6 +203,55 @@ export function createTestHost(options: TestHostOptions): TestHost {
       if (!chapter) return null;
       const { content, ...summary } = chapter;
       return { ...summary, content: content ?? { text: "", html: "" } };
+    },
+    // The two writes a test of an editing Plugin needs (#591): a Chapter
+    // content write keeps the host's conversion, and a Checkpoint records
+    // itself only when the Book changed since the last one.
+    "library.chapters.updateContent": ({ chapterId, content, expectedUpdatedAt }) => {
+      const chapter = chapters.find((entry) => entry.id === chapterId);
+      if (!chapter) throw chapterNotFound(chapterId);
+      const flushed = flushPendingEdits();
+      if (
+        expectedUpdatedAt !== undefined &&
+        (flushed.has(chapterId) || chapter.updatedAt !== expectedUpdatedAt)
+      ) {
+        throw new PluginApiError({
+          code: "conflict",
+          message: `Chapter ${chapterId} changed since it was read`,
+        });
+      }
+      const html = fragmentToHtml(content);
+      chapter.content = { html, text: htmlToPlainText(html) };
+      // Strictly increasing, so Last Edited always moves forward even when two
+      // writes land in the same millisecond.
+      chapter.updatedAt = Math.max(Date.now(), chapter.updatedAt + 1);
+      unchangedBooks.delete(chapter.bookId);
+      return null;
+    },
+    "library.books.checkpoint": ({ bookId, label }) => {
+      // Flush any pending author typing before taking the Checkpoint, like the
+      // app's pending-edits flush.
+      flushPendingEdits();
+      // A test-only failure hook (#591): proves a Plugin refuses its write
+      // when no Checkpoint could be taken, without touching any other row.
+      if (options.checkpointError !== undefined) {
+        throw new PluginApiError({
+          code: "internal-error",
+          message: options.checkpointError,
+        });
+      }
+      if (!books.some((book) => book.id === bookId)) {
+        throw new PluginApiError({
+          code: "invalid-params",
+          message: `Book ${bookId} does not exist`,
+        });
+      }
+      if (unchangedBooks.has(bookId)) return { versionId: null };
+      const versionId = `version-${nextVersion}`;
+      nextVersion += 1;
+      checkpoints.push({ bookId, label, versionId });
+      unchangedBooks.add(bookId);
+      return { versionId };
     },
     "library.notes.list": ({ bookId }) =>
       notes
@@ -217,6 +311,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
     "endpoint.address": (_params, { pluginId }) => ({
       url: endpointUrlFor(endpointState, pluginId),
     }),
+    "permissions.granted": () => ({ permissions: [...granted] }),
     // Refuses what the host refuses (the same rule as the app's handler), then records the state.
     "toolbar.setPressed": ({ button, pressed }) => {
       assertToggleButton(options.manifest, button);
@@ -237,6 +332,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
       if (event === "endpoint.addressChanged") {
         return { url: endpointUrlFor(endpointState, options.manifest.id) };
       }
+      if (event === "permissions.changed") return { permissions: [...granted] };
       return undefined;
     },
   });
@@ -258,14 +354,8 @@ export function createTestHost(options: TestHostOptions): TestHost {
   };
   let nextEndpointRequestId = 1;
 
-  /**
-   * Hands the Plugin one request on its Plugin Endpoint through the very
-   * dispatcher the app routes with, and resolves with the answer once it is
-   * complete: a streamed answer resolves after its `end`, and its chunks are
-   * joined into `body`. Without the `serve` grant the dispatcher answers 404
-   * and the request never reaches the Plugin.
-   */
-  function endpoint(request: TestEndpointRequest): Promise<TestEndpointAnswer> {
+  /** The dispatcher message for one Endpoint request the test hands the Plugin. */
+  function endpointMessage(request: TestEndpointRequest) {
     const tail = request.path.startsWith("/") ? request.path : `/${request.path}`;
     const headers: [string, string][] = Array.isArray(request.headers)
       ? request.headers.map(([name, value]) => [name, value])
@@ -276,26 +366,172 @@ export function createTestHost(options: TestHostOptions): TestHost {
         : typeof request.body === "string"
           ? new TextEncoder().encode(request.body)
           : request.body;
+    return {
+      requestId: String(nextEndpointRequestId++),
+      pluginId: options.manifest.id,
+      request: {
+        method: request.method ?? "GET",
+        path: `/plugin/${options.manifest.id}${tail}`,
+        headers,
+        body: bytesToBase64(bytes),
+      },
+    };
+  }
 
+  /**
+   * Hands the Plugin one request on its Plugin Endpoint through the very
+   * dispatcher the app routes with, and resolves with the answer once it is
+   * complete: a streamed answer resolves after its `end`, and its chunks are
+   * joined into `body`. Without the `serve` grant the dispatcher answers 404
+   * and the request never reaches the Plugin.
+   */
+  function endpoint(request: TestEndpointRequest): Promise<TestEndpointAnswer> {
     return collectEndpointAnswer((sink) =>
       dispatchEndpointRequest(
         {
           runtime: () => endpointRuntime,
           approval: () => endpointApproval(options.manifest, granted),
         },
-        {
-          requestId: String(nextEndpointRequestId++),
-          pluginId: options.manifest.id,
-          request: {
-            method: request.method ?? "GET",
-            path: `/plugin/${options.manifest.id}${tail}`,
-            headers,
-            body: bytesToBase64(bytes),
-          },
-        },
+        endpointMessage(request),
         sink
       )
     ).then((answer) => ({ ...answer, text: () => new TextDecoder().decode(answer.body) }));
+  }
+
+  /** Joins streamed pieces into the one body they carry, decoding split characters whole. */
+  function joinStreamed(pieces: readonly Uint8Array[]): Uint8Array {
+    const joined = new Uint8Array(pieces.reduce((total, piece) => total + piece.length, 0));
+    let offset = 0;
+    for (const piece of pieces) {
+      joined.set(piece, offset);
+      offset += piece.length;
+    }
+    return joined;
+  }
+
+  /**
+   * Hands the Plugin one request on its Plugin Endpoint and reads a streamed
+   * answer chunk by chunk, without waiting for its `end`: a long-lived stream
+   * (a `subscriptions/listen` SSE stream never ends on its own) would hang
+   * `endpoint()`. A whole answer ends the stream at its head instead.
+   */
+  function endpointStream(request: TestEndpointRequest): TestEndpointStream {
+    const pieces: Uint8Array[] = [];
+    let head: { status: number; headers: [string, string][] } | null = null;
+    let ended = false;
+    let closed = false;
+    let resolveHead!: (head: { status: number; headers: [string, string][] }) => void;
+    const headPromise = new Promise<{ status: number; headers: [string, string][] }>((resolve) => {
+      resolveHead = resolve;
+    });
+    interface TextWaiter {
+      match: string;
+      resolve: (text: string) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+    const waiters = new Set<TextWaiter>();
+
+    function currentText(): string {
+      return new TextDecoder().decode(joinStreamed(pieces));
+    }
+
+    /** Resolves every waiter the body so far already satisfies. */
+    function settleWaiters(): void {
+      if (waiters.size === 0) return;
+      const text = currentText();
+      for (const waiter of [...waiters]) {
+        if (text.includes(waiter.match)) {
+          waiters.delete(waiter);
+          clearTimeout(waiter.timer);
+          waiter.resolve(text);
+        } else if (ended) {
+          waiters.delete(waiter);
+          clearTimeout(waiter.timer);
+          waiter.reject(
+            new Error(`The streamed answer ended without ${JSON.stringify(waiter.match)}`)
+          );
+        }
+      }
+    }
+
+    /** Rejects every waiter: the test stopped reading, or the head never came. */
+    function failWaiters(error: Error): void {
+      for (const waiter of [...waiters]) {
+        waiters.delete(waiter);
+        clearTimeout(waiter.timer);
+        waiter.reject(error);
+      }
+    }
+
+    dispatchEndpointRequest(
+      {
+        runtime: () => endpointRuntime,
+        approval: () => endpointApproval(options.manifest, granted),
+      },
+      endpointMessage(request),
+      {
+        respond(nextStatus, nextHeaders, body, nextStreaming) {
+          head = { status: nextStatus, headers: nextHeaders };
+          resolveHead(head);
+          if (nextStreaming) return;
+          if (body !== undefined) pieces.push(base64ToBytes(body));
+          ended = true;
+          settleWaiters();
+        },
+        chunk(chunk) {
+          // The test hung up: the broker drops the rest of the stream, so the
+          // Plugin cannot keep writing into a closed assertion.
+          if (closed) return false;
+          pieces.push(base64ToBytes(chunk));
+          settleWaiters();
+          return true;
+        },
+        end() {
+          ended = true;
+          settleWaiters();
+        },
+      }
+    );
+
+    return {
+      head: headPromise,
+      chunks: () => pieces.slice(),
+      text: () => currentText(),
+      waitForText(match, timeoutMs = 5000) {
+        const text = currentText();
+        if (text.includes(match)) return Promise.resolve(text);
+        if (ended) {
+          return Promise.reject(
+            new Error(`The streamed answer ended without ${JSON.stringify(match)}`)
+          );
+        }
+        return new Promise<string>((resolve, reject) => {
+          const waiter: TextWaiter = {
+            match,
+            resolve,
+            reject,
+            timer: setTimeout(() => {}, 0),
+          };
+          waiter.timer = setTimeout(() => {
+            waiters.delete(waiter);
+            reject(
+              new Error(
+                `The streamed answer did not contain ${JSON.stringify(match)} within ${timeoutMs} ms`
+              )
+            );
+          }, timeoutMs);
+          waiters.add(waiter);
+          // A chunk may have landed between the first check and this line.
+          settleWaiters();
+        });
+      },
+      close() {
+        if (closed) return;
+        closed = true;
+        failWaiters(new Error("The streamed answer was closed"));
+      },
+    };
   }
 
   /** Every page `renderPage` opened and has not unmounted yet. */
@@ -370,6 +606,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
     get clipboard() {
       return clipboard;
     },
+    get checkpoints() {
+      return checkpoints.slice();
+    },
     toolbarPressed(button) {
       return toolbarPressedState.get(button) ?? false;
     },
@@ -377,7 +616,13 @@ export function createTestHost(options: TestHostOptions): TestHost {
       clipboard = next;
     },
     setGranted(permissions) {
-      granted = new Set(permissions);
+      const next = new Set(permissions);
+      const unchanged =
+        next.size === granted.size && [...next].every((permission) => granted.has(permission));
+      granted = next;
+      // Like setLanguage: only a real change reaches a subscribed Plugin, so
+      // recording the same set again costs no event.
+      if (!unchanged) broker.emit("permissions.changed", { permissions: [...granted] });
     },
     setLanguage(next) {
       language = next;
@@ -394,7 +639,11 @@ export function createTestHost(options: TestHostOptions): TestHost {
     setLibraryAvailable(available) {
       libraryAvailable = available;
     },
+    setPendingEdit(chapterId, html) {
+      pendingEdits.set(chapterId, html);
+    },
     endpoint,
+    endpointStream,
     renderPage(page: string) {
       return renderSurface(page, "page");
     },

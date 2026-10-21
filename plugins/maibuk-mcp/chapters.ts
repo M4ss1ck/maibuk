@@ -25,7 +25,11 @@ export interface ReadChapterArgs {
 type ChapterRow = Awaited<ReturnType<PluginClient["library"]["chapters"]["list"]>>[number];
 type BookRow = Awaited<ReturnType<PluginClient["library"]["books"]["list"]>>[number];
 
-function chapterCandidate(
+/**
+ * The candidate line an ambiguous Chapter prefix answers with, shared by the
+ * tools that resolve a Chapter ref: short id, title, and its Book.
+ */
+export function chapterCandidate(
   chapter: ChapterRow,
   booksById: Map<string, BookRow>,
   allChapterIds: readonly string[]
