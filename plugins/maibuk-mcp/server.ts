@@ -28,16 +28,34 @@ const SERVER_INSTRUCTIONS =
  * (`ttlMs`, `cacheScope`); the values repeat the SDK defaults, stated here so
  * the advertised caching is a choice rather than an accident.
  *
+ * The server advertises `capabilities.tools.listChanged`, so a modern Agent
+ * may open a `subscriptions/listen` stream for the tool list: the entry
+ * publishes `notifications/tools/list_changed` through the handler's notifier
+ * whenever the author grants or revokes the write Plugin Permission, and the
+ * legacy stateless era (which has no listen stream) keeps the
+ * `tools/list` `ttlMs: 0` cache hint as its fallback.
+ *
  * `writeGuard` is bound per request by the Plugin entry: the server instance
  * itself is fresh per request, but the guard carries the current request's
  * Connection (see `./plugin`), so the write tools checkpoint the right Book
  * no matter how long the serving handler lives.
+ *
+ * `canWrite` is the same request's write Plugin Permission: the read tools
+ * always register, in order, and the write tools register only while the
+ * author grants `library:write`. The SDK refuses a call to a tool that is not
+ * listed as an unknown tool, so a read-only Agent cannot reach the write path
+ * at all.
  */
-export function buildMcpServer(client: PluginClient, writeGuard: WriteGuard): McpServer {
+export function buildMcpServer(
+  client: PluginClient,
+  writeGuard: WriteGuard,
+  canWrite = true
+): McpServer {
   const server = new McpServer(
     { name: "maibuk", version: "0.1.0" },
     {
       instructions: SERVER_INSTRUCTIONS,
+      capabilities: { tools: { listChanged: true } },
       cacheHints: {
         "tools/list": { ttlMs: 0, cacheScope: "private" },
         "server/discover": { ttlMs: 0, cacheScope: "private" },
@@ -123,48 +141,53 @@ export function buildMcpServer(client: PluginClient, writeGuard: WriteGuard): Mc
     },
     async (args) => readNote(client, args as any)
   );
-  server.registerTool(
-    "edit_chapter",
-    {
-      title: "Edit chapter",
-      description:
-        "Replace one exact piece of a Chapter's text, or append to its end, without sending the whole Chapter back.",
-      inputSchema: z.object({
-        chapter: z.string().min(8),
-        find: z.string().optional(),
-        replace: z.string().optional(),
-        append: z.string().optional(),
-        format: z.enum(["text", "html"]).optional(),
-      }),
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
+  // The write tools register only while the author grants `library:write`
+  // (see `canWrite` above): a read-only Agent lists and calls the read tools
+  // alone, and the SDK refuses a call to an unlisted tool as an unknown tool.
+  if (canWrite) {
+    server.registerTool(
+      "edit_chapter",
+      {
+        title: "Edit chapter",
+        description:
+          "Replace one exact piece of a Chapter's text, or append to its end, without sending the whole Chapter back.",
+        inputSchema: z.object({
+          chapter: z.string().min(8),
+          find: z.string().optional(),
+          replace: z.string().optional(),
+          append: z.string().optional(),
+          format: z.enum(["text", "html"]).optional(),
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
       },
-    },
-    async (args) => editChapter(client, args as any, writeGuard)
-  );
-  server.registerTool(
-    "write_chapter",
-    {
-      title: "Write chapter",
-      description:
-        "Replace a Chapter's whole content with text (the host makes paragraphs) or html (the host sanitizes it). Needs expectedLastEdited from read_chapter and is refused if the Chapter changed since. Prefer edit_chapter for small changes.",
-      inputSchema: z.object({
-        chapter: z.string().min(8),
-        expectedLastEdited: z.string(),
-        text: z.string().optional(),
-        html: z.string().optional(),
-      }),
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
+      async (args) => editChapter(client, args as any, writeGuard)
+    );
+    server.registerTool(
+      "write_chapter",
+      {
+        title: "Write chapter",
+        description:
+          "Replace a Chapter's whole content with text (the host makes paragraphs) or html (the host sanitizes it). Needs expectedLastEdited from read_chapter and is refused if the Chapter changed since. Prefer edit_chapter for small changes.",
+        inputSchema: z.object({
+          chapter: z.string().min(8),
+          expectedLastEdited: z.string(),
+          text: z.string().optional(),
+          html: z.string().optional(),
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
       },
-    },
-    async (args) => writeChapter(client, args as any, writeGuard)
-  );
+      async (args) => writeChapter(client, args as any, writeGuard)
+    );
+  }
   return server;
 }

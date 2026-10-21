@@ -11,8 +11,8 @@
   "lifecycle": "persistent",
   "defaultLanguage": "en",
   "permissions": {
-    "required": ["serve", "library:read", "library:write"],
-    "optional": []
+    "required": ["serve", "library:read"],
+    "optional": ["library:write"]
   },
   "contributes": {
     "commands": [

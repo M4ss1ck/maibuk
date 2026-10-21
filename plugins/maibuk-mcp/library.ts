@@ -22,6 +22,33 @@ function libraryUnavailableResult(): CallToolResult {
   return { content: [{ type: "text", text: LIBRARY_UNAVAILABLE_TEXT }], isError: true };
 }
 
+/**
+ * What a write tool answers when the author made the Plugin read-only: either
+ * the tool was never listed, or a revoke raced the call and the host refused
+ * the write. The sentence names the read tools, so the Agent knows what to do
+ * instead of retrying the write.
+ */
+export const READ_ONLY_TEXT =
+  "The author made this Plugin read-only, so it cannot change the Library; use the read tools.";
+
+function readOnlyResult(): CallToolResult {
+  return { content: [{ type: "text", text: READ_ONLY_TEXT }], isError: true };
+}
+
+/**
+ * Whether a Plugin API failure refuses with `permission-denied` on the
+ * Library write Plugin Permission: the host refused `updateContent` or
+ * `checkpoint` because a revoke raced the call.
+ */
+export function isWritePermissionDenied(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "permission-denied" &&
+    (error as { permission?: unknown }).permission === "library:write"
+  );
+}
+
 function errorResult(text: string): CallToolResult {
   return { content: [{ type: "text", text }], isError: true };
 }
@@ -33,13 +60,17 @@ export function isoDate(ms: number): string {
 
 /**
  * Runs `fn`, turning a thrown `library-unavailable` error into the Tutorial
- * refusal; any other error propagates to the caller.
+ * refusal, and a `library:write` `permission-denied` into the read-only
+ * refusal (a revoke raced the call: the write tool ran, but the host refused
+ * its write). A `permission-denied` on any other Plugin Permission is not a
+ * write racing a revoke, so it propagates to the caller.
  */
 export async function libraryCall(fn: () => Promise<CallToolResult>): Promise<CallToolResult> {
   try {
     return await fn();
   } catch (error) {
     if (isLibraryUnavailable(error)) return libraryUnavailableResult();
+    if (isWritePermissionDenied(error)) return readOnlyResult();
     throw error;
   }
 }
@@ -215,4 +246,4 @@ export function readWindow(
   };
 }
 
-export { errorResult, libraryUnavailableResult, titleOrUntitled };
+export { errorResult, libraryUnavailableResult, readOnlyResult, titleOrUntitled };

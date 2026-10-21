@@ -963,6 +963,43 @@ describe("createTestHost() endpoint", () => {
       host.stop();
     }
   });
+
+  it("reads a streamed answer chunk by chunk without waiting for its end", async () => {
+    const host = createTestHost({ manifest: serveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      client.onEndpointRequest(() => ({
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+        body: (async function* () {
+          yield "one ";
+          await gate;
+          yield "two";
+        })(),
+      }));
+
+      const stream = host.endpointStream({ path: "/stream" });
+
+      const head = await stream.head;
+      expect(head.status).toBe(200);
+      expect(head.headers).toEqual([["content-type", "text/event-stream"]]);
+      // The first chunk arrives while the stream stays open behind the gate.
+      await expect(stream.waitForText("one ")).resolves.toBe("one ");
+      release();
+      await expect(stream.waitForText("one two")).resolves.toBe("one two");
+      expect(stream.chunks().map((chunk) => new TextDecoder().decode(chunk))).toEqual([
+        "one ",
+        "two",
+      ]);
+      stream.close();
+    } finally {
+      host.stop();
+    }
+  });
 });
 
 describe("createTestHost() endpoint address", () => {

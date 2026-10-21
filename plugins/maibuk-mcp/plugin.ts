@@ -20,7 +20,7 @@ import {
 } from "@/plugin-sdk";
 import { isLibraryUnavailable, LIBRARY_UNAVAILABLE_TEXT } from "./books";
 import type { WriteGuard } from "./edits";
-import { errorResult } from "./library";
+import { errorResult, isWritePermissionDenied, readOnlyResult } from "./library";
 import { buildMcpServer } from "./server";
 
 /** The storage key holding the Connection's Key. */
@@ -168,13 +168,39 @@ function toWebRequest(request: PluginEndpointRequest, caller: string | null): Re
   return new Request(`http://127.0.0.1${request.path}`, init);
 }
 
-/** Converts the SDK's web Response back into a Plugin Endpoint answer. */
-async function fromWebResponse(response: Response): Promise<PluginEndpointAnswer> {
+/**
+ * Converts the SDK's web Response back into a Plugin Endpoint answer. The body
+ * streams chunk by chunk instead of buffering: a `subscriptions/listen` answer
+ * is a long-lived SSE stream that never ends on its own, so buffering it with
+ * `arrayBuffer()` would hang the request until the Agent hangs up. A bodyless
+ * response (a bare 202, a 405) stays bodyless. Headers and status pass through
+ * unchanged, so the existing answers keep their shape.
+ */
+function fromWebResponse(response: Response): PluginEndpointAnswer {
   const headers: [string, string][] = [];
   response.headers.forEach((value, name) => {
     headers.push([name, value]);
   });
-  return { status: response.status, headers, body: new Uint8Array(await response.arrayBuffer()) };
+  if (response.body === null) return { status: response.status, headers };
+  return { status: response.status, headers, body: streamBody(response.body) };
+}
+
+/**
+ * Reads one web body chunk by chunk as the Plugin Endpoint's streamed body.
+ * The reader releases its lock when the stream ends or errors, so a cancelled
+ * listen stream never holds the SDK's response open.
+ */
+async function* streamBody(body: ReadableStream<Uint8Array>): AsyncIterable<Uint8Array> {
+  const reader = body.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      yield value;
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 /** One live Connection as Plugin storage holds it, in ms since the epoch. */
@@ -355,7 +381,9 @@ function createConnections(client: PluginClient): {
   // the Connection that initialize opened, while that one is still live.
   function resolve(caller: Caller | null): string | null {
     if (caller === null) return null;
-    return caller.name ?? (caller.legacy && borrowed !== null && live.has(borrowed) ? borrowed : null);
+    return (
+      caller.name ?? (caller.legacy && borrowed !== null && live.has(borrowed) ? borrowed : null)
+    );
   }
 
   return {
@@ -412,6 +440,11 @@ export function startMcp(client: PluginClient): void {
    * the same Connection skip it, and a failed Checkpoint refuses the write.
    * A request that named no Agent shares the anonymous memory instead, so
    * those requests also take one Checkpoint per Book, not one per write.
+   *
+   * A `library:write` `permission-denied` is a revoke that raced the call
+   * (the tool was listed, but the host refused the Checkpoint): it answers
+   * the read-only refusal, never the generic Checkpoint failure, so the Agent
+   * learns the Plugin is read-only instead of retrying a doomed write.
    */
   function writeGuardFor(caller: string | null): WriteGuard {
     const agentName = caller ?? "an Agent";
@@ -422,6 +455,7 @@ export function startMcp(client: PluginClient): void {
           await client.library.books.checkpoint({ bookId, label: `Before ${agentName} edits` });
         } catch (error) {
           if (isLibraryUnavailable(error)) throw error;
+          if (isWritePermissionDenied(error)) return readOnlyResult();
           return errorResult(
             "Could not take a Checkpoint of the Book before writing, so nothing changed; try again."
           );
@@ -441,12 +475,52 @@ export function startMcp(client: PluginClient): void {
   }
 
   // One factory for both eras, so the two can never drift apart.
+  // Whether the author grants the write Plugin Permission right now: the
+  // `permissions.changed` subscription below replays the current list on
+  // subscribe and delivers every later change, and each request's server
+  // registers the write tools only while it holds `library:write`. `null`
+  // until the first delivery; the request path reads the list directly in
+  // that window (see below), so the first request still serves the right set.
+  let canWrite: boolean | null = null;
+  // The last delivered list, so only a real change after the initial replay
+  // fans out to the Agents (see the subscription below).
+  let lastPermissions: readonly string[] | null = null;
+
   const handler: McpHttpHandler = createMcpHandler(
-    (context) => buildMcpServer(client, writeGuardFor(callerOf(context))),
+    (context) => buildMcpServer(client, writeGuardFor(callerOf(context)), canWrite ?? true),
     {
       legacy: "stateless",
     }
   );
+
+  /**
+   * Whether two Plugin Permission lists hold the same set, whatever their order.
+   */
+  function samePermissions(left: readonly string[], right: readonly string[]): boolean {
+    return left.length === right.length && left.every((permission) => right.includes(permission));
+  }
+
+  // The write Plugin Permission is optional now (see the manifest): revoking
+  // it leaves the Plugin running with only the read tools, and re-granting
+  // brings the write tools back. Every delivery after the initial replay
+  // publishes `notifications/tools/list_changed` to the Agents listening on a
+  // modern `subscriptions/listen` stream, so they re-list instead of calling
+  // a tool that is gone (or missing one that is back).
+  void client
+    .on("permissions.changed", (payload) => {
+      const next = [...payload.permissions];
+      const first = canWrite === null;
+      const changed = lastPermissions === null || !samePermissions(lastPermissions, next);
+      lastPermissions = next;
+      canWrite = next.includes("library:write");
+      if (!first && changed) handler.notify.toolsChanged();
+    })
+    .catch(() => {
+      // No subscription (denied or stopped): each request reads the list
+      // directly (see below), and the host's own `library:write` gate still
+      // refuses the write with the read-only text, so nothing is lost but the
+      // live list-changed signal.
+    });
   // The Tutorial flips availability through this event; a refusal from any
   // library call flips it too (see the per-request probe below).
   let libraryAvailable = true;
@@ -508,6 +582,21 @@ export function startMcp(client: PluginClient): void {
     // and only such a request carries its Connection to the write tools.
     const caller = readCaller(body);
     connections.count(caller);
+    if (canWrite === null) {
+      // The replayed `permissions.changed` delivery has not arrived yet (the
+      // subscription is still settling): read the current list directly, so
+      // the first request still serves the right tool set. A failed read
+      // keeps the write tools, the way Built-ins pre-grant the optional
+      // write; the host's own `library:write` gate still refuses the write
+      // with the read-only text, so a wrong guess never changes the Library.
+      try {
+        const granted = await client.permissions.granted();
+        lastPermissions = [...granted.permissions];
+        canWrite = granted.permissions.includes("library:write");
+      } catch {
+        canWrite = true;
+      }
+    }
     return fromWebResponse(await handler.fetch(toWebRequest(request, connections.resolve(caller))));
   });
 }

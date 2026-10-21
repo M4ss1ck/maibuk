@@ -98,12 +98,9 @@ function makeBook(id: string, updatedAt: number, title = `Title ${id}`) {
   };
 }
 
-function makeChapter(
-  id: string,
-  bookId: string,
-  html: string,
-  updatedAt = Date.UTC(2026, 0, 1)
-) {
+const JANUARY_1 = Date.UTC(2026, 0, 1);
+
+function makeChapter(id: string, bookId: string, html: string, updatedAt = JANUARY_1) {
   return {
     id,
     bookId,
@@ -163,7 +160,8 @@ describe("write checkpoints", () => {
         toolsCall("edit_chapter", { chapter: "chapteralpha", append: "More." }, 2)
       );
       expect(isError(first)).toBe(false);
-      const reread = await mcpRequest(host, key, toolsCall("read_chapter", { chapter: "chapteralpha" }, 3));
+      const readCall = toolsCall("read_chapter", { chapter: "chapteralpha" }, 3);
+      const reread = await mcpRequest(host, key, readCall);
       const second = await mcpRequest(
         host,
         key,

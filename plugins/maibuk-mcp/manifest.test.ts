@@ -31,9 +31,9 @@ describe("MCP Server manifest", () => {
     expect(manifest().lifecycle).toBe("persistent");
   });
 
-  it("asks only for the endpoint and Library reads and writes", () => {
-    expect(manifest().permissions.required).toEqual(["serve", "library:read", "library:write"]);
-    expect(manifest().permissions.optional).toEqual([]);
+  it("asks only for the endpoint and Library reads, with writes optional", () => {
+    expect(manifest().permissions.required).toEqual(["serve", "library:read"]);
+    expect(manifest().permissions.optional).toEqual(["library:write"]);
   });
 
   it("contributes the newKey Command with no default shortcut", () => {

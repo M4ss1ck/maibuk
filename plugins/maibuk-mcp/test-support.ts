@@ -81,9 +81,7 @@ export function startHost(options: ConnectOptions = {}): {
     ...(options.startReason !== undefined ? { startReason: options.startReason } : {}),
     storage,
     ...(options.library !== undefined ? { library: options.library } : {}),
-    ...(options.checkpointError !== undefined
-      ? { checkpointError: options.checkpointError }
-      : {}),
+    ...(options.checkpointError ? { checkpointError: options.checkpointError } : {}),
   });
   if (options.libraryUnavailable === true) host.setLibraryAvailable(false);
   startMcp(createPluginClient(host.port));

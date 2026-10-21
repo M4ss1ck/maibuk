@@ -849,6 +849,33 @@ export interface TestEndpointAnswer {
   text(): string;
 }
 
+/**
+ * One in-progress streamed Endpoint answer, read chunk by chunk.
+ * `endpoint()` waits for the stream to end; this instead hands each chunk to
+ * the test as it arrives, so a test can open a long-lived stream (a
+ * `subscriptions/listen` SSE stream never ends on its own) and assert what it
+ * carries mid-stream.
+ */
+export interface TestEndpointStream {
+  /** Resolves with the head once the Plugin responds. */
+  readonly head: Promise<{ status: number; headers: [string, string][] }>;
+  /** The chunks received so far, in order. */
+  chunks(): Uint8Array[];
+  /** The body received so far, decoded as UTF-8 text. */
+  text(): string;
+  /**
+   * Resolves with the body text once it contains `match`; rejects when the
+   * stream ends without it, or after `timeoutMs` (defaults to 5 seconds).
+   */
+  waitForText(match: string, timeoutMs?: number): Promise<string>;
+  /**
+   * Stops reading: later chunks are dropped (the broker is told the caller
+   * hung up), and waiting readers reject. The stream itself ends when the
+   * test stops the host.
+   */
+  close(): void;
+}
+
 export interface TestHost {
   /** The Plugin-side port: hand it to the Plugin's setup. */
   port: MessagePort;
@@ -899,6 +926,14 @@ export interface TestHost {
    * test can prove grant handling with `setGranted`.
    */
   endpoint(request: TestEndpointRequest): Promise<TestEndpointAnswer>;
+  /**
+   * Hands the Plugin one request on its Plugin Endpoint and reads a streamed
+   * answer chunk by chunk, without waiting for its `end`: a long-lived stream
+   * (a `subscriptions/listen` SSE stream never ends on its own) would hang
+   * `endpoint()`. Without the `serve` Plugin Permission the head is 404 and
+   * the Plugin's handler never runs.
+   */
+  endpointStream(request: TestEndpointRequest): TestEndpointStream;
   /**
    * Renders one of the Plugin's pages through the real host renderer, over a
    * fresh Remote UI mount, and resolves once the Plugin accepts it. Rejects when

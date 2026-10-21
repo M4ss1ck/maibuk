@@ -5,7 +5,10 @@
  */
 
 import { describe, expect, it } from "vitest";
+import type { PluginClient } from "@/plugin-sdk";
+import { PluginApiError } from "@/plugin-sdk";
 import { connect, mcpRequest, type McpAnswer } from "./test-support";
+import { editChapter, type WriteGuard } from "./edits";
 
 function initializeBody(id: unknown = 1) {
   return {
@@ -693,5 +696,71 @@ describe("write_chapter", () => {
     } finally {
       host.stop();
     }
+  });
+});
+
+describe("edit_chapter read-only race", () => {
+  const READ_ONLY_TEXT =
+    "The author made this Plugin read-only, so it cannot change the Library; use the read tools.";
+
+  /** A Plugin client the host refuses with permission-denied on the write. */
+  function refusedClient() {
+    const book = {
+      id: "bookalpha1",
+      title: "The Book",
+      subtitle: null,
+      authorName: "Author",
+      genre: null,
+      language: "en",
+      wordCount: 100,
+      targetWordCount: null,
+      status: "draft" as const,
+      updatedAt: 1000,
+    };
+    const summary = {
+      id: "chapteralpha",
+      bookId: "bookalpha1",
+      title: "The Chapter",
+      order: 1,
+      parentId: null,
+      chapterType: "chapter" as const,
+      wordCount: 10,
+      status: "draft" as const,
+      updatedAt: Date.UTC(2026, 0, 1),
+    };
+    return {
+      library: {
+        books: { list: async () => [book] },
+        chapters: {
+          list: async () => [summary],
+          get: async () => ({
+            ...summary,
+            content: { html: "<p>Alpha body.</p>", text: "Alpha body." },
+          }),
+          updateContent: async () => {
+            throw new PluginApiError({
+              code: "permission-denied",
+              permission: "library:write",
+              message: "Library write needs library:write.",
+            });
+          },
+        },
+      },
+    } as unknown as PluginClient;
+  }
+
+  it("answers the read-only text when the host refuses the write mid-call", async () => {
+    // The Plugin still thinks it can write (the Checkpoint guard passes), but
+    // the host revoked library:write after the tool list was served.
+    const guard: WriteGuard = { ensureCheckpoint: async () => null };
+    const result = await editChapter(
+      refusedClient(),
+      { chapter: "chapteralpha", append: "More." },
+      guard
+    );
+    expect(result).toEqual({
+      content: [{ type: "text", text: READ_ONLY_TEXT }],
+      isError: true,
+    });
   });
 });

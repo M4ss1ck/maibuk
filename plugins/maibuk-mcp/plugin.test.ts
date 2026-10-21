@@ -213,6 +213,59 @@ describe("MCP Server protocol", () => {
           },
         ]
       `);
+
+      // Read-only variant: without library:write the Agent sees only the read
+      // tools, in the same order and with the same annotations.
+      host.setGranted(["serve", "library:read"]);
+      let readonly: McpAnswer | undefined;
+      await vi.waitFor(async () => {
+        readonly = await mcpRequest(host, key, toolsListBody(3));
+        expect(readonly.json.result.tools.map((tool: any) => tool.name)).toEqual([
+          "list_books",
+          "get_book",
+          "read_chapter",
+          "list_notes",
+          "read_note",
+        ]);
+      });
+      if (readonly === undefined) throw new Error("The read-only tools/list never arrived");
+      for (const tool of readonly.json.result.tools) {
+        expect(tool.outputSchema).toBeUndefined();
+      }
+      expect(gateOf(readonly)).toMatchInlineSnapshot(`
+        [
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "list_books",
+          },
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "get_book",
+          },
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "read_chapter",
+          },
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "list_notes",
+          },
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "read_note",
+          },
+        ]
+      `);
     } finally {
       host.stop();
     }
@@ -543,6 +596,219 @@ describe("MCP Server Connections", () => {
       await untilWritten(() => connectionsOf(storage).length === 0);
       await mcpRequest(host, key, toolsListBody());
       expect(connectionsOf(storage)).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+/** The Agent's legacy `tools/call` body. */
+function toolsCallBody(name: string, args: unknown, id: unknown = 2) {
+  return { jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } };
+}
+
+function readOnlyBook() {
+  return {
+    id: "bookalpha1",
+    title: "The Book",
+    subtitle: null,
+    authorName: "Author",
+    genre: null,
+    language: "en",
+    wordCount: 100,
+    targetWordCount: null,
+    status: "draft" as const,
+    updatedAt: 1000,
+  };
+}
+
+function readOnlyChapter(html = "<p>Alpha body.</p>") {
+  return {
+    id: "chapteralpha",
+    bookId: "bookalpha1",
+    title: "Chapter chapteralpha",
+    order: 1,
+    parentId: null,
+    chapterType: "chapter" as const,
+    wordCount: 10,
+    status: "draft" as const,
+    updatedAt: Date.UTC(2026, 0, 1),
+    content: { html, text: "Alpha body." },
+  };
+}
+
+function readOnlyLibrary() {
+  return { books: [readOnlyBook()], chapters: [readOnlyChapter()] } as any;
+}
+
+/** Whether the Agent sees a refusal: a tool error result, or a JSON-RPC error. */
+function refused(answer: McpAnswer): boolean {
+  return answer.json?.result?.isError === true || answer.json?.error !== undefined;
+}
+
+describe("MCP Server read-only mode", () => {
+  it("drops the write tools when library:write is revoked and brings them back on re-grant", async () => {
+    const { host, key } = await connect();
+    try {
+      const full = await mcpRequest(host, key, toolsListBody());
+      expect(full.json.result.tools.map((tool: any) => tool.name)).toEqual([
+        "list_books",
+        "get_book",
+        "read_chapter",
+        "list_notes",
+        "read_note",
+        "edit_chapter",
+        "write_chapter",
+      ]);
+
+      host.setGranted(["serve", "library:read"]);
+      await vi.waitFor(async () => {
+        const readonly = await mcpRequest(host, key, toolsListBody(3));
+        expect(readonly.json.result.tools.map((tool: any) => tool.name)).toEqual([
+          "list_books",
+          "get_book",
+          "read_chapter",
+          "list_notes",
+          "read_note",
+        ]);
+      });
+
+      host.setGranted(["serve", "library:read", "library:write"]);
+      await vi.waitFor(async () => {
+        const back = await mcpRequest(host, key, toolsListBody(4));
+        expect(back.json.result.tools.map((tool: any) => tool.name)).toEqual([
+          "list_books",
+          "get_book",
+          "read_chapter",
+          "list_notes",
+          "read_note",
+          "edit_chapter",
+          "write_chapter",
+        ]);
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a write tool call while read-only, leaving the Chapter and history alone", async () => {
+    const library = readOnlyLibrary();
+    const { host, key } = await connect({ library });
+    try {
+      host.setGranted(["serve", "library:read"]);
+      await vi.waitFor(async () => {
+        const listed = await mcpRequest(host, key, toolsListBody(3));
+        expect(listed.json.result.tools.map((tool: any) => tool.name)).toEqual([
+          "list_books",
+          "get_book",
+          "read_chapter",
+          "list_notes",
+          "read_note",
+        ]);
+      });
+
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCallBody("edit_chapter", { chapter: "chapteralpha", append: "More." }, 4)
+      );
+      // The tool is not listed, so the SDK refuses the call as an unknown tool.
+      expect(answer.json).toEqual({
+        jsonrpc: "2.0",
+        id: 4,
+        error: { code: -32602, message: "Tool edit_chapter not found" },
+      });
+      expect(library.chapters[0].content.html).toBe("<p>Alpha body.</p>");
+      expect(host.checkpoints).toEqual([]);
+
+      // The read tools keep working while read-only.
+      const reread = await mcpRequest(
+        host,
+        key,
+        toolsCallBody("read_chapter", { chapter: "chapteralpha" }, 5)
+      );
+      expect(refused(reread)).toBe(false);
+      const blocks = reread.json.result.content.map((block: any) => block.text).join("\n");
+      expect(blocks).toContain("Alpha body.");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses the write when a revoke races the call, changing nothing", async () => {
+    const library = readOnlyLibrary();
+    const { host, key } = await connect({ library });
+    try {
+      // The call reaches the Plugin while it still lists the write tools; the
+      // revoke lands before its Library writes do. The Plugin processes the
+      // delivered revoke before it builds the call's server, so the SDK
+      // refuses the call as an unknown tool; the read-only text covers the
+      // narrower window where the host itself refuses the write (see the
+      // `libraryCall` and `edit_chapter` race tests).
+      const pending = mcpRequest(
+        host,
+        key,
+        toolsCallBody("edit_chapter", { chapter: "chapteralpha", append: "More." }, 2)
+      );
+      host.setGranted(["serve", "library:read"]);
+      const answer = await pending;
+      expect(answer.json).toEqual({
+        jsonrpc: "2.0",
+        id: 2,
+        error: { code: -32602, message: "Tool edit_chapter not found" },
+      });
+      expect(library.chapters[0].content.html).toBe("<p>Alpha body.</p>");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("advertises listChanged and signals the tool-list change on a listen stream", async () => {
+    const { host, key } = await connect();
+    try {
+      // Both eras advertise the listChanged capability the listen stream needs.
+      const initialized = await mcpRequest(host, key, initializeBody());
+      expect(initialized.json.result.capabilities).toEqual({ tools: { listChanged: true } });
+      const discovered = await mcpRequest(
+        host,
+        key,
+        discoverBody(),
+        modernHeaders("server/discover")
+      );
+      expect(discovered.json.result.capabilities).toEqual({ tools: { listChanged: true } });
+
+      // A modern Agent opens a subscriptions/listen stream for tool-list changes.
+      const stream = host.endpointStream({
+        method: "POST",
+        path: "/mcp",
+        headers: {
+          "content-type": "application/json",
+          accept: "text/event-stream",
+          authorization: `Bearer ${key}`,
+          ...modernHeaders("subscriptions/listen"),
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 10,
+          method: "subscriptions/listen",
+          params: modernParams({ notifications: { toolsListChanged: true } }),
+        }),
+      });
+      const head = await stream.head;
+      expect(head.status).toBe(200);
+      // The acknowledged filter honors the tool-list change ...
+      await expect(
+        stream.waitForText("notifications/subscriptions/acknowledged")
+      ).resolves.toContain("notifications/subscriptions/acknowledged");
+      await stream.waitForText('"toolsListChanged":true');
+      // ... but no change has been signalled yet.
+      expect(stream.text()).not.toContain("notifications/tools/list_changed");
+
+      // Revoking the write Permission drops the write tools and signals it.
+      host.setGranted(["serve", "library:read"]);
+      await stream.waitForText("notifications/tools/list_changed");
+      stream.close();
     } finally {
       host.stop();
     }

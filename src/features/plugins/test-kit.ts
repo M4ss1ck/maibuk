@@ -36,6 +36,7 @@ import type { PluginSecretStore } from "@/features/plugins/secret-store";
 import {
   PLUGIN_INIT_MESSAGE,
   PluginApiError,
+  base64ToBytes,
   bytesToBase64,
   type PluginUiMountKind,
 } from "@/plugin-sdk/protocol";
@@ -49,6 +50,7 @@ import type {
   TestCheckpoint,
   TestEndpointAnswer,
   TestEndpointRequest,
+  TestEndpointStream,
   TestHost,
   TestHostOptions,
   TestNavigation,
@@ -319,14 +321,8 @@ export function createTestHost(options: TestHostOptions): TestHost {
   };
   let nextEndpointRequestId = 1;
 
-  /**
-   * Hands the Plugin one request on its Plugin Endpoint through the very
-   * dispatcher the app routes with, and resolves with the answer once it is
-   * complete: a streamed answer resolves after its `end`, and its chunks are
-   * joined into `body`. Without the `serve` grant the dispatcher answers 404
-   * and the request never reaches the Plugin.
-   */
-  function endpoint(request: TestEndpointRequest): Promise<TestEndpointAnswer> {
+  /** The dispatcher message for one Endpoint request the test hands the Plugin. */
+  function endpointMessage(request: TestEndpointRequest) {
     const tail = request.path.startsWith("/") ? request.path : `/${request.path}`;
     const headers: [string, string][] = Array.isArray(request.headers)
       ? request.headers.map(([name, value]) => [name, value])
@@ -337,26 +333,172 @@ export function createTestHost(options: TestHostOptions): TestHost {
         : typeof request.body === "string"
           ? new TextEncoder().encode(request.body)
           : request.body;
+    return {
+      requestId: String(nextEndpointRequestId++),
+      pluginId: options.manifest.id,
+      request: {
+        method: request.method ?? "GET",
+        path: `/plugin/${options.manifest.id}${tail}`,
+        headers,
+        body: bytesToBase64(bytes),
+      },
+    };
+  }
 
+  /**
+   * Hands the Plugin one request on its Plugin Endpoint through the very
+   * dispatcher the app routes with, and resolves with the answer once it is
+   * complete: a streamed answer resolves after its `end`, and its chunks are
+   * joined into `body`. Without the `serve` grant the dispatcher answers 404
+   * and the request never reaches the Plugin.
+   */
+  function endpoint(request: TestEndpointRequest): Promise<TestEndpointAnswer> {
     return collectEndpointAnswer((sink) =>
       dispatchEndpointRequest(
         {
           runtime: () => endpointRuntime,
           approval: () => endpointApproval(options.manifest, granted),
         },
-        {
-          requestId: String(nextEndpointRequestId++),
-          pluginId: options.manifest.id,
-          request: {
-            method: request.method ?? "GET",
-            path: `/plugin/${options.manifest.id}${tail}`,
-            headers,
-            body: bytesToBase64(bytes),
-          },
-        },
+        endpointMessage(request),
         sink
       )
     ).then((answer) => ({ ...answer, text: () => new TextDecoder().decode(answer.body) }));
+  }
+
+  /** Joins streamed pieces into the one body they carry, decoding split characters whole. */
+  function joinStreamed(pieces: readonly Uint8Array[]): Uint8Array {
+    const joined = new Uint8Array(pieces.reduce((total, piece) => total + piece.length, 0));
+    let offset = 0;
+    for (const piece of pieces) {
+      joined.set(piece, offset);
+      offset += piece.length;
+    }
+    return joined;
+  }
+
+  /**
+   * Hands the Plugin one request on its Plugin Endpoint and reads a streamed
+   * answer chunk by chunk, without waiting for its `end`: a long-lived stream
+   * (a `subscriptions/listen` SSE stream never ends on its own) would hang
+   * `endpoint()`. A whole answer ends the stream at its head instead.
+   */
+  function endpointStream(request: TestEndpointRequest): TestEndpointStream {
+    const pieces: Uint8Array[] = [];
+    let head: { status: number; headers: [string, string][] } | null = null;
+    let ended = false;
+    let closed = false;
+    let resolveHead!: (head: { status: number; headers: [string, string][] }) => void;
+    const headPromise = new Promise<{ status: number; headers: [string, string][] }>((resolve) => {
+      resolveHead = resolve;
+    });
+    interface TextWaiter {
+      match: string;
+      resolve: (text: string) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+    const waiters = new Set<TextWaiter>();
+
+    function currentText(): string {
+      return new TextDecoder().decode(joinStreamed(pieces));
+    }
+
+    /** Resolves every waiter the body so far already satisfies. */
+    function settleWaiters(): void {
+      if (waiters.size === 0) return;
+      const text = currentText();
+      for (const waiter of [...waiters]) {
+        if (text.includes(waiter.match)) {
+          waiters.delete(waiter);
+          clearTimeout(waiter.timer);
+          waiter.resolve(text);
+        } else if (ended) {
+          waiters.delete(waiter);
+          clearTimeout(waiter.timer);
+          waiter.reject(
+            new Error(`The streamed answer ended without ${JSON.stringify(waiter.match)}`)
+          );
+        }
+      }
+    }
+
+    /** Rejects every waiter: the test stopped reading, or the head never came. */
+    function failWaiters(error: Error): void {
+      for (const waiter of [...waiters]) {
+        waiters.delete(waiter);
+        clearTimeout(waiter.timer);
+        waiter.reject(error);
+      }
+    }
+
+    dispatchEndpointRequest(
+      {
+        runtime: () => endpointRuntime,
+        approval: () => endpointApproval(options.manifest, granted),
+      },
+      endpointMessage(request),
+      {
+        respond(nextStatus, nextHeaders, body, nextStreaming) {
+          head = { status: nextStatus, headers: nextHeaders };
+          resolveHead(head);
+          if (nextStreaming) return;
+          if (body !== undefined) pieces.push(base64ToBytes(body));
+          ended = true;
+          settleWaiters();
+        },
+        chunk(chunk) {
+          // The test hung up: the broker drops the rest of the stream, so the
+          // Plugin cannot keep writing into a closed assertion.
+          if (closed) return false;
+          pieces.push(base64ToBytes(chunk));
+          settleWaiters();
+          return true;
+        },
+        end() {
+          ended = true;
+          settleWaiters();
+        },
+      }
+    );
+
+    return {
+      head: headPromise,
+      chunks: () => pieces.slice(),
+      text: () => currentText(),
+      waitForText(match, timeoutMs = 5000) {
+        const text = currentText();
+        if (text.includes(match)) return Promise.resolve(text);
+        if (ended) {
+          return Promise.reject(
+            new Error(`The streamed answer ended without ${JSON.stringify(match)}`)
+          );
+        }
+        return new Promise<string>((resolve, reject) => {
+          const waiter: TextWaiter = {
+            match,
+            resolve,
+            reject,
+            timer: setTimeout(() => {}, 0),
+          };
+          waiter.timer = setTimeout(() => {
+            waiters.delete(waiter);
+            reject(
+              new Error(
+                `The streamed answer did not contain ${JSON.stringify(match)} within ${timeoutMs} ms`
+              )
+            );
+          }, timeoutMs);
+          waiters.add(waiter);
+          // A chunk may have landed between the first check and this line.
+          settleWaiters();
+        });
+      },
+      close() {
+        if (closed) return;
+        closed = true;
+        failWaiters(new Error("The streamed answer was closed"));
+      },
+    };
   }
 
   /** Every page `renderPage` opened and has not unmounted yet. */
@@ -465,6 +607,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
       libraryAvailable = available;
     },
     endpoint,
+    endpointStream,
     renderPage(page: string) {
       return renderSurface(page, "page");
     },
