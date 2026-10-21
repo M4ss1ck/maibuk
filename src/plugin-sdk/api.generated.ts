@@ -236,6 +236,8 @@ export interface PluginApiMethods {
         /** Sanitized by the host before it lands. */
         html: string;
       };
+      /** Milliseconds since the Unix epoch: the updatedAt the Plugin read. When given, the write is refused with code conflict if the Chapter changed since, including by the author's typing flushed just before the write. */
+      expectedUpdatedAt?: number;
     };
     output: null;
   };

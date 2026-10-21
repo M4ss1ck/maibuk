@@ -141,8 +141,8 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "library.chapters.get": ({ chapterId }) => getPluginChapter(chapterId),
     "library.notes.list": ({ bookId }) => listPluginNotes(bookId),
     "library.notes.get": ({ noteId }) => getPluginNote(noteId),
-    "library.chapters.updateContent": ({ chapterId, content }) =>
-      updatePluginChapterContent(chapterId, content),
+    "library.chapters.updateContent": ({ chapterId, content, expectedUpdatedAt }) =>
+      updatePluginChapterContent(chapterId, content, expectedUpdatedAt),
     "library.chapters.create": ({ bookId, title, position, content }) =>
       createPluginChapter({ bookId, title, position, content }),
     "library.chapters.delete": ({ chapterId }) => deletePluginChapter(chapterId),

@@ -52,10 +52,21 @@ const librarySwitch = await import("@/features/tutorial/library-switch");
 const handlers = createPluginHandlers(PLUGIN_MANIFEST);
 const context = { pluginId: "tracer" };
 
-function writeChapterContent(chapterId: string, content: { text: string } | { html: string }) {
+function writeChapterContent(
+  chapterId: string,
+  content: { text: string } | { html: string },
+  expectedUpdatedAt?: number
+) {
   const write = handlers["library.chapters.updateContent"];
   if (!write) throw new Error("library.chapters.updateContent is not wired");
-  return write({ chapterId, content }, context);
+  return write(
+    {
+      chapterId,
+      content,
+      ...(expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt }),
+    },
+    context
+  );
 }
 
 function writeNote(input: {
@@ -127,13 +138,26 @@ async function seedChapter(
   id: string,
   bookId: string,
   content = "<p>Stored</p>",
-  fields: { chapterType?: string; status?: string } = {}
+  fields: { chapterType?: string; status?: string; updatedAt?: number } = {}
 ): Promise<void> {
   await testDb.execute(
     `INSERT INTO chapters (id, book_id, title, content, "order", chapter_type, word_count, status, is_included_in_export, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 0, ?, 1, ?, 1, 1000, 1000)`,
-    [id, bookId, `Title ${id}`, content, fields.chapterType ?? "chapter", fields.status ?? "draft"]
+     VALUES (?, ?, ?, ?, 0, ?, 1, ?, 1, 1000, ?)`,
+    [
+      id,
+      bookId,
+      `Title ${id}`,
+      content,
+      fields.chapterType ?? "chapter",
+      fields.status ?? "draft",
+      fields.updatedAt ?? 1000,
+    ]
   );
+}
+
+/** The current Unix second, the unit the Library stores `updated_at` in. */
+function currentSecond(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
 interface BookRow {
@@ -320,6 +344,107 @@ describe("Plugin Library writes reach the open view", () => {
       release();
       off();
     }
+  });
+
+  it("an Agent write computed from a stale read does not overwrite the author's typing", async () => {
+    // Freeze Date so the seed, the Plugin's read, and the Flush share one Unix
+    // second: the same second `updated_at` does not move, so only the stored
+    // content can reveal that the author typed.
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-01-15T12:00:00.000Z") });
+    try {
+      await seedBook("book-1");
+      await seedChapter("ch-1", "book-1", "<p>Original</p>", { updatedAt: currentSecond() });
+      await useChapterStore.getState().loadChapters("book-1");
+      useChapterStore.getState().setCurrentChapter(useChapterStore.getState().chapters[0] ?? null);
+
+      const session = createEditSession<string>({
+        initial: "<p>Original</p>",
+        saveDelayMs: 60_000,
+        save: async (content) => {
+          const stored = await useChapterStore.getState().updateChapter("ch-1", { content });
+          return stored?.content ?? content;
+        },
+      });
+      const off = registerPendingEditsFlush(() => session.flush());
+
+      try {
+        session.update("<p>Original</p><p>Mine</p>");
+        // The Plugin read before the author typed: the row still holds the old content.
+        const stale = await readChapter("ch-1");
+        expect(stale?.updatedAt).toBe(currentSecond() * 1000);
+        expect(await chapterContent("ch-1")).toBe("<p>Original</p>");
+
+        await expect(
+          writeChapterContent(
+            "ch-1",
+            { html: "<p>Original</p><p>Agent</p>" },
+            stale?.updatedAt
+          )
+        ).rejects.toMatchObject({ name: "PluginApiError", code: "conflict" });
+
+        // The flush ran before the refusal, so the row holds the author's typing,
+        // and the session still holds it too.
+        expect(await chapterContent("ch-1")).toBe("<p>Original</p><p>Mine</p>");
+        expect(session.getContent()).toBe("<p>Original</p><p>Mine</p>");
+        expect(useChapterStore.getState().currentChapter?.content).toBe(
+          "<p>Original</p><p>Mine</p>"
+        );
+      } finally {
+        off();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("refuses on unsaved typing alone, checked after the flush", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-01-15T12:00:00.000Z") });
+    try {
+      await seedBook("book-1");
+      await seedChapter("ch-1", "book-1", "<p>Original</p>", { updatedAt: currentSecond() });
+
+      const session = createEditSession<string>({
+        initial: "<p>Original</p>",
+        saveDelayMs: 60_000,
+        save: async (content) => {
+          const stored = await useChapterStore.getState().updateChapter("ch-1", { content });
+          return stored?.content ?? content;
+        },
+      });
+      const off = registerPendingEditsFlush(() => session.flush());
+
+      try {
+        const read = await readChapter("ch-1");
+        // Nothing but unsaved typing: the row is untouched when the write starts.
+        session.update("<p>Original</p><p>Mine</p>");
+        expect(await chapterContent("ch-1")).toBe("<p>Original</p>");
+
+        await expect(
+          writeChapterContent("ch-1", { html: "<p>Agent</p>" }, read?.updatedAt)
+        ).rejects.toMatchObject({ name: "PluginApiError", code: "conflict" });
+
+        // The Flush landed the typing without moving `updated_at`, so the
+        // refusal came from what the Flush did, not from a timestamp mismatch.
+        expect(await chapterContent("ch-1")).toBe("<p>Original</p><p>Mine</p>");
+        expect((await readChapter("ch-1"))?.updatedAt).toBe(currentSecond() * 1000);
+        expect(session.hasUnsavedChanges()).toBe(false);
+      } finally {
+        off();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("writes when expectedUpdatedAt matches and nothing is pending", async () => {
+    await seedBook("book-1");
+    await seedChapter("ch-1", "book-1", "<p>Original</p>");
+
+    const read = await readChapter("ch-1");
+    await expect(
+      writeChapterContent("ch-1", { html: "<p>Agent</p>" }, read?.updatedAt)
+    ).resolves.toBeNull();
+    expect(await chapterContent("ch-1")).toBe("<p>Agent</p>");
   });
 
   it("refuses the Plugin write end to end when the open editor's save fails", async () => {

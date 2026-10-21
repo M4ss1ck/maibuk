@@ -17,6 +17,7 @@ export const PLUGIN_API_ERROR_CODES = [
   "rate-limited",
   "plugin-stopped",
   "library-unavailable",
+  "conflict",
   "not-implemented",
   "message-too-large",
   "network-error",

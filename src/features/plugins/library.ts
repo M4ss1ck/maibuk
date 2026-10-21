@@ -326,12 +326,55 @@ export async function checkpointPluginBook(input: {
   });
 }
 
-/** Replaces a Chapter's content through the Chapter write path. */
+/** The stored content and sync-clock of one Chapter, or null when it does not exist. */
+async function readChapterContentRow(
+  chapterId: string
+): Promise<{ content: string | null; updatedAt: number } | null> {
+  const db = await getDatabase();
+  const rows = await db.select<Row[]>("SELECT content, updated_at FROM chapters WHERE id = ?", [
+    chapterId,
+  ]);
+  if (rows.length === 0) return null;
+  return {
+    content: (rows[0].content as string | null) ?? null,
+    updatedAt: toMillis(rows[0].updated_at),
+  };
+}
+
+/**
+ * Replaces a Chapter's content through the Chapter write path. When
+ * `expectedUpdatedAt` is given — the `updatedAt` the Plugin read — the write is
+ * optimistic: the row is read before the open editors flush and again after it,
+ * in the same write. The Chapter changed since the Plugin read it when the
+ * stored content moved (the author's typing the flush just saved) or when
+ * `updated_at` differs from the one read; either way nothing is written and the
+ * call is refused with `conflict`.
+ *
+ * The content comparison is what catches typing flushed in the same second: the
+ * Library stores `updated_at` in Unix seconds, so a read and the flush a few
+ * milliseconds later share one timestamp.
+ */
 export async function updatePluginChapterContent(
   chapterId: string,
-  fragment: PluginContentFragment
+  fragment: PluginContentFragment,
+  expectedUpdatedAt?: number
 ): Promise<null> {
   return libraryWrite(async () => {
+    if (expectedUpdatedAt !== undefined) {
+      assertWritableId(chapterId);
+      const before = await readChapterContentRow(chapterId);
+      if (!before) throw notFound("Chapter", chapterId);
+      await flushPendingEdits();
+      const after = await readChapterContentRow(chapterId);
+      if (!after) throw notFound("Chapter", chapterId);
+      const typedDuringFlush = before.content !== after.content;
+      if (typedDuringFlush || after.updatedAt !== expectedUpdatedAt) {
+        throw new PluginApiError({
+          code: "conflict",
+          message: `Chapter ${chapterId} changed since it was read`,
+        });
+      }
+    }
     const chapter = await updateChapterRow(chapterId, { content: fragmentToHtml(fragment) }, "local");
     if (!chapter) throw notFound("Chapter", chapterId);
     return null;

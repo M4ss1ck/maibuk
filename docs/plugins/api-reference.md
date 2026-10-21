@@ -12,6 +12,7 @@ Every method returns a promise. A refused call rejects with a `PluginApiError` w
 - `rate-limited`
 - `plugin-stopped`
 - `library-unavailable`
+- `conflict`
 - `not-implemented`
 - `message-too-large`
 - `network-error`
@@ -360,6 +361,8 @@ Input:
     /** Sanitized by the host before it lands. */
     html: string;
   };
+  /** Milliseconds since the Unix epoch: the updatedAt the Plugin read. When given, the write is refused with code conflict if the Chapter changed since, including by the author's typing flushed just before the write. */
+  expectedUpdatedAt?: number;
 }
 ```
 

@@ -120,6 +120,14 @@ describe("PLUGIN_API_TABLE", () => {
     );
   });
 
+  it("takes an optional expectedUpdatedAt on library.chapters.updateContent", () => {
+    const row = PLUGIN_API_TABLE.find((entry) => entry.id === "library.chapters.updateContent");
+    const input = inputJsonSchema(row!);
+    expect(input.required).toEqual(["chapterId", "content"]);
+    const properties = input.properties as Record<string, { type?: string }>;
+    expect(properties.expectedUpdatedAt.type).toBe("number");
+  });
+
   it("takes every Book detail as an optional enum-checked field, with the Book id required", () => {
     const row = PLUGIN_API_TABLE.find((entry) => entry.id === "library.books.update");
     const input = inputJsonSchema(row!);

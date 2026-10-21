@@ -223,7 +223,15 @@ export const PLUGIN_API_TABLE = [
   defineApiRow({
     id: "library.chapters.updateContent",
     description: "Replaces a Chapter's content through the Chapter write path.",
-    input: z.strictObject({ chapterId: id, content: fragment }),
+    input: z.strictObject({
+      chapterId: id,
+      content: fragment,
+      expectedUpdatedAt: timestamp
+        .optional()
+        .describe(
+          "Milliseconds since the Unix epoch: the updatedAt the Plugin read. When given, the write is refused with code conflict if the Chapter changed since, including by the author's typing flushed just before the write."
+        ),
+    }),
     output: ok,
     ...libraryWrite,
   }),

@@ -17,6 +17,7 @@ vi.mock("@/lib/db", () => ({ getDatabase: mockGetDatabase }));
 const {
   createPluginNote,
   fragmentToHtml,
+  getPluginChapter,
   updatePluginChapterContent,
   updatePluginNote,
 } = await import("@/features/plugins/library");
@@ -178,6 +179,56 @@ describe("Plugin Library writes", () => {
     await expect(updatePluginChapterContent("ghost", { text: "x" })).rejects.toBeInstanceOf(
       PluginApiError
     );
+    expect(changes).toEqual([]);
+  });
+
+  it("writes when expectedUpdatedAt matches the Chapter as read", async () => {
+    const read = await getPluginChapter("c1");
+
+    await updatePluginChapterContent("c1", { text: "New" }, read?.updatedAt);
+
+    expect(await chapterContent("c1")).toBe("<p>New</p>");
+    expect(changes).toEqual([{ entity: "book", id: "b1", origin: "local", kind: "content" }]);
+  });
+
+  it("refuses with conflict when updated_at differs from the read and writes nothing", async () => {
+    const read = await getPluginChapter("c1");
+    // The content is untouched: only the Chapter's clock moved since the read.
+    await testDb.execute("UPDATE chapters SET updated_at = ? WHERE id = 'c1'", [2001]);
+
+    await expect(
+      updatePluginChapterContent("c1", { text: "New" }, read?.updatedAt)
+    ).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "conflict",
+      message: "Chapter c1 changed since it was read",
+    });
+
+    expect(await chapterContent("c1")).toBe("<p>Old</p>");
+    expect(changes).toEqual([]);
+  });
+
+  it("refuses with conflict when the flush landed typing in the same second", async () => {
+    const read = await getPluginChapter("c1");
+    // The Flush saves the author's typing but `updated_at` stays put, as it does
+    // when the read and the flush fall in one Unix second. Only the stored
+    // content reveals the change.
+    const off = registerPendingEditsFlush(() =>
+      testDb.execute("UPDATE chapters SET content = ? WHERE id = 'c1'", ["<p>Typed</p>"])
+    );
+    try {
+      await expect(
+        updatePluginChapterContent("c1", { text: "New" }, read?.updatedAt)
+      ).rejects.toMatchObject({
+        name: "PluginApiError",
+        code: "conflict",
+        message: "Chapter c1 changed since it was read",
+      });
+    } finally {
+      off();
+    }
+
+    expect(await chapterContent("c1")).toBe("<p>Typed</p>");
     expect(changes).toEqual([]);
   });
 
