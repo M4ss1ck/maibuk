@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 /** How far the nearest scrolling ancestor of `element` is scrolled. */
 export function scrollTopAround(element: Locator): Promise<number> {
@@ -49,6 +49,85 @@ export async function watchForText(page: Page, text: string): Promise<() => Prom
 /** Animations running on `element` and its descendants right now. */
 export function runningAnimationCount(element: Locator): Promise<number> {
   return element.evaluate((target) => target.getAnimations({ subtree: true }).length);
+}
+
+/**
+ * Reads a control's focus ring: its outline style, how far the ring is drawn
+ * outside the border box, and the sides an ancestor's overflow clips. The ring
+ * is drawn `outline-width + outline-offset` outside the box, so a clipping
+ * ancestor cuts it off unless its padding box leaves that much room. A scroll
+ * box such as the sidebar's destinations section is one: its edges cap the ring
+ * of every row inside it, while rows outside it draw a whole one.
+ */
+async function readFocusRing(
+  element: Locator
+): Promise<{ outlineStyle: string; overhang: number; sides: string[] }> {
+  return element.evaluate((el) => {
+    const style = getComputedStyle(el);
+    const overhang = Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+    const box = el.getBoundingClientRect();
+    let left = Number.NEGATIVE_INFINITY;
+    let top = Number.NEGATIVE_INFINITY;
+    let right = Number.POSITIVE_INFINITY;
+    let bottom = Number.POSITIVE_INFINITY;
+    for (let ancestor = el.parentElement; ancestor; ancestor = ancestor.parentElement) {
+      const overflow = getComputedStyle(ancestor);
+      if (overflow.overflowX === "visible" && overflow.overflowY === "visible") continue;
+      const rect = ancestor.getBoundingClientRect();
+      // clientLeft/clientWidth describe the padding box, where overflow clips.
+      left = Math.max(left, rect.left + ancestor.clientLeft);
+      top = Math.max(top, rect.top + ancestor.clientTop);
+      right = Math.min(right, rect.left + ancestor.clientLeft + ancestor.clientWidth);
+      bottom = Math.min(bottom, rect.top + ancestor.clientTop + ancestor.clientHeight);
+    }
+    const sides: string[] = [];
+    // The clip box comes from clientWidth/clientHeight, which CSSOM rounds to
+    // integers; the row's rect keeps fractions. Half a pixel absorbs the
+    // rounding without hiding a real clip.
+    const epsilon = 0.5;
+    if (box.left - overhang < left - epsilon) sides.push("left");
+    if (box.right + overhang > right + epsilon) sides.push("right");
+    if (box.top - overhang < top - epsilon) sides.push("top");
+    if (box.bottom + overhang > bottom + epsilon) sides.push("bottom");
+    return { outlineStyle: style.outlineStyle, overhang, sides };
+  });
+}
+
+/**
+ * Focus lands before the list scrolls the row into view, so the box can still
+ * be on its way for a frame or two. Waits until it holds the same place for a
+ * frame, then reads the ring.
+ */
+async function waitForBoxToSettle(element: Locator): Promise<boolean> {
+  const page = element.page();
+  let previous = "";
+  for (let frame = 0; frame < 8; frame += 1) {
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    );
+    const box = await element.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      return `${rect.left},${rect.top},${rect.width},${rect.height}`;
+    });
+    if (box === previous) return true;
+    previous = box;
+  }
+  return false;
+}
+
+/**
+ * A focused control draws its ring, and no clipping ancestor cuts a side of
+ * it. Soft, so a Before screenshot run reaches its capture points even when the
+ * fix's new assertions fail on the base.
+ */
+export async function expectFocusRingUnclipped(element: Locator, name: string) {
+  if (!(await waitForBoxToSettle(element))) {
+    throw new Error(`${name}'s box never settled; cannot judge its focus ring`);
+  }
+  const ring = await readFocusRing(element);
+  expect.soft(ring.outlineStyle, `${name} draws a focus ring`).not.toBe("none");
+  expect.soft(ring.overhang, `${name} draws its ring outside its box`).toBeGreaterThan(0);
+  expect.soft(ring.sides, `${name}'s focus ring is cut off`).toEqual([]);
 }
 
 /**
