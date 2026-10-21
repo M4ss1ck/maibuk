@@ -89,9 +89,12 @@ export async function tabTo(user: User, element: HTMLElement, max = 40): Promise
 
 /** The MCP Server manifest the build ships, parsed with the host's Built-in rules. */
 export function mcpManifest(): PluginManifest {
-  const result = parsePluginManifest(readFileSync(join(__dirname, "manifest.json"), "utf8"), {
-    builtIn: true,
-  });
+  const result = parsePluginManifest(
+    readFileSync(join(import.meta.dirname, "manifest.json"), "utf8"),
+    {
+      builtIn: true,
+    }
+  );
   if (!result.ok) throw new Error(JSON.stringify(result.problems));
   return result.manifest;
 }

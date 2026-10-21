@@ -637,6 +637,101 @@ rerunning:
 node scripts/plugins-bench-budget.mjs .bench/plugins-chromium.json
 ```
 
+## MCP Server Agent eval
+
+`pnpm eval:mcp` checks that a real Agent can use the MCP Server Built-in Plugin
+(`plugins/maibuk-mcp/`, issue #595). For each of six tasks it runs one headless
+Claude Code session against a fixture Library, then reads the Library back and
+judges the result. It costs money, because every task is a real model session
+(about $0.01 to $0.10 per task on `sonnet`). It never runs in CI. Run it before
+a release and whenever a tool's shape, its description, or the server
+instructions change.
+
+**What runs.** The real MCP Server Plugin runs on the Plugin test kit
+(`createTestHost`, which uses the real broker and method table over an
+in-memory Library), loaded through Vite SSR. A real HTTP listener on
+`127.0.0.1` sits in front of its Plugin Endpoint at `/plugin/maibuk-mcp/mcp`.
+Claude Code connects to it with the same server name, URL, and Bearer Key as
+the Claude Code snippet the Plugin page shows. Each task gets a fresh copy of
+the fixture and an empty working folder. Claude Code runs with `--tools ""`
+(no built-in tools, so the Agent can reach the Library only through MCP),
+`--strict-mcp-config`, and `--no-session-persistence`. The fakes are the
+in-memory Library and the listener: the app's Rust listener (Origin, Host, and
+port checks) is covered by its own tests.
+
+| Task | Prompt asks for | The Library must show afterwards | Budget |
+| --- | --- | --- | --- |
+| 1 | The Note tagged `keeper`, read it | Nothing changed; the tagged Note was read, not the decoy whose title says keeper; the answer names Ottilie Marsh and 31 years | 2,766 |
+| 2 | Append a scene to "Storm" | The old HTML kept byte for byte, then the two scene paragraphs; no whole replace; one Checkpoint | 2,866 |
+| 3 | Fix the one typo in "Arrival" | The HTML equals the original with that one word fixed, formatting intact; `edit_chapter`, never `write_chapter` | 3,166 |
+| 4 | Create "Interlude", then move it after "Arrival" | The Chapter exists with its text, and the order is Arrival, Interlude, Storm, The Lamp Room, Epilogue | 2,866 |
+| 5 | Replace "The Lamp Room" whole while the author types | The stale replace was refused; the new version and the author's typed paragraph are both in the Chapter | 3,066 |
+| 6 | Rename a Book in read-only mode | Only the five read tools were offered; nothing changed; the answer says it cannot write | 1,181 |
+
+In task 5 the author's typing is simulated. Right after the Agent's first
+read of the Chapter, the eval records unsaved editor text
+(`setPendingEdit`), and the next write flushes it, the same way the app's
+pending-edits flush does. Each task also checks that no other Chapter
+changed.
+
+**Budgets** are MCP tokens: what the MCP Server puts in the model's context,
+counted from the wire as characters over four. That is the same proxy
+`docs/research/mcp-server-token-efficiency.md` uses for definitions. The
+tool definitions and the server instructions count once per session; every
+call's arguments and result count every time. A task passes when every check
+holds and its MCP tokens stay within its budget. Each budget is the fixed cost,
+plus the expected path, plus room for one orienting or repeated call:
+
+- The fixed cost is 2,266 (2,174 for the 12 tool definitions, 92 for the
+  instructions), or 731 in read-only mode.
+- On this fixture, `list_books` costs about 30, `get_book` about 100, a
+  tag-filtered `list_notes` about 27, `read_note` about 96, a 204-word
+  `read_chapter` about 315, and a write's answer about 25.
+
+The reasoning for each task sits beside its number in
+`src/test/support/mcp-eval/tasks.ts`. The budgets were fixed before the first
+paid run.
+
+These numbers count what the server sends, not the Agent's whole bill. The
+report also prints Claude Code's own session tokens (input, cache writes, cache
+reads, and output, summed over every turn) and the cost. That figure is mostly
+Claude Code's base prompt, about 17,000 tokens per turn, so it measures the
+client more than the server.
+
+**Proven without a paid run.** `src/test/integration/mcp-eval-tasks.test.ts`
+drives the same harness with a scripted Agent and runs in CI:
+
+- For each task, the expected path passes every check within its budget.
+- A plausible wrong path fails the check meant to catch it. Examples: reading
+  the decoy Note, a whole replace for a typo, dropping the author's paragraph.
+- The fixed cost equals what the server sends, so a change to the definitions
+  or the instructions fails until the budgets are re-derived.
+
+The counting, parsing, and report rules have unit tests in
+`src/test/unit/support/mcp-eval-report.test.ts`.
+
+**Prerequisites.** Claude Code (`claude`) must be on `PATH` and logged in. The
+eval runs on that login. It does not use `--bare`, which reads only
+`ANTHROPIC_API_KEY`.
+
+```bash
+pnpm eval:mcp                      # all six tasks on sonnet
+pnpm eval:mcp --task 3,5           # some tasks
+pnpm eval:mcp --model opus         # another model
+pnpm eval:mcp --help               # every option
+```
+
+It prints one row per task (PASS or FAIL, MCP tokens, budget, session tokens,
+turns, and cost), then each failed check with what was found. It writes
+`.bench/mcp-eval.json`, plus one wire log per task in `.bench/mcp-eval/`
+(every JSON-RPC exchange, the tool calls, and the Library before and after).
+Exit codes: 0 means every task passed, 1 means a task failed, and 2 means a
+task could not be measured (no `claude`, a crash, or a timeout).
+
+A model can fail a task in a way that is not a server problem. Read the wire log
+before you change a tool: a failed check tells you what the Agent did, not
+why.
+
 ## Output
 
 Everything generated lands in `e2e/.output/` (gitignored): the web build,
