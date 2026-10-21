@@ -7,6 +7,7 @@ import {
   tabTo,
 } from "../support/keyboard";
 import { capture } from "../support/capture";
+import { expectFocusRingUnclipped } from "../support/layout";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -86,9 +87,15 @@ test.describe("primary navigation @wf:shell-nav-sidebar", () => {
     // The whole navigation is one roving stop: arrows walk it in order, from
     // the scrolling destinations on to the pinned Metrics and Settings.
     await tabTo(page, navOption(page, "Books"));
+    await capture(page, "sidebar-focus-ring-top", { around: [navSidebar(page)] });
+    await expectFocusRingUnclipped(navOption(page, "Books"), "Books");
     for (const name of ["Notes", "Canvas", "Ephemeral", "Metrics", "Settings"]) {
       await page.keyboard.press("ArrowDown");
       await expect(navOption(page, name)).toBeFocused();
+      if (name === "Ephemeral") {
+        await capture(page, "sidebar-focus-ring-bottom", { around: [navSidebar(page)] });
+      }
+      await expectFocusRingUnclipped(navOption(page, name), name);
     }
 
     await page.keyboard.press("Enter");
@@ -198,6 +205,10 @@ test.describe("primary navigation @wf:shell-nav-sidebar", () => {
       for (const name of ["Notes", "Canvas", "Ephemeral", "Echoes", "Metrics", "Settings"]) {
         await page.keyboard.press("ArrowDown");
         await expect(navOption(page, name)).toBeFocused();
+        if (name === "Echoes") {
+          await capture(page, "sidebar-focus-ring-scrolled", { around: [navSidebar(page)] });
+        }
+        await expectFocusRingUnclipped(navOption(page, name), name);
         // Ratio 1, not the default 0: a row half cut by the scrolling section
         // still intersects the viewport and would pass the default check.
         await expect(navOption(page, name)).toBeInViewport({ ratio: 1 });

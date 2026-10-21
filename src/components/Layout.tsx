@@ -203,14 +203,27 @@ export function Layout() {
             >
               <ListBoxSection
                 id="destinations"
-                className="flex flex-col gap-2 min-h-0 overflow-y-auto scrollbar-themed"
+                // The scroll box clips at its padding box, so a row's focus ring
+                // (2px outline, 2px offset) is cut off at the top of the first
+                // row, the bottom of the last, and both sides of every row. The
+                // padding buys the ring room. The negative top and left margins
+                // keep the rows where they were; the right and bottom padding
+                // stay inside the box, so the scrollbar keeps clear of the
+                // resize handle and does not spill into the pinned pair. The
+                // scroll padding stops scrollIntoView landing a row flush with
+                // the clip edge.
+                className="flex flex-col gap-2 min-h-0 overflow-y-auto scrollbar-themed pl-1.5 -ml-1.5 pr-1 pt-1.5 -mt-1.5 pb-1.5 scroll-py-1.5"
               >
                 {scrollNavItems.map(renderNavItem)}
               </ListBoxSection>
               <ListBoxSection
                 id="pinned"
                 aria-label={t("nav.pinned")}
-                className="flex flex-col gap-2 shrink-0 pt-2"
+                // The scroller's 6px bottom padding plus this 2px makes the
+                // original 8px gap, so Metrics and Settings stay where they
+                // were. The right inset matches the scroller's rows; a visible
+                // scrollbar still takes its own width, as it did before.
+                className="flex flex-col gap-2 shrink-0 pt-0.5 pr-1"
               >
                 {pinnedNavigationItems.map(renderNavItem)}
               </ListBoxSection>
