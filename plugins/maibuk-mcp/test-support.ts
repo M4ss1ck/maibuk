@@ -87,7 +87,8 @@ export async function tabTo(user: User, element: HTMLElement, max = 40): Promise
   for (let i = 0; i < max && document.activeElement !== element; i++) await user.tab();
 }
 
-/** The MCP Server manifest the build ships, parsed with the host's Built-in rules. */export function mcpManifest(): PluginManifest {
+/** The MCP Server manifest the build ships, parsed with the host's Built-in rules. */
+export function mcpManifest(): PluginManifest {
   const result = parsePluginManifest(readFileSync(join(__dirname, "manifest.json"), "utf8"), {
     builtIn: true,
   });

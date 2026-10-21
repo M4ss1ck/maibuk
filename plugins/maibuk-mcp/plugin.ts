@@ -328,6 +328,8 @@ function createConnections(client: PluginClient): {
   needsCheckpoint: (name: string | null, bookId: string) => boolean;
   /** Remembers the Book checkpointed, whether the host took one or not. */
   markCheckpointed: (name: string | null, bookId: string) => void;
+  /** Ends every live Connection at once: a new Key cut off the Agents they named. */
+  endAll: () => void;
 } {
   const live = new Map<string, Connection>();
   /** The name of the Connection the most recent legacy `initialize` opened. */
@@ -385,6 +387,23 @@ function createConnections(client: PluginClient): {
   }
 
   /**
+   * Ends every live Connection at once. A new Key makes every Agent holding the
+   * old one unable to reach the Plugin, so their Connections leave the list at
+   * the same moment: each idle timer is cleared, each Connection's Checkpoint
+   * memory is dropped with it, and the now-empty list is published and stored,
+   * so the page and its indicator stop showing Agents the old Key cut off.
+   */
+  function endAll(): void {
+    for (const connection of live.values()) {
+      if (connection.timer !== null) clearTimeout(connection.timer);
+    }
+    live.clear();
+    checkpointed.clear();
+    borrowed = null;
+    write();
+  }
+
+  /**
    * Restarts the nameless memory's idle timer from now: the books it holds are
    * forgotten once no request without a name arrives for `CONNECTION_IDLE_MS`,
    * the same window a named Connection lasts.
@@ -434,6 +453,7 @@ function createConnections(client: PluginClient): {
 
   return {
     resolve,
+    endAll,
     count(caller: Caller | null): void {
       if (caller === null) return;
       const name = resolve(caller);
@@ -593,12 +613,17 @@ export function startMcp(client: PluginClient, serve?: McpServe): void {
   // Requests that arrive before the Key exists, or before the stored Activity
   // log is back in memory, wait for it here.
   const ready = Promise.all([ensureKey(client), startActivityLog(client, CONNECTION_WRITE_MS)]);
-  // The page shows the Key the start made or found; a new Key replaces it.
+  // The page shows the Key the start made or found; a new Key replaces it. A
+  // start that could store none (the Tutorial) says so instead of loading
+  // forever: a Key a later request makes repaints the snippets.
   void ready
     .then(([key]) => {
       if (key !== null) connect.setKey(key);
+      else connect.setKeyUnavailable();
     })
-    .catch(() => {});
+    .catch(() => {
+      connect.setKeyUnavailable();
+    });
 
   // The page shows the address the Plugin Endpoint is bound to, and refreshes
   // its snippets when a move raises `endpoint.addressChanged`. Without `serve`
@@ -611,10 +636,16 @@ export function startMcp(client: PluginClient, serve?: McpServe): void {
     .on("endpoint.addressChanged", ({ url }) => connect.setAddress(url))
     .catch(() => {});
 
-  /** Makes a fresh Key, so the open page's snippets refresh and the old Key stops working. */
+  /**
+   * Makes a fresh Key, so the open page's snippets refresh and the old Key stops
+   * working. Every live Connection ends with it: the Agents it named can no
+   * longer reach the Plugin, so the page stops listing them.
+   */
   async function makeNewKey(): Promise<void> {
     const fresh = await storeFreshKey(client);
-    if (fresh !== null) connect.setKey(fresh);
+    if (fresh === null) return;
+    connections.endAll();
+    connect.setKey(fresh);
   }
 
   /**

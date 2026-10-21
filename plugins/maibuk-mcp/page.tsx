@@ -29,6 +29,11 @@ export const SHOWN_ADDRESS_STORAGE_KEY = "shownAddress";
 export interface ConnectSnapshot {
   /** The stored Key, or null until the runtime has read or made one. */
   key: string | null;
+  /**
+   * Whether the start found no Key it could make (the Tutorial, storage
+   * refused): the snippets stay unavailable until a Key appears.
+   */
+  keyUnavailable: boolean;
   /** The Plugin Endpoint base, or null while it is not listening. */
   address: string | null;
 }
@@ -37,16 +42,25 @@ export interface ConnectSnapshot {
 export interface ConnectStore {
   get(): ConnectSnapshot;
   subscribe(listener: () => void): () => void;
+  /** Shows `key`; a Key that arrived clears the unavailable state. */
   setKey(key: string | null): void;
+  /** Says no Key could be made right now, so the snippets are unavailable. */
+  setKeyUnavailable(): void;
   setAddress(address: string | null): void;
 }
 
 /** A store that starts empty and repaints its listeners on a real change. */
 export function createConnectStore(): ConnectStore {
-  let state: ConnectSnapshot = { key: null, address: null };
+  let state: ConnectSnapshot = { key: null, keyUnavailable: false, address: null };
   const listeners = new Set<() => void>();
   function publish(next: ConnectSnapshot): void {
-    if (next.key === state.key && next.address === state.address) return;
+    if (
+      next.key === state.key &&
+      next.address === state.address &&
+      next.keyUnavailable === state.keyUnavailable
+    ) {
+      return;
+    }
     state = next;
     for (const listener of listeners) listener();
   }
@@ -59,7 +73,10 @@ export function createConnectStore(): ConnectStore {
       };
     },
     setKey(key) {
-      publish({ ...state, key });
+      publish({ ...state, key, keyUnavailable: false });
+    },
+    setKeyUnavailable() {
+      publish({ ...state, keyUnavailable: true });
     },
     setAddress(address) {
       publish({ ...state, address });
@@ -89,7 +106,11 @@ export function createConnectPage(
 ): ComponentType {
   return function ConnectPage() {
     const language = useLanguage(client);
-    const { key, address } = useSyncExternalStore(store.subscribe, store.get, store.get);
+    const { key, address, keyUnavailable } = useSyncExternalStore(
+      store.subscribe,
+      store.get,
+      store.get
+    );
     const [copied, setCopied] = useState<SnippetKind | null>(null);
     const [notice, setNotice] = useState(false);
     const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -171,9 +192,7 @@ export function createConnectPage(
 
         {address === null ? (
           <ui.Status tone="info">{t("unavailable")}</ui.Status>
-        ) : key === null ? (
-          <ui.Status tone="info">{t("loading")}</ui.Status>
-        ) : (
+        ) : key !== null ? (
           <ui.View direction="column" gap="lg">
             {SNIPPET_KINDS.map((kind) => (
               <ui.View key={kind} direction="column" gap="sm">
@@ -192,6 +211,12 @@ export function createConnectPage(
               </ui.View>
             ))}
           </ui.View>
+        ) : keyUnavailable ? (
+          // No Key could be made (the Tutorial, storage refused): a request that
+          // later stores one repaints this branch into the snippets.
+          <ui.Status tone="warning">{t("snippetsUnavailable")}</ui.Status>
+        ) : (
+          <ui.Status tone="info">{t("loading")}</ui.Status>
         )}
 
         <ui.View direction="row" gap="md" align="center" wrap>

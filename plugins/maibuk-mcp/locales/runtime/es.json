@@ -10,6 +10,7 @@
   "newKey": "Crear una clave nueva",
   "newKeyNote": "Los Agentes que usen la clave anterior dejarán de funcionar hasta que pegues la nueva.",
   "loading": "Cargando los fragmentos de configuración…",
+  "snippetsUnavailable": "Los fragmentos de configuración no están disponibles ahora mismo. Volverán cuando Maibuk pueda guardar una clave.",
   "unavailable": "El Endpoint del Plugin no está disponible, así que todavía no hay una dirección a la que conectarse.",
   "reconnect": "La dirección de Maibuk cambió. Copia el fragmento actualizado en cada Agente para reconectar.",
   "done": "Hecho",

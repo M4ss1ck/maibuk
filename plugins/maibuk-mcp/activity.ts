@@ -83,10 +83,33 @@ export function recordActivity(activity: Activity): void {
   persist();
 }
 
-/** The stored log as Activities, or none when it holds anything else. */
+/** Whether a parsed JSON value is an object (and not an array). */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Whether one stored value is an Activity, field by field: a stored log can hold
+ * anything an older copy of this Plugin (or a hand-edited Database File) left
+ * behind, and the page must never render a row it cannot read.
+ */
+function isActivity(value: unknown): value is Activity {
+  if (!isRecord(value)) return false;
+  const { at, agent, tool, item, result } = value;
+  return (
+    typeof at === "number" &&
+    Number.isFinite(at) &&
+    (agent === null || typeof agent === "string") &&
+    typeof tool === "string" &&
+    (item === null || typeof item === "string") &&
+    (result === "ok" || result === "error")
+  );
+}
+
+/** The stored log as Activities, keeping only the newest valid entries. */
 function storedActivities(value: unknown): Activity[] {
   if (!Array.isArray(value)) return [];
-  return value.slice(-ACTIVITY_LIMIT) as Activity[];
+  return value.filter(isActivity).slice(-ACTIVITY_LIMIT);
 }
 
 /**

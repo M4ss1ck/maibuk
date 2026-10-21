@@ -13,6 +13,7 @@ import { createTestHost } from "@/features/plugins/test-kit";
 import { createPluginClient } from "@/plugin-sdk";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { ACTIVITY_LIMIT, recordActivity } from "./activity";
+import { RELATIVE_TICK_MS } from "./connections-panel";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { CONNECT_PAGE_ID } from "./page";
@@ -111,8 +112,20 @@ function freezeClock(at: number): void {
   });
 }
 
-/** Polls the host's tree, advancing the fake clock when one is installed. */
+/**
+ * How the page's last-activity label writes one distance, in the app's English
+ * locale: the same formatter the panel reads.
+ */
+function relativeLabel(value: number, unit: Intl.RelativeTimeFormatUnit): string {
+  return new Intl.RelativeTimeFormat("en", { numeric: "auto" }).format(value, unit);
+}
+
+/**
+ * Polls the host's tree until the page shows what the test asserts, instead of
+ * guessing how many event-loop turns the Remote UI mount needs.
+ */
 async function untilVisible(check: () => void): Promise<void> {
+  // time-budget: the Remote UI mount paints slower than vi.waitFor's one-second default.
   await vi.waitFor(check, { timeout: 5_000 });
 }
 
@@ -148,6 +161,34 @@ describe("MCP Server live page", () => {
         expect(screen.getByText(en.noConnections)).toBeInTheDocument();
       });
       expect(screen.getByText(en.connectionsEmpty)).toBeInTheDocument();
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("repaints the last-activity duration while the panel stays mounted", async () => {
+    const { host, storage } = pageHost({ library: liveLibrary() });
+    try {
+      const key = await waitForStoredKey(storage);
+      // The fake clock owns the panel's repaint interval, so it goes first.
+      freezeClock(START);
+      const page = await host.renderPage(CONNECT_PAGE_ID);
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+
+      await untilVisible(() => {
+        const connections = screen.getByRole("table", { name: en.connectionsLabel });
+        expect(within(connections).getByText(relativeLabel(0, "second"))).toBeInTheDocument();
+      });
+
+      // No request moves the Connection: only the panel's own repaint can.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RELATIVE_TICK_MS * 2);
+      });
+      const connections = screen.getByRole("table", { name: en.connectionsLabel });
+      expect(within(connections).getByText(relativeLabel(-1, "minute"))).toBeInTheDocument();
+      expect(within(connections).queryByText(relativeLabel(0, "second"))).toBeNull();
 
       page.unmount();
     } finally {

@@ -35,6 +35,10 @@ const CHAPTER = SEED_CHAPTERS[0].title;
 const AGENT = "Claude Code";
 const APPENDED = "The Agent appended this line.";
 
+/** The MCP Server card's description, which only the expanded panel shows. */
+const DESCRIPTION =
+  "Let outside AI tools read and change the Library through the Model Context Protocol.";
+
 /** The three required Plugin Permissions, as the card labels them. */
 const REQUIRED_LABELS = [
   "Answer requests from apps on this computer · Required to enable this Plugin",
@@ -49,12 +53,17 @@ const navOption = (page: Page, name: string) =>
   primaryNav(page).getByRole("option", { name: new RegExp(`^${name}`) });
 const enableSwitch = (page: Page) =>
   page.getByRole("switch", { name: `Enable ${PLUGIN_NAME}`, exact: true });
-/** The MCP Server card, by the Settings row id it carries (issue #442). */
-const card = (page: Page) => page.locator(`[data-settings-row="pluginCard.${PLUGIN_ID}"]`);
+/** The MCP Server card's disclosure trigger: the button named after the Plugin. */
+const cardTrigger = (page: Page) =>
+  page.getByRole("button", { name: new RegExp(`^${PLUGIN_NAME}`) });
+/**
+ * The code blocks the page shows, in order. A setup snippet renders as a
+ * `<pre><code>` with no accessible name (nothing but the snippet text itself),
+ * so the role alone locates each one.
+ */
+const snippets = (page: Page) => page.getByRole("code");
 /** The first setup snippet: Claude Code's, the order the page shows. */
-const firstSnippet = (page: Page) => page.locator("pre code").first();
-/** Every snippet, in the page's order. */
-const snippets = (page: Page) => page.locator("pre code");
+const firstSnippet = (page: Page) => snippets(page).first();
 
 /** Jumps to the Plugins section through the Settings outline, leaving its heading focused. */
 async function openPluginsSection(page: Page): Promise<void> {
@@ -86,12 +95,14 @@ async function openPluginsSection(page: Page): Promise<void> {
  */
 async function turnOn(page: Page): Promise<void> {
   await openPluginsSection(page);
-  await expect(card(page)).toBeVisible();
-  // The card's disclosure trigger comes first in its header, the switch after.
-  const trigger = card(page).getByRole("button").first();
+  // The card's disclosure trigger comes first in its header; Enter expands it.
+  const trigger = cardTrigger(page);
+  await expect(trigger).toBeVisible();
   await tabTo(page, trigger, { max: 40 });
   await page.keyboard.press("Enter");
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  // The expanded panel opens with the manifest description, which a collapsed
+  // card does not show.
+  await expect(page.getByText(DESCRIPTION)).toBeVisible();
   const toggle = enableSwitch(page);
   await tabTo(page, toggle, { max: 12 });
   await page.keyboard.press("Space");
@@ -106,7 +117,8 @@ async function openPermissions(page: Page): Promise<void> {
   const trigger = page.getByRole("button", { name: /Plugin permissions/ });
   await tabTo(page, trigger, { max: 40 });
   await page.keyboard.press("Enter");
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  // The accordion's first grant appears only once it is open.
+  await expect(page.getByRole("checkbox", { name: REQUIRED_LABELS[0], exact: true })).toBeVisible();
 }
 
 /** Opens the Command Palette and returns its dialog. */
@@ -172,15 +184,11 @@ async function clipboardText(page: Page): Promise<string> {
   }
 }
 
-/** The Key a snippet carries as its Bearer token. */
-function keyOf(snippetText: string): string {
-  const match = /Bearer ([0-9a-f]{64})/.exec(snippetText);
-  if (match === null) throw new Error(`no Key in the snippet: ${snippetText}`);
-  return match[1];
-}
-
-/** The Key the first snippet carries, or null while it still renders none. */
-function keyOrNull(snippetText: string): string | null {
+/**
+ * The Key a snippet carries as its Bearer token, or null while it still renders
+ * none (the page is between Keys).
+ */
+function snippetKey(snippetText: string): string | null {
   return /Bearer ([0-9a-f]{64})/.exec(snippetText)?.[1] ?? null;
 }
 
@@ -297,7 +305,7 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
     await bindAddress(page, ADDRESS_PORT);
 
     const snippetText = await copyFirstSnippet(page);
-    const key = keyOf(snippetText);
+    const key = snippetKey(snippetText);
     expect(snippetText).toContain(`http://127.0.0.1:${ADDRESS_PORT}/plugin/${PLUGIN_ID}/mcp`);
     expect(snippetText).toContain(`claude mcp add --transport http maibuk`);
     // The page shows the same text it put on the clipboard.
@@ -313,7 +321,7 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
     await bindAddress(page, ADDRESS_PORT);
     await expect(page.getByText("No Agents connected", { exact: true })).toBeVisible();
 
-    const key = keyOf(await copyFirstSnippet(page));
+    const key = snippetKey(await copyFirstSnippet(page));
     const initialized = await mcpRequest(page, key, initializeBody());
     expect(initialized.status, initialized.text).toBe(200);
     expect(initialized.json.result.serverInfo.name).toBe("maibuk");
@@ -344,7 +352,7 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
     await turnOn(page);
     await openMcpPage(page);
     await bindAddress(page, ADDRESS_PORT);
-    const key = keyOf(await copyFirstSnippet(page));
+    const key = snippetKey(await copyFirstSnippet(page));
 
     const initialized = await mcpRequest(page, key, initializeBody());
     expect(initialized.status, initialized.text).toBe(200);
@@ -407,7 +415,7 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
     // Every snippet was refreshed in place with the new address, Key unchanged.
     for (const text of await snippets(page).allTextContents()) {
       expect(text).toContain(`http://127.0.0.1:${MOVED_PORT}/`);
-      expect(text).toContain(keyOf(before));
+      expect(text).toContain(snippetKey(before));
     }
 
     const done = page.getByRole("button", { name: "Done", exact: true });
@@ -426,14 +434,17 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
     await bindAddress(page, ADDRESS_PORT);
 
     const first = await copyFirstSnippet(page);
-    const oldKey = keyOf(first);
+    const oldKey = snippetKey(first);
+    expect(oldKey).toMatch(/^[0-9a-f]{64}$/);
     const firstSnippets = await snippets(page).allTextContents();
 
     // Make a New MCP Server Key rotates the Key in place on the open page.
     await runPaletteCommand(page, "Make a New MCP Server Key");
     await expect(page).toHaveURL(new RegExp(`/plugin/${PLUGIN_ID}/connect$`));
-    await expect.poll(async () => keyOrNull(await snippetTextOf(page))).not.toBe(oldKey);
-    const newKey = keyOf(await snippetTextOf(page));
+    await expect.poll(async () => snippetKey(await snippetTextOf(page))).not.toBe(oldKey);
+    const newKey = snippetKey(await snippetTextOf(page));
+    // The page may sit between Keys for a paint; the snippet settles on one.
+    expect(newKey).toMatch(/^[0-9a-f]{64}$/);
     expect(newKey).not.toBe(oldKey);
     // Every snippet was rebuilt: the old text is gone, the new Key is in it.
     const rotated = await snippets(page).allTextContents();

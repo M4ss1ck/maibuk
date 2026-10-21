@@ -10,11 +10,24 @@
  * answered tool call repaint the page without a round trip.
  */
 
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ui } from "@/plugin-sdk";
 import { ACTIVITY_LIMIT, activityEntries, subscribeActivity, type Activity } from "./activity";
 import { translate, type McpKey } from "./i18n";
 import { liveConnections, subscribeConnections, type ConnectionRecord } from "./live";
+
+/** How often the Connections table repaints its relative labels. */
+export const RELATIVE_TICK_MS = 30_000;
+
+/** The clock, read again every `intervalMs` for as long as the caller stays mounted. */
+function useNow(intervalMs: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
 
 /** One runtime string lookup, bound to the page's language. */
 type Translate = (key: McpKey) => string;
@@ -65,9 +78,10 @@ export function LiveSections({ language }: { language: string }): ReactNode {
 function ConnectionsSection({ language }: { language: string }): ReactNode {
   const connections = useLiveConnections();
   const t = (key: McpKey) => translate(language, key);
-  // The relative labels are read from the clock on each repaint; a Connection
-  // repaints whenever it moves, so the page never shows a stale duration.
-  const now = Date.now();
+  // The relative labels count from the clock, so the section repaints them on
+  // its own timer: without one, "now" would freeze until the next Connection
+  // change, and the list would claim an Agent called hours after it last did.
+  const now = useNow(RELATIVE_TICK_MS);
 
   return (
     <ui.View direction="column" gap="sm">

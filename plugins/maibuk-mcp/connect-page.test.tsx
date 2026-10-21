@@ -6,7 +6,7 @@
  * renderer; nothing is a pointer press or an attribute check.
  */
 
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import "@/i18n";
@@ -31,7 +31,13 @@ function snippetsFor(key: string): [string, string][] {
 
 /** A host with this Plugin, serving a page over the polyfill-free Remote UI entry. */
 function pageHost(
-  options: { storage?: Map<string, unknown>; language?: string; port?: number | null } = {}
+  options: {
+    storage?: Map<string, unknown>;
+    language?: string;
+    port?: number | null;
+    /** Starts with the Library unavailable, the way the Tutorial leaves it. */
+    libraryUnavailable?: boolean;
+  } = {}
 ) {
   const storage = options.storage ?? new Map<string, unknown>();
   const host = createTestHost({
@@ -40,6 +46,7 @@ function pageHost(
     ...(options.language === undefined ? {} : { language: options.language }),
   });
   host.setEndpointAddress(options.port === undefined ? PORT : options.port);
+  if (options.libraryUnavailable === true) host.setLibraryAvailable(false);
   startMcp(createPluginClient(host.port), servePluginUi);
   return { host, storage };
 }
@@ -142,6 +149,34 @@ describe("MCP Server page", () => {
     }
   });
 
+  it("ends every live Connection when the author makes a new Key with the keyboard", async () => {
+    const { host, storage } = pageHost();
+    try {
+      const key = await storedKey(storage);
+      const page = await host.renderPage(CONNECT_PAGE_ID);
+      const user = userEvent.setup();
+
+      await mcpRequest(host, key, initializeBody());
+      const connections = await screen.findByRole("table", { name: en.connectionsLabel });
+      expect(within(connections).getByText("page-test")).toBeInTheDocument();
+      expect(screen.getByText(en.connectedOne)).toBeInTheDocument();
+
+      const make = screen.getByRole("button", { name: en.newKey });
+      await tabTo(user, make);
+      await user.keyboard("{Enter}");
+
+      // The Agents the old Key cut off leave the list at once, indicator included.
+      await waitFor(() => expect(screen.getByText(en.noConnections)).toBeInTheDocument());
+      expect(screen.queryByRole("table", { name: en.connectionsLabel })).toBeNull();
+      expect(screen.getByText(en.connectionsEmpty)).toBeInTheDocument();
+      await waitFor(() => expect(storage.get("connections")).toEqual([]));
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
   it("refreshes the snippets on a move and dismisses the reconnect notice with Done", async () => {
     const { host, storage } = pageHost();
     try {
@@ -192,6 +227,28 @@ describe("MCP Server page", () => {
 
       expect(await screen.findByText(en.unavailable)).toBeInTheDocument();
       expect(screen.queryAllByRole("button", { name: en.copy })).toHaveLength(0);
+
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("says the setup snippets are unavailable while the Tutorial leaves no Key, then recovers", async () => {
+    const { host, storage } = pageHost({ libraryUnavailable: true });
+    try {
+      const page = await host.renderPage(CONNECT_PAGE_ID);
+
+      // Startup could store no Key, so the page says so instead of loading forever.
+      expect(await screen.findByText(en.snippetsUnavailable)).toBeInTheDocument();
+      expect(screen.queryAllByRole("button", { name: en.copy })).toHaveLength(0);
+
+      // The Tutorial ends: the next request makes the Key the page was waiting for.
+      host.setLibraryAvailable(true);
+      expect((await mcpRequest(host, null, initializeBody())).status).toBe(401);
+      const key = await storedKey(storage);
+      expect(await findSnippet(claudeCodeSnippet({ url: MCP_URL, key }))).toBeInTheDocument();
+      expect(screen.queryByText(en.snippetsUnavailable)).toBeNull();
 
       page.unmount();
     } finally {

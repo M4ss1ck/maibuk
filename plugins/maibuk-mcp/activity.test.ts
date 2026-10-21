@@ -301,6 +301,36 @@ describe("MCP Server Activity log", () => {
     }
   });
 
+  it("drops stored entries that are not Activities", async () => {
+    const storage = new Map<string, unknown>([
+      [
+        "activity",
+        [
+          { at: START, agent: "Claude Code", tool: "list_books", item: null, result: "ok" },
+          { at: "yesterday", agent: "Claude Code", tool: "list_books", item: null, result: "ok" },
+          { at: START, agent: 7, tool: "list_books", item: null, result: "ok" },
+          { at: START, agent: null, tool: "list_books", item: null, result: "maybe" },
+          { at: START, agent: null, tool: "list_books", item: 5, result: "ok" },
+          { tool: "list_books" },
+          "not an entry",
+          null,
+          { at: START, agent: null, tool: "list_books", item: null, result: "error" },
+        ],
+      ],
+    ]);
+    const { host, key } = await connect({ storage, library: activityLibrary() });
+    try {
+      // A request waits for the start's load, so the log is back in memory.
+      await mcpRequest(host, key, toolsListBody());
+      expect(activityEntries()).toEqual([
+        { at: START, agent: "Claude Code", tool: "list_books", item: null, result: "ok" },
+        { at: START, agent: null, tool: "list_books", item: null, result: "error" },
+      ]);
+    } finally {
+      host.stop();
+    }
+  });
+
   it("keeps the log when the author makes a new Key", async () => {
     const { host, key } = await connect({ library: activityLibrary() });
     try {
