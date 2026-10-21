@@ -7,8 +7,9 @@
 import { describe, expect, it } from "vitest";
 import type { PluginClient } from "@/plugin-sdk";
 import { PluginApiError } from "@/plugin-sdk";
-import { connect, mcpRequest, type McpAnswer } from "./test-support";
+import { connect, makeNote, mcpRequest, noteLibrary, type McpAnswer } from "./test-support";
 import { editChapter, type WriteGuard } from "./edits";
+import { editNote } from "./notes";
 
 function initializeBody(id: unknown = 1) {
   return {
@@ -1046,6 +1047,578 @@ describe("write_chapter create mode", () => {
     } finally {
       host.stop();
     }
+  });
+});
+
+/** The created id at the end of a `write_note` create sentence. */
+function createdNoteId(text: string): string {
+  const match = /its id is ([A-Za-z0-9-]+)\./.exec(text);
+  if (!match) throw new Error(`No created id in ${JSON.stringify(text)}`);
+  return match[1];
+}
+
+describe("write_note", () => {
+  it("creates a Note in a Book and reports its id and Last Edited", async () => {
+    const books = [makeBook("bookalpha1", 1000, "The Book")];
+    const { host, key } = await connect({ library: { books } as any });
+    try {
+      const answer = await callTool(host, key, "write_note", {
+        book: "bookalpha1",
+        title: "Ideas",
+        text: "One\n\nTwo",
+      });
+      expect(isError(answer)).toBe(false);
+      expect(textOf(answer).split("\n")[0]).toMatch(
+        /^Created Note Ideas in Book The Book; its id is \S{8,}\.$/
+      );
+      expect(lastEditedOf(textOf(answer))).toMatch(
+        /^Last Edited: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+      );
+
+      const reread = await callTool(host, key, "read_note", {
+        note: createdNoteId(textOf(answer)),
+      });
+      expect(isError(reread)).toBe(false);
+      expect(reread.json.result.content[0].text).toContain("Book:");
+      expect(reread.json.result.content[0].text).toContain("The Book");
+      expect(reread.json.result.content[1].text).toBe("One\n\nTwo");
+      expect(lastEditedOf(reread.json.result.content[0].text)).toBe(
+        lastEditedOf(textOf(answer))
+      );
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates an Unfiled Note when no Book is given", async () => {
+    const books = [makeBook("bookalpha1", 1000, "The Book")];
+    const { host, key } = await connect({ library: { books } as any });
+    try {
+      const answer = await callTool(host, key, "write_note", { title: "Loose" });
+      expect(isError(answer)).toBe(false);
+      expect(textOf(answer).split("\n")[0]).toMatch(
+        /^Created Note Loose as an Unfiled Note; its id is \S{8,}\.$/
+      );
+
+      const reread = await callTool(host, key, "read_note", {
+        note: createdNoteId(textOf(answer)),
+      });
+      expect(reread.json.result.content[0].text).toContain("Book: Unfiled");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates an Unfiled Note when book is null", async () => {
+    const books = [makeBook("bookalpha1", 1000, "The Book")];
+    const { host, key } = await connect({ library: { books } as any });
+    try {
+      const answer = await callTool(host, key, "write_note", { book: null, title: "Loose" });
+      expect(isError(answer)).toBe(false);
+      const reread = await callTool(host, key, "read_note", {
+        note: createdNoteId(textOf(answer)),
+      });
+      expect(reread.json.result.content[0].text).toContain("Book: Unfiled");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates a Note with no title as an Untitled one", async () => {
+    const books = [makeBook("bookalpha1", 1000, "The Book")];
+    const { host, key } = await connect({ library: { books } as any });
+    try {
+      const answer = await callTool(host, key, "write_note", { book: "bookalpha1" });
+      expect(isError(answer)).toBe(false);
+      expect(textOf(answer).split("\n")[0]).toMatch(/^Created Note Untitled in Book The Book;/);
+
+      const reread = await callTool(host, key, "read_note", {
+        note: createdNoteId(textOf(answer)),
+      });
+      expect(reread.json.result.content[0].text).toContain(": Untitled");
+      expect(reread.json.result.content[1].text).toBe("");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("sets Tags on a created Note", async () => {
+    const books = [makeBook("bookalpha1", 1000, "The Book")];
+    const { host, key } = await connect({ library: { books } as any });
+    try {
+      const answer = await callTool(host, key, "write_note", {
+        title: "Tagged",
+        tags: [" alpha ", "Beta", "alpha"],
+      });
+      expect(isError(answer)).toBe(false);
+      const reread = await callTool(host, key, "read_note", {
+        note: createdNoteId(textOf(answer)),
+      });
+      expect(reread.json.result.content[0].text).toContain("Tags: alpha, Beta");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("replaces the whole Note when expectedLastEdited matches", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const reread = await callTool(host, key, "read_note", { note: "notealpha1" });
+      const answer = await callTool(host, key, "write_note", {
+        note: "notealpha1",
+        expectedLastEdited: lastEditedOf(textOf(reread)).replace("Last Edited: ", ""),
+        html: "<p>New body.</p>",
+      });
+      expect(isError(answer)).toBe(false);
+      expect(textOf(answer).split("\n")[0]).toBe("Replaced the whole of Note The Note.");
+      expect(notes[0].content.html).toBe("<p>New body.</p>");
+
+      const after = await callTool(host, key, "read_note", { note: "notealpha1" });
+      expect(lastEditedOf(textOf(after))).toBe(lastEditedOf(textOf(answer)));
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a stale expectedLastEdited and writes nothing", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "write_note", {
+        note: "notealpha1",
+        expectedLastEdited: new Date(Date.UTC(2020, 0, 1)).toISOString(),
+        html: "<p>New body.</p>",
+      });
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toContain("changed since you read it");
+      expect(textOf(answer)).toContain("read_note again");
+      expect(notes[0].content.html).toBe("<p>Old body.</p>");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a replace with no expectedLastEdited", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "write_note", {
+        note: "notealpha1",
+        html: "<p>New body.</p>",
+      });
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toBe(
+        "Give expectedLastEdited from read_note; call read_note first to get Last Edited."
+      );
+      expect(notes[0].content.html).toBe("<p>Old body.</p>");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("changes only the title when only title is given", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const reread = await callTool(host, key, "read_note", { note: "notealpha1" });
+      const answer = await callTool(host, key, "write_note", {
+        note: "notealpha1",
+        expectedLastEdited: lastEditedOf(textOf(reread)).replace("Last Edited: ", ""),
+        title: "Renamed",
+      });
+      expect(isError(answer)).toBe(false);
+      expect(notes[0].title).toBe("Renamed");
+      expect(notes[0].content.html).toBe("<p>Old body.</p>");
+      expect(textOf(answer).split("\n")[0]).toBe("Replaced the whole of Note Renamed.");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("sets Tags on a whole replace", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const reread = await callTool(host, key, "read_note", { note: "notealpha1" });
+      const answer = await callTool(host, key, "write_note", {
+        note: "notealpha1",
+        expectedLastEdited: lastEditedOf(textOf(reread)).replace("Last Edited: ", ""),
+        tags: ["plot", "plot", "idea"],
+      });
+      expect(isError(answer)).toBe(false);
+      expect(notes[0].tags).toEqual(["plot", "idea"]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("moves a Note to another Book", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const reread = await callTool(host, key, "read_note", { note: "notealpha1" });
+      const answer = await callTool(host, key, "write_note", {
+        note: "notealpha1",
+        expectedLastEdited: lastEditedOf(textOf(reread)).replace("Last Edited: ", ""),
+        book: "bookbeta12",
+      });
+      expect(isError(answer)).toBe(false);
+      expect(notes[0].bookId).toBe("bookbeta12");
+      expect(textOf(answer).split("\n")[0]).toBe(
+        "Replaced the whole of Note The Note. It is now in Book Other Book."
+      );
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("moves a Note to Unfiled when book is null", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const reread = await callTool(host, key, "read_note", { note: "notealpha1" });
+      const answer = await callTool(host, key, "write_note", {
+        note: "notealpha1",
+        expectedLastEdited: lastEditedOf(textOf(reread)).replace("Last Edited: ", ""),
+        book: null,
+      });
+      expect(isError(answer)).toBe(false);
+      expect(notes[0].bookId).toBeNull();
+      expect(textOf(answer).split("\n")[0]).toBe(
+        "Replaced the whole of Note The Note. It is now an Unfiled Note."
+      );
+    } finally {
+      host.stop();
+    }
+  });
+
+  it.each([
+    ["both text and html", { text: "a", html: "<p>a</p>" }, /not both/],
+    [
+      "create with expectedLastEdited",
+      { title: "X", expectedLastEdited: "2026-01-01T00:00:00.000Z" },
+      /expectedLastEdited is only for replacing a Note/,
+    ],
+    [
+      "replace with nothing to change",
+      { note: "notealpha1", expectedLastEdited: "2026-01-01T00:00:00.000Z" },
+      /Give text or html content, a title, Tags, or a Book/,
+    ],
+    [
+      "unknown Book",
+      { book: "zzzzzzzz", title: "X" },
+      /No Book has the id zzzzzzzz; call list_books/,
+    ],
+    [
+      "unknown Note",
+      { note: "zzzzzzzz", expectedLastEdited: "2026-01-01T00:00:00.000Z", html: "<p>a</p>" },
+      /No Note has the id zzzzzzzz; call list_notes/,
+    ],
+  ])("refuses %s, leaving the Library and Checkpoints alone", async (_case, args, message) => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const before = JSON.stringify(notes);
+      const answer = await callTool(host, key, "write_note", args);
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toMatch(message);
+      expect(JSON.stringify(notes)).toBe(before);
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+describe("edit_note", () => {
+  it("replaces one match, leaving every other byte of the markup alone", async () => {
+    const books = [makeBook("bookalpha1", 1000, "The Book")];
+    const notes = [
+      makeNote(
+        "notealpha1",
+        "bookalpha1",
+        "The Note",
+        {
+          html: '<p class="lead">The <em>quick</em> brown fox &amp; the lazy dog.</p><p>Second <strong>line</strong> with &lt;tags&gt;.</p>',
+          text: "The quick brown fox & the lazy dog.\n\nSecond line with <tags>.",
+        },
+        Date.UTC(2026, 0, 1)
+      ),
+    ];
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "edit_note", {
+        note: "notealpha1",
+        find: "brown fox",
+        replace: "red fox",
+      });
+      expect(isError(answer)).toBe(false);
+
+      const lines = textOf(answer).split("\n");
+      expect(lines[0]).toBe("Replaced 1 match in Note The Note.");
+      expect(lines[1]).toMatch(/^Last Edited: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+
+      expect(notes[0].content.html).toBe(
+        '<p class="lead">The <em>quick</em> red fox &amp; the lazy dog.</p><p>Second <strong>line</strong> with &lt;tags&gt;.</p>'
+      );
+
+      // The Agent passes the reported value back later: it is the one a fresh
+      // read reports.
+      const reread = await callTool(host, key, "read_note", { note: "notealpha1" });
+      expect(lastEditedOf(textOf(reread))).toBe(lines[1]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("appends text as the host's paragraphs: blank lines split, single newlines break", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "edit_note", {
+        note: "notealpha1",
+        append: "A new scene & more\nsame paragraph\n\nSecond paragraph",
+      });
+      expect(isError(answer)).toBe(false);
+      expect(textOf(answer).split("\n")[0]).toBe("Appended to Note The Note.");
+      expect(notes[0].content.html).toBe(
+        "<p>Old body.</p><p>A new scene &amp; more<br>same paragraph</p><p>Second paragraph</p>"
+      );
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("appends an HTML fragment as given", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "edit_note", {
+        note: "notealpha1",
+        append: "<h2>Scene</h2><p>Body</p>",
+        format: "html",
+      });
+      expect(isError(answer)).toBe(false);
+      expect(textOf(answer).split("\n")[0]).toBe("Appended to Note The Note.");
+      expect(notes[0].content.html).toBe("<p>Old body.</p><h2>Scene</h2><p>Body</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("no match tells the Agent to read the Note as HTML", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "edit_note", {
+        note: "notealpha1",
+        find: "New body",
+        replace: "Other body",
+      });
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toBe(
+        "No match for that find text; read the Note as HTML (read_note with format html) and copy the exact text."
+      );
+      expect(notes[0].content.html).toBe("<p>Old body.</p>");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("a find that crosses markup fails and points at the HTML read", async () => {
+    const { books, notes } = noteLibrary();
+    notes[0].content = { html: "<p>hello <em>world</em></p>", text: "hello world" };
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "edit_note", {
+        note: "notealpha1",
+        find: "hello world",
+        replace: "goodbye world",
+      });
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toBe(
+        "That text crosses formatting, so read the Note as HTML (read_note with format html) and pick a find within one run of text."
+      );
+      expect(notes[0].content.html).toBe("<p>hello <em>world</em></p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("more than one match says how many and asks for more surrounding text", async () => {
+    const { books, notes } = noteLibrary();
+    notes[0].content = { html: "<p>fox and fox</p>", text: "fox and fox" };
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "edit_note", {
+        note: "notealpha1",
+        find: "fox",
+        replace: "wolf",
+      });
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toBe(
+        "That find text matches 2 places; include more surrounding text in find so it matches once."
+      );
+      expect(notes[0].content.html).toBe("<p>fox and fox</p>");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it.each([
+    [
+      "find and replace with append",
+      { find: "a", replace: "b", append: "c" },
+      "Give find and replace, or append, but not both; call read_note first to copy the exact text.",
+    ],
+    [
+      "find without replace",
+      { find: "a" },
+      "Give find and replace together, or append; call read_note first to copy the exact text.",
+    ],
+    [
+      "replace without find",
+      { replace: "b" },
+      "Give find and replace together, or append; call read_note first to copy the exact text.",
+    ],
+    [
+      "an empty find",
+      { find: "", replace: "b" },
+      "Give the exact text to find; call read_note with format html to copy it.",
+    ],
+    [
+      "an empty append",
+      { append: "" },
+      "Give the text to append; call read_note to see where the Note ends.",
+    ],
+  ])("refuses %s", async (_case, args, message) => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "edit_note", {
+        note: "notealpha1",
+        ...args,
+      });
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toBe(message);
+      expect(notes[0].content.html).toBe("<p>Old body.</p>");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("an unknown id names list_notes", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "edit_note", {
+        note: "zzzzzzzz",
+        append: "more",
+      });
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toBe("No Note has the id zzzzzzzz; call list_notes to see the Notes.");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("edits an Unfiled Note without a Checkpoint", async () => {
+    const { books, notes } = noteLibrary();
+    notes[0].bookId = null;
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "edit_note", {
+        note: "notealpha1",
+        find: "Old body",
+        replace: "Loose body",
+      });
+      expect(isError(answer)).toBe(false);
+      expect(notes[0].content.html).toBe("<p>Loose body.</p>");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("tutorial refusal", async () => {
+    const { books, notes } = noteLibrary();
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      host.setLibraryAvailable(false);
+      const answer = await callTool(host, key, "edit_note", {
+        note: "notealpha1",
+        append: "more",
+      });
+      expect(answer.status).toBe(503);
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+describe("edit_note conflict re-apply", () => {
+  /** A Note whose first write conflicts because the author typed meanwhile. */
+  function conflictedNoteClient() {
+    const book = makeBook("bookalpha1", 1000, "The Book");
+    const note = {
+      id: "notealpha1",
+      bookId: "bookalpha1" as string | null,
+      title: "The Note",
+      language: "en",
+      tags: [] as string[],
+      wordCount: 10,
+      updatedAt: Date.UTC(2026, 0, 1),
+      content: { html: "<p>Original</p>", text: "Original" },
+    };
+    let updates = 0;
+    return {
+      note,
+      client: {
+        library: {
+          books: { list: async () => [book] },
+          notes: {
+            list: async () => [note],
+            get: async () => ({ ...note }),
+            update: async ({ content }: { content?: { html?: string } }) => {
+              updates += 1;
+              if (updates === 1) {
+                // The author's typing lands between the read and the write.
+                note.content = { html: "<p>Original</p><p>Mine</p>", text: "Original\n\nMine" };
+                note.updatedAt += 1;
+                throw new PluginApiError({
+                  code: "conflict",
+                  message: "Note notealpha1 changed since it was read",
+                });
+              }
+              note.content = { html: content?.html ?? note.content.html, text: "" };
+              note.updatedAt += 1;
+              return null;
+            },
+          },
+        },
+      } as unknown as PluginClient,
+    };
+  }
+
+  it("re-applies the edit to the fresh content after a conflict", async () => {
+    const { client, note } = conflictedNoteClient();
+    const guard: WriteGuard = { ensureCheckpoint: async () => null };
+    const result = await editNote(client, { note: "notealpha1", append: "More." }, guard);
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: `Appended to Note The Note.\nLast Edited: ${new Date(note.updatedAt).toISOString()}`,
+        },
+      ],
+    });
+    expect(note.content.html).toBe("<p>Original</p><p>Mine</p><p>More.</p>");
   });
 });
 

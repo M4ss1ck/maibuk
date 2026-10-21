@@ -1621,4 +1621,243 @@ describe("createTestHost() Library writes", () => {
       host.stop();
     }
   });
+
+  // #593: the Note writes, so a test of a Plugin's Note tools drives the same
+  // create, update, and delete the app's handlers perform.
+  function noteFixture() {
+    return {
+      id: "n1",
+      bookId: "b1",
+      title: "Note",
+      language: "en",
+      tags: ["idea"],
+      wordCount: 1,
+      updatedAt: 2_000,
+      content: { text: "Body", html: "<p>Body</p>" },
+    };
+  }
+
+  function notesHost() {
+    const note = noteFixture();
+    const books = [{ ...BOOK }, { ...BOOK, id: "b2", title: "Dune Messiah" }];
+    const host = createTestHost({
+      manifest: writeManifest(),
+      permissions: ["library:read", "library:write"],
+      library: { books, notes: [note] },
+    });
+    return { host, note };
+  }
+
+  it("creates a Note in a Book, with its content and word count", async () => {
+    const { host } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      const { noteId } = await client.library.notes.create({
+        title: "Fresh",
+        bookId: "b1",
+        content: { text: "One two" },
+      });
+
+      await expect(client.library.notes.get({ noteId })).resolves.toMatchObject({
+        bookId: "b1",
+        title: "Fresh",
+        tags: [],
+        wordCount: 2,
+        content: { text: "One two", html: "<p>One two</p>" },
+      });
+      await expect(client.library.notes.list({ bookId: "b1" })).resolves.toHaveLength(2);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates a Note with its Tags, trimmed and deduplicated", async () => {
+    const { host } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      const { noteId } = await client.library.notes.create({
+        title: "Tagged",
+        bookId: "b1",
+        tags: [" a ", "b", "a", "  "],
+      });
+
+      await expect(client.library.notes.get({ noteId })).resolves.toMatchObject({
+        tags: ["a", "b"],
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates an Unfiled Note when bookId is omitted or null", async () => {
+    const { host } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      const { noteId: omitted } = await client.library.notes.create({ title: "Loose" });
+      const { noteId: explicit } = await client.library.notes.create({
+        title: "Also loose",
+        bookId: null,
+      });
+
+      await expect(client.library.notes.list({})).resolves.toMatchObject([
+        { id: "n1", bookId: "b1" },
+        { id: omitted, bookId: null },
+        { id: explicit, bookId: null },
+      ]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("updates a Note's title, content, and Tags, moving Last Edited", async () => {
+    const { host, note } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      await expect(
+        client.library.notes.update({
+          noteId: "n1",
+          title: "Renamed",
+          content: { html: "<p>New <em>body</em></p>" },
+          tags: [" a ", "b", "a", "  "],
+        })
+      ).resolves.toBeNull();
+
+      await expect(client.library.notes.get({ noteId: "n1" })).resolves.toMatchObject({
+        title: "Renamed",
+        tags: ["a", "b"],
+        wordCount: 2,
+        content: { text: "New body", html: "<p>New <em>body</em></p>" },
+      });
+      expect(note.updatedAt).toBeGreaterThan(2_000);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("moves a Note to another Book and to Unfiled", async () => {
+    const { host, note } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      await client.library.notes.update({ noteId: "n1", bookId: "b2" });
+      expect(note.bookId).toBe("b2");
+      await expect(client.library.notes.list({ bookId: "b1" })).resolves.toEqual([]);
+      await expect(client.library.notes.list({ bookId: "b2" })).resolves.toMatchObject([
+        { id: "n1" },
+      ]);
+
+      await client.library.notes.update({ noteId: "n1", bookId: null });
+      expect(note.bookId).toBeNull();
+      await expect(client.library.notes.list({ bookId: "b2" })).resolves.toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses an unknown Note and an unknown Book, changing nothing", async () => {
+    const { host, note } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      await expect(
+        client.library.notes.update({ noteId: "absent", title: "Renamed" })
+      ).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Note absent does not exist",
+      });
+      await expect(
+        client.library.notes.update({ noteId: "n1", bookId: "absent" })
+      ).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Book absent does not exist",
+      });
+      expect(note.title).toBe("Note");
+      expect(note.bookId).toBe("b1");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a stale expectedUpdatedAt and writes when it matches", async () => {
+    const { host, note } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      const expected = note.updatedAt;
+
+      await expect(
+        client.library.notes.update({
+          noteId: "n1",
+          title: "Wrong",
+          expectedUpdatedAt: expected - 1,
+        })
+      ).rejects.toMatchObject({ code: "conflict" });
+      expect(note.title).toBe("Note");
+
+      await expect(
+        client.library.notes.update({
+          noteId: "n1",
+          title: "Right",
+          expectedUpdatedAt: expected,
+        })
+      ).resolves.toBeNull();
+      expect(note.title).toBe("Right");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a Note write when a pending edit flushed, landing the typing", async () => {
+    const { host, note } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      const expected = note.updatedAt;
+      host.setPendingEdit("n1", "<p>Typed</p>");
+
+      await expect(
+        client.library.notes.update({
+          noteId: "n1",
+          content: { html: "<p>Written</p>" },
+          expectedUpdatedAt: expected,
+        })
+      ).rejects.toMatchObject({ code: "conflict" });
+
+      // The flush landed the author's typing, and the refused write left it alone.
+      expect(note.content).toEqual({ html: "<p>Typed</p>", text: "Typed" });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("flushes a Note pending edit before an unguarded update", async () => {
+    const { host, note } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      host.setPendingEdit("n1", "<p>Typed</p>");
+
+      await client.library.notes.update({
+        noteId: "n1",
+        content: { html: "<p>Written</p>" },
+      });
+
+      // The pending typing landed first, then the write replaced it.
+      expect(note.content).toEqual({ html: "<p>Written</p>", text: "Written" });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("deletes a Note, so the reads no longer serve it", async () => {
+    const { host } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.library.notes.delete({ noteId: "n1" })).resolves.toBeNull();
+
+      await expect(client.library.notes.get({ noteId: "n1" })).resolves.toBeNull();
+      await expect(client.library.notes.list({})).resolves.toEqual([]);
+      await expect(client.library.notes.delete({ noteId: "absent" })).rejects.toMatchObject({
+        code: "invalid-params",
+        message: "Note absent does not exist",
+      });
+    } finally {
+      host.stop();
+    }
+  });
 });

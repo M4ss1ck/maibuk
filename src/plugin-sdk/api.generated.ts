@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.6";
+export const PLUGIN_API_VERSION = "0.1.7";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -285,7 +285,7 @@ export interface PluginApiMethods {
     };
     output: null;
   };
-  /** Creates a Note through the Note write path and returns its id. */
+  /** Creates a Note through the Note write path and returns its id; Tags are trimmed and deduplicated like the Note tags field. */
   "library.notes.create": {
     input: {
       title: string;
@@ -297,6 +297,7 @@ export interface PluginApiMethods {
         /** Sanitized by the host before it lands. */
         html: string;
       };
+      tags?: string[];
     };
     output: {
       noteId: string;
@@ -317,6 +318,8 @@ export interface PluginApiMethods {
       tags?: string[];
       /** Null moves the Note to Unfiled. */
       bookId?: string | null;
+      /** Milliseconds since the Unix epoch: the updatedAt the Plugin read. When given, the write is refused with code conflict if the Note changed since, including by the author's typing flushed just before the write. */
+      expectedUpdatedAt?: number;
     };
     output: null;
   };
@@ -670,7 +673,7 @@ export interface PluginApi {
       list(params?: PluginApiMethods["library.notes.list"]["input"]): Promise<PluginApiMethods["library.notes.list"]["output"]>;
       /** Reads one Note with its content as plain text and sanitized HTML. */
       get(params: PluginApiMethods["library.notes.get"]["input"]): Promise<PluginApiMethods["library.notes.get"]["output"]>;
-      /** Creates a Note through the Note write path and returns its id. */
+      /** Creates a Note through the Note write path and returns its id; Tags are trimmed and deduplicated like the Note tags field. */
       create(params: PluginApiMethods["library.notes.create"]["input"]): Promise<PluginApiMethods["library.notes.create"]["output"]>;
       /** Updates a Note's title, content, Tags, or Book through the Note write path; Tags are trimmed and deduplicated like the Note tags field, and a null bookId moves it to Unfiled. */
       update(params: PluginApiMethods["library.notes.update"]["input"]): Promise<PluginApiMethods["library.notes.update"]["output"]>;

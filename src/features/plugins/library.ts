@@ -326,13 +326,14 @@ export async function checkpointPluginBook(input: {
   });
 }
 
-/** The stored content and sync-clock of one Chapter, or null when it does not exist. */
-async function readChapterContentRow(
-  chapterId: string
+/** The stored content and sync-clock of one Chapter or Note, or null when it does not exist. */
+async function readContentRow(
+  table: "chapters" | "notes",
+  id: string
 ): Promise<{ content: string | null; updatedAt: number } | null> {
   const db = await getDatabase();
-  const rows = await db.select<Row[]>("SELECT content, updated_at FROM chapters WHERE id = ?", [
-    chapterId,
+  const rows = await db.select<Row[]>(`SELECT content, updated_at FROM ${table} WHERE id = ?`, [
+    id,
   ]);
   if (rows.length === 0) return null;
   return {
@@ -362,10 +363,10 @@ export async function updatePluginChapterContent(
   return libraryWrite(async () => {
     if (expectedUpdatedAt !== undefined) {
       assertWritableId(chapterId);
-      const before = await readChapterContentRow(chapterId);
+      const before = await readContentRow("chapters", chapterId);
       if (!before) throw notFound("Chapter", chapterId);
       await flushPendingEdits();
-      const after = await readChapterContentRow(chapterId);
+      const after = await readContentRow("chapters", chapterId);
       if (!after) throw notFound("Chapter", chapterId);
       const typedDuringFlush = before.content !== after.content;
       if (typedDuringFlush || after.updatedAt !== expectedUpdatedAt) {
@@ -520,11 +521,15 @@ export async function updatePluginChapter(input: {
   });
 }
 
-/** Creates a Note through the Note write path and returns its id. */
+/**
+ * Creates a Note through the Note write path and returns its id. Tags are
+ * normalized the way the Note UI stores them and land with the create.
+ */
 export async function createPluginNote(input: {
   title: string;
   bookId?: string | null;
   content?: PluginContentFragment;
+  tags?: string[];
 }): Promise<{ noteId: string }> {
   return libraryWrite(async () => {
     const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
@@ -535,6 +540,7 @@ export async function createPluginNote(input: {
         ...(content === undefined
           ? {}
           : { content, wordCount: contentWordCount(content) }),
+        ...(input.tags === undefined ? {} : { tags: normalizeNoteTags(input.tags) }),
       },
       "local"
     );
@@ -544,11 +550,22 @@ export async function createPluginNote(input: {
 
 /**
  * Updates a Note's title, content, Tags, or Book through the Note write path
- * (#588). No "current" state is read before the write: `updateNoteRow` merges
- * the given fields onto the stored row, so an omitted field is left as stored,
- * and a missing id is refused. Tags are normalized the way the Note UI
- * stores them; a bookId of null moves the Note to Unfiled, and a bookId naming
- * no Book is refused before anything is written.
+ * (#588). `updateNoteRow` merges the given fields onto the stored row, so an
+ * omitted field is left as stored, and a missing id is refused. Tags are
+ * normalized the way the Note UI stores them; a bookId of null moves the Note
+ * to Unfiled, and a bookId naming no Book is refused before anything is
+ * written.
+ *
+ * When `expectedUpdatedAt` is given — the `updatedAt` the Plugin read — the
+ * write is optimistic, the same rule as Chapter content: the row is read before
+ * the open editors flush and again after it, in the same write. The Note
+ * changed since the Plugin read it when the stored content moved (the author's
+ * typing the flush just saved) or when `updated_at` differs from the one read;
+ * either way nothing is written and the call is refused with `conflict`.
+ *
+ * The content comparison is what catches typing flushed in the same second: the
+ * Library stores `updated_at` in Unix seconds, so a read and the flush a few
+ * milliseconds later share one timestamp.
  */
 export async function updatePluginNote(input: {
   noteId: string;
@@ -556,10 +573,26 @@ export async function updatePluginNote(input: {
   content?: PluginContentFragment;
   tags?: string[];
   bookId?: string | null;
+  expectedUpdatedAt?: number;
 }): Promise<null> {
   return libraryWrite(async () => {
     if (input.bookId != null && !(await getPluginBook(input.bookId))) {
       throw notFound("Book", input.bookId);
+    }
+    if (input.expectedUpdatedAt !== undefined) {
+      assertWritableId(input.noteId);
+      const before = await readContentRow("notes", input.noteId);
+      if (!before) throw notFound("Note", input.noteId);
+      await flushPendingEdits();
+      const after = await readContentRow("notes", input.noteId);
+      if (!after) throw notFound("Note", input.noteId);
+      const typedDuringFlush = before.content !== after.content;
+      if (typedDuringFlush || after.updatedAt !== input.expectedUpdatedAt) {
+        throw new PluginApiError({
+          code: "conflict",
+          message: `Note ${input.noteId} changed since it was read`,
+        });
+      }
     }
     const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
     const note = await updateNoteRow(

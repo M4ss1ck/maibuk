@@ -149,10 +149,10 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
       reorderPluginChapters({ bookId, chapterIds }),
     "library.chapters.update": ({ chapterId, title, chapterType, status }) =>
       updatePluginChapter({ chapterId, title, chapterType, status }),
-    "library.notes.create": ({ title, bookId, content }) =>
-      createPluginNote({ title, bookId, content }),
-    "library.notes.update": ({ noteId, title, content, tags, bookId }) =>
-      updatePluginNote({ noteId, title, content, tags, bookId }),
+    "library.notes.create": ({ title, bookId, content, tags }) =>
+      createPluginNote({ title, bookId, content, tags }),
+    "library.notes.update": ({ noteId, title, content, tags, bookId, expectedUpdatedAt }) =>
+      updatePluginNote({ noteId, title, content, tags, bookId, expectedUpdatedAt }),
     "library.notes.delete": ({ noteId }) => deletePluginNote(noteId),
     "library.canvases.list": ({ bookId }) => listPluginCanvases(bookId),
     "library.canvases.get": ({ canvasId }) => getPluginCanvas(canvasId),

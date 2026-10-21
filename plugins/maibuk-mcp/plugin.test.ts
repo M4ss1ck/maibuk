@@ -115,6 +115,9 @@ describe("MCP Server protocol", () => {
         "write_chapter",
         "manage_chapter",
         "update_book",
+        "edit_note",
+        "write_note",
+        "delete_note",
       ]);
     } finally {
       host.stop();
@@ -230,6 +233,33 @@ describe("MCP Server protocol", () => {
               "readOnlyHint": false,
             },
             "name": "update_book",
+          },
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+            },
+            "name": "edit_note",
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+            },
+            "name": "write_note",
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+            },
+            "name": "delete_note",
           },
         ]
       `);
@@ -681,6 +711,9 @@ describe("MCP Server read-only mode", () => {
         "write_chapter",
         "manage_chapter",
         "update_book",
+        "edit_note",
+        "write_note",
+        "delete_note",
       ]);
 
       host.setGranted(["serve", "library:read"]);
@@ -708,6 +741,9 @@ describe("MCP Server read-only mode", () => {
           "write_chapter",
           "manage_chapter",
           "update_book",
+          "edit_note",
+          "write_note",
+          "delete_note",
         ]);
       });
     } finally {
@@ -754,6 +790,34 @@ describe("MCP Server read-only mode", () => {
       expect(refused(reread)).toBe(false);
       const blocks = reread.json.result.content.map((block: any) => block.text).join("\n");
       expect(blocks).toContain("Alpha body.");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it.each([
+    ["write_note", { book: "bookalpha1", title: "Ideas" }],
+    ["edit_note", { note: "notealpha1", append: "More." }],
+    ["delete_note", { note: "notealpha1" }],
+  ])("refuses %s while read-only as an unknown tool", async (tool, args) => {
+    const library = readOnlyLibrary();
+    const before = JSON.stringify(library);
+    const { host, key } = await connect({ library });
+    try {
+      host.setGranted(["serve", "library:read"]);
+      await vi.waitFor(async () => {
+        const listed = await mcpRequest(host, key, toolsListBody(3));
+        expect(listed.json.result.tools.map((entry: any) => entry.name)).not.toContain(tool);
+      });
+
+      const answer = await mcpRequest(host, key, toolsCallBody(tool, args, 4));
+      expect(answer.json).toEqual({
+        jsonrpc: "2.0",
+        id: 4,
+        error: { code: -32602, message: `Tool ${tool} not found` },
+      });
+      expect(JSON.stringify(library)).toBe(before);
+      expect(host.checkpoints).toEqual([]);
     } finally {
       host.stop();
     }

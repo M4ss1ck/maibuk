@@ -1,9 +1,9 @@
 /**
- * Test-only helpers shared by the MCP Server suites (`manifest.test.ts`,
- * `plugin.test.ts`). They drive the Plugin through the same kit the tests
- * use (`createTestHost`), start it the way the Worker entry does, and post
- * JSON-RPC to its Plugin Endpoint the way an Agent would: only what the Agent
- * sees (status, headers, JSON-RPC result) is asserted. This file is never
+ * Test-only helpers shared by the MCP Server suites: the Note fixtures every
+ * suite serves, plus the transport helpers that drive the Plugin through the
+ * same kit the tests use (`createTestHost`), start it the way the Worker entry
+ * does, and post JSON-RPC to its Plugin Endpoint the way an Agent would: only
+ * what the Agent sees (status, headers, JSON-RPC result) is asserted. This file is never
  * imported by the runtime: the Built-in build bundles only the entry and its
  * import graph, and the import-boundary step skips this file the way it skips
  * a `.test` file.
@@ -22,6 +22,61 @@ import type {
 } from "@/features/plugins/types";
 import { createPluginClient } from "@/plugin-sdk";
 import { startMcp } from "./plugin";
+
+/** The plain Book row the shared Note fixtures sit in. */
+function fixtureBook(id: string, title: string) {
+  return {
+    id,
+    title,
+    subtitle: null,
+    authorName: "Author",
+    genre: null,
+    language: "en",
+    wordCount: 100,
+    targetWordCount: null,
+    status: "draft" as const,
+    updatedAt: 1000,
+  };
+}
+
+/** A Note row with its stored content, the shape the test kit's Library serves. */
+export function makeNote(
+  id: string,
+  bookId: string | null,
+  title = `Note ${id}`,
+  content = { text: "Old body.", html: "<p>Old body.</p>" },
+  updatedAt = Date.UTC(2026, 0, 1),
+  tags: string[] = []
+) {
+  return {
+    id,
+    bookId,
+    title,
+    language: "en",
+    tags,
+    wordCount: 10,
+    updatedAt,
+    content,
+  };
+}
+
+/** A Note with plain text and the one-paragraph HTML the host makes of it. */
+export function noteWithBody(
+  id: string,
+  bookId: string | null,
+  title: string,
+  text: string,
+  tags: string[] = []
+) {
+  return makeNote(id, bookId, title, { text, html: `<p>${text}</p>` }, Date.UTC(2026, 0, 1), tags);
+}
+
+/** Two Books and one Note in the first, as the Agent finds them. */
+export function noteLibrary() {
+  const books = [fixtureBook("bookalpha1", "The Book"), fixtureBook("bookbeta12", "Other Book")];
+  const notes = [makeNote("notealpha1", "bookalpha1", "The Note")];
+  return { books, notes };
+}
 
 /** The MCP Server manifest the build ships, parsed with the host's Built-in rules. */
 export function mcpManifest(): PluginManifest {

@@ -19,6 +19,10 @@ import type { PluginManifest } from "@/features/plugins/types";
 // 0.1.6 adds permissions.granted and permissions.changed, so a Plugin learns
 // the Plugin Permissions it holds (#591), all additive: a ^0.1.5 Plugin keeps
 // loading.
+// 0.1.7 adds expectedUpdatedAt to library.notes.update, so a Plugin's Note
+// write is refused when the Note changed since it was read (#593), and Tags to
+// library.notes.create, so a new Note lands with its Tags in the same write;
+// both additive: a ^0.1.6 Plugin keeps loading.
 
 function manifestWith(apiVersion: string): PluginManifest {
   const result = validateManifestValue({
@@ -42,45 +46,53 @@ function manifestWith(apiVersion: string): PluginManifest {
 const APP = "0.12.0";
 
 describe("Plugin API patch compatibility (ADR 0029)", () => {
-  it("the host reports Plugin API 0.1.6", () => {
-    expect(PLUGIN_API_VERSION).toBe("0.1.6");
+  it("the host reports Plugin API 0.1.7", () => {
+    expect(PLUGIN_API_VERSION).toBe("0.1.7");
   });
 
-  it("a ^0.1.5 Plugin still loads against the 0.1.6 host", () => {
+  it("a ^0.1.6 Plugin still loads against the 0.1.7 host", () => {
+    const verdict = checkPluginCompatibility(manifestWith("^0.1.6"), {
+      apiVersion: "0.1.7",
+      appVersion: APP,
+    });
+    expect(verdict.verdict).toBe("ok");
+  });
+
+  it("a ^0.1.5 Plugin still loads against the 0.1.7 host", () => {
     const verdict = checkPluginCompatibility(manifestWith("^0.1.5"), {
-      apiVersion: "0.1.6",
+      apiVersion: "0.1.7",
       appVersion: APP,
     });
     expect(verdict.verdict).toBe("ok");
   });
 
-  it("a ^0.1.4 Plugin still loads against the 0.1.6 host", () => {
+  it("a ^0.1.4 Plugin still loads against the 0.1.7 host", () => {
     const verdict = checkPluginCompatibility(manifestWith("^0.1.4"), {
-      apiVersion: "0.1.6",
+      apiVersion: "0.1.7",
       appVersion: APP,
     });
     expect(verdict.verdict).toBe("ok");
   });
 
-  it("a ^0.1.3 Plugin still loads against the 0.1.6 host", () => {
+  it("a ^0.1.3 Plugin still loads against the 0.1.7 host", () => {
     const verdict = checkPluginCompatibility(manifestWith("^0.1.3"), {
-      apiVersion: "0.1.6",
+      apiVersion: "0.1.7",
       appVersion: APP,
     });
     expect(verdict.verdict).toBe("ok");
   });
 
-  it("a ^0.1.2 Plugin still loads against the 0.1.6 host", () => {
+  it("a ^0.1.2 Plugin still loads against the 0.1.7 host", () => {
     const verdict = checkPluginCompatibility(manifestWith("^0.1.2"), {
-      apiVersion: "0.1.6",
+      apiVersion: "0.1.7",
       appVersion: APP,
     });
     expect(verdict.verdict).toBe("ok");
   });
 
-  it("a ^0.1.1 Plugin still loads against the 0.1.6 host", () => {
+  it("a ^0.1.1 Plugin still loads against the 0.1.7 host", () => {
     const verdict = checkPluginCompatibility(manifestWith("^0.1.1"), {
-      apiVersion: "0.1.6",
+      apiVersion: "0.1.7",
       appVersion: APP,
     });
     expect(verdict.verdict).toBe("ok");

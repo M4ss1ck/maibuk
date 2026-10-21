@@ -1,8 +1,9 @@
 /**
- * The `edit_chapter` tool for the maibuk-mcp Plugin: find-and-replace of one
- * exact piece of a Chapter's text, or an append to its end. Both edits work on
- * the stored HTML, so an Agent changes a few characters instead of sending the
- * whole Chapter back, and every byte it did not name stays where it was.
+ * The `edit_chapter` tool for the maibuk-mcp Plugin, with the pure edit logic
+ * `edit_note` shares: find-and-replace of one exact piece of a Chapter's text,
+ * or an append to its end. Both edits work on the stored HTML, so an Agent
+ * changes a few characters instead of sending the whole Chapter back, and
+ * every byte it did not name stays where it was.
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
@@ -20,8 +21,12 @@ import {
 } from "./library";
 
 /** Arguments for `edit_chapter`. */
-export interface EditChapterArgs {
+export interface EditChapterArgs extends EditModeArgs {
   chapter: string;
+}
+
+/** The arguments an edit reads its one mode from; a Chapter or a Note adds its id. */
+export interface EditModeArgs {
   find?: string;
   replace?: string;
   append?: string;
@@ -168,16 +173,34 @@ export type EditMode =
   | { kind: "append"; text: string; format: "text" | "html" };
 
 /**
+ * The words an edit's sentences use for the row it changes. `edit_chapter` and
+ * `edit_note` share the same pure edit logic, so it names the row and the read
+ * tool an Agent copies the exact text from instead of hard-coding either.
+ */
+export interface EditTerms {
+  /** The row's noun as a sentence names it, such as `Chapter` or `Note`. */
+  noun: string;
+  /** The read tool that returns its text, such as `read_chapter`. */
+  readTool: string;
+}
+
+/** How `edit_chapter` names the row it changes. */
+const CHAPTER_TERMS: EditTerms = { noun: "Chapter", readTool: "read_chapter" };
+
+/**
  * Resolves the arguments to exactly one mode. The modes never mix, so an Agent
  * that sends both learns which shape to send instead of guessing what won.
  */
-function editModeOf(args: EditChapterArgs): EditMode | { result: CallToolResult } {
+export function editModeOf(
+  args: EditModeArgs,
+  terms: EditTerms
+): EditMode | { result: CallToolResult } {
   const { find, replace, append } = args;
 
   if (append !== undefined && (find !== undefined || replace !== undefined)) {
     return {
       result: errorResult(
-        "Give find and replace, or append, but not both; call read_chapter first to copy the exact text."
+        `Give find and replace, or append, but not both; call ${terms.readTool} first to copy the exact text.`
       ),
     };
   }
@@ -185,7 +208,7 @@ function editModeOf(args: EditChapterArgs): EditMode | { result: CallToolResult 
     if (append === "") {
       return {
         result: errorResult(
-          "Give the text to append; call read_chapter to see where the Chapter ends."
+          `Give the text to append; call ${terms.readTool} to see where the ${terms.noun} ends.`
         ),
       };
     }
@@ -194,14 +217,14 @@ function editModeOf(args: EditChapterArgs): EditMode | { result: CallToolResult 
   if (find === undefined || replace === undefined) {
     return {
       result: errorResult(
-        "Give find and replace together, or append; call read_chapter first to copy the exact text."
+        `Give find and replace together, or append; call ${terms.readTool} first to copy the exact text.`
       ),
     };
   }
   if (find === "") {
     return {
       result: errorResult(
-        "Give the exact text to find; call read_chapter with format html to copy it."
+        `Give the exact text to find; call ${terms.readTool} with format html to copy it.`
       ),
     };
   }
@@ -218,7 +241,8 @@ export function applyEdit(
   html: string,
   plainText: string,
   mode: EditMode,
-  title: string
+  title: string,
+  terms: EditTerms
 ): { html: string; sentence: string } | { result: CallToolResult } {
   if (mode.kind === "replace") {
     const find = escapeAsStoredHtml(mode.find);
@@ -227,8 +251,8 @@ export function applyEdit(
       return {
         result: errorResult(
           plainText.includes(mode.find)
-            ? "That text crosses formatting, so read the Chapter as HTML (read_chapter with format html) and pick a find within one run of text."
-            : "No match for that find text; read the Chapter as HTML (read_chapter with format html) and copy the exact text."
+            ? `That text crosses formatting, so read the ${terms.noun} as HTML (${terms.readTool} with format html) and pick a find within one run of text.`
+            : `No match for that find text; read the ${terms.noun} as HTML (${terms.readTool} with format html) and copy the exact text.`
         ),
       };
     }
@@ -244,11 +268,91 @@ export function applyEdit(
       html.slice(0, at) + escapeAsStoredHtml(mode.replace) + html.slice(at + find.length);
     return {
       html: updatedHtml,
-      sentence: `Replaced 1 match in Chapter ${titleOrUntitled(title)}.`,
+      sentence: `Replaced 1 match in ${terms.noun} ${titleOrUntitled(title)}.`,
     };
   }
   const fragment = mode.format === "html" ? mode.text : paragraphsOf(mode.text);
-  return { html: html + fragment, sentence: `Appended to Chapter ${titleOrUntitled(title)}.` };
+  return {
+    html: html + fragment,
+    sentence: `Appended to ${terms.noun} ${titleOrUntitled(title)}.`,
+  };
+}
+
+/** The row an edit reads and rewrites: the fields the shared guarded edit needs. */
+export interface EditableRow {
+  id: string;
+  title: string;
+  updatedAt: number;
+  content: { html: string; text: string };
+}
+
+/** What a guarded edit reads, writes, and refuses against, so both edit tools share it. */
+export interface GuardedEditOptions {
+  /** The row as the edit first read it. */
+  initial: EditableRow;
+  mode: EditMode;
+  terms: EditTerms;
+  /** Takes the row's Book Checkpoint, or refuses; null means the write may proceed. */
+  ensureCheckpoint(): Promise<CallToolResult | null>;
+  /** Reads the row again; null when it no longer exists. */
+  read(): Promise<EditableRow | null>;
+  /** Writes the new HTML guarded by the `updatedAt` the edit was computed from. */
+  write(html: string, expectedUpdatedAt: number): Promise<unknown>;
+  /** The refusal when a re-read finds the row gone. */
+  missing: CallToolResult;
+}
+
+/**
+ * The guarded edit both `edit_chapter` and `edit_note` run: applies the edit to
+ * the stored HTML, refuses before any Checkpoint when it cannot apply, takes
+ * the Checkpoint once, then writes under `expectedUpdatedAt` and re-reads and
+ * re-applies on a conflict up to three times. A refused edit takes no
+ * Checkpoint and a failed Checkpoint leaves the content unchanged.
+ */
+export async function guardedEdit(options: GuardedEditOptions): Promise<CallToolResult> {
+  const { initial, mode, terms, ensureCheckpoint, read, write, missing } = options;
+
+  const first = applyEdit(initial.content.html, initial.content.text, mode, initial.title, terms);
+  if ("result" in first) return first.result;
+
+  let updatedHtml = first.html;
+  let sentence = first.sentence;
+
+  // After every refusal (validation, no match, several matches) and before
+  // the write, so a refused write takes no Checkpoint and a failed Checkpoint
+  // leaves the content unchanged.
+  const checkpoint = await ensureCheckpoint();
+  if (checkpoint !== null) return checkpoint;
+
+  let current = initial;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await write(updatedHtml, current.updatedAt);
+      break;
+    } catch (error) {
+      if (!isConflict(error)) throw error;
+      if (attempt === 2) {
+        return errorResult(
+          `The author is typing in this ${terms.noun} right now; try again in a moment.`
+        );
+      }
+      const fresh = await read();
+      if (!fresh) return missing;
+      const reEdited = applyEdit(fresh.content.html, fresh.content.text, mode, fresh.title, terms);
+      if ("result" in reEdited) return reEdited.result;
+      updatedHtml = reEdited.html;
+      sentence = reEdited.sentence;
+      current = fresh;
+    }
+  }
+
+  // Re-read after the write: the host stamps Last Edited itself, and the
+  // Agent passes this value back as expectedLastEdited later.
+  const stored = await read();
+  const lastEdited = new Date((stored ?? current).updatedAt).toISOString();
+  return {
+    content: [{ type: "text", text: `${sentence}\nLast Edited: ${lastEdited}` }],
+  };
 }
 
 export async function resolveChapter(
@@ -304,7 +408,7 @@ export async function editChapter(
   writeGuard: WriteGuard
 ): Promise<CallToolResult> {
   const ref = (args.chapter ?? "").trim();
-  const mode = editModeOf(args);
+  const mode = editModeOf(args, CHAPTER_TERMS);
   if ("result" in mode) return mode.result;
 
   return libraryCall(async () => {
@@ -313,54 +417,20 @@ export async function editChapter(
 
     const full = resolved.full;
 
-    const initial = applyEdit(full.content.html, full.content.text, mode, full.title);
-    if ("result" in initial) return initial.result;
-
-    let updatedHtml = initial.html;
-    const initialSentence = initial.sentence;
-
-    // After every refusal (validation, no match, several matches) and before
-    // the write, so a refused write takes no Checkpoint and a failed
-    // Checkpoint leaves the content unchanged.
-    const checkpoint = await writeGuard.ensureCheckpoint(full.bookId);
-    if (checkpoint !== null) return checkpoint;
-
-    let current = full;
-    let sentence = initialSentence;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        await client.library.chapters.updateContent({
+    return guardedEdit({
+      initial: full,
+      mode,
+      terms: CHAPTER_TERMS,
+      ensureCheckpoint: () => writeGuard.ensureCheckpoint(full.bookId),
+      read: () => client.library.chapters.get({ chapterId: full.id }),
+      write: (html, expectedUpdatedAt) =>
+        client.library.chapters.updateContent({
           chapterId: full.id,
-          content: { html: updatedHtml },
-          expectedUpdatedAt: current.updatedAt,
-        });
-        break;
-      } catch (error) {
-        if (!isConflict(error)) throw error;
-        if (attempt === 2) {
-          return errorResult(
-            "The author is typing in this Chapter right now; try again in a moment."
-          );
-        }
-        const fresh = await client.library.chapters.get({ chapterId: full.id });
-        if (!fresh) {
-          return errorResult(`No Chapter has the id ${ref}; call get_book to see the Chapters.`);
-        }
-        const reEdited = applyEdit(fresh.content.html, fresh.content.text, mode, fresh.title);
-        if ("result" in reEdited) return reEdited.result;
-        updatedHtml = reEdited.html;
-        sentence = reEdited.sentence;
-        current = fresh;
-      }
-    }
-
-    // Re-read after the write: the host stamps Last Edited itself, and the
-    // Agent passes this value back as expectedLastEdited later.
-    const stored = await client.library.chapters.get({ chapterId: full.id });
-    const lastEdited = new Date((stored ?? current).updatedAt).toISOString();
-    return {
-      content: [{ type: "text", text: `${sentence}\nLast Edited: ${lastEdited}` }],
-    };
+          content: { html },
+          expectedUpdatedAt,
+        }),
+      missing: errorResult(`No Chapter has the id ${ref}; call get_book to see the Chapters.`),
+    });
   });
 }
 
@@ -375,8 +445,19 @@ export interface WriteChapterArgs {
   html?: string;
 }
 
-function changedSinceMessage(lastEdited: string): string {
-  return `The Chapter changed since you read it (Last Edited is now ${lastEdited}); call read_chapter again and redo the change.`;
+/** The refusal a whole-content write gives when the row changed since its read. */
+export function changedSinceMessage(lastEdited: string, terms: EditTerms): string {
+  return `The ${terms.noun} changed since you read it (Last Edited is now ${lastEdited}); call ${terms.readTool} again and redo the change.`;
+}
+
+/** The content a write sends: `{text}`, `{html}`, or null when neither is given. */
+export function contentOf(args: {
+  text?: string;
+  html?: string;
+}): { text: string } | { html: string } | null {
+  if (args.text !== undefined) return { text: args.text };
+  if (args.html !== undefined) return { html: args.html };
+  return null;
 }
 
 export async function writeChapter(
@@ -498,7 +579,7 @@ export async function writeChapter(
 
     const current = new Date(full.updatedAt).toISOString();
     if (expectedLastEdited.trim() !== current) {
-      return errorResult(changedSinceMessage(current));
+      return errorResult(changedSinceMessage(current, CHAPTER_TERMS));
     }
 
     // After the expectedLastEdited check and before the write: a refused
@@ -516,7 +597,7 @@ export async function writeChapter(
       if (!isConflict(error)) throw error;
       const fresh = await client.library.chapters.get({ chapterId: full.id });
       const freshLastEdited = new Date((fresh ?? full).updatedAt).toISOString();
-      return errorResult(changedSinceMessage(freshLastEdited));
+      return errorResult(changedSinceMessage(freshLastEdited, CHAPTER_TERMS));
     }
 
     const stored = await client.library.chapters.get({ chapterId: full.id });
