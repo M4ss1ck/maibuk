@@ -8,6 +8,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
+import { installRandomUuid } from "./crypto-shim";
 import {
   answerHeader,
   connect,
@@ -899,6 +900,49 @@ describe("MCP Server read-only mode", () => {
       stream.close();
     } finally {
       host.stop();
+    }
+  });
+});
+
+/**
+ * The sandbox Worker's opaque origin is not a secure context, so its Web Crypto
+ * has `getRandomValues` and no `randomUUID`; the Worker entry fills that gap
+ * (#594). These tests run in a realm that has one, so they take it away and put
+ * it back exactly as they found it.
+ */
+function withoutGlobalRandomUuid(): () => void {
+  const crypto = globalThis.crypto as { randomUUID?: unknown };
+  const own = Object.getOwnPropertyDescriptor(crypto, "randomUUID");
+  Object.defineProperty(crypto, "randomUUID", {
+    value: undefined,
+    writable: true,
+    configurable: true,
+  });
+  return () => {
+    if (own === undefined) delete crypto.randomUUID;
+    else Object.defineProperty(crypto, "randomUUID", own);
+  };
+}
+
+describe("MCP Server in the sandbox Worker", () => {
+  it("answers initialize and tools/call when the Worker's crypto has no randomUUID", async () => {
+    const restore = withoutGlobalRandomUuid();
+    const { host, key } = await connect();
+    try {
+      // The entry installs it on the Worker's crypto before serving anything.
+      expect(installRandomUuid()).toBe(true);
+
+      const initialized = await mcpRequest(host, key, initializeBody());
+      expect(initialized.status, initialized.text).toBe(200);
+      expect(initialized.json.result.serverInfo.name).toBe("maibuk");
+
+      const listed = await mcpRequest(host, key, toolsCallBody("list_books", {}));
+      expect(listed.status, listed.text).toBe(200);
+      expect(refused(listed)).toBe(false);
+      expect(Array.isArray(listed.json.result.content)).toBe(true);
+    } finally {
+      host.stop();
+      restore();
     }
   });
 });

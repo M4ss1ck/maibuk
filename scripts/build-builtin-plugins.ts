@@ -44,6 +44,15 @@ export type PluginTarget = (typeof PLUGIN_PLATFORMS)[number];
 /** The gzip budget for one built entry: the SDK plus the Plugin (issue #444). */
 export const BUNDLE_SIZE_LIMIT_BYTES = 150 * 1024;
 
+/**
+ * A per-Built-in budget above the default, keyed by Plugin id. Only a Plugin
+ * whose weight is mostly a third-party runtime needs one: maibuk-mcp carries
+ * the MCP SDK plus zod, which alone exceed 150 KB gzip.
+ */
+export const BUNDLE_SIZE_LIMIT_OVERRIDES: Readonly<Record<string, number>> = {
+  "maibuk-mcp": 240 * 1024,
+};
+
 export interface BuildBuiltInPluginsOptions {
   /** The folder holding `plugins/<id>/` sources. */
   sourceRoot: string;
@@ -138,18 +147,21 @@ export async function buildBuiltInPlugins(
 
 /**
  * The gzip byte size of each built Plugin entry in `<outRoot>/index.json`,
- * against `limitBytes`. The entry already carries the SDK, so this measures the
- * SDK plus the Plugin together.
+ * against `limitBytes`, or that Plugin's override when `overrides` names it.
+ * The entry already carries the SDK, so this measures the SDK plus the Plugin
+ * together.
  */
 export function checkBundleSize(
   outRoot: string,
-  limitBytes: number = BUNDLE_SIZE_LIMIT_BYTES
+  limitBytes: number = BUNDLE_SIZE_LIMIT_BYTES,
+  overrides: Readonly<Record<string, number>> = BUNDLE_SIZE_LIMIT_OVERRIDES
 ): BundleSizeResult[] {
   const index = JSON.parse(readFileSync(join(outRoot, "index.json"), "utf8")) as BuiltInPluginIndex;
   return index.plugins.map((plugin) => {
     const entry = readFileSync(join(outRoot, plugin.id, plugin.manifest.entry));
     const bytes = gzipSync(entry, { level: 9 }).length;
-    return { id: plugin.id, bytes, limitBytes, ok: bytes <= limitBytes };
+    const limit = overrides[plugin.id] ?? limitBytes;
+    return { id: plugin.id, bytes, limitBytes: limit, ok: bytes <= limit };
   });
 }
 
@@ -200,9 +212,7 @@ async function main(): Promise<void> {
     if (size.ok) {
       console.log(`  ${size.id}: ${kb} KB gzip`);
     } else {
-      console.error(
-        `  ${size.id}: ${kb} KB gzip, over the ${BUNDLE_SIZE_LIMIT_BYTES / 1024} KB budget`
-      );
+      console.error(`  ${size.id}: ${kb} KB gzip, over the ${size.limitBytes / 1024} KB budget`);
       overBudget = true;
     }
   }

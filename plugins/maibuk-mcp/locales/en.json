@@ -1,3 +1,11 @@
 {
-  "commands.newKey.label": "Make a New MCP Server Key"
+  "name": "MCP Server",
+  "description": "Let outside AI tools read and change the Library through the Model Context Protocol.",
+  "commands.openConnect.label": "Open MCP Server",
+  "commands.newKey.label": "Make a New MCP Server Key",
+  "commands.copyClaudeCode.label": "Copy the Claude Code setup snippet",
+  "commands.copyCodex.label": "Copy the Codex setup snippet",
+  "commands.copyOpenCode.label": "Copy the OpenCode setup snippet",
+  "commands.copyCursor.label": "Copy the Cursor setup snippet",
+  "pages.connect.title": "MCP Server"
 }

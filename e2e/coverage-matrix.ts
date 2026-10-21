@@ -2498,6 +2498,32 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-mcp-server",
+    area: "plugins",
+    workflow:
+      "MCP Server, the Built-in Plugin that ships off by default, turned on from Settings → Plugins by keyboard: an untouched Built-in is pre-granted its three required Plugin Permissions and the optional library:write, so its switch starts it with no review dialog; its navigating Command opens the page, which shows the Plugin Endpoint address and Key in four setup snippets (Claude Code, Codex, OpenCode, Cursor), and Copy puts the same text on the clipboard; an Agent that initializes over the Endpoint with that Key and calls a tool appears in Live Connections, the indicator reads Connected: 1 Agent, and the Activity log lists the call by time, Agent, tool, item, and result with none of the author's text; a write through the Endpoint changes the Library, so the Chapter opens with the appended text; a moved address raises the reconnect notice with the refreshed snippets, and Done dismisses it; Make a New MCP Server Key rotates the Key, which cuts off a request using the old one, and each copy Command copies its Agent's snippet; asserts: the pre-granted permission labels and lock, the unavailable Status before an address binds, the copied and shown snippet text, the Connections and Activity tables, the Chapter text, the notice and its dismissal, the 401 for the old Key; persists: yes (device-local approvals and the Plugin's stored Key). Every HTTP request goes through the E2E lane's test-only seam because the web build has no socket, and so does the address that moves; the socket itself (the bind, the Host and Origin checks, 421 and 403) is proven by the Rust tests in src-tauri/src/plugins/endpoint.rs, not here",
+    edges: [
+      "Turning it on pre-grants every permission, and a copied snippet carries the address and Key",
+      "An Agent that connects appears in Live Connections, the indicator says connected, and the Activity log holds its call",
+      "A write through the Endpoint changes the Library, and the open Chapter shows it",
+      "A moved address raises the reconnect notice with refreshed snippets, and Done dismisses it",
+      "The Plugin Commands make a new Key that refuses the old one, and copy each Agent's snippet",
+    ],
+    terms: ["Plugin", "Built-in Plugin", "Plugin Permission", "Plugin Endpoint", "Plugin Command"],
+    shortcuts: [
+      "plugin.maibuk-mcp.openConnect",
+      "plugin.maibuk-mcp.newKey",
+      "plugin.maibuk-mcp.copyClaudeCode",
+      "plugin.maibuk-mcp.copyCodex",
+      "plugin.maibuk-mcp.copyOpenCode",
+      "plugin.maibuk-mcp.copyCursor",
+    ],
+    routes: ["/settings", "/plugin/:pluginId/:pageId", "/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "settings-reset-all",
     area: "settings",
     workflow:

@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
 import {
+  BUNDLE_SIZE_LIMIT_OVERRIDES,
   buildBuiltInPlugins,
   checkBundleSize,
   defaultTarget,
@@ -117,12 +118,12 @@ describe("buildBuiltInPlugins()", () => {
     expect(() => readdirSync(join(outRoot, "desktop-only"))).toThrow();
   });
 
-  it("builds the shipped list, Echoes only, without fixtures", async () => {
+  it("builds the shipped list without fixtures, omitting the desktop-only one on web", async () => {
     const outRoot = tempOutRoot();
     const shipped = JSON.parse(readFileSync(join(REPO_ROOT, "plugins/builtins.json"), "utf8")) as {
       plugins: string[];
     };
-    expect(shipped.plugins).toEqual(["maibuk-echoes"]);
+    expect(shipped.plugins).toEqual(["maibuk-echoes", "maibuk-mcp"]);
 
     await buildBuiltInPlugins({
       sourceRoot: join(REPO_ROOT, "plugins"),
@@ -131,6 +132,7 @@ describe("buildBuiltInPlugins()", () => {
       target: "web",
     });
 
+    // maibuk-mcp lists only "desktop", so the web build ships Echoes alone.
     const names = readdirSync(outRoot);
     expect(names.sort()).toEqual(["index.json", "maibuk-echoes"]);
     expect(names).not.toContain("sample-builtin");
@@ -159,6 +161,25 @@ describe("checkBundleSize()", () => {
     expect(tight.ok).toBe(false);
     expect(tight.bytes).toBeGreaterThan(10);
     expect(tight.limitBytes).toBe(10);
+  });
+
+  it("raises the cap for the id an override names and leaves the others at the default", async () => {
+    const outRoot = tempOutRoot();
+    await buildBuiltInPlugins({
+      sourceRoot: FIXTURE_ROOT,
+      ids: ["sample-builtin", "desktop-only"],
+      outRoot,
+      target: "desktop",
+    });
+
+    const [overridden, plain] = checkBundleSize(outRoot, 10, { "sample-builtin": 200_000 });
+    expect(overridden).toMatchObject({ id: "sample-builtin", limitBytes: 200_000, ok: true });
+    expect(plain).toMatchObject({ id: "desktop-only", limitBytes: 10, ok: false });
+  });
+
+  it("gives maibuk-mcp the only raised budget", () => {
+    // The MCP SDK plus zod alone exceed the 150 KB default.
+    expect(BUNDLE_SIZE_LIMIT_OVERRIDES).toEqual({ "maibuk-mcp": 240 * 1024 });
   });
 });
 

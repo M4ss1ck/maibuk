@@ -23,8 +23,9 @@ You are building a **Plugin**: a packaged addition to Maibuk that reaches the au
 | Every Plugin API method (types are the source of truth) | `docs/plugins/api-reference.md`, `src/plugin-sdk/api.generated.ts` |
 | Every host-rendered component and its props | `docs/plugins/ui-reference.md`, `src/plugin-sdk/ui.generated.ts` |
 | A complete Plugin to copy patterns from | `plugins/maibuk-echoes/` (page, sidebar entry, Commands, Settings row, toolbar button, Item Menu entry, highlights, locales, tests) |
+| A Plugin that answers the Plugin Endpoint | `plugins/maibuk-mcp/` (desktop-only, `serve`, MCP tools, its own page and copies) |
 
-These pages, the generated types, and Echoes are the whole contract. Maibuk's code outside `src/plugin-sdk/` is private: answer questions from the contract, and treat anything only the private code could tell you as a gap.
+These pages, the generated types, and the shipped Built-ins (Echoes and MCP Server) are the whole contract. Maibuk's code outside `src/plugin-sdk/` is private: answer questions from the contract, and treat anything only the private code could tell you as a gap.
 
 Your code imports only `@maibuk/plugin-sdk` and its public subpaths (`@maibuk/plugin-sdk/ui-serve`, `@maibuk/plugin-sdk/worker-ui`), packages installed in the Plugin's own `node_modules`, and relative files inside the Plugin folder. Test files may also import `@maibuk/plugin-test-kit`.
 

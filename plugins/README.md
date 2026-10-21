@@ -25,11 +25,14 @@ plugins/<id>/
 `plugins/builtins.json` lists the ids to build and ship, in order:
 
 ```json
-{ "plugins": ["maibuk-echoes"] }
+{ "plugins": ["maibuk-echoes", "maibuk-mcp"] }
 ```
 
-Echoes (`maibuk-echoes`) is the first Built-in Plugin. Fixture Plugins under
-`e2e/` or `src/test/` are never bundled; the build only reads this list.
+Echoes (`maibuk-echoes`) is the first Built-in Plugin. MCP Server (`maibuk-mcp`)
+is the second: a desktop-only Built-in that answers the Plugin Endpoint, so an
+outside AI tool reads and changes the Library over the Model Context Protocol.
+Fixture Plugins under `e2e/` or `src/test/` are never bundled; the build only
+reads this list.
 
 ## Activation
 
@@ -120,7 +123,10 @@ Built-in only when its manifest lists `android`, and skips the rest with
 
 The build fails when any built entry exceeds **150 KB gzip**. The entry already
 contains the SDK from `src/plugin-sdk`, so the gate covers the SDK plus the
-Plugin together.
+Plugin together. A Built-in whose weight is mostly a third-party runtime may
+carry a higher per-Plugin budget in `scripts/build-builtin-plugins.ts`
+(`BUNDLE_SIZE_LIMIT_OVERRIDES`): maibuk-mcp gets 240 KB because the MCP SDK plus
+zod alone exceed 150 KB gzip.
 
 ## Plugins in their own repository
 

@@ -52,6 +52,12 @@ interface FixturePlugin {
   output: string;
   /** Extra source folders copied verbatim beside the bundle (a Frame's `ui/`). */
   copyFolders?: readonly string[];
+  /**
+   * Manifest fields replaced in the built copy, never in the source folder.
+   * The real Built-in source keeps its shipped manifest; the E2E lane runs it
+   * on the web build, which a desktop-only manifest excludes.
+   */
+  manifestPatch?: Readonly<Record<string, unknown>>;
 }
 
 /** The source-built fixture Plugins, by folder name in the Plugin Directory. */
@@ -78,6 +84,16 @@ const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
     repoSource: true,
     manifest: "manifest.json",
     output: "maibuk-echoes",
+  },
+  // MCP Server ships desktop-only; the E2E web lane runs the real source with
+  // "web" added to its manifest `platforms` here, in the built copy alone. The
+  // shipped `plugins/maibuk-mcp/manifest.json` is never changed.
+  {
+    source: "plugins/maibuk-mcp",
+    repoSource: true,
+    manifest: "manifest.json",
+    output: "maibuk-mcp",
+    manifestPatch: { platforms: ["desktop", "web"] },
   },
 ];
 
@@ -114,6 +130,20 @@ async function buildFixturePlugin(
         : undefined,
   });
   await copyFixtureFolders(fixture, sourceDir, outDir, requestLog.origin);
+  if (fixture.manifestPatch !== undefined) {
+    patchBuiltManifest(outDir, fixture.manifestPatch);
+  }
+}
+
+/**
+ * Replaces the built copy's manifest fields with the fixture's patch. The
+ * source manifest stays exactly as shipped, so nothing a real build reads
+ * changes; the seeded folder is the built one, so the app hashes what it runs.
+ */
+function patchBuiltManifest(outDir: string, patch: Readonly<Record<string, unknown>>): void {
+  const manifestPath = resolve(outDir, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+  writeFileSync(manifestPath, `${JSON.stringify({ ...manifest, ...patch }, null, 2)}\n`);
 }
 
 /** Copies a fixture's extra folders beside the bundle and substitutes the origin. */
