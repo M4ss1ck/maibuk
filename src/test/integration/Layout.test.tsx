@@ -78,6 +78,7 @@ import {
 import { useReleaseStore } from "@/features/releases/store";
 import { useThemeStore } from "@/features/theme/store";
 import { useSettingsStore } from "@/features/settings/store";
+import { installArrowNavigation } from "@/lib/arrow-navigation";
 import { runTopBackDismiss } from "@/lib/platform/backDismiss";
 import { registerPluginCommands } from "@/lib/shortcut-registry";
 
@@ -209,35 +210,44 @@ describe("Layout", () => {
     );
   });
 
-  it("moves link focus inside the scrolling list and onto the pinned pair with Tab", async () => {
+  it("walks the scrolling destinations and the pinned pair with the arrows as one list", async () => {
     const user = userEvent.setup();
-    renderLayout();
-    const projects = getNavigationLink("Projects");
-    const notes = getNavigationLink("Notes");
-    const canvas = getNavigationLink("Canvas");
-    const ephemeral = getNavigationLink("Ephemeral");
-    const metrics = getNavigationLink("Metrics");
-    const settings = getNavigationLink("Settings");
+    const uninstall = installArrowNavigation();
+    try {
+      renderLayout();
+      const projects = getNavigationLink("Projects");
+      const notes = getNavigationLink("Notes");
+      const ephemeral = getNavigationLink("Ephemeral");
+      const metrics = getNavigationLink("Metrics");
+      const settings = getNavigationLink("Settings");
 
-    // The scrolling list is one roving stop: arrows walk it in order, Home and
-    // End land on its ends.
-    projects.focus();
-    await user.keyboard("{ArrowDown}");
-    expect(notes).toHaveFocus();
-    await user.keyboard("{End}");
-    expect(ephemeral).toHaveFocus();
-    await user.keyboard("{ArrowUp}");
-    expect(canvas).toHaveFocus();
-    await user.keyboard("{Home}");
-    expect(projects).toHaveFocus();
+      // The navigation is one roving stop: the arrows walk it in visual order,
+      // past Ephemeral and on to the pinned Metrics and Settings.
+      projects.focus();
+      await user.keyboard("{ArrowDown}");
+      expect(notes).toHaveFocus();
+      await user.keyboard("{End}");
+      expect(settings).toHaveFocus();
+      await user.keyboard("{ArrowUp}");
+      expect(metrics).toHaveFocus();
+      await user.keyboard("{ArrowUp}");
+      expect(ephemeral).toHaveFocus();
+      await user.keyboard("{Home}");
+      expect(projects).toHaveFocus();
+      await user.keyboard("{ArrowUp}");
+      expect(projects).toHaveFocus();
+      await user.keyboard("{End}");
+      expect(settings).toHaveFocus();
+      await user.keyboard("{ArrowDown}");
+      expect(settings).toHaveFocus();
 
-    // Tab leaves the scrolling list for the pinned pair, whose arrows walk it too.
-    await user.tab();
-    expect(metrics).toHaveFocus();
-    await user.keyboard("{ArrowDown}");
-    expect(settings).toHaveFocus();
-    await user.keyboard("{Home}");
-    expect(metrics).toHaveFocus();
+      // One Tab stop for the whole list: Tab leaves it instead of stopping
+      // between the scrolling destinations and the pinned pair.
+      await user.tab();
+      expect(getNavigation()).not.toContainElement(document.activeElement as HTMLElement);
+    } finally {
+      uninstall();
+    }
   });
 
   it("orders core destinations, a Plugin entry, then the pinned Metrics and Settings", () => {
@@ -267,22 +277,21 @@ describe("Layout", () => {
     const metrics = getNavigationLink("Metrics");
     const settings = getNavigationLink("Settings");
 
-    // The scrolling list ends at the Plugin entry; arrows walk it in order.
+    // The Plugin entry comes after the core destinations, and the arrows carry
+    // on from it to the pinned Metrics and Settings.
     projects.focus();
-    for (const name of ["Notes", "Canvas", "Ephemeral", "Report"]) {
+    for (const name of ["Notes", "Canvas", "Ephemeral", "Report", "Metrics", "Settings"]) {
       await user.keyboard("{ArrowDown}");
       expect(getNavigationLink(name)).toHaveFocus();
     }
     await user.keyboard("{End}");
-    expect(report).toHaveFocus();
-
-    // Tab reaches the pinned pair, whose arrows walk Metrics then Settings.
-    await user.tab();
-    expect(metrics).toHaveFocus();
-    await user.keyboard("{ArrowDown}");
     expect(settings).toHaveFocus();
-    await user.keyboard("{Home}");
+    await user.keyboard("{ArrowUp}");
     expect(metrics).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(projects).toHaveFocus();
+
+    expect(report).toHaveAttribute("href", "/plugin/sample/report");
   });
 
   it("keeps the core, Plugin, Metrics, Settings order in the mobile drawer", async () => {
@@ -314,10 +323,9 @@ describe("Layout", () => {
     const projects = within(nav).getByText("Proyectos").closest("a") as HTMLAnchorElement;
     const settings = within(nav).getByText("Configuración").closest("a") as HTMLAnchorElement;
 
-    // Typeahead works within each nav list; reach the pinned list (Métricas,
-    // Configuración) with Tab first.
+    // Typeahead reaches a pinned destination from a scrolling one: the whole
+    // navigation is one list.
     projects.focus();
-    await user.tab();
     await user.keyboard("conf");
     expect(settings).toHaveFocus();
 

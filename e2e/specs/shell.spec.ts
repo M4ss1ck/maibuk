@@ -67,13 +67,13 @@ async function newNoteByKeyboard(page: Page) {
   await expect(page).toHaveURL(/\/notes\/[\w-]+$/);
 }
 
-// The nav is two lists: the core destinations and Plugin entries scroll, and
-// Metrics plus Settings stay pinned below them. Options are located inside the
-// sidebar so both lists are searched.
+// The nav is one list in two sections: the core destinations and Plugin
+// entries scroll, and Metrics plus Settings stay pinned below them. Options are
+// located inside the sidebar, and the first group is the scrolling section.
 const navSidebar = (page: Page) => page.getByRole("complementary", { name: "Navigation sidebar" });
 const navOption = (page: Page, name: string) =>
   navSidebar(page).getByRole("option", { name: new RegExp(`^${name}`) });
-const navScroller = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
+const navScroller = (page: Page) => navSidebar(page).getByRole("group").first();
 
 test.describe("primary navigation @wf:shell-nav-sidebar", () => {
   test("Tab into the navigation, arrows move, Enter goes there and announces it", async ({
@@ -83,27 +83,23 @@ test.describe("primary navigation @wf:shell-nav-sidebar", () => {
     const announcer = page.getByRole("status").first();
     await expect(announcer).toHaveText("My Books");
 
-    // The core destinations are one roving stop: arrows walk it in order.
+    // The whole navigation is one roving stop: arrows walk it in order, from
+    // the scrolling destinations on to the pinned Metrics and Settings.
     await tabTo(page, navOption(page, "Books"));
-    for (const name of ["Notes", "Canvas", "Ephemeral"]) {
+    for (const name of ["Notes", "Canvas", "Ephemeral", "Metrics", "Settings"]) {
       await page.keyboard.press("ArrowDown");
       await expect(navOption(page, name)).toBeFocused();
     }
-
-    // Tab leaves the scrolling list for the pinned pair (Metrics, Settings).
-    await page.keyboard.press("Tab");
-    await expect(navOption(page, "Metrics")).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(navOption(page, "Settings")).toBeFocused();
 
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
     await expect(announcer).toHaveText("Settings");
 
-    // Shift+Tab returns to the scrolling list, where the arrows reach Notes.
-    await page.keyboard.press("Shift+Tab");
-    await pressUntilFocused(page, "ArrowUp", navOption(page, "Notes"));
+    // Home returns to the first destination, and Enter reaches Notes.
+    await page.keyboard.press("Home");
+    await expect(navOption(page, "Books")).toBeFocused();
+    await pressUntilFocused(page, "ArrowDown", navOption(page, "Notes"));
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/notes$/);
     await expect(announcer).toHaveText("Notes");
@@ -132,23 +128,19 @@ test.describe("primary navigation @wf:shell-nav-sidebar", () => {
       await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });
       await capture(page, "sidebar-with-echoes", { around: [navSidebar(page)] });
 
-      // The Plugin entry is the last row of the scrolling list; arrows walk the
-      // core destinations and it in that exact visual order.
+      // The Plugin entry comes after the core destinations, and the arrows walk
+      // the column in visual order on through it to Metrics and Settings.
       await tabTo(page, navOption(page, "Books"));
-      for (const name of ["Notes", "Canvas", "Ephemeral", "Echoes"]) {
+      for (const name of ["Notes", "Canvas", "Ephemeral", "Echoes", "Metrics", "Settings"]) {
         await page.keyboard.press("ArrowDown");
         await expect(navOption(page, name)).toBeFocused();
       }
       await page.keyboard.press("End");
-      await expect(navOption(page, "Echoes")).toBeFocused();
-
-      // Tab moves onto the pinned pair, whose arrows walk Metrics and Settings.
-      await page.keyboard.press("Tab");
-      await expect(navOption(page, "Metrics")).toBeFocused();
-      await page.keyboard.press("ArrowDown");
       await expect(navOption(page, "Settings")).toBeFocused();
-      await page.keyboard.press("Home");
+      await page.keyboard.press("ArrowUp");
       await expect(navOption(page, "Metrics")).toBeFocused();
+      await page.keyboard.press("Home");
+      await expect(navOption(page, "Books")).toBeFocused();
     });
   });
 
@@ -201,14 +193,10 @@ test.describe("primary navigation @wf:shell-nav-sidebar", () => {
       // Keyboard still walks the list in order, through the scroller and on to
       // the pinned pair, and the pair stays in view as focus lands on it.
       await tabTo(page, navOption(page, "Books"));
-      for (const name of ["Notes", "Canvas", "Ephemeral", "Echoes"]) {
+      for (const name of ["Notes", "Canvas", "Ephemeral", "Echoes", "Metrics", "Settings"]) {
         await page.keyboard.press("ArrowDown");
         await expect(navOption(page, name)).toBeFocused();
       }
-      await page.keyboard.press("Tab");
-      await expect(navOption(page, "Metrics")).toBeFocused();
-      await page.keyboard.press("ArrowDown");
-      await expect(navOption(page, "Settings")).toBeFocused();
       await expect(navOption(page, "Settings")).toBeInViewport();
       await expect(navSidebar(page).getByRole("button", { name: "Light" })).toBeInViewport();
     });
