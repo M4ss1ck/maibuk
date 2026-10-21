@@ -191,13 +191,17 @@ test.describe("primary navigation @wf:shell-nav-sidebar", () => {
       expect(metrics!.y + metrics!.height).toBeLessThanOrEqual(settings!.y + 2);
 
       // Keyboard still walks the list in order, through the scroller and on to
-      // the pinned pair, and the pair stays in view as focus lands on it.
+      // the pinned pair. Every focused row is fully on screen, so arrowing onto
+      // one below the fold scrolls the destinations section to it, and the
+      // pinned pair stays in view as focus lands on it.
       await tabTo(page, navOption(page, "Books"));
       for (const name of ["Notes", "Canvas", "Ephemeral", "Echoes", "Metrics", "Settings"]) {
         await page.keyboard.press("ArrowDown");
         await expect(navOption(page, name)).toBeFocused();
+        // Ratio 1, not the default 0: a row half cut by the scrolling section
+        // still intersects the viewport and would pass the default check.
+        await expect(navOption(page, name)).toBeInViewport({ ratio: 1 });
       }
-      await expect(navOption(page, "Settings")).toBeInViewport();
       await expect(navSidebar(page).getByRole("button", { name: "Light" })).toBeInViewport();
     });
   });
