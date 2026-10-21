@@ -13,8 +13,12 @@
 // (5 tools); a call costs its result plus its arguments, list_books ~30,
 // get_book ~100, list_notes ~27, read_note ~96, read_chapter of Arrival ~315
 // as text, a write's answer ~25. Each budget is the fixed cost plus the
-// expected path plus room for one orienting or repeated call; the reasoning
-// sits beside each number and in `e2e/README.md`.
+// expected path plus room for one orienting or repeated call. The path costs
+// rest on the research's response rules (§3.3, §8.3): lists of short lines
+// with a cursor, one format a read (text by default), windowed prose, and
+// small edits instead of whole-Chapter rewrites; a server that broke one of
+// them would spend a task's room. The reasoning sits beside each number and
+// in `e2e/README.md`.
 
 /** The fixed MCP cost of a session: every definition and the instructions, read-write. */
 export const FIXED_COST = 2_266;
@@ -461,12 +465,21 @@ export const EVAL_TASKS: readonly EvalTask[] = [
     check(run) {
       const after = chapterOf(run, IDS.lampRoom);
       const text = normalize(after?.text ?? "");
-      const refused = run.calls.some(
+      // Refused first, then a fresh read, then a replace that landed: the
+      // recovery the refusal's own sentence asks for, in that order.
+      const refusedAt = run.calls.findIndex(
         (call) => call.name === "write_chapter" && call.isError && /changed/i.test(call.text)
       );
+      const rereadAt = run.calls.findIndex(
+        (call, index) => index > refusedAt && call.name === "read_chapter" && !call.isError
+      );
+      const landedAt = run.calls.findIndex(
+        (call, index) => index > rereadAt && call.name === "write_chapter" && !call.isError
+      );
+      const refused = refusedAt !== -1 && rereadAt !== -1 && landedAt !== -1;
       return [
         check(
-          "the stale replace was refused",
+          "refused, re-read, then replaced",
           refused,
           run.calls.map((call) => `${call.name}${call.isError ? "!" : ""}`).join(", ")
         ),

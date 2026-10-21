@@ -69,30 +69,28 @@ export interface CheckResult {
   detail: string;
 }
 
-/** Parses one Plugin Endpoint answer body: plain JSON, or the SDK's SSE stream framing it. */
-export function parseMcpBody(text: string): any {
-  const frames = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("data:"));
-  const payload =
-    frames.length > 0 ? frames[frames.length - 1].slice("data:".length).trim() : text.trim();
-  if (payload === "") return null;
-  try {
-    return JSON.parse(payload);
-  } catch {
-    return null;
-  }
-}
-
-/** Parses a request body; anything that is not JSON is kept as null. */
-export function parseRequestBody(text: string): any {
+/** Parses JSON text; an empty or malformed body is kept as null. */
+function jsonOrNull(text: string): any {
   if (text.trim() === "") return null;
   try {
     return JSON.parse(text);
   } catch {
     return null;
   }
+}
+
+/** Parses one Plugin Endpoint answer body: plain JSON, or the SDK's SSE stream framing it. */
+export function parseMcpBody(text: string): any {
+  const frames = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("data:"));
+  return jsonOrNull(frames.length > 0 ? frames[frames.length - 1].slice("data:".length) : text);
+}
+
+/** Parses a request body; anything that is not JSON is kept as null. */
+export function parseRequestBody(text: string): any {
+  return jsonOrNull(text);
 }
 
 function textOfResult(result: any): string {

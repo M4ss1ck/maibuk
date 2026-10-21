@@ -251,6 +251,7 @@ async function main(): Promise<void> {
       exitCode = 0;
       return;
     }
+    if (process.env.CI) refuse("the eval is paid and never runs in CI");
     const version = claudeVersion();
     const out = resolve(REPO_ROOT, options.out);
     const wireDir = join(dirname(out), "mcp-eval");

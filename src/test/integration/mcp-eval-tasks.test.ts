@@ -325,6 +325,23 @@ describe("MCP Server eval task 5: a whole replace refused after the author typed
     expect(failed(outcome.checks)).toEqual([]);
   });
 
+  it("fails an Agent that is refused and gives up without re-reading", async () => {
+    const { checks } = await runScripted(task("5"), async (agent) => {
+      const first = await agent.call("read_chapter", { chapter: short(IDS.lampRoom) });
+      await agent.call("write_chapter", {
+        chapter: short(IDS.lampRoom),
+        expectedLastEdited: lastEdited(first),
+        text: LAMP_ROOM_REWRITE.join("\n\n"),
+      });
+      return "The Chapter changed, so I stopped.";
+    });
+    expect(failed(checks)).toEqual([
+      "refused, re-read, then replaced",
+      "the new version landed",
+      "the old version is gone",
+    ]);
+  });
+
   it("fails a recovery that drops the author's paragraph", async () => {
     const { checks } = await refusedThenRetried(() => LAMP_ROOM_REWRITE.join("\n\n"));
     expect(failed(checks)).toEqual(["the author's typing survived"]);
