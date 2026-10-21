@@ -12,8 +12,13 @@
 // The Worker entry installs the Remote DOM polyfill, so it stays first among
 // the SDK imports: `@/plugin-sdk` touches HTMLElement when it is evaluated.
 import { servePluginUi } from "@/plugin-sdk/worker-ui";
+// Then the sandbox's Web Crypto gap, before any SDK module can reach it: the
+// MCP transport calls `crypto.randomUUID`, which the opaque-origin Worker lacks.
+import { installRandomUuid } from "./crypto-shim";
 import { PLUGIN_READY_MESSAGE, createPluginClient } from "@/plugin-sdk";
 import { startMcp } from "./plugin";
+
+installRandomUuid();
 
 /** The Worker global surface this plugin uses, without the DOM's Window types. */
 interface McpWorkerScope {
