@@ -11,7 +11,7 @@ import type { PluginClient } from "@/plugin-sdk";
 import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
 import { editChapter, writeChapter, type WriteGuard } from "./edits";
-import { editNote, listNotes, readNote, writeNote } from "./notes";
+import { deleteNote, editNote, listNotes, readNote, writeNote } from "./notes";
 import {
   BOOK_STATUSES,
   CHAPTER_STATUSES,
@@ -335,6 +335,24 @@ export function buildMcpServer(
         },
       },
       async (args) => writeNote(client, args as any, writeGuard)
+    );
+    server.registerTool(
+      "delete_note",
+      {
+        title: "Delete note",
+        description:
+          "Delete one Note through the normal Delete path and return its whole text so it can be restored. A Note in a Book takes that Book's Checkpoint first; an Unfiled Note takes none. The author confirms the delete in Deletion Review before a sync carries it.",
+        inputSchema: z.object({
+          note: z.string().min(8),
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async (args) => deleteNote(client, args as any, writeGuard)
     );
   }
   return server;

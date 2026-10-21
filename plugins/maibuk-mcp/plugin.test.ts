@@ -117,6 +117,7 @@ describe("MCP Server protocol", () => {
         "update_book",
         "edit_note",
         "write_note",
+        "delete_note",
       ]);
     } finally {
       host.stop();
@@ -250,6 +251,15 @@ describe("MCP Server protocol", () => {
               "readOnlyHint": false,
             },
             "name": "write_note",
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "idempotentHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": false,
+            },
+            "name": "delete_note",
           },
         ]
       `);
@@ -703,6 +713,7 @@ describe("MCP Server read-only mode", () => {
         "update_book",
         "edit_note",
         "write_note",
+        "delete_note",
       ]);
 
       host.setGranted(["serve", "library:read"]);
@@ -732,6 +743,7 @@ describe("MCP Server read-only mode", () => {
           "update_book",
           "edit_note",
           "write_note",
+          "delete_note",
         ]);
       });
     } finally {
@@ -828,6 +840,32 @@ describe("MCP Server read-only mode", () => {
         jsonrpc: "2.0",
         id: 4,
         error: { code: -32602, message: "Tool edit_note not found" },
+      });
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses delete_note while read-only as an unknown tool", async () => {
+    const library = readOnlyLibrary();
+    const { host, key } = await connect({ library });
+    try {
+      host.setGranted(["serve", "library:read"]);
+      await vi.waitFor(async () => {
+        const listed = await mcpRequest(host, key, toolsListBody(3));
+        expect(listed.json.result.tools.map((tool: any) => tool.name)).not.toContain("delete_note");
+      });
+
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCallBody("delete_note", { note: "notealpha1" }, 4)
+      );
+      expect(answer.json).toEqual({
+        jsonrpc: "2.0",
+        id: 4,
+        error: { code: -32602, message: "Tool delete_note not found" },
       });
       expect(host.checkpoints).toEqual([]);
     } finally {

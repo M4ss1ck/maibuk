@@ -1,9 +1,10 @@
 /**
  * The Note tools for the maibuk-mcp Plugin: `list_notes` and `read_note`, plus
  * `write_note`, which creates a Note in a Book or as an Unfiled Note, or
- * replaces one Note's whole content, title, Tags, and Book, and `edit_note`,
- * which shares `edit_chapter`'s find-and-replace and append. Pure-ish handlers
- * over a `PluginClient`, like `list_books`.
+ * replaces one Note's whole content, title, Tags, and Book, `edit_note`, which
+ * shares `edit_chapter`'s find-and-replace and append, and `delete_note`, which
+ * returns the whole text it removes. Pure-ish handlers over a `PluginClient`,
+ * like `list_books`.
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
@@ -40,6 +41,39 @@ function noteLine(note: NoteRow, allIds: readonly string[]): string {
   const base = `${sid}  ${title}  ${note.wordCount} words  ${isoDate(note.updatedAt)}`;
   if (note.tags.length === 0) return base;
   return `${base}  Tags: ${note.tags.join(", ")}`;
+}
+
+/**
+ * The lines that name one Note: its short id and title, where it lives (a Book
+ * or Unfiled), and its Tags. `read_note` prints them above its content window
+ * and `delete_note` above the whole text it returns, so both name a Note the
+ * same way.
+ */
+async function noteIdentityLines(
+  client: PluginClient,
+  full: FullNote,
+  allIds: readonly string[]
+): Promise<string[]> {
+  let bookHeaderLine: string;
+  if (full.bookId === null) {
+    bookHeaderLine = "Book: Unfiled";
+  } else {
+    const books = await client.library.books.list();
+    const book = books.find((entry) => entry.id === full.bookId);
+    bookHeaderLine =
+      book !== undefined
+        ? `Book: ${shortId(
+            book.id,
+            books.map((entry) => entry.id)
+          )}  ${titleOrUntitled(book.title)}`
+        : `Book: ${full.bookId}`;
+  }
+  const tagsLine = full.tags.length === 0 ? "Tags: none" : `Tags: ${full.tags.join(", ")}`;
+  return [
+    `Note ${shortId(full.id, allIds)}: ${titleOrUntitled(full.title)}`,
+    bookHeaderLine,
+    tagsLine,
+  ];
 }
 
 export interface ReadNoteArgs {
@@ -80,28 +114,9 @@ export async function readNote(client: PluginClient, args: ReadNoteArgs): Promis
       );
     }
 
-    const noteSid = shortId(full.id, allIds);
-    const title = titleOrUntitled(full.title);
-    let bookHeaderLine: string;
-    if (full.bookId === null) {
-      bookHeaderLine = "Book: Unfiled";
-    } else {
-      const books = await client.library.books.list();
-      const book = books.find((entry) => entry.id === full.bookId);
-      bookHeaderLine =
-        book !== undefined
-          ? `Book: ${shortId(
-              book.id,
-              books.map((entry) => entry.id)
-            )}  ${titleOrUntitled(book.title)}`
-          : `Book: ${full.bookId}`;
-    }
-    const tagsLine = full.tags.length === 0 ? "Tags: none" : `Tags: ${full.tags.join(", ")}`;
-
+    const identity = await noteIdentityLines(client, full, allIds);
     const header = [
-      `Note ${noteSid}: ${title}`,
-      bookHeaderLine,
-      tagsLine,
+      ...identity,
       `Words: ${full.wordCount}`,
       `Last Edited: ${new Date(full.updatedAt).toISOString()}`,
       `Format: ${format}`,
@@ -440,6 +455,58 @@ export async function editNote(
     const lastEdited = new Date((stored ?? current).updatedAt).toISOString();
     return {
       content: [{ type: "text", text: `${sentence}\nLast Edited: ${lastEdited}` }],
+    };
+  });
+}
+
+/** Arguments for `delete_note`: the one Note to remove. */
+export interface DeleteNoteArgs {
+  note: string;
+}
+
+/**
+ * Deletes one Note through the host's normal Delete path, so sync and Deletion
+ * Review carry it, and returns its whole text so the Agent and author can
+ * restore it. A Note in a Book takes that Book's Checkpoint first; an Unfiled
+ * Note belongs to no Book, so it takes none, and a Note that does not resolve
+ * takes none.
+ */
+export async function deleteNote(
+  client: PluginClient,
+  args: DeleteNoteArgs,
+  writeGuard: WriteGuard
+): Promise<CallToolResult> {
+  const ref = (args.note ?? "").trim();
+
+  return libraryCall(async () => {
+    const resolved = await resolveNote(client, ref, "delete_note");
+    if ("result" in resolved) return resolved.result;
+
+    const full = resolved.full;
+
+    // Before the delete: a failed Checkpoint refuses it and leaves the Note
+    // alone. An Unfiled Note belongs to no Book, so it takes none.
+    if (full.bookId !== null) {
+      const checkpoint = await writeGuard.ensureCheckpoint(full.bookId);
+      if (checkpoint !== null) return checkpoint;
+    }
+
+    // The identity lines are read before the row goes, so a short id never
+    // lengthens because the Note itself left the list.
+    const allIds = (await client.library.notes.list()).map((note) => note.id);
+    const identity = await noteIdentityLines(client, full, allIds);
+
+    await client.library.notes.delete({ noteId: full.id });
+
+    const title = titleOrUntitled(full.title);
+    // A Checkpoint is a Version of the Book's Chapters and holds no Notes, so
+    // the text returned below is the only copy an Agent can restore from.
+    const sentence = `Deleted Note ${title} through the normal Delete path, so a sync carries it the way it carries a Delete the author made. Its whole text follows; to restore it, call write_note with it.`;
+    return {
+      content: [
+        { type: "text", text: [sentence, ...identity].join("\n") },
+        { type: "text", text: full.content.text },
+      ],
     };
   });
 }

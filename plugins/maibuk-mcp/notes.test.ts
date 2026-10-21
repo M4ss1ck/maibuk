@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { connect, mcpRequest, type McpAnswer } from "./test-support";
 
 function initializeBody(id: unknown = 1) {
@@ -305,6 +305,170 @@ describe("list_notes", () => {
       host.setLibraryAvailable(false);
       const answer = await callTool(host, key, "list_notes", {});
       expect(answer.status).toBe(503);
+    } finally {
+      host.stop();
+    }
+  });
+});
+
+describe("delete_note", () => {
+  function noteWithBody(
+    id: string,
+    bookId: string | null,
+    title: string,
+    text: string,
+    tags: string[] = []
+  ) {
+    return {
+      id,
+      bookId,
+      title,
+      language: "en",
+      tags,
+      wordCount: 10,
+      updatedAt: Date.UTC(2026, 0, 1),
+      content: { text, html: `<p>${text}</p>` },
+    };
+  }
+
+  it("deletes a Book Note through the host's Delete path and returns its whole text", async () => {
+    const books = [makeBook("bookalpha1", 1000, { title: "The Book" })];
+    const body = Array.from({ length: 3000 }, (_, index) => `Line ${index}`).join("\n");
+    const notes = [noteWithBody("notealpha1", "bookalpha1", "The Note", body, ["plot", "idea"])];
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "delete_note", { note: "notealpha1" });
+      expect(isError(answer)).toBe(false);
+
+      const [header, content] = answer.json.result.content;
+      expect(header.text).toContain(
+        "Deleted Note The Note through the normal Delete path, so a sync carries it the way it carries a Delete the author made. Its whole text follows; to restore it, call write_note with it."
+      );
+      expect(header.text).toContain("Note notealph: The Note");
+      expect(header.text).toContain("Book: bookalph  The Book");
+      expect(header.text).toContain("Tags: plot, idea");
+      // The whole text, never a window: the body is longer than a read window.
+      expect(body.length).toBeGreaterThan(20000);
+      expect(content.text).toBe(body);
+
+      // The test kit keeps the Library in memory and only its
+      // `library.notes.delete` removes a row, so an empty list is the Delete
+      // path and nothing else.
+      const listed = await callTool(host, key, "list_notes", {});
+      expect(textOf(listed)).toBe("No Notes match.");
+      const reread = await callTool(host, key, "read_note", { note: "notealpha1" });
+      expect(isError(reread)).toBe(true);
+      expect(textOf(reread)).toBe(
+        "No Note has the id notealpha1; call list_notes to see the Notes."
+      );
+      expect(host.checkpoints).toEqual([
+        { bookId: "bookalpha1", label: "Before mcp-test edits", versionId: expect.any(String) },
+      ]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("deletes an Unfiled Note without a Checkpoint", async () => {
+    const books = [makeBook("bookalpha1", 1000, { title: "The Book" })];
+    const notes = [noteWithBody("notealpha1", null, "Loose", "Body.")];
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "delete_note", { note: "notealpha1" });
+      expect(isError(answer)).toBe(false);
+
+      const [header, content] = answer.json.result.content;
+      expect(header.text).toContain(
+        "Deleted Note Loose through the normal Delete path, so a sync carries it the way it carries a Delete the author made. Its whole text follows; to restore it, call write_note with it."
+      );
+      expect(header.text).toContain("Book: Unfiled");
+      expect(header.text).toContain("Tags: none");
+      expect(content.text).toBe("Body.");
+      const listed = await callTool(host, key, "list_notes", {});
+      expect(textOf(listed)).toBe("No Notes match.");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses when the Checkpoint fails and leaves the Note", async () => {
+    const books = [makeBook("bookalpha1", 1000, { title: "The Book" })];
+    const notes = [noteWithBody("notealpha1", "bookalpha1", "The Note", "Body.")];
+    const { host, key } = await connect({
+      library: { books, notes } as any,
+      checkpointError: "The Versions shelf is stuck.",
+    });
+    try {
+      const answer = await callTool(host, key, "delete_note", { note: "notealpha1" });
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toBe(
+        "Could not take a Checkpoint of the Book before writing, so nothing changed; try again."
+      );
+      const listed = await callTool(host, key, "list_notes", {});
+      expect(textOf(listed)).toContain("The Note");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses an unknown id without a Checkpoint", async () => {
+    const books = [makeBook("bookalpha1", 1000, { title: "The Book" })];
+    const notes = [noteWithBody("notealpha1", "bookalpha1", "The Note", "Body.")];
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      const answer = await callTool(host, key, "delete_note", { note: "zzzzzzzz" });
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toBe("No Note has the id zzzzzzzz; call list_notes to see the Notes.");
+      const listed = await callTool(host, key, "list_notes", {});
+      expect(textOf(listed)).toContain("The Note");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("is absent in read-only mode", async () => {
+    const books = [makeBook("bookalpha1", 1000, { title: "The Book" })];
+    const notes = [noteWithBody("notealpha1", "bookalpha1", "The Note", "Body.")];
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      await mcpRequest(host, key, initializeBody());
+      const listed = await mcpRequest(host, key, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/list",
+        params: {},
+      });
+      expect(listed.json.result.tools.map((tool: any) => tool.name)).toContain("delete_note");
+
+      host.setGranted(["serve", "library:read"]);
+      await vi.waitFor(async () => {
+        const readonly = await mcpRequest(host, key, {
+          jsonrpc: "2.0",
+          id: 4,
+          method: "tools/list",
+          params: {},
+        });
+        expect(readonly.json.result.tools.map((tool: any) => tool.name)).not.toContain(
+          "delete_note"
+        );
+      });
+
+      const refused = await mcpRequest(
+        host,
+        key,
+        toolsCall("delete_note", { note: "notealpha1" }, 5)
+      );
+      expect(refused.json).toEqual({
+        jsonrpc: "2.0",
+        id: 5,
+        error: { code: -32602, message: "Tool delete_note not found" },
+      });
+      const surviving = await callTool(host, key, "list_notes", {});
+      expect(textOf(surviving)).toContain("The Note");
+      expect(host.checkpoints).toEqual([]);
     } finally {
       host.stop();
     }
