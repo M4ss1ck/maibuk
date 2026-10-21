@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-10-21
+
+### Added
+- Adds MCP Server as a built-in plugin with a dedicated page for agent snippets, key management, live connections, and a capped activity log
+- Adds MCP tools for reading Books, Chapters, and Notes with filtering, paging, excerpts, windows, and format options
+- Adds MCP tools for creating, editing, replacing, moving, and deleting Chapters and Notes, plus Book detail updates
+- Adds MCP read-only mode and automatic Checkpoints before a connection’s first write to a Book
+- Adds Plugin API support for Book, Chapter, and Note fields and writes, including Chapter reordering, Note Tags and filing, and plugin-created Checkpoints
+- Adds the serve permission and Plugin Endpoint for plugins that receive HTTP requests
+- Adds Plugin Endpoint address APIs so serve plugins can discover their URL and react when it changes
+
+### Changed
+- Keeps a stable Plugin Endpoint port across launches and moves it only when another app holds it
+- Protects plugin and MCP writes from overwriting newer author edits
+- Refines MCP Server page state for key regeneration, missing keys, connection durations, and activity timestamps
+
+### Fixed
+- Fixes MCP Server compatibility in opaque-origin sandbox environments
+- Fixes Plugin Endpoint cleanup and response handling for abandoned requests and responses without bodies
+- Keeps plugin-created Checkpoints from being pruned
+
 ## [0.13.2] - 2026-10-20
 
 ### Added
