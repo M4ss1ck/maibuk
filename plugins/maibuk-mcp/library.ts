@@ -49,6 +49,13 @@ export function isWritePermissionDenied(error: unknown): boolean {
   );
 }
 
+/** Whether a Plugin API failure refuses with code "conflict". */
+export function isConflict(error: unknown): boolean {
+  return (
+    typeof error === "object" && error !== null && (error as { code?: unknown }).code === "conflict"
+  );
+}
+
 function errorResult(text: string): CallToolResult {
   return { content: [{ type: "text", text }], isError: true };
 }

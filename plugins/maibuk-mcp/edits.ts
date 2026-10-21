@@ -8,7 +8,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import type { PluginClient } from "@/plugin-sdk";
 import { chapterCandidate } from "./chapters";
-import { errorResult, libraryCall, resolveRef, titleOrUntitled } from "./library";
+import { errorResult, isConflict, libraryCall, resolveRef, titleOrUntitled } from "./library";
 
 /** Arguments for `edit_chapter`. */
 export interface EditChapterArgs {
@@ -154,7 +154,7 @@ function textMatchIndexes(html: string, needle: string, map: HtmlTextMap): numbe
 }
 
 /** One edit's mode, resolved from the arguments before any Library call. */
-type EditMode =
+export type EditMode =
   | { kind: "replace"; find: string; replace: string }
   | { kind: "append"; text: string; format: "text" | "html" };
 
@@ -197,6 +197,49 @@ function editModeOf(args: EditChapterArgs): EditMode | { result: CallToolResult 
     };
   }
   return { kind: "replace", find, replace };
+}
+
+/**
+ * The pure part of an edit: turns the stored HTML and plain text plus the
+ * resolved mode into the new HTML and the success sentence, or into a refusal
+ * result (no match, a match that crosses markup, or several matches). No
+ * Library call happens here, so the same edit can be re-run on a fresh row.
+ */
+export function applyEdit(
+  html: string,
+  plainText: string,
+  mode: EditMode,
+  title: string
+): { html: string; sentence: string } | { result: CallToolResult } {
+  if (mode.kind === "replace") {
+    const find = escapeAsStoredHtml(mode.find);
+    const matches = textMatchIndexes(html, find, scanHtml(html));
+    if (matches.length === 0) {
+      return {
+        result: errorResult(
+          plainText.includes(mode.find)
+            ? "That text crosses formatting, so read the Chapter as HTML (read_chapter with format html) and pick a find within one run of text."
+            : "No match for that find text; read the Chapter as HTML (read_chapter with format html) and copy the exact text."
+        ),
+      };
+    }
+    if (matches.length > 1) {
+      return {
+        result: errorResult(
+          `That find text matches ${matches.length} places; include more surrounding text in find so it matches once.`
+        ),
+      };
+    }
+    const at = matches[0];
+    const updatedHtml =
+      html.slice(0, at) + escapeAsStoredHtml(mode.replace) + html.slice(at + find.length);
+    return {
+      html: updatedHtml,
+      sentence: `Replaced 1 match in Chapter ${titleOrUntitled(title)}.`,
+    };
+  }
+  const fragment = mode.format === "html" ? mode.text : paragraphsOf(mode.text);
+  return { html: html + fragment, sentence: `Appended to Chapter ${titleOrUntitled(title)}.` };
 }
 
 export async function resolveChapter(
@@ -261,34 +304,11 @@ export async function editChapter(
 
     const full = resolved.full;
 
-    const html = full.content.html;
-    let updatedHtml: string;
-    let sentence: string;
+    const initial = applyEdit(full.content.html, full.content.text, mode, full.title);
+    if ("result" in initial) return initial.result;
 
-    if (mode.kind === "replace") {
-      const find = escapeAsStoredHtml(mode.find);
-      const matches = textMatchIndexes(html, find, scanHtml(html));
-      if (matches.length === 0) {
-        return errorResult(
-          full.content.text.includes(mode.find)
-            ? "That text crosses formatting, so read the Chapter as HTML (read_chapter with format html) and pick a find within one run of text."
-            : "No match for that find text; read the Chapter as HTML (read_chapter with format html) and copy the exact text."
-        );
-      }
-      if (matches.length > 1) {
-        return errorResult(
-          `That find text matches ${matches.length} places; include more surrounding text in find so it matches once.`
-        );
-      }
-      const at = matches[0];
-      updatedHtml =
-        html.slice(0, at) + escapeAsStoredHtml(mode.replace) + html.slice(at + find.length);
-      sentence = `Replaced 1 match in Chapter ${titleOrUntitled(full.title)}.`;
-    } else {
-      const fragment = mode.format === "html" ? mode.text : paragraphsOf(mode.text);
-      updatedHtml = html + fragment;
-      sentence = `Appended to Chapter ${titleOrUntitled(full.title)}.`;
-    }
+    let updatedHtml = initial.html;
+    const initialSentence = initial.sentence;
 
     // After every refusal (validation, no match, several matches) and before
     // the write, so a refused write takes no Checkpoint and a failed
@@ -296,15 +316,39 @@ export async function editChapter(
     const checkpoint = await writeGuard.ensureCheckpoint(full.bookId);
     if (checkpoint !== null) return checkpoint;
 
-    await client.library.chapters.updateContent({
-      chapterId: full.id,
-      content: { html: updatedHtml },
-    });
+    let current = full;
+    let sentence = initialSentence;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await client.library.chapters.updateContent({
+          chapterId: full.id,
+          content: { html: updatedHtml },
+          expectedUpdatedAt: current.updatedAt,
+        });
+        break;
+      } catch (error) {
+        if (!isConflict(error)) throw error;
+        if (attempt === 2) {
+          return errorResult(
+            "The author is typing in this Chapter right now; try again in a moment."
+          );
+        }
+        const fresh = await client.library.chapters.get({ chapterId: full.id });
+        if (!fresh) {
+          return errorResult(`No Chapter has the id ${ref}; call get_book to see the Chapters.`);
+        }
+        const reEdited = applyEdit(fresh.content.html, fresh.content.text, mode, fresh.title);
+        if ("result" in reEdited) return reEdited.result;
+        updatedHtml = reEdited.html;
+        sentence = reEdited.sentence;
+        current = fresh;
+      }
+    }
 
     // Re-read after the write: the host stamps Last Edited itself, and the
     // Agent passes this value back as expectedLastEdited later.
     const stored = await client.library.chapters.get({ chapterId: full.id });
-    const lastEdited = new Date((stored ?? full).updatedAt).toISOString();
+    const lastEdited = new Date((stored ?? current).updatedAt).toISOString();
     return {
       content: [{ type: "text", text: `${sentence}\nLast Edited: ${lastEdited}` }],
     };
@@ -317,6 +361,10 @@ export interface WriteChapterArgs {
   expectedLastEdited: string;
   text?: string;
   html?: string;
+}
+
+function changedSinceMessage(lastEdited: string): string {
+  return `The Chapter changed since you read it (Last Edited is now ${lastEdited}); call read_chapter again and redo the change.`;
 }
 
 export async function writeChapter(
@@ -338,9 +386,7 @@ export async function writeChapter(
 
     const current = new Date(full.updatedAt).toISOString();
     if (args.expectedLastEdited.trim() !== current) {
-      return errorResult(
-        `The Chapter changed since you read it (Last Edited is now ${current}); call read_chapter again and redo the change.`
-      );
+      return errorResult(changedSinceMessage(current));
     }
 
     // After the expectedLastEdited check and before the write: a refused
@@ -348,10 +394,18 @@ export async function writeChapter(
     const checkpoint = await writeGuard.ensureCheckpoint(full.bookId);
     if (checkpoint !== null) return checkpoint;
 
-    await client.library.chapters.updateContent({
-      chapterId: full.id,
-      content: args.text !== undefined ? { text: args.text } : { html: args.html as string },
-    });
+    try {
+      await client.library.chapters.updateContent({
+        chapterId: full.id,
+        content: args.text !== undefined ? { text: args.text } : { html: args.html as string },
+        expectedUpdatedAt: full.updatedAt,
+      });
+    } catch (error) {
+      if (!isConflict(error)) throw error;
+      const fresh = await client.library.chapters.get({ chapterId: full.id });
+      const freshLastEdited = new Date((fresh ?? full).updatedAt).toISOString();
+      return errorResult(changedSinceMessage(freshLastEdited));
+    }
 
     const stored = await client.library.chapters.get({ chapterId: full.id });
     return {

@@ -449,4 +449,105 @@ describe("write checkpoints", () => {
       host.stop();
     }
   });
+
+  it("edit_chapter applies an append on top of pending author typing", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const chapters = [makeChapter("chapteralpha", "bookalpha1", "<p>Original</p>")];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      host.setPendingEdit("chapteralpha", "<p>Original</p><p>Mine</p>");
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCall("edit_chapter", { chapter: "chapteralpha", append: "More." }, 2)
+      );
+      expect(isError(answer)).toBe(false);
+      expect(chapters[0].content.html).toBe("<p>Original</p><p>Mine</p><p>More.</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("edit_chapter re-reads after a conflict on a later write in the same Connection", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const chapters = [makeChapter("chapteralpha", "bookalpha1", "<p>Original</p>")];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      const first = await mcpRequest(
+        host,
+        key,
+        toolsCall("edit_chapter", { chapter: "chapteralpha", append: "First." }, 2)
+      );
+      expect(isError(first)).toBe(false);
+      expect(host.checkpoints).toHaveLength(1);
+
+      host.setPendingEdit("chapteralpha", "<p>Original</p><p>Mine</p>");
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCall("edit_chapter", { chapter: "chapteralpha", append: "More." }, 3)
+      );
+      expect(isError(answer)).toBe(false);
+      expect(chapters[0].content.html).toBe("<p>Original</p><p>Mine</p><p>More.</p>");
+      expect(host.checkpoints).toHaveLength(1);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("edit_chapter answers no match when pending typing removed the find text", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const chapters = [makeChapter("chapteralpha", "bookalpha1", "<p>Original target</p>")];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      host.setPendingEdit("chapteralpha", "<p>Original</p>");
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCall(
+          "edit_chapter",
+          { chapter: "chapteralpha", find: "target", replace: "changed" },
+          2
+        )
+      );
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toContain("read the Chapter as HTML");
+      expect(chapters[0].content.html).toBe("<p>Original</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("write_chapter refuses while the author has unsaved typing", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const chapters = [makeChapter("chapteralpha", "bookalpha1", "<p>Original</p>")];
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      const reread = await mcpRequest(
+        host,
+        key,
+        toolsCall("read_chapter", { chapter: "chapteralpha" }, 2)
+      );
+      const lastEdited = lastEditedOf(textOf(reread));
+      host.setPendingEdit("chapteralpha", "<p>Typed</p>");
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCall(
+          "write_chapter",
+          { chapter: "chapteralpha", expectedLastEdited: lastEdited, html: "<p>New</p>" },
+          3
+        )
+      );
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toContain("changed since you read it");
+      expect(chapters[0].content.html).toBe("<p>Typed</p>");
+    } finally {
+      host.stop();
+    }
+  });
 });

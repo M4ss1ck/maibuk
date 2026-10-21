@@ -1267,4 +1267,84 @@ describe("createTestHost() Library writes", () => {
       host.stop();
     }
   });
+
+  it("flushes a pending edit before a content write without expectedUpdatedAt", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+      host.setPendingEdit("c1", "<p>Typed</p>");
+
+      await client.library.chapters.updateContent({
+        chapterId: "c1",
+        content: { html: "<p>Written</p>" },
+      });
+
+      // The pending typing landed first, then the write replaced it.
+      expect(chapter.content).toEqual({ html: "<p>Written</p>", text: "Written" });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a content write whose expectedUpdatedAt is stale", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+      const stale = chapter.updatedAt - 1;
+      const before = chapter.content;
+
+      await expect(
+        client.library.chapters.updateContent({
+          chapterId: "c1",
+          content: { html: "<p>Wrong</p>" },
+          expectedUpdatedAt: stale,
+        })
+      ).rejects.toMatchObject({ code: "conflict" });
+      expect(chapter.content).toEqual(before);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses when a pending edit was flushed even though expectedUpdatedAt matched before", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+      const expected = chapter.updatedAt;
+      host.setPendingEdit("c1", "<p>Typed</p>");
+
+      await expect(
+        client.library.chapters.updateContent({
+          chapterId: "c1",
+          content: { html: "<p>Written</p>" },
+          expectedUpdatedAt: expected,
+        })
+      ).rejects.toMatchObject({ code: "conflict" });
+
+      // The flush landed the typing, and the refused write left it alone.
+      expect(chapter.content).toEqual({ html: "<p>Typed</p>", text: "Typed" });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("flushes a pending edit before a Checkpoint, so the stored Chapter holds the typing", async () => {
+    const chapter = chapterFixture();
+    const host = writeHost(chapter);
+    try {
+      const client = createPluginClient(host.port);
+      host.setPendingEdit("c1", "<p>Typed</p>");
+
+      await client.library.books.checkpoint({ bookId: "b1", label: "Before edits" });
+
+      await expect(client.library.chapters.get({ chapterId: "c1" })).resolves.toMatchObject({
+        content: { html: "<p>Typed</p>", text: "Typed" },
+      });
+    } finally {
+      host.stop();
+    }
+  });
 });

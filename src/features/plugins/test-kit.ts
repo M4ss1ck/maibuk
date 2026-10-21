@@ -120,6 +120,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
   // Version path sees it; only taken Checkpoints are recorded.
   const checkpoints: TestCheckpoint[] = [];
   const unchangedBooks = new Set<string>();
+  const pendingEdits = new Map<string, string>();
   let nextVersion = 1;
   const storage = options.storage ?? new Map<string, unknown>();
   const secrets = options.secrets ?? new Map<string, string>();
@@ -129,6 +130,25 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const toolbarPressedState = new Map<string, boolean>();
   let language = options.language ?? "en";
   let libraryAvailable = true;
+
+  /**
+   * Flushes every pending author edit into the in-memory Library, the way the
+   * app's pending-edits flush does before a Library write or Checkpoint. Returns
+   * the set of Chapter ids whose stored content moved.
+   */
+  function flushPendingEdits(): Set<string> {
+    const changed = new Set<string>();
+    for (const [chapterId, html] of pendingEdits) {
+      const chapter = chapters.find((entry) => entry.id === chapterId);
+      if (!chapter) continue;
+      chapter.content = { html, text: htmlToPlainText(html) };
+      chapter.updatedAt = Math.max(Date.now(), chapter.updatedAt + 1);
+      unchangedBooks.delete(chapter.bookId);
+      changed.add(chapterId);
+    }
+    pendingEdits.clear();
+    return changed;
+  }
   // The Plugin Endpoint's listener as this host fakes it: off until the test
   // gives the Plugin an address, then bound on that port.
   let endpointState: EndpointListenerState = { state: "off" };
@@ -187,9 +207,19 @@ export function createTestHost(options: TestHostOptions): TestHost {
     // The two writes a test of an editing Plugin needs (#591): a Chapter
     // content write keeps the host's conversion, and a Checkpoint records
     // itself only when the Book changed since the last one.
-    "library.chapters.updateContent": ({ chapterId, content }) => {
+    "library.chapters.updateContent": ({ chapterId, content, expectedUpdatedAt }) => {
       const chapter = chapters.find((entry) => entry.id === chapterId);
       if (!chapter) throw chapterNotFound(chapterId);
+      const flushed = flushPendingEdits();
+      if (
+        expectedUpdatedAt !== undefined &&
+        (flushed.has(chapterId) || chapter.updatedAt !== expectedUpdatedAt)
+      ) {
+        throw new PluginApiError({
+          code: "conflict",
+          message: `Chapter ${chapterId} changed since it was read`,
+        });
+      }
       const html = fragmentToHtml(content);
       chapter.content = { html, text: htmlToPlainText(html) };
       // Strictly increasing, so Last Edited always moves forward even when two
@@ -199,6 +229,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
       return null;
     },
     "library.books.checkpoint": ({ bookId, label }) => {
+      // Flush any pending author typing before taking the Checkpoint, like the
+      // app's pending-edits flush.
+      flushPendingEdits();
       // A test-only failure hook (#591): proves a Plugin refuses its write
       // when no Checkpoint could be taken, without touching any other row.
       if (options.checkpointError !== undefined) {
@@ -605,6 +638,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
     },
     setLibraryAvailable(available) {
       libraryAvailable = available;
+    },
+    setPendingEdit(chapterId, html) {
+      pendingEdits.set(chapterId, html);
     },
     endpoint,
     endpointStream,
