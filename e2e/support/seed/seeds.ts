@@ -5,14 +5,14 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer, type ViteDevServer } from "vite";
 
 export const REPO_ROOT = resolve(import.meta.dirname, "../../..");
 export const SEED_DIR = resolve(REPO_ROOT, "e2e/.output/seeds");
 
 // The write paths normalize HTML with DOMParser. jsdom supplies it, the same
 // environment the Vitest suite runs these write paths under.
-function installDomGlobals(): void {
+export function installDomGlobals(): void {
   if (typeof globalThis.DOMParser !== "undefined") return;
   const { window } = new JSDOM("<!doctype html><html><body></body></html>");
   const g = globalThis as Record<string, unknown>;
@@ -21,9 +21,13 @@ function installDomGlobals(): void {
   }
 }
 
-export async function writeSeedFiles(): Promise<string[]> {
-  installDomGlobals();
-  const server = await createServer({
+/**
+ * A Vite server that loads app modules for Node through SSR, so `@/` aliases,
+ * `?url` imports and `import.meta.env` behave as in the app build. Also used
+ * by the MCP Server Agent eval (`e2e/run-mcp-eval.ts`). The caller closes it.
+ */
+export function createSsrServer(): Promise<ViteDevServer> {
+  return createServer({
     root: REPO_ROOT,
     configFile: resolve(REPO_ROOT, "vite.config.ts"),
     mode: "production",
@@ -42,7 +46,15 @@ export async function writeSeedFiles(): Promise<string[]> {
       },
     ],
     optimizeDeps: { noDiscovery: true, include: [] },
+    // lucide-react has no `exports` map, so Node cannot resolve its
+    // extensionless `lucide-react/dynamic` subpath; Vite's resolver can.
+    ssr: { noExternal: ["lucide-react"] },
   });
+}
+
+export async function writeSeedFiles(): Promise<string[]> {
+  installDomGlobals();
+  const server = await createSsrServer();
   try {
     const mod = (await server.ssrLoadModule("/e2e/support/seed/build-seeds.ts")) as {
       buildAllSeeds: () => Promise<Record<string, Uint8Array>>;

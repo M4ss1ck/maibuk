@@ -59,6 +59,7 @@
     "bench:dictation:android": "node scripts/dictation-bench/android.mjs .bench/dictation-android.json",
     "bench:frames": "tsx e2e/run-frames.ts",
     "bench:plugins": "tsx e2e/run-plugins-bench.ts",
+    "eval:mcp": "tsx e2e/run-mcp-eval.ts",
     "e2e:voice-audio": "bash scripts/e2e-voice-audio.sh"
   },
   "dependencies": {
