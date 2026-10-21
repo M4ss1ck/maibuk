@@ -15,6 +15,7 @@ import {
   libraryCall,
   resolveRef,
   shortId,
+  positionRefusal,
   titleOrUntitled,
 } from "./library";
 
@@ -442,14 +443,8 @@ export async function writeChapter(
       );
       const count = siblings.length;
 
-      if (args.position !== undefined) {
-        const position = args.position;
-        if (!Number.isInteger(position) || position < 1 || position > count + 1) {
-          return errorResult(
-            `Position must be a whole number from 1 to ${count + 1}; call get_book to see the Chapter order.`
-          );
-        }
-      }
+      const refusal = positionRefusal(args.position, count + 1);
+      if (refusal !== null) return refusal;
 
       // After all validation and the Book resolve, before the create: a
       // refused create takes no Checkpoint, and a failed Checkpoint refuses it.

@@ -253,4 +253,16 @@ export function readWindow(
   };
 }
 
+/**
+ * The refusal for a 1-based Chapter position outside 1..`max` (the numbering
+ * `get_book` prints), or null when `position` is absent or in range.
+ */
+export function positionRefusal(position: number | undefined, max: number): CallToolResult | null {
+  if (position === undefined) return null;
+  if (Number.isInteger(position) && position >= 1 && position <= max) return null;
+  return errorResult(
+    `Position must be a whole number from 1 to ${max}; call get_book to see the Chapter order.`
+  );
+}
+
 export { errorResult, libraryUnavailableResult, readOnlyResult, titleOrUntitled };

@@ -8,7 +8,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import type { PluginClient } from "@/plugin-sdk";
 import { resolveChapter, type WriteGuard } from "./edits";
-import { errorResult, libraryCall, resolveRef, titleOrUntitled } from "./library";
+import { errorResult, libraryCall, positionRefusal, resolveRef, titleOrUntitled } from "./library";
 import { bookLine } from "./books";
 
 /**
@@ -165,14 +165,8 @@ export async function manageChapter(
     const chapterIds = siblings.map((chapter) => chapter.id);
     const count = chapterIds.length;
 
-    if (args.position !== undefined) {
-      const position = args.position;
-      if (!Number.isInteger(position) || position < 1 || position > count) {
-        return errorResult(
-          `Position must be a whole number from 1 to ${count}; call get_book to see the Chapter order.`
-        );
-      }
-    }
+    const refusal = positionRefusal(args.position, count);
+    if (refusal !== null) return refusal;
 
     // After every refusal and before the first write, so a refused call takes no
     // Checkpoint and a failed Checkpoint leaves the Chapter alone.

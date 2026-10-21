@@ -77,7 +77,7 @@ export function buildMcpServer(
       description:
         "List Books in the Library, optionally filtered by Book Status, at most 50 per page.",
       inputSchema: z.object({
-        status: z.enum(["draft", "in-progress", "completed", "archived"]).optional(),
+        status: z.enum(BOOK_STATUSES).optional(),
         cursor: z.string().optional(),
         limit: z.number().int().min(1).optional(),
         detail: z.enum(["titles", "excerpts"]).optional(),
