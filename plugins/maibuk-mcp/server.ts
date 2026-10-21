@@ -12,6 +12,7 @@ import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
 import { editChapter, writeChapter, type WriteGuard } from "./edits";
 import { listNotes, readNote } from "./notes";
+import { CHAPTER_STATUSES, CHAPTER_TYPES, manageChapter } from "./structure";
 
 /**
  * What the server tells every Agent about the Library: what it holds, and
@@ -187,6 +188,43 @@ export function buildMcpServer(
         },
       },
       async (args) => writeChapter(client, args as any, writeGuard)
+    );
+    server.registerTool(
+      "manage_chapter",
+      {
+        title: "Manage chapter",
+        description:
+          "Change one Chapter's title, Chapter Type, or Chapter Status, move it to a new position among its Book's Chapters, or delete it. A delete goes through the normal Delete path, so the author confirms it in Deletion Review before a sync carries it, and the Checkpoint taken before the first write still holds the Chapter.",
+        inputSchema: z.object({
+          chapter: z.string().min(8),
+          title: z.string().optional().describe("The new title; at least one character."),
+          chapterType: z
+            .string()
+            .optional()
+            .describe(`One of: ${CHAPTER_TYPES.join(", ")}.`),
+          status: z
+            .string()
+            .optional()
+            .describe(`One of: ${CHAPTER_STATUSES.join(", ")}.`),
+          position: z
+            .number()
+            .optional()
+            .describe(
+              "The Chapter's new 1-based position among its Book's Chapters, the numbering get_book prints."
+            ),
+          delete: z
+            .boolean()
+            .optional()
+            .describe("Delete the Chapter; give no other field with it."),
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async (args) => manageChapter(client, args as any, writeGuard)
     );
   }
   return server;
