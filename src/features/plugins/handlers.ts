@@ -12,7 +12,7 @@
  * `navigation.openPage` opens a Plugin page;
  * `language.get` reads the app language; `endpoint.address` reads this Plugin's
  * Plugin Endpoint address; `permissions.granted` lists the calling Plugin's own
- * grants; `secrets.*` writes the calling
+ * Plugin Permissions; `secrets.*` writes the calling
  * Plugin's credentials through the registered store; `network.fetch` fetches
  * on a granted host and streams the body, injecting a named secret into a
  * declared header; `clipboard.*` reads and writes the platform clipboard; and
@@ -135,8 +135,7 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "library.books.get": ({ bookId }) => getPluginBook(bookId),
     "library.books.update": ({ bookId, title, authorName, genre, status, targetWordCount }) =>
       updatePluginBook({ bookId, title, authorName, genre, status, targetWordCount }),
-    "library.books.checkpoint": ({ bookId, label }) =>
-      checkpointPluginBook({ bookId, label }),
+    "library.books.checkpoint": ({ bookId, label }) => checkpointPluginBook({ bookId, label }),
     "library.chapters.list": ({ bookId }) => listPluginChapters(bookId),
     "library.chapters.get": ({ chapterId }) => getPluginChapter(chapterId),
     "library.notes.list": ({ bookId }) => listPluginNotes(bookId),
@@ -177,7 +176,8 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
       return null;
     },
     "storage.keys": (_params, context) => listPluginStorageKeys(context.pluginId),
-    "navigation.openEntity": ({ entity, reveal }) => openPluginEntity(entity, reveal).then(() => null),
+    "navigation.openEntity": ({ entity, reveal }) =>
+      openPluginEntity(entity, reveal).then(() => null),
     "navigation.openPage": ({ pageId, pluginId }, context) =>
       openPluginPage(pluginId ?? context.pluginId, pageId),
     "language.get": async () => ({ language: currentPluginLanguage() }),

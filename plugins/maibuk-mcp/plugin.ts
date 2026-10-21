@@ -487,7 +487,7 @@ export function startMcp(client: PluginClient): void {
   let lastPermissions: readonly string[] | null = null;
 
   const handler: McpHttpHandler = createMcpHandler(
-    (context) => buildMcpServer(client, writeGuardFor(callerOf(context)), canWrite ?? true),
+    (context) => buildMcpServer(client, writeGuardFor(callerOf(context)), canWrite ?? false),
     {
       legacy: "stateless",
     }
@@ -586,15 +586,14 @@ export function startMcp(client: PluginClient): void {
       // The replayed `permissions.changed` delivery has not arrived yet (the
       // subscription is still settling): read the current list directly, so
       // the first request still serves the right tool set. A failed read
-      // keeps the write tools, the way Built-ins pre-grant the optional
-      // write; the host's own `library:write` gate still refuses the write
-      // with the read-only text, so a wrong guess never changes the Library.
+      // serves the read-only tool set until the replayed delivery arrives:
+      // a read-only Plugin never lists write tools, even for one request.
       try {
         const granted = await client.permissions.granted();
         lastPermissions = [...granted.permissions];
         canWrite = granted.permissions.includes("library:write");
       } catch {
-        canWrite = true;
+        canWrite = false;
       }
     }
     return fromWebResponse(await handler.fetch(toWebRequest(request, connections.resolve(caller))));
