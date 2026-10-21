@@ -278,6 +278,83 @@ export function applyEdit(
   };
 }
 
+/** The row an edit reads and rewrites: the fields the shared guarded edit needs. */
+export interface EditableRow {
+  id: string;
+  title: string;
+  updatedAt: number;
+  content: { html: string; text: string };
+}
+
+/** What a guarded edit reads, writes, and refuses against, so both edit tools share it. */
+export interface GuardedEditOptions {
+  /** The row as the edit first read it. */
+  initial: EditableRow;
+  mode: EditMode;
+  terms: EditTerms;
+  /** Takes the row's Book Checkpoint, or refuses; null means the write may proceed. */
+  ensureCheckpoint(): Promise<CallToolResult | null>;
+  /** Reads the row again; null when it no longer exists. */
+  read(): Promise<EditableRow | null>;
+  /** Writes the new HTML guarded by the `updatedAt` the edit was computed from. */
+  write(html: string, expectedUpdatedAt: number): Promise<unknown>;
+  /** The refusal when a re-read finds the row gone. */
+  missing: CallToolResult;
+}
+
+/**
+ * The guarded edit both `edit_chapter` and `edit_note` run: applies the edit to
+ * the stored HTML, refuses before any Checkpoint when it cannot apply, takes
+ * the Checkpoint once, then writes under `expectedUpdatedAt` and re-reads and
+ * re-applies on a conflict up to three times. A refused edit takes no
+ * Checkpoint and a failed Checkpoint leaves the content unchanged.
+ */
+export async function guardedEdit(options: GuardedEditOptions): Promise<CallToolResult> {
+  const { initial, mode, terms, ensureCheckpoint, read, write, missing } = options;
+
+  const first = applyEdit(initial.content.html, initial.content.text, mode, initial.title, terms);
+  if ("result" in first) return first.result;
+
+  let updatedHtml = first.html;
+  let sentence = first.sentence;
+
+  // After every refusal (validation, no match, several matches) and before
+  // the write, so a refused write takes no Checkpoint and a failed Checkpoint
+  // leaves the content unchanged.
+  const checkpoint = await ensureCheckpoint();
+  if (checkpoint !== null) return checkpoint;
+
+  let current = initial;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await write(updatedHtml, current.updatedAt);
+      break;
+    } catch (error) {
+      if (!isConflict(error)) throw error;
+      if (attempt === 2) {
+        return errorResult(
+          `The author is typing in this ${terms.noun} right now; try again in a moment.`
+        );
+      }
+      const fresh = await read();
+      if (!fresh) return missing;
+      const reEdited = applyEdit(fresh.content.html, fresh.content.text, mode, fresh.title, terms);
+      if ("result" in reEdited) return reEdited.result;
+      updatedHtml = reEdited.html;
+      sentence = reEdited.sentence;
+      current = fresh;
+    }
+  }
+
+  // Re-read after the write: the host stamps Last Edited itself, and the
+  // Agent passes this value back as expectedLastEdited later.
+  const stored = await read();
+  const lastEdited = new Date((stored ?? current).updatedAt).toISOString();
+  return {
+    content: [{ type: "text", text: `${sentence}\nLast Edited: ${lastEdited}` }],
+  };
+}
+
 export async function resolveChapter(
   client: PluginClient,
   ref: string,
@@ -340,66 +417,20 @@ export async function editChapter(
 
     const full = resolved.full;
 
-    const initial = applyEdit(
-      full.content.html,
-      full.content.text,
+    return guardedEdit({
+      initial: full,
       mode,
-      full.title,
-      CHAPTER_TERMS
-    );
-    if ("result" in initial) return initial.result;
-
-    let updatedHtml = initial.html;
-    const initialSentence = initial.sentence;
-
-    // After every refusal (validation, no match, several matches) and before
-    // the write, so a refused write takes no Checkpoint and a failed
-    // Checkpoint leaves the content unchanged.
-    const checkpoint = await writeGuard.ensureCheckpoint(full.bookId);
-    if (checkpoint !== null) return checkpoint;
-
-    let current = full;
-    let sentence = initialSentence;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        await client.library.chapters.updateContent({
+      terms: CHAPTER_TERMS,
+      ensureCheckpoint: () => writeGuard.ensureCheckpoint(full.bookId),
+      read: () => client.library.chapters.get({ chapterId: full.id }),
+      write: (html, expectedUpdatedAt) =>
+        client.library.chapters.updateContent({
           chapterId: full.id,
-          content: { html: updatedHtml },
-          expectedUpdatedAt: current.updatedAt,
-        });
-        break;
-      } catch (error) {
-        if (!isConflict(error)) throw error;
-        if (attempt === 2) {
-          return errorResult(
-            "The author is typing in this Chapter right now; try again in a moment."
-          );
-        }
-        const fresh = await client.library.chapters.get({ chapterId: full.id });
-        if (!fresh) {
-          return errorResult(`No Chapter has the id ${ref}; call get_book to see the Chapters.`);
-        }
-        const reEdited = applyEdit(
-          fresh.content.html,
-          fresh.content.text,
-          mode,
-          fresh.title,
-          CHAPTER_TERMS
-        );
-        if ("result" in reEdited) return reEdited.result;
-        updatedHtml = reEdited.html;
-        sentence = reEdited.sentence;
-        current = fresh;
-      }
-    }
-
-    // Re-read after the write: the host stamps Last Edited itself, and the
-    // Agent passes this value back as expectedLastEdited later.
-    const stored = await client.library.chapters.get({ chapterId: full.id });
-    const lastEdited = new Date((stored ?? current).updatedAt).toISOString();
-    return {
-      content: [{ type: "text", text: `${sentence}\nLast Edited: ${lastEdited}` }],
-    };
+          content: { html },
+          expectedUpdatedAt,
+        }),
+      missing: errorResult(`No Chapter has the id ${ref}; call get_book to see the Chapters.`),
+    });
   });
 }
 
@@ -414,8 +445,19 @@ export interface WriteChapterArgs {
   html?: string;
 }
 
-function changedSinceMessage(lastEdited: string): string {
-  return `The Chapter changed since you read it (Last Edited is now ${lastEdited}); call read_chapter again and redo the change.`;
+/** The refusal a whole-content write gives when the row changed since its read. */
+export function changedSinceMessage(lastEdited: string, terms: EditTerms): string {
+  return `The ${terms.noun} changed since you read it (Last Edited is now ${lastEdited}); call ${terms.readTool} again and redo the change.`;
+}
+
+/** The content a write sends: `{text}`, `{html}`, or null when neither is given. */
+export function contentOf(args: {
+  text?: string;
+  html?: string;
+}): { text: string } | { html: string } | null {
+  if (args.text !== undefined) return { text: args.text };
+  if (args.html !== undefined) return { html: args.html };
+  return null;
 }
 
 export async function writeChapter(
@@ -537,7 +579,7 @@ export async function writeChapter(
 
     const current = new Date(full.updatedAt).toISOString();
     if (expectedLastEdited.trim() !== current) {
-      return errorResult(changedSinceMessage(current));
+      return errorResult(changedSinceMessage(current, CHAPTER_TERMS));
     }
 
     // After the expectedLastEdited check and before the write: a refused
@@ -555,7 +597,7 @@ export async function writeChapter(
       if (!isConflict(error)) throw error;
       const fresh = await client.library.chapters.get({ chapterId: full.id });
       const freshLastEdited = new Date((fresh ?? full).updatedAt).toISOString();
-      return errorResult(changedSinceMessage(freshLastEdited));
+      return errorResult(changedSinceMessage(freshLastEdited, CHAPTER_TERMS));
     }
 
     const stored = await client.library.chapters.get({ chapterId: full.id });

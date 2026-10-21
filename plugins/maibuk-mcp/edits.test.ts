@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import type { PluginClient } from "@/plugin-sdk";
 import { PluginApiError } from "@/plugin-sdk";
-import { connect, mcpRequest, type McpAnswer } from "./test-support";
+import { connect, makeNote, mcpRequest, noteLibrary, type McpAnswer } from "./test-support";
 import { editChapter, type WriteGuard } from "./edits";
 import { editNote } from "./notes";
 
@@ -1050,26 +1050,6 @@ describe("write_chapter create mode", () => {
   });
 });
 
-function makeNote(
-  id: string,
-  bookId: string | null,
-  title: string,
-  content = { text: "Old body.", html: "<p>Old body.</p>" },
-  updatedAt = Date.UTC(2026, 0, 1),
-  tags: string[] = []
-) {
-  return {
-    id,
-    bookId,
-    title,
-    language: "en",
-    tags,
-    wordCount: 10,
-    updatedAt,
-    content,
-  };
-}
-
 /** The created id at the end of a `write_note` create sentence. */
 function createdNoteId(text: string): string {
   const match = /its id is ([A-Za-z0-9-]+)\./.exec(text);
@@ -1078,16 +1058,6 @@ function createdNoteId(text: string): string {
 }
 
 describe("write_note", () => {
-  /** Two Books and one Note in the first, as the Agent finds them. */
-  function noteLibrary() {
-    const books = [
-      makeBook("bookalpha1", 1000, "The Book"),
-      makeBook("bookbeta12", 1000, "Other Book"),
-    ];
-    const notes = [makeNote("notealpha1", "bookalpha1", "The Note")];
-    return { books, notes };
-  }
-
   it("creates a Note in a Book and reports its id and Last Edited", async () => {
     const books = [makeBook("bookalpha1", 1000, "The Book")];
     const { host, key } = await connect({ library: { books } as any });
@@ -1364,16 +1334,6 @@ describe("write_note", () => {
 });
 
 describe("edit_note", () => {
-  /** Two Books and one Note in the first, as the Agent finds them. */
-  function noteLibrary() {
-    const books = [
-      makeBook("bookalpha1", 1000, "The Book"),
-      makeBook("bookbeta12", 1000, "Other Book"),
-    ];
-    const notes = [makeNote("notealpha1", "bookalpha1", "The Note")];
-    return { books, notes };
-  }
-
   it("replaces one match, leaving every other byte of the markup alone", async () => {
     const books = [makeBook("bookalpha1", 1000, "The Book")];
     const notes = [

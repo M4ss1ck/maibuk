@@ -3,8 +3,8 @@
  * `write_note`, which creates a Note in a Book or as an Unfiled Note, or
  * replaces one Note's whole content, title, Tags, and Book, `edit_note`, which
  * shares `edit_chapter`'s find-and-replace and append, and `delete_note`, which
- * returns the whole text it removes. Pure-ish handlers over a `PluginClient`,
- * like `list_books`.
+ * returns the whole text and HTML it removes. Pure-ish handlers over a
+ * `PluginClient`, like `list_books`.
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
@@ -22,7 +22,18 @@ import {
   titleOrUntitled,
 } from "./library";
 import { bookLine } from "./books";
-import { applyEdit, editModeOf, type EditModeArgs, type EditTerms, type WriteGuard } from "./edits";
+import {
+  changedSinceMessage,
+  contentOf,
+  editModeOf,
+  guardedEdit,
+  type EditModeArgs,
+  type EditTerms,
+  type WriteGuard,
+} from "./edits";
+
+/** How the Note tools name the row they change in the shared write sentences. */
+const NOTE_TERMS: EditTerms = { noun: "Note", readTool: "read_note" };
 
 export interface ListNotesArgs {
   book?: string;
@@ -144,10 +155,6 @@ export interface WriteNoteArgs {
   tags?: string[];
 }
 
-function changedSinceMessage(lastEdited: string): string {
-  return `The Note changed since you read it (Last Edited is now ${lastEdited}); call read_note again and redo the change.`;
-}
-
 /** The Note an Agent named, by full id or an 8+ character prefix. */
 async function resolveNote(
   client: PluginClient,
@@ -205,7 +212,7 @@ export async function writeNote(
   args: WriteNoteArgs,
   writeGuard: WriteGuard
 ): Promise<CallToolResult> {
-  const hasNote = args.note !== undefined;
+  const noteRef = args.note;
 
   if (args.text !== undefined && args.html !== undefined) {
     return errorResult(
@@ -218,7 +225,7 @@ export async function writeNote(
     );
   }
 
-  if (!hasNote) {
+  if (noteRef === undefined) {
     if (args.expectedLastEdited !== undefined) {
       return errorResult(
         "expectedLastEdited is only for replacing a Note's content; to create, call write_note with title and no expectedLastEdited."
@@ -245,21 +252,13 @@ export async function writeNote(
         if (checkpoint !== null) return checkpoint;
       }
 
+      const content = contentOf(args);
       const { noteId: newId } = await client.library.notes.create({
         title,
         ...(bookId === null ? {} : { bookId }),
-        ...(args.text !== undefined
-          ? { content: { text: args.text } }
-          : args.html !== undefined
-            ? { content: { html: args.html } }
-            : {}),
+        ...(content === null ? {} : { content }),
+        ...(args.tags === undefined ? {} : { tags: args.tags }),
       });
-
-      // The Note write path creates with no Tags, so a create that names them
-      // sets them through the same update a replace uses.
-      if (args.tags !== undefined) {
-        await client.library.notes.update({ noteId: newId, tags: args.tags });
-      }
 
       const stored = await client.library.notes.get({ noteId: newId });
       const allIds = (await client.library.notes.list()).map((note) => note.id);
@@ -294,16 +293,17 @@ export async function writeNote(
     );
   }
   const expectedLastEdited = args.expectedLastEdited;
+  const noteRefTrimmed = noteRef.trim();
 
   return libraryCall(async () => {
-    const resolved = await resolveNote(client, (args.note as string).trim(), "write_note");
+    const resolved = await resolveNote(client, noteRefTrimmed, "write_note");
     if ("result" in resolved) return resolved.result;
 
     const full = resolved.full;
 
     const current = new Date(full.updatedAt).toISOString();
     if (expectedLastEdited.trim() !== current) {
-      return errorResult(changedSinceMessage(current));
+      return errorResult(changedSinceMessage(current, NOTE_TERMS));
     }
 
     // The Note's place after the write: its Book unchanged, the named Book, or
@@ -332,14 +332,11 @@ export async function writeNote(
     }
 
     const title = args.title === undefined ? undefined : args.title.trim();
+    const content = contentOf(args);
     try {
       await client.library.notes.update({
         noteId: full.id,
-        ...(args.text !== undefined
-          ? { content: { text: args.text } }
-          : args.html !== undefined
-            ? { content: { html: args.html } }
-            : {}),
+        ...(content === null ? {} : { content }),
         ...(title === undefined ? {} : { title }),
         ...(args.tags === undefined ? {} : { tags: args.tags }),
         ...(args.book === undefined ? {} : { bookId: destinationId }),
@@ -349,7 +346,7 @@ export async function writeNote(
       if (!isConflict(error)) throw error;
       const fresh = await client.library.notes.get({ noteId: full.id });
       const freshLastEdited = new Date((fresh ?? full).updatedAt).toISOString();
-      return errorResult(changedSinceMessage(freshLastEdited));
+      return errorResult(changedSinceMessage(freshLastEdited, NOTE_TERMS));
     }
 
     const stored = await client.library.notes.get({ noteId: full.id });
@@ -377,9 +374,6 @@ export interface EditNoteArgs extends EditModeArgs {
   note: string;
 }
 
-/** How `edit_note` names the row it changes in the shared edit sentences. */
-const NOTE_TERMS: EditTerms = { noun: "Note", readTool: "read_note" };
-
 /**
  * Replaces one exact piece of a Note's text, or appends to its end, with the
  * same rules as `edit_chapter`: the edit runs on the stored HTML, a Note in a
@@ -401,61 +395,22 @@ export async function editNote(
 
     const full = resolved.full;
 
-    const initial = applyEdit(full.content.html, full.content.text, mode, full.title, NOTE_TERMS);
-    if ("result" in initial) return initial.result;
-
-    let updatedHtml = initial.html;
-    const initialSentence = initial.sentence;
-
-    // After every refusal (validation, no match, several matches) and before
-    // the write: a refused write takes no Checkpoint and a failed Checkpoint
-    // leaves the content unchanged. An Unfiled Note belongs to no Book, so it
-    // takes none.
-    if (full.bookId !== null) {
-      const checkpoint = await writeGuard.ensureCheckpoint(full.bookId);
-      if (checkpoint !== null) return checkpoint;
-    }
-
-    let current = full;
-    let sentence = initialSentence;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        await client.library.notes.update({
+    return guardedEdit({
+      initial: full,
+      mode,
+      terms: NOTE_TERMS,
+      // An Unfiled Note belongs to no Book, so it takes none.
+      ensureCheckpoint: () =>
+        full.bookId === null ? Promise.resolve(null) : writeGuard.ensureCheckpoint(full.bookId),
+      read: () => client.library.notes.get({ noteId: full.id }),
+      write: (html, expectedUpdatedAt) =>
+        client.library.notes.update({
           noteId: full.id,
-          content: { html: updatedHtml },
-          expectedUpdatedAt: current.updatedAt,
-        });
-        break;
-      } catch (error) {
-        if (!isConflict(error)) throw error;
-        if (attempt === 2) {
-          return errorResult("The author is typing in this Note right now; try again in a moment.");
-        }
-        const fresh = await client.library.notes.get({ noteId: full.id });
-        if (!fresh) {
-          return errorResult(`No Note has the id ${ref}; call list_notes to see the Notes.`);
-        }
-        const reEdited = applyEdit(
-          fresh.content.html,
-          fresh.content.text,
-          mode,
-          fresh.title,
-          NOTE_TERMS
-        );
-        if ("result" in reEdited) return reEdited.result;
-        updatedHtml = reEdited.html;
-        sentence = reEdited.sentence;
-        current = fresh;
-      }
-    }
-
-    // Re-read after the write: the host stamps Last Edited itself, and the
-    // Agent passes this value back as expectedLastEdited later.
-    const stored = await client.library.notes.get({ noteId: full.id });
-    const lastEdited = new Date((stored ?? current).updatedAt).toISOString();
-    return {
-      content: [{ type: "text", text: `${sentence}\nLast Edited: ${lastEdited}` }],
-    };
+          content: { html },
+          expectedUpdatedAt,
+        }),
+      missing: errorResult(`No Note has the id ${ref}; call list_notes to see the Notes.`),
+    });
   });
 }
 
@@ -466,8 +421,8 @@ export interface DeleteNoteArgs {
 
 /**
  * Deletes one Note through the host's normal Delete path, so sync and Deletion
- * Review carry it, and returns its whole text so the Agent and author can
- * restore it. A Note in a Book takes that Book's Checkpoint first; an Unfiled
+ * Review carry it, and returns its whole text and HTML so the Agent and author
+ * can restore it. A Note in a Book takes that Book's Checkpoint first; an Unfiled
  * Note belongs to no Book, so it takes none, and a Note that does not resolve
  * takes none.
  */
@@ -500,12 +455,14 @@ export async function deleteNote(
 
     const title = titleOrUntitled(full.title);
     // A Checkpoint is a Version of the Book's Chapters and holds no Notes, so
-    // the text returned below is the only copy an Agent can restore from.
-    const sentence = `Deleted Note ${title} through the normal Delete path, so a sync carries it the way it carries a Delete the author made. Its whole text follows; to restore it, call write_note with it.`;
+    // the text and HTML returned below are the only copies an Agent can
+    // restore from.
+    const sentence = `Deleted Note ${title} through the normal Delete path, so a sync carries it the way it carries a Delete the author made. Its whole text follows, then its HTML; to restore it, call write_note with the html argument.`;
     return {
       content: [
         { type: "text", text: [sentence, ...identity].join("\n") },
         { type: "text", text: full.content.text },
+        { type: "text", text: `HTML:\n${full.content.html}` },
       ],
     };
   });

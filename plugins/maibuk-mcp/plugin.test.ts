@@ -795,78 +795,28 @@ describe("MCP Server read-only mode", () => {
     }
   });
 
-  it("refuses write_note while read-only as an unknown tool", async () => {
+  it.each([
+    ["write_note", { book: "bookalpha1", title: "Ideas" }],
+    ["edit_note", { note: "notealpha1", append: "More." }],
+    ["delete_note", { note: "notealpha1" }],
+  ])("refuses %s while read-only as an unknown tool", async (tool, args) => {
     const library = readOnlyLibrary();
+    const before = JSON.stringify(library);
     const { host, key } = await connect({ library });
     try {
       host.setGranted(["serve", "library:read"]);
       await vi.waitFor(async () => {
         const listed = await mcpRequest(host, key, toolsListBody(3));
-        expect(listed.json.result.tools.map((tool: any) => tool.name)).not.toContain("write_note");
+        expect(listed.json.result.tools.map((entry: any) => entry.name)).not.toContain(tool);
       });
 
-      const answer = await mcpRequest(
-        host,
-        key,
-        toolsCallBody("write_note", { book: "bookalpha1", title: "Ideas" }, 4)
-      );
+      const answer = await mcpRequest(host, key, toolsCallBody(tool, args, 4));
       expect(answer.json).toEqual({
         jsonrpc: "2.0",
         id: 4,
-        error: { code: -32602, message: "Tool write_note not found" },
+        error: { code: -32602, message: `Tool ${tool} not found` },
       });
-      expect(host.checkpoints).toEqual([]);
-    } finally {
-      host.stop();
-    }
-  });
-
-  it("refuses edit_note while read-only as an unknown tool", async () => {
-    const library = readOnlyLibrary();
-    const { host, key } = await connect({ library });
-    try {
-      host.setGranted(["serve", "library:read"]);
-      await vi.waitFor(async () => {
-        const listed = await mcpRequest(host, key, toolsListBody(3));
-        expect(listed.json.result.tools.map((tool: any) => tool.name)).not.toContain("edit_note");
-      });
-
-      const answer = await mcpRequest(
-        host,
-        key,
-        toolsCallBody("edit_note", { note: "notealpha1", append: "More." }, 4)
-      );
-      expect(answer.json).toEqual({
-        jsonrpc: "2.0",
-        id: 4,
-        error: { code: -32602, message: "Tool edit_note not found" },
-      });
-      expect(host.checkpoints).toEqual([]);
-    } finally {
-      host.stop();
-    }
-  });
-
-  it("refuses delete_note while read-only as an unknown tool", async () => {
-    const library = readOnlyLibrary();
-    const { host, key } = await connect({ library });
-    try {
-      host.setGranted(["serve", "library:read"]);
-      await vi.waitFor(async () => {
-        const listed = await mcpRequest(host, key, toolsListBody(3));
-        expect(listed.json.result.tools.map((tool: any) => tool.name)).not.toContain("delete_note");
-      });
-
-      const answer = await mcpRequest(
-        host,
-        key,
-        toolsCallBody("delete_note", { note: "notealpha1" }, 4)
-      );
-      expect(answer.json).toEqual({
-        jsonrpc: "2.0",
-        id: 4,
-        error: { code: -32602, message: "Tool delete_note not found" },
-      });
+      expect(JSON.stringify(library)).toBe(before);
       expect(host.checkpoints).toEqual([]);
     } finally {
       host.stop();

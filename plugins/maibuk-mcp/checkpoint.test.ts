@@ -11,6 +11,7 @@ import { createTestHost } from "@/features/plugins/test-kit";
 import { CONNECTION_IDLE_MS, startMcp } from "./plugin";
 import {
   connect,
+  makeNote,
   mcpManifest,
   mcpRequest,
   modernHeaders,
@@ -99,19 +100,6 @@ function makeBook(id: string, updatedAt: number, title = `Title ${id}`) {
 }
 
 const JANUARY_1 = Date.UTC(2026, 0, 1);
-
-function makeNote(id: string, bookId: string | null, title = `Note ${id}`) {
-  return {
-    id,
-    bookId,
-    title,
-    language: "en",
-    tags: [] as string[],
-    wordCount: 10,
-    updatedAt: JANUARY_1,
-    content: { html: "<p>Old body.</p>", text: "Old body." },
-  };
-}
 
 function makeChapter(id: string, bookId: string, html: string, updatedAt = JANUARY_1) {
   return {
@@ -805,6 +793,65 @@ describe("write checkpoints", () => {
       expect(isError(answer)).toBe(true);
       expect(textOf(answer)).toContain("read the Chapter as HTML");
       expect(chapters[0].content.html).toBe("<p>Original</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("write_note refuses while the author has unsaved typing in the Note", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const notes = [
+      makeNote("notealpha1", "bookalpha1", "The Note", {
+        html: "<p>Original</p>",
+        text: "Original",
+      }),
+    ];
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      const reread = await mcpRequest(
+        host,
+        key,
+        toolsCall("read_note", { note: "notealpha1" }, 2)
+      );
+      const lastEdited = lastEditedOf(textOf(reread));
+      host.setPendingEdit("notealpha1", "<p>Typed</p>");
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCall(
+          "write_note",
+          { note: "notealpha1", expectedLastEdited: lastEdited, html: "<p>New</p>" },
+          3
+        )
+      );
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toContain("changed since you read it");
+      expect(notes[0].content.html).toBe("<p>Typed</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("edit_note applies an append on top of pending author typing", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const notes = [
+      makeNote("notealpha1", "bookalpha1", "The Note", {
+        html: "<p>Original</p>",
+        text: "Original",
+      }),
+    ];
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      host.setPendingEdit("notealpha1", "<p>Original</p><p>Mine</p>");
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCall("edit_note", { note: "notealpha1", append: "More." }, 2)
+      );
+      expect(isError(answer)).toBe(false);
+      expect(notes[0].content.html).toBe("<p>Original</p><p>Mine</p><p>More.</p>");
     } finally {
       host.stop();
     }
