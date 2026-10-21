@@ -1671,6 +1671,24 @@ describe("createTestHost() Library writes", () => {
     }
   });
 
+  it("creates a Note with its Tags, trimmed and deduplicated", async () => {
+    const { host } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      const { noteId } = await client.library.notes.create({
+        title: "Tagged",
+        bookId: "b1",
+        tags: [" a ", "b", "a", "  "],
+      });
+
+      await expect(client.library.notes.get({ noteId })).resolves.toMatchObject({
+        tags: ["a", "b"],
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
   it("creates an Unfiled Note when bookId is omitted or null", async () => {
     const { host } = notesHost();
     try {
@@ -1781,6 +1799,46 @@ describe("createTestHost() Library writes", () => {
         })
       ).resolves.toBeNull();
       expect(note.title).toBe("Right");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses a Note write when a pending edit flushed, landing the typing", async () => {
+    const { host, note } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      const expected = note.updatedAt;
+      host.setPendingEdit("n1", "<p>Typed</p>");
+
+      await expect(
+        client.library.notes.update({
+          noteId: "n1",
+          content: { html: "<p>Written</p>" },
+          expectedUpdatedAt: expected,
+        })
+      ).rejects.toMatchObject({ code: "conflict" });
+
+      // The flush landed the author's typing, and the refused write left it alone.
+      expect(note.content).toEqual({ html: "<p>Typed</p>", text: "Typed" });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("flushes a Note pending edit before an unguarded update", async () => {
+    const { host, note } = notesHost();
+    try {
+      const client = createPluginClient(host.port);
+      host.setPendingEdit("n1", "<p>Typed</p>");
+
+      await client.library.notes.update({
+        noteId: "n1",
+        content: { html: "<p>Written</p>" },
+      });
+
+      // The pending typing landed first, then the write replaced it.
+      expect(note.content).toEqual({ html: "<p>Written</p>", text: "Written" });
     } finally {
       host.stop();
     }

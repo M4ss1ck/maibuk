@@ -20,8 +20,9 @@ import type { PluginManifest } from "@/features/plugins/types";
 // the Plugin Permissions it holds (#591), all additive: a ^0.1.5 Plugin keeps
 // loading.
 // 0.1.7 adds expectedUpdatedAt to library.notes.update, so a Plugin's Note
-// write is refused when the Note changed since it was read (#593), additive: a
-// ^0.1.6 Plugin keeps loading.
+// write is refused when the Note changed since it was read (#593), and Tags to
+// library.notes.create, so a new Note lands with its Tags in the same write;
+// both additive: a ^0.1.6 Plugin keeps loading.
 
 function manifestWith(apiVersion: string): PluginManifest {
   const result = validateManifestValue({

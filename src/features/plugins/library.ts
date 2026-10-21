@@ -521,11 +521,15 @@ export async function updatePluginChapter(input: {
   });
 }
 
-/** Creates a Note through the Note write path and returns its id. */
+/**
+ * Creates a Note through the Note write path and returns its id. Tags are
+ * normalized the way the Note UI stores them and land with the create.
+ */
 export async function createPluginNote(input: {
   title: string;
   bookId?: string | null;
   content?: PluginContentFragment;
+  tags?: string[];
 }): Promise<{ noteId: string }> {
   return libraryWrite(async () => {
     const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
@@ -536,6 +540,7 @@ export async function createPluginNote(input: {
         ...(content === undefined
           ? {}
           : { content, wordCount: contentWordCount(content) }),
+        ...(input.tags === undefined ? {} : { tags: normalizeNoteTags(input.tags) }),
       },
       "local"
     );

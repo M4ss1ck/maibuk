@@ -144,7 +144,8 @@ export function createTestHost(options: TestHostOptions): TestHost {
   // Version path sees it; only taken Checkpoints are recorded.
   const checkpoints: TestCheckpoint[] = [];
   const unchangedBooks = new Set<string>();
-  const pendingEdits = new Map<string, string>();
+  const pendingChapterEdits = new Map<string, string>();
+  const pendingNoteEdits = new Map<string, string>();
   let nextVersion = 1;
   let nextCreatedChapter = 1;
   let nextCreatedNote = 1;
@@ -160,20 +161,31 @@ export function createTestHost(options: TestHostOptions): TestHost {
   /**
    * Flushes every pending author edit into the in-memory Library, the way the
    * app's pending-edits flush does before a Library write or Checkpoint. Returns
-   * the set of Chapter ids whose stored content moved.
+   * the Chapter and Note ids whose stored content moved.
    */
-  function flushPendingEdits(): Set<string> {
-    const changed = new Set<string>();
-    for (const [chapterId, html] of pendingEdits) {
+  function flushPendingEdits(): { chapters: Set<string>; notes: Set<string> } {
+    const chaptersChanged = new Set<string>();
+    for (const [chapterId, html] of pendingChapterEdits) {
       const chapter = chapters.find((entry) => entry.id === chapterId);
       if (!chapter) continue;
       chapter.content = { html, text: htmlToPlainText(html) };
       chapter.updatedAt = Math.max(Date.now(), chapter.updatedAt + 1);
       unchangedBooks.delete(chapter.bookId);
-      changed.add(chapterId);
+      chaptersChanged.add(chapterId);
     }
-    pendingEdits.clear();
-    return changed;
+    pendingChapterEdits.clear();
+    const notesChanged = new Set<string>();
+    for (const [noteId, html] of pendingNoteEdits) {
+      const note = notes.find((entry) => entry.id === noteId);
+      if (!note) continue;
+      const text = htmlToPlainText(html);
+      note.content = { html, text };
+      note.wordCount = countWords(text);
+      stampRow(note);
+      notesChanged.add(noteId);
+    }
+    pendingNoteEdits.clear();
+    return { chapters: chaptersChanged, notes: notesChanged };
   }
 
   /** The Book's Chapters in stored order: the sequence a position or a reorder names. */
@@ -293,7 +305,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
       const flushed = flushPendingEdits();
       if (
         expectedUpdatedAt !== undefined &&
-        (flushed.has(chapterId) || chapter.updatedAt !== expectedUpdatedAt)
+        (flushed.chapters.has(chapterId) || chapter.updatedAt !== expectedUpdatedAt)
       ) {
         throw new PluginApiError({
           code: "conflict",
@@ -356,7 +368,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
       const index = chapters.findIndex((entry) => entry.id === chapterId);
       if (index === -1) throw chapterNotFound(chapterId);
       const [removed] = chapters.splice(index, 1);
-      pendingEdits.delete(chapterId);
+      pendingChapterEdits.delete(chapterId);
       touchBook(removed.bookId);
       return null;
     },
@@ -438,7 +450,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
     // The Note writes (#593): create, update, and delete, each through the same
     // rules the app's handlers apply, so a test asserts the Library state they
     // produced.
-    "library.notes.create": ({ title, bookId, content }) => {
+    "library.notes.create": ({ title, bookId, content, tags }) => {
       const html = content === undefined ? undefined : fragmentToHtml(content);
       const text = html === undefined ? undefined : htmlToPlainText(html);
       const noteId = `note-created-${nextCreatedNote}`;
@@ -453,7 +465,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
         bookId: bookId ?? null,
         title,
         language: noteLanguage,
-        tags: [],
+        tags: tags === undefined ? [] : normalizeNoteTags(tags),
         wordCount: text === undefined ? 0 : countWords(text),
         updatedAt: Date.now(),
         ...(html === undefined || text === undefined ? {} : { content: { html, text } }),
@@ -466,10 +478,13 @@ export function createTestHost(options: TestHostOptions): TestHost {
       }
       const note = notes.find((entry) => entry.id === noteId);
       if (!note) throw noteNotFound(noteId);
-      flushPendingEdits();
+      const flushed = flushPendingEdits();
       // The guard the app applies: a write computed from a stale read is
       // refused, so a test proves a Plugin never overwrites newer text.
-      if (expectedUpdatedAt !== undefined && note.updatedAt !== expectedUpdatedAt) {
+      if (
+        expectedUpdatedAt !== undefined &&
+        (flushed.notes.has(noteId) || note.updatedAt !== expectedUpdatedAt)
+      ) {
         throw new PluginApiError({
           code: "conflict",
           message: `Note ${noteId} changed since it was read`,
@@ -492,6 +507,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
       const index = notes.findIndex((entry) => entry.id === noteId);
       if (index === -1) throw noteNotFound(noteId);
       notes.splice(index, 1);
+      pendingNoteEdits.delete(noteId);
       return null;
     },
     "library.canvases.list": ({ bookId }) =>
@@ -870,8 +886,14 @@ export function createTestHost(options: TestHostOptions): TestHost {
     setLibraryAvailable(available) {
       libraryAvailable = available;
     },
-    setPendingEdit(chapterId, html) {
-      pendingEdits.set(chapterId, html);
+    setPendingEdit(id, html) {
+      // An id the Library serves as a Note records Note typing; anything else is
+      // a Chapter id, the only kind the kit recorded before Notes.
+      if (!chapters.some((entry) => entry.id === id) && notes.some((entry) => entry.id === id)) {
+        pendingNoteEdits.set(id, html);
+      } else {
+        pendingChapterEdits.set(id, html);
+      }
     },
     endpoint,
     endpointStream,

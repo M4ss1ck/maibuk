@@ -283,11 +283,13 @@ export const PLUGIN_API_TABLE = [
   }),
   defineApiRow({
     id: "library.notes.create",
-    description: "Creates a Note through the Note write path and returns its id.",
+    description:
+      "Creates a Note through the Note write path and returns its id; Tags are trimmed and deduplicated like the Note tags field.",
     input: z.strictObject({
       title: z.string().max(500),
       bookId: id.nullable().optional(),
       content: fragment.optional(),
+      tags: z.array(z.string()).optional(),
     }),
     output: z.strictObject({ noteId: id }),
     ...libraryWrite,

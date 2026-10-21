@@ -918,8 +918,8 @@ export interface TestHost {
   setEndpointAddress(port: number | null): void;
   /** Makes the Library available or unavailable, as the Tutorial does. */
   setLibraryAvailable(available: boolean): void;
-  /** Records unsaved author typing in an open editor; the next Library write or Checkpoint flushes it first, like the app's pending-edits flush. */
-  setPendingEdit(chapterId: string, html: string): void;
+  /** Records unsaved author typing in an open Chapter or Note editor; the next Library write or Checkpoint flushes it first, like the app's pending-edits flush. */
+  setPendingEdit(id: string, html: string): void;
   /**
    * Hands the Plugin one request on its Plugin Endpoint through the same
    * dispatcher the app uses, and resolves with the answer once it is complete:

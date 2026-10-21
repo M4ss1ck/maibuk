@@ -82,6 +82,12 @@ function writeNote(input: {
   return write(input, context);
 }
 
+function createNote(input: PluginApiInput<"library.notes.create">) {
+  const create = handlers["library.notes.create"];
+  if (!create) throw new Error("library.notes.create is not wired");
+  return create(input, context);
+}
+
 /** The #588 Book writes and the reads that carry its fields, all through the handlers. */
 function writeBook(input: PluginApiInput<"library.books.update">) {
   const write = handlers["library.books.update"];
@@ -468,6 +474,31 @@ describe("Plugin Library writes reach the open view", () => {
       })
     ).resolves.toBeNull();
     expect(await noteContent("note-1")).toBe("<p>Agent</p>");
+  });
+
+  it("creates a Note with normalized Tags in the one write", async () => {
+    await seedBook("book-1");
+    const changes: Change[] = [];
+    const off = onChange((signal) => {
+      if (isEntityChange(signal)) changes.push(signal);
+    });
+    try {
+      const { noteId } = await createNote({
+        title: "Tagged",
+        bookId: "book-1",
+        tags: [" a ", "b", "a", "  "],
+      });
+
+      await expect(readNote(noteId)).resolves.toMatchObject({
+        title: "Tagged",
+        bookId: "book-1",
+        tags: ["a", "b"],
+      });
+      // The Tags land with the create, not through a second update call.
+      expect(changes).toEqual([{ entity: "note", id: noteId, origin: "local", kind: "content" }]);
+    } finally {
+      off();
+    }
   });
 
   it("a Note write computed from a stale read does not overwrite the author's typing", async () => {

@@ -478,7 +478,7 @@ null
 
 ### `library.notes.create`
 
-Creates a Note through the Note write path and returns its id.
+Creates a Note through the Note write path and returns its id; Tags are trimmed and deduplicated like the Note tags field.
 
 - Plugin Permission: `library:write`
 - Effect: write
@@ -497,6 +497,7 @@ Input:
     /** Sanitized by the host before it lands. */
     html: string;
   };
+  tags?: string[];
 }
 ```
 

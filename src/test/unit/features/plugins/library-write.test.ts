@@ -35,13 +35,24 @@ describe("Plugin Library writes", () => {
     return rows.length > 0 ? rows[0].content : null;
   }
 
-  async function noteRow(
-    id: string
-  ): Promise<{ book_id: string | null; title: string; content: string; word_count: number } | null> {
+  async function noteRow(id: string): Promise<{
+    book_id: string | null;
+    title: string;
+    content: string;
+    tags: string[];
+    word_count: number;
+  } | null> {
     const rows = await testDb.select<
-      { book_id: string | null; title: string; content: string; word_count: number }[]
-    >("SELECT book_id, title, content, word_count FROM notes WHERE id = ?", [id]);
-    return rows.length > 0 ? rows[0] : null;
+      {
+        book_id: string | null;
+        title: string;
+        content: string;
+        tags: string;
+        word_count: number;
+      }[]
+    >("SELECT book_id, title, content, tags, word_count FROM notes WHERE id = ?", [id]);
+    if (rows.length === 0) return null;
+    return { ...rows[0], tags: JSON.parse(rows[0].tags) as string[] };
   }
 
   beforeEach(async () => {
@@ -147,6 +158,19 @@ describe("Plugin Library writes", () => {
     const { noteId } = await createPluginNote({ title: "Loose" });
 
     expect((await noteRow(noteId))?.book_id).toBeNull();
+  });
+
+  it("creates a Note with normalized Tags in the one write", async () => {
+    const { noteId } = await createPluginNote({
+      title: "Tagged",
+      bookId: "b1",
+      tags: [" a ", "b", "a", "  "],
+    });
+
+    const row = await noteRow(noteId);
+    expect(row?.tags).toEqual(["a", "b"]);
+    // Tags land with the create, not through a second update call.
+    expect(changes).toEqual([{ entity: "note", id: noteId, origin: "local", kind: "content" }]);
   });
 
   it("updates only a Note's title", async () => {
