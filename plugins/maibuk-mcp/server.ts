@@ -11,7 +11,7 @@ import type { PluginClient } from "@/plugin-sdk";
 import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
 import { editChapter, writeChapter, type WriteGuard } from "./edits";
-import { listNotes, readNote, writeNote } from "./notes";
+import { editNote, listNotes, readNote, writeNote } from "./notes";
 import {
   BOOK_STATUSES,
   CHAPTER_STATUSES,
@@ -276,6 +276,28 @@ export function buildMcpServer(
         },
       },
       async (args) => updateBook(client, args as any, writeGuard)
+    );
+    server.registerTool(
+      "edit_note",
+      {
+        title: "Edit note",
+        description:
+          "Replace one exact piece of a Note's text, or append to its end, without sending the whole Note back.",
+        inputSchema: z.object({
+          note: z.string().min(8),
+          find: z.string().optional(),
+          replace: z.string().optional(),
+          append: z.string().optional(),
+          format: z.enum(["text", "html"]).optional(),
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      async (args) => editNote(client, args as any, writeGuard)
     );
     server.registerTool(
       "write_note",

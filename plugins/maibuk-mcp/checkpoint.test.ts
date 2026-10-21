@@ -654,6 +654,91 @@ describe("write checkpoints", () => {
     }
   });
 
+  it("first edit_note records one checkpoint before the Note write", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const notes = [makeNote("notealpha1", "bookalpha1")];
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCall("edit_note", { note: "notealpha1", append: "More." }, 2)
+      );
+      expect(isError(answer)).toBe(false);
+      expect(host.checkpoints).toEqual([
+        { bookId: "bookalpha1", label: "Before Claude Code edits", versionId: expect.any(String) },
+      ]);
+      expect(notes[0].content.html).toBe("<p>Old body.</p><p>More.</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("an Unfiled Note edit takes no checkpoint", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const notes = [makeNote("notealpha1", null)];
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCall("edit_note", { note: "notealpha1", append: "More." }, 2)
+      );
+      expect(isError(answer)).toBe(false);
+      expect(notes[0].content.html).toBe("<p>Old body.</p><p>More.</p>");
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("a refused edit_note takes no checkpoint", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const notes = [makeNote("notealpha1", "bookalpha1")];
+    const { host, key } = await connect({ library: { books, notes } as any });
+    try {
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCall("edit_note", { note: "notealpha1", find: "Missing", replace: "Found" }, 2)
+      );
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toContain("read the Note as HTML");
+      expect(host.checkpoints).toEqual([]);
+      expect(notes[0].content.html).toBe("<p>Old body.</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("a failed Note edit Checkpoint refuses the write and leaves the Note alone", async () => {
+    const books = [makeBook("bookalpha1", 1000)];
+    const notes = [makeNote("notealpha1", "bookalpha1")];
+    const { host, key } = await connect({
+      library: { books, notes } as any,
+      checkpointError: "The Versions shelf is stuck.",
+    });
+    try {
+      await mcpRequest(host, key, initializeFrom("Claude Code"));
+      const answer = await mcpRequest(
+        host,
+        key,
+        toolsCall("edit_note", { note: "notealpha1", append: "More." }, 2)
+      );
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toBe(
+        "Could not take a Checkpoint of the Book before writing, so nothing changed; try again."
+      );
+      expect(host.checkpoints).toEqual([]);
+      expect(notes[0].content.html).toBe("<p>Old body.</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
   it("edit_chapter applies an append on top of pending author typing", async () => {
     const books = [makeBook("bookalpha1", 1000)];
     const chapters = [makeChapter("chapteralpha", "bookalpha1", "<p>Original</p>")];

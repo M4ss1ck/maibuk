@@ -1,8 +1,9 @@
 /**
- * The `edit_chapter` tool for the maibuk-mcp Plugin: find-and-replace of one
- * exact piece of a Chapter's text, or an append to its end. Both edits work on
- * the stored HTML, so an Agent changes a few characters instead of sending the
- * whole Chapter back, and every byte it did not name stays where it was.
+ * The `edit_chapter` tool for the maibuk-mcp Plugin, with the pure edit logic
+ * `edit_note` shares: find-and-replace of one exact piece of a Chapter's text,
+ * or an append to its end. Both edits work on the stored HTML, so an Agent
+ * changes a few characters instead of sending the whole Chapter back, and
+ * every byte it did not name stays where it was.
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
@@ -20,8 +21,12 @@ import {
 } from "./library";
 
 /** Arguments for `edit_chapter`. */
-export interface EditChapterArgs {
+export interface EditChapterArgs extends EditModeArgs {
   chapter: string;
+}
+
+/** The arguments an edit reads its one mode from; a Chapter or a Note adds its id. */
+export interface EditModeArgs {
   find?: string;
   replace?: string;
   append?: string;
@@ -168,16 +173,34 @@ export type EditMode =
   | { kind: "append"; text: string; format: "text" | "html" };
 
 /**
+ * The words an edit's sentences use for the row it changes. `edit_chapter` and
+ * `edit_note` share the same pure edit logic, so it names the row and the read
+ * tool an Agent copies the exact text from instead of hard-coding either.
+ */
+export interface EditTerms {
+  /** The row's noun as a sentence names it, such as `Chapter` or `Note`. */
+  noun: string;
+  /** The read tool that returns its text, such as `read_chapter`. */
+  readTool: string;
+}
+
+/** How `edit_chapter` names the row it changes. */
+const CHAPTER_TERMS: EditTerms = { noun: "Chapter", readTool: "read_chapter" };
+
+/**
  * Resolves the arguments to exactly one mode. The modes never mix, so an Agent
  * that sends both learns which shape to send instead of guessing what won.
  */
-function editModeOf(args: EditChapterArgs): EditMode | { result: CallToolResult } {
+export function editModeOf(
+  args: EditModeArgs,
+  terms: EditTerms
+): EditMode | { result: CallToolResult } {
   const { find, replace, append } = args;
 
   if (append !== undefined && (find !== undefined || replace !== undefined)) {
     return {
       result: errorResult(
-        "Give find and replace, or append, but not both; call read_chapter first to copy the exact text."
+        `Give find and replace, or append, but not both; call ${terms.readTool} first to copy the exact text.`
       ),
     };
   }
@@ -185,7 +208,7 @@ function editModeOf(args: EditChapterArgs): EditMode | { result: CallToolResult 
     if (append === "") {
       return {
         result: errorResult(
-          "Give the text to append; call read_chapter to see where the Chapter ends."
+          `Give the text to append; call ${terms.readTool} to see where the ${terms.noun} ends.`
         ),
       };
     }
@@ -194,14 +217,14 @@ function editModeOf(args: EditChapterArgs): EditMode | { result: CallToolResult 
   if (find === undefined || replace === undefined) {
     return {
       result: errorResult(
-        "Give find and replace together, or append; call read_chapter first to copy the exact text."
+        `Give find and replace together, or append; call ${terms.readTool} first to copy the exact text.`
       ),
     };
   }
   if (find === "") {
     return {
       result: errorResult(
-        "Give the exact text to find; call read_chapter with format html to copy it."
+        `Give the exact text to find; call ${terms.readTool} with format html to copy it.`
       ),
     };
   }
@@ -218,7 +241,8 @@ export function applyEdit(
   html: string,
   plainText: string,
   mode: EditMode,
-  title: string
+  title: string,
+  terms: EditTerms
 ): { html: string; sentence: string } | { result: CallToolResult } {
   if (mode.kind === "replace") {
     const find = escapeAsStoredHtml(mode.find);
@@ -227,8 +251,8 @@ export function applyEdit(
       return {
         result: errorResult(
           plainText.includes(mode.find)
-            ? "That text crosses formatting, so read the Chapter as HTML (read_chapter with format html) and pick a find within one run of text."
-            : "No match for that find text; read the Chapter as HTML (read_chapter with format html) and copy the exact text."
+            ? `That text crosses formatting, so read the ${terms.noun} as HTML (${terms.readTool} with format html) and pick a find within one run of text.`
+            : `No match for that find text; read the ${terms.noun} as HTML (${terms.readTool} with format html) and copy the exact text.`
         ),
       };
     }
@@ -244,11 +268,14 @@ export function applyEdit(
       html.slice(0, at) + escapeAsStoredHtml(mode.replace) + html.slice(at + find.length);
     return {
       html: updatedHtml,
-      sentence: `Replaced 1 match in Chapter ${titleOrUntitled(title)}.`,
+      sentence: `Replaced 1 match in ${terms.noun} ${titleOrUntitled(title)}.`,
     };
   }
   const fragment = mode.format === "html" ? mode.text : paragraphsOf(mode.text);
-  return { html: html + fragment, sentence: `Appended to Chapter ${titleOrUntitled(title)}.` };
+  return {
+    html: html + fragment,
+    sentence: `Appended to ${terms.noun} ${titleOrUntitled(title)}.`,
+  };
 }
 
 export async function resolveChapter(
@@ -304,7 +331,7 @@ export async function editChapter(
   writeGuard: WriteGuard
 ): Promise<CallToolResult> {
   const ref = (args.chapter ?? "").trim();
-  const mode = editModeOf(args);
+  const mode = editModeOf(args, CHAPTER_TERMS);
   if ("result" in mode) return mode.result;
 
   return libraryCall(async () => {
@@ -313,7 +340,13 @@ export async function editChapter(
 
     const full = resolved.full;
 
-    const initial = applyEdit(full.content.html, full.content.text, mode, full.title);
+    const initial = applyEdit(
+      full.content.html,
+      full.content.text,
+      mode,
+      full.title,
+      CHAPTER_TERMS
+    );
     if ("result" in initial) return initial.result;
 
     let updatedHtml = initial.html;
@@ -346,7 +379,13 @@ export async function editChapter(
         if (!fresh) {
           return errorResult(`No Chapter has the id ${ref}; call get_book to see the Chapters.`);
         }
-        const reEdited = applyEdit(fresh.content.html, fresh.content.text, mode, fresh.title);
+        const reEdited = applyEdit(
+          fresh.content.html,
+          fresh.content.text,
+          mode,
+          fresh.title,
+          CHAPTER_TERMS
+        );
         if ("result" in reEdited) return reEdited.result;
         updatedHtml = reEdited.html;
         sentence = reEdited.sentence;

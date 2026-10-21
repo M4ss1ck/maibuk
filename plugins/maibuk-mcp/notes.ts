@@ -1,7 +1,8 @@
 /**
  * The Note tools for the maibuk-mcp Plugin: `list_notes` and `read_note`, plus
  * `write_note`, which creates a Note in a Book or as an Unfiled Note, or
- * replaces one Note's whole content, title, Tags, and Book. Pure-ish handlers
+ * replaces one Note's whole content, title, Tags, and Book, and `edit_note`,
+ * which shares `edit_chapter`'s find-and-replace and append. Pure-ish handlers
  * over a `PluginClient`, like `list_books`.
  */
 
@@ -20,7 +21,7 @@ import {
   titleOrUntitled,
 } from "./library";
 import { bookLine } from "./books";
-import type { WriteGuard } from "./edits";
+import { applyEdit, editModeOf, type EditModeArgs, type EditTerms, type WriteGuard } from "./edits";
 
 export interface ListNotesArgs {
   book?: string;
@@ -352,6 +353,93 @@ export async function writeNote(
           ).toISOString()}`,
         },
       ],
+    };
+  });
+}
+
+/** Arguments for `edit_note`: the Note to change plus one edit mode's fields. */
+export interface EditNoteArgs extends EditModeArgs {
+  note: string;
+}
+
+/** How `edit_note` names the row it changes in the shared edit sentences. */
+const NOTE_TERMS: EditTerms = { noun: "Note", readTool: "read_note" };
+
+/**
+ * Replaces one exact piece of a Note's text, or appends to its end, with the
+ * same rules as `edit_chapter`: the edit runs on the stored HTML, a Note in a
+ * Book takes that Book's Checkpoint first, an Unfiled Note takes none, and a
+ * conflict re-reads the Note and applies the edit to the fresh content.
+ */
+export async function editNote(
+  client: PluginClient,
+  args: EditNoteArgs,
+  writeGuard: WriteGuard
+): Promise<CallToolResult> {
+  const ref = (args.note ?? "").trim();
+  const mode = editModeOf(args, NOTE_TERMS);
+  if ("result" in mode) return mode.result;
+
+  return libraryCall(async () => {
+    const resolved = await resolveNote(client, ref, "edit_note");
+    if ("result" in resolved) return resolved.result;
+
+    const full = resolved.full;
+
+    const initial = applyEdit(full.content.html, full.content.text, mode, full.title, NOTE_TERMS);
+    if ("result" in initial) return initial.result;
+
+    let updatedHtml = initial.html;
+    const initialSentence = initial.sentence;
+
+    // After every refusal (validation, no match, several matches) and before
+    // the write: a refused write takes no Checkpoint and a failed Checkpoint
+    // leaves the content unchanged. An Unfiled Note belongs to no Book, so it
+    // takes none.
+    if (full.bookId !== null) {
+      const checkpoint = await writeGuard.ensureCheckpoint(full.bookId);
+      if (checkpoint !== null) return checkpoint;
+    }
+
+    let current = full;
+    let sentence = initialSentence;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await client.library.notes.update({
+          noteId: full.id,
+          content: { html: updatedHtml },
+          expectedUpdatedAt: current.updatedAt,
+        });
+        break;
+      } catch (error) {
+        if (!isConflict(error)) throw error;
+        if (attempt === 2) {
+          return errorResult("The author is typing in this Note right now; try again in a moment.");
+        }
+        const fresh = await client.library.notes.get({ noteId: full.id });
+        if (!fresh) {
+          return errorResult(`No Note has the id ${ref}; call list_notes to see the Notes.`);
+        }
+        const reEdited = applyEdit(
+          fresh.content.html,
+          fresh.content.text,
+          mode,
+          fresh.title,
+          NOTE_TERMS
+        );
+        if ("result" in reEdited) return reEdited.result;
+        updatedHtml = reEdited.html;
+        sentence = reEdited.sentence;
+        current = fresh;
+      }
+    }
+
+    // Re-read after the write: the host stamps Last Edited itself, and the
+    // Agent passes this value back as expectedLastEdited later.
+    const stored = await client.library.notes.get({ noteId: full.id });
+    const lastEdited = new Date((stored ?? current).updatedAt).toISOString();
+    return {
+      content: [{ type: "text", text: `${sentence}\nLast Edited: ${lastEdited}` }],
     };
   });
 }
