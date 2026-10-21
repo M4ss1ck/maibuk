@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { FocusScope, Overlay } from "react-aria";
 import { Dialog, RouterProvider } from "react-aria-components";
-import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
+import { ListBox, ListBoxItem, ListBoxSection } from "react-aria-components/ListBox";
 import { Outlet, useHref, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BarChart3, Feather, Menu, NotebookPen, Workflow } from "lucide-react";
@@ -37,7 +37,7 @@ function NavShortcut({ id, className }: { id: CommandId; className?: string }) {
 }
 
 export function Layout() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -138,15 +138,15 @@ export function Layout() {
     icon: <PluginIcon icon={entry.icon} className="w-5 h-5 shrink-0" />,
     shortcut: entry.commandId,
   }));
-  // The core destinations and the Plugin entries share one scrolling list.
+  // The core destinations and the Plugin entries share one scrolling section.
   const scrollNavItems = [...coreNavigationItems, ...pluginNavItems];
-  const navDependencies = [i18n.resolvedLanguage, location.pathname, pluginSidebarEntries];
 
   const sidebarContent = (mobile: boolean) => {
     const renderNavItem = (item: NavItem) => {
       const isCurrent = location.pathname === item.id;
       return (
         <ListBoxItem
+          key={item.id}
           id={item.id}
           href={item.id}
           textValue={item.label}
@@ -192,30 +192,28 @@ export function Layout() {
           data-tutorial={mobile ? undefined : "books.nav"}
         >
           <RouterProvider navigate={navigate} useHref={useHref}>
-            {/* Core destinations and Plugin entries: this list is the one that
-                scrolls when the seven-or-more rows outgrow the sidebar. It is a
-                single roving stop, so Tab and the arrows walk it in order. */}
+            {/* One list, two sections: the core destinations and Plugin entries
+                scroll, and Metrics and Settings stay pinned at the bottom. It is
+                one roving stop, so Tab and the arrows walk the whole column in
+                order, through Ephemeral and any Plugin entry to the pinned pair. */}
             <ListBox
               aria-label={t("nav.primary")}
-              items={scrollNavItems}
-              dependencies={navDependencies}
               selectionMode="none"
-              className="flex flex-col gap-2 min-h-0 shrink overflow-y-auto scrollbar-themed"
+              className="flex flex-col min-h-0"
             >
-              {renderNavItem}
-            </ListBox>
-            {/* Metrics and Settings: always the last two, pinned at the bottom of
-                the nav area so they stay visible above the theme switcher. A
-                separate list keeps them out of the scroll and keeps the arrows
-                in visual order (they never overlap the scrolling rows). */}
-            <ListBox
-              aria-label={t("nav.pinned")}
-              items={pinnedNavigationItems}
-              dependencies={navDependencies}
-              selectionMode="none"
-              className="flex flex-col gap-2 shrink-0 pt-2"
-            >
-              {renderNavItem}
+              <ListBoxSection
+                id="destinations"
+                className="flex flex-col gap-2 min-h-0 overflow-y-auto scrollbar-themed"
+              >
+                {scrollNavItems.map(renderNavItem)}
+              </ListBoxSection>
+              <ListBoxSection
+                id="pinned"
+                aria-label={t("nav.pinned")}
+                className="flex flex-col gap-2 shrink-0 pt-2"
+              >
+                {pinnedNavigationItems.map(renderNavItem)}
+              </ListBoxSection>
             </ListBox>
           </RouterProvider>
         </nav>
