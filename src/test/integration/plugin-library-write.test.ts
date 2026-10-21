@@ -73,6 +73,9 @@ function writeNote(input: {
   noteId: string;
   title?: string;
   content?: { text: string } | { html: string };
+  tags?: string[];
+  bookId?: string | null;
+  expectedUpdatedAt?: number;
 }) {
   const write = handlers["library.notes.update"];
   if (!write) throw new Error("library.notes.update is not wired");
@@ -114,6 +117,12 @@ function readChapters(bookId: string) {
   const read = handlers["library.chapters.list"];
   if (!read) throw new Error("library.chapters.list is not wired");
   return read({ bookId }, context);
+}
+
+function readNote(noteId: string) {
+  const read = handlers["library.notes.get"];
+  if (!read) throw new Error("library.notes.get is not wired");
+  return read({ noteId }, context);
 }
 
 async function seedBook(
@@ -445,6 +454,71 @@ describe("Plugin Library writes reach the open view", () => {
       writeChapterContent("ch-1", { html: "<p>Agent</p>" }, read?.updatedAt)
     ).resolves.toBeNull();
     expect(await chapterContent("ch-1")).toBe("<p>Agent</p>");
+  });
+
+  it("writes a Note when expectedUpdatedAt matches and nothing is pending", async () => {
+    await seedNote("note-1", "<p>Original</p>");
+
+    const read = await readNote("note-1");
+    await expect(
+      writeNote({
+        noteId: "note-1",
+        content: { html: "<p>Agent</p>" },
+        expectedUpdatedAt: read?.updatedAt,
+      })
+    ).resolves.toBeNull();
+    expect(await noteContent("note-1")).toBe("<p>Agent</p>");
+  });
+
+  it("a Note write computed from a stale read does not overwrite the author's typing", async () => {
+    // Freeze Date so the seed, the Plugin's read, and the Flush share one Unix
+    // second: the same second `updated_at` does not move, so only the stored
+    // content can reveal that the author typed.
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-01-15T12:00:00.000Z") });
+    try {
+      await seedNote("note-1", "<p>Original</p>");
+      await testDb.execute("UPDATE notes SET updated_at = ? WHERE id = 'note-1'", [
+        currentSecond(),
+      ]);
+      await useNoteStore.getState().loadNotes();
+      await useNoteStore.getState().loadNote("note-1");
+
+      const session = createEditSession<string>({
+        initial: "<p>Original</p>",
+        saveDelayMs: 60_000,
+        save: async (content) => {
+          const stored = await useNoteStore.getState().updateNote({ id: "note-1", content });
+          return stored?.content ?? content;
+        },
+      });
+      const off = registerPendingEditsFlush(() => session.flush());
+
+      try {
+        session.update("<p>Original</p><p>Mine</p>");
+        // The Plugin read before the author typed: the row still holds the old content.
+        const stale = await readNote("note-1");
+        expect(stale?.updatedAt).toBe(currentSecond() * 1000);
+        expect(await noteContent("note-1")).toBe("<p>Original</p>");
+
+        await expect(
+          writeNote({
+            noteId: "note-1",
+            content: { html: "<p>Original</p><p>Agent</p>" },
+            expectedUpdatedAt: stale?.updatedAt,
+          })
+        ).rejects.toMatchObject({ name: "PluginApiError", code: "conflict" });
+
+        // The flush ran before the refusal, so the row holds the author's typing,
+        // and the session still holds it too.
+        expect(await noteContent("note-1")).toBe("<p>Original</p><p>Mine</p>");
+        expect(session.getContent()).toBe("<p>Original</p><p>Mine</p>");
+        expect(useNoteStore.getState().currentNote?.content).toBe("<p>Original</p><p>Mine</p>");
+      } finally {
+        off();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("refuses the Plugin write end to end when the open editor's save fails", async () => {

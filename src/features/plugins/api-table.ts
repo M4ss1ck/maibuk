@@ -16,7 +16,7 @@ import { CHAPTER_STATUSES, CHAPTER_TYPES } from "@/features/chapters/types";
 import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.6";
+export const PLUGIN_API_VERSION = "0.1.7";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -302,6 +302,11 @@ export const PLUGIN_API_TABLE = [
       content: fragment.optional(),
       tags: z.array(z.string()).optional(),
       bookId: id.nullable().optional().describe("Null moves the Note to Unfiled."),
+      expectedUpdatedAt: timestamp
+        .optional()
+        .describe(
+          "Milliseconds since the Unix epoch: the updatedAt the Plugin read. When given, the write is refused with code conflict if the Note changed since, including by the author's typing flushed just before the write."
+        ),
     }),
     output: ok,
     ...libraryWrite,

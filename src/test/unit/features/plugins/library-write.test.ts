@@ -18,6 +18,7 @@ const {
   createPluginNote,
   fragmentToHtml,
   getPluginChapter,
+  getPluginNote,
   updatePluginChapterContent,
   updatePluginNote,
 } = await import("@/features/plugins/library");
@@ -267,5 +268,74 @@ describe("Plugin Library writes", () => {
     const row = await noteRow("n1");
     expect(row?.title).toBe("Renamed");
     expect(row?.word_count).toBe(1);
+  });
+
+  it("writes when expectedUpdatedAt matches the Note as read", async () => {
+    const read = await getPluginNote("n1");
+
+    await updatePluginNote({
+      noteId: "n1",
+      content: { text: "New" },
+      expectedUpdatedAt: read?.updatedAt,
+    });
+
+    expect((await noteRow("n1"))?.content).toBe("<p>New</p>");
+    expect(changes).toEqual([{ entity: "note", id: "n1", origin: "local", kind: "content" }]);
+  });
+
+  it("refuses a Note with a stale expectedUpdatedAt and writes nothing", async () => {
+    const read = await getPluginNote("n1");
+    // The content is untouched: only the Note's clock moved since the read.
+    await testDb.execute("UPDATE notes SET updated_at = ? WHERE id = 'n1'", [3001]);
+
+    await expect(
+      updatePluginNote({
+        noteId: "n1",
+        content: { text: "New" },
+        expectedUpdatedAt: read?.updatedAt,
+      })
+    ).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "conflict",
+      message: "Note n1 changed since it was read",
+    });
+
+    expect((await noteRow("n1"))?.content).toBe("<p>Body</p>");
+    expect(changes).toEqual([]);
+  });
+
+  it("refuses with conflict when the flush landed Note typing in the same second", async () => {
+    const read = await getPluginNote("n1");
+    // The Flush saves the author's typing but `updated_at` stays put, as it does
+    // when the read and the flush fall in one Unix second. Only the stored
+    // content reveals the change.
+    const off = registerPendingEditsFlush(() =>
+      testDb.execute("UPDATE notes SET content = ? WHERE id = 'n1'", ["<p>Typed</p>"])
+    );
+    try {
+      await expect(
+        updatePluginNote({
+          noteId: "n1",
+          content: { text: "New" },
+          expectedUpdatedAt: read?.updatedAt,
+        })
+      ).rejects.toMatchObject({
+        name: "PluginApiError",
+        code: "conflict",
+        message: "Note n1 changed since it was read",
+      });
+    } finally {
+      off();
+    }
+
+    expect((await noteRow("n1"))?.content).toBe("<p>Typed</p>");
+    expect(changes).toEqual([]);
+  });
+
+  it("leaves an unguarded Note write free to replace what is stored", async () => {
+    // No expectedUpdatedAt: the write is not optimistic, the same rule as a Chapter.
+    await updatePluginNote({ noteId: "n1", content: { text: "New" } });
+
+    expect((await noteRow("n1"))?.content).toBe("<p>New</p>");
   });
 });

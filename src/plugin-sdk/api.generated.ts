@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.6";
+export const PLUGIN_API_VERSION = "0.1.7";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -317,6 +317,8 @@ export interface PluginApiMethods {
       tags?: string[];
       /** Null moves the Note to Unfiled. */
       bookId?: string | null;
+      /** Milliseconds since the Unix epoch: the updatedAt the Plugin read. When given, the write is refused with code conflict if the Note changed since, including by the author's typing flushed just before the write. */
+      expectedUpdatedAt?: number;
     };
     output: null;
   };
