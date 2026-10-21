@@ -7,8 +7,16 @@
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import type { PluginClient } from "@/plugin-sdk";
+import { bookLine } from "./books";
 import { chapterCandidate } from "./chapters";
-import { errorResult, isConflict, libraryCall, resolveRef, titleOrUntitled } from "./library";
+import {
+  errorResult,
+  isConflict,
+  libraryCall,
+  resolveRef,
+  shortId,
+  titleOrUntitled,
+} from "./library";
 
 /** Arguments for `edit_chapter`. */
 export interface EditChapterArgs {
@@ -355,10 +363,13 @@ export async function editChapter(
   });
 }
 
-/** Arguments for `write_chapter`. */
+/** Arguments for `write_chapter`: replace mode names `chapter`, create mode names `book`. */
 export interface WriteChapterArgs {
-  chapter: string;
-  expectedLastEdited: string;
+  chapter?: string;
+  book?: string;
+  title?: string;
+  position?: number;
+  expectedLastEdited?: string;
   text?: string;
   html?: string;
 }
@@ -372,20 +383,126 @@ export async function writeChapter(
   args: WriteChapterArgs,
   writeGuard: WriteGuard
 ): Promise<CallToolResult> {
+  const hasChapter = args.chapter !== undefined;
+  const hasBook = args.book !== undefined;
+
+  if (hasChapter && hasBook) {
+    return errorResult(
+      "Give chapter to replace a Chapter's content, or book and title to create a new Chapter, not both."
+    );
+  }
+  if (!hasChapter && !hasBook) {
+    return errorResult(
+      "Give chapter to replace a Chapter's content, or book and title to create a new Chapter; you gave neither."
+    );
+  }
+
+  if (hasBook) {
+    if (args.expectedLastEdited !== undefined) {
+      return errorResult(
+        "expectedLastEdited is only for replacing a Chapter's content; to create, call write_chapter with book and title and no expectedLastEdited."
+      );
+    }
+    if (args.title === undefined || args.title.trim() === "") {
+      return errorResult(
+        "Give a title of at least one character; call write_chapter with book and a title to create."
+      );
+    }
+    if (args.title.trim().length > 500) {
+      return errorResult(
+        "A title can be at most 500 characters; call write_chapter with a shorter one."
+      );
+    }
+    if (args.text !== undefined && args.html !== undefined) {
+      return errorResult(
+        "Give the new content as text or as html, not both; call write_chapter again with only one of them."
+      );
+    }
+
+    const title = args.title.trim();
+    const ref = args.book as string;
+
+    return libraryCall(async () => {
+      const books = await client.library.books.list();
+      const allBookIds = books.map((book) => book.id);
+      const resolved = resolveRef({
+        ref: ref.trim(),
+        rows: books,
+        noun: "Book",
+        listTool: "list_books",
+        tool: "write_chapter",
+        line: (book) => bookLine(book, allBookIds),
+      });
+      if ("result" in resolved) return resolved.result;
+      const bookId = resolved.row.id;
+      const bookTitle = resolved.row.title;
+
+      const siblings = [...(await client.library.chapters.list({ bookId }))].sort(
+        (a, b) => a.order - b.order
+      );
+      const count = siblings.length;
+
+      if (args.position !== undefined) {
+        const position = args.position;
+        if (!Number.isInteger(position) || position < 1 || position > count + 1) {
+          return errorResult(
+            `Position must be a whole number from 1 to ${count + 1}; call get_book to see the Chapter order.`
+          );
+        }
+      }
+
+      // After all validation and the Book resolve, before the create: a
+      // refused create takes no Checkpoint, and a failed Checkpoint refuses it.
+      const checkpoint = await writeGuard.ensureCheckpoint(bookId);
+      if (checkpoint !== null) return checkpoint;
+
+      const { chapterId: newId } = await client.library.chapters.create({
+        bookId,
+        title,
+        ...(args.position === undefined ? {} : { position: (args.position as number) - 1 }),
+        ...(args.text !== undefined
+          ? { content: { text: args.text } }
+          : args.html !== undefined
+            ? { content: { html: args.html } }
+            : {}),
+      });
+
+      const after = [...(await client.library.chapters.list({ bookId }))].sort(
+        (a, b) => a.order - b.order
+      );
+      const afterIds = after.map((chapter) => chapter.id);
+      const position = after.findIndex((chapter) => chapter.id === newId) + 1;
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created Chapter ${titleOrUntitled(title)} as chapter ${position} of ${after.length} in Book ${titleOrUntitled(bookTitle)}; its id is ${shortId(newId, afterIds)}.`,
+          },
+        ],
+      };
+    });
+  }
+
   if ((args.text !== undefined) === (args.html !== undefined)) {
     return errorResult(
       "Give the new content as text or as html, not both; call read_chapter first to get Last Edited."
     );
   }
+  if (args.expectedLastEdited === undefined) {
+    return errorResult(
+      "Give expectedLastEdited from read_chapter; call read_chapter first to get Last Edited."
+    );
+  }
+  const expectedLastEdited = args.expectedLastEdited;
 
   return libraryCall(async () => {
-    const resolved = await resolveChapter(client, args.chapter.trim(), "write_chapter");
+    const resolved = await resolveChapter(client, (args.chapter as string).trim(), "write_chapter");
     if ("result" in resolved) return resolved.result;
 
     const full = resolved.full;
 
     const current = new Date(full.updatedAt).toISOString();
-    if (args.expectedLastEdited.trim() !== current) {
+    if (expectedLastEdited.trim() !== current) {
       return errorResult(changedSinceMessage(current));
     }
 

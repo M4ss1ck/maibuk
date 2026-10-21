@@ -179,10 +179,25 @@ export function buildMcpServer(
       {
         title: "Write chapter",
         description:
-          "Replace a Chapter's whole content with text (the host makes paragraphs) or html (the host sanitizes it). Needs expectedLastEdited from read_chapter and is refused if the Chapter changed since. Prefer edit_chapter for small changes.",
+          "Replace a Chapter's whole content with chapter and expectedLastEdited from read_chapter, or create a new Chapter with book, title, and optional position and content, as text (the host makes paragraphs) or html (the host sanitizes it). A replace is refused if the Chapter changed since it was read; prefer edit_chapter for small changes.",
         inputSchema: z.object({
-          chapter: z.string().min(8),
-          expectedLastEdited: z.string(),
+          chapter: z
+            .string()
+            .min(8)
+            .optional()
+            .describe("The Chapter to replace; replace mode needs this with expectedLastEdited."),
+          book: z
+            .string()
+            .optional()
+            .describe("The Book to create in; create mode needs this with title."),
+          title: z.string().optional().describe("The new Chapter's title; create mode needs this."),
+          position: z
+            .number()
+            .optional()
+            .describe(
+              "The new Chapter's 1-based position among its Book's Chapters, the numbering get_book prints; omitted appends."
+            ),
+          expectedLastEdited: z.string().optional(),
           text: z.string().optional(),
           html: z.string().optional(),
         }),

@@ -699,6 +699,356 @@ describe("write_chapter", () => {
   });
 });
 
+describe("write_chapter create mode", () => {
+  function makeCBook(id: string, title = `Title ${id}`) {
+    return {
+      id,
+      title,
+      subtitle: null,
+      authorName: "Author",
+      genre: null,
+      language: "en",
+      wordCount: 100,
+      targetWordCount: null,
+      status: "draft" as const,
+      updatedAt: 1000,
+    };
+  }
+
+  function makeCChapter(
+    id: string,
+    bookId: string,
+    order: number,
+    title: string,
+    content = { text: "Body.", html: "<p>Body.</p>" }
+  ) {
+    return {
+      id,
+      bookId,
+      title,
+      order,
+      parentId: null,
+      chapterType: "chapter" as const,
+      wordCount: 10,
+      status: "draft" as const,
+      updatedAt: Date.UTC(2026, 0, 1) + order,
+      content,
+    };
+  }
+
+  /** One Book with three Chapters, in order, as `get_book` prints them. */
+  function threeChapterLibrary() {
+    const books = [makeCBook("bookalpha1", "The Book")];
+    const chapters = [
+      makeCChapter("chapteralpha", "bookalpha1", 0, "Alpha"),
+      makeCChapter("chapterbravo", "bookalpha1", 1, "Bravo"),
+      makeCChapter("chaptercharl", "bookalpha1", 2, "Charlie"),
+    ];
+    return { books, chapters };
+  }
+
+  /** The Book's Chapter titles in stored order, as a fresh `get_book` reports them. */
+  async function orderTitles(host: any, key: string): Promise<string[]> {
+    const answer = await callTool(host, key, "get_book", { book: "bookalpha1" });
+    return textOf(answer)
+      .split("\n")
+      .filter((line) => /^\d+\. /.test(line))
+      .map((line) => line.split("  ")[1]);
+  }
+
+  async function bookText(host: any, key: string): Promise<string> {
+    const answer = await callTool(host, key, "get_book", { book: "bookalpha1" });
+    return textOf(answer);
+  }
+
+  /** The created id at the end of the success sentence. */
+  function createdId(text: string): string {
+    const match = /its id is ([A-Za-z0-9-]+)\./.exec(text);
+    if (!match) throw new Error(`No created id in ${JSON.stringify(text)}`);
+    return match[1];
+  }
+
+  it("appends when position is omitted", async () => {
+    const { books, chapters } = threeChapterLibrary();
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "write_chapter", {
+        book: "bookalpha1",
+        title: "Delta",
+      });
+      expect(isError(answer)).toBe(false);
+      const sid = createdId(textOf(answer));
+      expect(textOf(answer)).toBe(
+        `Created Chapter Delta as chapter 4 of 4 in Book The Book; its id is ${sid}.`
+      );
+      expect(await orderTitles(host, key)).toEqual(["Alpha", "Bravo", "Charlie", "Delta"]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates at position 1, first", async () => {
+    const { books, chapters } = threeChapterLibrary();
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "write_chapter", {
+        book: "bookalpha1",
+        title: "Opening",
+        position: 1,
+      });
+      expect(isError(answer)).toBe(false);
+      expect(textOf(answer)).toContain(
+        "Created Chapter Opening as chapter 1 of 4 in Book The Book;"
+      );
+      expect(await orderTitles(host, key)).toEqual(["Opening", "Alpha", "Bravo", "Charlie"]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates at a middle position", async () => {
+    const { books, chapters } = threeChapterLibrary();
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "write_chapter", {
+        book: "bookalpha1",
+        title: "Middle",
+        position: 2,
+      });
+      expect(isError(answer)).toBe(false);
+      expect(textOf(answer)).toContain(
+        "Created Chapter Middle as chapter 2 of 4 in Book The Book;"
+      );
+      expect(await orderTitles(host, key)).toEqual(["Alpha", "Middle", "Bravo", "Charlie"]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates at N+1, last", async () => {
+    const { books, chapters } = threeChapterLibrary();
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "write_chapter", {
+        book: "bookalpha1",
+        title: "Finale",
+        position: 4,
+      });
+      expect(isError(answer)).toBe(false);
+      expect(textOf(answer)).toContain(
+        "Created Chapter Finale as chapter 4 of 4 in Book The Book;"
+      );
+      expect(await orderTitles(host, key)).toEqual(["Alpha", "Bravo", "Charlie", "Finale"]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates with text as the paragraphs replace mode would make", async () => {
+    const { books, chapters } = threeChapterLibrary();
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "write_chapter", {
+        book: "bookalpha1",
+        title: "Typed",
+        text: "One\n\nTwo",
+      });
+      expect(isError(answer)).toBe(false);
+      const reread = await callTool(host, key, "read_chapter", {
+        chapter: createdId(textOf(answer)),
+        format: "html",
+      });
+      expect(isError(reread)).toBe(false);
+      expect(reread.json.result.content[1].text).toBe("<p>One</p><p>Two</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates with html as given", async () => {
+    const { books, chapters } = threeChapterLibrary();
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "write_chapter", {
+        book: "bookalpha1",
+        title: "Marked",
+        html: "<h2>Scene</h2><p>Body</p>",
+      });
+      expect(isError(answer)).toBe(false);
+      const reread = await callTool(host, key, "read_chapter", {
+        chapter: createdId(textOf(answer)),
+        format: "html",
+      });
+      expect(isError(reread)).toBe(false);
+      expect(reread.json.result.content[1].text).toBe("<h2>Scene</h2><p>Body</p>");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("creates with no content as an empty Chapter", async () => {
+    const { books, chapters } = threeChapterLibrary();
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "write_chapter", {
+        book: "bookalpha1",
+        title: "Empty",
+      });
+      expect(isError(answer)).toBe(false);
+      const reread = await callTool(host, key, "read_chapter", {
+        chapter: createdId(textOf(answer)),
+      });
+      expect(isError(reread)).toBe(false);
+      expect(reread.json.result.content[1].text).toBe("");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("the returned short id resolves with read_chapter", async () => {
+    const { books, chapters } = threeChapterLibrary();
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const answer = await callTool(host, key, "write_chapter", {
+        book: "bookalpha1",
+        title: "Found",
+        text: "Hello.",
+      });
+      expect(isError(answer)).toBe(false);
+      const reread = await callTool(host, key, "read_chapter", {
+        chapter: createdId(textOf(answer)),
+      });
+      expect(isError(reread)).toBe(false);
+      expect(reread.json.result.content[0].text).toContain("Chapter ");
+      expect(reread.json.result.content[0].text).toContain("Found");
+      expect(reread.json.result.content[1].text).toBe("Hello.");
+    } finally {
+      host.stop();
+    }
+  });
+
+  it.each([
+    [
+      "both book and chapter",
+      { chapter: "chapteralpha", book: "bookalpha1", title: "X" },
+      "Give chapter to replace a Chapter's content, or book and title to create a new Chapter, not both.",
+    ],
+    [
+      "neither book nor chapter",
+      { title: "X" },
+      "Give chapter to replace a Chapter's content, or book and title to create a new Chapter; you gave neither.",
+    ],
+    [
+      "create with expectedLastEdited",
+      { book: "bookalpha1", title: "X", expectedLastEdited: "2026-01-01T00:00:00.000Z" },
+      "expectedLastEdited is only for replacing a Chapter's content",
+    ],
+    ["create without a title", { book: "bookalpha1" }, "Give a title of at least one character"],
+    [
+      "create with a blank title",
+      { book: "bookalpha1", title: "   " },
+      "Give a title of at least one character",
+    ],
+    [
+      "create with a title over 500 characters",
+      { book: "bookalpha1", title: "x".repeat(501) },
+      "A title can be at most 500 characters",
+    ],
+    [
+      "create with both text and html",
+      { book: "bookalpha1", title: "X", text: "a", html: "<p>a</p>" },
+      "Give the new content as text or as html, not both",
+    ],
+    [
+      "create at position 0",
+      { book: "bookalpha1", title: "X", position: 0 },
+      "Position must be a whole number from 1 to 4; call get_book to see the Chapter order.",
+    ],
+    [
+      "create past N+1",
+      { book: "bookalpha1", title: "X", position: 5 },
+      "Position must be a whole number from 1 to 4; call get_book to see the Chapter order.",
+    ],
+    [
+      "create at a non-integer position",
+      { book: "bookalpha1", title: "X", position: 2.5 },
+      "Position must be a whole number from 1 to 4; call get_book to see the Chapter order.",
+    ],
+    [
+      "replace without expectedLastEdited",
+      { chapter: "chapteralpha", html: "<p>new</p>" },
+      "Give expectedLastEdited from read_chapter; call read_chapter first to get Last Edited.",
+    ],
+    [
+      "unknown book",
+      { book: "zzzzzzzz", title: "X" },
+      "No Book has the id zzzzzzzz; call list_books to see the Books.",
+    ],
+  ])("refuses %s, leaving the Library and Checkpoints alone", async (_case, args, message) => {
+    const { books, chapters } = threeChapterLibrary();
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      const before = await bookText(host, key);
+      const beforeRows = JSON.stringify(chapters);
+      const answer = await callTool(host, key, "write_chapter", args);
+      expect(isError(answer)).toBe(true);
+      expect(textOf(answer)).toContain(message);
+      expect(await bookText(host, key)).toBe(before);
+      expect(JSON.stringify(chapters)).toBe(beforeRows);
+      expect(host.checkpoints).toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("first create checkpoints once; a following manage_chapter or write_chapter takes none", async () => {
+    const { books, chapters } = threeChapterLibrary();
+    const { host, key } = await connect({ library: { books, chapters } as any });
+    try {
+      await mcpRequest(host, key, initializeBody());
+      const created = await mcpRequest(
+        host,
+        key,
+        toolsCall("write_chapter", {
+          book: "bookalpha1",
+          title: "Delta",
+        })
+      );
+      expect(created.json?.result?.isError).not.toBe(true);
+      expect(host.checkpoints).toHaveLength(1);
+      expect(host.checkpoints[0].bookId).toBe("bookalpha1");
+
+      const newId = createdId(created.json.result.content[0].text);
+      const managed = await mcpRequest(
+        host,
+        key,
+        toolsCall("manage_chapter", { chapter: newId, title: "Renamed" }, 3)
+      );
+      expect(managed.json?.result?.isError).not.toBe(true);
+
+      const reread = await mcpRequest(host, key, toolsCall("read_chapter", { chapter: newId }, 4));
+      const lastEdited = (reread.json.result.content[0].text as string)
+        .split("\n")
+        .find((entry: string) => entry.startsWith("Last Edited: "))!
+        .replace("Last Edited: ", "");
+      const replaced = await mcpRequest(
+        host,
+        key,
+        toolsCall(
+          "write_chapter",
+          { chapter: newId, expectedLastEdited: lastEdited, html: "<p>new</p>" },
+          5
+        )
+      );
+      expect(replaced.json?.result?.isError).not.toBe(true);
+      expect(host.checkpoints).toHaveLength(1);
+      expect(await orderTitles(host, key)).toEqual(["Alpha", "Bravo", "Charlie", "Renamed"]);
+    } finally {
+      host.stop();
+    }
+  });
+});
+
 describe("edit_chapter read-only race", () => {
   const READ_ONLY_TEXT =
     "The author made this Plugin read-only, so it cannot change the Library; use the read tools.";
