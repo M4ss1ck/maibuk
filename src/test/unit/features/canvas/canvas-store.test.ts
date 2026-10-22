@@ -28,6 +28,57 @@ const textNode = (id: string, x = 0) => ({
   position: { x, y: 0 },
 });
 
+type SelectFn = (sql: string, params?: unknown[]) => Promise<unknown>;
+
+function originalSelect(): SelectFn {
+  return testDb.select.bind(testDb) as SelectFn;
+}
+
+/** The store's full-list read, as opposed to the single-row reads write paths make. */
+function isCanvasListRead(sql: string): boolean {
+  return sql.includes("FROM canvases ORDER BY");
+}
+
+/** Hold the first canvases list SELECT open, after it has captured its rows. */
+function holdFirstCanvasRead(): { release: () => void; captured: Promise<void> } {
+  const original = originalSelect();
+  let held = false;
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let markCaptured = () => {};
+  const captured = new Promise<void>((resolve) => {
+    markCaptured = resolve;
+  });
+
+  testDb.select = async <T = unknown[]>(sql: string, params?: unknown[]): Promise<T> => {
+    if (!held && isCanvasListRead(sql)) {
+      held = true;
+      const rows = (await original(sql, params)) as T;
+      markCaptured();
+      await gate;
+      return rows;
+    }
+    return (await original(sql, params)) as T;
+  };
+
+  return { release, captured };
+}
+
+/** Record every SELECT that reads the whole canvases list. */
+function countCanvasListSelects(): string[] {
+  const original = originalSelect();
+  const calls: string[] = [];
+
+  testDb.select = async <T = unknown[]>(sql: string, params?: unknown[]): Promise<T> => {
+    if (isCanvasListRead(sql)) calls.push(sql);
+    return (await original(sql, params)) as T;
+  };
+
+  return calls;
+}
+
 describe("useCanvasStore", () => {
   beforeEach(async () => {
     testDb = await createTestDatabase();
@@ -581,6 +632,69 @@ describe("useCanvasStore", () => {
       past: [],
       future: [],
       liveBaseDoc: null,
+    });
+  });
+
+  describe("stale reads", () => {
+    it("does not let an older read finishing last replace newer rows", async () => {
+      const raw = JSON.stringify(createDefaultCanvasDoc());
+      await insertCanvas("canvas", raw, { title: "Old" });
+
+      const held = holdFirstCanvasRead();
+      const loading = useCanvasStore.getState().loadCanvases();
+      await held.captured;
+
+      await testDb.execute("UPDATE canvases SET title = ? WHERE id = ?", ["New", "canvas"]);
+      // A newer read applies first; the held one must not replace it.
+      await useCanvasStore.getState().refreshCanvases();
+
+      held.release();
+      await loading;
+
+      expect(useCanvasStore.getState().canvases.map((canvas) => canvas.title)).toEqual(["New"]);
+    });
+
+    it("does not undo a store write made during an in-flight load", async () => {
+      const raw = JSON.stringify(createDefaultCanvasDoc());
+      await insertCanvas("canvas", raw, { title: "Draft" });
+
+      const held = holdFirstCanvasRead();
+      const loading = useCanvasStore.getState().loadCanvases();
+      await held.captured;
+
+      await useCanvasStore.getState().updateCanvas("canvas", { title: "Edited" });
+      held.release();
+      await loading;
+
+      const stored = useCanvasStore.getState().canvases.find((canvas) => canvas.id === "canvas");
+      expect(stored?.title).toBe("Edited");
+    });
+
+    it("keeps the applied canvases array when a stale read is dropped", async () => {
+      const raw = JSON.stringify(createDefaultCanvasDoc());
+      await insertCanvas("canvas", raw, { title: "Old" });
+
+      const held = holdFirstCanvasRead();
+      const loading = useCanvasStore.getState().loadCanvases();
+      await held.captured;
+
+      await testDb.execute("UPDATE canvases SET title = ? WHERE id = ?", ["New", "canvas"]);
+      await useCanvasStore.getState().refreshCanvases();
+      const applied = useCanvasStore.getState().canvases;
+
+      held.release();
+      await loading;
+
+      expect(useCanvasStore.getState().canvases).toBe(applied);
+      expect(useCanvasStore.getState().galleryLoading).toBe(false);
+    });
+
+    it("issues exactly one canvases SELECT per load", async () => {
+      const calls = countCanvasListSelects();
+
+      await useCanvasStore.getState().loadCanvases();
+
+      expect(calls).toHaveLength(1);
     });
   });
 });

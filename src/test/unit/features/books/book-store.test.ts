@@ -16,6 +16,57 @@ vi.mock("../../../../lib/db", () => ({
 // Import store AFTER mock is set up (vi.mock is hoisted automatically)
 const { useBookStore } = await import("@/features/books/store");
 
+type SelectFn = (sql: string, params?: unknown[]) => Promise<unknown>;
+
+function originalSelect(): SelectFn {
+  return testDb.select.bind(testDb) as SelectFn;
+}
+
+/** The store's full-list read, as opposed to the single-row reads write paths make. */
+function isBooksListRead(sql: string): boolean {
+  return sql.includes("FROM books ORDER BY last_opened_at");
+}
+
+/** Hold the first books list SELECT open, after it has captured its rows. */
+function holdFirstBooksRead(): { release: () => void; captured: Promise<void> } {
+  const original = originalSelect();
+  let held = false;
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let markCaptured = () => {};
+  const captured = new Promise<void>((resolve) => {
+    markCaptured = resolve;
+  });
+
+  testDb.select = async <T = unknown[]>(sql: string, params?: unknown[]): Promise<T> => {
+    if (!held && isBooksListRead(sql)) {
+      held = true;
+      const rows = (await original(sql, params)) as T;
+      markCaptured();
+      await gate;
+      return rows;
+    }
+    return (await original(sql, params)) as T;
+  };
+
+  return { release, captured };
+}
+
+/** Record every SELECT that reads the whole books list. */
+function countBooksListSelects(): string[] {
+  const original = originalSelect();
+  const calls: string[] = [];
+
+  testDb.select = async <T = unknown[]>(sql: string, params?: unknown[]): Promise<T> => {
+    if (isBooksListRead(sql)) calls.push(sql);
+    return (await original(sql, params)) as T;
+  };
+
+  return calls;
+}
+
 describe("useBookStore", () => {
   beforeEach(async () => {
     testDb = await createTestDatabase();
@@ -381,6 +432,76 @@ describe("useBookStore", () => {
       await useBookStore.getState().updateWordCount(created.id, 1234);
 
       expect(useBookStore.getState().currentBook?.wordCount).toBe(1234);
+    });
+  });
+
+  describe("stale reads", () => {
+    it("does not let an older read finishing last replace newer rows", async () => {
+      const book = await useBookStore.getState().createBook({
+        title: "Old",
+        authorName: "Author",
+      });
+
+      const held = holdFirstBooksRead();
+      const loading = useBookStore.getState().loadBooks();
+      await held.captured;
+
+      await testDb.execute("UPDATE books SET title = ? WHERE id = ?", ["New", book.id]);
+      // A newer read applies first; the held one must not replace it.
+      await useBookStore.getState().refreshBooks();
+
+      held.release();
+      await loading;
+
+      expect(useBookStore.getState().books.map((b) => b.title)).toEqual(["New"]);
+    });
+
+    it("does not undo a store write made during an in-flight load", async () => {
+      const book = await useBookStore.getState().createBook({
+        title: "Draft",
+        authorName: "Author",
+      });
+
+      const held = holdFirstBooksRead();
+      const loading = useBookStore.getState().loadBooks();
+      await held.captured;
+
+      await useBookStore.getState().updateBook(book.id, { title: "Edited" });
+      held.release();
+      await loading;
+
+      const stored = useBookStore.getState().books.find((b) => b.id === book.id);
+      expect(stored?.title).toBe("Edited");
+    });
+
+    it("keeps the applied books array when a stale read is dropped", async () => {
+      const book = await useBookStore.getState().createBook({
+        title: "Old",
+        authorName: "Author",
+      });
+
+      const held = holdFirstBooksRead();
+      const loading = useBookStore.getState().loadBooks();
+      await held.captured;
+
+      await testDb.execute("UPDATE books SET title = ? WHERE id = ?", ["New", book.id]);
+      await useBookStore.getState().refreshBooks();
+      const applied = useBookStore.getState().books;
+
+      held.release();
+      await loading;
+
+      expect(useBookStore.getState().books).toBe(applied);
+      expect(useBookStore.getState().isLoading).toBe(false);
+    });
+
+    it("issues exactly one books SELECT per load", async () => {
+      await useBookStore.getState().createBook({ title: "A", authorName: "Author" });
+      const calls = countBooksListSelects();
+
+      await useBookStore.getState().loadBooks();
+
+      expect(calls).toHaveLength(1);
     });
   });
 });
