@@ -1,0 +1,40 @@
+{
+  "manifestVersion": 1,
+  "id": "fixture-stopped",
+  "name": "Stopped Fixture",
+  "description": "The E2E fixture-stopped Plugin (issue #618): one on-demand Plugin with a sidebar entry and one page, plus a Command that makes its Worker throw an uncaught error. The host stops it with reason crashed, so the lane can prove the Stopped Plugin surfaces: the marked and renamed sidebar entry with its tooltip, the page panel that replaces the body with the reason, Try again, and Plugin settings. It is deterministic and never shipped in a product bundle.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web"],
+  "lifecycle": "on-demand",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": [],
+    "optional": []
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "open",
+        "label": "Open stopped fixture",
+        "contexts": ["global"],
+        "navigates": true
+      },
+      {
+        "id": "crash",
+        "label": "Crash stopped fixture",
+        "contexts": ["global"]
+      }
+    ],
+    "pages": [
+      {
+        "id": "report",
+        "title": "Stopped fixture report",
+        "command": "open"
+      }
+    ],
+    "sidebarEntries": [{ "page": "report", "icon": "book-open" }]
+  }
+}

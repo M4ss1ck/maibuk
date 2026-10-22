@@ -150,6 +150,7 @@ function createFakeLifecycle() {
     },
     state: (pluginId) => states.get(pluginId) ?? null,
     runtime: () => null,
+    launchRefusal: () => null,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {

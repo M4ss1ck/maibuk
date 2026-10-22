@@ -5,6 +5,9 @@
  * generic sentence. A refusal's own message is shown as it is.
  */
 
+import { PLUGIN_STOP_MESSAGE_KEYS } from "@/features/plugins/stop-messages";
+import type { StoppedPluginReason } from "@/features/plugins/stopped";
+
 /** A translation function narrowed to the keys this module uses. */
 export type StartupErrorTranslate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -34,4 +37,18 @@ export function pluginStartupErrorText(value: string, t: StartupErrorTranslate):
   if (suffix !== undefined) return t(`plugins.startupError.${suffix}`);
   // A message is shown as it is; a code with no copy falls back to the generic.
   return STARTUP_ERROR_CODES.has(value) ? t("plugins.startupError.generic") : value;
+}
+
+/**
+ * The reason a Stopped Plugin shows on its page, its sidebar entry, and its
+ * Settings row (#618), from the stop-message and startup-error copy.
+ */
+export function pluginStoppedReasonText(
+  reason: StoppedPluginReason,
+  name: string,
+  t: StartupErrorTranslate
+): string {
+  if (reason.kind === "limit") return t(PLUGIN_STOP_MESSAGE_KEYS[reason.reason], { name });
+  if (reason.kind === "review") return t("plugins.startupError.hashMismatch");
+  return pluginStartupErrorText(reason.startupError, t);
 }

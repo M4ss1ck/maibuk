@@ -17,6 +17,8 @@ import { Button, Switch } from "@/components/ui";
 import { MultiSelectFilter } from "@/components/ui/MultiSelectFilter";
 import { toast } from "@/components/ui/Toast";
 import { hasMissingRequired } from "@/features/plugins/approvals";
+import { readStoppedPlugin } from "@/features/plugins/stopped";
+import { useInstalledPluginLifecycle, usePluginLifecycleRevision } from "@/hooks";
 import {
   PLUGIN_FILTER_CATEGORIES,
   type PluginFilterCategory,
@@ -57,6 +59,8 @@ import { useShortcuts } from "@/lib/shortcuts";
 export function PluginsSection() {
   const { t } = useTranslation();
   const plugins = usePluginManagementStore((state) => state.plugins);
+  const pluginLifecycle = useInstalledPluginLifecycle();
+  usePluginLifecycleRevision(pluginLifecycle);
   const pluginDevelopmentMode = useSettingsStore((state) => state.pluginDevelopmentMode);
   const setPluginDevelopmentMode = useSettingsStore((state) => state.setPluginDevelopmentMode);
   const owners = useSyncExternalStore(
@@ -165,7 +169,11 @@ export function PluginsSection() {
       (entry) => entry.installed && entry.duplicateFolders.length === 0 && !entry.unsupported
     ) ?? null;
   const reinstallable = entries.find((entry) => !entry.installed && entry.builtIn) ?? null;
-  const restartable = entries.find((entry) => entry.stopped !== null) ?? null;
+  // The first row whose Try again shows: the same Stopped Plugin read the row uses.
+  const restartable =
+    entries.find(
+      (entry) => readStoppedPlugin(pluginLifecycle, entry.pluginId)?.action === "tryAgain"
+    ) ?? null;
   const deletable =
     entries.find(
       (entry) => !entry.installed && entry.removed && (dataSizes[entry.pluginId] ?? 0) > 0

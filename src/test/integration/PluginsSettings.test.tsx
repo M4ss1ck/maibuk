@@ -609,6 +609,7 @@ function installReadyLifecycle(pluginId: string, runtime: PluginRuntime): void {
     stop: () => {},
     state: (id: string) => (id === pluginId ? ready : null),
     runtime: (id: string) => (id === pluginId ? runtime : null),
+    launchRefusal: () => null,
     subscribe: () => () => {},
     dispose: () => {},
   } as unknown as PluginLifecycle;

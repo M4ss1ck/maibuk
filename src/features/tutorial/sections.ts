@@ -236,6 +236,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
     "decided, not built: a Plugin toolbar button, and the Tutorial Library has no Plugin to point at",
   "Inactive Binding":
     "shown only as a badge inside the Shortcut Editor, which the Tutorial does not open",
+  "Stopped Plugin":
+    "a failure state of a Plugin, and the Tutorial Library has no Plugin to point at",
   "Retained Plugin Preference":
     "device-local settings inside the Shortcut Editor, which the Tutorial does not open",
   "Host-rendered UI":

@@ -6,7 +6,8 @@
  *
  * `main.tsx` seeds the registry from it before the first render, keeping only
  * Plugins whose approval is enabled now. The lifecycle drops what the scan did
- * not replace once it settles, and from then on saves the live entries on
+ * not replace once it settles (an enabled Plugin it refused keeps its entry,
+ * marked Stopped), and from then on saves the live entries on
  * every contribution change (enable, disable, language change). A snapshot is
  * device-local, like the approvals, and a bad one seeds nothing.
  *
@@ -148,12 +149,14 @@ export function seedPluginSidebarFromSnapshot(): void {
 
 /**
  * Saves the live entries now and after every contribution change; returns the
- * stop. The lifecycle starts it once the scan settled, so a seeded entry is
- * never saved back, and stops it before a dispose clears the registry.
+ * stop. The lifecycle starts it once the scan settled, when the only seeded
+ * entries left belong to enabled Plugins the scan refused: those are saved
+ * back, so a refusal that recurs keeps its marked entry next launch (#618).
+ * It stops before a dispose clears the registry.
  */
 export function persistPluginSidebarSnapshot(): () => void {
   const save = (): void => {
-    writePluginSidebarSnapshot(getPluginSidebarEntries().filter((entry) => entry.seeded !== true));
+    writePluginSidebarSnapshot(getPluginSidebarEntries());
   };
   save();
   return onPluginContributionsChange(save);

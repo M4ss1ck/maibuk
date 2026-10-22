@@ -3,6 +3,7 @@ import {
   getPluginLifecycle,
   onPluginLifecycleInstalled,
 } from "@/features/plugins/lifecycle-instance";
+import { readStoppedPlugin, type StoppedPlugin } from "@/features/plugins/stopped";
 import type { PluginLifecycle } from "@/features/plugins/types";
 
 /**
@@ -61,4 +62,15 @@ export function usePluginSurface(
     lifecycle.surfaceReached(pluginId, surface);
     return () => lifecycle.surfaceLeft(pluginId, surface);
   }, [lifecycle, pluginId, surface, enabled]);
+}
+
+/**
+ * The Stopped Plugin read for one Plugin (#618), re-read on every lifecycle
+ * change and when the launch scan settles.
+ */
+export function useStoppedPlugin(pluginId: string): StoppedPlugin | null {
+  const lifecycle = useInstalledPluginLifecycle();
+  usePluginLifecycleRevision(lifecycle);
+  usePluginLaunchScanned(lifecycle);
+  return readStoppedPlugin(lifecycle, pluginId);
 }

@@ -2301,6 +2301,19 @@
         "kb": "{{value}} KB",
         "mb": "{{value}} MB"
       }
+    },
+    "stoppedPanel": {
+      "title": "{{name}} se detuvo",
+      "tryAgain": "Reintentar",
+      "starting": "Iniciando…",
+      "pluginSettings": "Ajustes del Plugin",
+      "reviewInSettings": "Revisar en Ajustes",
+      "notResponding": "{{name}} no responde. Esperando su respuesta…",
+      "sidebarName": "{{title}}, detenido. {{reason}}",
+      "commands": {
+        "tryAgain": "Intentar iniciar este Plugin de nuevo",
+        "openSettings": "Abrir los ajustes de este Plugin"
+      }
     }
   }
 }

@@ -79,6 +79,7 @@ const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
     output: "fixture-frame",
     copyFolders: ["ui"],
   },
+  { source: "fixture-stopped", manifest: "manifest.json", output: "fixture-stopped" },
   {
     source: "plugins/maibuk-echoes",
     repoSource: true,

@@ -174,11 +174,13 @@ export function seedPluginSidebarEntries(entries: readonly PluginSidebarEntryDef
   notifyContributionsChange();
 }
 
-/** Removes every seeded record the scan did not replace. */
-export function dropSeededPluginContributions(): void {
+/** Removes every seeded record the scan did not replace, except the ones `keep` names. */
+export function dropSeededPluginContributions(
+  keep: (pluginId: string) => boolean = () => false
+): void {
   let dropped = false;
   for (const [pluginId, record] of contributions) {
-    if (record.seeded !== true) continue;
+    if (record.seeded !== true || keep(pluginId)) continue;
     contributions.delete(pluginId);
     dropped = true;
   }

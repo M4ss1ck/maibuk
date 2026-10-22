@@ -1,6 +1,6 @@
 import { render, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 import { mockVirtualizerLayout } from "@/test/support/virtualizer-layout";
@@ -160,6 +160,13 @@ import type { CommandId } from "@/lib/shortcut-registry";
 const { runCommand } = await import("@/lib/command-runner");
 const { resetSyncEngineForTests } = await import("@/features/sync/sync-engine");
 const { resetAutoSyncForTests } = await import("@/features/sync/auto-sync");
+const { registerPluginContributions } = await import("@/features/plugins/contributions");
+const { readPluginManifest } = await import("@/features/plugins/runtime");
+const { removePluginApproval, savePluginApproval } = await import("@/features/plugins/approvals");
+const { setPluginLifecycleInstance } = await import("@/features/plugins/lifecycle-instance");
+const { useSettingsRevealStore } = await import("@/features/settings/settings-reveal-store");
+const { pluginFolder } = await import("@/test/support/plugin-fixtures");
+import type { PluginLifecycle } from "@/features/plugins/types";
 
 let path = "/";
 // Every distinct route the app has moved to, in order. A run that navigates
@@ -230,6 +237,7 @@ const SKIP: Partial<Record<CommandId, string>> = {
   "noteItem.delete": "destructive: deletes the seeded note",
   "canvasNode.delete": "destructive: deletes canvas content",
   "editor.spellCheck": "toggles the spellcheck worker, which jsdom does not have",
+  "pluginPage.tryAgain": "starts the Plugin again, a side effect no test may trigger",
 };
 
 // A goto Command on its own screen runs but stays: nothing to compare.
@@ -250,6 +258,72 @@ const IN_PLACE: Partial<Record<CommandId, (screen: string) => string | null>> = 
   "notes.newNote": (screen) =>
     screen.startsWith("/notes/") ? "swaps the open note without navigating" : null,
 };
+
+const STOPPED_PLUGIN_PAGE = "/plugin/sample/report";
+
+// Commands safe on every other screen but not this one: on a Stopped Plugin's
+// page the last focus stop is the panel's Plugin settings button, so an Enter
+// or Space press from a focus Command would navigate.
+const SKIP_ON_SCREEN: Partial<Record<string, Partial<Record<CommandId, string>>>> = {
+  [STOPPED_PLUGIN_PAGE]: {
+    "focus.activate": "presses the focused Plugin settings button, which navigates",
+    "focus.toggle": "presses Space on the focused Plugin settings button, which navigates",
+  },
+};
+
+/**
+ * A Stopped Plugin's page (#618): the registered page, the enabled approval,
+ * and a lifecycle whose `sample` entry stopped on a crash. Its panel binds
+ * `pluginPage.openSettings`, the navigating Command no other screen mounts.
+ * Returns the undo, for `onTestFinished`.
+ */
+function installStoppedPluginPage(): () => void {
+  const folder = pluginFolder(
+    {},
+    {
+      id: "sample",
+      name: "Sample",
+      platforms: ["desktop", "web"],
+      contributes: {
+        commands: [{ id: "open", label: "Open report", contexts: ["global"], navigates: true }],
+        pages: [{ id: "report", title: "Sample report", command: "open" }],
+      },
+    }
+  );
+  const parsed = readPluginManifest(folder);
+  if (!parsed.ok) throw new Error("fixture manifest is invalid");
+  const unregister = registerPluginContributions({ manifest: parsed.manifest, folder });
+  savePluginApproval({
+    pluginId: "sample",
+    pinnedHash: "h1:test",
+    granted: [],
+    enabled: true,
+    approvedVersion: "",
+    approvedPermissions: { required: [], optional: [] },
+    approvedFiles: {},
+  });
+  setPluginLifecycleInstance({
+    state: (pluginId: string) =>
+      pluginId === "sample" ? { status: "stopped", reason: "crashed", refusal: null } : null,
+    runtime: () => null,
+    launchRefusal: () => null,
+    launchScanned: () => true,
+    onLaunchScanned: () => () => {},
+    subscribe: () => () => {},
+    surfaceReached: () => {},
+    surfaceLeft: () => {},
+    start: async () => ({ ok: false, refusal: { code: "not-installed" } }),
+    installed: () => [],
+    stop: () => {},
+    dispose: () => {},
+  } as unknown as PluginLifecycle);
+  return () => {
+    unregister();
+    setPluginLifecycleInstance(null);
+    removePluginApproval("sample");
+    useSettingsRevealStore.getState().clearRow();
+  };
+}
 
 // The Notes Gallery is virtualized (#562): jsdom reports no viewport, so the
 // grid would mount no cards and the Gallery's roving Tab stop would be the
@@ -304,6 +378,7 @@ const SCREENS: {
   { name: "Ephemeral", path: () => "/ephemeral" },
   { name: "Settings", path: () => "/settings" },
   { name: "a Book", path: ({ book }) => `/book/${book}` },
+  { name: "a stopped Plugin page", path: () => STOPPED_PLUGIN_PAGE },
 ];
 // Commands flagged navigates and the rest, apart: a screen binds ~70 of the
 // rest, and each one waits for a move that must not come.
@@ -322,6 +397,11 @@ describe.sequential("navigating Commands (issue #319)", () => {
     const note = await createNoteRow({ title: "Nav Note", bookId: null }, "local");
     const canvas = await createCanvasRow({ title: "Nav Canvas" }, "local");
     const screen = screenPath({ book: book.id, note: note.id, canvas: canvas.id });
+    // The Stopped Plugin page exists only once its page, approval, and Stopped
+    // lifecycle are in place, before the app mounts.
+    const undoStoppedPluginPage =
+      screen === STOPPED_PLUGIN_PAGE ? installStoppedPluginPage() : null;
+    if (undoStoppedPluginPage !== null) onTestFinished(undoStoppedPluginPage);
     renderApp("/");
 
     navigateTo(screen);
@@ -331,6 +411,15 @@ describe.sequential("navigating Commands (issue #319)", () => {
       useEphemeralStore.setState({ content: "<p>draft</p>", wordCount: 1 });
       await waitFor(() =>
         expect(useBoundShortcutStore.getState().counts["ephemeral.createNote"]).toBeGreaterThan(0)
+      );
+    }
+    // The Stopped Plugin panel binds its two Commands in an effect, after the
+    // page's own mount.
+    if (screen === STOPPED_PLUGIN_PAGE) {
+      await waitFor(() =>
+        expect(useBoundShortcutStore.getState().counts["pluginPage.openSettings"]).toBeGreaterThan(
+          0
+        )
       );
     }
     const bound = Object.keys(useBoundShortcutStore.getState().counts) as CommandId[];
@@ -359,7 +448,7 @@ describe.sequential("navigating Commands (issue #319)", () => {
       await settleOn(screen);
     };
     for (const id of bound) {
-      const skipReason = SKIP[id];
+      const skipReason = SKIP[id] ?? SKIP_ON_SCREEN[screen]?.[id];
       if (skipReason) continue;
       if ((getCommand(id).navigates === true) !== (kind === "flagged")) continue;
       if (GOTO_TARGET[id] === path) continue;
