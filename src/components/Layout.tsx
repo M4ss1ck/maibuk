@@ -30,7 +30,7 @@ const NAV_TUTORIAL_ANCHORS: Record<string, string | undefined> = {
   "/settings": "books.settings",
 };
 
-function NavShortcut({ id, className }: { id: CommandId; className?: string }) {
+function NavShortcut({ id, className }: { id?: CommandId; className?: string }) {
   const hint = useCommandHint(id);
   if (!hint) return null;
   return <KeyboardShortcut shortcut={hint.formatted} className={className} />;
@@ -82,7 +82,7 @@ export function Layout() {
     id: string;
     label: string;
     icon: ReactNode;
-    shortcut: CommandId;
+    shortcut?: CommandId;
   };
   // Core destinations first; the pinned tail (Metrics, Settings) is appended
   // after the Plugin entries below, so it always renders last.
@@ -130,13 +130,14 @@ export function Layout() {
   // Plugin sidebar entries follow the core destinations, ordered by the
   // contributions registry (Plugin name, then id, then declared order). A
   // sidebar entry is its page's navigation Command, so it shows the same
-  // Shortcut hint as any other navigation control. Metrics and Settings come
-  // after them, whether or not a Plugin contributes an entry.
+  // Shortcut hint as any other navigation control, once the scan registered
+  // that Command (an entry seeded from the last launch has none yet). Metrics
+  // and Settings come after them, whether or not a Plugin contributes an entry.
   const pluginNavItems: NavItem[] = pluginSidebarEntries.map((entry) => ({
     id: entry.pageRoute,
     label: entry.title,
     icon: <PluginIcon icon={entry.icon} className="w-5 h-5 shrink-0" />,
-    shortcut: entry.commandId,
+    shortcut: entry.seeded ? undefined : entry.commandId,
   }));
   // The core destinations and the Plugin entries share one scrolling section.
   const scrollNavItems = [...coreNavigationItems, ...pluginNavItems];

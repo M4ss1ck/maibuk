@@ -1,9 +1,11 @@
 /**
  * The runtime state machine for every Plugin (ADR 0019, #401, #436).
  *
- * A persistent Plugin starts after the first route render, after the Library
- * opens, and after the launch Auto Sync and the launch Backup settled; starts
- * run one at a time in idle time. An on-demand Plugin starts when one of its
+ * The launch scan registers every enabled Plugin's contributions right away,
+ * so the sidebar, palette, and menus never wait on a sync. A persistent Plugin
+ * starts after the first route render, after the Library opens, and after the
+ * launch Auto Sync and the launch Backup settled; starts run one at a time in
+ * idle time. An on-demand Plugin starts when one of its
  * surfaces becomes reachable and stops after five minutes with neither a
  * reachable surface nor a call. A Plugin is ready when its setup finished, it
  * answered the startup health check, and the dataVersion gate passed; only
@@ -32,6 +34,7 @@ import { PLUGIN_UI_NODE_LIMIT_MARKER } from "@/plugin-sdk/ui-node-limit";
 import { clearStartupError, getPluginApproval, recordStartupError } from "@/features/plugins/approvals";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { registerPluginContributions } from "@/features/plugins/contributions";
+import { dropSeededPluginContributions } from "@/features/plugins/contributions-registry";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
 import {
   clearPluginHighlights,
@@ -58,6 +61,7 @@ import { reviewPluginCopy } from "@/features/plugins/review";
 import { STARTUP_TIMEOUT_MS, readPluginManifest, startPlugin } from "@/features/plugins/runtime";
 import { pluginStopMessageKey } from "@/features/plugins/stop-messages";
 import { clearToolbarPressed } from "@/features/plugins/toolbar-pressed";
+import { persistPluginSidebarSnapshot } from "@/features/plugins/sidebar-snapshot";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
 import { isTutorialLibraryActive, settleAuthorLibraryWork, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
 import type {
@@ -78,6 +82,7 @@ import type {
 import { toast } from "@/components/ui/Toast";
 import { APP_VERSION } from "@/constants";
 import { useSettingsStore } from "@/features/settings/store";
+import { useSyncStore } from "@/features/sync/store";
 import i18n from "@/i18n";
 import { benchMarksEnabled } from "@/lib/bench-marks";
 import { waitForDatabaseReady } from "@/lib/db";
@@ -189,16 +194,48 @@ async function withinStartupBudget<T>(
   }
 }
 
-async function defaultWhenLaunchSettled(): Promise<void> {
+/**
+ * How long a persistent start waits for a launch Auto Sync that cannot begin.
+ * The launch run starts once the session check verifies; a check that failed
+ * on the network leaves the device signed in but unverified, and that run
+ * would otherwise never come.
+ */
+export const LAUNCH_AUTO_SYNC_START_GRACE_MS = 15_000;
+
+/**
+ * Resolves once the launch Auto Sync is behind us or is not coming: it ran,
+ * automatic sync is off or signed out (re-read on every sync store change, so
+ * a logout mid-wait counts), the device is offline, or the grace period passed
+ * with no verified session. A verified session's run is always waited for.
+ */
+function whenLaunchAutoSyncSettled(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const offs: Array<() => void> = [];
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let done = false;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      for (const off of offs) off();
+      resolve();
+    };
+    const check = (): void => {
+      if (hasLaunchAutoSyncSettled() || !navigator.onLine) finish();
+    };
+    offs.push(onLaunchAutoSyncSettled(finish));
+    offs.push(useSyncStore.subscribe(check));
+    timer = setTimeout(() => {
+      if (!useSyncStore.getState().authVerified) finish();
+    }, LAUNCH_AUTO_SYNC_START_GRACE_MS);
+    check();
+  });
+}
+
+/** The default gate before the first persistent start (#436). */
+export async function whenPluginLaunchSettled(): Promise<void> {
   await waitForDatabaseReady();
-  if (!hasLaunchAutoSyncSettled()) {
-    await new Promise<void>((resolve) => {
-      const off = onLaunchAutoSyncSettled(() => {
-        off();
-        resolve();
-      });
-    });
-  }
+  await whenLaunchAutoSyncSettled();
   if (!hasLaunchBackupSettled()) {
     await new Promise<void>((resolve) => {
       const off = onLaunchBackupSettled(() => {
@@ -246,7 +283,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     get: getPluginDataVersion,
     set: setPluginDataVersion,
   };
-  const whenLaunchSettled = options.whenLaunchSettled ?? defaultWhenLaunchSettled;
+  const whenLaunchSettled = options.whenLaunchSettled ?? whenPluginLaunchSettled;
   const scheduleIdle = options.scheduleIdle ?? defaultScheduleIdle;
   const stopMessage = options.stopMessage ?? pluginStoppedMessage;
   const handlers = options.handlers ?? createPluginHandlers;
@@ -277,9 +314,16 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   // registration below.
   let pendingBulkReplace: { reason: BulkReason; pluginIds: string[] } | null = null;
 
+  // Saves the sidebar for the next launch's first frame once the scan settled.
+  let stopSidebarSnapshot: (() => void) | null = null;
+
   function markScanned(): void {
     if (scanned) return;
     scanned = true;
+    // The registry now holds what this launch found: a seeded entry the scan
+    // did not replace belongs to a Plugin that is gone, off, or changed.
+    dropSeededPluginContributions();
+    if (!disposed) stopSidebarSnapshot = persistPluginSidebarSnapshot();
     for (const listener of [...scanListeners]) listener();
   }
 
@@ -841,8 +885,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
           directory: options.directory,
           builtInSource,
         });
-        await whenLaunchSettled();
         if (disposed) return;
+        // The scan reads the Plugin Directory only, so it never waits for the
+        // Library or a sync: contributions register within seconds of launch.
         const scan = await scanApprovedPlugins({
           directory: options.directory,
           builtInSource,
@@ -880,8 +925,11 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
           const entry = entries.get(plugin.pluginId);
           if (entry && entry.surfaces.size > 0) void startEntry(entry, "warmStart");
         }
-        // Persistent Plugins start one at a time in idle time; on-demand
+        // Persistent Plugins start one at a time in idle time, never ahead of
+        // the Library, the launch Auto Sync, or the launch Backup; on-demand
         // Plugins wait for a surface and disabled ones never registered.
+        await whenLaunchSettled();
+        if (disposed) return;
         for (const plugin of scan.plugins) {
           if (plugin.manifest.lifecycle !== "persistent") continue;
           await nextIdle();
@@ -1076,6 +1124,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       offEditorContent();
       offEditorFocus();
       pendingBulkReplace = null;
+      // Clearing the registry below is not the author turning Plugins off, so
+      // the snapshot keeps what the next launch should show.
+      stopSidebarSnapshot?.();
+      stopSidebarSnapshot = null;
       // A lifecycle stopped mid-launch must not leave loading surfaces behind.
       markScanned();
       scanListeners.clear();

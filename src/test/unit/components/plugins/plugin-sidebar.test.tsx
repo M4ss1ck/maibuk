@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/Layout";
@@ -8,7 +8,14 @@ import {
   registerPluginContributions,
   resetPluginContributionsForTests,
 } from "@/features/plugins/contributions";
+import { PLUGIN_APPROVALS_STORAGE_KEY, savePluginApproval } from "@/features/plugins/approvals";
 import { readPluginManifest } from "@/features/plugins/runtime";
+import {
+  PLUGIN_SIDEBAR_SNAPSHOT_KEY,
+  seedPluginSidebarFromSnapshot,
+  writePluginSidebarSnapshot,
+} from "@/features/plugins/sidebar-snapshot";
+import type { PluginSidebarEntryDef } from "@/features/plugins/contributions-registry";
 import { platformMismatchManifest, pluginFolder } from "@/test/support/plugin-fixtures";
 
 const cleanups: Array<() => void> = [];
@@ -65,7 +72,22 @@ function registerRepro(): void {
 afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
   resetPluginContributionsForTests();
+  localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
+  localStorage.removeItem(PLUGIN_SIDEBAR_SNAPSHOT_KEY);
 });
+
+function renderShell() {
+  return render(
+    <MemoryRouter initialEntries={["/"]}>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<div>Home</div>} />
+          <Route path="plugin/:pluginId/:pageId" element={<PluginPage />} />
+        </Route>
+      </Routes>
+    </MemoryRouter>
+  );
+}
 
 describe("Plugin sidebar entry via keyboard", () => {
   it("opens its page from the keyboard", async () => {
@@ -124,5 +146,40 @@ describe("Plugin sidebar entry via keyboard", () => {
 
     const nav = screen.getByRole("listbox", { name: "Primary navigation" });
     expect(within(nav).queryByRole("option", { name: /Page/ })).toBeNull();
+  });
+
+  // The first frame knows the enabled Plugins' entries: they come from the last
+  // launch's snapshot, before the scan registers the page Command.
+  it("shows a saved entry in the first render and swaps in the scanned one", () => {
+    savePluginApproval({
+      pluginId: "sample",
+      pinnedHash: "h1:any",
+      granted: [],
+      enabled: true,
+      approvedVersion: "",
+      approvedPermissions: { required: [], optional: [] },
+      approvedFiles: {},
+    });
+    const saved: PluginSidebarEntryDef = {
+      pluginId: "sample",
+      displayName: "Sample",
+      pageId: "report",
+      pageRoute: "/plugin/sample/report",
+      title: "Saved report",
+      icon: "book-open",
+      commandId: "plugin.sample.open" as PluginSidebarEntryDef["commandId"],
+    };
+    writePluginSidebarSnapshot([saved]);
+    seedPluginSidebarFromSnapshot();
+
+    // The seeded entry's Command is not registered: reading its Shortcut would throw.
+    expect(() => renderShell()).not.toThrow();
+    const nav = screen.getByRole("listbox", { name: "Primary navigation" });
+    expect(within(nav).getByRole("option", { name: /Saved report/ })).toBeInTheDocument();
+
+    act(() => registerSample());
+
+    expect(within(nav).queryByRole("option", { name: /Saved report/ })).toBeNull();
+    expect(within(nav).getByRole("option", { name: /Sample report/ })).toBeInTheDocument();
   });
 });

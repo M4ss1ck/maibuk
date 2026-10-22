@@ -70,6 +70,28 @@ test.describe("Plugin contributions @wf:plugins-contributions", () => {
     });
   });
 
+  test("a relaunch shows the sidebar entry in the first frame, before the launch scan", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(navOption(page, "Tracer report")).toBeVisible({ timeout: 15_000 });
+
+    // Holding the lifecycle install means nothing can register the entry after
+    // the reload: only the last launch's sidebar snapshot can put it there.
+    await delayIdleWork(page, 30_000);
+    await page.reload();
+    await expect(navOption(page, "Books")).toBeVisible();
+    await capture(page, "plugins-sidebar-first-frame");
+    await expect(navOption(page, "Tracer report")).toBeVisible({ timeout: 1_000 });
+
+    // Opened before the scan, its page shows the loading copy, not "not installed".
+    await tabTo(page, navOption(page, "Books"));
+    await pressUntilFocused(page, "ArrowDown", navOption(page, "Tracer report"), { max: 10 });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/plugin\/tracer\/report$/);
+    await expect(page.getByRole("heading", { name: /Loading Plugin/ })).toBeVisible();
+  });
+
   test("a global Plugin Command runs from its Shortcut and reaches the Plugin", async ({
     page,
   }) => {

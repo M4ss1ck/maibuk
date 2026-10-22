@@ -8,6 +8,10 @@ import { ToastViewport } from "@/components/ui/Toast";
 import { APP_VERSION } from "@/constants";
 import { PLUGIN_APPROVALS_STORAGE_KEY, savePluginApproval } from "@/features/plugins/approvals";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
+import {
+  getPluginSidebarEntries,
+  type PluginSidebarEntryDef,
+} from "@/features/plugins/contributions-registry";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import {
   EDITOR_CONTENT_EVENT_MS,
@@ -29,6 +33,12 @@ import {
   resetPluginLifecycleForTests,
 } from "@/features/plugins/lifecycle";
 import { STARTUP_TIMEOUT_MS } from "@/features/plugins/runtime";
+import {
+  PLUGIN_SIDEBAR_SNAPSHOT_KEY,
+  readPluginSidebarSnapshot,
+  seedPluginSidebarFromSnapshot,
+  writePluginSidebarSnapshot,
+} from "@/features/plugins/sidebar-snapshot";
 import { isToolbarPressed, setToolbarPressed } from "@/features/plugins/toolbar-pressed";
 import { cancelBulkReplace, emitChange, prepareBulkReplace } from "@/features/sync/change-feed";
 import type {
@@ -123,6 +133,31 @@ async function advanceUntilSettled(work: Promise<unknown>, what: string): Promis
 
 function makePlugin(id: string, overrides: Partial<PluginManifest> = {}): PluginFolder {
   return pluginFolder({}, { id, name: id, ...overrides });
+}
+
+/** One saved sidebar entry, as a previous launch would have written it. */
+function snapshotEntry(pluginId: string, pageId: string): PluginSidebarEntryDef {
+  return {
+    pluginId,
+    displayName: pluginId,
+    pageId,
+    pageRoute: `/plugin/${pluginId}/${pageId}`,
+    title: pageId,
+    commandId: `plugin.${pluginId}.open` as PluginSidebarEntryDef["commandId"],
+  };
+}
+
+/** A page with a sidebar entry, reached by its navigating Command. */
+function pagePluginOverrides(): Partial<PluginManifest> {
+  return {
+    // The scan runs on the web host; contributions filter by the test platform.
+    platforms: ["desktop", "web"],
+    contributes: {
+      commands: [{ id: "open", label: "Open report", contexts: ["global"], navigates: true }],
+      pages: [{ id: "report", title: "Report", command: "open" }],
+      sidebarEntries: [{ page: "report", icon: "book-open" }],
+    },
+  };
 }
 
 interface HarnessOptions {
@@ -268,6 +303,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
   localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
+  localStorage.removeItem(PLUGIN_SIDEBAR_SNAPSHOT_KEY);
   resetLibrarySwitchForTests();
   resetPluginLifecycleForTests();
 });
@@ -342,25 +378,90 @@ describe("Plugin lifecycle: launch", () => {
     expect(h.lifecycle.state("beta")).toEqual({ status: "ready", startReason: "launch" });
   });
 
-  it("waits for the Library, the launch Auto Sync, and the launch Backup before scanning", async () => {
+  // A long launch sync used to hold the scan, so the sidebar stayed empty for
+  // minutes; an unverified session held it for good. Only a persistent start
+  // waits for the Library, the launch Auto Sync, and the launch Backup (#436).
+  it("scans and registers contributions without waiting for the launch Auto Sync or Backup", async () => {
     let settleLaunch!: () => void;
     const gate = new Promise<void>((resolve) => {
       settleLaunch = resolve;
     });
     const h = await createHarness({
-      approved: [makePlugin("alpha")],
+      approved: [makePlugin("alpha", pagePluginOverrides())],
       whenLaunchSettled: () => gate,
     });
 
     const launching = h.lifecycle.launch();
-    await advance(0);
-    expect(h.directory.listFolders).not.toHaveBeenCalled();
+    await advanceUntil(() => h.lifecycle.launchScanned(), "the launch scan settling");
+    expect(h.lifecycle.installed().map((plugin) => plugin.pluginId)).toEqual(["alpha"]);
+    expect(getPluginSidebarEntries().map((entry) => entry.pageRoute)).toEqual([
+      "/plugin/alpha/report",
+    ]);
     expect(h.frameCount()).toBe(0);
 
     settleLaunch();
     await advanceUntilSettled(launching, "lifecycle.launch()");
     await advance(0);
     expect(h.framesFor("alpha")).toHaveLength(1);
+  });
+
+  it("warm-starts an on-demand Plugin from a reachable surface while the launch Auto Sync runs", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("warm-page", { lifecycle: "on-demand", ...pagePluginOverrides() })],
+      whenLaunchSettled: () => new Promise<void>(() => undefined),
+    });
+    h.lifecycle.surfaceReached("warm-page", "sidebar:report");
+
+    void h.lifecycle.launch();
+    await advanceUntil(() => h.framesFor("warm-page").length === 1, "warm-page's frame");
+    await advanceUntil(
+      () => h.lifecycle.state("warm-page")?.status === "ready",
+      "warm-page becoming ready"
+    );
+    expect(h.lifecycle.state("warm-page")).toEqual({ status: "ready", startReason: "warmStart" });
+  });
+
+  it("saves the sidebar snapshot once the scan registered, for the next launch's first frame", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha", pagePluginOverrides())] });
+
+    await launchAll(h);
+
+    expect(readPluginSidebarSnapshot()).toEqual([
+      expect.objectContaining({
+        pluginId: "alpha",
+        pageId: "report",
+        pageRoute: "/plugin/alpha/report",
+        title: "Report",
+        icon: "book-open",
+        commandId: "plugin.alpha.open",
+      }),
+    ]);
+  });
+
+  it("drops a snapshot entry the scan did not register and saves the corrected snapshot", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    writePluginSidebarSnapshot([snapshotEntry("alpha", "gone")]);
+    seedPluginSidebarFromSnapshot();
+    expect(getPluginSidebarEntries().map((entry) => entry.pageRoute)).toEqual([
+      "/plugin/alpha/gone",
+    ]);
+
+    await launchAll(h);
+
+    expect(getPluginSidebarEntries()).toEqual([]);
+    expect(readPluginSidebarSnapshot()).toEqual([]);
+  });
+
+  it("keeps the sidebar snapshot when the lifecycle is disposed", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha", pagePluginOverrides())] });
+    await launchAll(h);
+
+    h.lifecycle.dispose();
+
+    expect(getPluginSidebarEntries()).toEqual([]);
+    expect(readPluginSidebarSnapshot().map((entry) => entry.pageRoute)).toEqual([
+      "/plugin/alpha/report",
+    ]);
   });
 
   it("marks the launch scan settled and notifies once the registrations ran", async () => {
@@ -378,15 +479,14 @@ describe("Plugin lifecycle: launch", () => {
     });
 
     const launching = h.lifecycle.launch();
-    await advance(0);
     expect(h.lifecycle.launchScanned()).toBe(false);
-    expect(h.frameCount()).toBe(0);
     expect(notified).toBe(0);
 
-    settleLaunch();
     await advanceUntil(() => h.lifecycle.launchScanned(), "the launch scan settling");
     expect(notified).toBe(1);
     expect(h.lifecycle.installed().map((plugin) => plugin.pluginId)).toEqual(["alpha"]);
+    expect(h.frameCount()).toBe(0);
+    settleLaunch();
     await advanceUntilSettled(launching, "lifecycle.launch()");
   });
 

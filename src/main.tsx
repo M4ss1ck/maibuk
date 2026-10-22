@@ -4,11 +4,17 @@ import { BrowserRouter } from "react-router-dom";
 import App from "@/App";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppSettingsProvider } from "@/features/settings";
+import { seedPluginSidebarFromSnapshot } from "@/features/plugins/sidebar-snapshot";
 import { IS_DESKTOP, IS_WEB } from "@/lib/platform";
 import "@/index.css";
 
 // Initialize i18n before app mounts
 import "@/i18n";
+
+// The enabled Plugins' sidebar entries are in the first frame: the approvals
+// and the last launch's snapshot are both synchronous reads, while the Plugin
+// Directory scan that confirms them runs after the render.
+seedPluginSidebarFromSnapshot();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
