@@ -83,6 +83,16 @@ test.describe("Notes Gallery browsing @wf:notes-gallery-browse", () => {
     await expect(galleryCard(page, SEED_NOTES.tideTables)).toBeFocused();
   });
 
+  test("a focused card is described by its full edit date @wf:notes-gallery-browse", async ({
+    page,
+  }) => {
+    await page.goto("/notes");
+    const card = galleryCard(page, SEED_NOTES.tideTables);
+    await tabTo(page, galleryGrid(page).getByRole("row").first(), { max: 40 });
+    await expect(card).toBeFocused();
+    await expect(card).toHaveAccessibleDescription(/\d{4}/);
+  });
+
   test.describe("empty Library @wf:notes-gallery-browse", () => {
     test.use({ library: "empty" });
 
