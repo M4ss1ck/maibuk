@@ -77,12 +77,10 @@ describe("readStoppedPlugin: what counts as a Stopped Plugin", () => {
     // It starts out stopped (never ran): wait for the start's frame before the clock runs.
     await advanceUntil(() => h.framesFor("alpha").length === 1, "the start's frame");
     await advance(STARTUP_TIMEOUT_MS + 1);
-    await advanceUntil(
-      () =>
-        h.lifecycle.state("alpha")?.status === "stopped" &&
-        h.lifecycle.state("alpha")?.reason === "startup-timeout",
-      "the timeout"
-    );
+    await advanceUntil(() => {
+      const state = h.lifecycle.state("alpha");
+      return state?.status === "stopped" && state.reason === "startup-timeout";
+    }, "the timeout");
 
     expect(readStoppedPlugin(h.lifecycle, "alpha")).toEqual({
       reason: { kind: "limit", reason: "startup-timeout" },
