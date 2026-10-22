@@ -180,6 +180,46 @@ pub struct AtomicStatementError {
     pub message: String,
 }
 
+/// One statement of an atomic load: plain SQL (the original shape), or SQL with
+/// `?` bind parameters so content is never escaped into the SQL text.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(untagged)]
+pub enum AtomicStatement {
+    Plain(String),
+    Bound {
+        sql: String,
+        params: Vec<serde_json::Value>,
+    },
+}
+
+impl AtomicStatement {
+    fn sql(&self) -> &str {
+        match self {
+            AtomicStatement::Plain(sql) => sql,
+            AtomicStatement::Bound { sql, .. } => sql,
+        }
+    }
+}
+
+/// Binds one JSON parameter. `None` for values SQLite cannot store as a column
+/// value (arrays and objects), which the caller reports as a statement error.
+fn bind_value<'q>(
+    query: sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>>,
+    value: &serde_json::Value,
+) -> Option<sqlx::query::Query<'q, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'q>>> {
+    use serde_json::Value;
+    Some(match value {
+        Value::Null => query.bind(None::<String>),
+        Value::String(text) => query.bind(text.clone()),
+        Value::Number(number) => match number.as_i64() {
+            Some(int) => query.bind(int),
+            None => query.bind(number.as_f64()?),
+        },
+        Value::Bool(flag) => query.bind(i64::from(*flag)),
+        Value::Array(_) | Value::Object(_) => return None,
+    })
+}
+
 fn is_transaction_control(statement: &str) -> bool {
     const KEYWORDS: &[&str] = &["BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE"];
     let trimmed = statement.trim();
@@ -203,10 +243,10 @@ fn is_transaction_control(statement: &str) -> bool {
 /// the Library never sits half-applied.
 pub async fn execute_atomic_on(
     pool: &SqlitePool,
-    statements: &[String],
+    statements: &[AtomicStatement],
 ) -> Result<(), AtomicStatementError> {
     for (index, statement) in statements.iter().enumerate() {
-        if is_transaction_control(statement) {
+        if is_transaction_control(statement.sql()) {
             return Err(AtomicStatementError {
                 index: Some(index),
                 message: "transaction control statements are not allowed in an atomic load"
@@ -227,10 +267,25 @@ pub async fn execute_atomic_on(
     // tasks must be `Send`. `Query::execute` leaves the two lifetimes
     // independent, so the same statements run fine on the one connection.
     for (index, statement) in statements.iter().enumerate() {
-        if statement.trim().is_empty() {
+        if statement.sql().trim().is_empty() {
             continue;
         }
-        if let Err(err) = sqlx::query(statement).execute(&mut *tx).await {
+        let mut query = sqlx::query(statement.sql());
+        if let AtomicStatement::Bound { params, .. } = statement {
+            for value in params {
+                match bind_value(query, value) {
+                    Some(bound) => query = bound,
+                    None => {
+                        let _ = tx.rollback().await;
+                        return Err(AtomicStatementError {
+                            index: Some(index),
+                            message: "unsupported bind parameter".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        if let Err(err) = query.execute(&mut *tx).await {
             let _ = tx.rollback().await;
             return Err(AtomicStatementError {
                 index: Some(index),
@@ -247,7 +302,7 @@ pub async fn execute_atomic_on(
 #[tauri::command]
 pub async fn library_execute_atomic<R: Runtime>(
     app: AppHandle<R>,
-    statements: Vec<String>,
+    statements: Vec<AtomicStatement>,
 ) -> Result<(), AtomicStatementError> {
     let pool = {
         let state = app.state::<tauri_plugin_sql::DbInstances>();
@@ -545,6 +600,13 @@ mod tests {
         std::fs::remove_dir_all(&outside).unwrap();
     }
 
+    fn plain(statements: &[&str]) -> Vec<AtomicStatement> {
+        statements
+            .iter()
+            .map(|sql| AtomicStatement::Plain((*sql).to_string()))
+            .collect()
+    }
+
     #[test]
     fn atomic_load_applies_every_statement() {
         let dir = temp_dir("atomic-ok");
@@ -553,18 +615,144 @@ mod tests {
         install_at(app.handle(), &dir).unwrap();
         let pool = installed_pool(app.handle());
         tauri::async_runtime::block_on(async {
-            let statements = [
-                "CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)".to_string(),
-                "INSERT INTO notes (title) VALUES ('a')".to_string(),
-                "INSERT INTO notes (title) VALUES ('b')".to_string(),
-                "INSERT INTO notes (title) VALUES ('c')".to_string(),
-            ];
+            let statements = plain(&[
+                "CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)",
+                "INSERT INTO notes (title) VALUES ('a')",
+                "INSERT INTO notes (title) VALUES ('b')",
+                "INSERT INTO notes (title) VALUES ('c')",
+            ]);
             execute_atomic_on(&pool, &statements).await.unwrap();
             let count: i64 = sqlx::query_scalar("SELECT count(*) FROM notes")
                 .fetch_one(&pool)
                 .await
                 .unwrap();
             assert_eq!(count, 3);
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn atomic_statement_decodes_both_wire_shapes() {
+        let statements: Vec<AtomicStatement> = serde_json::from_str(
+            r#"["DELETE FROM notes", {"sql": "INSERT INTO notes (title) VALUES (?)", "params": ["it's", 1, null, 2.5, true]}]"#,
+        )
+        .unwrap();
+        assert!(matches!(&statements[0], AtomicStatement::Plain(sql) if sql == "DELETE FROM notes"));
+        match &statements[1] {
+            AtomicStatement::Bound { sql, params } => {
+                assert_eq!(sql, "INSERT INTO notes (title) VALUES (?)");
+                assert_eq!(
+                    params,
+                    &vec![
+                        serde_json::json!("it's"),
+                        serde_json::json!(1),
+                        serde_json::Value::Null,
+                        serde_json::json!(2.5),
+                        serde_json::json!(true),
+                    ]
+                );
+            }
+            other => panic!("expected a bound statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn bound_statement_round_trips_content_exactly() {
+        let dir = temp_dir("atomic-bound-ok");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        let quote = "it's a \"quote\"; DROP TABLE notes; --".to_string();
+        let big = "x'y;".repeat(25_000);
+        tauri::async_runtime::block_on(async {
+            let statements = vec![
+                AtomicStatement::Plain(
+                    "CREATE TABLE notes (id INTEGER PRIMARY KEY, quote TEXT, big TEXT, num INTEGER, note TEXT)"
+                        .to_string(),
+                ),
+                AtomicStatement::Bound {
+                    sql: "INSERT INTO notes (quote, big, num, note) VALUES (?, ?, ?, ?)".to_string(),
+                    params: vec![
+                        serde_json::Value::String(quote.clone()),
+                        serde_json::Value::String(big.clone()),
+                        serde_json::json!(42),
+                        serde_json::Value::Null,
+                    ],
+                },
+            ];
+            execute_atomic_on(&pool, &statements).await.unwrap();
+            let row: (String, String, i64, Option<String>) =
+                sqlx::query_as("SELECT quote, big, num, note FROM notes")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(row, (quote.clone(), big.clone(), 42, None));
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn bound_statement_failure_rolls_back_the_plain_statement_before_it() {
+        let dir = temp_dir("atomic-bound-rollback");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let statements = vec![
+                AtomicStatement::Plain("INSERT INTO notes (title) VALUES ('earlier')".to_string()),
+                AtomicStatement::Bound {
+                    sql: "INSERT INTO missing_table (title) VALUES (?)".to_string(),
+                    params: vec![serde_json::Value::String("x".to_string())],
+                },
+            ];
+            let err = execute_atomic_on(&pool, &statements).await.unwrap_err();
+            assert_eq!(err.index, Some(1));
+            assert!(
+                err.message.contains("no such table"),
+                "unexpected error: {err:?}"
+            );
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM notes")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(count, 0);
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn bound_statement_rejects_a_parameter_sqlite_cannot_store() {
+        let dir = temp_dir("atomic-bound-unsupported");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            sqlx::query("CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let statements = vec![
+                AtomicStatement::Plain("INSERT INTO notes (title) VALUES ('earlier')".to_string()),
+                AtomicStatement::Bound {
+                    sql: "INSERT INTO notes (title) VALUES (?)".to_string(),
+                    params: vec![serde_json::json!(["not", "a", "column", "value"])],
+                },
+            ];
+            let err = execute_atomic_on(&pool, &statements).await.unwrap_err();
+            assert_eq!(err.index, Some(1));
+            assert_eq!(err.message, "unsupported bind parameter");
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM notes")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            assert_eq!(count, 0);
         });
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -585,12 +773,12 @@ mod tests {
                 .execute(&pool)
                 .await
                 .unwrap();
-            let statements = [
-                "INSERT INTO notes (title) VALUES ('a')".to_string(),
-                "INSERT INTO notes (title) VALUES ('b')".to_string(),
-                "INSERT INTO missing_table (title) VALUES ('x')".to_string(),
-                "INSERT INTO notes (title) VALUES ('c')".to_string(),
-            ];
+            let statements = plain(&[
+                "INSERT INTO notes (title) VALUES ('a')",
+                "INSERT INTO notes (title) VALUES ('b')",
+                "INSERT INTO missing_table (title) VALUES ('x')",
+                "INSERT INTO notes (title) VALUES ('c')",
+            ]);
             let err = execute_atomic_on(&pool, &statements).await.unwrap_err();
             assert_eq!(err.index, Some(2));
             assert!(
@@ -627,10 +815,10 @@ mod tests {
                 .unwrap();
             let attach = format!("ATTACH '{}' AS x", outside.join("i.db").display());
             let statements = vec![
-                "INSERT INTO notes (title) VALUES ('a')".to_string(),
-                "INSERT INTO notes (title) VALUES ('b')".to_string(),
-                attach,
-                "INSERT INTO notes (title) VALUES ('c')".to_string(),
+                AtomicStatement::Plain("INSERT INTO notes (title) VALUES ('a')".to_string()),
+                AtomicStatement::Plain("INSERT INTO notes (title) VALUES ('b')".to_string()),
+                AtomicStatement::Plain(attach),
+                AtomicStatement::Plain("INSERT INTO notes (title) VALUES ('c')".to_string()),
             ];
             let err = execute_atomic_on(&pool, &statements).await.unwrap_err();
             assert_eq!(err.index, Some(2));
@@ -642,9 +830,9 @@ mod tests {
 
             let vacuum_into = format!("VACUUM INTO '{}'", outside.join("y.db").display());
             let statements = vec![
-                "INSERT INTO notes (title) VALUES ('a')".to_string(),
-                "INSERT INTO notes (title) VALUES ('b')".to_string(),
-                vacuum_into,
+                AtomicStatement::Plain("INSERT INTO notes (title) VALUES ('a')".to_string()),
+                AtomicStatement::Plain("INSERT INTO notes (title) VALUES ('b')".to_string()),
+                AtomicStatement::Plain(vacuum_into),
             ];
             let err = execute_atomic_on(&pool, &statements).await.unwrap_err();
             assert_eq!(err.index, Some(2));
@@ -667,11 +855,11 @@ mod tests {
         install_at(app.handle(), &dir).unwrap();
         let pool = installed_pool(app.handle());
         tauri::async_runtime::block_on(async {
-            let statements = [
-                "CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)".to_string(),
-                "COMMIT".to_string(),
-                "INSERT INTO notes (title) VALUES ('a')".to_string(),
-            ];
+            let statements = plain(&[
+                "CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)",
+                "COMMIT",
+                "INSERT INTO notes (title) VALUES ('a')",
+            ]);
             let err = execute_atomic_on(&pool, &statements).await.unwrap_err();
             assert_eq!(err.index, Some(1));
             assert!(
@@ -710,8 +898,8 @@ mod tests {
                     .await
                     .unwrap();
             }
-            let statements: Vec<String> = (0..5000)
-                .map(|i| format!("INSERT INTO notes (title) VALUES ('bulk {i}')"))
+            let statements: Vec<AtomicStatement> = (0..5000)
+                .map(|i| AtomicStatement::Plain(format!("INSERT INTO notes (title) VALUES ('bulk {i}')")))
                 .collect();
 
             let done = Arc::new(AtomicBool::new(false));

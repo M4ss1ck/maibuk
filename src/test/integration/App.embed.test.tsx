@@ -49,6 +49,9 @@ vi.mock("../../components/ui", () => ({
 }));
 
 vi.mock("../../features/backup/lifecycle", () => ({
+  // The launch Backup never settles here, so the Version storage upgrade never starts.
+  hasLaunchBackupSettled: vi.fn(() => false),
+  onLaunchBackupSettled: vi.fn(() => () => {}),
   scheduleDailyBackup: mockScheduleDailyBackup,
 }));
 

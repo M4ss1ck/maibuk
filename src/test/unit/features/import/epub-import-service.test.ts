@@ -165,7 +165,11 @@ describe("EPUB import service", () => {
     mockInsertChapterEpubMeta.mockResolvedValue(undefined);
     mockDeleteExecute.mockResolvedValue({ rowsAffected: 0 });
     mockSelect.mockResolvedValue([]);
-    mockGetDatabase.mockResolvedValue({ execute: mockDeleteExecute, select: mockSelect });
+    mockGetDatabase.mockResolvedValue({
+      execute: mockDeleteExecute,
+      select: mockSelect,
+      executeAtomic: vi.fn().mockResolvedValue(undefined),
+    });
   });
 
   it("scans without writing to the database", async () => {

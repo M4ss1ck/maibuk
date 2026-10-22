@@ -172,7 +172,11 @@ function buildObjectFormData(input: PushObjectInput, userId: string, deleted: bo
   formData.append("checksum", input.checksum ?? "");
   formData.append("meta", input.meta ?? "");
   formData.append("deleted", String(deleted));
-  if (input.content) {
+  if (deleted) {
+    // A soft delete frees the stored payload: an empty value clears the file
+    // field, whether or not the server's hook would (object contract, rule 4).
+    formData.append("content", "");
+  } else if (input.content) {
     formData.append("content", input.content, `${input.key}.bin`);
   }
   return formData;
@@ -277,11 +281,19 @@ export async function listObjects(kind: ObjectKind, group?: string): Promise<Rem
  * hold the unique (user, app_name, kind, key) identity, so a device that still
  * has the item must update the deleted row or remove its copy, never create.
  */
-export async function listDeletedObjects(kind: ObjectKind): Promise<RemoteObject[]> {
+export async function listDeletedObjects(
+  kind: ObjectKind,
+  group?: string
+): Promise<RemoteObject[]> {
   const client = getClient();
 
+  const filters = [`app_name = "${APP_NAME}"`, `kind = "${kind}"`, "deleted = true"];
+  if (group !== undefined) {
+    filters.push(`group = "${group}"`);
+  }
+
   const records = await client.collection("objects").getFullList({
-    filter: `app_name = "${APP_NAME}" && kind = "${kind}" && deleted = true`,
+    filter: filters.join(" && "),
     sort: "updated",
     fields: OBJECT_LIST_FIELDS,
   });
@@ -324,7 +336,8 @@ export async function pullObjectsSince(
 export async function softDeleteObject(
   kind: ObjectKind,
   key: string,
-  meta?: string
+  meta?: string,
+  group?: string
 ): Promise<void> {
   const client = getClient();
   const userId = client.authStore.record?.id;
@@ -333,9 +346,17 @@ export async function softDeleteObject(
   const filter = `app_name = "${APP_NAME}" && kind = "${kind}" && key = "${key}"`;
   const existing = await client.collection("objects").getList(1, 1, { filter });
 
-  const input: PushObjectInput = { kind, key, meta };
+  // The group stays: a Version's tombstone is found by its Book (group), and
+  // an update without it would blank the field.
+  const input: PushObjectInput = { kind, key, meta, group };
   if (existing.items.length > 0) {
-    await writeObject({ ...input, remoteId: existing.items[0].id }, true, client, userId);
+    const current = existing.items[0];
+    await writeObject(
+      { ...input, group: group ?? (current.group as string | undefined), remoteId: current.id },
+      true,
+      client,
+      userId
+    );
   } else {
     try {
       await writeObject(input, true, client, userId);

@@ -22,7 +22,6 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
-
 vi.mock("@/lib/platform", () => ({
   IS_WEB: false,
   IS_TAURI: true,
@@ -85,6 +84,9 @@ vi.mock("@/lib/metrics/MetricsService", () => ({
 }));
 
 vi.mock("@/features/backup/lifecycle", () => ({
+  // The launch Backup never settles here, so the Version storage upgrade never starts.
+  hasLaunchBackupSettled: vi.fn(() => false),
+  onLaunchBackupSettled: vi.fn(() => () => {}),
   runDailyBackupOnce: vi.fn().mockResolvedValue(undefined),
   scheduleDailyBackup: vi.fn(),
   createLaunchBackup: vi.fn().mockResolvedValue(undefined),

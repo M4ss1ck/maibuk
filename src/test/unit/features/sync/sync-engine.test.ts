@@ -10,6 +10,9 @@ const mockPushBookBlob = vi.hoisted(() => vi.fn());
 const mockPullBookBlob = vi.hoisted(() => vi.fn());
 const mockListRemoteBooks = vi.hoisted(() => vi.fn());
 const mockListRemoteVersions = vi.hoisted(() => vi.fn());
+const mockListObjects = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockListDeletedObjects = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockSoftDeleteObject = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockPushVersionBlob = vi.hoisted(() => vi.fn());
 const mockPullVersionBlob = vi.hoisted(() => vi.fn());
 const mockApplyBookSnapshot = vi.hoisted(() => vi.fn());
@@ -82,6 +85,9 @@ vi.mock("../../../../features/sync/client", () => ({
   pullBookBlob: mockPullBookBlob,
   listRemoteBooks: mockListRemoteBooks,
   listRemoteVersions: mockListRemoteVersions,
+  listObjects: mockListObjects,
+  listDeletedObjects: mockListDeletedObjects,
+  softDeleteObject: mockSoftDeleteObject,
   pushVersionBlob: mockPushVersionBlob,
   pullVersionBlob: mockPullVersionBlob,
   refreshAuth: mockRefreshAuth,
@@ -121,6 +127,7 @@ vi.mock("../../../../features/settings/store", () => ({
 }));
 
 vi.mock("../../../../features/versions/store", () => ({
+  withVersionWrites: (work: () => Promise<unknown>) => work(),
   useVersionStore: {
     getState: () => ({ createVersion: mockCreateVersion }),
   },
@@ -151,6 +158,16 @@ vi.mock("../../../../features/sync/tombstones", () => ({
 vi.mock("../../../../features/sync/migration-reset", () => ({
   ensureGenericCollectionMigration: mockEnsureGenericCollectionMigration,
 }));
+
+// Seconds now: remote fixtures that Version Retention must keep are dated here.
+const secondsNow = () => Math.floor(Date.now() / 1000);
+
+/** The split-format INSERT statements a version pull ran (executeAtomic batches). */
+function versionInsertStatements(executeAtomic: ReturnType<typeof vi.fn>) {
+  return executeAtomic.mock.calls
+    .flatMap((call) => call[0] as { sql: string; params: unknown[] }[])
+    .filter((statement) => statement.sql.includes("INSERT OR IGNORE INTO book_versions"));
+}
 
 const {
   syncBook,
@@ -200,6 +217,7 @@ describe("syncBook — timestamp fix", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
   const noopConflict = vi.fn();
 
@@ -369,6 +387,7 @@ describe("syncAllBooks — truthful outcomes", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(() => {
@@ -497,6 +516,7 @@ describe("syncAllBooks — scoped direction and deletion safety", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(() => {
@@ -730,6 +750,7 @@ describe("ensureAuth — pre-sync auth guard", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(() => {
@@ -861,6 +882,7 @@ describe("syncVersions — pure union", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(() => {
@@ -894,6 +916,8 @@ describe("syncVersions — pure union", () => {
 
   it("pushes only local-only versions and pulls only remote-only versions", async () => {
     mockDb.select.mockImplementation(async (sql: string) => {
+      // The upgrade-pending check: no inline Versions, so version sync runs.
+      if (sql.includes("format = ?")) return [];
       if (sql.includes("book_versions")) {
         return [
           {
@@ -926,10 +950,8 @@ describe("syncVersions — pure union", () => {
     mockPullVersionBlob.mockResolvedValue({
       data: new Uint8Array([1, 2, 3]),
     });
-    mockDecrypt.mockResolvedValue('{"book":{}}');
-    mockComputeChecksum
-      .mockResolvedValueOnce("local-checksum") // for syncBookInBatch
-      .mockResolvedValueOnce("chk-remote"); // for pulled version verification
+    mockDecrypt.mockResolvedValue('{"book":{},"chapters":[]}');
+    mockComputeChecksum.mockResolvedValueOnce("local-checksum"); // for syncBookInBatch
 
     mockListRemoteBooks.mockResolvedValue([
       { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
@@ -953,10 +975,12 @@ describe("syncVersions — pure union", () => {
 
     // Should pull the remote-only version
     expect(mockPullVersionBlob).toHaveBeenCalledWith("rem-1");
+    expect(versionInsertStatements(mockDb.executeAtomic)[0]?.params).toContain("ver-remote");
   });
 
   it("does not push or pull when version is present on both sides", async () => {
     mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("format = ?")) return [];
       if (sql.includes("book_versions")) {
         return [
           {
@@ -1020,8 +1044,8 @@ describe("syncVersions — pure union", () => {
     mockPullVersionBlob.mockResolvedValue({
       data: new Uint8Array([1, 2, 3]),
     });
-    mockDecrypt.mockResolvedValue('{"book":{"title":"Remote"}}');
-    mockComputeChecksum.mockResolvedValueOnce("local-checksum").mockResolvedValueOnce("chk-remote");
+    mockDecrypt.mockResolvedValue('{"book":{"title":"Remote"},"chapters":[]}');
+    mockComputeChecksum.mockResolvedValueOnce("local-checksum");
 
     mockListRemoteBooks.mockResolvedValue([
       { bookId: "book-1", checksum: "remote-checksum", updatedAt: 5000 },
@@ -1035,11 +1059,10 @@ describe("syncVersions — pure union", () => {
 
     await syncBook("book-1", "pass", onConflict);
 
-    const insertCall = mockDb.execute.mock.calls.find((call) =>
-      (call[0] as string).includes("INSERT OR IGNORE INTO book_versions")
-    );
+    const insertCall = versionInsertStatements(mockDb.executeAtomic)[0];
     expect(insertCall).toBeDefined();
-    expect(insertCall![1]).toEqual(
+    expect(insertCall!.params.at(-1)).toBe("split");
+    expect(insertCall!.params).toEqual(
       expect.arrayContaining(["ver-remote", "book-1", "Remote Draft", "manual", 2000, 600])
     );
   });
@@ -1063,12 +1086,12 @@ describe("syncVersions — pure union", () => {
         checksum: "chk-remote",
         name: null,
         triggerType: "auto-idle",
-        createdAt: 2000,
+        createdAt: secondsNow(),
         wordCount: 600,
       },
     ]);
     mockPullVersionBlob.mockResolvedValue({ data: new Uint8Array([1, 2, 3]) });
-    mockDecrypt.mockResolvedValue('{"book":{}}');
+    mockDecrypt.mockResolvedValue('{"book":{},"chapters":[]}');
     // A naive hash of the decrypted blob differs from the stored checksum —
     // the engine must NOT reject the version over that.
     mockComputeChecksum.mockResolvedValue("does-not-match-chk-remote");
@@ -1084,11 +1107,10 @@ describe("syncVersions — pure union", () => {
 
     await syncBook("book-1", "pass", onConflict);
 
-    const insertCall = mockDb.execute.mock.calls.find((call) =>
-      (call[0] as string).includes("INSERT OR IGNORE INTO book_versions")
-    );
+    const insertCall = versionInsertStatements(mockDb.executeAtomic)[0];
     expect(insertCall).toBeDefined();
-    expect(insertCall![1]).toEqual(expect.arrayContaining(["ver-remote", "chk-remote"]));
+    expect(insertCall!.params.at(-1)).toBe("split");
+    expect(insertCall!.params).toEqual(expect.arrayContaining(["ver-remote", "chk-remote"]));
   });
 
   it("skips a version that fails to decrypt and continues syncing", async () => {
@@ -1106,7 +1128,7 @@ describe("syncVersions — pure union", () => {
         checksum: "chk-bad",
         name: null,
         triggerType: "auto-idle",
-        createdAt: 2000,
+        createdAt: secondsNow(),
         wordCount: 600,
       },
     ]);
@@ -1124,9 +1146,7 @@ describe("syncVersions — pure union", () => {
     const result = await syncBook("book-1", "pass", onConflict);
     expect(result.outcome).toBe("success");
 
-    const insertCall = mockDb.execute.mock.calls.find((call) =>
-      (call[0] as string).includes("INSERT OR IGNORE INTO book_versions")
-    );
+    const insertCall = versionInsertStatements(mockDb.executeAtomic)[0];
     expect(insertCall).toBeUndefined();
   });
 
@@ -1145,7 +1165,7 @@ describe("syncVersions — pure union", () => {
         checksum: "chk-remote",
         name: null,
         triggerType: "auto-idle",
-        createdAt: 2000,
+        createdAt: secondsNow(),
         wordCount: 600,
       },
     ]);
@@ -1189,6 +1209,7 @@ describe("syncVersions — pure union", () => {
 
   it("stamps synced_at on pushed versions", async () => {
     mockDb.select.mockImplementation(async (sql: string) => {
+      if (sql.includes("format = ?")) return [];
       if (sql.includes("book_versions")) {
         return [
           {
@@ -1232,6 +1253,7 @@ describe("syncMetrics — engine integration", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(() => {
@@ -1338,6 +1360,7 @@ describe("syncAllNotes — note sync parity with books", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(() => {
@@ -1473,6 +1496,7 @@ describe("three-way sync against the last-synced base", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
   let bookBase: { local_checksum: string; remote_checksum: string } | null;
   let noteBase: { local_checksum: string; remote_checksum: string } | null;
@@ -1932,6 +1956,7 @@ describe("syncSingleNote — scoped current-note push", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(() => {
@@ -2027,6 +2052,7 @@ describe("items deleted on another device", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
   let bookBase: { local_checksum: string; remote_checksum: string } | null;
   let noteBase: { local_checksum: string; remote_checksum: string } | null;

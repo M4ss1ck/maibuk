@@ -11,6 +11,7 @@
 // not. updated_at stays the sync conflict clock and always bumps.
 
 import { getDatabase } from "@/lib/db";
+import { SWEEP_VERSION_CONTENT, withVersionWrites } from "@/features/versions/content-store";
 import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
 import { flushForOutsideWrite } from "@/features/sync/pending-edits";
@@ -145,10 +146,7 @@ export async function createBookRow(
     lastOpenedAt: undefined,
     lastChapterId: undefined,
   };
-  await emitChange(
-    { entity: "book", id, origin, kind: "content" },
-    viewMeta
-  );
+  await emitChange({ entity: "book", id, origin, kind: "content" }, viewMeta);
   return own;
 }
 
@@ -290,11 +288,16 @@ export async function deleteBookRow(
       title: rows[0].title,
     });
   }
-  await db.execute("DELETE FROM books WHERE id = ?", [id]);
-  await emitChange(
-    { entity: "book", id, origin, kind: "content" },
-    viewMeta
+  // Its Versions go with it, and the content only they referenced: web has no
+  // foreign keys to cascade, and the sync removes their remote copies.
+  await withVersionWrites(() =>
+    db.executeAtomic([
+      { sql: "DELETE FROM book_versions WHERE book_id = ?", params: [id] },
+      { sql: "DELETE FROM books WHERE id = ?", params: [id] },
+      ...SWEEP_VERSION_CONTENT,
+    ])
   );
+  await emitChange({ entity: "book", id, origin, kind: "content" }, viewMeta);
 }
 
 /**
@@ -326,6 +329,8 @@ export async function removeBookRow(id: string, origin: ChangeOrigin): Promise<v
     await db.execute(`DELETE FROM ${table} WHERE book_id = ?`, [id]).catch(() => {});
   }
   await db.execute("DELETE FROM books WHERE id = ?", [id]);
+  // Best effort like the deletes above: the next Version deletion sweeps again.
+  await withVersionWrites(() => db.executeAtomic(SWEEP_VERSION_CONTENT)).catch(() => {});
   await emitChange({ entity: "book", id, origin, kind: "content" });
 }
 

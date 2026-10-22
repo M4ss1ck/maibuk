@@ -361,6 +361,8 @@ export function BackupSection() {
         if (error instanceof Error) {
           if (error.message === "BACKUP_CORRUPT") {
             setErrorMessage(t("backup.backupCorrupt"));
+          } else if (error.message === "DUMP_TOO_NEW") {
+            setErrorMessage(t("backup.dumpTooNew"));
           } else if (error.message === "RESTORE_INVALID") {
             setErrorMessage(t("backup.restoreInvalid"));
           } else if (error.message.startsWith("RESTORE_FAILED:")) {

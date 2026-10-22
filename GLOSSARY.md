@@ -196,7 +196,7 @@ _UI_: en "Version history" / es "Historial de versiones"
 _Avoid_: snapshot, revision
 
 **Named Version**:
-A Version the author chose to save.
+A Version the author chose to save, by saving one or by renaming any Version.
 _UI_: en "Named" / es "Nombrada"
 _Avoid_: manual version, milestone
 
@@ -208,6 +208,10 @@ _Avoid_: autosave version
 **Version Trigger**:
 The reason a Version was taken: the author, idle time, closing, before a Pull, before a Restore, or a Plugin before it changes the Book.
 
+**Version Retention**:
+Which Checkpoints a Book keeps: every recent one, then one per day, then one per week; Named Versions and Checkpoints taken before a Restore or by a Plugin are always kept. Every device keeps the same ones, and a Checkpoint it drops never comes back.
+_Avoid_: version pruning cap, "Retention" alone (reserved for Backup Retention)
+
 **Backup**:
 A saved copy of the Library at a moment in time. Restoring it brings back Books, Notes, Canvases, and Version history; settings and metrics stay as they are.
 _UI_: en "Backups" / es "Copias de seguridad"
@@ -218,7 +222,7 @@ Where Backups are kept on desktop: the app's own data folder by default, or a fo
 _UI_: en "Backup directory" / es "Carpeta de copias"
 
 **Database File**:
-A copy of the Library's writing and settings (not its metrics) saved to a file the author chooses, kept outside Backups and Retention; loading one adds its contents to this Library, overwriting items that already exist, instead of clearing it first.
+A copy of the Library's writing and settings (not its metrics) saved to a file the author chooses, kept outside Backups and Backup Retention; loading one adds its contents to this Library, overwriting items that already exist, instead of clearing it first.
 _UI_: en "Export Database", "Import Database"
 _Avoid_: "backup" and "restore" for this file
 
@@ -226,7 +230,7 @@ _Avoid_: "backup" and "restore" for this file
 The reason a Backup was taken: daily, on close, before sync, before a Restore, Reset, or loading a Database File, or at the author's request.
 _UI_: en "Pre-restore" / es "Pre-restauración" also before a Reset or loading a Database File _(known mismatch)_
 
-**Retention**:
+**Backup Retention**:
 How many Backups the Library keeps before the oldest are pruned; safety Backups taken before sync, a Restore, a Reset, or loading a Database File are kept longer.
 _UI_: en "Maximum backups to keep"
 

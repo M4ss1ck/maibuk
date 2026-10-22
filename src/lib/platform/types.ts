@@ -7,13 +7,16 @@ import type {
   PluginFolderFile,
 } from "@/features/plugins/types";
 
+/** One statement of an atomic write: plain SQL, or SQL with `?` bind parameters. */
+export type AtomicStatement = string | { sql: string; params: readonly (string | number | null)[] };
+
 export interface DatabaseAdapter {
   execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }>;
   select<T = unknown[]>(sql: string, params?: unknown[]): Promise<T>;
   close(): Promise<void>;
   exportData(): Promise<Uint8Array>;
   /** Runs every statement in one transaction, or none: rejects with AtomicStatementError and leaves the Library unchanged. */
-  executeAtomic(statements: string[]): Promise<void>;
+  executeAtomic(statements: readonly AtomicStatement[]): Promise<void>;
 }
 
 export interface SaveDialogOptions {

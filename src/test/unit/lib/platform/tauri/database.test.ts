@@ -75,6 +75,23 @@ describe("createTauriDatabase", () => {
     expect(mockInvoke).toHaveBeenCalledWith("library_execute_atomic", { statements });
   });
 
+  it("executeAtomic passes bound statements to invoke in object form, unchanged", async () => {
+    const db = await createTauriDatabase("sqlite:maibuk.db");
+    const statements = [
+      "DELETE FROM notes",
+      { sql: "INSERT INTO notes (id, title) VALUES (?, ?)", params: ["n1", "it's; quoted"] },
+    ];
+
+    await db.executeAtomic(statements);
+
+    expect(mockInvoke).toHaveBeenCalledWith("library_execute_atomic", {
+      statements: [
+        "DELETE FROM notes",
+        { sql: "INSERT INTO notes (id, title) VALUES (?, ?)", params: ["n1", "it's; quoted"] },
+      ],
+    });
+  });
+
   it("maps a rejected invoke to AtomicStatementError with index and detail", async () => {
     const db = await createTauriDatabase("sqlite:maibuk.db");
     mockInvoke.mockRejectedValue({ index: 1, message: "no such table: x" });

@@ -3,7 +3,16 @@ import { getDatabase } from "@/lib/db";
 import { serializeBook, applyBookSnapshot } from "@/features/sync/serializer";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { computeChecksum } from "@/lib/checksum";
-import { VERSION_AUTO_PRUNE_KEEP } from "@/constants";
+import { VERSION_CLOSE_COALESCE_SECONDS } from "@/constants";
+import {
+  deleteVersionRows,
+  historyBytes,
+  insertSplitVersionStatements,
+  isVersionUpgradePending,
+  withVersionWrites,
+  readVersionSnapshot,
+} from "@/features/versions/content-store";
+import { RETAINED_AUTOMATIC_TRIGGERS, retainVersions } from "@/features/versions/retention";
 import type {
   BookVersion,
   CreateVersionInput,
@@ -15,16 +24,49 @@ import type { AppliedBook } from "@/features/books/write";
 
 export const DEFAULT_VERSIONS_PAGE_SIZE = 10;
 
-// Trigger types that represent automatic/system-generated snapshots and are
-// subject to the retention cap. Manual stays uncapped (explicit user intent);
-// pre-restore and plugin stay uncapped (safety breadcrumbs): a Plugin takes a
-// Checkpoint before it changes a Book, and checksum dedup stops a chatty Plugin
-// from spamming history.
-const PRUNABLE_TRIGGERS = ["auto-idle", "close", "pre-sync"] as const;
-type PrunableTrigger = (typeof PRUNABLE_TRIGGERS)[number];
+export { withVersionWrites };
 
-function isPrunable(trigger: VersionTrigger): trigger is PrunableTrigger {
-  return (PRUNABLE_TRIGGERS as readonly string[]).includes(trigger);
+function nowSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Drops the Book's Versions that Version Retention does not keep (ADR 0033),
+ * with the content only they referenced. Call inside withVersionWrites.
+ * Returns the dropped ids.
+ */
+export async function applyVersionRetention(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  bookId: string,
+  now = nowSeconds(),
+  { upgrading = false }: { upgrading?: boolean } = {}
+): Promise<string[]> {
+  // History older than this Release is pruned only by the upgrade, after its
+  // safety Backup; until then nothing is dropped.
+  if (!upgrading && (await isVersionUpgradePending(db))) return [];
+  const rows = await db.select<{ id: string; trigger_type: string; created_at: number }[]>(
+    "SELECT id, trigger_type, created_at FROM book_versions WHERE book_id = ?",
+    [bookId]
+  );
+  const keep = retainVersions(
+    rows.map((row) => ({ id: row.id, triggerType: row.trigger_type, createdAt: row.created_at })),
+    now
+  );
+  const dropped = rows.filter((row) => !keep.has(row.id)).map((row) => row.id);
+  await deleteVersionRows(db, dropped);
+  return dropped;
+}
+
+/** Remembers that a Version's remote copy must be tombstoned on the next sync. */
+async function recordVersionTombstone(
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  versionId: string,
+  bookId: string
+): Promise<void> {
+  await db.execute(
+    "INSERT OR REPLACE INTO version_tombstones (version_id, book_id, deleted_at) VALUES (?, ?, ?)",
+    [versionId, bookId, nowSeconds()]
+  );
 }
 
 function generateId(): string {
@@ -91,6 +133,8 @@ interface VersionStore {
   pageSize: number;
   isLoading: boolean;
   error: string | null;
+  /** Bytes the current Book's history takes; null until it is measured. */
+  historyBytes: number | null;
 
   loadVersions: (bookId: string, page?: number, pageSize?: number) => Promise<void>;
   setPage: (page: number) => Promise<void>;
@@ -99,53 +143,6 @@ interface VersionStore {
   restoreVersion: (versionId: string, options?: RestoreOptions) => Promise<AppliedBook | undefined>;
   renameVersion: (versionId: string, name: string) => Promise<void>;
   deleteVersion: (versionId: string) => Promise<void>;
-}
-
-async function pruneTriggerType(
-  db: Awaited<ReturnType<typeof getDatabase>>,
-  bookId: string,
-  trigger: PrunableTrigger,
-  keep: number
-): Promise<number> {
-  // Find the cutoff — the (keep+1)th most-recent row of this trigger type.
-  // Anything older (or tied at the same created_at with a smaller id) is excess.
-  //
-  // Two-step (SELECT cutoff → DELETE everything past it) to avoid SQLite-isms
-  // like `LIMIT -1` or `DELETE … WHERE id IN (SELECT …)` patterns that some
-  // drivers (notably tauri-plugin-sql via sqlx) handle inconsistently.
-  const cutoffRows = await db.select<Array<{ created_at: number; id: string }>>(
-    `SELECT created_at, id FROM book_versions
-     WHERE book_id = ? AND trigger_type = ?
-     ORDER BY created_at DESC, id DESC
-     LIMIT 1 OFFSET ?`,
-    [bookId, trigger, keep]
-  );
-
-  if (cutoffRows.length === 0) {
-    return 0;
-  }
-
-  const cutoff = cutoffRows[0];
-  const result = await db.execute(
-    `DELETE FROM book_versions
-     WHERE book_id = ?
-       AND trigger_type = ?
-       AND (created_at < ? OR (created_at = ? AND id <= ?))`,
-    [bookId, trigger, cutoff.created_at, cutoff.created_at, cutoff.id]
-  );
-  return result.rowsAffected ?? 0;
-}
-
-async function pruneAllAutoTriggers(
-  db: Awaited<ReturnType<typeof getDatabase>>,
-  bookId: string,
-  keep: number
-): Promise<number> {
-  let total = 0;
-  for (const trigger of PRUNABLE_TRIGGERS) {
-    total += await pruneTriggerType(db, bookId, trigger, keep);
-  }
-  return total;
 }
 
 async function fetchPage(
@@ -188,10 +185,11 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
   pageSize: DEFAULT_VERSIONS_PAGE_SIZE,
   isLoading: false,
   error: null,
+  historyBytes: null,
 
   loadVersions: async (bookId, page = 1, pageSize = DEFAULT_VERSIONS_PAGE_SIZE) => {
-    // First load of this book in the session → opportunistically prune the
-    // auto-idle backlog. Page navigation (same currentBookId) skips this.
+    // First load of this book in the session applies Version Retention. Page
+    // navigation (same currentBookId) skips it.
     const isFirstLoad = get().currentBookId !== bookId;
 
     set({
@@ -201,26 +199,28 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
       pageSize,
     });
 
-    // Prune is non-fatal: if it fails we still want to render the page.
+    // Retention is non-fatal: if it fails we still want to render the page.
     if (isFirstLoad) {
       try {
         const db = await getDatabase();
-        const pruned = await pruneAllAutoTriggers(db, bookId, VERSION_AUTO_PRUNE_KEEP);
-        if (pruned > 0) {
-          console.info(`[versions] Pruned ${pruned} auto-version(s) for book ${bookId}`);
+        const pruned = await withVersionWrites(() => applyVersionRetention(db, bookId));
+        if (pruned.length > 0) {
+          console.info(`[versions] Version Retention dropped ${pruned.length} for book ${bookId}`);
         }
       } catch (err) {
-        console.warn("[versions] Auto-version prune failed:", err);
+        console.warn("[versions] Version Retention failed:", err);
       }
     }
 
     try {
       const { versions, totalCount, clampedPage } = await fetchPage(bookId, page, pageSize);
+      const bytes = await historyBytes(await getDatabase(), bookId);
       set({
         versions,
         totalCount,
         currentPage: clampedPage,
         isLoading: false,
+        historyBytes: bytes,
       });
     } catch (error) {
       set({ error: String(error), isLoading: false });
@@ -233,97 +233,99 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     await get().loadVersions(currentBookId, page, pageSize);
   },
 
-  createVersion: async (input: CreateVersionInput) => {
-    const db = await getDatabase();
-    const snapshotStr = await serializeBook(input.bookId);
-    const snapshot = JSON.parse(snapshotStr) as BookSnapshot;
-    // Hash the content-normalized snapshot so flushes that bump updatedAt
-    // without changing text don't create new versions.
-    const checksum = await computeChecksum(contentHashInput(snapshot));
+  createVersion: (input: CreateVersionInput) =>
+    withVersionWrites(async () => {
+      const db = await getDatabase();
+      const now = nowSeconds();
 
-    // Dedup: skip creation if the most recent version of this book has the
-    // same content checksum. Applies across all trigger types.
-    const lastVersions = await db.select<Record<string, unknown>[]>(
-      `SELECT checksum FROM book_versions
-       WHERE book_id = ?
-       ORDER BY created_at DESC, id DESC
-       LIMIT 1`,
-      [input.bookId]
-    );
-
-    if (lastVersions.length > 0 && lastVersions[0].checksum === checksum) {
-      return null;
-    }
-
-    const id = generateId();
-    const now = Math.floor(Date.now() / 1000);
-
-    await db.execute(
-      `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at, synced_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        input.bookId,
-        input.name ?? null,
-        snapshotStr,
-        snapshot.book.wordCount,
-        checksum,
-        input.triggerType,
-        now,
-        null,
-      ]
-    );
-
-    // Retention: cap automatic trigger types per book. Each prunable type has
-    // its own quota (so heavy "close" activity can't starve "auto-idle" history).
-    // Manual, pre-restore, and plugin are never pruned.
-    let prunedCount = 0;
-    if (isPrunable(input.triggerType)) {
-      prunedCount = await pruneTriggerType(
-        db,
-        input.bookId,
-        input.triggerType,
-        VERSION_AUTO_PRUNE_KEEP
-      );
-    }
-
-    const version: BookVersion = {
-      id,
-      bookId: input.bookId,
-      name: input.name ?? null,
-      wordCount: snapshot.book.wordCount,
-      checksum,
-      triggerType: input.triggerType,
-      createdAt: new Date(now * 1000),
-      syncedAt: null,
-    };
-
-    // Keep the visible page in sync when the user is browsing this book's history.
-    // We only mutate the visible slice when the new row would land on page 1
-    // (rows are sorted newest-first); other pages get refreshed lazily on navigation.
-    set((state) => {
-      if (state.currentBookId !== input.bookId) return {};
-      const newTotal = state.totalCount + 1 - prunedCount;
-      if (state.currentPage === 1) {
-        const next = [version, ...state.versions].slice(0, state.pageSize);
-        return { versions: next, totalCount: newTotal };
+      // A close Checkpoint right after another Version adds history without
+      // adding safety: the Book was just saved (#612).
+      if (input.triggerType === "close") {
+        const recent = await db.select<{ id: string }[]>(
+          "SELECT id FROM book_versions WHERE book_id = ? AND created_at > ? LIMIT 1",
+          [input.bookId, now - VERSION_CLOSE_COALESCE_SECONDS]
+        );
+        if (recent.length > 0) return null;
       }
-      return { totalCount: newTotal };
-    });
 
-    return version;
-  },
+      const snapshotStr = await serializeBook(input.bookId);
+      const snapshot = JSON.parse(snapshotStr) as BookSnapshot;
+      // Hash the content-normalized snapshot so flushes that bump updatedAt
+      // without changing text don't create new versions.
+      const checksum = await computeChecksum(contentHashInput(snapshot));
+
+      // Dedup: skip creation if the most recent version of this book has the
+      // same content checksum. Applies across all trigger types.
+      const lastVersions = await db.select<Record<string, unknown>[]>(
+        `SELECT checksum FROM book_versions
+         WHERE book_id = ?
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1`,
+        [input.bookId]
+      );
+
+      if (lastVersions.length > 0 && lastVersions[0].checksum === checksum) {
+        return null;
+      }
+
+      const id = generateId();
+      await db.executeAtomic(
+        await insertSplitVersionStatements(
+          db,
+          {
+            id,
+            bookId: input.bookId,
+            name: input.name ?? null,
+            wordCount: snapshot.book.wordCount,
+            checksum,
+            triggerType: input.triggerType,
+            createdAt: now,
+            syncedAt: null,
+          },
+          snapshot
+        )
+      );
+
+      // Version Retention runs after every automatic Checkpoint. Named
+      // Versions, pre-restore, and Plugin Checkpoints are always kept.
+      const prunedCount = RETAINED_AUTOMATIC_TRIGGERS.includes(input.triggerType)
+        ? (await applyVersionRetention(db, input.bookId, now)).length
+        : 0;
+
+      const version: BookVersion = {
+        id,
+        bookId: input.bookId,
+        name: input.name ?? null,
+        wordCount: snapshot.book.wordCount,
+        checksum,
+        triggerType: input.triggerType,
+        createdAt: new Date(now * 1000),
+        syncedAt: null,
+      };
+
+      // Keep the visible page in sync when the user is browsing this book's history.
+      // We only mutate the visible slice when the new row would land on page 1
+      // (rows are sorted newest-first); other pages get refreshed lazily on navigation.
+      set((state) => {
+        if (state.currentBookId !== input.bookId) return {};
+        const newTotal = state.totalCount + 1 - prunedCount;
+        if (state.currentPage === 1) {
+          const next = [version, ...state.versions].slice(0, state.pageSize);
+          return { versions: next, totalCount: newTotal };
+        }
+        return { totalCount: newTotal };
+      });
+
+      return version;
+    }),
 
   getVersionSnapshot: async (versionId: string) => {
     const db = await getDatabase();
-    const result = await db.select<Record<string, unknown>[]>(
-      "SELECT snapshot FROM book_versions WHERE id = ?",
-      [versionId]
-    );
-    if (result.length === 0) {
+    const stored = await readVersionSnapshot(db, versionId);
+    if (!stored) {
       throw new Error("Version not found");
     }
-    return result[0].snapshot as string;
+    return JSON.stringify(stored.snapshot);
   },
 
   restoreVersion: async (versionId: string, options?: RestoreOptions) => {
@@ -333,17 +335,12 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     await flushPendingEdits();
     const db = await getDatabase();
 
-    // Load target version metadata and snapshot
-    const result = await db.select<Record<string, unknown>[]>(
-      "SELECT book_id, snapshot FROM book_versions WHERE id = ?",
-      [versionId]
-    );
-    if (result.length === 0) {
+    // Load the target Version, whatever format it is stored in.
+    const stored = await readVersionSnapshot(db, versionId);
+    if (!stored) {
       throw new Error("Version not found");
     }
-
-    const bookId = result[0].book_id as string;
-    const targetJson = result[0].snapshot as string;
+    const { bookId, snapshot } = stored;
 
     // Create pre-restore version
     await useVersionStore.getState().createVersion({
@@ -351,8 +348,6 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
       triggerType: "pre-restore",
       name: options?.preRestoreName,
     });
-
-    const snapshot = JSON.parse(targetJson) as BookSnapshot;
 
     // A local apply reads as a fresh local edit (timestamps move to now),
     // persists through the book write path, and emits the local Change so
@@ -364,18 +359,62 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     return applied;
   },
 
+  // Version metadata never changes on the sync server, so renaming makes a new
+  // Named Version over the same content and tombstones the old one: the name
+  // reaches every device, and Version Retention always keeps it (ADR 0033).
   renameVersion: async (versionId: string, name: string) => {
     const db = await getDatabase();
-    await db.execute("UPDATE book_versions SET name = ? WHERE id = ?", [name, versionId]);
+    await withVersionWrites(async () => {
+      const rows = await db.select<{ book_id: string }[]>(
+        "SELECT book_id FROM book_versions WHERE id = ?",
+        [versionId]
+      );
+      const row = rows[0];
+      if (!row) throw new Error("Version not found");
+      const id = generateId();
+      await db.executeAtomic([
+        {
+          sql: `INSERT INTO book_versions
+                  (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at, synced_at, format)
+                SELECT ?, book_id, ?, snapshot, word_count, checksum, 'manual', created_at, NULL, format
+                FROM book_versions WHERE id = ?`,
+          params: [id, name, versionId],
+        },
+        {
+          sql: `INSERT INTO book_version_chapters (version_id, chapter_id, position, content_hash, meta)
+                SELECT ?, chapter_id, position, content_hash, meta
+                FROM book_version_chapters WHERE version_id = ?`,
+          params: [id, versionId],
+        },
+        {
+          sql: `INSERT INTO book_version_assets (version_id, role, hash)
+                SELECT ?, role, hash FROM book_version_assets WHERE version_id = ?`,
+          params: [id, versionId],
+        },
+      ]);
+      await deleteVersionRows(db, [versionId]);
+      // Always: a push may still be uploading it, and tombstoning a key the
+      // server never had only leaves a small deleted row.
+      await recordVersionTombstone(db, versionId, row.book_id);
+    });
 
-    set((state) => ({
-      versions: state.versions.map((v) => (v.id === versionId ? { ...v, name } : v)),
-    }));
+    const { currentBookId, currentPage, pageSize } = get();
+    if (currentBookId) await get().loadVersions(currentBookId, currentPage, pageSize);
   },
 
   deleteVersion: async (versionId: string) => {
     const db = await getDatabase();
-    await db.execute("DELETE FROM book_versions WHERE id = ?", [versionId]);
+    await withVersionWrites(async () => {
+      const rows = await db.select<{ book_id: string }[]>(
+        "SELECT book_id FROM book_versions WHERE id = ?",
+        [versionId]
+      );
+      await deleteVersionRows(db, [versionId]);
+      const row = rows[0];
+      // Without the tombstone the next sync would pull the Version back, even
+      // one whose push is still uploading.
+      if (row) await recordVersionTombstone(db, versionId, row.book_id);
+    });
 
     // Reload the current page so totalCount and the visible slice stay correct
     // (the page may now have one fewer row, or we may have dropped off the last page).

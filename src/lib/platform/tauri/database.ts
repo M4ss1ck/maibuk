@@ -1,6 +1,6 @@
 import Database from "@tauri-apps/plugin-sql";
 import { invoke } from "@tauri-apps/api/core";
-import type { DatabaseAdapter } from "@/lib/platform/types";
+import type { AtomicStatement, DatabaseAdapter } from "@/lib/platform/types";
 import { AtomicStatementError } from "@/lib/db/atomic";
 import { exportSqlDump } from "@/lib/db/sql-export";
 
@@ -25,7 +25,7 @@ class TauriDatabaseAdapter implements DatabaseAdapter {
     return exportSqlDump(this);
   }
 
-  async executeAtomic(statements: string[]): Promise<void> {
+  async executeAtomic(statements: readonly AtomicStatement[]): Promise<void> {
     try {
       await invoke("library_execute_atomic", { statements });
     } catch (error) {

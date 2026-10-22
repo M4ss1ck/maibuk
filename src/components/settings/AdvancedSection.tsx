@@ -106,7 +106,11 @@ export function AdvancedSection() {
       }
     } catch (error) {
       console.error("Failed to import database:", error);
-      alert(t("settings.importDatabaseFailed"));
+      alert(
+        error instanceof Error && error.message === "DUMP_TOO_NEW"
+          ? t("backup.dumpTooNew")
+          : t("settings.importDatabaseFailed")
+      );
     } finally {
       setIsImporting(false);
     }

@@ -1309,7 +1309,13 @@
     "skipTutorial": "Omitir el Tutorial",
     "areaTutorial": "Tutorial",
     "keywords": {
-      "openReleaseNotes": ["notas de la versión", "cambios", "versión", "actualización", "acerca de"],
+      "openReleaseNotes": [
+        "notas de la versión",
+        "cambios",
+        "versión",
+        "actualización",
+        "acerca de"
+      ],
       "toggleAlwaysOnTop": ["fijar", "flotante", "ventana", "siempre visible"],
       "toggleTheme": ["oscuro", "claro", "modo", "apariencia"],
       "syncNow": ["subir", "descargar", "nube"],
@@ -1440,6 +1446,8 @@
     }
   },
   "versions": {
+    "upgradeBackupFailed": "Maibuk no pudo guardar una copia de seguridad antes de ordenar tu historial de versiones, así que el historial queda como está. Lo intentará de nuevo la próxima vez que abras Maibuk.",
+    "historySize": "El historial ocupa {{size}}",
     "moreActions": "Más acciones de versión",
     "title": "Historial de versiones",
     "saveVersion": "Guardar versión",
@@ -1517,6 +1525,7 @@
     "restoreFailed": "La restauración falló y tu biblioteca puede estar incompleta. Restaura la copia \"Pre-restauración\" más reciente para recuperarla.",
     "restoreInvalid": "Esta copia de seguridad no contiene datos de libros o capítulos para restaurar.",
     "backupCorrupt": "La copia de seguridad está dañada y no se puede restaurar.",
+    "dumpTooNew": "Este archivo se creó con una edición más reciente de Maibuk. Actualiza Maibuk para abrirlo.",
     "backupCreated": "Copia de seguridad creada",
     "backupEmpty": "No se creó copia de seguridad: tu biblioteca no tiene datos que respaldar.",
     "createFailed": "No se pudo crear la copia de seguridad. Verifica el espacio disponible en disco.",

@@ -1,6 +1,6 @@
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from "sql.js";
 import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
-import type { DatabaseAdapter } from "@/lib/platform/types";
+import type { AtomicStatement, DatabaseAdapter } from "@/lib/platform/types";
 import { runAtomicSqlJs } from "@/lib/db/atomic";
 import { exportSqlDump } from "@/lib/db/sql-export";
 
@@ -41,7 +41,7 @@ export class MemoryDatabaseAdapter implements DatabaseAdapter {
     return exportSqlDump(this);
   }
 
-  async executeAtomic(statements: string[]): Promise<void> {
+  async executeAtomic(statements: readonly AtomicStatement[]): Promise<void> {
     runAtomicSqlJs(this.db, statements);
   }
 }

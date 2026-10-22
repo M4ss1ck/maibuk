@@ -12,6 +12,9 @@ const mockPushBookBlob = vi.hoisted(() => vi.fn());
 const mockPullBookBlob = vi.hoisted(() => vi.fn());
 const mockListRemoteBooks = vi.hoisted(() => vi.fn());
 const mockListRemoteVersions = vi.hoisted(() => vi.fn());
+const mockListObjects = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockListDeletedObjects = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockSoftDeleteObject = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockPushVersionBlob = vi.hoisted(() => vi.fn());
 const mockPullVersionBlob = vi.hoisted(() => vi.fn());
 const mockApplyBookSnapshot = vi.hoisted(() => vi.fn());
@@ -66,6 +69,9 @@ vi.mock("@/features/sync/client", () => ({
   pullBookBlob: mockPullBookBlob,
   listRemoteBooks: mockListRemoteBooks,
   listRemoteVersions: mockListRemoteVersions,
+  listObjects: mockListObjects,
+  listDeletedObjects: mockListDeletedObjects,
+  softDeleteObject: mockSoftDeleteObject,
   pushVersionBlob: mockPushVersionBlob,
   pullVersionBlob: mockPullVersionBlob,
   refreshAuth: mockRefreshAuth,
@@ -103,6 +109,7 @@ vi.mock("@/features/settings/store", () => ({
 }));
 
 vi.mock("@/features/versions/store", () => ({
+  withVersionWrites: (work: () => Promise<unknown>) => work(),
   useVersionStore: {
     getState: () => ({ createVersion: mockCreateVersion }),
   },
@@ -141,6 +148,7 @@ describe("sync concurrency — FIFO serialization", () => {
   const mockDb = {
     select: vi.fn(),
     execute: vi.fn(),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(() => {

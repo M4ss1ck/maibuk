@@ -31,6 +31,23 @@ vi.mock("@/features/sync/pending-edits", () => ({
   flushPendingEdits: mockFlushPendingEdits,
 }));
 
+const { mockVersionWrites } = vi.hoisted(() => ({
+  mockVersionWrites: { queued: 0 },
+}));
+
+// Passthrough that counts each Version write as it joins the lock, so a test
+// can wait for a dump to reach the queue instead of sleeping.
+vi.mock("@/features/versions/content-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/versions/content-store")>();
+  return {
+    ...actual,
+    withVersionWrites: <T>(work: () => Promise<T>): Promise<T> => {
+      mockVersionWrites.queued += 1;
+      return actual.withVersionWrites(work);
+    },
+  };
+});
+
 /** The DELETE statements a mocked execute call received. */
 function deletesFrom(execute: ReturnType<typeof vi.fn>): string[] {
   return execute.mock.calls
@@ -205,6 +222,40 @@ describe("src/lib/db/index.ts", () => {
       expect(data).toEqual(new Uint8Array([1, 2, 3]));
       expect(mockDb.exportData).toHaveBeenCalled();
     });
+
+    it("resolves only after a Version write already running has finished", async () => {
+      const { exportDatabase } = await import("@/lib/db");
+      const { withVersionWrites } = await import("@/features/versions/content-store");
+      mockVersionWrites.queued = 0;
+      const events: string[] = [];
+      mockDb.exportData.mockImplementation(async () => {
+        events.push("export");
+        return new Uint8Array([9]);
+      });
+      let finishWrite!: () => void;
+      const writeHeld = new Promise<void>((resolve) => {
+        finishWrite = resolve;
+      });
+
+      const write = withVersionWrites(async () => {
+        events.push("write-start");
+        await writeHeld;
+        events.push("write-end");
+      });
+      const dump = exportDatabase();
+
+      // The dump has joined the queue behind the held write. Only the write's
+      // release can let it run.
+      await vi.waitFor(() => expect(mockVersionWrites.queued).toBe(2));
+      expect(events).not.toContain("export");
+
+      finishWrite();
+      const data = await dump;
+      await write;
+
+      expect(events).toEqual(["write-start", "write-end", "export"]);
+      expect(data).toEqual(new Uint8Array([9]));
+    });
   });
 
   describe("resetDatabase()", () => {
@@ -221,6 +272,10 @@ describe("src/lib/db/index.ts", () => {
         "DELETE FROM book_metadata",
         "DELETE FROM project_assets",
         "DELETE FROM chapters",
+        "DELETE FROM book_version_chapters",
+        "DELETE FROM book_version_assets",
+        "DELETE FROM version_blobs",
+        "DELETE FROM version_tombstones",
         "DELETE FROM book_versions",
         "DELETE FROM books",
         "DELETE FROM cover_templates",
@@ -349,6 +404,11 @@ describe("src/lib/db/index.ts", () => {
   });
 
   describe("importDatabase()", () => {
+    // The load's last statement: a whole-Book Version row from the dump that
+    // landed on a split row goes back to inline (ADR 0032).
+    const RESTORE_INLINE_VERSIONS = `UPDATE book_versions SET format = 'inline'
+         WHERE format = 'split' AND snapshot NOT LIKE '%"chapters":[]%'`;
+
     it("flushes pending edits, then loads each INSERT as an in-place upsert", async () => {
       const { importDatabase } = await import("@/lib/db");
       const sql = `INSERT INTO books (id) VALUES ('1');\nINSERT OR IGNORE INTO chapters (id) VALUES ('a;b');`;
@@ -359,6 +419,7 @@ describe("src/lib/db/index.ts", () => {
       expect(mockDb.executeAtomic).toHaveBeenCalledWith([
         `INSERT INTO books (id) VALUES ('1') ON CONFLICT DO UPDATE SET id = excluded.id`,
         `INSERT INTO chapters (id) VALUES ('a;b') ON CONFLICT DO UPDATE SET id = excluded.id`,
+        RESTORE_INLINE_VERSIONS,
       ]);
       expect(mockFlushPendingEdits.mock.invocationCallOrder[0]).toBeLessThan(
         mockDb.executeAtomic.mock.invocationCallOrder[0]
@@ -373,6 +434,7 @@ describe("src/lib/db/index.ts", () => {
 
       expect(mockDb.executeAtomic).toHaveBeenCalledWith([
         `INSERT INTO books (id) VALUES ('1') ON CONFLICT DO UPDATE SET id = excluded.id`,
+        RESTORE_INLINE_VERSIONS,
       ]);
     });
 

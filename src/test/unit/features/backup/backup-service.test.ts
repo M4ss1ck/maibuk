@@ -515,6 +515,9 @@ describe("BackupService", () => {
       expect(mockDb.executeAtomic).toHaveBeenCalledTimes(1);
       expect(mockDb.executeAtomic).toHaveBeenCalledWith([
         "DELETE FROM chapters",
+        "DELETE FROM book_version_chapters",
+        "DELETE FROM book_version_assets",
+        "DELETE FROM version_blobs",
         "DELETE FROM book_versions",
         "DELETE FROM books",
         "DELETE FROM notes",
@@ -613,7 +616,7 @@ describe("BackupService", () => {
         return [];
       });
       mockDb.executeAtomic.mockRejectedValueOnce(
-        new AtomicStatementError(7, "UNIQUE constraint failed", 8)
+        new AtomicStatementError(10, "UNIQUE constraint failed", 11)
       );
 
       await expect(
@@ -702,7 +705,7 @@ describe("BackupService", () => {
         return [];
       });
       mockDb.executeAtomic.mockRejectedValueOnce(
-        new AtomicStatementError(7, "UNIQUE constraint failed", 8)
+        new AtomicStatementError(10, "UNIQUE constraint failed", 11)
       );
 
       try {
@@ -746,8 +749,9 @@ describe("BackupService", () => {
     });
 
     it("cancels the prepared replacement when the Restore fails", async () => {
-      const { onBeforeBulkReplace, onBulkReplaceCancelled, resetChangeFeedForTests } =
-        await import("@/features/sync/change-feed");
+      const { onBeforeBulkReplace, onBulkReplaceCancelled, resetChangeFeedForTests } = await import(
+        "@/features/sync/change-feed"
+      );
       resetChangeFeedForTests();
       const order: string[] = [];
       const offPrepared = onBeforeBulkReplace((reason) => {
@@ -764,7 +768,7 @@ describe("BackupService", () => {
         return [];
       });
       mockDb.executeAtomic.mockRejectedValueOnce(
-        new AtomicStatementError(7, "UNIQUE constraint failed", 8)
+        new AtomicStatementError(10, "UNIQUE constraint failed", 11)
       );
 
       try {
@@ -875,8 +879,11 @@ describe("BackupService", () => {
       // But restore should still proceed
       expect(mockDb.executeAtomic).toHaveBeenCalledTimes(1);
       const skippedStatements = mockDb.executeAtomic.mock.calls[0][0] as string[];
-      expect(skippedStatements.slice(0, 7)).toEqual([
+      expect(skippedStatements.slice(0, 10)).toEqual([
         "DELETE FROM chapters",
+        "DELETE FROM book_version_chapters",
+        "DELETE FROM book_version_assets",
+        "DELETE FROM version_blobs",
         "DELETE FROM book_versions",
         "DELETE FROM books",
         "DELETE FROM notes",

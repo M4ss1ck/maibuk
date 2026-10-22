@@ -204,8 +204,11 @@ describe("BackupService concurrency — shared write queue", () => {
     expect(order).toEqual(["save:daily", "save:pre-restore", `read:${target}`]);
     expect(mockDb.executeAtomic).toHaveBeenCalledTimes(1);
     const restoreStatements = mockDb.executeAtomic.mock.calls[0][0] as string[];
-    expect(restoreStatements.slice(0, 7)).toEqual([
+    expect(restoreStatements.slice(0, 10)).toEqual([
       "DELETE FROM chapters",
+      "DELETE FROM book_version_chapters",
+      "DELETE FROM book_version_assets",
+      "DELETE FROM version_blobs",
       "DELETE FROM book_versions",
       "DELETE FROM books",
       "DELETE FROM notes",

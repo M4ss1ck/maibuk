@@ -134,6 +134,82 @@ describe("runAtomicSqlJs()", () => {
   });
 });
 
+describe("runAtomicSqlJs() with bound statements", () => {
+  it("stores a bound value with quotes, semicolons and 1 MB exactly", async () => {
+    const db = await createRawDb();
+    const tricky = "O'Brien; DROP TABLE authors; --";
+    const big = "a'b;".repeat(250_000); // 1,000,000 characters
+
+    runAtomicSqlJs(db, [
+      { sql: "INSERT INTO authors (id, name) VALUES (?, ?)", params: ["a2", tricky] },
+      { sql: "INSERT INTO notes (id, title) VALUES (?, ?)", params: ["n2", big] },
+    ]);
+
+    const rows = snapshot(db);
+    expect(rows.authors.find((row) => row.id === "a2")?.name).toBe(tricky);
+    expect(rows.notes.find((row) => row.id === "n2")?.title).toBe(big);
+    db.close();
+  });
+
+  it("commits plain and bound statements together", async () => {
+    const db = await createRawDb();
+
+    runAtomicSqlJs(db, [
+      "INSERT INTO authors (id, name) VALUES ('a2', 'Plain')",
+      { sql: "INSERT INTO notes (id, title) VALUES (?, ?)", params: ["n2", "Bound"] },
+      "   ",
+    ]);
+
+    expect(snapshot(db).authors).toHaveLength(2);
+    expect(snapshot(db).notes).toHaveLength(2);
+    db.close();
+  });
+
+  it("a failing bound statement rolls back every statement and reports its index", async () => {
+    const db = await createRawDb();
+    const before = snapshot(db);
+
+    let error: unknown = null;
+    try {
+      runAtomicSqlJs(db, [
+        "INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')",
+        { sql: "INSERT INTO notes (id, title) VALUES (?, ?)", params: ["n1", "Duplicate id"] },
+      ]);
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeInstanceOf(AtomicStatementError);
+    expect((error as AtomicStatementError).index).toBe(1);
+    expect((error as AtomicStatementError).message).toMatch(/^Statement 2\/2 failed: /);
+    expect(snapshot(db)).toEqual(before);
+    db.close();
+  });
+
+  it("refuses a bound statement whose sql is BEGIN before running anything", async () => {
+    const db = await createRawDb();
+    const before = snapshot(db);
+
+    let error: unknown = null;
+    try {
+      runAtomicSqlJs(db, [
+        "INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')",
+        { sql: "BEGIN", params: [] },
+      ]);
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeInstanceOf(AtomicStatementError);
+    expect((error as AtomicStatementError).index).toBe(1);
+    expect((error as AtomicStatementError).detail).toBe(
+      "transaction control statements are not allowed in an atomic load"
+    );
+    expect(snapshot(db)).toEqual(before);
+    db.close();
+  });
+});
+
 describe("isTransactionControl()", () => {
   it.each([
     ["BEGIN", true],

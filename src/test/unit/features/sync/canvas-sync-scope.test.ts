@@ -20,6 +20,9 @@ const mockListRemoteDeletedBooks = vi.hoisted(() => vi.fn());
 const mockListRemoteDeletedNotes = vi.hoisted(() => vi.fn());
 const mockListRemoteDeletedCanvases = vi.hoisted(() => vi.fn());
 const mockListRemoteVersions = vi.hoisted(() => vi.fn());
+const mockListObjects = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockListDeletedObjects = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockSoftDeleteObject = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockSyncStoreGetState = vi.hoisted(() => vi.fn());
 const mockUseSettingsStoreGetState = vi.hoisted(() => vi.fn());
 const mockCreateVersion = vi.hoisted(() => vi.fn());
@@ -57,6 +60,9 @@ vi.mock("../../../../features/sync/client", () => ({
   pullBookBlob: vi.fn().mockResolvedValue(null),
   listRemoteBooks: mockListRemoteBooks,
   listRemoteVersions: mockListRemoteVersions,
+  listObjects: mockListObjects,
+  listDeletedObjects: mockListDeletedObjects,
+  softDeleteObject: mockSoftDeleteObject,
   pushVersionBlob: vi.fn(),
   pullVersionBlob: vi.fn().mockResolvedValue(null),
   refreshAuth: vi.fn(),
@@ -94,6 +100,7 @@ vi.mock("../../../../features/settings/store", () => ({
 }));
 
 vi.mock("../../../../features/versions/store", () => ({
+  withVersionWrites: (work: () => Promise<unknown>) => work(),
   useVersionStore: {
     getState: () => ({ createVersion: mockCreateVersion }),
   },
@@ -153,6 +160,7 @@ beforeEach(() => {
       return [];
     }),
     execute: vi.fn().mockResolvedValue({ rowsAffected: 1 }),
+    executeAtomic: vi.fn().mockResolvedValue(undefined),
   };
   mockGetDatabase.mockResolvedValue(mockDb);
   mockCreateBackupAdapter.mockResolvedValue({

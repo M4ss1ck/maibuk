@@ -1,5 +1,5 @@
 ---
-status: accepted (not implemented)
+status: accepted (not implemented); Version retention superseded in part by ADR 0033
 ---
 
 # Versions and metrics stay outside Entity Sync
