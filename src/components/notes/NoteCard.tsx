@@ -5,7 +5,7 @@ import { BookOpen } from "lucide-react";
 import type { Note } from "@/features/notes";
 import { notePlainText } from "@/components/notes/notes-list-model";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
-import { timeAgo } from "@/components/notes/timeAgo";
+import { noteFullDate, timeAgo } from "@/components/notes/timeAgo";
 import { ItemActionsMenu } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
@@ -47,6 +47,7 @@ export const NoteCard = memo(function NoteCard({
   });
   useItemCommands(cardRef, actions);
 
+
   return (
     <GridListItem
       id={note.id}
@@ -84,6 +85,7 @@ export const NoteCard = memo(function NoteCard({
           <NoteTagsRow
             tags={note.tags}
             dateLabel={timeAgo(note.contentUpdatedAt, i18n.language, t)}
+            dateTooltip={noteFullDate(note.contentUpdatedAt, i18n.language)}
             interactiveOverflow={false}
           />
         </div>

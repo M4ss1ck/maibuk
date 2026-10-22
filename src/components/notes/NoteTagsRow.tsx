@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { tagColor } from "@/components/notes/tagColor";
 import { Tooltip } from "@/components/ui";
 
@@ -11,6 +11,8 @@ interface NoteTagsRowProps {
   datePosition?: "left" | "right";
   action?: ReactNode;
   interactiveOverflow?: boolean;
+  /** Full date behind the date label, shown in a tooltip and linked as its description. */
+  dateTooltip?: string;
 }
 
 function TagChip({ tag, className = "" }: { tag: string; className?: string }) {
@@ -28,13 +30,34 @@ function TagChip({ tag, className = "" }: { tag: string; className?: string }) {
   );
 }
 
+/**
+ * Link a hidden description to the GridList row around it. React Aria drops
+ * `aria-describedby` from GridListItem and its description slot joins the
+ * row's name instead, so the link is set once, when the element mounts.
+ */
+function describeRow(node: HTMLElement | null) {
+  const row = node?.closest<HTMLElement>('[role="row"]');
+  if (!node || !row) return;
+  const ids = (row.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean);
+  if (!ids.includes(node.id)) row.setAttribute("aria-describedby", [...ids, node.id].join(" "));
+  return () => {
+    const rest = (row.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .filter((id) => id && id !== node.id);
+    if (rest.length > 0) row.setAttribute("aria-describedby", rest.join(" "));
+    else row.removeAttribute("aria-describedby");
+  };
+}
+
 export function NoteTagsRow({
   tags,
   dateLabel,
   datePosition = "right",
   action,
   interactiveOverflow = true,
+  dateTooltip,
 }: NoteTagsRowProps) {
+  const descriptionId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const actionRef = useRef<HTMLSpanElement>(null);
@@ -105,9 +128,13 @@ export function NoteTagsRow({
     </span>
   );
 
+  // The date span is not focusable: the tooltip opens on hover, and the row
+  // that owns focus gets the same text as its accessible description.
+  const datedEl = dateTooltip ? <Tooltip content={dateTooltip}>{dateEl}</Tooltip> : dateEl;
+
   return (
     <div ref={containerRef} className="relative flex min-w-0 items-center gap-1">
-      {datePosition === "left" && dateEl}
+      {datePosition === "left" && datedEl}
       {action && (
         <span ref={actionRef} className="shrink-0">
           {action}
@@ -143,7 +170,13 @@ export function NoteTagsRow({
         </span>
       )}
 
-      {datePosition === "right" && dateEl}
+      {datePosition === "right" && datedEl}
+
+      {dateTooltip && (
+        <span id={descriptionId} ref={describeRow} hidden>
+          {dateTooltip}
+        </span>
+      )}
 
       {showHiddenTags && hiddenCount > 0 && interactiveOverflow && (
         <div className="absolute left-0 top-full z-20 mt-1 flex max-w-56 flex-wrap gap-1 rounded-lg border border-border bg-background p-2 shadow-lg">
