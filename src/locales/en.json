@@ -1441,6 +1441,8 @@
     }
   },
   "versions": {
+    "upgradeBackupFailed": "Maibuk could not save a safety backup before tidying your version history, so your history stays as it is. It tries again the next time Maibuk starts.",
+    "historySize": "History uses {{size}}",
     "moreActions": "More version actions",
     "title": "Version history",
     "saveVersion": "Save version",
@@ -1518,6 +1520,7 @@
     "restoreFailed": "Restore failed, and your library may be incomplete. Restore the latest \"Pre-restore\" backup to get it back.",
     "restoreInvalid": "This backup contains no book or chapter data to restore.",
     "backupCorrupt": "Backup is corrupted and cannot be restored.",
+    "dumpTooNew": "This file was made by a newer release of Maibuk. Update Maibuk to open it.",
     "backupCreated": "Backup created",
     "backupEmpty": "No backup created: your library has no data to back up.",
     "createFailed": "Could not create backup. Check available disk space.",

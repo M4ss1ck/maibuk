@@ -1,7 +1,14 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
+import type { BookSnapshot } from "@/features/sync/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
-import { VERSION_AUTO_PRUNE_KEEP } from "@/constants";
+import { retainVersions } from "@/features/versions/retention";
+import {
+  convertInlineVersions,
+  insertSplitVersionStatements,
+  readVersionSnapshot,
+  type VersionRowInput,
+} from "@/features/versions/content-store";
 import { PendingEditsFlushError, registerPendingEditsFlush } from "@/features/sync/pending-edits";
 
 const { mockGetDatabase } = vi.hoisted(() => ({
@@ -22,7 +29,9 @@ vi.mock("../../../../features/sync/serializer", () => ({
   applyBookSnapshot: mockApplyBookSnapshot,
 }));
 
-const { useVersionStore } = await import("@/features/versions/store");
+const { useVersionStore, applyVersionRetention, withVersionWrites } = await import(
+  "@/features/versions/store"
+);
 
 async function seedBook(db: DatabaseAdapter, bookId = "book-1") {
   const now = Math.floor(Date.now() / 1000);
@@ -56,13 +65,101 @@ function makeSnapshot(wordCount: number, updatedAt: number): string {
   });
 }
 
+// Retention bins are UTC days and weeks counted from the epoch, so every seeded
+// age is measured against this fixed instant.
+const NOW_MS = Date.UTC(2026, 9, 22, 12, 0, 0);
+const NOW = Math.floor(NOW_MS / 1000);
+const DAY = 24 * 60 * 60;
+
+interface SeededVersion {
+  id: string;
+  triggerType: string;
+  createdAt: number;
+}
+
+/** A Book with one chapter per entry; the snapshot a split Version stores. */
+function makeChapterSnapshot(chapters: Array<{ id: string; content: string }>): string {
+  const base = JSON.parse(makeSnapshot(2000, 1000));
+  base.chapters = chapters.map((chapter, order) => ({
+    id: chapter.id,
+    bookId: "book-1",
+    title: chapter.id,
+    content: chapter.content,
+    synopsis: null,
+    order,
+    parentId: null,
+    chapterType: "chapter",
+    wordCount: 1000,
+    status: "draft",
+    isIncludedInExport: true,
+    createdAt: 1000,
+    updatedAt: 1000,
+  }));
+  return JSON.stringify(base);
+}
+
+/** The retention rule's kept set over `candidates`, sorted, for comparing with the DB. */
+function expectedKept(candidates: SeededVersion[]): string[] {
+  return [...retainVersions(candidates, NOW)].sort();
+}
+
+/**
+ * Stores a Version the way the app does now: a split manifest with format
+ * 'split'. A raw INSERT would leave format at its 'inline' default, which
+ * holds every Version back until the upgrade has converted it.
+ */
+async function insertSplitRow(
+  db: DatabaseAdapter,
+  row: VersionRowInput,
+  snapshotJson: string
+): Promise<void> {
+  await db.executeAtomic(
+    await insertSplitVersionStatements(db, row, JSON.parse(snapshotJson) as BookSnapshot)
+  );
+}
+
 describe("useVersionStore", () => {
   let testDb: DatabaseAdapter;
+
+  /** Stores a split Version on book-1, the way the app saves one. */
+  async function seedVersion(
+    id: string,
+    triggerType: string,
+    createdAt: number,
+    extra: { name?: string | null; syncedAt?: number | null; checksum?: string } = {}
+  ): Promise<SeededVersion> {
+    await insertSplitRow(
+      testDb,
+      {
+        id,
+        bookId: "book-1",
+        name: extra.name ?? null,
+        wordCount: 1000,
+        checksum: extra.checksum ?? `chk-${id}`,
+        triggerType,
+        createdAt,
+        syncedAt: extra.syncedAt ?? null,
+      },
+      makeSnapshot(1000, createdAt)
+    );
+    return { id, triggerType, createdAt };
+  }
+
+  /** Ids of every Version the Book holds in the DB, sorted. */
+  async function keptIds(): Promise<string[]> {
+    const rows = await testDb.select<{ id: string }[]>(
+      "SELECT id FROM book_versions WHERE book_id = ?",
+      ["book-1"]
+    );
+    return rows.map((r) => r.id).sort();
+  }
 
   beforeEach(async () => {
     testDb = await createTestDatabase();
     mockGetDatabase.mockResolvedValue(testDb);
     await seedBook(testDb);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW_MS);
     mockSerializeBook.mockReset();
     mockApplyBookSnapshot.mockReset();
     // applyBookSnapshot resolves with the rows as stored; restore reads the
@@ -78,6 +175,10 @@ describe("useVersionStore", () => {
       isLoading: false,
       error: null,
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("createVersion", () => {
@@ -102,8 +203,13 @@ describe("useVersionStore", () => {
         [version!.id]
       );
       expect(rows).toHaveLength(1);
-      expect(rows[0].snapshot).toBe(snapshot);
+      expect(rows[0].format).toBe("split");
       expect(rows[0].trigger_type).toBe("manual");
+      // The stored `snapshot` is the split form with chapterCount; the Book it
+      // rebuilds is the one that was saved.
+      expect((await readVersionSnapshot(testDb, version!.id))?.snapshot).toEqual(
+        JSON.parse(snapshot)
+      );
     });
 
     it("dedups when checksum matches the last version", async () => {
@@ -130,20 +236,21 @@ describe("useVersionStore", () => {
     });
 
     it("dedups when only updatedAt changed but text content is identical", async () => {
-      // First snapshot at updatedAt=1000
+      // First snapshot at updatedAt=1000. auto-idle, not close: a close inside
+      // 10 minutes of another Version is coalesced, which would hide the dedup.
       mockSerializeBook.mockResolvedValueOnce(makeSnapshot(1000, 1000));
       const v1 = await useVersionStore.getState().createVersion({
         bookId: "book-1",
-        triggerType: "close",
+        triggerType: "auto-idle",
       });
       expect(v1).not.toBeNull();
 
-      // Same content, fresh updatedAt — simulates the "close" trigger flushing
-      // the editor (bumps chapter timestamps) without any real text change.
+      // Same content, fresh updatedAt — simulates a flush that bumps chapter
+      // timestamps without any real text change.
       mockSerializeBook.mockResolvedValueOnce(makeSnapshot(1000, 9999));
       const v2 = await useVersionStore.getState().createVersion({
         bookId: "book-1",
-        triggerType: "close",
+        triggerType: "auto-idle",
       });
       expect(v2).toBeNull();
 
@@ -170,106 +277,96 @@ describe("useVersionStore", () => {
       expect(useVersionStore.getState().versions[0].name).toBe("First");
     });
 
-    describe("auto-idle retention", () => {
-      const MAX_KEEP = VERSION_AUTO_PRUNE_KEEP;
-
-      async function seedAutoIdle(count: number) {
-        const baseTime = Math.floor(Date.now() / 1000) - count * 60;
-        for (let i = 0; i < count; i++) {
-          await testDb.execute(
-            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              `auto-${String(i).padStart(4, "0")}`,
-              "book-1",
-              null,
-              "{}",
-              i,
-              `seed-${i}`,
-              "auto-idle",
-              baseTime + i,
-            ]
-          );
+    describe("Version Retention", () => {
+      /** One automatic Version per day, `count` days back, an hour before each day mark. */
+      async function seedDailyHistory(trigger: string, count: number): Promise<SeededVersion[]> {
+        const seeded: SeededVersion[] = [];
+        for (let k = 0; k < count; k++) {
+          seeded.push(await seedVersion(`${trigger}-day-${k}`, trigger, NOW - k * DAY - 3600));
         }
+        return seeded;
       }
 
-      it("prunes older auto-idle checkpoints when one is created beyond the cap", async () => {
-        await seedAutoIdle(MAX_KEEP); // already at the cap with seeded rows
+      it("keeps what retainVersions keeps when an auto-idle Version lands on a 30-day history", async () => {
+        const seeded = await seedDailyHistory("auto-idle", 30);
+        useVersionStore.setState({ currentBookId: "book-1", totalCount: seeded.length });
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
 
-        // The new auto-idle insert must keep the count at MAX_KEEP (insert + prune one).
-        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
-
-        await useVersionStore.getState().createVersion({
+        const version = await useVersionStore.getState().createVersion({
           bookId: "book-1",
           triggerType: "auto-idle",
         });
 
-        const rows = await testDb.select<Record<string, unknown>[]>(
-          `SELECT COUNT(*) AS c FROM book_versions
-           WHERE book_id = ? AND trigger_type = 'auto-idle'`,
-          ["book-1"]
+        expect(version).not.toBeNull();
+        const kept = await keptIds();
+        expect(kept).toEqual(
+          expectedKept([...seeded, { id: version!.id, triggerType: "auto-idle", createdAt: NOW }])
         );
-        expect(Number(rows[0].c)).toBe(MAX_KEEP);
+        expect(kept.length).toBeLessThan(seeded.length + 1);
+        expect(useVersionStore.getState().totalCount).toBe(kept.length);
       });
 
-      it("prunes a large backlog of auto-idle rows down to the cap in one insert", async () => {
-        await seedAutoIdle(100);
+      it("keeps the newest 10 automatic Versions of the last day when 20 sit inside the last hour", async () => {
+        const seeded: SeededVersion[] = [];
+        for (let i = 0; i < 20; i++) {
+          seeded.push(await seedVersion(`hour-${i}`, "auto-idle", NOW - (i + 1) * 60));
+        }
+        useVersionStore.setState({ currentBookId: "book-1", totalCount: seeded.length });
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
 
-        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
-
-        await useVersionStore.getState().createVersion({
+        const version = await useVersionStore.getState().createVersion({
           bookId: "book-1",
           triggerType: "auto-idle",
         });
 
-        const rows = await testDb.select<Record<string, unknown>[]>(
-          `SELECT COUNT(*) AS c FROM book_versions
-           WHERE book_id = ? AND trigger_type = 'auto-idle'`,
-          ["book-1"]
+        const kept = await keptIds();
+        expect(kept).toEqual(
+          expectedKept([...seeded, { id: version!.id, triggerType: "auto-idle", createdAt: NOW }])
         );
-        expect(Number(rows[0].c)).toBe(MAX_KEEP);
+        expect(kept).toHaveLength(10);
+        expect(useVersionStore.getState().totalCount).toBe(10);
+      });
+
+      it("prunes a large auto-idle backlog to the retention rule in one insert", async () => {
+        const seeded: SeededVersion[] = [];
+        for (let i = 0; i < 100; i++) {
+          seeded.push(await seedVersion(`backlog-${i}`, "auto-idle", NOW - i * 3600 - 60));
+        }
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
+
+        const version = await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "auto-idle",
+        });
+
+        const kept = await keptIds();
+        expect(kept).toEqual(
+          expectedKept([...seeded, { id: version!.id, triggerType: "auto-idle", createdAt: NOW }])
+        );
+        expect(kept.length).toBeLessThan(seeded.length + 1);
       });
 
       it("never prunes manual or pre-restore versions", async () => {
-        const baseTime = Math.floor(Date.now() / 1000) - 10000;
+        const baseTime = NOW - 10000;
         for (const trigger of ["manual", "pre-restore"] as const) {
-          await testDb.execute(
-            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              `keep-${trigger}`,
-              "book-1",
-              `keep-${trigger}`,
-              "{}",
-              0,
-              `keep-${trigger}`,
-              trigger,
-              baseTime,
-            ]
-          );
+          await seedVersion(`keep-${trigger}`, trigger, baseTime, { name: `keep-${trigger}` });
         }
-        await seedAutoIdle(MAX_KEEP + 5);
-
-        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
+        await seedDailyHistory("auto-idle", 30);
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
 
         await useVersionStore.getState().createVersion({
           bookId: "book-1",
           triggerType: "auto-idle",
         });
 
-        for (const trigger of ["manual", "pre-restore"]) {
-          const rows = await testDb.select<Record<string, unknown>[]>(
-            "SELECT id FROM book_versions WHERE id = ?",
-            [`keep-${trigger}`]
-          );
-          expect(rows).toHaveLength(1);
-        }
+        const kept = await keptIds();
+        expect(kept).toContain("keep-manual");
+        expect(kept).toContain("keep-pre-restore");
       });
 
       it("does not prune when the trigger type is manual", async () => {
-        await seedAutoIdle(MAX_KEEP + 5);
-
-        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
+        const seeded = await seedDailyHistory("auto-idle", 30);
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
 
         await useVersionStore.getState().createVersion({
           bookId: "book-1",
@@ -277,104 +374,87 @@ describe("useVersionStore", () => {
           triggerType: "manual",
         });
 
-        const rows = await testDb.select<Record<string, unknown>[]>(
-          `SELECT COUNT(*) AS c FROM book_versions
-           WHERE book_id = ? AND trigger_type = 'auto-idle'`,
-          ["book-1"]
-        );
-        expect(Number(rows[0].c)).toBe(MAX_KEEP + 5);
+        // A manual Version runs no retention: the 30 automatic rows stay, plus the new one.
+        const kept = await keptIds();
+        expect(kept).toHaveLength(seeded.length + 1);
+        for (const v of seeded) expect(kept).toContain(v.id);
       });
 
       it("prunes close-trigger backlog when a new close version is inserted", async () => {
-        const baseTime = Math.floor(Date.now() / 1000) - 50_000;
+        const seeded: SeededVersion[] = [];
         for (let i = 0; i < 50; i++) {
-          await testDb.execute(
-            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              `close-${String(i).padStart(4, "0")}`,
-              "book-1",
-              null,
-              "{}",
-              i,
-              `close-${i}`,
-              "close",
-              baseTime + i,
-            ]
+          seeded.push(
+            await seedVersion(`close-${String(i).padStart(4, "0")}`, "close", NOW - 50_000 + i)
           );
         }
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
 
-        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
-
-        await useVersionStore.getState().createVersion({
+        const version = await useVersionStore.getState().createVersion({
           bookId: "book-1",
           triggerType: "close",
         });
 
-        const rows = await testDb.select<Record<string, unknown>[]>(
-          `SELECT COUNT(*) AS c FROM book_versions
-           WHERE book_id = ? AND trigger_type = 'close'`,
-          ["book-1"]
+        expect(version).not.toBeNull();
+        const kept = await keptIds();
+        expect(kept).toEqual(
+          expectedKept([...seeded, { id: version!.id, triggerType: "close", createdAt: NOW }])
         );
-        expect(Number(rows[0].c)).toBe(MAX_KEEP);
+        expect(kept.length).toBeLessThan(seeded.length + 1);
       });
 
       it("prunes pre-sync backlog when a new pre-sync version is inserted", async () => {
-        const baseTime = Math.floor(Date.now() / 1000) - 50_000;
+        const seeded: SeededVersion[] = [];
         for (let i = 0; i < 30; i++) {
-          await testDb.execute(
-            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              `psync-${String(i).padStart(4, "0")}`,
-              "book-1",
-              null,
-              "{}",
-              i,
-              `psync-${i}`,
-              "pre-sync",
-              baseTime + i,
-            ]
+          seeded.push(
+            await seedVersion(`psync-${String(i).padStart(4, "0")}`, "pre-sync", NOW - 50_000 + i)
           );
         }
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
 
-        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
-
-        await useVersionStore.getState().createVersion({
+        const version = await useVersionStore.getState().createVersion({
           bookId: "book-1",
           triggerType: "pre-sync",
         });
 
-        const rows = await testDb.select<Record<string, unknown>[]>(
-          `SELECT COUNT(*) AS c FROM book_versions
-           WHERE book_id = ? AND trigger_type = 'pre-sync'`,
-          ["book-1"]
+        expect(version).not.toBeNull();
+        const kept = await keptIds();
+        expect(kept).toEqual(
+          expectedKept([...seeded, { id: version!.id, triggerType: "pre-sync", createdAt: NOW }])
         );
-        expect(Number(rows[0].c)).toBe(MAX_KEEP);
+        expect(kept.length).toBeLessThan(seeded.length + 1);
       });
 
       it("never prunes plugin Versions, like manual and pre-restore", async () => {
         const baseTime = Math.floor(Date.now() / 1000) - 50_000;
         for (let i = 0; i < 30; i++) {
-          await testDb.execute(
-            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              `plugin-${String(i).padStart(4, "0")}`,
-              "book-1",
-              "Plugin checkpoint",
-              "{}",
-              i,
-              `plugin-${i}`,
-              "plugin",
-              baseTime + i,
-            ]
+          await insertSplitRow(
+            testDb,
+            {
+              id: `plugin-${String(i).padStart(4, "0")}`,
+              bookId: "book-1",
+              name: "Plugin checkpoint",
+              wordCount: i,
+              checksum: `plugin-${i}`,
+              triggerType: "plugin",
+              createdAt: baseTime + i,
+              syncedAt: null,
+            },
+            makeSnapshot(i, baseTime + i)
           );
         }
-        await testDb.execute(
-          `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          ["manual-keepme", "book-1", "Important", "{}", 0, "manual-chk", "manual", baseTime + 10_000]
+        await insertSplitRow(
+          testDb,
+          {
+            id: "manual-keepme",
+            bookId: "book-1",
+            name: "Important",
+            wordCount: 0,
+            checksum: "manual-chk",
+            triggerType: "manual",
+            createdAt: baseTime + 10_000,
+            syncedAt: null,
+          },
+          makeSnapshot(0, baseTime + 10_000)
         );
 
         mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
@@ -401,52 +481,50 @@ describe("useVersionStore", () => {
         expect(manualRows).toHaveLength(1);
       });
 
-      it("each trigger type has its own quota — inserting close does not touch auto-idle", async () => {
-        await seedAutoIdle(MAX_KEEP);
-
-        const baseTime = Math.floor(Date.now() / 1000) - 100;
-        for (let i = 0; i < MAX_KEEP; i++) {
-          await testDb.execute(
-            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [`close-quota-${i}`, "book-1", null, "{}", i, `close-q-${i}`, "close", baseTime + i]
-          );
+      it("runs one rule across both automatic triggers instead of a quota per trigger", async () => {
+        const seeded: SeededVersion[] = [];
+        for (let i = 0; i < 20; i++) {
+          seeded.push(await seedVersion(`auto-${i}`, "auto-idle", NOW - 3600 - i * 60));
+          seeded.push(await seedVersion(`close-${i}`, "close", NOW - 7200 - i * 60));
         }
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
 
-        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
-
-        await useVersionStore.getState().createVersion({
+        const version = await useVersionStore.getState().createVersion({
           bookId: "book-1",
           triggerType: "close",
         });
 
-        const auto = await testDb.select<Record<string, unknown>[]>(
-          `SELECT COUNT(*) AS c FROM book_versions
-           WHERE book_id = ? AND trigger_type = 'auto-idle'`,
-          ["book-1"]
+        expect(version).not.toBeNull();
+        const kept = await keptIds();
+        expect(kept).toEqual(
+          expectedKept([...seeded, { id: version!.id, triggerType: "close", createdAt: NOW }])
         );
-        const close = await testDb.select<Record<string, unknown>[]>(
-          `SELECT COUNT(*) AS c FROM book_versions
-           WHERE book_id = ? AND trigger_type = 'close'`,
-          ["book-1"]
-        );
-        expect(Number(auto[0].c)).toBe(MAX_KEEP); // auto-idle untouched
-        expect(Number(close[0].c)).toBe(MAX_KEEP); // close pruned back to cap
+        // The newest 10 automatic Versions of the last day, whatever their trigger.
+        expect(kept).toHaveLength(10);
       });
 
-      it("only prunes auto-idle rows belonging to the same book", async () => {
+      it("only prunes automatic Versions belonging to the same book", async () => {
         await seedBook(testDb, "book-2");
-        const baseTime = Math.floor(Date.now() / 1000) - 100;
+        const baseTime = NOW - 100;
         for (let i = 0; i < 3; i++) {
-          await testDb.execute(
-            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [`other-${i}`, "book-2", null, "{}", i, `o-${i}`, "auto-idle", baseTime + i]
+          await insertSplitRow(
+            testDb,
+            {
+              id: `other-${i}`,
+              bookId: "book-2",
+              name: null,
+              wordCount: i,
+              checksum: `o-${i}`,
+              triggerType: "auto-idle",
+              createdAt: baseTime + i,
+              syncedAt: null,
+            },
+            makeSnapshot(i, baseTime + i)
           );
         }
-        await seedAutoIdle(MAX_KEEP + 10);
+        await seedDailyHistory("auto-idle", 40);
 
-        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, Date.now()));
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
 
         await useVersionStore.getState().createVersion({
           bookId: "book-1",
@@ -460,6 +538,224 @@ describe("useVersionStore", () => {
         );
         expect(Number(otherRows[0].c)).toBe(3);
       });
+
+      it("keeps manual, pre-restore and plugin Versions 200 days old through createVersion and loadVersions", async () => {
+        const old = NOW - 200 * DAY;
+        for (const trigger of ["manual", "pre-restore", "plugin"] as const) {
+          for (let i = 0; i < 2; i++) {
+            await seedVersion(`${trigger}-old-${i}`, trigger, old - i * 60);
+          }
+        }
+        for (let k = 0; k < 30; k++) {
+          await seedVersion(`auto-old-${k}`, "auto-idle", old - k * DAY);
+        }
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
+
+        const version = await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "auto-idle",
+        });
+        expect(version).not.toBeNull();
+
+        const countByTrigger = async () =>
+          Object.fromEntries(
+            (
+              await testDb.select<{ trigger_type: string; c: number }[]>(
+                "SELECT trigger_type, COUNT(*) AS c FROM book_versions WHERE book_id = ? GROUP BY trigger_type",
+                ["book-1"]
+              )
+            ).map((r) => [r.trigger_type, Number(r.c)])
+          );
+
+        // Retention drops the 200-day-old automatic rows, and only those.
+        const afterCreate = await countByTrigger();
+        expect(afterCreate.manual).toBe(2);
+        expect(afterCreate["pre-restore"]).toBe(2);
+        expect(afterCreate.plugin).toBe(2);
+        expect(afterCreate["auto-idle"]).toBe(1);
+
+        await useVersionStore.getState().loadVersions("book-1");
+
+        const afterLoad = await countByTrigger();
+        expect(afterLoad.manual).toBe(2);
+        expect(afterLoad["pre-restore"]).toBe(2);
+        expect(afterLoad.plugin).toBe(2);
+      });
+    });
+
+    describe("while an inline Version waits for the upgrade", () => {
+      /** Thirty daily automatic Versions on book-1: more than the rule keeps. */
+      async function seedThirtyDays(): Promise<SeededVersion[]> {
+        const seeded: SeededVersion[] = [];
+        for (let k = 0; k < 30; k++) {
+          seeded.push(await seedVersion(`gate-day-${k}`, "auto-idle", NOW - k * DAY - 3600));
+        }
+        return seeded;
+      }
+
+      /** One inline row on another Book: the upgrade gate is Library-wide. */
+      async function seedInlineRowOnOtherBook(): Promise<void> {
+        await seedBook(testDb, "book-2");
+        await testDb.execute(
+          `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at, synced_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            "inline-other",
+            "book-2",
+            null,
+            makeSnapshot(1000, NOW),
+            1000,
+            "chk-inline",
+            "manual",
+            NOW,
+            null,
+          ]
+        );
+      }
+
+      it("createVersion and loadVersions drop nothing, and retention resumes once the upgrade converts the row", async () => {
+        const seeded = await seedThirtyDays();
+        await seedInlineRowOnOtherBook();
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
+
+        const first = await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "auto-idle",
+        });
+        expect(first).not.toBeNull();
+        const everything = [...seeded.map((s) => s.id), first!.id].sort();
+        expect(await keptIds()).toEqual(everything);
+
+        await useVersionStore.getState().loadVersions("book-1");
+        expect(await keptIds()).toEqual(everything);
+
+        expect(await convertInlineVersions(testDb, 10)).toBe(1);
+
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9998, NOW));
+        const second = await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "auto-idle",
+        });
+        expect(second).not.toBeNull();
+        const afterUpgrade: SeededVersion[] = [
+          ...seeded,
+          { id: first!.id, triggerType: "auto-idle", createdAt: NOW },
+          { id: second!.id, triggerType: "auto-idle", createdAt: NOW },
+        ];
+        expect(await keptIds()).toEqual(expectedKept(afterUpgrade));
+        expect((await keptIds()).length).toBeLessThan(afterUpgrade.length);
+      });
+
+      it("applyVersionRetention drops only when called as the upgrade, even with an inline row present", async () => {
+        const seeded = await seedThirtyDays();
+        await seedInlineRowOnOtherBook();
+
+        const held = await withVersionWrites(() => applyVersionRetention(testDb, "book-1", NOW));
+        expect(held).toEqual([]);
+        expect(await keptIds()).toEqual(seeded.map((s) => s.id).sort());
+
+        const dropped = await withVersionWrites(() =>
+          applyVersionRetention(testDb, "book-1", NOW, { upgrading: true })
+        );
+        expect(dropped.length).toBeGreaterThan(0);
+        expect(await keptIds()).toEqual(expectedKept(seeded));
+      });
+    });
+
+    describe("close coalescing", () => {
+      it("skips a close Version when the Book has a Version created 5 minutes ago", async () => {
+        await seedVersion("recent", "auto-idle", NOW - 300);
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
+
+        const version = await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "close",
+        });
+
+        expect(version).toBeNull();
+        expect(await keptIds()).toEqual(["recent"]);
+      });
+
+      it("creates a close Version once the newest Version is 11 minutes old", async () => {
+        await seedVersion("older", "auto-idle", NOW - 660);
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
+
+        const version = await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "close",
+        });
+
+        expect(version).not.toBeNull();
+        expect(await keptIds()).toHaveLength(2);
+      });
+
+      it("never coalesces an auto-idle Version", async () => {
+        await seedVersion("recent", "auto-idle", NOW - 300);
+        mockSerializeBook.mockResolvedValue(makeSnapshot(9999, NOW));
+
+        const version = await useVersionStore.getState().createVersion({
+          bookId: "book-1",
+          triggerType: "auto-idle",
+        });
+
+        expect(version).not.toBeNull();
+        expect(await keptIds()).toHaveLength(2);
+      });
+    });
+
+    it("stores a new Version in the split format with one manifest row per Chapter", async () => {
+      mockSerializeBook.mockResolvedValue(
+        makeChapterSnapshot([
+          { id: "ch-1", content: "<p>First chapter</p>" },
+          { id: "ch-2", content: "<p>Second chapter</p>" },
+        ])
+      );
+
+      const version = await useVersionStore.getState().createVersion({
+        bookId: "book-1",
+        name: "Split",
+        triggerType: "manual",
+      });
+
+      expect(version).not.toBeNull();
+      const rows = await testDb.select<{ format: string }[]>(
+        "SELECT format FROM book_versions WHERE id = ?",
+        [version!.id]
+      );
+      expect(rows[0].format).toBe("split");
+
+      const manifest = await testDb.select<
+        { chapter_id: string; position: number; content_hash: string | null }[]
+      >(
+        "SELECT chapter_id, position, content_hash FROM book_version_chapters WHERE version_id = ? ORDER BY position",
+        [version!.id]
+      );
+      expect(manifest.map((r) => [r.chapter_id, r.position])).toEqual([
+        ["ch-1", 0],
+        ["ch-2", 1],
+      ]);
+      expect(manifest.every((r) => r.content_hash !== null)).toBe(true);
+
+      const restored = JSON.parse(
+        await useVersionStore.getState().getVersionSnapshot(version!.id)
+      ) as { chapters: { id: string; content: string }[] };
+      expect(restored.chapters.map((c) => [c.id, c.content])).toEqual([
+        ["ch-1", "<p>First chapter</p>"],
+        ["ch-2", "<p>Second chapter</p>"],
+      ]);
+    });
+
+    it("creates exactly one Version when two identical saves run concurrently", async () => {
+      mockSerializeBook.mockResolvedValue(makeSnapshot(1000, NOW));
+      const store = useVersionStore.getState();
+
+      const results = await Promise.all([
+        store.createVersion({ bookId: "book-1", triggerType: "manual" }),
+        store.createVersion({ bookId: "book-1", triggerType: "manual" }),
+      ]);
+
+      expect(results.filter((v) => v !== null)).toHaveLength(1);
+      expect(await keptIds()).toHaveLength(1);
     });
   });
 
@@ -529,53 +825,69 @@ describe("useVersionStore", () => {
       expect(useVersionStore.getState().versions).toHaveLength(5);
     });
 
+    /** Close and pre-sync Versions, three a day for ten days starting 40 days back. */
+    async function seedOldBacklog(): Promise<SeededVersion[]> {
+      const seeded: SeededVersion[] = [];
+      for (let d = 40; d < 50; d++) {
+        for (let j = 0; j < 3; j++) {
+          seeded.push(await seedVersion(`close-${d}-${j}`, "close", NOW - d * DAY - j * 600));
+          seeded.push(
+            await seedVersion(`psync-${d}-${j}`, "pre-sync", NOW - d * DAY - j * 600 - 60)
+          );
+        }
+      }
+      return seeded;
+    }
+
+    it("drops on the first load of a Book what Version Retention does not keep", async () => {
+      const seeded = await seedOldBacklog();
+
+      await useVersionStore.getState().loadVersions("book-1");
+
+      const kept = await keptIds();
+      expect(kept).toEqual(expectedKept(seeded));
+      expect(kept.length).toBeLessThan(seeded.length);
+      expect(useVersionStore.getState().totalCount).toBe(kept.length);
+    });
+
+    it("does not prune again on a page change for the same Book", async () => {
+      const seeded = await seedOldBacklog();
+      await useVersionStore.getState().loadVersions("book-1");
+      const afterFirstLoad = await keptIds();
+
+      // Same week as the oldest backlog rows and older than their newest, so
+      // retention would drop it if it ran again.
+      const late = await seedVersion("late-old", "auto-idle", NOW - 40 * DAY - 5);
+      expect(expectedKept([...seeded, late])).not.toContain("late-old");
+
+      await useVersionStore.getState().setPage(2);
+
+      expect(await keptIds()).toEqual([...afterFirstLoad, "late-old"].sort());
+    });
+
     it("opportunistically prunes auto-idle backlog on the first load per book", async () => {
-      const baseTime = Math.floor(Date.now() / 1000) - 100000;
+      const seeded: SeededVersion[] = [];
       for (let i = 0; i < 100; i++) {
-        await testDb.execute(
-          `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            `legacy-${String(i).padStart(4, "0")}`,
-            "book-1",
-            null,
-            "{}",
-            i,
-            `chk-legacy-${i}`,
-            "auto-idle",
-            baseTime + i,
-          ]
+        seeded.push(
+          await seedVersion(`legacy-${String(i).padStart(4, "0")}`, "auto-idle", NOW - 100_000 + i)
         );
       }
 
       await useVersionStore.getState().loadVersions("book-1", 1, 10);
 
-      const remaining = await testDb.select<Record<string, unknown>[]>(
-        `SELECT COUNT(*) AS c FROM book_versions
-         WHERE book_id = ? AND trigger_type = 'auto-idle'`,
-        ["book-1"]
-      );
-      expect(Number(remaining[0].c)).toBe(VERSION_AUTO_PRUNE_KEEP);
-      expect(useVersionStore.getState().totalCount).toBe(VERSION_AUTO_PRUNE_KEEP);
+      const kept = await keptIds();
+      expect(kept).toEqual(expectedKept(seeded));
+      expect(kept.length).toBeLessThan(seeded.length);
+      expect(useVersionStore.getState().totalCount).toBe(kept.length);
     });
 
     it("prunes ALL automatic trigger backlogs (auto-idle, close, pre-sync) on first load", async () => {
-      const baseTime = Math.floor(Date.now() / 1000) - 100_000;
+      const baseTime = NOW - 100_000;
+      const seeded: SeededVersion[] = [];
       const seed = async (trigger: string, count: number, prefix: string) => {
         for (let i = 0; i < count; i++) {
-          await testDb.execute(
-            `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              `${prefix}-${String(i).padStart(4, "0")}`,
-              "book-1",
-              null,
-              "{}",
-              i,
-              `${prefix}-chk-${i}`,
-              trigger,
-              baseTime + i,
-            ]
+          seeded.push(
+            await seedVersion(`${prefix}-${String(i).padStart(4, "0")}`, trigger, baseTime + i)
           );
         }
       };
@@ -584,13 +896,15 @@ describe("useVersionStore", () => {
       await seed("auto-idle", 50, "ai");
       await seed("close", 8500, "cl");
       await seed("pre-sync", 35, "ps");
-      await testDb.execute(
-        `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        ["manual-keepme", "book-1", "Important", "{}", 0, "manual-chk", "manual", baseTime + 10_000]
+      seeded.push(
+        await seedVersion("manual-keepme", "manual", baseTime + 10_000, { name: "Important" })
       );
 
       await useVersionStore.getState().loadVersions("book-1", 1, 10);
+
+      const kept = await keptIds();
+      expect(kept).toEqual(expectedKept(seeded));
+      expect(kept).toContain("manual-keepme");
 
       const counts = await testDb.select<Record<string, unknown>[]>(
         `SELECT trigger_type, COUNT(*) AS c FROM book_versions
@@ -600,49 +914,12 @@ describe("useVersionStore", () => {
       const byTrigger = Object.fromEntries(
         counts.map((r) => [r.trigger_type as string, Number(r.c)])
       );
-      expect(byTrigger["auto-idle"]).toBe(VERSION_AUTO_PRUNE_KEEP);
-      expect(byTrigger.close).toBe(VERSION_AUTO_PRUNE_KEEP);
-      expect(byTrigger["pre-sync"]).toBe(VERSION_AUTO_PRUNE_KEEP);
+      // Retention ranks all automatic triggers together, so a trigger whose
+      // rows are all older than a newer bin-mate can drop to zero.
+      expect(byTrigger["auto-idle"] ?? 0).toBeLessThan(50);
+      expect(byTrigger.close ?? 0).toBeLessThan(8500);
+      expect(byTrigger["pre-sync"] ?? 0).toBeLessThan(35);
       expect(byTrigger.manual).toBe(1);
-    });
-
-    it("does not re-prune on subsequent page navigation for the same book", async () => {
-      const baseTime = Math.floor(Date.now() / 1000) - 1000;
-      // Seed exactly at the cap so the prune is a no-op on first load.
-      for (let i = 0; i < VERSION_AUTO_PRUNE_KEEP; i++) {
-        await testDb.execute(
-          `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            `auto-${String(i).padStart(4, "0")}`,
-            "book-1",
-            null,
-            "{}",
-            i,
-            `chk-${i}`,
-            "auto-idle",
-            baseTime + i,
-          ]
-        );
-      }
-      // Add one extra auto-idle row AFTER the first load: page navigation must NOT prune it.
-      await useVersionStore.getState().loadVersions("book-1", 1, 10);
-
-      await testDb.execute(
-        `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        ["extra", "book-1", null, "{}", 999, "chk-extra", "auto-idle", baseTime + 9999]
-      );
-
-      // Page navigation through setPage → loadVersions(currentBookId, …). Should not prune.
-      await useVersionStore.getState().setPage(2);
-
-      const remaining = await testDb.select<Record<string, unknown>[]>(
-        `SELECT COUNT(*) AS c FROM book_versions
-         WHERE book_id = ? AND trigger_type = 'auto-idle'`,
-        ["book-1"]
-      );
-      expect(Number(remaining[0].c)).toBe(VERSION_AUTO_PRUNE_KEEP + 1);
     });
 
     it("never exposes the snapshot field", async () => {
@@ -835,9 +1112,7 @@ describe("useVersionStore", () => {
       const values = await testDb.select<Record<string, unknown>[]>(
         `SELECT plugin_id, "key", "value" FROM plugin_storage`
       );
-      expect(values).toEqual([
-        { plugin_id: "echoes", key: "ignored", value: '["chapter-1"]' },
-      ]);
+      expect(values).toEqual([{ plugin_id: "echoes", key: "ignored", value: '["chapter-1"]' }]);
       const versions = await testDb.select<Record<string, unknown>[]>(
         "SELECT plugin_id, data_version FROM plugin_data_versions"
       );
@@ -846,38 +1121,60 @@ describe("useVersionStore", () => {
   });
 
   describe("renameVersion", () => {
-    it("updates the name in DB and state", async () => {
-      const now = Math.floor(Date.now() / 1000);
-      await testDb.execute(
-        `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        ["ver-1", "book-1", "Old Name", "{}", 0, "chk-1", "manual", now]
-      );
+    it("replaces a synced Version with a manual copy under the new name and tombstones the old id", async () => {
+      const created = NOW - 3600;
+      const snapshot = makeSnapshot(1000, created);
+      await seedVersion("ver-1", "auto-idle", created, { syncedAt: NOW - 100, checksum: "chk-1" });
+      useVersionStore.setState({ currentBookId: "book-1" });
 
-      useVersionStore.setState({
-        currentBookId: "book-1",
-        versions: [
-          {
-            id: "ver-1",
-            bookId: "book-1",
-            name: "Old Name",
-            wordCount: 0,
-            checksum: "chk-1",
-            triggerType: "manual",
-            createdAt: new Date(now * 1000),
-            syncedAt: null,
-          },
-        ],
-      });
-
-      await useVersionStore.getState().renameVersion("ver-1", "New Name");
+      await useVersionStore.getState().renameVersion("ver-1", "Named draft");
 
       const rows = await testDb.select<Record<string, unknown>[]>(
-        "SELECT name FROM book_versions WHERE id = ?",
-        ["ver-1"]
+        "SELECT id, name, trigger_type, created_at, checksum, synced_at FROM book_versions WHERE book_id = ?",
+        ["book-1"]
       );
-      expect(rows[0].name).toBe("New Name");
-      expect(useVersionStore.getState().versions[0].name).toBe("New Name");
+      expect(rows).toHaveLength(1);
+      const renamed = rows[0];
+      expect(renamed.id).not.toBe("ver-1");
+      expect(renamed.name).toBe("Named draft");
+      expect(renamed.trigger_type).toBe("manual");
+      expect(renamed.created_at).toBe(created);
+      expect(renamed.checksum).toBe("chk-1");
+      expect(renamed.synced_at).toBeNull();
+
+      const tombstones = await testDb.select<Record<string, unknown>[]>(
+        "SELECT version_id, book_id FROM version_tombstones"
+      );
+      expect(tombstones).toEqual([{ version_id: "ver-1", book_id: "book-1" }]);
+
+      expect(await useVersionStore.getState().getVersionSnapshot(renamed.id as string)).toBe(
+        snapshot
+      );
+      expect(useVersionStore.getState().versions.map((v) => v.name)).toEqual(["Named draft"]);
+    });
+
+    it("records a tombstone even when the renamed Version was never synced", async () => {
+      await seedVersion("ver-2", "auto-idle", NOW - 3600);
+
+      await useVersionStore.getState().renameVersion("ver-2", "Local only");
+
+      const rows = await testDb.select<Record<string, unknown>[]>(
+        "SELECT name, trigger_type, synced_at FROM book_versions WHERE book_id = ?",
+        ["book-1"]
+      );
+      expect(rows).toEqual([{ name: "Local only", trigger_type: "manual", synced_at: null }]);
+      // A push may be uploading the old id right now, so the tombstone is
+      // recorded whether or not this device ever synced it.
+      const tombstones = await testDb.select<Record<string, unknown>[]>(
+        "SELECT version_id, book_id FROM version_tombstones"
+      );
+      expect(tombstones).toEqual([{ version_id: "ver-2", book_id: "book-1" }]);
+    });
+
+    it("rejects when the Version does not exist", async () => {
+      await expect(useVersionStore.getState().renameVersion("missing", "Nope")).rejects.toThrow(
+        "Version not found"
+      );
     });
   });
 
@@ -947,6 +1244,61 @@ describe("useVersionStore", () => {
       );
       expect(rows).toHaveLength(0);
       expect(useVersionStore.getState().versions).toHaveLength(0);
+    });
+
+    it("records a tombstone and drops the manifest rows of a synced split Version", async () => {
+      mockSerializeBook.mockResolvedValue(
+        makeChapterSnapshot([
+          { id: "ch-1", content: "<p>First</p>" },
+          { id: "ch-2", content: "<p>Second</p>" },
+        ])
+      );
+      const version = await useVersionStore.getState().createVersion({
+        bookId: "book-1",
+        triggerType: "manual",
+      });
+      await testDb.execute("UPDATE book_versions SET synced_at = ? WHERE id = ?", [
+        NOW - 100,
+        version!.id,
+      ]);
+      const manifestBefore = await testDb.select<Record<string, unknown>[]>(
+        "SELECT chapter_id FROM book_version_chapters WHERE version_id = ?",
+        [version!.id]
+      );
+      expect(manifestBefore).toHaveLength(2);
+
+      await useVersionStore.getState().deleteVersion(version!.id);
+
+      const tombstones = await testDb.select<Record<string, unknown>[]>(
+        "SELECT version_id, book_id FROM version_tombstones"
+      );
+      expect(tombstones).toEqual([{ version_id: version!.id, book_id: "book-1" }]);
+      const manifestAfter = await testDb.select<Record<string, unknown>[]>(
+        "SELECT chapter_id FROM book_version_chapters WHERE version_id = ?",
+        [version!.id]
+      );
+      expect(manifestAfter).toEqual([]);
+      const rows = await testDb.select<Record<string, unknown>[]>(
+        "SELECT id FROM book_versions WHERE id = ?",
+        [version!.id]
+      );
+      expect(rows).toEqual([]);
+    });
+
+    it("records a tombstone even when the deleted Version was never synced", async () => {
+      await seedVersion("ver-unsynced", "manual", NOW - 60);
+
+      await useVersionStore.getState().deleteVersion("ver-unsynced");
+
+      const tombstones = await testDb.select<Record<string, unknown>[]>(
+        "SELECT version_id, book_id FROM version_tombstones"
+      );
+      expect(tombstones).toEqual([{ version_id: "ver-unsynced", book_id: "book-1" }]);
+      const rows = await testDb.select<Record<string, unknown>[]>(
+        "SELECT id FROM book_versions WHERE id = ?",
+        ["ver-unsynced"]
+      );
+      expect(rows).toEqual([]);
     });
   });
 });

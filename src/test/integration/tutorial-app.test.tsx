@@ -54,6 +54,9 @@ vi.mock("@/lib/metrics/MetricsService", () => ({
 vi.mock("@/features/releases/release-check", () => ({ installReleaseCheck: () => () => {} }));
 
 vi.mock("@/features/backup/lifecycle", () => ({
+  // The launch Backup never settles here, so the Version storage upgrade never starts.
+  hasLaunchBackupSettled: vi.fn(() => false),
+  onLaunchBackupSettled: vi.fn(() => () => {}),
   scheduleDailyBackup: vi.fn(),
   runBackgroundBackup: vi.fn(async () => undefined),
   createDailyBackup: vi.fn(async () => undefined),
@@ -304,10 +307,7 @@ describe("the first-launch offer", () => {
     const user = userEvent.setup();
     renderApp("/");
 
-    const offer = await screen.findByRole(
-      "dialog",
-      { name: en("tutorial.offer.title") }
-    );
+    const offer = await screen.findByRole("dialog", { name: en("tutorial.offer.title") });
     expect(offer).toHaveTextContent("5 minutes");
     await tabTo(user, within(offer).getByRole("button", { name: en("tutorial.offer.start") }));
     await user.keyboard("{Enter}");
@@ -392,10 +392,7 @@ describe("the first-launch offer", () => {
   it("Not now dismisses it for good, says where to find it, and focuses the Books heading", async () => {
     const user = userEvent.setup();
     renderApp("/");
-    const offer = await screen.findByRole(
-      "dialog",
-      { name: en("tutorial.offer.title") }
-    );
+    const offer = await screen.findByRole("dialog", { name: en("tutorial.offer.title") });
     expect(offer).toHaveTextContent(en("tutorial.relaunchHint"));
 
     await user.click(within(offer).getByRole("button", { name: en("tutorial.offer.notNow") }));
@@ -411,10 +408,7 @@ describe("the first-launch offer by keyboard", () => {
   it("Escape is Not now: dismissed for good, with focus on the Books heading", async () => {
     const user = userEvent.setup();
     renderApp("/");
-    const offer = await screen.findByRole(
-      "dialog",
-      { name: en("tutorial.offer.title") }
-    );
+    const offer = await screen.findByRole("dialog", { name: en("tutorial.offer.title") });
     await waitFor(() => expect(offer.contains(document.activeElement)).toBe(true));
 
     await user.keyboard("{Escape}");

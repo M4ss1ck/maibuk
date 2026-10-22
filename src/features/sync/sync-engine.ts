@@ -1,12 +1,9 @@
 import { getDatabase } from "@/lib/db";
-import { isSyncCryptoError } from "@/features/sync/crypto";
 import {
   computeChecksumAsync,
   normalizeNoteSnapshotAsync,
   normalizeBookSnapshotAsync,
   normalizeCanvasSnapshotAsync,
-  encryptToBuffer,
-  decryptBufferToText,
 } from "@/features/sync/sync-codec";
 import {
   serializeBook,
@@ -19,12 +16,11 @@ import {
   removeLocalNote,
   removeLocalCanvas,
 } from "@/features/sync/serializer";
+import { refreshAuth as pbRefreshAuth } from "@/features/sync/client";
 import {
-  refreshAuth as pbRefreshAuth,
-  listRemoteVersions,
-  pushVersionBlob,
-  pullVersionBlob,
-} from "@/features/sync/client";
+  syncVersions as syncVersionsWithRetention,
+  tombstoneVersionsOfDeletedBooks,
+} from "@/features/sync/version-sync";
 import type {
   BookSnapshot,
   CanvasSnapshot,
@@ -529,100 +525,10 @@ async function syncVersions(
   passphrase: string,
   options: SyncOptions = DEFAULT_SYNC_OPTIONS
 ): Promise<void> {
-  const db = await getDatabase();
-
-  const localRows = await db.select<
-    {
-      id: string;
-      checksum: string;
-      name: string | null;
-      trigger_type: string;
-      created_at: number;
-      word_count: number;
-      snapshot: string;
-    }[]
-  >(
-    `SELECT id, checksum, name, trigger_type, created_at, word_count, snapshot
-     FROM book_versions WHERE book_id = ?`,
-    [bookId]
-  );
-
-  const remotes = await listRemoteVersions(bookId);
-  const remoteIds = new Set(remotes.map((r) => r.versionId));
-  const localIds = new Set(localRows.map((r) => r.id));
-
-  // Push local-only versions. A single failed push (e.g. a transient server
-  // rejection) must not abort the whole version sync — log it and move on, the
-  // same way the pull loop below isolates each version. synced_at is only
-  // stamped after a successful push, so a skipped version retries next sync.
-  if (canPush(options.direction)) {
-    for (const local of localRows) {
-      if (remoteIds.has(local.id)) continue;
-
-      try {
-        const encrypted = await encryptToBuffer(local.snapshot, passphrase);
-        await pushVersionBlob(
-          {
-            versionId: local.id,
-            bookId,
-            checksum: local.checksum,
-            name: local.name,
-            triggerType: local.trigger_type,
-            createdAt: local.created_at,
-            wordCount: local.word_count,
-          },
-          new Blob([encrypted])
-        );
-
-        const now = Math.floor(Date.now() / 1000);
-        await db.execute("UPDATE book_versions SET synced_at = ? WHERE id = ?", [now, local.id]);
-      } catch (error) {
-        console.warn(`Version sync: skipping push of version ${local.id}`, error);
-      }
-    }
-  }
-
-  // Pull remote-only versions. AES-GCM authenticates each blob on decrypt, so a
-  // corrupt or tampered payload throws below — there is no separate integrity
-  // check to do here. (The stored checksum is a content hash of the snapshot,
-  // not a hash of the raw serialized blob, so re-hashing the decrypted payload
-  // would never match it.) Each version is isolated so one bad blob cannot
-  // abort the whole initial sync, but a wrong passphrase — which fails every
-  // version — is surfaced rather than silently swallowed.
-  if (canPull(options.direction)) {
-    for (const remote of remotes) {
-      if (localIds.has(remote.versionId)) continue;
-
-      try {
-        const blob = await pullVersionBlob(remote.remoteId);
-        if (!blob) continue;
-
-        const decrypted = await decryptBufferToText(blob.data, passphrase);
-
-        await db.execute(
-          `INSERT OR IGNORE INTO book_versions
-           (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at, synced_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            remote.versionId,
-            bookId,
-            remote.name,
-            decrypted,
-            remote.wordCount,
-            remote.checksum,
-            remote.triggerType,
-            remote.createdAt,
-            Math.floor(Date.now() / 1000),
-          ]
-        );
-      } catch (error) {
-        if (isSyncCryptoError(error) && error.code === "INVALID_PASSPHRASE") {
-          throw error;
-        }
-        console.warn(`Version sync: skipping version ${remote.versionId}`, error);
-      }
-    }
-  }
+  await syncVersionsWithRetention(bookId, passphrase, {
+    push: canPush(options.direction),
+    pull: canPull(options.direction),
+  });
 }
 
 // Only log metrics push progress when there's a real backlog (e.g. the one-time
@@ -787,6 +693,14 @@ async function syncAllBooksInternal(
       afterItem: afterBookItem(passphrase, options),
     });
     actions.push(...bookBatch.actions);
+    // A deleted Book's Versions stop taking server space (ADR 0033).
+    if (!bookBatch.cancelled && canPush(options.direction)) {
+      try {
+        await tombstoneVersionsOfDeletedBooks();
+      } catch (error) {
+        console.warn("Version sync: could not tombstone deleted Books' versions", error);
+      }
+    }
     if (bookBatch.cancelled) {
       await syncMetrics(passphrase, options);
       return {

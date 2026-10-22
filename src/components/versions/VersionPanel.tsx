@@ -72,10 +72,20 @@ function formatRelativeTime(date: Date, locale: string): string {
 
 type ConfirmAction = { type: "restore" | "delete"; versionId: string } | null;
 
+/** "4.2 MB" or "380 kB" in the UI language; history is never shown in bytes. */
+function formatHistorySize(bytes: number, locale: string): string {
+  const [value, unit] =
+    bytes >= 1_000_000 ? [bytes / 1_000_000, "megabyte"] : [bytes / 1_000, "kilobyte"];
+  return new Intl.NumberFormat(locale, { style: "unit", unit, maximumFractionDigits: 1 }).format(
+    value
+  );
+}
+
 export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: VersionPanelProps) {
   const { t, i18n } = useTranslation();
   const visibleVersions = useVersionStore((state) => state.versions);
   const totalCount = useVersionStore((state) => state.totalCount);
+  const historyBytes = useVersionStore((state) => state.historyBytes);
   const currentPage = useVersionStore((state) => state.currentPage);
   const pageSize = useVersionStore((state) => state.pageSize);
   const isLoading = useVersionStore((state) => state.isLoading);
@@ -687,6 +697,11 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
+          )}
+          {historyBytes !== null && (
+            <p className="pt-2 text-xs text-muted-foreground">
+              {t("versions.historySize", { size: formatHistorySize(historyBytes, i18n.language) })}
+            </p>
           )}
         </div>
       )}

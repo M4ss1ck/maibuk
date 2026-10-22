@@ -3,6 +3,8 @@ import { ensureMetricsSchema } from "@/features/metrics/events-repo";
 import { getTutorialDatabase } from "@/features/tutorial/library-switch";
 import { DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
 import { compactLibrary } from "@/lib/db/compact";
+import { SQL_DUMP_FORMAT, sqlDumpFormat } from "@/lib/db/sql-export-format";
+import { withVersionWrites } from "@/features/versions/content-store";
 import { isTransactionControl } from "@/lib/db/atomic";
 import { parseSqlStatements } from "@/lib/db/sql-parser";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
@@ -132,6 +134,51 @@ export async function initializeSchema(db: DatabaseAdapter): Promise<void> {
       trigger_type TEXT NOT NULL DEFAULT 'manual',
       created_at INTEGER NOT NULL,
       synced_at INTEGER
+    )
+  `);
+
+  // Version content (ADR 0032): a split Version's Chapters and Cover point at
+  // content-addressed text, so a Checkpoint stores only what changed.
+  await db
+    .execute(`ALTER TABLE book_versions ADD COLUMN format TEXT NOT NULL DEFAULT 'inline'`)
+    .catch(() => {
+      // Column already exists, ignore error
+    });
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS version_blobs (
+      hash TEXT PRIMARY KEY,
+      content TEXT NOT NULL
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS book_version_chapters (
+      version_id TEXT NOT NULL,
+      chapter_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      content_hash TEXT,
+      meta TEXT NOT NULL,
+      PRIMARY KEY (version_id, chapter_id)
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS book_version_assets (
+      version_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      PRIMARY KEY (version_id, role)
+    )
+  `);
+
+  // Versions deleted or renamed here whose remote copy still has to be
+  // tombstoned on the next sync (ADR 0033). Device-local: never backed up.
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS version_tombstones (
+      version_id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL,
+      deleted_at INTEGER NOT NULL
     )
   `);
 
@@ -364,6 +411,14 @@ export async function initializeSchema(db: DatabaseAdapter): Promise<void> {
   `);
 
   await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_book_version_chapters_hash ON book_version_chapters(content_hash)
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_book_version_assets_hash ON book_version_assets(hash)
+  `);
+
+  await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_project_assets_book_id ON project_assets(book_id)
   `);
 
@@ -426,7 +481,9 @@ export async function closeDatabase(): Promise<void> {
 
 export async function exportDatabase(): Promise<Uint8Array> {
   const database = await getDatabase();
-  return database.exportData();
+  // A dump reads page by page: inside the Version lock no Version can lose its
+  // content between the rows it has written and the content tables after them.
+  return withVersionWrites(() => database.exportData());
 }
 
 /**
@@ -442,6 +499,10 @@ export const RESET_LIBRARY_TABLES = [
   "book_metadata",
   "project_assets",
   "chapters",
+  "book_version_chapters",
+  "book_version_assets",
+  "version_blobs",
+  "version_tombstones",
   "book_versions",
   "books",
   "cover_templates",
@@ -468,7 +529,9 @@ export async function resetDatabase(): Promise<void> {
 
   try {
     // One transaction: a failure clears nothing.
-    await database.executeAtomic(RESET_LIBRARY_TABLES.map((table) => `DELETE FROM ${table}`));
+    await withVersionWrites(() =>
+      database.executeAtomic(RESET_LIBRARY_TABLES.map((table) => `DELETE FROM ${table}`))
+    );
   } catch (error) {
     // Nothing was cleared and no completion signal will follow; restart the
     // Plugins that stopped so the app is not left with none.
@@ -510,6 +573,8 @@ export function normaliseToUpsert(statement: string): string {
 
 export async function importDatabase(sqlContent: string): Promise<void> {
   // Pending editor text lands first; a failed save stops the load before anything changes.
+  // A newer app's dump has tables and columns this one does not know.
+  if (sqlDumpFormat(sqlContent) > SQL_DUMP_FORMAT) throw new Error("DUMP_TOO_NEW");
   await flushPendingEdits();
   const database = await getDatabase();
   const statements = parseSqlStatements(sqlContent)
@@ -523,7 +588,15 @@ export async function importDatabase(sqlContent: string): Promise<void> {
   await prepareBulkReplace("databaseLoad");
 
   try {
-    await database.executeAtomic(statements);
+    await withVersionWrites(() =>
+      database.executeAtomic([
+        ...statements,
+        // An older dump's whole-Book row upserted over a split one: back to
+        // inline, so the upgrade converts it again instead of keeping the bloat.
+        `UPDATE book_versions SET format = 'inline'
+         WHERE format = 'split' AND snapshot NOT LIKE '%"chapters":[]%'`,
+      ])
+    );
   } catch (error) {
     // Nothing was merged and no completion signal will follow; restart the
     // Plugins that stopped so the app is not left with none.

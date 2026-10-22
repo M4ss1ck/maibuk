@@ -1931,6 +1931,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "versions-retention",
+    area: "history",
+    workflow:
+      'Open History on a Book with a months-old Checkpoint backlog: Version Retention keeps only the Named Version and the newest Checkpoints of recent bins, and the footer shows "History uses <size>"; persists: yes',
+    edges: ["a Named Version is never dropped"],
+    terms: ["Version Retention", "Version", "Checkpoint", "Named Version"],
+    shortcuts: [],
+    routes: ["/book/:bookId"],
+    fixture: "checkpointBacklog",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "export-book-epub",
     area: "library-data",
     workflow:
@@ -2001,7 +2014,7 @@ export const ROWS: MatrixRow[] = [
     area: "library-data",
     workflow: 'Change "Maximum backups to keep", create beyond limit, oldest pruned; persists: yes',
     edges: ["Invalid value"],
-    terms: ["Retention", "Backup"],
+    terms: ["Backup Retention", "Backup"],
     shortcuts: [],
     routes: ["/settings"],
     fixture: "backupsPresent",

@@ -1,5 +1,5 @@
 import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
-import type { DatabaseAdapter } from "@/lib/platform/types";
+import type { AtomicStatement, DatabaseAdapter } from "@/lib/platform/types";
 import { runAtomicSqlJs } from "@/lib/db/atomic";
 import { exportSqlDump } from "@/lib/db/sql-export";
 
@@ -44,7 +44,7 @@ export class WebDatabaseAdapter implements DatabaseAdapter {
     return exportSqlDump(this);
   }
 
-  async executeAtomic(statements: string[]): Promise<void> {
+  async executeAtomic(statements: readonly AtomicStatement[]): Promise<void> {
     runAtomicSqlJs(this.db, statements);
     await this.persist();
   }

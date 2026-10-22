@@ -73,6 +73,47 @@ export const bookVersions = sqliteTable("book_versions", {
   triggerType: text("trigger_type").notNull().default("manual"),
   createdAt: integer("created_at").notNull(),
   syncedAt: integer("synced_at"),
+  // "inline": the whole Book in snapshot (read forever); "split": snapshot holds
+  // the Book without Chapters or Cover, and the manifest tables below hold them.
+  format: text("format").notNull().default("inline"),
+});
+
+// Content-addressed Version content (ADR 0032): Chapter HTML, Cover data.
+export const versionBlobs = sqliteTable("version_blobs", {
+  hash: text("hash").primaryKey(), // sha256 of the exact content
+  content: text("content").notNull(),
+});
+
+// One row per Chapter of a split Version; content lives in version_blobs.
+export const bookVersionChapters = sqliteTable(
+  "book_version_chapters",
+  {
+    versionId: text("version_id").notNull(),
+    chapterId: text("chapter_id").notNull(),
+    position: integer("position").notNull(),
+    contentHash: text("content_hash"), // NULL when the Chapter had no content
+    meta: text("meta").notNull(), // Chapter fields minus content, as JSON
+  },
+  (table) => [primaryKey({ columns: [table.versionId, table.chapterId] })]
+);
+
+// The Cover fields of a split Version (role: coverImage | coverData).
+export const bookVersionAssets = sqliteTable(
+  "book_version_assets",
+  {
+    versionId: text("version_id").notNull(),
+    role: text("role").notNull(),
+    hash: text("hash").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.versionId, table.role] })]
+);
+
+// Versions deleted or renamed on this device whose remote copy still has to
+// be tombstoned (ADR 0033). Device-local, never backed up.
+export const versionTombstones = sqliteTable("version_tombstones", {
+  versionId: text("version_id").primaryKey(),
+  bookId: text("book_id").notNull(),
+  deletedAt: integer("deleted_at").notNull(),
 });
 
 // Project assets imported from EPUBs or created inside Maibuk.

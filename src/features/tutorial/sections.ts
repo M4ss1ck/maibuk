@@ -176,7 +176,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
       step("settings.backups", [
         "Backup",
         "Backup Trigger",
-        "Retention",
+        "Backup Retention",
         "Restore",
         "Backup Directory",
       ]),
@@ -212,6 +212,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Release Notes":
     "app metadata, not part of writing; it lives in a dialog, and steps never open dialogs",
   "Sync Base": "internal state a sync compares against; nothing on screen shows it",
+  "Version Retention":
+    "runs on its own and has no control; the History size readout sits in the panel the History step already shows",
   Deferred: "only named in the Sync Log after an automatic run; no control to point at",
   Tombstone: "lives inside the Deletion Review dialog; steps never open dialogs",
   "Deleted Elsewhere": "lives inside the Deletion Review dialog; steps never open dialogs",

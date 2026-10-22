@@ -78,6 +78,51 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
     )
   `);
 
+  // Version content (ADR 0032): a split Version's Chapters and Cover point at
+  // content-addressed text, so a Checkpoint stores only what changed.
+  await adapter
+    .execute(`ALTER TABLE book_versions ADD COLUMN format TEXT NOT NULL DEFAULT 'inline'`)
+    .catch(() => {
+      // Column already exists, ignore error
+    });
+
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS version_blobs (
+      hash TEXT PRIMARY KEY,
+      content TEXT NOT NULL
+    )
+  `);
+
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS book_version_chapters (
+      version_id TEXT NOT NULL,
+      chapter_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      content_hash TEXT,
+      meta TEXT NOT NULL,
+      PRIMARY KEY (version_id, chapter_id)
+    )
+  `);
+
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS book_version_assets (
+      version_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      PRIMARY KEY (version_id, role)
+    )
+  `);
+
+  // Versions deleted or renamed here whose remote copy still has to be
+  // tombstoned on the next sync (ADR 0033). Device-local: never backed up.
+  await adapter.execute(`
+    CREATE TABLE IF NOT EXISTS version_tombstones (
+      version_id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL,
+      deleted_at INTEGER NOT NULL
+    )
+  `);
+
   await adapter.execute(`
     CREATE TABLE IF NOT EXISTS project_assets (
       id TEXT PRIMARY KEY,
@@ -265,6 +310,12 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   );
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_book_versions_book ON book_versions(book_id, created_at DESC)`
+  );
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_book_version_chapters_hash ON book_version_chapters(content_hash)`
+  );
+  await adapter.execute(
+    `CREATE INDEX IF NOT EXISTS idx_book_version_assets_hash ON book_version_assets(hash)`
   );
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_project_assets_book_id ON project_assets(book_id)`

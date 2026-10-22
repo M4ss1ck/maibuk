@@ -23,6 +23,9 @@ const SECTION_COMMENTS = [
   "-- Settings",
   "-- Plugin Storage",
   "-- Plugin Data Versions",
+  "-- Version Content",
+  "-- Version Chapters",
+  "-- Version Covers",
 ];
 
 function stubNoWorker(): void {
@@ -95,6 +98,7 @@ describe("sql-export pure formatter (shared by worker and fallback)", () => {
       [
         "-- Maibuk Database Export (SQL Dump)",
         "-- Exported at: 2026-01-02T03:04:05.000Z",
+        "-- Maibuk dump format: 2",
         "-- Import this file into a SQLite database after creating the schema",
         "",
         "-- Books",
@@ -125,6 +129,15 @@ describe("sql-export pure formatter (shared by worker and fallback)", () => {
         "",
         "",
         "-- Plugin Data Versions",
+        "",
+        "",
+        "-- Version Content",
+        "",
+        "",
+        "-- Version Chapters",
+        "",
+        "",
+        "-- Version Covers",
         "",
       ].join("\n")
     );

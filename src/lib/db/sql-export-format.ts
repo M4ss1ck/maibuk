@@ -39,7 +39,22 @@ export const SQL_EXPORT_TABLES: SqlExportTable[] = [
     name: PLUGIN_DATA_VERSIONS_TABLE,
     comment: `-- ${PLUGIN_DATA_VERSIONS_SECTION_TITLE}`,
   },
+  // Version content (ADR 0032), appended last like the Plugin tables.
+  { name: "version_blobs", comment: "-- Version Content" },
+  { name: "book_version_chapters", comment: "-- Version Chapters" },
+  { name: "book_version_assets", comment: "-- Version Covers" },
 ];
+
+// Bumped when an older app could no longer restore the dump. 2: split Versions
+// (ADR 0032). Dumps without the header line are format 1.
+export const SQL_DUMP_FORMAT = 2;
+const DUMP_FORMAT_RE = /^-- Maibuk dump format: (\d+)$/m;
+
+/** The dump format a SQL dump declares; 1 for dumps made before the header existed. */
+export function sqlDumpFormat(sql: string): number {
+  const match = DUMP_FORMAT_RE.exec(sql.slice(0, 1024));
+  return match ? Number(match[1]) : 1;
+}
 
 export function escapeSqlExportValue(value: unknown): string {
   if (value === null || value === undefined) return "NULL";
@@ -78,6 +93,7 @@ export function assembleSqlDump(
   const lines: string[] = [
     "-- Maibuk Database Export (SQL Dump)",
     `-- Exported at: ${exportedAt}`,
+    `-- Maibuk dump format: ${SQL_DUMP_FORMAT}`,
     "-- Import this file into a SQLite database after creating the schema",
     "",
   ];

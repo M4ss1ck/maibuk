@@ -15,6 +15,7 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
+import { capture } from "../support/capture";
 import { expect, test } from "../support/test";
 
 test.use({ library: "checkpointHistory" });
@@ -410,5 +411,59 @@ test.describe("renaming and deleting a Version @wf:versions-rename-delete", () =
     await expect(panel(page).getByText("Delete this version permanently?")).toBeHidden();
     await expect(row(page, HISTORY.withPrologue)).toBeVisible();
     await expect(row(page, HISTORY.withPrologue)).toBeFocused();
+  });
+});
+
+// Version Retention (ADR 0033) over a months-old Checkpoint backlog. The seed
+// names are mirrored here; specs never import the seed builder.
+const BACKLOG = {
+  book: "The Tide Tables",
+  namedVersion: "Spring draft",
+} as const;
+
+test.describe("Version Retention @wf:versions-retention", () => {
+  test.use({ library: "checkpointBacklog" });
+
+  /** Enters the seeded backlog Book from the Gallery and leaves focus in the editor. */
+  async function openBacklogEditor(page: Page) {
+    await page.goto("/");
+    await expect(bookCard(page)).toHaveCount(1);
+    await page.keyboard.press("1");
+    await expect(bookCard(page)).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: BACKLOG.book, level: 1 })).toBeVisible();
+    await expect(editorText(page)).toBeFocused();
+  }
+
+  test("the 40 months-old Checkpoints are dropped and only the Named Version stays", async ({
+    page,
+  }) => {
+    await openBacklogEditor(page);
+    await openHistory(page);
+
+    await expect(panel(page).getByRole("row")).toHaveCount(1);
+    await expect(row(page, BACKLOG.namedVersion)).toBeVisible();
+    await expect(row(page, BACKLOG.namedVersion)).toBeFocused();
+  });
+
+  test("the footer reports the size of the history that is left", async ({ page }) => {
+    await openBacklogEditor(page);
+    await openHistory(page);
+    await expect(panel(page).getByRole("row").first()).toBeVisible();
+    await capture(page, "version-history-size");
+
+    await expect(panel(page).getByText(/History uses \d+(\.\d)? (kB|MB)/)).toBeVisible();
+  });
+
+  test("the drop persists across a reload", async ({ page }) => {
+    await openBacklogEditor(page);
+    await openHistory(page);
+    await expect(panel(page).getByRole("row")).toHaveCount(1);
+
+    await page.reload();
+    await openHistory(page);
+
+    await expect(panel(page).getByRole("row")).toHaveCount(1);
+    await expect(row(page, BACKLOG.namedVersion)).toBeVisible();
   });
 });

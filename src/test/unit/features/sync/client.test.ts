@@ -1631,3 +1631,66 @@ it("legacy metrics blob functions are removed", () => {
   expect((clientModule as Record<string, unknown>).pushMetricsBlob).toBeUndefined();
   expect((clientModule as Record<string, unknown>).pullMetricsBlob).toBeUndefined();
 });
+
+describe("soft delete payload", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    initClient("https://sync.example.com");
+    mockAuthStoreRecord = { id: "u1", email: "a@b.c" };
+  });
+
+  it("clears the stored content when an existing Version is soft-deleted", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "r1" }] });
+    mockUpdate.mockResolvedValue({ id: "r1" });
+
+    await softDeleteObject("version", "ver-1");
+
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("deleted")).toBe("true");
+    expect(formData.get("content")).toBe("");
+  });
+
+  it("clears the stored content when a deleted row is created for a Version", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({ id: "deleted-1" });
+
+    await softDeleteObject("version", "ver-2");
+
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.get("deleted")).toBe("true");
+    expect(formData.get("content")).toBe("");
+  });
+
+  it("keeps the existing row's group when no group is passed, so the tombstone stays with its Book", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "r1", group: "book-9" }] });
+    mockUpdate.mockResolvedValue({ id: "r1" });
+
+    await softDeleteObject("version", "ver-3");
+
+    expect(mockUpdate).toHaveBeenCalledWith("r1", expect.any(FormData));
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("group")).toBe("book-9");
+    expect(formData.get("deleted")).toBe("true");
+  });
+
+  it("sends the passed group on update, overriding the existing row's group", async () => {
+    mockGetList.mockResolvedValue({ items: [{ id: "r1", group: "book-9" }] });
+    mockUpdate.mockResolvedValue({ id: "r1" });
+
+    await softDeleteObject("version", "ver-3", undefined, "book-1");
+
+    const formData = mockUpdate.mock.calls[0][1] as FormData;
+    expect(formData.get("group")).toBe("book-1");
+  });
+
+  it("sends the passed group when a deleted row is created for a Version", async () => {
+    mockGetList.mockResolvedValue({ items: [] });
+    mockSyncCreate.mockResolvedValue({ id: "deleted-1" });
+
+    await softDeleteObject("version", "ver-4", undefined, "book-1");
+
+    const formData = mockSyncCreate.mock.calls[0][0] as FormData;
+    expect(formData.get("group")).toBe("book-1");
+    expect(formData.get("deleted")).toBe("true");
+  });
+});

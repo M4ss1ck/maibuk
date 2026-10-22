@@ -50,6 +50,9 @@ vi.mock("@/lib/metrics/MetricsService", () => ({
 vi.mock("@/features/releases/release-check", () => ({ installReleaseCheck: () => () => {} }));
 
 vi.mock("@/features/backup/lifecycle", () => ({
+  // The launch Backup never settles here, so the Version storage upgrade never starts.
+  hasLaunchBackupSettled: vi.fn(() => false),
+  onLaunchBackupSettled: vi.fn(() => () => {}),
   scheduleDailyBackup: vi.fn(),
   runBackgroundBackup: vi.fn(async () => undefined),
   createDailyBackup: vi.fn(async () => undefined),

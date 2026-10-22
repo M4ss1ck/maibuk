@@ -9,6 +9,8 @@ import { getDatabase } from "@/lib/db";
 import { parseSqlLineComments, parseSqlStatements } from "@/lib/db/sql-parser";
 import {
   CANVASES_SECTION_TITLE,
+  SQL_DUMP_FORMAT,
+  sqlDumpFormat,
   PLUGIN_SECTION_TITLES,
 } from "@/lib/db/sql-export-format";
 import { PLUGIN_TABLES } from "@/features/plugins/tables";
@@ -17,6 +19,7 @@ import { useChapterStore } from "@/features/chapters/store";
 import { useNoteStore } from "@/features/notes/store";
 import { useCanvasStore } from "@/features/canvas/store";
 import { parseCanvasDoc, serializeCanvasDoc } from "@/features/canvas/serialization";
+import { withVersionWrites } from "@/features/versions/content-store";
 import { generateSqlDump } from "@/features/backup/generate-sql-dump";
 import { dumpHasDataAsync } from "@/features/sync/sync-codec";
 import { createAsyncQueue } from "@/lib/async-queue";
@@ -56,6 +59,9 @@ const RESTORE_INSERT_TABLES = [
   "books",
   "chapters",
   "book_versions",
+  "version_blobs",
+  "book_version_chapters",
+  "book_version_assets",
   "notes",
   "canvases",
   "sync_tombstones",
@@ -199,6 +205,9 @@ function backupCoversPluginData(sql: string, statements: string[]): boolean {
  */
 export const RESTORE_DELETE_TABLES: readonly string[] = [
   "chapters",
+  "book_version_chapters",
+  "book_version_assets",
+  "version_blobs",
   "book_versions",
   "books",
   "notes",
@@ -233,7 +242,9 @@ async function replaceRestoreData(
   // the Library as it was (#344).
   const deletes = restoreDeletes(scope);
   try {
-    await db.executeAtomic([...deletes, ...statements]);
+    // Inside the Version lock: a Checkpoint saved mid-Restore must not point at
+    // content the Restore just replaced.
+    await withVersionWrites(() => db.executeAtomic([...deletes, ...statements]));
   } catch (error) {
     if (
       error instanceof AtomicStatementError &&
@@ -346,6 +357,10 @@ export class BackupService {
       sql = await this.adapter.readBackup(filename);
     } catch {
       throw new Error("BACKUP_CORRUPT");
+    }
+    // A newer app's dump has tables and columns this one does not know.
+    if (sqlDumpFormat(sql) > SQL_DUMP_FORMAT) {
+      throw new Error("DUMP_TOO_NEW");
     }
 
     const statements = extractRestoreStatements(sql);

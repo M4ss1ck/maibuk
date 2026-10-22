@@ -59,6 +59,9 @@ vi.mock("@/lib/metrics/MetricsService", () => ({
 vi.mock("@/features/releases/release-check", () => ({ installReleaseCheck: () => () => {} }));
 
 vi.mock("@/features/backup/lifecycle", () => ({
+  // The launch Backup never settles here, so the Version storage upgrade never starts.
+  hasLaunchBackupSettled: vi.fn(() => false),
+  onLaunchBackupSettled: vi.fn(() => () => {}),
   scheduleDailyBackup: vi.fn(),
   runBackgroundBackup: vi.fn(async () => undefined),
   createDailyBackup: vi.fn(async () => undefined),
@@ -283,16 +286,14 @@ function openChapterTitle(): string {
  * reader finishes announcing the typed letter first.
  */
 async function awaitActiveInCurrentOptions(dialog: HTMLElement, search: HTMLElement) {
-  await waitFor(
-    () => {
-      const id = search.getAttribute("aria-activedescendant");
-      expect(
-        within(dialog)
-          .getAllByRole("option")
-          .some((option) => option.id === id)
-      ).toBe(true);
-    }
-  );
+  await waitFor(() => {
+    const id = search.getAttribute("aria-activedescendant");
+    expect(
+      within(dialog)
+        .getAllByRole("option")
+        .some((option) => option.id === id)
+    ).toBe(true);
+  });
 }
 
 /** The options of one titled section of the results, e.g. "Recent". */
@@ -405,7 +406,9 @@ describe("Command Palette", () => {
     await screen.findByRole("dialog", { name: en("shortcuts.title") });
     expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull();
     await user.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: en("shortcuts.title") })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: en("shortcuts.title") })).toBeNull()
+    );
 
     await user.keyboard("{F1}");
     const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
@@ -556,13 +559,11 @@ describe("Command Palette", () => {
       const id = search.getAttribute("aria-activedescendant");
       return id !== null && document.getElementById(id) === toggle;
     };
-    await waitFor(
-      () => {
-        const id = search.getAttribute("aria-activedescendant");
-        const options = within(dialog).getAllByRole("option");
-        expect(options.some((option) => option.id === id)).toBe(true);
-      }
-    );
+    await waitFor(() => {
+      const id = search.getAttribute("aria-activedescendant");
+      const options = within(dialog).getAllByRole("option");
+      expect(options.some((option) => option.id === id)).toBe(true);
+    });
     for (let i = 0; i < 5 && !isActive(); i++) {
       const before = search.getAttribute("aria-activedescendant");
       await user.keyboard("{ArrowDown}");
@@ -794,11 +795,10 @@ describe("Command Palette", () => {
     const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
     paletteSearch(dialog);
     await user.keyboard("{ArrowDown}");
-    await waitFor(
-      () =>
-        expect(
-          useBoundShortcutStore.getState().counts["commandPalette.removeRecent"]
-        ).toBeGreaterThan(0)
+    await waitFor(() =>
+      expect(
+        useBoundShortcutStore.getState().counts["commandPalette.removeRecent"]
+      ).toBeGreaterThan(0)
     );
   });
 
@@ -816,15 +816,13 @@ describe("Command Palette", () => {
       renderApp(`/book/${book.id}`);
       await settleOn(`/book/${book.id}`);
 
-      const editorDom = await waitFor(
-        () => {
-          const element = document.querySelector(
-            '[data-focus-pane="editor-main"] .tiptap'
-          ) as HTMLElement | null;
-          expect(element).not.toBeNull();
-          return element as HTMLElement;
-        }
-      );
+      const editorDom = await waitFor(() => {
+        const element = document.querySelector(
+          '[data-focus-pane="editor-main"] .tiptap'
+        ) as HTMLElement | null;
+        expect(element).not.toBeNull();
+        return element as HTMLElement;
+      });
       act(() => {
         editorDom.focus();
       });
@@ -904,8 +902,8 @@ describe("Command Palette entities and pages", () => {
     await waitFor(() => expect(path).toBe(`/book/${otherBook.id}`));
     await waitFor(() => expect(openChapterTitle()).toBe("Prologue"));
     // The Chapter that opened is the other Book's, not this one's.
-    await waitFor(
-      () => expect(document.querySelector(".tiptap")?.textContent ?? "").toContain("Far away")
+    await waitFor(() =>
+      expect(document.querySelector(".tiptap")?.textContent ?? "").toContain("Far away")
     );
   });
 
@@ -924,9 +922,7 @@ describe("Command Palette entities and pages", () => {
     await user.keyboard("Shared Title");
     await waitFor(() => expect(within(dialog).getAllByRole("option").length).toBeGreaterThan(1));
 
-    await waitFor(
-      () => expect(search.getAttribute("aria-activedescendant")).toContain("chapter:")
-    );
+    await waitFor(() => expect(search.getAttribute("aria-activedescendant")).toContain("chapter:"));
     // The first result is one of the two identical-titled Chapters, and it is
     // the open Book's: its detail says which Book it belongs to.
     const firstId = search.getAttribute("aria-activedescendant") as string;
@@ -1146,13 +1142,11 @@ describe("Command Palette entities and pages", () => {
     const user = userEvent.setup();
     renderApp(`/book/${book.id}`);
     await settleOn(`/book/${book.id}`);
-    const editorDom = await waitFor(
-      () => {
-        const element = document.querySelector('[data-focus-pane="editor-main"] .tiptap');
-        expect(element).not.toBeNull();
-        return element as HTMLElement;
-      }
-    );
+    const editorDom = await waitFor(() => {
+      const element = document.querySelector('[data-focus-pane="editor-main"] .tiptap');
+      expect(element).not.toBeNull();
+      return element as HTMLElement;
+    });
     act(() => {
       editorDom.focus();
     });

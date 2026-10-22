@@ -21,6 +21,7 @@ import {
   LANGUAGE_BOOKS,
 } from "./names";
 import { checkpointHistory } from "./checkpoint-history";
+import { checkpointBacklog } from "./checkpoint-backlog";
 import { metricsHistory } from "./metrics-history";
 import { PERF_SEED_LIBRARIES } from "./perf-libraries";
 
@@ -341,7 +342,11 @@ async function echoesLargeBook(): Promise<void> {
       { bookId: book.id, title: `Part ${chapter + 1}` },
       "local"
     );
-    const saved = await updateChapterRow(created.id, { content: `<p>${parts.join(" ")}</p>` }, "local");
+    const saved = await updateChapterRow(
+      created.id,
+      { content: `<p>${parts.join(" ")}</p>` },
+      "local"
+    );
     words += saved?.wordCount ?? 0;
   }
   await updateBookWordCountRow(book.id, words);
@@ -359,6 +364,7 @@ export const SEED_LIBRARIES = {
   paletteLibrary,
   canvasWithNodes,
   checkpointHistory,
+  checkpointBacklog,
   backupsPresent,
   metricsHistory,
   pluginData,

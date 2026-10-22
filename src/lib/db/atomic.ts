@@ -1,4 +1,5 @@
 import type { Database as SqlJsDatabase } from "sql.js";
+import type { AtomicStatement } from "@/lib/platform/types";
 
 /** One statement of an atomic load failed, or the load itself could not run. */
 export class AtomicStatementError extends Error {
@@ -40,26 +41,36 @@ function errorMessage(error: unknown): string {
  * Runs every statement inside one sql.js transaction, or none. Synchronous on
  * purpose: nothing else can interleave with sql.js mid-load.
  */
-export function runAtomicSqlJs(db: SqlJsDatabase, statements: string[]): void {
+export function runAtomicSqlJs(db: SqlJsDatabase, statements: readonly AtomicStatement[]): void {
   const total = statements.length;
-  for (let index = 0; index < statements.length; index += 1) {
-    if (isTransactionControl(statements[index])) {
+  const normalised = statements.map((statement) =>
+    typeof statement === "string"
+      ? { sql: statement, params: undefined }
+      : { sql: statement.sql, params: statement.params }
+  );
+  for (let index = 0; index < normalised.length; index += 1) {
+    if (isTransactionControl(normalised[index].sql)) {
       throw new AtomicStatementError(
         index,
         "transaction control statements are not allowed in an atomic load",
         total
       );
     }
-    if (ATTACH_RE.test(statements[index].trimStart())) {
+    if (ATTACH_RE.test(normalised[index].sql.trimStart())) {
       throw new AtomicStatementError(index, "ATTACH is not allowed in an atomic load", total);
     }
   }
 
   db.run("BEGIN");
-  for (let index = 0; index < statements.length; index += 1) {
-    if (statements[index].trim().length === 0) continue;
+  for (let index = 0; index < normalised.length; index += 1) {
+    const { sql, params } = normalised[index];
+    if (sql.trim().length === 0) continue;
     try {
-      db.run(statements[index]);
+      if (params) {
+        db.run(sql, params as (string | number | null)[]);
+      } else {
+        db.run(sql);
+      }
     } catch (error) {
       try {
         db.run("ROLLBACK");
