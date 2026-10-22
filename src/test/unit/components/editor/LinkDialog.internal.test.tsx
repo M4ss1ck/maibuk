@@ -54,7 +54,7 @@ describe("LinkDialog internal target picker", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("editor.linkInMaibuk"));
     fireEvent.click(screen.getByText("Chapter One"));
 
     expect(setLink).toHaveBeenCalledWith({ href: "maibuk://chapter/c1" });
@@ -86,7 +86,7 @@ describe("LinkDialog internal target picker", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("editor.linkInMaibuk"));
     fireEvent.click(screen.getByText("Chapter One"));
 
     expect(insertContent).toHaveBeenCalledWith('<a href="maibuk://chapter/c1">Chapter One</a>');
@@ -109,7 +109,7 @@ describe("LinkDialog internal target picker", () => {
         ]}
       />
     );
-    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("editor.linkInMaibuk"));
     fireEvent.click(screen.getByText("A Section"));
     expect(setLink).toHaveBeenCalledWith({
       href: "maibuk://heading/c1/h-1",
@@ -132,7 +132,7 @@ describe("LinkDialog internal target picker", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("editor.linkInMaibuk"));
     fireEvent.change(screen.getByPlaceholderText("editor.searchTargets"), {
       target: { value: "research" },
     });
@@ -162,7 +162,7 @@ describe("LinkDialog internal target picker", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("editor.linkInMaibuk"));
 
     expect(screen.getByText("editor.linkTargetNote")).toBeInTheDocument();
     expect(screen.getByText("editor.linkTargetBook")).toBeInTheDocument();
@@ -194,7 +194,7 @@ describe("LinkDialog internal target picker", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("editor.linkInMaibuk"));
 
     expect(screen.queryByText("Opening Chapter")).not.toBeInTheDocument();
 
@@ -240,7 +240,7 @@ describe("LinkDialog internal target picker", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("editor.linkInMaibuk"));
 
     expect(screen.queryByText("Research Question")).not.toBeInTheDocument();
 
@@ -281,7 +281,7 @@ describe("LinkDialog internal target picker", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("editor.linkInMaibuk"));
     fireEvent.click(screen.getByText("Chapter One"));
 
     expect(insertContent).toHaveBeenCalledWith('<a href="maibuk://chapter/c1">Chapter One</a>');
@@ -305,7 +305,7 @@ describe("LinkDialog internal target picker", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("editor.linkInThisBook"));
+    fireEvent.click(screen.getByText("editor.linkInMaibuk"));
 
     const textInput = screen.getByPlaceholderText("editor.linkText");
     fireEvent.change(textInput, { target: { value: "Custom Label" } });

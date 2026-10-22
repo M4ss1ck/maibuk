@@ -98,4 +98,11 @@ describe("locale key coverage", () => {
     expect(en.nav.sidebarWidthValue).toContain("{{width}}");
     expect(es.nav.sidebarWidthValue).toContain("{{width}}");
   });
+
+  it("names the Link dialog's internal targets after Maibuk, not a Book", () => {
+    expect(en.editor.linkInMaibuk).toBe("In Maibuk");
+    expect(es.editor.linkInMaibuk).toBe("En Maibuk");
+    expect(en.editor).not.toHaveProperty("linkInThisBook");
+    expect(es.editor).not.toHaveProperty("linkInThisBook");
+  });
 });
