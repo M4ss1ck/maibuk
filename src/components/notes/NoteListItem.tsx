@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import type { Note } from "@/features/notes";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
+import { noteDateLabel, noteFullDate } from "@/components/notes/timeAgo";
 import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
@@ -40,13 +41,6 @@ interface NoteListItemProps {
   onDragEnd?: (e: DragEvent<HTMLDivElement>) => void;
 }
 
-function formatDate(unixSeconds: number) {
-  return new Date(unixSeconds * 1000).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function toPreview(content: string) {
   return content
     .replace(/<[^>]*>/g, " ")
@@ -72,7 +66,8 @@ export function NoteListItem({
   onDrop,
   onDragEnd,
 }: NoteListItemProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n?.language ?? "en";
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(note.title);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -156,6 +151,7 @@ export function NoteListItem({
     [setOwnerRef]
   );
   useItemCommands(rowRef, actions, { enabled: !isEditing });
+
 
   const commitTitle = () => {
     const nextTitle = draftTitle.trim();
@@ -325,7 +321,11 @@ export function NoteListItem({
 
       {/* Line 3: tags + last-modified */}
       <div className="mt-2 min-h-4">
-        <NoteTagsRow tags={note.tags} dateLabel={formatDate(note.contentUpdatedAt)} />
+        <NoteTagsRow
+          tags={note.tags}
+          dateLabel={noteDateLabel(note.contentUpdatedAt, locale)}
+          dateTooltip={noteFullDate(note.contentUpdatedAt, locale)}
+        />
       </div>
     </div>
   );

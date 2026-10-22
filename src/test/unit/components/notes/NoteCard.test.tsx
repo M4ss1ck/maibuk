@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GridList } from "react-aria-components/GridList";
 import { NoteCard } from "@/components/notes/NoteCard";
+import { noteFullDate } from "@/components/notes/timeAgo";
 import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
 import type { Note } from "@/features/notes";
 
@@ -89,6 +90,42 @@ describe("NoteCard", () => {
       </GridList>
     );
     expect(screen.getByText("Untitled note")).toBeInTheDocument();
+  });
+
+  it("describes the card with the full date on the keyboard path", async () => {
+    const user = userEvent.setup();
+    const contentUpdatedAt = Math.floor(Date.now() / 1000);
+    render(
+      <GridList aria-label="Notes" selectionMode="none">
+        <NoteCard note={buildNote({ contentUpdatedAt })} onClick={vi.fn()} />
+      </GridList>
+    );
+    const row = screen.getByRole("row");
+
+    await user.tab();
+    if (document.activeElement !== row) await user.keyboard("{ArrowDown}");
+
+    expect(row).toHaveFocus();
+    expect(document.activeElement).toHaveAccessibleDescription(
+      noteFullDate(contentUpdatedAt, "en")
+    );
+  });
+
+  it("shows the full date in a tooltip over the relative date label", async () => {
+    const user = userEvent.setup();
+    const contentUpdatedAt = Math.floor(Date.now() / 1000);
+    render(
+      <GridList aria-label="Notes" selectionMode="none">
+        <NoteCard note={buildNote({ contentUpdatedAt })} onClick={vi.fn()} />
+      </GridList>
+    );
+    const label = screen.getAllByText(/^notes\.(seconds|minutes)Ago$/)[0];
+
+    await user.hover(label);
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      noteFullDate(contentUpdatedAt, "en")
+    );
   });
 
   it("renders the linked book title only when provided", () => {

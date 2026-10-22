@@ -86,6 +86,69 @@ function sortCanvases(canvases: Canvas[]): Canvas[] {
   });
 }
 
+// An older read can resolve after a newer one, or after a local write; without
+// a ticket its rows would replace fresher state and the gallery would show a
+// canvas out of order until it remounts.
+let readTicket = 0;
+// Ticket of the newest read whose rows reached the store.
+let appliedReadTicket = 0;
+// Bumped by every store write that sets `canvases`, so a read issued earlier
+// knows its rows predate that write.
+let writeEpoch = 0;
+
+const CANVASES_SELECT = 'SELECT * FROM canvases ORDER BY pinned DESC, "order" ASC, updated_at DESC';
+
+async function readCanvases(): Promise<Canvas[]> {
+  const db = await getDatabase();
+  const rows = await db.select<Record<string, unknown>[]>(CANVASES_SELECT);
+  return sortCanvases(
+    rows.map((row) => {
+      const parsed = parseCanvasDoc(row.doc as string);
+      const doc = parsed.ok
+        ? { ...parsed.doc, viewport: viewportForCanvas(row.id as string, parsed.doc.viewport) }
+        : parsed.doc;
+      return toModel(row, doc);
+    })
+  );
+}
+
+type ReadOutcome = "applied" | "stale-read" | "stale-write";
+
+function applyRead(ticket: number, epochAtIssue: number): ReadOutcome {
+  // A newer read already applied, so these rows lose.
+  if (ticket < appliedReadTicket) return "stale-read";
+  // A store write landed after this read was issued; the rows are outdated.
+  if (writeEpoch !== epochAtIssue) return "stale-write";
+  appliedReadTicket = ticket;
+  return "applied";
+}
+
+/**
+ * Read every canvas, or null when a newer read already reached the store. A
+ * store write that lands mid-read triggers one fresh read; a second one is
+ * applied anyway so the store never sits without data.
+ */
+async function readFreshCanvases(): Promise<Canvas[] | null> {
+  let ticket = ++readTicket;
+  let epoch = writeEpoch;
+  let canvases = await readCanvases();
+  let outcome = applyRead(ticket, epoch);
+  if (outcome === "stale-write") {
+    // The write is committed, so one fresh read sees it.
+    ticket = ++readTicket;
+    epoch = writeEpoch;
+    canvases = await readCanvases();
+    outcome = applyRead(ticket, epoch);
+    if (outcome === "stale-write") appliedReadTicket = ticket;
+  }
+  if (outcome === "stale-read") {
+    if (import.meta.env.DEV)
+      console.debug("[canvas] dropped stale read", { ticket, latest: appliedReadTicket });
+    return null;
+  }
+  return canvases;
+}
+
 function toModel(row: Record<string, unknown>, doc: CanvasDoc): Canvas {
   return {
     id: row.id as string,
@@ -251,18 +314,12 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   loadCanvases: async () => {
     set({ galleryLoading: true, galleryError: null });
     try {
-      const db = await getDatabase();
-      const rows = await db.select<Record<string, unknown>[]>(
-        'SELECT * FROM canvases ORDER BY pinned DESC, "order" ASC, updated_at DESC'
-      );
-      const canvases = rows.map((row) => {
-        const parsed = parseCanvasDoc(row.doc as string);
-        const doc = parsed.ok
-          ? { ...parsed.doc, viewport: viewportForCanvas(row.id as string, parsed.doc.viewport) }
-          : parsed.doc;
-        return toModel(row, doc);
-      });
-      set({ canvases: sortCanvases(canvases), galleryLoaded: true, galleryLoading: false });
+      const canvases = await readFreshCanvases();
+      if (!canvases) {
+        if (get().galleryLoading) set({ galleryLoading: false });
+        return;
+      }
+      set({ canvases, galleryLoaded: true, galleryLoading: false });
     } catch (error) {
       set({ galleryError: String(error), galleryLoading: false });
     }
@@ -271,19 +328,10 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   refreshCanvases: async () => {
     // Re-read the list after something outside the UI changed it (a sync
     // pull); never flips the gallery loading flags.
-    const db = await getDatabase();
-    const rows = await db.select<Record<string, unknown>[]>(
-      'SELECT * FROM canvases ORDER BY pinned DESC, "order" ASC, updated_at DESC'
-    );
-    const canvases = rows.map((row) => {
-      const parsed = parseCanvasDoc(row.doc as string);
-      const doc = parsed.ok
-        ? { ...parsed.doc, viewport: viewportForCanvas(row.id as string, parsed.doc.viewport) }
-        : parsed.doc;
-      return toModel(row, doc);
-    });
+    const canvases = await readFreshCanvases();
+    if (!canvases) return;
     set((state) => ({
-      canvases: sortCanvases(canvases),
+      canvases,
       current: state.current
         ? (canvases.find((canvas) => canvas.id === state.current?.id) ?? state.current)
         : null,
@@ -316,6 +364,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   createCanvas: async (input = {}) => {
     // The write path persists, returns the stored canvas, and emits the Change.
     const canvas = await createCanvasRow(input, "local", STORE_VIEW);
+    writeEpoch++;
     set((state) => ({ canvases: sortCanvases([...state.canvases, canvas]) }));
     return canvas;
   },
@@ -323,6 +372,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   deleteCanvas: async (id) => {
     // The write path records the tombstone, deletes, and emits the Change.
     await deleteCanvasRow(id, "local", STORE_VIEW);
+    writeEpoch++;
     set((state) => ({
       canvases: state.canvases.filter((canvas) => canvas.id !== id),
       ...(state.current?.id === id ? editorResetState() : {}),
@@ -336,6 +386,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     // Change (content for a title change, metadata for pin/order).
     const stored = await canvasWriteQueue.enqueue(() => updateCanvasRow(id, input, "local", STORE_VIEW));
     if (!stored) return;
+    writeEpoch++;
     set((state) => ({
       canvases: sortCanvases(
         state.canvases.map((canvas) =>
@@ -369,6 +420,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   reorderCanvases: async (items) => {
     // The write path persists the order and emits one metadata Change per row.
     await canvasWriteQueue.enqueue(() => reorderCanvasRows(items, "local", STORE_VIEW));
+    writeEpoch++;
     const now = nowSeconds();
     const orderById = new Map(items.map((item) => [item.id, item.order]));
     set((state) => ({
@@ -860,6 +912,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     if (!stored) {
       throw new Error("Canvas document replacement is not allowed");
     }
+    writeEpoch++;
     set((currentState) => ({
       canvases: currentState.canvases.map((canvas) =>
         canvas.id === canvasId
@@ -903,6 +956,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       // below stay on the shared queue, where the session save never runs.
       const stored = await updateCanvasDocRow(canvasId, doc, "local", STORE_VIEW);
       if (!stored) return null;
+      writeEpoch++;
       if (get().current?.id !== canvasId) return stored;
       set((currentState) => ({
         canvases: currentState.canvases.map((canvas) =>
@@ -951,7 +1005,9 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       const stored = await canvasWriteQueue.enqueue(() =>
         updateCanvasDocRow(canvasId, doc, "local", STORE_VIEW)
       );
-      if (!stored || get().current?.id !== canvasId) return;
+      if (!stored) return;
+      writeEpoch++;
+      if (get().current?.id !== canvasId) return;
       set((currentState) => ({
         canvases: currentState.canvases.map((canvas) =>
           canvas.id === canvasId

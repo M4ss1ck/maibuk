@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
+import {
+  registerPendingEditsFlush,
+  resetPendingEditsForTests,
+} from "@/features/sync/pending-edits";
 
 // --- Mock getDatabase ---
 let testDb: DatabaseAdapter;
@@ -14,6 +18,52 @@ vi.mock("../../../../lib/db", () => ({
 }));
 
 const { useNoteStore } = await import("@/features/notes/store");
+
+type SelectFn = (sql: string, params?: unknown[]) => Promise<unknown>;
+
+function originalSelect(): SelectFn {
+  return testDb.select.bind(testDb) as SelectFn;
+}
+
+/** Hold the first notes SELECT open, after it has captured its rows. */
+function holdFirstNotesRead(): { release: () => void; captured: Promise<void> } {
+  const original = originalSelect();
+  let held = false;
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let markCaptured = () => {};
+  const captured = new Promise<void>((resolve) => {
+    markCaptured = resolve;
+  });
+
+  testDb.select = async <T = unknown[]>(sql: string, params?: unknown[]): Promise<T> => {
+    if (!held && sql.includes("FROM notes")) {
+      held = true;
+      const rows = (await original(sql, params)) as T;
+      markCaptured();
+      await gate;
+      return rows;
+    }
+    return (await original(sql, params)) as T;
+  };
+
+  return { release, captured };
+}
+
+/** Record every SELECT that reads the notes table. */
+function countNotesSelects(): string[] {
+  const original = originalSelect();
+  const calls: string[] = [];
+
+  testDb.select = async <T = unknown[]>(sql: string, params?: unknown[]): Promise<T> => {
+    if (sql.includes("FROM notes")) calls.push(sql);
+    return (await original(sql, params)) as T;
+  };
+
+  return calls;
+}
 
 describe("useNoteStore", () => {
   beforeEach(async () => {
@@ -437,6 +487,122 @@ describe("useNoteStore", () => {
 
       const updated = useNoteStore.getState().notes.find((n) => n.id === note.id);
       expect(updated?.collapsedHeadings).toEqual([]);
+    });
+  });
+
+  describe("stale reads", () => {
+    afterEach(() => {
+      resetPendingEditsForTests();
+    });
+
+    it("does not let an older read finishing last replace newer rows", async () => {
+      const note = await useNoteStore
+        .getState()
+        .createNote({ title: "A", content: "<p>old</p>" });
+      const newer = note.contentUpdatedAt + 1000;
+
+      const held = holdFirstNotesRead();
+      const loading = useNoteStore.getState().loadNotes();
+      await held.captured;
+
+      await testDb.execute("UPDATE notes SET content = ?, content_updated_at = ? WHERE id = ?", [
+        "<p>new</p>",
+        newer,
+        note.id,
+      ]);
+      // A newer read applies first; the held one must not replace it.
+      await useNoteStore.getState().refreshNotes();
+
+      held.release();
+      await loading;
+
+      const stored = useNoteStore.getState().notes.find((n) => n.id === note.id);
+      expect(stored?.contentUpdatedAt).toBe(newer);
+      expect(stored?.content).toBe("<p>new</p>");
+    });
+
+    it("does not undo a store write made during an in-flight load", async () => {
+      const note = await useNoteStore
+        .getState()
+        .createNote({ title: "Draft", content: "<p>old</p>" });
+
+      const held = holdFirstNotesRead();
+      const loading = useNoteStore.getState().loadNotes();
+      await held.captured;
+
+      await useNoteStore.getState().updateNote({ id: note.id, content: "<p>edited</p>" });
+      held.release();
+      await loading;
+
+      const stored = useNoteStore.getState().notes.find((n) => n.id === note.id);
+      expect(stored?.content).toBe("<p>edited</p>");
+    });
+
+    it("flushes a pending editor save before reading notes", async () => {
+      const note = await useNoteStore
+        .getState()
+        .createNote({ title: "Draft", content: "<p>old</p>" });
+
+      registerPendingEditsFlush(async () => {
+        await useNoteStore.getState().updateNote({ id: note.id, content: "new" });
+      });
+
+      await useNoteStore.getState().loadNotes();
+
+      const stored = useNoteStore.getState().notes.find((n) => n.id === note.id);
+      expect(stored?.content).toBe("new");
+    });
+
+    it("still loads notes when the pending-edits flush fails", async () => {
+      await useNoteStore.getState().createNote({ title: "Kept" });
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      registerPendingEditsFlush(async () => {
+        throw new Error("editor cannot save");
+      });
+
+      try {
+        await useNoteStore.getState().loadNotes();
+
+        expect(useNoteStore.getState().notes.map((n) => n.title)).toEqual(["Kept"]);
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to save pending edits before loading notes:",
+          expect.anything()
+        );
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it("issues one notes SELECT per load when no editor is flushing", async () => {
+      await useNoteStore.getState().createNote({ title: "A" });
+      const calls = countNotesSelects();
+
+      await useNoteStore.getState().loadNotes();
+
+      expect(calls).toHaveLength(1);
+    });
+
+    it("keeps the applied notes array when a stale read is dropped", async () => {
+      const note = await useNoteStore
+        .getState()
+        .createNote({ title: "A", content: "<p>old</p>" });
+
+      const held = holdFirstNotesRead();
+      const loading = useNoteStore.getState().loadNotes();
+      await held.captured;
+
+      await testDb.execute("UPDATE notes SET content = ?, content_updated_at = ? WHERE id = ?", [
+        "<p>new</p>",
+        note.contentUpdatedAt + 1000,
+        note.id,
+      ]);
+      await useNoteStore.getState().refreshNotes();
+      const applied = useNoteStore.getState().notes;
+
+      held.release();
+      await loading;
+
+      expect(useNoteStore.getState().notes).toBe(applied);
     });
   });
 });

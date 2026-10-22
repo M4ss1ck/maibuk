@@ -1240,7 +1240,11 @@ export const ROWS: MatrixRow[] = [
     id: "notes-gallery-browse",
     area: "notes",
     workflow: "Notes Gallery: arrow through cards, Enter opens; asserts: activeElement",
-    edges: ["Empty state", "ArrowDown from the page enters the first card"],
+    edges: [
+      "Empty state",
+      "ArrowDown from the page enters the first card",
+      "Focused card is described by its full edit date",
+    ],
     terms: ["Gallery", "Note"],
     shortcuts: [],
     routes: ["/notes"],

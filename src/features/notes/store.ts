@@ -9,12 +9,68 @@ import {
   updateNoteRow,
 } from "@/features/notes/write";
 import { STORE_VIEW } from "@/features/sync/change-feed";
+import { flushPendingEdits } from "@/features/sync/pending-edits";
 import type {
   CreateNoteInput,
   Note,
   ReorderNoteItem,
   UpdateNoteInput,
 } from "@/features/notes/types";
+
+// An older read can resolve after a newer one, or after a local write; without
+// a ticket its rows would replace fresher state and the gallery would show a
+// stale "Newest" order until it remounts.
+let readTicket = 0;
+// Ticket of the newest read whose rows reached the store.
+let appliedReadTicket = 0;
+// Bumped by every store write that sets `notes`, so a read issued earlier knows
+// its rows predate that write.
+let writeEpoch = 0;
+
+const NOTES_SELECT = 'SELECT * FROM notes ORDER BY pinned DESC, "order" ASC';
+
+async function readNotes(): Promise<Note[]> {
+  const db = await getDatabase();
+  const rows = await db.select<Record<string, unknown>[]>(NOTES_SELECT);
+  return rows.map(toNote);
+}
+
+type ReadOutcome = "applied" | "stale-read" | "stale-write";
+
+function applyRead(ticket: number, epochAtIssue: number): ReadOutcome {
+  // A newer read already applied, so these rows lose.
+  if (ticket < appliedReadTicket) return "stale-read";
+  // A store write landed after this read was issued; the rows are outdated.
+  if (writeEpoch !== epochAtIssue) return "stale-write";
+  appliedReadTicket = ticket;
+  return "applied";
+}
+
+/**
+ * Read every note, or null when a newer read already reached the store. A
+ * store write that lands mid-read triggers one fresh read; a second one is
+ * applied anyway so the store never sits without data.
+ */
+async function readFreshNotes(): Promise<Note[] | null> {
+  let ticket = ++readTicket;
+  let epoch = writeEpoch;
+  let notes = await readNotes();
+  let outcome = applyRead(ticket, epoch);
+  if (outcome === "stale-write") {
+    // The write is committed, so one fresh read sees it.
+    ticket = ++readTicket;
+    epoch = writeEpoch;
+    notes = await readNotes();
+    outcome = applyRead(ticket, epoch);
+    if (outcome === "stale-write") appliedReadTicket = ticket;
+  }
+  if (outcome === "stale-read") {
+    if (import.meta.env.DEV)
+      console.debug("[notes] dropped stale read", { ticket, latest: appliedReadTicket });
+    return null;
+  }
+  return notes;
+}
 
 // Pinned notes float to the top; ties broken by manual order.
 function sortNotes(notes: Note[]): Note[] {
@@ -55,11 +111,19 @@ export const useNoteStore = create<NoteStore>((set) => ({
   loadNotes: async () => {
     set({ isLoading: true, error: null });
     try {
-      const db = await getDatabase();
-      const rows = await db.select<Record<string, unknown>[]>(
-        'SELECT * FROM notes ORDER BY pinned DESC, "order" ASC'
-      );
-      set({ notes: rows.map(toNote), isLoading: false });
+      // Editors hold keystrokes for about a second; read after they land so the
+      // Library reflects them. A failed save must not block the read.
+      try {
+        await flushPendingEdits();
+      } catch (error) {
+        console.error("Failed to save pending edits before loading notes:", error);
+      }
+      const notes = await readFreshNotes();
+      if (!notes) {
+        if (useNoteStore.getState().isLoading) set({ isLoading: false });
+        return;
+      }
+      set({ notes, isLoading: false });
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
@@ -79,11 +143,8 @@ export const useNoteStore = create<NoteStore>((set) => ({
   },
 
   refreshNotes: async () => {
-    const db = await getDatabase();
-    const rows = await db.select<Record<string, unknown>[]>(
-      'SELECT * FROM notes ORDER BY pinned DESC, "order" ASC'
-    );
-    const notes = rows.map(toNote);
+    const notes = await readFreshNotes();
+    if (!notes) return;
     set((state) => ({
       notes,
       currentNote: state.currentNote
@@ -97,6 +158,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
     // The store updates its own view below, so the Change needs no refresh.
     const note = await createNoteRow(input, "local", STORE_VIEW);
 
+    writeEpoch++;
     set((state) => ({ notes: sortNotes([...state.notes, note]) }));
     return note;
   },
@@ -106,6 +168,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
     const updated = await updateNoteRow(input, "local", STORE_VIEW);
     if (!updated) return null;
 
+    writeEpoch++;
     set((state) => ({
       notes: sortNotes(state.notes.map((n) => (n.id === updated.id ? updated : n))),
       currentNote: state.currentNote?.id === updated.id ? updated : state.currentNote,
@@ -118,6 +181,7 @@ export const useNoteStore = create<NoteStore>((set) => ({
     // The write path records the tombstone, deletes, and emits the Change.
     await deleteNoteRow(id, "local", STORE_VIEW);
 
+    writeEpoch++;
     set((state) => ({
       notes: state.notes.filter((n) => n.id !== id),
       currentNote: state.currentNote?.id === id ? null : state.currentNote,
@@ -127,11 +191,8 @@ export const useNoteStore = create<NoteStore>((set) => ({
   reorderNotes: async (orderedItems: string[] | ReorderNoteItem[]) => {
     // The write path persists the order and emits the Change.
     await reorderNoteRows(orderedItems, "local", STORE_VIEW);
-    const db = await getDatabase();
-    const rows = await db.select<Record<string, unknown>[]>(
-      'SELECT * FROM notes ORDER BY pinned DESC, "order" ASC'
-    );
-    const notes = rows.map(toNote);
+    const notes = await readFreshNotes();
+    if (!notes) return;
     set((state) => ({
       notes,
       currentNote: state.currentNote
