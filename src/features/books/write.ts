@@ -11,6 +11,7 @@
 // not. updated_at stays the sync conflict clock and always bumps.
 
 import { getDatabase } from "@/lib/db";
+import type { AtomicStatement } from "@/lib/platform/types";
 import { SWEEP_VERSION_CONTENT, withVersionWrites } from "@/features/versions/content-store";
 import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
@@ -21,7 +22,11 @@ import {
   type ChangeKind,
   type ChangeOrigin,
 } from "@/features/sync/change-feed";
-import { normalizeChapterContent, toChapter } from "@/features/chapters/write";
+import {
+  chapterDependentDeletes,
+  normalizeChapterContent,
+  toChapter,
+} from "@/features/chapters/write";
 import { reindexSource } from "@/features/links/link-index";
 import { appLanguage } from "@/features/settings/app-language";
 import type { Book, BookStatus, CreateBookInput, UpdateBookInput } from "@/features/books/types";
@@ -271,6 +276,22 @@ export async function updateBookWordCountRow(id: string, wordCount: number): Pro
   return readBook(id);
 }
 
+/** The rows hanging off a Book, deleted by hand: the web leaves foreign_keys off, so no cascade removes them. */
+export function bookDependentDeletes(id: string): AtomicStatement[] {
+  return [
+    ...chapterDependentDeletes("SELECT id FROM chapters WHERE book_id = ?", [id]),
+    ...[
+      "chapter_epub_meta",
+      "epub_structures",
+      "book_styles",
+      "book_metadata",
+      "project_assets",
+      "book_versions",
+      "chapters",
+    ].map((table) => ({ sql: `DELETE FROM ${table} WHERE book_id = ?`, params: [id] })),
+  ];
+}
+
 /** Local delete: records a tombstone so sync carries the deletion. */
 export async function deleteBookRow(
   id: string,
@@ -288,11 +309,11 @@ export async function deleteBookRow(
       title: rows[0].title,
     });
   }
-  // Its Versions go with it, and the content only they referenced: web has no
-  // foreign keys to cascade, and the sync removes their remote copies.
+  // Its Chapters, Versions, and every row hanging off the Book go with it: web
+  // has no foreign keys to cascade, and the sync removes their remote copies.
   await withVersionWrites(() =>
     db.executeAtomic([
-      { sql: "DELETE FROM book_versions WHERE book_id = ?", params: [id] },
+      ...bookDependentDeletes(id),
       { sql: "DELETE FROM books WHERE id = ?", params: [id] },
       ...SWEEP_VERSION_CONTENT,
     ])
@@ -309,28 +330,15 @@ export async function removeBookRow(id: string, origin: ChangeOrigin): Promise<v
   assertWritableId(id);
   await flushForOutsideWrite(origin);
   const db = await getDatabase();
-  const chapters = await db.select<{ id: string }[]>("SELECT id FROM chapters WHERE book_id = ?", [
-    id,
-  ]);
-  for (const chapter of chapters) {
-    await db.execute("DELETE FROM links WHERE source_id = ?", [chapter.id]).catch(() => {});
-  }
-  // The schema declares ON DELETE CASCADE, but no adapter enables SQLite's
-  // foreign_keys pragma, so the dependent rows are deleted explicitly.
-  for (const table of [
-    "chapter_epub_meta",
-    "epub_structures",
-    "book_styles",
-    "book_metadata",
-    "project_assets",
-    "book_versions",
-    "chapters",
-  ]) {
-    await db.execute(`DELETE FROM ${table} WHERE book_id = ?`, [id]).catch(() => {});
-  }
-  await db.execute("DELETE FROM books WHERE id = ?", [id]);
-  // Best effort like the deletes above: the next Version deletion sweeps again.
-  await withVersionWrites(() => db.executeAtomic(SWEEP_VERSION_CONTENT)).catch(() => {});
+  // One transaction: the Book, its Chapters, and every row hanging off it go
+  // together, with the content only its Versions referenced.
+  await withVersionWrites(() =>
+    db.executeAtomic([
+      ...bookDependentDeletes(id),
+      { sql: "DELETE FROM books WHERE id = ?", params: [id] },
+      ...SWEEP_VERSION_CONTENT,
+    ])
+  );
   await emitChange({ entity: "book", id, origin, kind: "content" });
 }
 
@@ -485,12 +493,19 @@ export async function applyBookSnapshotData(
 
   const applyChapters = async (): Promise<void> => {
     // Drop only the chapters the snapshot no longer has, then upsert the
-    // rest in place: deleting a kept chapter cascades to its EPUB metadata
-    // on desktop.
-    await db.execute(
-      "DELETE FROM chapters WHERE book_id = ? AND id NOT IN (SELECT value FROM json_each(?))",
-      [book.id, JSON.stringify(normalizedChapters.map((ch) => ch.id))]
-    );
+    // rest in place. Their dependents (link index rows, EPUB metadata) are
+    // deleted by hand in the same transaction: the web leaves foreign_keys
+    // off, so no cascade removes them there.
+    const droppedChaptersSql =
+      "SELECT id FROM chapters WHERE book_id = ? AND id NOT IN (SELECT value FROM json_each(?))";
+    const droppedChapterParams = [book.id, JSON.stringify(normalizedChapters.map((ch) => ch.id))];
+    await db.executeAtomic([
+      ...chapterDependentDeletes(droppedChaptersSql, droppedChapterParams),
+      {
+        sql: "DELETE FROM chapters WHERE book_id = ? AND id NOT IN (SELECT value FROM json_each(?))",
+        params: droppedChapterParams,
+      },
+    ]);
 
     for (let i = 0; i < normalizedChapters.length; i++) {
       const ch = normalizedChapters[i];
