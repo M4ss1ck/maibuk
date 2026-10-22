@@ -277,7 +277,7 @@ export async function updateBookWordCountRow(id: string, wordCount: number): Pro
 }
 
 /** The rows hanging off a Book, deleted by hand: the web leaves foreign_keys off, so no cascade removes them. */
-function bookDependentDeletes(id: string): AtomicStatement[] {
+export function bookDependentDeletes(id: string): AtomicStatement[] {
   return [
     ...chapterDependentDeletes("SELECT id FROM chapters WHERE book_id = ?", [id]),
     ...[

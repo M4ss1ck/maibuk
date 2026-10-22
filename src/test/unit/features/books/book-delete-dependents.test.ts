@@ -92,6 +92,20 @@ async function seedBookWithDependents(bookId: string): Promise<void> {
   );
 }
 
+/**
+ * Refuses every delete of a books row, so the Book delete fails partway through
+ * the batch. A best-effort loop (one execute per delete) would leave the
+ * dependents already deleted, committed and gone; one atomic batch rolls the
+ * whole thing back. Each test gets a fresh database, so the trigger never
+ * outlives its test.
+ */
+async function seedRefusingBookTrigger(): Promise<void> {
+  await testDb.execute(
+    `CREATE TRIGGER boom BEFORE DELETE ON books
+     BEGIN SELECT RAISE(ABORT, 'boom'); END;`
+  );
+}
+
 /** How many rows of each dependent table still point at a seeded Book. */
 async function rowsFor(bookId: string): Promise<Record<string, number>> {
   const chapterId = `chapter-${bookId}`;
@@ -153,6 +167,25 @@ describe.each(["OFF", "ON"])("Book delete with foreign_keys = %s", (mode) => {
     await removeBookRow(DELETED, "remote");
 
     expect(await rowsFor(DELETED)).toEqual(NO_ROWS);
+    expect(await rowsFor(KEPT)).toEqual(ONE_ROW_EACH);
+  });
+
+  it("deleteBookRow keeps every dependent row when the Book delete is refused", async () => {
+    await seedRefusingBookTrigger();
+
+    await expect(deleteBookRow(DELETED, "local")).rejects.toThrow(/boom/);
+
+    // Nothing half-deleted: the batch is all or nothing.
+    expect(await rowsFor(DELETED)).toEqual(ONE_ROW_EACH);
+    expect(await rowsFor(KEPT)).toEqual(ONE_ROW_EACH);
+  });
+
+  it("removeBookRow keeps every dependent row when the Book delete is refused", async () => {
+    await seedRefusingBookTrigger();
+
+    await expect(removeBookRow(DELETED, "remote")).rejects.toThrow(/boom/);
+
+    expect(await rowsFor(DELETED)).toEqual(ONE_ROW_EACH);
     expect(await rowsFor(KEPT)).toEqual(ONE_ROW_EACH);
   });
 });

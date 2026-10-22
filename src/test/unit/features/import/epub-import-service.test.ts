@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AtomicStatement } from "@/lib/platform/types";
 
 const {
   mockBuildImportPreview,
   mockCreateBook,
   mockCreateChapter,
   mockDeleteExecute,
+  mockExecuteAtomic,
   mockGetDatabase,
   mockInsertBookMetadata,
   mockInsertBookStyles,
@@ -24,6 +26,7 @@ const {
   mockCreateBook: vi.fn(),
   mockCreateChapter: vi.fn(),
   mockDeleteExecute: vi.fn(),
+  mockExecuteAtomic: vi.fn(),
   mockGetDatabase: vi.fn(),
   mockInsertBookMetadata: vi.fn(),
   mockInsertBookStyles: vi.fn(),
@@ -164,11 +167,12 @@ describe("EPUB import service", () => {
     mockInsertEpubStructure.mockResolvedValue(undefined);
     mockInsertChapterEpubMeta.mockResolvedValue(undefined);
     mockDeleteExecute.mockResolvedValue({ rowsAffected: 0 });
+    mockExecuteAtomic.mockResolvedValue(undefined);
     mockSelect.mockResolvedValue([]);
     mockGetDatabase.mockResolvedValue({
       execute: mockDeleteExecute,
       select: mockSelect,
-      executeAtomic: vi.fn().mockResolvedValue(undefined),
+      executeAtomic: mockExecuteAtomic,
     });
   });
 
@@ -304,17 +308,39 @@ describe("EPUB import service", () => {
       off();
     }
 
-    expect(mockDeleteExecute).toHaveBeenCalledWith(
-      "DELETE FROM chapter_epub_meta WHERE book_id = ?",
-      ["book-1"]
+    // The cleanup is one atomic batch, so a failed removal leaves nothing half
+    // deleted. Assert on the statements the batch carries, not on separate
+    // execute() calls.
+    expect(mockExecuteAtomic).toHaveBeenCalledTimes(1);
+    const statements = (mockExecuteAtomic.mock.calls[0][0] as AtomicStatement[]).map((statement) =>
+      typeof statement === "string" ? { sql: statement, params: undefined } : statement
     );
-    expect(mockDeleteExecute).toHaveBeenCalledWith("DELETE FROM chapters WHERE book_id = ?", [
-      "book-1",
-    ]);
-    expect(mockDeleteExecute).toHaveBeenCalledWith("DELETE FROM books WHERE id = ?", ["book-1"]);
+    const deletes = (sql: string) => statements.filter((statement) => statement.sql === sql);
+
+    for (const sql of [
+      "DELETE FROM chapters WHERE book_id = ?",
+      "DELETE FROM chapter_epub_meta WHERE book_id = ?",
+      "DELETE FROM books WHERE id = ?",
+    ]) {
+      const matched = deletes(sql);
+      expect(matched.length, `the cleanup batch is missing: ${sql}`).toBeGreaterThan(0);
+      for (const statement of matched) {
+        expect(statement.params).toContain("book-1");
+      }
+    }
+
+    // `links` has no foreign key at all: its rows go through the Chapter ids.
+    const linkDeletes = statements.filter((statement) =>
+      statement.sql.includes("DELETE FROM links")
+    );
+    expect(linkDeletes.length).toBeGreaterThan(0);
+    for (const statement of linkDeletes) {
+      expect(statement.params).toContain("book-1");
+    }
+
     // Shared removal path: no tombstone for a book that was never synced.
-    for (const [sql] of mockDeleteExecute.mock.calls) {
-      expect(String(sql)).not.toContain("sync_tombstones");
+    for (const statement of statements) {
+      expect(statement.sql).not.toContain("sync_tombstones");
     }
     // The cleanup is a local write: its Change refreshes the views so no
     // phantom book lingers (ADR 0026 rejects labelling local writes remote).
