@@ -17,6 +17,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { cp } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { type Alias, build } from "vite";
+import { onRollupWarn } from "./rollup-warnings";
 
 /** The repo root, from this script's own location (`scripts/`). */
 const REPO_ROOT = resolve(import.meta.dirname, "..");
@@ -101,6 +102,7 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<void> {
       rollupOptions: {
         external: [],
         output: { inlineDynamicImports: true },
+        onwarn: onRollupWarn,
       },
     },
   });

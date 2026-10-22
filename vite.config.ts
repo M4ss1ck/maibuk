@@ -7,6 +7,7 @@ import { createReadStream, statSync } from "node:fs";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { version } from "./package.json";
 import { TEST_TIMEOUT_MS } from "./src/test/time-budget";
+import { onRollupWarn } from "./scripts/rollup-warnings";
 
 const host = process.env.TAURI_DEV_HOST;
 const buildTarget = process.env.VITE_BUILD_TARGET || "tauri";
@@ -432,6 +433,7 @@ export default defineConfig(() => ({
         // Built-in Plugin build lane (issue #444): the pure build, target, and
         // bundle-size logic.
         "scripts/build-builtin-plugins.ts",
+        "scripts/rollup-warnings.ts",
         // Plugin tooling (issue #455): the CLI, the generated configs, the
         // shared file listing, and the boundary, layout, and package checks,
         // each with a unit test. `steps.ts` is deliberately absent: only the
@@ -518,6 +520,10 @@ export default defineConfig(() => ({
   // as /book/:id resolves assets under /book/ and the SPA fallback answers
   // the module requests with index.html.
   base: "/",
+
+  build: {
+    rollupOptions: { onwarn: onRollupWarn },
+  },
 
   preview: {
     headers: isolation,
