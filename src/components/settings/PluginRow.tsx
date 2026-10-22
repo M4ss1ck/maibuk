@@ -3,7 +3,7 @@
  * the name, its origin and state badges, the disclosure chevron, and — outside
  * the disclosure trigger — the enable switch. The expanded panel reads top to
  * bottom: the localized manifest description, the notices (a startup error, a
- * Stopped reason with Restart, unsupported and duplicate-folder text, the data
+ * Stopped Plugin reason with Try again or Review, unsupported and duplicate-folder text, the data
  * size warning, the update-available Keep/Replace actions, the custom-UI
  * notice, and the removed third-party note), the Plugin's own Settings surface
  * and rows, a nested Permissions accordion (the granted Plugin Permissions with
@@ -33,6 +33,7 @@ import { PluginPermissionList } from "@/components/plugins/PluginPermissionList"
 import { PluginSettingsRowBody } from "@/components/plugins/PluginSettingsRowBody";
 import {
   pluginStartupErrorText,
+  pluginStoppedReasonText,
   type StartupErrorTranslate,
 } from "@/components/plugins/plugin-startup-error";
 import { PluginSurface } from "@/components/plugins/PluginSurface";
@@ -48,7 +49,6 @@ import {
   localizedPluginManifest,
   usePluginManagementStore,
 } from "@/features/plugins/management";
-import { pluginStopMessageKey } from "@/features/plugins/stop-messages";
 import type { PluginManagementEntry, PluginPermissionId } from "@/features/plugins/types";
 import {
   getPluginSettingsRows,
@@ -56,6 +56,7 @@ import {
   rowOnPlatform,
   type SettingsPlatform,
 } from "@/features/settings/rows";
+import { useStoppedPlugin } from "@/hooks";
 import { usePluginSecrets } from "@/hooks/usePluginSecrets";
 
 const BADGE_CLASS =
@@ -152,8 +153,7 @@ export function PluginRow({
   // id, or its manifest excludes this device (#443). The control stays visible
   // but disabled so the row explains itself instead of acting.
   const enableable = entry.installed && entry.duplicateFolders.length === 0 && !entry.unsupported;
-  const stopped = entry.stopped !== null;
-  const stoppedKey = entry.stopped !== null ? pluginStopMessageKey(entry.stopped.reason) : null;
+  const stoppedPlugin = useStoppedPlugin(entry.pluginId);
   const showCustomUi = manifest.customUi === true;
   // A removed Built-in offers Reinstall from the bundled copy; a removed
   // third-party Plugin offers none (the author must add its files again).
@@ -236,10 +236,10 @@ export function PluginRow({
                 {t("plugins.management.filters.unsupported")}
               </span>
             )}
-            {stopped && (
+            {stoppedPlugin !== null && (
               <span className={ISSUE_BADGE_CLASS}>{t("plugins.management.stopped")}</span>
             )}
-            {approval?.startupError !== undefined && (
+            {approval?.startupError !== undefined && stoppedPlugin === null && (
               <span className={ISSUE_BADGE_CLASS}>{t("plugins.management.failedToStart")}</span>
             )}
             {entry.review.status === "review-required" && (
@@ -282,27 +282,42 @@ export function PluginRow({
           {/* The manifest description, localized, opens the panel. */}
           <p className="text-sm">{description}</p>
 
-          {approval?.startupError !== undefined && (
-            <p className="mt-3 text-sm text-destructive">
-              {pluginStartupErrorText(approval.startupError, t as unknown as StartupErrorTranslate)}
-            </p>
-          )}
-          {stopped && stoppedKey !== null && (
+          {stoppedPlugin !== null ? (
             <div className="mt-3">
               <p className="text-sm text-destructive">
-                {translate(stoppedKey, { name: manifest.name })}
+                {pluginStoppedReasonText(stoppedPlugin.reason, manifest.name, translate)}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  className="pointer-coarse:min-h-12"
-                  data-command="settings.restartPlugin"
-                  onClick={() => void store.restart(entry.pluginId)}
-                >
-                  {t("plugins.management.restart")}
-                </Button>
+                {stoppedPlugin.action === "tryAgain" ? (
+                  <Button
+                    variant="secondary"
+                    className="pointer-coarse:min-h-12"
+                    data-command="settings.restartPlugin"
+                    onClick={() => void store.restart(entry.pluginId)}
+                  >
+                    {t("plugins.stoppedPanel.tryAgain")}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    className="pointer-coarse:min-h-12"
+                    data-command="settings.reviewPlugin"
+                    onClick={onReview}
+                  >
+                    {t("plugins.permissions.review")}
+                  </Button>
+                )}
               </div>
             </div>
+          ) : (
+            approval?.startupError !== undefined && (
+              <p className="mt-3 text-sm text-destructive">
+                {pluginStartupErrorText(
+                  approval.startupError,
+                  t as unknown as StartupErrorTranslate
+                )}
+              </p>
+            )
           )}
           {entry.unsupported && (
             <p className="mt-3 text-sm text-muted-foreground">

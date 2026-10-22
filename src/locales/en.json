@@ -2296,6 +2296,19 @@
         "kb": "{{value}} KB",
         "mb": "{{value}} MB"
       }
+    },
+    "stoppedPanel": {
+      "title": "{{name}} stopped",
+      "tryAgain": "Try again",
+      "starting": "Starting…",
+      "pluginSettings": "Plugin settings",
+      "reviewInSettings": "Review in Settings",
+      "notResponding": "{{name}} is not responding. Waiting for it to answer…",
+      "sidebarName": "{{title}}, stopped. {{reason}}",
+      "commands": {
+        "tryAgain": "Try starting this Plugin again",
+        "openSettings": "Open this Plugin’s settings"
+      }
     }
   }
 }

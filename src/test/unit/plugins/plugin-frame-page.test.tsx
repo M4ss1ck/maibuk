@@ -43,6 +43,7 @@ vi.mock("@/hooks/usePluginSurface", () => ({
   usePluginLaunchScanned: () => true,
   usePluginLifecycleRevision: () => 0,
   usePluginSurface: () => undefined,
+  useStoppedPlugin: () => null,
 }));
 
 function seedPages(): void {

@@ -126,6 +126,7 @@ function createFakeLifecycle() {
     stop: () => {},
     state: () => null,
     runtime: () => null,
+    launchRefusal: () => null,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {

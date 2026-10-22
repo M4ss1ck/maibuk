@@ -10,6 +10,7 @@ import type { PLUGIN_PERMISSION_NAMES } from "@/features/plugins/manifest-valida
 import type { BookStatus } from "@/features/books/types";
 import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import type { Language } from "@/features/settings/types";
+import type { PluginStopMessageReason } from "@/features/plugins/stop-messages";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { EndpointRequest, PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
@@ -637,6 +638,23 @@ export type PluginLifecycleState =
   | { status: "ready"; startReason: PluginStartReason }
   | { status: "unavailable"; startReason: PluginStartReason; heartbeatMisses: number };
 
+// Stopped Plugin (stopped.ts, #618)
+
+/** Why a Plugin is a Stopped Plugin, in the shape its copy is chosen by. */
+export type StoppedPluginReason =
+  /** A limit stopped a run: the stop-message copy. */
+  | { kind: "limit"; reason: PluginStopMessageReason }
+  /** A refused activation: the stored `startupError` value (a code or the refusal's message). */
+  | { kind: "refusal"; startupError: string }
+  /** The copy is not the one the author approved. */
+  | { kind: "review" };
+
+export interface StoppedPlugin {
+  reason: StoppedPluginReason;
+  /** Try again starts it; a refusal a retry cannot fix sends the author to Settings. */
+  action: "tryAgain" | "review";
+}
+
 export interface PluginLifecycleChange {
   pluginId: string;
   /** The Plugin's display name, so a listener needs no manifest lookup. */
@@ -711,6 +729,11 @@ export interface PluginLifecycle {
   stop(pluginId: string, reason?: PluginLifecycleStopReason): void;
   /** The Plugin's state, or null for an id the lifecycle has not seen. */
   state(pluginId: string): PluginLifecycleState | null;
+  /**
+   * Why the launch scan refused an enabled Plugin, until it installs cleanly or
+   * is uninstalled; null otherwise (#618).
+   */
+  launchRefusal(pluginId: string): PluginStartRefusal | null;
   /** The running runtime; contributions and Command runs use its broker (#437). */
   runtime(pluginId: string): PluginRuntime | null;
   /** State changes, for contributions and Settings. */

@@ -316,13 +316,18 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
 
   // Saves the sidebar for the next launch's first frame once the scan settled.
   let stopSidebarSnapshot: (() => void) | null = null;
+  // Why the launch scan refused each enabled Plugin it could not read (#618):
+  // those Plugins have no entry, and a Stopped Plugin's surfaces read this.
+  const launchRefusals = new Map<string, PluginStartRefusal>();
 
   function markScanned(): void {
     if (scanned) return;
     scanned = true;
     // The registry now holds what this launch found: a seeded entry the scan
-    // did not replace belongs to a Plugin that is gone, off, or changed.
-    dropSeededPluginContributions();
+    // did not replace belongs to a Plugin that is gone, off, or changed. A
+    // Plugin the scan refused keeps its entry, marked Stopped, so it does not
+    // vanish without a word (#618).
+    dropSeededPluginContributions((pluginId) => launchRefusals.has(pluginId));
     if (!disposed) stopSidebarSnapshot = persistPluginSidebarSnapshot();
     for (const listener of [...scanListeners]) listener();
   }
@@ -712,6 +717,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       result.plugin.stop();
       return { ok: false, refusal: { code: "not-installed" } };
     }
+    // A clean start ends a recorded refusal: the Plugin is no longer stopped.
+    clearStartupError(pluginId);
     setState(entry, { status: "ready", startReason: reason });
     startHeartbeat(entry);
     armIdle(entry);
@@ -896,6 +903,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         for (const { pluginId, refusal } of scan.refusals) {
           console.warn(`Plugin ${pluginId} did not load: ${refusal.code}`, refusal);
           recordStartupError(pluginId, refusal);
+          launchRefusals.set(pluginId, refusal);
         }
         for (const plugin of scan.plugins) {
           const entry = createEntry(plugin);
@@ -1034,6 +1042,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         manifest: read.manifest,
         builtIn: builtInIds.has(pluginId),
       };
+      launchRefusals.delete(pluginId);
       let entry = entries.get(pluginId);
       if (!entry) {
         entry = createEntry(installed);
@@ -1066,6 +1075,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     },
 
     uninstall(pluginId: string): void {
+      if (launchRefusals.delete(pluginId)) {
+        // The kept, marked sidebar entry goes with the Plugin.
+        dropSeededPluginContributions((seeded) => seeded !== pluginId);
+      }
       const entry = entries.get(pluginId);
       if (!entry) return;
       clearPluginHighlights(pluginId);
@@ -1106,6 +1119,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       return entries.get(pluginId)?.runtime ?? null;
     },
 
+    launchRefusal(pluginId: string) {
+      return launchRefusals.get(pluginId) ?? null;
+    },
+
     subscribe(listener: (change: PluginLifecycleChange) => void): () => void {
       listeners.add(listener);
       return () => {
@@ -1124,6 +1141,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       offEditorContent();
       offEditorFocus();
       pendingBulkReplace = null;
+      launchRefusals.clear();
       // Clearing the registry below is not the author turning Plugins off, so
       // the snapshot keeps what the next launch should show.
       stopSidebarSnapshot?.();

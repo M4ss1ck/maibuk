@@ -44,6 +44,7 @@ export const CORE_CONTEXTS = [
   "symbolItem",
   "commandPalette",
   "settings",
+  "pluginPage",
 ] as const;
 
 export type CoreShortcutContext = (typeof CORE_CONTEXTS)[number];
@@ -334,6 +335,17 @@ export const COMMANDS = {
     labelKey: "plugins.management.commands.restartPlugin",
     contexts: ["settings"],
     defaults: [],
+  },
+  "pluginPage.tryAgain": {
+    labelKey: "plugins.stoppedPanel.commands.tryAgain",
+    contexts: ["pluginPage"],
+    defaults: [],
+  },
+  "pluginPage.openSettings": {
+    labelKey: "plugins.stoppedPanel.commands.openSettings",
+    contexts: ["pluginPage"],
+    defaults: [],
+    navigates: true,
   },
   "settings.addPlugin": {
     labelKey: "plugins.management.commands.addPlugin",
@@ -1780,10 +1792,10 @@ export const ROUTE_CONTEXTS: Readonly<Record<string, readonly ShortcutContext[]>
   "/ephemeral": ["ephemeral", "editor", "image", "footnoteItem", "symbolItem", "commandPalette"],
   "/metrics": ["commandPalette"],
   "/settings": ["settings", "commandPalette"],
-  // A Plugin page is its own runtime-derived Context (`plugin.<id>.<page>`),
-  // so only the palette is static here; `contextsOverlap` compares the
-  // derived Contexts by name.
-  "/plugin/:pluginId/:pageId": ["commandPalette"],
+  // A Plugin page also shows the host Context "pluginPage", which holds the
+  // Stopped Plugin panel Commands; the page's own Context stays runtime-derived
+  // (`plugin.<id>.<page>`), and `contextsOverlap` compares it by name.
+  "/plugin/:pluginId/:pageId": ["pluginPage", "commandPalette"],
   "/embed": [],
   "/book/:bookId": [
     "bookEditor",
@@ -1828,7 +1840,7 @@ export const SHORTCUT_SECTIONS = [
   },
   { id: "settings", labelKey: "shortcuts.sections.settings", contexts: ["settings"] },
   { id: "focus", labelKey: "shortcuts.sections.focus", contexts: [] },
-  { id: "plugins", labelKey: "shortcuts.sections.plugins", contexts: [] },
+  { id: "plugins", labelKey: "shortcuts.sections.plugins", contexts: ["pluginPage"] },
 ] as const satisfies readonly {
   id: string;
   labelKey: string;

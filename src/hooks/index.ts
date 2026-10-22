@@ -6,6 +6,7 @@ export {
   usePluginLaunchScanned,
   usePluginLifecycleRevision,
   usePluginSurface,
+  useStoppedPlugin,
 } from "@/hooks/usePluginSurface";
 export { usePluginSecrets } from "@/hooks/usePluginSecrets";
 export { useDialogOverlay } from "@/hooks/useDialogOverlay";

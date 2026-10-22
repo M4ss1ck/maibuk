@@ -13,6 +13,7 @@ import "@/i18n";
 import { PluginsSection } from "@/components/settings/PluginsSection";
 import { toast } from "@/components/ui/Toast";
 import { useModalStore } from "@/components/ui/modal-store";
+import { PLUGIN_APPROVALS_STORAGE_KEY, savePluginApproval } from "@/features/plugins/approvals";
 import { PLUGIN_FILTER_CATEGORIES, PLUGIN_DATA_SIZE_WARNING_BYTES, usePluginManagementStore } from "@/features/plugins/management";
 import {
   resetPluginLifecycleForTests,
@@ -26,6 +27,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import type {
   PluginApproval,
   PluginLifecycle,
+  PluginLifecycleState,
   PluginManagementEntry,
   PluginManifest,
   PluginPermissionId,
@@ -170,6 +172,24 @@ async function openPermissions(user: User): Promise<void> {
   await user.keyboard("{Enter}");
 }
 
+/**
+ * Installs a fake lifecycle reporting one state per Plugin id, so the row's
+ * Stopped Plugin read (#618) comes from the lifecycle rather than the store.
+ */
+function installStoppedLifecycle(states: Record<string, PluginLifecycleState | null>): void {
+  const lifecycle = {
+    launchScanned: () => true,
+    onLaunchScanned: () => () => {},
+    surfaceReached: () => {},
+    surfaceLeft: () => {},
+    state: (id: string) => states[id] ?? null,
+    launchRefusal: () => null,
+    runtime: () => null,
+    subscribe: () => () => {},
+  } as unknown as PluginLifecycle;
+  setPluginLifecycleInstance(lifecycle);
+}
+
 beforeEach(() => {
   localStorage.clear();
   registerPluginSecretStore(null);
@@ -196,6 +216,8 @@ beforeEach(() => {
 afterEach(async () => {
   while (unregisters.length > 0) unregisters.pop()?.();
   registerPluginSecretStore(null);
+  setPluginLifecycleInstance(null);
+  localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
   await i18n.changeLanguage("en");
 });
 
@@ -1091,15 +1113,18 @@ describe("Plugin management (#443)", () => {
     expect(await screen.findByText("No Plugins match these filters.")).toBeInTheDocument();
   });
 
-  it("shows a Stopped row's reason and restarts it by keyboard", async () => {
+  it("shows a Stopped row's reason and tries again by keyboard", async () => {
     const user = userEvent.setup();
     seed(
       entry({
         approval: approval({ enabled: true }),
         review: review({ status: "approved" }),
-        stopped: { reason: "crashed" },
       })
     );
+    savePluginApproval(approval({ enabled: true }));
+    installStoppedLifecycle({
+      echoes: { status: "stopped", reason: "crashed", refusal: null },
+    });
     const restart = vi.fn(async () => {});
     usePluginManagementStore.setState({ restart });
     render(<PluginsSection />);
@@ -1108,7 +1133,7 @@ describe("Plugin management (#443)", () => {
     expect(screen.getByText("Stopped")).toBeInTheDocument();
     expect(screen.getByText("Echoes stopped unexpectedly.")).toBeInTheDocument();
 
-    const restartButton = screen.getByRole("button", { name: "Restart" });
+    const restartButton = screen.getByRole("button", { name: "Try again" });
     await tabTo(user, restartButton);
     await user.keyboard("{Enter}");
     expect(restart).toHaveBeenCalledWith("echoes");
@@ -1235,22 +1260,125 @@ describe("Plugin management (#443)", () => {
         manifest: manifest({ id: "alpha", name: "Alpha" }),
         approval: approval({ enabled: true }),
         review: review({ status: "approved" }),
-        stopped: { reason: "unresponsive" },
       }),
       entry({
         pluginId: "beta",
         manifest: manifest({ id: "beta", name: "Beta" }),
         approval: approval({ enabled: true }),
         review: review({ status: "approved" }),
-        stopped: { reason: "out-of-memory" },
       })
     );
+    savePluginApproval(approval({ pluginId: "alpha", enabled: true }));
+    savePluginApproval(approval({ pluginId: "beta", enabled: true }));
+    installStoppedLifecycle({
+      alpha: { status: "stopped", reason: "unresponsive", refusal: null },
+      beta: { status: "stopped", reason: "out-of-memory", refusal: null },
+    });
     render(<PluginsSection />);
 
     await openRow(user, "Alpha");
     expect(screen.getByText("Alpha stopped responding and was closed.")).toBeInTheDocument();
     await openRow(user, "Beta");
     expect(screen.getByText("Beta used too much memory and was stopped.")).toBeInTheDocument();
+  });
+
+  it("shows a stopped Plugin's refusal reason and tries again by keyboard", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        approval: approval({ enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    savePluginApproval(approval({ enabled: true }));
+    installStoppedLifecycle({
+      echoes: {
+        status: "stopped",
+        reason: null,
+        refusal: { code: "worker-error", message: "Echoes could not load its index" },
+      },
+    });
+    const restart = vi.fn(async () => {});
+    usePluginManagementStore.setState({ restart });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.getByText("Echoes could not load its index")).toBeInTheDocument();
+
+    const tryAgain = screen.getByRole("button", { name: "Try again" });
+    await tabTo(user, tryAgain, 20);
+    await user.keyboard("{Enter}");
+    expect(restart).toHaveBeenCalledWith("echoes");
+  });
+
+  it("offers Review, not Try again, when the saved data is newer than the Plugin", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        approval: approval({ enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    savePluginApproval(approval({ enabled: true }));
+    installStoppedLifecycle({
+      echoes: {
+        status: "stopped",
+        reason: null,
+        refusal: { code: "data-newer", stored: 3, manifest: 2 },
+      },
+    });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(
+      screen.getByText("This Plugin's saved data is from a newer version of Maibuk.")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("offers Review, not Try again, for a copy that changed", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        approval: approval({ enabled: true }),
+        review: review({ status: "approved" }),
+      })
+    );
+    savePluginApproval(approval({ enabled: true }));
+    installStoppedLifecycle({
+      echoes: {
+        status: "stopped",
+        reason: null,
+        refusal: { code: "review-required", status: "review-required" },
+      },
+    });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.getByText("This Plugin's files changed and need review.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Review" })).toBeInTheDocument();
+  });
+
+  it("shows the crash reason alone when a stored startup error also exists", async () => {
+    const user = userEvent.setup();
+    seed(
+      entry({
+        approval: approval({ enabled: true, startupError: "manifest-invalid" }),
+        review: review({ status: "approved" }),
+      })
+    );
+    savePluginApproval(approval({ enabled: true, startupError: "manifest-invalid" }));
+    installStoppedLifecycle({
+      echoes: { status: "stopped", reason: "crashed", refusal: null },
+    });
+    render(<PluginsSection />);
+
+    await openRow(user);
+    expect(screen.getByText("Echoes stopped unexpectedly.")).toBeInTheDocument();
+    // The Stopped Plugin read owns the notice; the stored startup error stays out.
+    expect(screen.queryByText("This Plugin's manifest is not valid.")).toBeNull();
+    expect(screen.queryByText("Failed to start")).toBeNull();
   });
 
   it("shows the Plugin's data size when expanded", async () => {
@@ -1531,9 +1659,11 @@ describe("Plugin management (#443)", () => {
         manifest: manifest({ id: "gamma", name: "Gamma" }),
         installed: false,
         removed: true,
-        stopped: { reason: "crashed" },
       })
     );
+    // Gamma is a Stopped Plugin: the restart Command reads the same Stopped read.
+    savePluginApproval(approval({ pluginId: "gamma", enabled: true }));
+    installStoppedLifecycle({ gamma: { status: "stopped", reason: "crashed", refusal: null } });
     usePluginManagementStore.setState({ dataSizes: { gamma: 4096 } });
     render(<PluginsSection />);
 

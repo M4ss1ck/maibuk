@@ -276,6 +276,7 @@ export default defineConfig(() => ({
         // Plugin storage (ADR 0023)
         "src/features/plugins/tables.ts",
         "src/features/plugins/storage.ts",
+        "src/features/plugins/stopped.ts",
         // Plugin secrets and network (ADR 0023, #453)
         "src/features/plugins/secret-store.ts",
         "src/features/plugins/network.ts",

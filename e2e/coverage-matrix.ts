@@ -2497,6 +2497,22 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-stopped",
+    area: "plugins",
+    workflow:
+      'The Stopped Plugin surfaces (#618), on an on-demand Plugin whose Worker throws an uncaught error: the page opens from its sidebar entry, the Command Palette runs "Crash stopped fixture", and the Plugin stops with reason crashed. The sidebar entry is marked and named "Stopped fixture report, stopped. Stopped Fixture stopped unexpectedly.", tooltipped with the reason, and the page replaces its body with the panel that says "Stopped Fixture stopped", an alert with the reason, and Try again and Plugin settings: Try again (Tab + Enter) reads Starting… and, once the Plugin is ready, the page body renders again and the sidebar name clears; Plugin settings (Tab + Enter) opens Settings on that Plugin card; asserts: the stopped accessible name, the alert text, the page body after the retry, the URL; persists: no',
+    edges: [
+      "Try again restarts a crashed Plugin and its page renders again",
+      "Plugin settings opens the Plugin card in Settings",
+    ],
+    terms: ["Stopped Plugin", "Plugin"],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "plugins-endpoint",
     area: "plugins",
     workflow:

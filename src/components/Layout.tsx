@@ -11,13 +11,22 @@ import { ReleaseBadge } from "@/components/releases/ReleaseBadge";
 import { CloseIcon, MaibukLogo, ProjectsIcon, SettingsIcon } from "@/components/icons";
 import { KeyboardShortcut, ResizeHandle, Tooltip } from "@/components/ui";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
+import { pluginStoppedReasonText } from "@/components/plugins/plugin-startup-error";
+import { asPluginTranslate } from "@/components/settings/plugin-translate";
 import { PluginSidebarSurfaces } from "@/components/plugins/PluginSidebarSurfaces";
-import { useDialogOverlay, useRestoreFocus } from "@/hooks";
+import {
+  useDialogOverlay,
+  useInstalledPluginLifecycle,
+  usePluginLaunchScanned,
+  usePluginLifecycleRevision,
+  useRestoreFocus,
+} from "@/hooks";
 import { useSettingsStore } from "@/features/settings/store";
 import {
   getPluginSidebarEntries,
   onPluginContributionsChange,
 } from "@/features/plugins/contributions-registry";
+import { readStoppedPlugin } from "@/features/plugins/stopped";
 import { MAIN_SIDEBAR_MAX_WIDTH, MAIN_SIDEBAR_MIN_WIDTH } from "@/features/settings/types";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 import { useCommandHint } from "@/lib/command-keys";
@@ -49,6 +58,11 @@ export function Layout() {
     getPluginSidebarEntries,
     getPluginSidebarEntries
   );
+  // A Stopped Plugin's entry is marked (#618), so the sidebar re-reads on
+  // every lifecycle change and once the launch scan settles.
+  const pluginLifecycle = useInstalledPluginLifecycle();
+  usePluginLifecycleRevision(pluginLifecycle);
+  usePluginLaunchScanned(pluginLifecycle);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
   const mobileMenuState = useMemo(
@@ -83,6 +97,8 @@ export function Layout() {
     label: string;
     icon: ReactNode;
     shortcut?: CommandId;
+    /** Why its Plugin stopped: the entry is marked, named, and tooltipped with it. */
+    stoppedReason?: string;
   };
   // Core destinations first; the pinned tail (Metrics, Settings) is appended
   // after the Plugin entries below, so it always renders last.
@@ -133,24 +149,40 @@ export function Layout() {
   // Shortcut hint as any other navigation control, once the scan registered
   // that Command (an entry seeded from the last launch has none yet). Metrics
   // and Settings come after them, whether or not a Plugin contributes an entry.
-  const pluginNavItems: NavItem[] = pluginSidebarEntries.map((entry) => ({
-    id: entry.pageRoute,
-    label: entry.title,
-    icon: <PluginIcon icon={entry.icon} className="w-5 h-5 shrink-0" />,
-    shortcut: entry.seeded ? undefined : entry.commandId,
-  }));
+  const pluginNavItems: NavItem[] = pluginSidebarEntries.map((entry) => {
+    const stopped = readStoppedPlugin(pluginLifecycle, entry.pluginId);
+    return {
+      id: entry.pageRoute,
+      label: entry.title,
+      icon: <PluginIcon icon={entry.icon} className="w-5 h-5 shrink-0" />,
+      shortcut: entry.seeded ? undefined : entry.commandId,
+      stoppedReason:
+        stopped === null
+          ? undefined
+          : pluginStoppedReasonText(stopped.reason, entry.displayName, asPluginTranslate(t)),
+    };
+  });
   // The core destinations and the Plugin entries share one scrolling section.
   const scrollNavItems = [...coreNavigationItems, ...pluginNavItems];
 
   const sidebarContent = (mobile: boolean) => {
     const renderNavItem = (item: NavItem) => {
       const isCurrent = location.pathname === item.id;
-      return (
+      const stopped = item.stoppedReason !== undefined;
+      const row = (
         <ListBoxItem
           key={item.id}
           id={item.id}
           href={item.id}
           textValue={item.label}
+          aria-label={
+            stopped
+              ? t("plugins.stoppedPanel.sidebarName", {
+                  title: item.label,
+                  reason: item.stoppedReason,
+                })
+              : undefined
+          }
           data-tutorial={mobile ? undefined : NAV_TUTORIAL_ANCHORS[item.id]}
           onAction={closeMobileMenu}
           className={({ isFocusVisible }) =>
@@ -159,12 +191,31 @@ export function Layout() {
             } ${isFocusVisible ? "outline-2 outline-offset-2 outline-primary" : "outline-none"}`
           }
         >
-          {item.icon}
+          {stopped ? (
+            // The mark sits on the icon's corner, so the collapsed sidebar shows it too.
+            <span className="relative inline-flex shrink-0">
+              {item.icon}
+              <span
+                aria-hidden="true"
+                data-plugin-stopped-mark
+                className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-background"
+              />
+            </span>
+          ) : (
+            item.icon
+          )}
           <span className="flex-1 truncate" aria-current={isCurrent ? "page" : undefined}>
             {item.label}
           </span>
           <NavShortcut id={item.shortcut} className="ml-auto hidden lg:inline-flex" />
         </ListBoxItem>
+      );
+      return stopped ? (
+        <Tooltip key={item.id} content={item.stoppedReason} side="right">
+          {row}
+        </Tooltip>
+      ) : (
+        row
       );
     };
 
