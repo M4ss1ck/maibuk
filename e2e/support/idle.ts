@@ -8,7 +8,7 @@ import type { Page } from "@playwright/test";
 
 /**
  * Delays every idle callback by `ms` milliseconds for the rest of the page's
- * life: the lifecycle install happens in one idle callback after the first
+ * life, in every browser: the lifecycle install happens in one idle callback after the first
  * render, so a test that must hold the app in its pre-scan copy (the Plugin
  * page's loading state) parks it deterministically. Setup-only, like the
  * storage helpers: page script, never an assertion surface.
@@ -16,9 +16,13 @@ import type { Page } from "@playwright/test";
 export async function delayIdleWork(page: Page, ms: number): Promise<void> {
   await page.addInitScript((ms) => {
     const original = window.requestIdleCallback?.bind(window);
-    if (!original) return;
+    // WebKit has no requestIdleCallback, so main.tsx falls back to a timeout
+    // the delay would miss; a delayed stand-in holds the install there too.
     window.requestIdleCallback = (callback: IdleRequestCallback, options?: IdleRequestOptions) =>
-      window.setTimeout(() => original(callback, options), ms);
+      window.setTimeout(() => {
+        if (original) original(callback, options);
+        else callback({ didTimeout: false, timeRemaining: () => 0 });
+      }, ms);
   }, ms);
 }
 

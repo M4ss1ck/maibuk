@@ -51,6 +51,12 @@ export interface PluginSidebarEntryDef {
   title: string;
   icon?: PluginIconSpec;
   commandId: PluginCommandId;
+  /**
+   * Read from the previous launch's snapshot, so the first frame shows the
+   * entry before the scan registers it. Its Command is not in the shared
+   * registry yet, so nothing reads that Command's label or Shortcut.
+   */
+  seeded?: true;
 }
 
 /** A Command explicitly listed for the Item Menus of its target kinds. */
@@ -89,6 +95,8 @@ export interface RegisteredContributions {
   sidebarEntries: readonly PluginSidebarEntryDef[];
   itemMenuEntries: readonly PluginItemMenuEntryDef[];
   token: symbol;
+  /** A sidebar-only record seeded from the snapshot until the scan replaces it. */
+  seeded?: true;
 }
 
 /** The route a Plugin page lives at. */
@@ -135,6 +143,46 @@ export function setRegisteredContributions(
 /** Removes one Plugin's record; the registration side notifies when it does. */
 export function deleteRegisteredContributions(pluginId: string): void {
   contributions.delete(pluginId);
+}
+
+/**
+ * Shows saved sidebar entries before the launch scan, one sidebar-only record
+ * per Plugin. A Plugin that already registered keeps its live record, and a
+ * later registration replaces the seeded one whole.
+ */
+export function seedPluginSidebarEntries(entries: readonly PluginSidebarEntryDef[]): void {
+  const byPlugin = new Map<string, PluginSidebarEntryDef[]>();
+  for (const entry of entries) {
+    if (contributions.has(entry.pluginId)) continue;
+    const list = byPlugin.get(entry.pluginId) ?? [];
+    list.push({ ...entry, seeded: true });
+    byPlugin.set(entry.pluginId, list);
+  }
+  if (byPlugin.size === 0) return;
+  for (const [pluginId, sidebarEntries] of byPlugin) {
+    contributions.set(pluginId, {
+      pluginId,
+      displayName: sidebarEntries[0].displayName,
+      commands: [],
+      pages: [],
+      sidebarEntries,
+      itemMenuEntries: [],
+      token: Symbol(pluginId),
+      seeded: true,
+    });
+  }
+  notifyContributionsChange();
+}
+
+/** Removes every seeded record the scan did not replace. */
+export function dropSeededPluginContributions(): void {
+  let dropped = false;
+  for (const [pluginId, record] of contributions) {
+    if (record.seeded !== true) continue;
+    contributions.delete(pluginId);
+    dropped = true;
+  }
+  if (dropped) notifyContributionsChange();
 }
 
 function isMaibukOwner(pluginId: string): boolean {
