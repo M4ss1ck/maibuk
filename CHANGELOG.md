@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-10-22
+
+### Changed
+- Versions are stored as manifests over shared content, so unchanged Chapter and Cover text is saved once and Library size is reduced
+- Version Retention is unified across devices and the sync server: the newest 10 Versions from the last day, the newest per UTC day for 14 days, and the newest per week for 8 weeks are kept, while Named, pre-restore and Plugin Versions are always retained
+- Version Retention is applied before pulling during sync, and dropped Versions are tombstoned
+- The storage upgrade runs on launch after a protected safety Backup, drops orphans and converts inline rows in batches; a failed safety Backup leaves data untouched and notifies the author
+- The storage upgrade re-runs after Restore, Database File load, Reset or Tutorial completion
+- Backups and Database Files remain self-contained in dump format 2; an older whole-Book row loaded over split data goes back to inline
+
+### Fixed
+- Pruned Checkpoints no longer return during sync
+
 ## [0.14.1] - 2026-10-21
 
 ### Fixed
