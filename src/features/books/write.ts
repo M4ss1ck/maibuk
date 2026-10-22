@@ -21,7 +21,11 @@ import {
   type ChangeKind,
   type ChangeOrigin,
 } from "@/features/sync/change-feed";
-import { normalizeChapterContent, toChapter } from "@/features/chapters/write";
+import {
+  chapterDependentDeletes,
+  normalizeChapterContent,
+  toChapter,
+} from "@/features/chapters/write";
 import { reindexSource } from "@/features/links/link-index";
 import { appLanguage } from "@/features/settings/app-language";
 import type { Book, BookStatus, CreateBookInput, UpdateBookInput } from "@/features/books/types";
@@ -485,12 +489,19 @@ export async function applyBookSnapshotData(
 
   const applyChapters = async (): Promise<void> => {
     // Drop only the chapters the snapshot no longer has, then upsert the
-    // rest in place: deleting a kept chapter cascades to its EPUB metadata
-    // on desktop.
-    await db.execute(
-      "DELETE FROM chapters WHERE book_id = ? AND id NOT IN (SELECT value FROM json_each(?))",
-      [book.id, JSON.stringify(normalizedChapters.map((ch) => ch.id))]
-    );
+    // rest in place. Their dependents (link index rows, EPUB metadata) are
+    // deleted by hand in the same transaction: the web leaves foreign_keys
+    // off, so no cascade removes them there.
+    const droppedChaptersSql =
+      "SELECT id FROM chapters WHERE book_id = ? AND id NOT IN (SELECT value FROM json_each(?))";
+    const droppedChapterParams = [book.id, JSON.stringify(normalizedChapters.map((ch) => ch.id))];
+    await db.executeAtomic([
+      ...chapterDependentDeletes(droppedChaptersSql, droppedChapterParams),
+      {
+        sql: "DELETE FROM chapters WHERE book_id = ? AND id NOT IN (SELECT value FROM json_each(?))",
+        params: droppedChapterParams,
+      },
+    ]);
 
     for (let i = 0; i < normalizedChapters.length; i++) {
       const ch = normalizedChapters[i];

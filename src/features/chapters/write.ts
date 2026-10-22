@@ -11,6 +11,7 @@
 // not. Equal-content updates never advance it.
 
 import { getDatabase } from "@/lib/db";
+import type { AtomicStatement } from "@/lib/platform/types";
 import { assertWritableId } from "@/features/tutorial/library-switch";
 import { flushForOutsideWrite } from "@/features/sync/pending-edits";
 import {
@@ -318,6 +319,20 @@ export async function updateChapterRow(
   return own;
 }
 
+/** Deletes the rows hanging off the Chapters that `chapterIdsSql` selects. The web leaves foreign_keys off and `links` has no foreign key, so no cascade removes them. */
+export function chapterDependentDeletes(
+  chapterIdsSql: string,
+  params: readonly (string | number | null)[]
+): AtomicStatement[] {
+  return [
+    {
+      sql: `DELETE FROM links WHERE source_type = 'chapter' AND source_id IN (${chapterIdsSql})`,
+      params,
+    },
+    { sql: `DELETE FROM chapter_epub_meta WHERE chapter_id IN (${chapterIdsSql})`, params },
+  ];
+}
+
 export async function deleteChapterRow(
   id: string,
   origin: ChangeOrigin,
@@ -329,7 +344,10 @@ export async function deleteChapterRow(
   const rows = await db.select<{ book_id: string }[]>("SELECT book_id FROM chapters WHERE id = ?", [
     id,
   ]);
-  await db.execute("DELETE FROM chapters WHERE id = ?", [id]);
+  await db.executeAtomic([
+    ...chapterDependentDeletes("?", [id]),
+    { sql: "DELETE FROM chapters WHERE id = ?", params: [id] },
+  ]);
   if (rows.length > 0) {
     // Removing a chapter removes content: the Book's Last Edited moves. The
     // deletion already persisted, so its signal is kept even if the parent

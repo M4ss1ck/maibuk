@@ -871,6 +871,7 @@ describe("book snapshot serializer", () => {
     mockGetDatabase.mockResolvedValue({
       ...realDb,
       execute: realDb.execute.bind(realDb),
+      executeAtomic: realDb.executeAtomic.bind(realDb),
       select: async <T>(sql: string, params?: unknown[]): Promise<T> => {
         selects++;
         // Existing-row reads succeed; the post-apply read-back fails after
@@ -1009,6 +1010,81 @@ describe("book snapshot serializer", () => {
       ["ch-1"]
     );
     expect(links).toEqual([{ target_id: "note-9" }]);
+  });
+});
+
+// A pulled snapshot drops the chapters the remote no longer has. Their
+// dependents must go with them in both modes: the web leaves foreign_keys off,
+// and `links` has no foreign key at all.
+describe.each(["OFF", "ON"])("book snapshot dependents with foreign_keys = %s", (mode) => {
+  beforeEach(async () => {
+    testDb = await createTestDatabase();
+    await testDb.execute(`PRAGMA foreign_keys = ${mode}`);
+    mockGetDatabase.mockResolvedValue(testDb);
+    useChapterStore.setState({ currentBookId: null });
+    installViewRefresh();
+  });
+
+  afterEach(() => {
+    resetViewRefreshForTests();
+    resetChangeFeedForTests();
+  });
+
+  async function seedSourceLink(chapterId: string): Promise<void> {
+    await testDb.execute(
+      `INSERT INTO links (id, source_type, source_id, source_book_id, target_type, target_id, resolved, updated_at)
+       VALUES (?, 'chapter', ?, 'book-1', 'note', 'note-9', 1, 1)`,
+      [`link-${chapterId}`, chapterId]
+    );
+  }
+
+  async function seedEpubMeta(chapterId: string, spineIndex: number): Promise<void> {
+    await testDb.execute(
+      `INSERT INTO chapter_epub_meta (chapter_id, book_id, href, media_type, spine_index)
+       VALUES (?, 'book-1', ?, 'application/xhtml+xml', ?)`,
+      [chapterId, `${chapterId}.xhtml`, spineIndex]
+    );
+  }
+
+  it("deletes the dropped chapter's links and EPUB metadata, keeping the kept one's", async () => {
+    await insertBook(testDb, "book-1");
+    await insertChapter(testDb, "ch-a", "book-1", 0);
+    await insertChapter(testDb, "ch-b", "book-1", 1);
+    // The kept chapter's own content link: the apply re-indexes kept chapters,
+    // so this is what its surviving source link is rebuilt from.
+    await testDb.execute("UPDATE chapters SET content = ? WHERE id = ?", [
+      '<p><a href="maibuk://note/note-9">Ninth</a></p>',
+      "ch-b",
+    ]);
+    await seedSourceLink("ch-a");
+    await seedSourceLink("ch-b");
+    // Inbound from a Note to the dropped chapter: it belongs to the Note.
+    await testDb.execute(
+      `INSERT INTO links (id, source_type, source_id, source_book_id, target_type, target_id, resolved, updated_at)
+       VALUES ('link-inbound', 'note', 'note-1', NULL, 'chapter', 'ch-a', 1, 1)`
+    );
+    await seedEpubMeta("ch-a", 0);
+    await seedEpubMeta("ch-b", 1);
+
+    const snapshot = JSON.parse(await serializeBook("book-1")) as BookSnapshot;
+    snapshot.chapters = snapshot.chapters.filter((ch) => ch.id === "ch-b");
+
+    await applyBookSnapshot(snapshot);
+
+    const linkSources = await testDb.select<{ source_id: string }[]>(
+      "SELECT source_id FROM links ORDER BY source_id"
+    );
+    expect(linkSources.map((row) => row.source_id)).not.toContain("ch-a");
+    // The kept chapter still has a source link (the apply re-indexes it from
+    // its own content, so only the source matters here) and its inbound note
+    // link is untouched.
+    expect(linkSources.map((row) => row.source_id)).toContain("ch-b");
+    expect(linkSources.map((row) => row.source_id)).toContain("note-1");
+    expect(
+      await testDb.select<{ chapter_id: string }[]>(
+        "SELECT chapter_id FROM chapter_epub_meta ORDER BY chapter_id"
+      )
+    ).toEqual([{ chapter_id: "ch-b" }]);
   });
 });
 
