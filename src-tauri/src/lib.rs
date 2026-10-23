@@ -7,6 +7,8 @@ mod tray;
 mod tray_host;
 mod trusted;
 #[cfg(desktop)]
+mod window_background;
+#[cfg(desktop)]
 mod window_restore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -20,7 +22,14 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             window_restore::show_main_window(app);
         }))
-        .plugin(tauri_plugin_deep_link::init());
+        .plugin(tauri_plugin_deep_link::init())
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Finished
+                && webview.label() == "main"
+            {
+                window_background::reveal_main_window(tauri::Manager::app_handle(webview));
+            }
+        });
 
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_deep_link::init());
@@ -55,6 +64,8 @@ pub fn run() {
         .manage(dictation::commands::DictationState::default())
         .invoke_handler(tauri::generate_handler![
             tray::set_tray_syncing,
+            #[cfg(desktop)]
+            window_background::set_window_background,
             android_exit::exit_app,
             library_db::library_execute_atomic,
             backup::pick_backup_directory,
@@ -158,13 +169,28 @@ pub fn run() {
                     });
                 }
 
-                // The window is created hidden (visible:false in tauri.conf.json).
-                // Show it unless this is an autostart/login launch (--minimized).
-                let start_minimized = std::env::args().any(|arg| arg == "--minimized");
-                if !start_minimized {
-                    if let Some(win) = app.get_webview_window("main") {
-                        let _ = win.show();
-                    }
+                // The window is created hidden (visible:false in tauri.conf.json)
+                // and shown once its page has loaded (`on_page_load` above):
+                // WebKitGTK paints a new WebView white until then, whatever its
+                // background color (#624). The color still paints the window
+                // the theme resolved to last time, or the stylesheet default
+                // when the frontend never reported one.
+                if let Some(win) = app.get_webview_window("main") {
+                    let color = app
+                        .path()
+                        .app_data_dir()
+                        .ok()
+                        .and_then(|dir| window_background::read_background(&dir))
+                        .unwrap_or_else(|| {
+                            let dark = matches!(win.theme(), Ok(tauri::Theme::Dark));
+                            window_background::default_background(dark)
+                        });
+                    let _ = win.set_background_color(Some(color));
+                    let handle = app.handle().clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(window_background::REVEAL_FALLBACK);
+                        window_background::reveal_main_window(&handle);
+                    });
                 }
                 window_restore::complete_startup(app.handle());
             }
