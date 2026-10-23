@@ -6,7 +6,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppSettingsProvider } from "@/features/settings";
 import { seedPluginSidebarFromSnapshot } from "@/features/plugins/sidebar-snapshot";
 import { IS_DESKTOP, IS_WEB } from "@/lib/platform";
-import { endBooting } from "@/lib/startup-screen";
+import { endBooting, captureStartupScreen } from "@/lib/startup-screen";
 import "@/index.css";
 
 // Initialize i18n before app mounts
@@ -16,6 +16,10 @@ import "@/i18n";
 // and the last launch's snapshot are both synchronous reads, while the Plugin
 // Directory scan that confirms them runs after the render.
 seedPluginSidebarFromSnapshot();
+
+// The inline startup screen's logo is mid-entrance; record how far it got so
+// the first LoadingScreen resumes it instead of restarting it under React.
+captureStartupScreen();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

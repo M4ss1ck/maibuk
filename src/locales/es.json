@@ -4,6 +4,9 @@
     "title": "Maibuk",
     "description": "Una aplicación de escritura multiplataforma para autores"
   },
+  "startup": {
+    "loading": "Cargando Maibuk"
+  },
   "commands": {
     "symbolItem": {
       "insert": "Insertar este símbolo",

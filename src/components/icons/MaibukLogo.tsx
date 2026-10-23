@@ -1,10 +1,13 @@
-export function MaibukLogo({ className }: { className?: string }) {
+import type { CSSProperties } from "react";
+
+export function MaibukLogo({ className, style }: { className?: string; style?: CSSProperties }) {
   return (
     <svg
       aria-hidden="true"
       className={className}
       fill="currentColor"
       fillRule="evenodd"
+      style={style}
       viewBox="0 0 1254 1254"
       xmlns="http://www.w3.org/2000/svg"
     >

@@ -4,6 +4,9 @@
     "title": "Maibuk",
     "description": "A cross-platform writing app for authors"
   },
+  "startup": {
+    "loading": "Loading Maibuk"
+  },
   "commands": {
     "symbolItem": {
       "insert": "Insert this symbol",
