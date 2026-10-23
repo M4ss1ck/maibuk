@@ -15,7 +15,16 @@ import { ensureSearchSchema } from "@/features/search/schema";
  */
 export async function createTestDatabase(): Promise<DatabaseAdapter> {
   const adapter = await createMemoryDatabase();
+  await ensureTestSchema(adapter);
+  return adapter;
+}
 
+/**
+ * Creates the Maibuk schema, including the Search index, on any adapter. The
+ * search bench's desktop engine uses it too, so both engines run the same
+ * tables the product does.
+ */
+export async function ensureTestSchema(adapter: DatabaseAdapter): Promise<void> {
   // Desktop enforces foreign keys (sqlx turns them on for every connection),
   // so ON DELETE CASCADE runs there. Mirror it: the web and the in-memory
   // engine leave them off, which hid INSERT OR REPLACE wiping a Book's
@@ -344,6 +353,4 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   );
 
   await ensureSearchSchema(adapter);
-
-  return adapter;
 }
