@@ -34,6 +34,7 @@ const bookEditorTranslations = {
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
+    i18n: { language: i18nState.language },
     t: (key: string) => {
       const lang = i18nState.language;
       return (bookEditorTranslations as Record<string, Record<string, string>>)[lang]?.[key] ?? key;

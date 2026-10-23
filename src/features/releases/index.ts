@@ -1,4 +1,9 @@
-export { BUNDLED_RELEASES } from "@/features/releases/bundled";
+export {
+  BUNDLED_RELEASES,
+  loadBundledReleaseNotes,
+  releaseNotesLanguage,
+} from "@/features/releases/bundled";
+export { compareChangelogParity } from "@/features/releases/changelog-parity";
 export { compareReleaseNumbers, isNewerRelease } from "@/features/releases/compare";
 export {
   checkForNewerReleases,

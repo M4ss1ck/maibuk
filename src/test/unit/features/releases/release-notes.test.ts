@@ -6,7 +6,7 @@ import {
   parseInline,
   parseReleaseBody,
 } from "@/features/releases/release-notes";
-import { BUNDLED_RELEASES } from "@/features/releases/bundled";
+import { BUNDLED_RELEASES, loadBundledReleaseNotes } from "@/features/releases/bundled";
 
 describe("the shipped CHANGELOG.md", () => {
   const source = readFileSync(`${process.cwd()}/CHANGELOG.md`, "utf8");
@@ -150,5 +150,21 @@ describe("parseReleaseBody()", () => {
 
   it("returns no sections for an empty body", () => {
     expect(parseReleaseBody("\n  \n")).toEqual([]);
+  });
+});
+
+describe("loadBundledReleaseNotes()", () => {
+  it("reads the language's own changelog, matching a full locale", async () => {
+    const spanish = parseChangelog(readFileSync(`${process.cwd()}/CHANGELOG.es.md`, "utf8"));
+    await expect(loadBundledReleaseNotes("es-ES")).resolves.toEqual(spanish.releases);
+    expect(await loadBundledReleaseNotes("es-ES")).not.toBe(BUNDLED_RELEASES);
+  });
+
+  it("falls back to the bundled English notes for English", async () => {
+    await expect(loadBundledReleaseNotes("en-US")).resolves.toBe(BUNDLED_RELEASES);
+  });
+
+  it("falls back to the bundled English notes for a language with no changelog", async () => {
+    await expect(loadBundledReleaseNotes("fr-FR")).resolves.toBe(BUNDLED_RELEASES);
   });
 });

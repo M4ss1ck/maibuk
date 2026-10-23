@@ -1,10 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { NewReleaseChip } from "@/components/releases/ReleaseBadge";
-import { BUNDLED_RELEASES } from "@/features/releases/bundled";
+import { BUNDLED_RELEASES, loadBundledReleaseNotes } from "@/features/releases/bundled";
 import type {
   InlineSegment,
   ReleaseNotes,
@@ -94,23 +94,43 @@ function Release({ release, isNew }: { release: ReleaseNotes; isNew: boolean }) 
 }
 
 /**
- * The Release Notes: what every Release changed, newest first, as the bundled
- * CHANGELOG.md lists them, with any newer published Releases on top. The
- * footer, there only when a newer Release exists, is the one download path.
+ * The Release Notes: what every Release changed, newest first, in the app
+ * language, as the bundled changelog of that language lists them, with any
+ * newer published Releases on top (still English, #632). English shows until
+ * the language's own file resolves, so the dialog is never empty. The footer,
+ * there only when a newer Release exists, is the one download path.
  */
 export function ReleaseNotesDialog() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isOpen = useReleaseStore((state) => state.isNotesOpen);
   const closeNotes = useReleaseStore((state) => state.closeNotes);
   const newerReleases = useReleaseStore((state) => state.newerReleases);
   const newest = newerReleases[0];
 
+  // `useTranslation()` re-renders on `languageChanged`, so the language is
+  // read straight from the hook and the load effect follows it.
+  const language = i18n.language;
+
+  // English until the language's changelog file resolves; the loader never
+  // rejects and answers English for a language without a file.
+  const [bundledReleases, setBundledReleases] = useState<readonly ReleaseNotes[]>(BUNDLED_RELEASES);
+  useEffect(() => {
+    if (!isOpen) return;
+    let current = true;
+    void loadBundledReleaseNotes(language).then((releases) => {
+      if (current) setBundledReleases(releases);
+    });
+    return () => {
+      current = false;
+    };
+  }, [isOpen, language]);
+
   const releases = useMemo(
     () => [
       ...newerReleases.map((release) => ({ release, isNew: true })),
-      ...BUNDLED_RELEASES.map((release) => ({ release, isNew: false })),
+      ...bundledReleases.map((release) => ({ release, isNew: false })),
     ],
-    [newerReleases]
+    [newerReleases, bundledReleases]
   );
 
   return (

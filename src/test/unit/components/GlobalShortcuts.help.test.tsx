@@ -18,7 +18,7 @@ let editorOpen = false;
 let customizeHelp: (() => void) | undefined;
 
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
