@@ -77,11 +77,59 @@ pub fn set_window_background(app: tauri::AppHandle, color: String) -> Result<(),
     Ok(())
 }
 
+/// How long the main window waits for its page before showing anyway, so a
+/// stalled load still gets a window.
+pub const REVEAL_FALLBACK: std::time::Duration = std::time::Duration::from_secs(3);
+
+static REVEALED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Show the main window the first time this is called, unless this is an
+/// autostart/login launch (--minimized), whose first show comes from the tray.
+/// WebKitGTK paints a new WebView white until its web process delivers a frame,
+/// whatever background color it was given (#624), so the window is shown once
+/// the page has loaded (or after REVEAL_FALLBACK), never at creation.
+pub fn reveal_main_window(app: &tauri::AppHandle) {
+    use tauri::Manager;
+
+    let minimized = std::env::args().any(|arg| arg == "--minimized");
+    reveal_once(&REVEALED, minimized, || {
+        if let Some(win) = app.get_webview_window("main") {
+            let _ = win.show();
+        }
+    });
+}
+
+/// Runs `show` on the first call only, and never for a minimized launch.
+fn reveal_once(revealed: &std::sync::atomic::AtomicBool, minimized: bool, show: impl FnOnce()) {
+    if revealed.swap(true, std::sync::atomic::Ordering::SeqCst) || minimized {
+        return;
+    }
+    show();
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
     use super::*;
+
+    #[test]
+    fn reveal_shows_once_whichever_of_page_load_and_fallback_comes_first() {
+        let revealed = std::sync::atomic::AtomicBool::new(false);
+        let mut shows = 0;
+        reveal_once(&revealed, false, || shows += 1);
+        reveal_once(&revealed, false, || shows += 1);
+        assert_eq!(shows, 1);
+    }
+
+    #[test]
+    fn reveal_never_shows_a_minimized_launch() {
+        let revealed = std::sync::atomic::AtomicBool::new(false);
+        let mut shows = 0;
+        reveal_once(&revealed, true, || shows += 1);
+        reveal_once(&revealed, true, || shows += 1);
+        assert_eq!(shows, 0);
+    }
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
