@@ -286,6 +286,7 @@ describe("src/lib/db/index.ts", () => {
         "DELETE FROM sync_state",
         "DELETE FROM plugin_storage",
         "DELETE FROM plugin_data_versions",
+        "DELETE FROM search_text",
         "DELETE FROM settings",
         "DELETE FROM metrics_cache",
         "DELETE FROM metrics_event_tombstones",

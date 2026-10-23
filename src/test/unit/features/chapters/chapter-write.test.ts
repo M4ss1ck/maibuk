@@ -153,6 +153,7 @@ describe("chapter write path", () => {
         return realDb.execute(sql, params);
       },
       select: realDb.select.bind(realDb),
+      executeAtomic: realDb.executeAtomic.bind(realDb),
     } as DatabaseAdapter);
     const signals: ChangeFeedSignal[] = [];
     const offSignals = onChange((signal) => {
@@ -259,6 +260,7 @@ describe("chapter write path", () => {
         return realDb.execute(sql, params);
       },
       select: realDb.select.bind(realDb),
+      executeAtomic: realDb.executeAtomic.bind(realDb),
     } as DatabaseAdapter);
 
     await expect(updateChapterRow("ch-1", { content: "<p>Edited</p>" }, "local")).rejects.toThrow(

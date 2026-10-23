@@ -37,6 +37,7 @@ import { installAuthKeepAlive } from "@/features/sync/auth-keep-alive";
 import { installAutoSync } from "@/features/sync/auto-sync";
 import { installReleaseCheck } from "@/features/releases/release-check";
 import { installViewRefresh } from "@/features/sync/view-refresh";
+import { installSearchIndex } from "@/features/search";
 import { isEmbedPath } from "@/lib/embed";
 import { IS_ANDROID, IS_DESKTOP, IS_WEB } from "@/lib/platform";
 import { installAndroidBackHandler } from "@/lib/window/androidBack";
@@ -89,6 +90,7 @@ function App() {
     installAuthKeepAlive();
     installAutoSync();
     installViewRefresh();
+    installSearchIndex();
     installReleaseCheck();
     if (IS_ANDROID) {
       void installAndroidBackHandler();

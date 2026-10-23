@@ -7,6 +7,7 @@
  */
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createMemoryDatabase } from "@/lib/db/memory-database";
+import { ensureSearchSchema } from "@/features/search/schema";
 
 /**
  * Create an in-memory SQLite database with the Maibuk schema.
@@ -341,6 +342,8 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
   await adapter.execute(
     `CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_type, target_id)`
   );
+
+  await ensureSearchSchema(adapter);
 
   return adapter;
 }

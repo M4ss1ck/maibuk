@@ -27,6 +27,7 @@ import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { emitChange, cancelBulkReplace, prepareBulkReplace } from "@/features/sync/change-feed";
 import { AtomicStatementError } from "@/lib/db/atomic";
+import { requestSearchRebuild } from "@/features/search/rebuild";
 
 // Serializes expensive backup work (create/restore) and concurrent
 // delete/prune writes across ALL BackupService instances. Reads
@@ -392,7 +393,14 @@ export class BackupService {
     }
 
     // Once replaceRestoreData resolved, the replacement committed and the
-    // Restore is complete. The signal follows the view re-reads on success, so
+    // Restore is complete. The search index is derived data: rebuild it from
+    // the restored rows in the background before declaring the Restore done,
+    // and never let an index failure turn a committed Restore into a failure.
+    await requestSearchRebuild().catch((error) => {
+      console.warn("[backup] rebuilding the search index after Restore failed:", error);
+    });
+
+    // The signal follows the view re-reads on success, so
     // a listener reading the stores on the signal sees the restored rows, but
     // it still fires in the finally when a re-read throws: the commit is the
     // completion (#430), and a view reload failure must not suppress it. The

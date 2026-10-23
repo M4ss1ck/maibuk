@@ -20,6 +20,7 @@ import {
   type ChangeOrigin,
 } from "@/features/sync/change-feed";
 import { reindexSource } from "@/features/links/link-index";
+import { deleteSearchItemStatement, noteSearchStatements } from "@/features/search/statements";
 import { appLanguage } from "@/features/settings/app-language";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import type {
@@ -126,25 +127,31 @@ export async function createNoteRow(
     contentUpdatedAt: now,
   };
 
-  await db.execute(
-    `INSERT INTO notes (id, book_id, title, content, language, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      note.id,
-      note.bookId ?? null,
-      note.title,
-      note.content,
-      note.language,
-      JSON.stringify(note.tags),
-      note.pinned ? 1 : 0,
-      note.order,
-      note.wordCount,
-      JSON.stringify(note.collapsedHeadings),
-      note.createdAt,
-      note.updatedAt,
-      note.contentUpdatedAt,
-    ]
-  );
+  await db.executeAtomic([
+    {
+      sql: `INSERT INTO notes (id, book_id, title, content, language, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
+        note.id,
+        note.bookId ?? null,
+        note.title,
+        note.content,
+        note.language,
+        JSON.stringify(note.tags),
+        note.pinned ? 1 : 0,
+        note.order,
+        note.wordCount,
+        JSON.stringify(note.collapsedHeadings),
+        note.createdAt,
+        note.updatedAt,
+        note.contentUpdatedAt,
+      ],
+    },
+    ...noteSearchStatements(
+      { id: note.id, bookId: note.bookId, content: note.content },
+      now
+    ),
+  ]);
 
   let stored: Note | null = null;
   try {
@@ -192,23 +199,30 @@ export async function updateNoteRow(
     contentUpdatedAt: contentChanged ? now : existing.contentUpdatedAt,
   };
 
-  await db.execute(
-    `UPDATE notes SET book_id = ?, title = ?, content = ?, language = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ?, content_updated_at = ? WHERE id = ?`,
-    [
-      updated.bookId ?? null,
-      updated.title,
-      updated.content,
-      updated.language,
-      JSON.stringify(updated.tags),
-      updated.pinned ? 1 : 0,
-      updated.order,
-      updated.wordCount,
-      JSON.stringify(updated.collapsedHeadings),
-      updated.updatedAt,
-      updated.contentUpdatedAt,
-      updated.id,
-    ]
-  );
+  await db.executeAtomic([
+    {
+      sql: `UPDATE notes SET book_id = ?, title = ?, content = ?, language = ?, tags = ?, pinned = ?, "order" = ?, word_count = ?, collapsed_headings = ?, updated_at = ?, content_updated_at = ? WHERE id = ?`,
+      params: [
+        updated.bookId ?? null,
+        updated.title,
+        updated.content,
+        updated.language,
+        JSON.stringify(updated.tags),
+        updated.pinned ? 1 : 0,
+        updated.order,
+        updated.wordCount,
+        JSON.stringify(updated.collapsedHeadings),
+        updated.updatedAt,
+        updated.contentUpdatedAt,
+        updated.id,
+      ],
+    },
+    // Note body text is searchable; title matches stay the palette's own job.
+    ...noteSearchStatements(
+      { id: updated.id, bookId: updated.bookId, content: updated.content },
+      now
+    ),
+  ]);
 
   // Capture this save's stored result before unrelated awaits (reindex,
   // emission): a later save must not replace it with newer content. A
@@ -251,7 +265,10 @@ export async function deleteNoteRow(
       title: rows[0].title,
     });
   }
-  await db.execute("DELETE FROM notes WHERE id = ?", [id]);
+  await db.executeAtomic([
+    { sql: "DELETE FROM notes WHERE id = ?", params: [id] },
+    deleteSearchItemStatement("note", id),
+  ]);
   await db.execute("DELETE FROM links WHERE source_id = ?", [id]).catch(() => {});
   await emitChange(
     { entity: "note", id, origin, kind: "content" },
@@ -268,7 +285,10 @@ export async function removeNoteRow(id: string, origin: ChangeOrigin): Promise<v
   assertWritableId(id);
   await flushForOutsideWrite(origin);
   const db = await getDatabase();
-  await db.execute("DELETE FROM notes WHERE id = ?", [id]);
+  await db.executeAtomic([
+    { sql: "DELETE FROM notes WHERE id = ?", params: [id] },
+    deleteSearchItemStatement("note", id),
+  ]);
   await db.execute("DELETE FROM links WHERE source_id = ?", [id]).catch(() => {});
   await emitChange({ entity: "note", id, origin, kind: "content" });
 }
@@ -381,26 +401,33 @@ export async function applyNoteSnapshotData(
     if (!changed) contentUpdatedAt = existing.contentUpdatedAt;
   }
 
-  await db.execute(
-    `INSERT OR REPLACE INTO notes (
+  await db.executeAtomic([
+    {
+      sql: `INSERT OR REPLACE INTO notes (
       id, book_id, title, content, language, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at, content_updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      note.id,
-      note.bookId ?? null,
-      note.title,
-      note.content,
-      note.language ?? "en",
-      note.tags,
-      note.pinned ? 1 : 0,
-      note.order,
-      note.wordCount,
-      collapsedHeadings,
-      note.createdAt,
-      updatedAt,
-      contentUpdatedAt,
-    ]
-  );
+      params: [
+        note.id,
+        note.bookId ?? null,
+        note.title,
+        note.content,
+        note.language ?? "en",
+        note.tags,
+        note.pinned ? 1 : 0,
+        note.order,
+        note.wordCount,
+        collapsedHeadings,
+        note.createdAt,
+        updatedAt,
+        contentUpdatedAt,
+      ],
+    },
+    // A synced or restored Note is searchable exactly like a local save.
+    ...noteSearchStatements(
+      { id: note.id, bookId: note.bookId, content: note.content },
+      now
+    ),
+  ]);
 
   // Capture this apply's stored result before the emission's awaits: a later
   // save must not replace it. A read-back failure after the durable write

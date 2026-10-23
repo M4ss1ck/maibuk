@@ -1,5 +1,6 @@
 import { createDatabase, IS_TAURI, type DatabaseAdapter } from "@/lib/platform";
 import { ensureMetricsSchema } from "@/features/metrics/events-repo";
+import { ensureSearchSchema } from "@/features/search/schema";
 import { getTutorialDatabase } from "@/features/tutorial/library-switch";
 import { DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
 import { compactLibrary } from "@/lib/db/compact";
@@ -466,6 +467,7 @@ export async function initializeSchema(db: DatabaseAdapter): Promise<void> {
   `);
 
   await ensureMetricsSchema(db);
+  await ensureSearchSchema(db);
 }
 
 // Migration: add the Book Last Edited column (user-facing "modified" time,
@@ -523,6 +525,7 @@ export const RESET_LIBRARY_TABLES = [
   "sync_state",
   PLUGIN_STORAGE_TABLE,
   PLUGIN_DATA_VERSIONS_TABLE,
+  "search_text",
   "settings",
   "metrics_cache",
   "metrics_event_tombstones",
