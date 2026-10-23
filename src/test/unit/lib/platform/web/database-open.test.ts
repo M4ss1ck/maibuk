@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The adapter fetches the sql.js wasm from a CDN; load the bundled one here.
+// Drop the locateFile config so Node loads the wasm from node_modules.
 vi.mock("sql.js", async () => {
   const actual = await vi.importActual<typeof import("sql.js")>("sql.js");
   return { default: () => actual.default() };
