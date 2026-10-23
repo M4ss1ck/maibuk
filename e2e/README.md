@@ -149,8 +149,7 @@ cores / 2, retries are 0, and a test times out after 30 s.
 - **Tutorial progress**: `dismissed` by default, so the first-launch offer does
   not cover empty-Library specs; Tutorial specs use `tutorialProgress: "clean"`;
 - a **hermetic network**: every request that is not the preview server is
-  aborted. The sql.js wasm is served from `node_modules`, and the update check
-  gets an empty tag list.
+  aborted, and the update check gets an empty tag list.
 
 Seeded names live in `e2e/support/seed/names.ts`, so specs never import app code.
 

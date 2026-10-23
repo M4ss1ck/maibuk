@@ -1,6 +1,6 @@
 // Deleting a Book or a Chapter has to remove its dependents by hand: the web
-// (sql.js) leaves foreign_keys off, and `links` has no foreign key at all, so
-// no cascade runs there. A table that joins the schema with a `book_id` (or a
+// leaves foreign_keys off, and `links` has no foreign key at all, so no
+// cascade runs there. A table that joins the schema with a `book_id` (or a
 // `chapter_id`) column and misses those hand-written deletes leaves orphan
 // rows behind on the web only, which no other test notices. This guard reads
 // the schema the Library is created with and holds both delete lists to it.

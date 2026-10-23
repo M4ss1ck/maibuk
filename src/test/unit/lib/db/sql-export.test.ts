@@ -145,7 +145,7 @@ describe("sql-export pure formatter (shared by worker and fallback)", () => {
 });
 
 describe("exportSqlDump fallback (Worker unavailable)", () => {
-  it("round-trips escaped quotes/semicolons/NULL/Unicode via sql.js restore", async () => {
+  it("round-trips escaped quotes/semicolons/NULL/Unicode via a fresh Library", async () => {
     stubNoWorker();
     const db = await createTestDatabase();
     await seedTrickyRows(db);
@@ -486,12 +486,24 @@ describe("platform adapters share the exporter", () => {
     return readFileSync(join(sourceRoot, relativePath), "utf8");
   }
 
-  it.each([
-    "platform/tauri/database.ts",
-    "platform/web/database.ts",
-  ])("%s delegates exportData to the shared helper", (relativePath) => {
-    const source = readSource(relativePath);
+  it("the Tauri adapter delegates exportData to the shared helper", () => {
+    const source = readSource("platform/tauri/database.ts");
     expect(source).toContain("exportSqlDump");
+    expect(source).toContain("lib/db/sql-export");
+    expect(source).not.toContain("generateInsertStatements");
+    expect(source).not.toContain("function escapeSQL");
+  });
+
+  it("the web adapter asks the Library Worker for the whole dump", () => {
+    const source = readSource("platform/web/database.ts");
+    expect(source).toContain('op: "exportSqlDump"');
+    expect(source).not.toContain("generateInsertStatements");
+    expect(source).not.toContain("function escapeSQL");
+  });
+
+  it("the Library Worker formats the dump with the shared helper", () => {
+    const source = readSource("db/db-worker-handler.ts");
+    expect(source).toContain("formatSqlDump");
     expect(source).toContain("lib/db/sql-export");
     expect(source).not.toContain("generateInsertStatements");
     expect(source).not.toContain("function escapeSQL");

@@ -65,8 +65,10 @@ async function readTablePages(
   }
 }
 
-// Fallback when the Worker API is unavailable.
-async function exportViaFallback(
+// Formats the whole dump in the current thread. The Worker that owns the
+// Library calls this directly, because its rows cannot be pulled from another
+// context; it is also the fallback when the Worker API is unavailable.
+export async function formatSqlDump(
   adapter: SqlExportReader,
   exportedAt: string
 ): Promise<Uint8Array> {
@@ -204,6 +206,6 @@ export async function exportSqlDump(
   const createWorker = options?.createWorker ?? defaultCreateWorker();
   // Fallback applies only when the Worker API itself is unavailable. A
   // created worker that later errors rejects instead of falling back.
-  if (!createWorker) return exportViaFallback(adapter, exportedAt);
+  if (!createWorker) return formatSqlDump(adapter, exportedAt);
   return exportViaWorker(adapter, exportedAt, createWorker);
 }

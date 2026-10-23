@@ -1,125 +1,92 @@
-import "fake-indexeddb/auto";
-import { describe, expect, it, vi } from "vitest";
-import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
-import { WebDatabaseAdapter } from "@/lib/platform/web/database";
+import { describe, expect, it } from "vitest";
+import { createDbWorkerHandler } from "@/lib/db/db-worker-handler";
 import { AtomicStatementError } from "@/lib/db/atomic";
+import { WebDatabaseAdapter } from "@/lib/platform/web/database";
+import type { DbWorkerTransport } from "@/lib/platform/web/db-client";
+import { createTestWebDatabase } from "@/test/support/db-worker";
 
-const DB_NAME = "maibuk-db-storage";
-
-function stubSqlJs() {
-  return {
-    run: vi.fn(),
-    export: vi.fn(() => new Uint8Array([7, 7, 7])),
-    getRowsModified: vi.fn(() => 1),
-    close: vi.fn(),
-  } as unknown as SqlJsDatabase;
+async function openTestLibrary(): Promise<WebDatabaseAdapter> {
+  const adapter = createTestWebDatabase(createDbWorkerHandler());
+  await adapter.open({ mode: "memory", name: "library.sqlite3" });
+  return adapter;
 }
 
-function readPersisted(): Promise<Uint8Array | null> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore("database");
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => {
-      const db = request.result;
-      const get = db.transaction("database", "readonly").objectStore("database").get("main");
-      get.onsuccess = () => {
-        const value = (get.result as Uint8Array | undefined) ?? null;
-        db.close();
-        resolve(value);
-      };
-      get.onerror = () => {
-        db.close();
-        reject(get.error);
-      };
+describe("WebDatabaseAdapter protocol client", () => {
+  it("resolves execute only after the Worker replies", async () => {
+    let reply: ((value: unknown) => void) | null = null;
+    const transport: DbWorkerTransport = {
+      request<T>(): Promise<T> {
+        return new Promise<T>((resolve) => {
+          reply = resolve as (value: unknown) => void;
+        });
+      },
+      terminate() {},
     };
+    const adapter = new WebDatabaseAdapter(transport);
+
+    let settled = false;
+    const pending = adapter.execute("INSERT INTO books VALUES (1)").then(() => {
+      settled = true;
+    });
+    expect(settled).toBe(false);
+
+    expect(reply).not.toBeNull();
+    (reply as unknown as (value: unknown) => void)({ rowsAffected: 1 });
+    await pending;
+    expect(settled).toBe(true);
   });
-}
 
-describe("WebDatabaseAdapter persistence", () => {
-  it("execute resolves only after the snapshot is in IndexedDB", async () => {
-    const db = stubSqlJs();
-    const adapter = new WebDatabaseAdapter(db);
+  it("executes and selects through the Worker", async () => {
+    const adapter = await openTestLibrary();
 
-    await adapter.execute("INSERT INTO books VALUES (1)");
+    await adapter.execute("CREATE TABLE books (id TEXT PRIMARY KEY, title TEXT)");
+    await adapter.execute("INSERT INTO books (id, title) VALUES ('b1', 'Saved')");
 
-    expect(db.run).toHaveBeenCalledWith("INSERT INTO books VALUES (1)", undefined);
-    expect(Array.from((await readPersisted()) ?? [])).toEqual([7, 7, 7]);
+    expect(await adapter.select("SELECT title FROM books")).toEqual([{ title: "Saved" }]);
     await adapter.close();
   });
 
-  it("execute rejects when IndexedDB refuses the write", async () => {
-    const db = stubSqlJs();
-    const adapter = new WebDatabaseAdapter(db);
-    const put = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(() => {
-      throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
-    });
+  it("rejects execute when the Worker reports a failure", async () => {
+    const adapter = await openTestLibrary();
 
-    try {
-      await expect(adapter.execute("INSERT INTO books VALUES (1)")).rejects.toThrow(
-        /quota has been exceeded/
-      );
-    } finally {
-      put.mockRestore();
-    }
-  });
-
-  it("a failed write does not stop the next one", async () => {
-    const db = stubSqlJs();
-    const adapter = new WebDatabaseAdapter(db);
-    const put = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementationOnce(() => {
-      throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
-    });
-
-    try {
-      await expect(adapter.execute("INSERT INTO books VALUES (1)")).rejects.toThrow();
-    } finally {
-      put.mockRestore();
-    }
-
-    await adapter.execute("INSERT INTO books VALUES (2)");
-    expect(Array.from((await readPersisted()) ?? [])).toEqual([7, 7, 7]);
+    await expect(adapter.execute("INSERT INTO missing_table (id) VALUES ('x')")).rejects.toThrow(
+      /no such table/
+    );
     await adapter.close();
   });
 
-  it("a failed executeAtomic leaves the persisted bytes untouched", async () => {
-    const SQL = await initSqlJs();
-    const sqlDb = new SQL.Database();
-    sqlDb.run("CREATE TABLE notes (id TEXT PRIMARY KEY, title TEXT)");
-    sqlDb.run("INSERT INTO notes (id, title) VALUES ('kept', 'Kept')");
-    const adapter = new WebDatabaseAdapter(sqlDb as unknown as SqlJsDatabase);
+  it("a failed statement does not stop the next one", async () => {
+    const adapter = await openTestLibrary();
+    await adapter.execute("CREATE TABLE notes (id TEXT PRIMARY KEY)");
 
-    await adapter.execute("INSERT INTO notes (id, title) VALUES ('base', 'Base')");
-    const before = await readPersisted();
-    expect(before).not.toBeNull();
+    await expect(adapter.execute("INSERT INTO missing_table (id) VALUES ('x')")).rejects.toThrow();
+    await adapter.execute("INSERT INTO notes (id) VALUES ('next')");
 
-    await expect(
-      adapter.executeAtomic([
+    expect(await adapter.select("SELECT id FROM notes")).toEqual([{ id: "next" }]);
+    await adapter.close();
+  });
+
+  it("a failed executeAtomic leaves every row as it was", async () => {
+    const adapter = await openTestLibrary();
+    await adapter.execute("CREATE TABLE notes (id TEXT PRIMARY KEY, title TEXT)");
+    await adapter.execute("INSERT INTO notes (id, title) VALUES ('kept', 'Kept')");
+
+    const error = await adapter
+      .executeAtomic([
         "INSERT INTO notes (id, title) VALUES ('doomed', 'Doomed')",
         "INSERT INTO missing_table (id) VALUES ('x')",
       ])
-    ).rejects.toBeInstanceOf(AtomicStatementError);
+      .catch((caught: unknown) => caught);
 
-    expect(await readPersisted()).toEqual(before);
-    expect(
-      await adapter.select<Record<string, unknown>[]>("SELECT id FROM notes ORDER BY id")
-    ).toEqual([{ id: "base" }, { id: "kept" }]);
+    expect(error).toBeInstanceOf(AtomicStatementError);
+    expect((error as AtomicStatementError).index).toBe(1);
+    expect(await adapter.select("SELECT id FROM notes ORDER BY id")).toEqual([{ id: "kept" }]);
 
     await adapter.execute("INSERT INTO notes (id, title) VALUES ('marker', 'Marker')");
-    const persisted = await readPersisted();
-    expect(persisted).not.toBeNull();
-    const restored = new SQL.Database(persisted ?? undefined);
-    try {
-      const stmt = restored.prepare("SELECT id FROM notes ORDER BY id");
-      const ids: unknown[] = [];
-      while (stmt.step()) {
-        ids.push((stmt.getAsObject() as Record<string, unknown>).id);
-      }
-      stmt.free();
-      expect(ids).toEqual(["base", "kept", "marker"]);
-    } finally {
-      restored.close();
-    }
+    expect(await adapter.select("SELECT id FROM notes ORDER BY id")).toEqual([
+      { id: "kept" },
+      { id: "marker" },
+    ]);
     await adapter.close();
   });
 });

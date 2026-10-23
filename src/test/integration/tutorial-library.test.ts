@@ -3,7 +3,7 @@ import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
 // Seam 1 (issue #189): the Tutorial module interface on real in-memory
-// databases. The author's Library is a sql.js database behind the real
+// databases. The author's Library is a database behind the real
 // getDatabase(); the Tutorial Library is the real in-memory one the switch
 // creates. Nothing below mocks a write path, a store, or the switch.
 
@@ -264,9 +264,7 @@ describe("entering the Tutorial Library", () => {
     const unregister = registerPendingEditsFlush(async () => {
       // An open editor's save goes through its store, which marks the write
       // (STORE_VIEW); a flush that wrote through the raw path would re-enter.
-      await useNoteStore
-        .getState()
-        .updateNote({ id: note.id, content: "<p>typed just now</p>" });
+      await useNoteStore.getState().updateNote({ id: note.id, content: "<p>typed just now</p>" });
     });
 
     await tutorial.startTutorial(START);

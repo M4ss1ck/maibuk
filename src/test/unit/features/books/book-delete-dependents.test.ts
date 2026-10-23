@@ -1,8 +1,7 @@
 // Deleting a Book has to remove every row that hangs off it by hand: the web
-// (sql.js) leaves foreign_keys off, and `links` has no foreign key at all, so
-// neither the Chapters nor their dependents cascade there. Both modes are
-// covered so the delete stays correct on desktop (cascade on) and web
-// (cascade off).
+// leaves foreign_keys off, and `links` has no foreign key at all, so neither
+// the Chapters nor their dependents cascade there. Both modes are covered so
+// the delete stays correct on desktop (cascade on) and web (cascade off).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";

@@ -1,54 +1,22 @@
-import sqlite3InitModule, {
-  type Database as SqliteDatabase,
-  type SqlValue,
-  type Sqlite3Static,
-} from "@sqlite.org/sqlite-wasm";
-// The wasm ships with the app instead of being fetched from a CDN: the app
-// bundle gets a hashed asset URL, and Node (tests) resolves it below from
-// node_modules through the package's own Node entry point.
-import sqlite3WasmUrl from "@sqlite.org/sqlite-wasm/sqlite3.wasm?url";
+import type { Database as SqliteDatabase, SqlValue, Sqlite3Static } from "@sqlite.org/sqlite-wasm";
 import type { AtomicStatement, DatabaseAdapter } from "@/lib/platform/types";
 import { runAtomic } from "@/lib/db/atomic";
 import { exportSqlDump } from "@/lib/db/sql-export";
-
-/** What `exec`/`selectObjects` hand back before parity conversion. */
-function toSqlJsValue(value: SqlValue): unknown {
-  // sql.js reads every INTEGER through sqlite3_column_double and so returns a
-  // Number, even outside the safe-integer range. The official build keeps the
-  // full int64 as BigInt; convert it so both engines hand callers the same
-  // JS types (the value is lossy exactly where sql.js already was).
-  return typeof value === "bigint" ? Number(value) : value;
-}
-
-/** sql.js returns plain objects; the official build returns null-prototype ones. */
-function toSqlJsRow(row: Record<string, SqlValue>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const key of Object.keys(row)) {
-    out[key] = toSqlJsValue(row[key]);
-  }
-  return out;
-}
-
-// The official build prefixes an SQL failure with its result code and name
-// (`SQLITE_CONSTRAINT_FOREIGNKEY: sqlite3 result code 787: FOREIGN KEY
-// constraint failed`); sql.js threw only SQLite's own message, which callers
-// and tests match on, so strip the prefix back off.
-const SQLITE_ERROR_PREFIX = /^[A-Z][A-Z0-9_]*: sqlite3 result code -?\d+: /;
-
-function toSqlJsError(error: unknown): unknown {
-  if (!(error instanceof Error)) return error;
-  const message = error.message.replace(SQLITE_ERROR_PREFIX, "");
-  return message === error.message ? error : new Error(message);
-}
+import { exportSqliteBytes, loadSqlite3 } from "@/lib/db/sqlite-engine";
+import { toLibraryError, toLibraryRow } from "@/lib/db/sqlite-parity";
 
 /**
  * A Library that lives only in memory: nothing it holds is ever persisted.
  * The Tutorial Library (ADR 0008) and the store tests use it. It runs the
- * SQLite project's own WASM build (rather than sql.js) so FTS5 is available,
- * in-process and without a Worker.
+ * SQLite project's own WASM build so FTS5 is available, in-process and
+ * without a Worker. The web Worker wraps the same class around its pooled
+ * database, so both paths share one set of row and error rules.
  */
 export class MemoryDatabaseAdapter implements DatabaseAdapter {
-  constructor(private db: SqliteDatabase) {}
+  constructor(
+    private db: SqliteDatabase,
+    private sqlite3: Sqlite3Static
+  ) {}
 
   async execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }> {
     this.run(sql, params);
@@ -61,9 +29,9 @@ export class MemoryDatabaseAdapter implements DatabaseAdapter {
         params === undefined
           ? this.db.selectObjects(sql)
           : this.db.selectObjects(sql, params as readonly SqlValue[]);
-      return rows.map(toSqlJsRow) as T;
+      return rows.map(toLibraryRow) as T;
     } catch (error) {
-      throw toSqlJsError(error);
+      throw toLibraryError(error);
     }
   }
 
@@ -76,6 +44,11 @@ export class MemoryDatabaseAdapter implements DatabaseAdapter {
     // once included canvases while production never did, which hid the
     // Backup restore that deleted every Canvas.
     return exportSqlDump(this);
+  }
+
+  /** The database file's bytes, not a SQL dump: a seed, or an exported copy. */
+  exportBytes(): Uint8Array {
+    return exportSqliteBytes(this.sqlite3, this.db);
   }
 
   async executeAtomic(statements: readonly AtomicStatement[]): Promise<void> {
@@ -92,41 +65,18 @@ export class MemoryDatabaseAdapter implements DatabaseAdapter {
         this.db.exec({ sql, bind: params as readonly SqlValue[] });
       }
     } catch (error) {
-      throw toSqlJsError(error);
+      throw toLibraryError(error);
     }
   }
 }
 
-let sqlite3: Promise<Sqlite3Static> | null = null;
-
-function isNodeRuntime(): boolean {
-  const runtime = globalThis as { process?: { versions?: { node?: string } } };
-  return runtime.process?.versions?.node !== undefined;
-}
-
-// Emscripten's loader is typed without its options argument, but the Node entry
-// point finds `sqlite3.wasm` beside itself while the bundled app must be told
-// where Vite placed the asset (never a CDN).
-const initSqlite3 = sqlite3InitModule as unknown as (options?: {
-  locateFile?: () => string;
-}) => Promise<Sqlite3Static>;
-
-function loadSqlite3(): Promise<Sqlite3Static> {
-  sqlite3 ??= initSqlite3(isNodeRuntime() ? {} : { locateFile: () => sqlite3WasmUrl }).catch(
-    (error: unknown) => {
-      sqlite3 = null;
-      throw error;
-    }
-  );
-  return sqlite3;
-}
-
 /** An empty in-memory Library, without a schema. */
-export async function createMemoryDatabase(): Promise<DatabaseAdapter> {
+export async function createMemoryDatabase(): Promise<MemoryDatabaseAdapter> {
   const engine = await loadSqlite3();
   const db = new engine.oo1.DB(":memory:", "c");
-  // The official build's WASM default is 8192; sql.js used 4096. Keep the
-  // page size the Library size checks and Compaction were written against.
+  // The official build's WASM default is 8192; the engine this replaced used
+  // 4096. Keep the page size the Library size checks and Compaction were
+  // written against.
   db.exec("PRAGMA page_size = 4096");
-  return new MemoryDatabaseAdapter(db);
+  return new MemoryDatabaseAdapter(db, engine);
 }

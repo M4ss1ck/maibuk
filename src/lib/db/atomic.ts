@@ -1,10 +1,11 @@
-import type { Database as SqlJsDatabase } from "sql.js";
 import type { AtomicStatement } from "@/lib/platform/types";
 
 /** One statement of an atomic load failed, or the load itself could not run. */
 export class AtomicStatementError extends Error {
   readonly index: number | null;
   readonly detail: string;
+  /** How many statements the load had, so a rebuilt error reads the same. */
+  readonly total: number;
 
   constructor(index: number | null, detail: string, total: number) {
     super(
@@ -15,11 +16,13 @@ export class AtomicStatementError extends Error {
     this.name = "AtomicStatementError";
     this.index = index;
     this.detail = detail;
+    this.total = total;
   }
 }
 
-// sql.js has no authorizer, and SQLite allows ATTACH inside a transaction, so
-// the web load refuses it up front the way desktop's authorizer does (#196).
+// The web engine has no authorizer, and SQLite allows ATTACH inside a
+// transaction, so the web load refuses it up front the way desktop's
+// authorizer does (#196).
 const ATTACH_RE = /^ATTACH\b/i;
 
 const TRANSACTION_CONTROL_RE = /^(BEGIN|COMMIT|END|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
@@ -93,19 +96,4 @@ export function runAtomic(db: AtomicDatabase, statements: readonly AtomicStateme
     }
     throw new AtomicStatementError(null, errorMessage(error), total);
   }
-}
-
-/**
- * `runAtomic` over a sql.js handle. The web adapter still runs sql.js until
- * the OPFS move lands, so it keeps this entry point.
- */
-export function runAtomicSqlJs(db: SqlJsDatabase, statements: readonly AtomicStatement[]): void {
-  runAtomic(
-    {
-      run: (sql, params) => {
-        db.run(sql, params as (string | number | null)[] | undefined);
-      },
-    },
-    statements
-  );
 }
