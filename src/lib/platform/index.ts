@@ -118,6 +118,22 @@ export async function setTraySyncing(syncing: boolean): Promise<void> {
   await invoke("set_tray_syncing", { syncing });
 }
 
+// Tell the desktop shell the color the page paints, so the next launch opens
+// the window on it instead of a white frame (#624). No-op on web and Android,
+// where nothing creates the window hidden. A failure only costs that first
+// frame, so it is logged and swallowed rather than breaking the theme change.
+export async function setWindowBackground(color: string): Promise<void> {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  try {
+    await invoke("set_window_background", { color });
+  } catch (error) {
+    console.warn("Window background not recorded", error);
+  }
+}
+
 // Launch the app at login (hidden in the tray). No-op on web.
 export async function setLaunchOnStartup(enabled: boolean): Promise<void> {
   if (!isDesktopRuntime()) {

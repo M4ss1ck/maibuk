@@ -7,6 +7,8 @@ mod tray;
 mod tray_host;
 mod trusted;
 #[cfg(desktop)]
+mod window_background;
+#[cfg(desktop)]
 mod window_restore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -55,6 +57,8 @@ pub fn run() {
         .manage(dictation::commands::DictationState::default())
         .invoke_handler(tauri::generate_handler![
             tray::set_tray_syncing,
+            #[cfg(desktop)]
+            window_background::set_window_background,
             android_exit::exit_app,
             library_db::library_execute_atomic,
             backup::pick_backup_directory,
@@ -161,8 +165,23 @@ pub fn run() {
                 // The window is created hidden (visible:false in tauri.conf.json).
                 // Show it unless this is an autostart/login launch (--minimized).
                 let start_minimized = std::env::args().any(|arg| arg == "--minimized");
-                if !start_minimized {
-                    if let Some(win) = app.get_webview_window("main") {
+                if let Some(win) = app.get_webview_window("main") {
+                    // A WebView paints white until its first frame. Paint the
+                    // window the theme resolved to last time, or the plain
+                    // stylesheet default when the frontend never reported one.
+                    // Also on an autostart launch, whose first show comes from
+                    // the tray later.
+                    let color = app
+                        .path()
+                        .app_data_dir()
+                        .ok()
+                        .and_then(|dir| window_background::read_background(&dir))
+                        .unwrap_or_else(|| {
+                            let dark = matches!(win.theme(), Ok(tauri::Theme::Dark));
+                            window_background::default_background(dark)
+                        });
+                    let _ = win.set_background_color(Some(color));
+                    if !start_minimized {
                         let _ = win.show();
                     }
                 }

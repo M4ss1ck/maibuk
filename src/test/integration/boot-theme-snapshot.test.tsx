@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,11 +7,16 @@ vi.mock("../../i18n", () => ({
   detectSystemLocale: vi.fn().mockResolvedValue("en"),
 }));
 
+const { mockSetWindowBackground } = vi.hoisted(() => ({
+  mockSetWindowBackground: vi.fn<(color: string) => Promise<void>>().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../lib/platform", () => ({
   IS_DESKTOP: false,
   setWindowAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
   isLaunchOnStartupEnabled: vi.fn().mockResolvedValue(false),
   setLaunchOnStartup: vi.fn().mockResolvedValue(undefined),
+  setWindowBackground: mockSetWindowBackground,
 }));
 
 const { ThemeProvider } = await import("@/components/ThemeProvider");
@@ -25,11 +30,20 @@ function snapshot() {
   return raw === null ? null : JSON.parse(raw);
 }
 
+// The stylesheet is not loaded in jsdom, so --color-background resolves to ""
+// unless a test says what it paints.
+function stubComputedBackground(read: () => string) {
+  return vi.spyOn(window, "getComputedStyle").mockReturnValue({
+    getPropertyValue: (property: string) => (property === "--color-background" ? read() : ""),
+  } as unknown as CSSStyleDeclaration);
+}
+
 describe("boot theme snapshot", () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.classList.remove("dark");
     useThemeStore.setState({ theme: "system" });
+    mockSetWindowBackground.mockClear();
   });
 
   it("records a committed theme change", () => {
@@ -65,5 +79,50 @@ describe("boot theme snapshot", () => {
         "--color-primary-hover-foreground": expect.any(String),
       },
     });
+  });
+
+  it("reports the window background after applying a theme change", () => {
+    const computed = stubComputedBackground(() => "#1c1917");
+    useThemeStore.setState({ theme: "dark" });
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <ThemeProvider>child</ThemeProvider>
+      </MemoryRouter>
+    );
+
+    expect(mockSetWindowBackground).toHaveBeenCalledWith("#1c1917");
+    computed.mockRestore();
+  });
+
+  it("reports the new background when the system theme changes", () => {
+    let color = "#fafaf9";
+    const computed = stubComputedBackground(() => color);
+    let handler: (() => void) | null = null;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: (_event: string, listener: () => void) => {
+        handler = listener;
+      },
+      removeEventListener: vi.fn(),
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <ThemeProvider>child</ThemeProvider>
+      </MemoryRouter>
+    );
+    expect(mockSetWindowBackground).toHaveBeenCalledWith("#fafaf9");
+
+    color = "#1c1917";
+    act(() => handler?.());
+
+    expect(mockSetWindowBackground).toHaveBeenLastCalledWith("#1c1917");
+    computed.mockRestore();
   });
 });
