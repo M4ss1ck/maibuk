@@ -174,7 +174,7 @@ test.describe("following a Link to a heading @wf:editor-follow-link @sc:editor.f
     await page.keyboard.press("ControlOrMeta+k");
     const dialog = page.getByRole("dialog", { name: "Insert Link" });
     await expect(dialog).toBeVisible();
-    await tabTo(page, dialog.getByRole("button", { name: "In this book" }), { backwards: true });
+    await tabTo(page, dialog.getByRole("button", { name: "In Maibuk" }), { backwards: true });
     await page.keyboard.press("Enter");
     await tabTo(page, dialog.getByRole("button", { name: `Expand ${SEED_NOTES.keeperLog}` }));
     await page.keyboard.press("Enter");

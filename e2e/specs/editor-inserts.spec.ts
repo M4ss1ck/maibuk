@@ -73,7 +73,7 @@ async function insertChapterLink(page: Page, chapterTitle: string) {
   await page.keyboard.press("ControlOrMeta+k");
   const dialog = page.getByRole("dialog", { name: "Insert Link" });
   await expect(dialog).toBeVisible();
-  await tabTo(page, dialog.getByRole("button", { name: "In this book" }), { backwards: true });
+  await tabTo(page, dialog.getByRole("button", { name: "In Maibuk" }), { backwards: true });
   await page.keyboard.press("Enter");
   await tabTo(page, dialog.getByRole("button", { name: new RegExp(`^${chapterTitle}`) }));
   await page.keyboard.press("Enter");

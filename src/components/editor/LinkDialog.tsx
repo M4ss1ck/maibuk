@@ -489,7 +489,7 @@ export function LinkDialog({
               variant={mode === "internal" ? "primary" : "secondary"}
               onClick={() => setMode("internal")}
             >
-              {t("editor.linkInThisBook")}
+              {t("editor.linkInMaibuk")}
             </Button>
           </div>
         )}
