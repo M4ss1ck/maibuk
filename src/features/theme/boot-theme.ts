@@ -1,11 +1,7 @@
+import type { BootTheme } from "@/features/theme/types";
+
 export const BOOT_THEME_KEY = "maibuk-boot-theme";
 export const BOOT_THEME_VERSION = 1;
-
-export type BootTheme = {
-  v: 1;
-  mode: "light" | "dark" | "system";
-  vars: Record<string, string>;
-};
 
 const MODES: Array<BootTheme["mode"]> = ["light", "dark", "system"];
 
@@ -15,6 +11,15 @@ function emptyBootTheme(): BootTheme {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** The same rule the inline script applies: only custom-property strings. */
+function readVars(value: Record<string, unknown>): Record<string, string> {
+  const vars: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key.startsWith("--") && typeof entry === "string") vars[key] = entry;
+  }
+  return vars;
 }
 
 function readBootTheme(): BootTheme {
@@ -32,7 +37,7 @@ function readBootTheme(): BootTheme {
     return {
       v: BOOT_THEME_VERSION,
       mode: mode as BootTheme["mode"],
-      vars: vars as Record<string, string>,
+      vars: readVars(vars),
     };
   } catch {
     return emptyBootTheme();

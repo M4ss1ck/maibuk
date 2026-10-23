@@ -24,6 +24,9 @@ export function normalizeWindowBackground(value: string): string | null {
 }
 
 let lastReported: string | null = null;
+// Reports go out one at a time: a fast light→dark→light toggle would otherwise
+// let an older invoke land last and persist the wrong color.
+let queue: Promise<void> = Promise.resolve();
 
 /**
  * Report the resolved background to the desktop shell, which keeps it for the
@@ -38,7 +41,15 @@ export function syncWindowBackground(): void {
   const color = normalizeWindowBackground(value);
   if (!color || color === lastReported) return;
   lastReported = color;
-  void Promise.resolve(setWindowBackground(color)).catch(() => {
-    // Losing the report only costs the next launch's first frame.
-  });
+  queue = queue.then(() =>
+    Promise.resolve(setWindowBackground(color)).catch(() => {
+      // Losing the report only costs the next launch's first frame.
+    })
+  );
+}
+
+/** Drops the module state between tests. */
+export function resetWindowBackgroundForTests(): void {
+  lastReported = null;
+  queue = Promise.resolve();
 }

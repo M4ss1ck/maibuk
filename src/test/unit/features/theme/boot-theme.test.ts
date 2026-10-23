@@ -48,6 +48,27 @@ describe("writeBootTheme()", () => {
     expect(readSnapshot()).toEqual({ v: 1, mode: "light", vars: {} });
   });
 
+  it("keeps only --prefixed string entries of vars", () => {
+    localStorage.setItem(
+      BOOT_THEME_KEY,
+      JSON.stringify({
+        v: 1,
+        mode: "dark",
+        vars: {
+          "--color-primary": "#123456",
+          "not-a-variable": "red",
+          "--not-a-string": 3,
+        },
+      })
+    );
+    writeBootTheme({ mode: "light" });
+    expect(readSnapshot()).toEqual({
+      v: 1,
+      mode: "light",
+      vars: { "--color-primary": "#123456" },
+    });
+  });
+
   it("never throws when writing the record fails", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("quota exceeded");

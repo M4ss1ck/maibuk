@@ -159,7 +159,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_match_the_stylesheet() {
+    fn defaults_are_the_documented_values() {
         assert_eq!(default_background(false), Color(250, 250, 249, 255));
         assert_eq!(default_background(true), Color(28, 25, 23, 255));
     }

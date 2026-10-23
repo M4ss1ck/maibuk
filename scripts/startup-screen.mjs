@@ -14,6 +14,7 @@ import { join } from "node:path";
 export const LOGO_SOURCE = "src/components/icons/MaibukLogo.tsx";
 export const CSS_SOURCE = "src/index.css";
 export const BOOT_SCRIPT_SOURCE = "src/features/theme/boot-theme-script.js";
+export const LOCALE_SOURCE = "src/locales/en.json";
 
 /** The tokens the first frame needs: the page surface and the logo color. */
 export const SCREEN_TOKENS = ["--color-background", "--color-primary"];
@@ -54,6 +55,16 @@ function blockBody(css, header, label) {
 
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** The status text is translated copy, so it must not open markup. */
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function tokenValue(body, token, label) {
@@ -127,7 +138,7 @@ export function startupEntranceAnimation(css) {
  * `<div id="root">`. The visible logo is decorative; the status span carries
  * the screen-reader text until React replaces it with the localized one.
  */
-export function renderStartupScreen({ logo, tokens, keyframes, animation, bootScript }) {
+export function renderStartupScreen({ logo, tokens, keyframes, animation, bootScript, status }) {
   const lightBackground = tokens.light["--color-background"];
   const darkBackground = tokens.dark["--color-background"];
   const lightPrimary = tokens.light["--color-primary"];
@@ -152,7 +163,7 @@ export function renderStartupScreen({ logo, tokens, keyframes, animation, bootSc
     `<div id="startup-screen">` +
     `<svg aria-hidden="true" fill="currentColor" fill-rule="${logo.fillRule}" viewBox="${logo.viewBox}" xmlns="http://www.w3.org/2000/svg">` +
     `<path d="${logo.d}"/></svg>` +
-    `<span class="startup-sr-only" role="status">Loading Maibuk</span>` +
+    `<span class="startup-sr-only" role="status">${escapeHtml(status)}</span>` +
     `</div>`;
 
   return { head, root };
@@ -173,6 +184,16 @@ export function applyStartupScreen(html, { head, root }) {
   return out.replace(ROOT_MARKER, () => `<div id="root">${root}</div>`);
 }
 
+/** The localized status the screen announces, so the copy has one source. */
+function startupStatus(root) {
+  const messages = JSON.parse(readFileSync(join(root, LOCALE_SOURCE), "utf8"));
+  const status = messages?.startup?.loading;
+  if (typeof status !== "string" || status.length === 0) {
+    fail(`no startup.loading string in ${LOCALE_SOURCE}`);
+  }
+  return status;
+}
+
 /**
  * Reads the sources on every call, so dev picks up edits to the logo, the
  * tokens, the keyframes, or the boot script without a Vite restart.
@@ -191,6 +212,7 @@ export function startupScreenPlugin({ root }) {
           keyframes: extractKeyframes(css, ENTRANCE_KEYFRAMES),
           animation: startupEntranceAnimation(css),
           bootScript: readFileSync(join(root, BOOT_SCRIPT_SOURCE), "utf8"),
+          status: startupStatus(root),
         });
         return applyStartupScreen(html, parts);
       },

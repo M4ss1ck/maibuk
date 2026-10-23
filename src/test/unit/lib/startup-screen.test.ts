@@ -92,6 +92,35 @@ describe("startupEntranceDelay()", () => {
     expect(startupEntranceDelay(() => 0)).toBe("-60000ms");
   });
 
+  it("still shows the end state just after the capture, within two seconds", () => {
+    mountStartupScreen();
+    captureStartupScreen(document, () => 0);
+
+    expect(startupEntranceDelay(() => 1999)).toBe("-61999ms");
+  });
+
+  it("expires a capture that is two seconds old, so a later screen animates from the start", () => {
+    mountStartupScreen();
+    captureStartupScreen(document, () => 0);
+
+    expect(startupEntranceDelay(() => 2000)).toBeNull();
+  });
+
+  it("holds the end state when the entrance finished while waiting for the first render", () => {
+    mountStartupScreen(200);
+    captureStartupScreen(document, () => 0);
+
+    // A null here would restart the entrance under React: the flicker #624 removes.
+    expect(startupEntranceDelay(() => 400)).toBe("-600ms");
+  });
+
+  it("has no delay once the capture is stale", () => {
+    mountStartupScreen(200);
+    captureStartupScreen(document, () => 0);
+
+    expect(startupEntranceDelay(() => 2000)).toBeNull();
+  });
+
   it("has no delay once the capture is consumed", () => {
     mountStartupScreen(200);
     captureStartupScreen(document, () => 0);

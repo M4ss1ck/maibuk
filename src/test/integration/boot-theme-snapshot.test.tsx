@@ -24,6 +24,7 @@ const { AppSettingsProvider } = await import("@/features/settings/AppSettingsPro
 const { useThemeStore } = await import("@/features/theme/store");
 const { useSettingsStore } = await import("@/features/settings/store");
 const { BOOT_THEME_KEY } = await import("@/features/theme/boot-theme");
+const { resetWindowBackgroundForTests } = await import("@/features/theme/window-background");
 
 function snapshot() {
   const raw = localStorage.getItem(BOOT_THEME_KEY);
@@ -43,6 +44,7 @@ describe("boot theme snapshot", () => {
     localStorage.clear();
     document.documentElement.classList.remove("dark");
     useThemeStore.setState({ theme: "system" });
+    resetWindowBackgroundForTests();
     mockSetWindowBackground.mockClear();
   });
 
@@ -81,7 +83,7 @@ describe("boot theme snapshot", () => {
     });
   });
 
-  it("reports the window background after applying a theme change", () => {
+  it("reports the window background after applying a theme change", async () => {
     const computed = stubComputedBackground(() => "#1c1917");
     useThemeStore.setState({ theme: "dark" });
 
@@ -91,11 +93,11 @@ describe("boot theme snapshot", () => {
       </MemoryRouter>
     );
 
-    expect(mockSetWindowBackground).toHaveBeenCalledWith("#1c1917");
+    await vi.waitFor(() => expect(mockSetWindowBackground).toHaveBeenCalledWith("#1c1917"));
     computed.mockRestore();
   });
 
-  it("reports the new background when the system theme changes", () => {
+  it("reports the new background when the system theme changes", async () => {
     let color = "#fafaf9";
     const computed = stubComputedBackground(() => color);
     let handler: (() => void) | null = null;
@@ -117,12 +119,14 @@ describe("boot theme snapshot", () => {
         <ThemeProvider>child</ThemeProvider>
       </MemoryRouter>
     );
-    expect(mockSetWindowBackground).toHaveBeenCalledWith("#fafaf9");
+    await vi.waitFor(() => expect(mockSetWindowBackground).toHaveBeenCalledWith("#fafaf9"));
 
     color = "#1c1917";
     act(() => handler?.());
 
-    expect(mockSetWindowBackground).toHaveBeenLastCalledWith("#1c1917");
+    await vi.waitFor(() =>
+      expect(mockSetWindowBackground).toHaveBeenLastCalledWith("#1c1917")
+    );
     computed.mockRestore();
   });
 });

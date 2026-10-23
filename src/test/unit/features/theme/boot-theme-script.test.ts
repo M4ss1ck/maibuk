@@ -8,6 +8,10 @@ const SOURCE = readFileSync(
   "utf8"
 );
 
+const EMBED_PATH = /EMBED_PATH\s*=\s*"([^"]+)"/.exec(
+  readFileSync(resolve(process.cwd(), "src/lib/embed.ts"), "utf8")
+)?.[1];
+
 const originalMatchMedia = window.matchMedia;
 
 function runScript(): void {
@@ -53,7 +57,7 @@ describe("boot-theme-script", () => {
   });
 
   it("stays small enough to inline", () => {
-    expect(Buffer.byteLength(SOURCE, "utf8")).toBeLessThan(1500);
+    expect(Buffer.byteLength(SOURCE, "utf8")).toBeLessThan(1700);
   });
 
   it("applies a light record even when the system prefers dark", () => {
@@ -137,13 +141,32 @@ describe("boot-theme-script", () => {
     expect(isDark()).toBe(false);
   });
 
-  it("leaves the document untouched on the Embed route", () => {
-    window.history.replaceState(null, "", "/embed");
-    document.documentElement.classList.add("dark");
-    document.documentElement.style.setProperty("--color-primary", "#abcdef");
+  it("matches the route src/lib/embed.ts declares", () => {
+    expect(EMBED_PATH).toBeTruthy();
+    expect(SOURCE).toContain(`"${EMBED_PATH}"`);
+  });
+
+  it("paints the Embed route's ?theme instead of the snapshot", () => {
+    window.history.replaceState(null, "", "/embed?theme=dark");
     storeRecord({ v: 1, mode: "light", vars: { "--color-primary": "#000000" } });
     runScript();
     expect(isDark()).toBe(true);
-    expect(document.documentElement.style.getPropertyValue("--color-primary")).toBe("#abcdef");
+    expect(document.documentElement.style.getPropertyValue("--color-primary")).toBe("");
+  });
+
+  it("keeps the Embed route light for ?theme=light even when the system prefers dark", () => {
+    window.history.replaceState(null, "", "/embed?theme=light");
+    setPrefersDark(true);
+    storeRecord({ v: 1, mode: "dark", vars: {} });
+    runScript();
+    expect(isDark()).toBe(false);
+  });
+
+  it("falls back to the system preference on the Embed route without a usable ?theme", () => {
+    window.history.replaceState(null, "", "/embed?theme=sepia");
+    setPrefersDark(true);
+    storeRecord({ v: 1, mode: "light", vars: {} });
+    runScript();
+    expect(isDark()).toBe(true);
   });
 });

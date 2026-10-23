@@ -22,6 +22,10 @@ const CSS = read("src/index.css");
 const LOGO = read("src/components/icons/MaibukLogo.tsx");
 const BOOT_SCRIPT = read("src/features/theme/boot-theme-script.js");
 const INDEX_HTML = read("index.html");
+const MESSAGES = JSON.parse(read("src/locales/en.json")) as {
+  startup: { loading: string };
+};
+const RUST_WINDOW_BACKGROUND = read("src-tauri/src/window_background.rs");
 
 function logo() {
   return extractLogoSvg(LOGO);
@@ -34,6 +38,7 @@ function parts() {
     keyframes: extractKeyframes(CSS, "logo-entrance"),
     animation: startupEntranceAnimation(CSS),
     bootScript: BOOT_SCRIPT,
+    status: MESSAGES.startup.loading,
   });
 }
 
@@ -172,8 +177,22 @@ describe("renderStartupScreen()", () => {
     expect(markup).toContain('aria-hidden="true"');
     expect(markup).toContain(`<path d="${logo().d}"/>`);
     expect(markup).toContain('role="status"');
-    expect(markup).toContain("Loading Maibuk");
+    expect(markup).toContain(MESSAGES.startup.loading);
     expect(markup).toContain('class="startup-sr-only"');
+  });
+
+  it("escapes the status text for HTML", () => {
+    const { root: markup } = renderStartupScreen({
+      logo: logo(),
+      tokens: extractTokenDefaults(CSS),
+      keyframes: extractKeyframes(CSS, "logo-entrance"),
+      animation: startupEntranceAnimation(CSS),
+      bootScript: BOOT_SCRIPT,
+      status: "Loading <Maibuk> & friends",
+    });
+
+    expect(markup).toContain("Loading &lt;Maibuk&gt; &amp; friends");
+    expect(markup).not.toContain("<Maibuk>");
   });
 
   it("keeps the inline head small", () => {
@@ -212,6 +231,27 @@ describe("renderStartupScreen()", () => {
   });
 });
 
+describe("window_background.rs", () => {
+  /** One `Color(r, g, b, a)` literal, as the `#rrggbb` the stylesheet uses. */
+  function rustColor(name: "LIGHT" | "DARK"): string {
+    const match = new RegExp(
+      `const ${name}: Color = Color\\((\\d+), (\\d+), (\\d+), \\d+\\)`
+    ).exec(RUST_WINDOW_BACKGROUND);
+    if (!match) throw new Error(`no ${name} Color literal in window_background.rs`);
+    return `#${match
+      .slice(1, 4)
+      .map((channel) => Number(channel).toString(16).padStart(2, "0"))
+      .join("")}`;
+  }
+
+  it("defaults to the stylesheet's --color-background, light and dark", () => {
+    const tokens = extractTokenDefaults(CSS);
+
+    expect(rustColor("LIGHT")).toBe(tokens.light["--color-background"]);
+    expect(rustColor("DARK")).toBe(tokens.dark["--color-background"]);
+  });
+});
+
 describe("startupScreenPlugin()", () => {
   it("inserts the head before the title and the first stylesheet", () => {
     const html = generateIndexHtml(INDEX_HTML);
@@ -220,6 +260,13 @@ describe("startupScreenPlugin()", () => {
     expect(styleAt).toBeGreaterThan(html.indexOf('<meta charset="UTF-8" />'));
     expect(styleAt).toBeLessThan(html.indexOf("<title>"));
     expect(styleAt).toBeLessThan(html.indexOf("<head>") + 200);
+  });
+
+  it("takes the status label from the English messages", () => {
+    const html = generateIndexHtml(INDEX_HTML);
+
+    expect(MESSAGES.startup.loading).toBeTruthy();
+    expect(html).toContain(`role="status">${MESSAGES.startup.loading}</span>`);
   });
 
   it("fills the root and marks the html element as booting", () => {

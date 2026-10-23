@@ -29,6 +29,12 @@ interface StartupCapture {
 /** An entrance that cannot be read is treated as over: the logo stays put. */
 const FINISHED_ENTRANCE_MS = 60_000;
 
+/**
+ * How long a capture can still belong to the incoming first screen. Past it,
+ * no LoadingScreen is coming (the app may have booted into /embed instead).
+ */
+const CAPTURE_STALE_MS = 2000;
+
 let capture: StartupCapture | null = null;
 let consumed = false;
 
@@ -54,7 +60,12 @@ export function captureStartupScreen(
  */
 export function startupEntranceDelay(now: () => number = () => performance.now()): string | null {
   if (!capture || consumed) return null;
-  return `-${Math.round(capture.elapsed + (now() - capture.at))}ms`;
+  const since = now() - capture.at;
+  // Past this, no LoadingScreen is coming for this capture, so a later screen
+  // animates from the start. Before it, a negative delay resumes the entrance,
+  // or holds the end state when the entrance is already over.
+  if (since >= CAPTURE_STALE_MS) return null;
+  return `-${Math.round(capture.elapsed + since)}ms`;
 }
 
 /** Marks the capture used, so a later LoadingScreen animates from the start. */

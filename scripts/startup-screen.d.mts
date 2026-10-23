@@ -3,6 +3,7 @@
 export const LOGO_SOURCE: string;
 export const CSS_SOURCE: string;
 export const BOOT_SCRIPT_SOURCE: string;
+export const LOCALE_SOURCE: string;
 export const SCREEN_TOKENS: string[];
 export const ENTRANCE_KEYFRAMES: string;
 export const ENTRANCE_RULE: string;
@@ -25,6 +26,7 @@ export interface StartupScreenSource {
   keyframes: string;
   animation: string;
   bootScript: string;
+  status: string;
 }
 
 export interface StartupScreenParts {
