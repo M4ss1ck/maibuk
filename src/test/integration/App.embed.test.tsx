@@ -56,7 +56,8 @@ vi.mock("../../features/backup/lifecycle", () => ({
 }));
 
 const mockInstallReleaseCheck = vi.hoisted(() => vi.fn(() => () => {}));
-vi.mock("@/features/releases/release-check", () => ({
+vi.mock("@/features/releases/release-check", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/releases/release-check")>()),
   installReleaseCheck: mockInstallReleaseCheck,
 }));
 
