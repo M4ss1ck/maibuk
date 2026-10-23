@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppSettingsProvider } from "@/features/settings";
 import { seedPluginSidebarFromSnapshot } from "@/features/plugins/sidebar-snapshot";
 import { IS_DESKTOP, IS_WEB } from "@/lib/platform";
+import { endBooting } from "@/lib/startup-screen";
 import "@/index.css";
 
 // Initialize i18n before app mounts
@@ -27,6 +28,10 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     </BrowserRouter>
   </React.StrictMode>
 );
+
+// The startup screen painted the first frame; let the first theme switch
+// animate again once React has replaced it.
+endBooting();
 
 // Approved Plugins load after the first render: the Plugin Directory scan must
 // not delay launch (#401). The lifecycle (#436) decides what starts and when —

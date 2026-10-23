@@ -6,6 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { createReadStream, statSync } from "node:fs";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { version } from "./package.json";
+import { startupScreenPlugin } from "./scripts/startup-screen.mjs";
 import { TEST_TIMEOUT_MS } from "./src/test/time-budget";
 
 const host = process.env.TAURI_DEV_HOST;
@@ -141,7 +142,13 @@ const isolation = {
 // https://vite.dev/config/
 export default defineConfig(() => ({
   envPrefix: ["VITE_", "TAURI_ENV_"],
-  plugins: [quickJsEngineAndroidOnly(), react(), tailwindcss(), builtInPluginsDevServe()],
+  plugins: [
+    quickJsEngineAndroidOnly(),
+    react(),
+    tailwindcss(),
+    builtInPluginsDevServe(),
+    startupScreenPlugin({ root: __dirname }),
+  ],
   resolve: {
     alias: [
       { find: "@", replacement: resolve(__dirname, "src") },
