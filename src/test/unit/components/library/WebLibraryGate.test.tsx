@@ -72,6 +72,19 @@ describe("WebLibraryGate", () => {
     );
   });
 
+  it("shows the app with no notice when the Library is on OPFS", async () => {
+    const open = vi.fn().mockResolvedValue({ kind: "opfs" });
+    render(
+      <WebLibraryGate open={open}>
+        <p>the app</p>
+      </WebLibraryGate>
+    );
+
+    expect(await screen.findByText("the app")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("tells the author that a Library the browser cannot keep will not be kept", async () => {
     const open = vi.fn().mockResolvedValue({ kind: "memory" });
     render(
