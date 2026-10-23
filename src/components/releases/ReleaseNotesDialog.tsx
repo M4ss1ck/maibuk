@@ -4,13 +4,18 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { NewReleaseChip } from "@/components/releases/ReleaseBadge";
-import { BUNDLED_RELEASES, loadBundledReleaseNotes } from "@/features/releases/bundled";
+import {
+  BUNDLED_RELEASES,
+  loadBundledReleaseNotes,
+  releaseNotesLanguage,
+} from "@/features/releases/bundled";
+import { loadLocalizedNewerReleases } from "@/features/releases/release-check";
 import type {
   InlineSegment,
   ReleaseNotes,
   ReleaseSection,
 } from "@/features/releases/release-notes";
-import { useReleaseStore } from "@/features/releases/store";
+import { newerReleasesIn, useReleaseStore } from "@/features/releases/store";
 import { openExternal } from "@/lib/platform";
 import { DOWNLOAD_PAGE } from "@/constants";
 
@@ -96,8 +101,10 @@ function Release({ release, isNew }: { release: ReleaseNotes; isNew: boolean }) 
 /**
  * The Release Notes: what every Release changed, newest first, in the app
  * language, as the bundled changelog of that language lists them, with any
- * newer published Releases on top (still English, #632). English shows until
- * the language's own file resolves, so the dialog is never empty. The footer,
+ * newer published Releases on top. A newer Release's notes come from its
+ * language's changelog file at its tag and stay English until that file
+ * resolves or when it does not list them (#632). English shows until the
+ * language's own file resolves, so the dialog is never empty. The footer,
  * there only when a newer Release exists, is the one download path.
  */
 export function ReleaseNotesDialog() {
@@ -105,10 +112,10 @@ export function ReleaseNotesDialog() {
   const isOpen = useReleaseStore((state) => state.isNotesOpen);
   const closeNotes = useReleaseStore((state) => state.closeNotes);
   const newerReleases = useReleaseStore((state) => state.newerReleases);
-  const newest = newerReleases[0];
+  const localizedNewerReleases = useReleaseStore((state) => state.localizedNewerReleases);
 
   // `useTranslation()` re-renders on `languageChanged`, so the language is
-  // read straight from the hook and the load effect follows it.
+  // read straight from the hook and the loads below follow it.
   const language = i18n.language;
 
   // English until the language's changelog file resolves; the loader never
@@ -125,12 +132,31 @@ export function ReleaseNotesDialog() {
     };
   }, [isOpen, language]);
 
+  // A language switch with the dialog open reads that language's notes for the
+  // newer Releases; a language already read costs no request, and this never
+  // asks for Releases.
+  useEffect(() => {
+    if (!isOpen) return;
+    void loadLocalizedNewerReleases(language);
+  }, [isOpen, language]);
+
+  const newer = useMemo(
+    () =>
+      newerReleasesIn(
+        newerReleases,
+        localizedNewerReleases.get(releaseNotesLanguage(language))
+      ),
+    [newerReleases, localizedNewerReleases, language]
+  );
+
+  const newest = newer[0];
+
   const releases = useMemo(
     () => [
-      ...newerReleases.map((release) => ({ release, isNew: true })),
+      ...newer.map((release) => ({ release, isNew: true })),
       ...bundledReleases.map((release) => ({ release, isNew: false })),
     ],
-    [newerReleases, bundledReleases]
+    [newer, bundledReleases]
   );
 
   return (

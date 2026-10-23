@@ -7,7 +7,10 @@ export { compareChangelogParity } from "@/features/releases/changelog-parity";
 export { compareReleaseNumbers, isNewerRelease } from "@/features/releases/compare";
 export {
   checkForNewerReleases,
+  fetchLocalizedReleaseNotes,
   installReleaseCheck,
+  loadLocalizedNewerReleases,
+  localizedChangelogUrl,
   newerReleasesFrom,
   RELEASE_CHECK_INTERVAL_MS,
   RELEASES_URL,
@@ -25,4 +28,4 @@ export type {
   ReleaseSection,
   SectionKind,
 } from "@/features/releases/release-notes";
-export { useReleaseStore } from "@/features/releases/store";
+export { newerReleasesIn, useReleaseStore } from "@/features/releases/store";
