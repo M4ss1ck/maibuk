@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { useThemeStore, applyTheme } from "@/features/theme";
+import { useThemeStore, applyTheme, writeBootTheme } from "@/features/theme";
 import { isEmbedPath } from "@/lib/embed";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -13,6 +13,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // the app-wide theme must not override it.
     if (onEmbed) return;
     applyTheme(theme);
+    writeBootTheme({ mode: theme });
 
     // Listen for system theme changes when in "system" mode
     if (theme === "system") {

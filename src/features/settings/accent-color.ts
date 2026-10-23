@@ -12,12 +12,21 @@ function darken(hex: string, amount: number): string {
   return `#${channels.join("")}`.toUpperCase();
 }
 
+/** The four primary properties an accent color sets on the document root. */
+export function accentColorVars(color: string): Record<string, string> {
+  const hover = darken(color, 0.12);
+  return {
+    "--color-primary": color,
+    "--color-primary-hover": hover,
+    "--color-primary-foreground": readableForeground(color),
+    "--color-primary-hover-foreground": readableForeground(hover),
+  };
+}
+
 /** Apply a committed or transient accent without writing the settings store. */
 export function applyAccentColor(color: string): void {
   const root = document.documentElement;
-  const hover = darken(color, 0.12);
-  root.style.setProperty("--color-primary", color);
-  root.style.setProperty("--color-primary-hover", hover);
-  root.style.setProperty("--color-primary-foreground", readableForeground(color));
-  root.style.setProperty("--color-primary-hover-foreground", readableForeground(hover));
+  for (const [property, value] of Object.entries(accentColorVars(color))) {
+    root.style.setProperty(property, value);
+  }
 }

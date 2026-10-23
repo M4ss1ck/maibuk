@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { useSettingsStore } from "@/features/settings/store";
 import i18n from "@/i18n";
 import type { FontFamily } from "@/features/settings/types";
-import { applyAccentColor } from "@/features/settings/accent-color";
+import { applyAccentColor, accentColorVars } from "@/features/settings/accent-color";
+import { writeBootTheme } from "@/features/theme";
 import { setWindowAlwaysOnTop, isLaunchOnStartupEnabled, IS_DESKTOP } from "@/lib/platform";
 
 const FONT_FAMILY_MAP: Record<FontFamily, string> = {
@@ -47,6 +48,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     applyAccentColor(primaryColor);
+    writeBootTheme({ vars: accentColorVars(primaryColor) });
   }, [primaryColor]);
 
   useEffect(() => {
