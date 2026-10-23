@@ -1,26 +1,24 @@
 /**
  * In-memory database test context for Zustand store tests.
- * Uses sql.js to create a real SQLite database in memory,
- * wrapped in the same DatabaseAdapter interface the stores expect.
+ * Uses the official SQLite WASM build to create a real SQLite database in
+ * memory, wrapped in the same DatabaseAdapter interface the stores expect.
  *
  * Adapted from the kaont project's service-test-context pattern.
  */
-import initSqlJs from "sql.js";
 import type { DatabaseAdapter } from "@/lib/platform/types";
-import { MemoryDatabaseAdapter } from "@/lib/db/memory-database";
+import { createMemoryDatabase } from "@/lib/db/memory-database";
 
 /**
  * Create an in-memory SQLite database with the Maibuk schema.
  * Returns a DatabaseAdapter suitable for mocking `getDatabase()`.
  */
 export async function createTestDatabase(): Promise<DatabaseAdapter> {
-  const SQL = await initSqlJs();
-  const sqlDb = new SQL.Database();
-  const adapter = new MemoryDatabaseAdapter(sqlDb);
+  const adapter = await createMemoryDatabase();
 
   // Desktop enforces foreign keys (sqlx turns them on for every connection),
-  // so ON DELETE CASCADE runs there. Mirror it: the web and sql.js leave them
-  // off, which hid INSERT OR REPLACE wiping a Book's Checkpoints on desktop.
+  // so ON DELETE CASCADE runs there. Mirror it: the web and the in-memory
+  // engine leave them off, which hid INSERT OR REPLACE wiping a Book's
+  // Checkpoints on desktop.
   await adapter.execute("PRAGMA foreign_keys = ON");
 
   // Mirror the schema from src/lib/db/index.ts initializeSchema()

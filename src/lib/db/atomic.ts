@@ -37,11 +37,17 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** The one surface an atomic load needs from a database engine. */
+export interface AtomicDatabase {
+  run(sql: string, params?: readonly (string | number | null)[]): void;
+}
+
 /**
- * Runs every statement inside one sql.js transaction, or none. Synchronous on
- * purpose: nothing else can interleave with sql.js mid-load.
+ * Runs every statement inside one transaction, or none. Synchronous on
+ * purpose: the engine is single-threaded and in-process, so nothing else can
+ * interleave with it mid-load.
  */
-export function runAtomicSqlJs(db: SqlJsDatabase, statements: readonly AtomicStatement[]): void {
+export function runAtomic(db: AtomicDatabase, statements: readonly AtomicStatement[]): void {
   const total = statements.length;
   const normalised = statements.map((statement) =>
     typeof statement === "string"
@@ -66,11 +72,7 @@ export function runAtomicSqlJs(db: SqlJsDatabase, statements: readonly AtomicSta
     const { sql, params } = normalised[index];
     if (sql.trim().length === 0) continue;
     try {
-      if (params) {
-        db.run(sql, params as (string | number | null)[]);
-      } else {
-        db.run(sql);
-      }
+      db.run(sql, params);
     } catch (error) {
       try {
         db.run("ROLLBACK");
@@ -91,4 +93,19 @@ export function runAtomicSqlJs(db: SqlJsDatabase, statements: readonly AtomicSta
     }
     throw new AtomicStatementError(null, errorMessage(error), total);
   }
+}
+
+/**
+ * `runAtomic` over a sql.js handle. The web adapter still runs sql.js until
+ * the OPFS move lands, so it keeps this entry point.
+ */
+export function runAtomicSqlJs(db: SqlJsDatabase, statements: readonly AtomicStatement[]): void {
+  runAtomic(
+    {
+      run: (sql, params) => {
+        db.run(sql, params as (string | number | null)[] | undefined);
+      },
+    },
+    statements
+  );
 }

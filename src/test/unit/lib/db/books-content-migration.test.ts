@@ -1,22 +1,12 @@
 import { describe, expect, it } from "vitest";
-import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
 import { migrateBooksContentUpdatedAt } from "@/lib/db";
-
-function adapterFor(db: SqlJsDatabase) {
-  return {
-    execute: async (sql: string, params?: unknown[]) => {
-      db.run(sql, params as (string | number | null)[]);
-      return { rowsAffected: db.getRowsModified() };
-    },
-  };
-}
+import { createMemoryDatabase } from "@/lib/db/memory-database";
 
 describe("books content_updated_at migration", () => {
   it("adds the column and backfills existing rows from updated_at", async () => {
-    const SQL = await initSqlJs();
-    const db = new SQL.Database();
+    const db = await createMemoryDatabase();
     try {
-      db.run(
+      await db.execute(
         `CREATE TABLE books (
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
@@ -25,31 +15,29 @@ describe("books content_updated_at migration", () => {
           updated_at INTEGER NOT NULL
         )`
       );
-      db.run(
+      await db.execute(
         `INSERT INTO books (id, title, author_name, created_at, updated_at)
          VALUES ('legacy', 'Legacy', 'Author', 1000, 2000)`
       );
 
-      await migrateBooksContentUpdatedAt(adapterFor(db));
+      await migrateBooksContentUpdatedAt(db);
 
-      const columns: { name: string }[] = [];
-      const stmt = db.prepare("PRAGMA table_info(books)");
-      while (stmt.step()) columns.push(stmt.getAsObject() as { name: string });
-      stmt.free();
+      const columns = await db.select<{ name: string }[]>("PRAGMA table_info(books)");
       expect(columns.map((c) => c.name)).toContain("content_updated_at");
 
-      const row = db.exec("SELECT content_updated_at FROM books WHERE id = 'legacy'");
-      expect(row[0].values[0][0]).toBe(2000);
+      const rows = await db.select<{ content_updated_at: number }[]>(
+        "SELECT content_updated_at FROM books WHERE id = 'legacy'"
+      );
+      expect(rows[0].content_updated_at).toBe(2000);
     } finally {
-      db.close();
+      await db.close();
     }
   });
 
   it("keeps existing values and is safe to run twice", async () => {
-    const SQL = await initSqlJs();
-    const db = new SQL.Database();
+    const db = await createMemoryDatabase();
     try {
-      db.run(
+      await db.execute(
         `CREATE TABLE books (
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
@@ -59,18 +47,20 @@ describe("books content_updated_at migration", () => {
           content_updated_at INTEGER
         )`
       );
-      db.run(
+      await db.execute(
         `INSERT INTO books (id, title, author_name, created_at, updated_at, content_updated_at)
          VALUES ('kept', 'Kept', 'Author', 1000, 2000, 500)`
       );
 
-      await migrateBooksContentUpdatedAt(adapterFor(db));
-      await migrateBooksContentUpdatedAt(adapterFor(db));
+      await migrateBooksContentUpdatedAt(db);
+      await migrateBooksContentUpdatedAt(db);
 
-      const row = db.exec("SELECT content_updated_at FROM books WHERE id = 'kept'");
-      expect(row[0].values[0][0]).toBe(500);
+      const rows = await db.select<{ content_updated_at: number }[]>(
+        "SELECT content_updated_at FROM books WHERE id = 'kept'"
+      );
+      expect(rows[0].content_updated_at).toBe(500);
     } finally {
-      db.close();
+      await db.close();
     }
   });
 });

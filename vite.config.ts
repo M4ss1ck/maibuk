@@ -172,12 +172,7 @@ export default defineConfig(() => ({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
-    alias: [
-      {
-        find: /^sql\.js\/dist\/sql-wasm\.wasm\?url$/,
-        replacement: resolve(__dirname, "src/test/support/sql-wasm-url.ts"),
-      },
-    ],
+    alias: [],
     include: [
       "src/test/**/*.test.ts",
       "src/test/**/*.test.tsx",
