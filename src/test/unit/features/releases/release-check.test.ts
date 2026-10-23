@@ -1,14 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import i18n from "@/i18n";
 import githubReleases from "@/test/fixtures/releases/github-releases.json";
 import {
   checkForNewerReleases,
+  fetchLocalizedReleaseNotes,
   installReleaseCheck,
+  loadLocalizedNewerReleases,
+  localizedReleaseNotesUrl,
   newerReleasesFrom,
   RELEASE_CHECK_INTERVAL_MS,
   RELEASES_URL,
 } from "@/features/releases/release-check";
 import { compareReleaseNumbers, isNewerRelease } from "@/features/releases/compare";
-import { useReleaseStore } from "@/features/releases/store";
+import type { ReleaseNotes } from "@/features/releases/release-notes";
+import { newerReleasesIn, useReleaseStore } from "@/features/releases/store";
 
 function release(tag: string, extra: Record<string, unknown> = {}) {
   return {
@@ -26,8 +31,23 @@ function okResponse(payload: unknown): Response {
   return { ok: true, json: async () => payload } as Response;
 }
 
-beforeEach(() => {
-  useReleaseStore.setState({ newerReleases: [], isNotesOpen: false });
+function okText(text: string): Response {
+  return { ok: true, status: 200, text: async () => text } as Response;
+}
+
+const SPANISH_FILE = "## [9.0.0] - 2026-10-05\n\n### Fixed\n- Corrige algo";
+
+beforeEach(async () => {
+  useReleaseStore.setState({
+    newerReleases: [],
+    localizedNewerReleases: new Map(),
+    isNotesOpen: false,
+  });
+  await i18n.changeLanguage("en");
+});
+
+afterEach(async () => {
+  await i18n.changeLanguage("en");
 });
 
 describe("compareReleaseNumbers()", () => {
@@ -122,6 +142,188 @@ describe("checkForNewerReleases()", () => {
     });
     await checkForNewerReleases(async () => okResponse([release("v9.0.0")]), "v9.0.0");
     expect(useReleaseStore.getState().newerReleases).toEqual([]);
+  });
+
+  it("fetches the app language's notes for the newest newer Release, once", async () => {
+    await i18n.changeLanguage("es");
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+      String(input) === RELEASES_URL
+        ? okResponse([release("v8.0.0"), release("v9.0.0")])
+        : okText(SPANISH_FILE)
+    );
+
+    await checkForNewerReleases(fetchImpl, "v1.0.0");
+
+    expect(fetchImpl.mock.calls.map(([url]) => String(url))).toEqual([
+      RELEASES_URL,
+      localizedReleaseNotesUrl("v9.0.0", "es"),
+    ]);
+    expect(useReleaseStore.getState().localizedNewerReleases.get("es")?.has("9.0.0")).toBe(true);
+  });
+
+  it("asks for no changelog in English", async () => {
+    const fetchImpl = vi.fn(async () => okResponse([release("v9.0.0")]));
+
+    await checkForNewerReleases(fetchImpl, "v1.0.0");
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledWith(RELEASES_URL, expect.anything());
+  });
+});
+
+describe("fetchLocalizedReleaseNotes()", () => {
+  it("reads that language's changelog at the Release tag", async () => {
+    const fetchImpl = vi.fn(async () => okText(SPANISH_FILE));
+
+    const notes = await fetchLocalizedReleaseNotes("es-ES", "v9.0.0", fetchImpl);
+
+    const url = localizedReleaseNotesUrl("v9.0.0", "es");
+    expect(url).toBe(
+      "https://raw.githubusercontent.com/M4ss1ck/maibuk/v9.0.0/CHANGELOG.es.md"
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(url);
+    expect(notes.get("9.0.0")?.sections).toEqual([
+      { kind: "fixed", items: [[{ kind: "text", text: "Corrige algo" }]] },
+    ]);
+  });
+
+  it("makes no request in English", async () => {
+    const fetchImpl = vi.fn();
+    expect(await fetchLocalizedReleaseNotes("en", "v9.0.0", fetchImpl)).toEqual(new Map());
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("answers an empty map when the request fails", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new TypeError("offline");
+    });
+    expect(await fetchLocalizedReleaseNotes("es", "v9.0.0", fetchImpl)).toEqual(new Map());
+  });
+
+  it("answers an empty map on a 404", async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 404 }) as Response);
+    expect(await fetchLocalizedReleaseNotes("fr", "v9.0.0", fetchImpl)).toEqual(new Map());
+  });
+
+  it("answers an empty map when the file does not parse", async () => {
+    const fetchImpl = vi.fn(async () => okText("## [9.0.0]\n\na line outside the grammar\n"));
+    expect(await fetchLocalizedReleaseNotes("es", "v9.0.0", fetchImpl)).toEqual(new Map());
+  });
+});
+
+describe("loadLocalizedNewerReleases()", () => {
+  it("loads a language on demand without asking for Releases", async () => {
+    useReleaseStore.setState({
+      newerReleases: [{ number: "9.0.0", date: null, sections: [] }],
+    });
+    const fetchImpl = vi.fn(async () => okText(SPANISH_FILE));
+
+    await loadLocalizedNewerReleases("es", fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledWith(localizedReleaseNotesUrl("v9.0.0", "es"));
+    expect(useReleaseStore.getState().localizedNewerReleases.get("es")?.has("9.0.0")).toBe(true);
+  });
+
+  it("asks once for a language and Release it already has", async () => {
+    useReleaseStore.setState({
+      newerReleases: [{ number: "9.0.0", date: null, sections: [] }],
+    });
+    const fetchImpl = vi.fn(async () => okText(SPANISH_FILE));
+
+    await loadLocalizedNewerReleases("es", fetchImpl);
+    await loadLocalizedNewerReleases("es", fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a failed request on the next load instead of caching the empty result", async () => {
+    useReleaseStore.setState({
+      newerReleases: [{ number: "9.0.0", date: null, sections: [] }],
+    });
+    let attempt = 0;
+    const fetchImpl = vi.fn(async () => {
+      attempt += 1;
+      if (attempt === 1) throw new TypeError("offline");
+      return okText(SPANISH_FILE);
+    });
+
+    await loadLocalizedNewerReleases("es", fetchImpl);
+    expect(useReleaseStore.getState().localizedNewerReleases.has("es")).toBe(false);
+
+    await loadLocalizedNewerReleases("es", fetchImpl);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(useReleaseStore.getState().localizedNewerReleases.get("es")?.has("9.0.0")).toBe(true);
+  });
+
+  it("retries a non-404 error response on the next load", async () => {
+    useReleaseStore.setState({
+      newerReleases: [{ number: "9.0.0", date: null, sections: [] }],
+    });
+    let attempt = 0;
+    const fetchImpl = vi.fn(async () => {
+      attempt += 1;
+      if (attempt === 1) return { ok: false, status: 503 } as Response;
+      return okText(SPANISH_FILE);
+    });
+
+    await loadLocalizedNewerReleases("es", fetchImpl);
+    expect(useReleaseStore.getState().localizedNewerReleases.has("es")).toBe(false);
+
+    await loadLocalizedNewerReleases("es", fetchImpl);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(useReleaseStore.getState().localizedNewerReleases.get("es")?.has("9.0.0")).toBe(true);
+  });
+
+  it("keeps a 404 cached, so a missing file is not requested again", async () => {
+    useReleaseStore.setState({
+      newerReleases: [{ number: "9.0.0", date: null, sections: [] }],
+    });
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 404 }) as Response);
+
+    await loadLocalizedNewerReleases("es", fetchImpl);
+    await loadLocalizedNewerReleases("es", fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(useReleaseStore.getState().localizedNewerReleases.get("es")?.size).toBe(0);
+  });
+
+  it("does nothing in English and with no newer Release", async () => {
+    const fetchImpl = vi.fn(async () => okText(SPANISH_FILE));
+
+    await loadLocalizedNewerReleases("es", fetchImpl);
+    await loadLocalizedNewerReleases("en", fetchImpl);
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("newerReleasesIn()", () => {
+  const english: ReleaseNotes = {
+    number: "9.0.0",
+    date: "2026-10-05",
+    url: "https://github.com/M4ss1ck/maibuk/releases/tag/v9.0.0",
+    sections: [{ kind: "fixed", items: [[{ kind: "text", text: "Fixed it" }]] }],
+  };
+  const other: ReleaseNotes = {
+    number: "8.0.0",
+    date: null,
+    sections: [{ kind: "fixed", items: [[{ kind: "text", text: "Fixed that" }]] }],
+  };
+
+  it("replaces the notes a language has and keeps that Release's page", () => {
+    const localized = new Map([
+      ["9.0.0", { number: "9.0.0", date: "2026-10-05", sections: [] }],
+    ]);
+    expect(newerReleasesIn([english, other], localized)).toEqual([
+      { ...english, sections: [] },
+      other,
+    ]);
+  });
+
+  it("keeps every English body when the language has nothing", () => {
+    expect(newerReleasesIn([english, other], undefined)).toEqual([english, other]);
+    expect(newerReleasesIn([english, other], new Map())).toEqual([english, other]);
   });
 });
 

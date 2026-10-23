@@ -1,8 +1,20 @@
-export { BUNDLED_RELEASES } from "@/features/releases/bundled";
+export {
+  BUNDLED_RELEASES,
+  cachedBundledReleaseNotes,
+  loadBundledReleaseNotes,
+  releaseNotesLanguage,
+} from "@/features/releases/bundled";
+export {
+  compareReleaseNotesParity,
+  releaseNotesFile,
+} from "@/features/releases/release-notes-parity";
 export { compareReleaseNumbers, isNewerRelease } from "@/features/releases/compare";
 export {
   checkForNewerReleases,
+  fetchLocalizedReleaseNotes,
   installReleaseCheck,
+  loadLocalizedNewerReleases,
+  localizedReleaseNotesUrl,
   newerReleasesFrom,
   RELEASE_CHECK_INTERVAL_MS,
   RELEASES_URL,
@@ -20,4 +32,4 @@ export type {
   ReleaseSection,
   SectionKind,
 } from "@/features/releases/release-notes";
-export { useReleaseStore } from "@/features/releases/store";
+export { newerReleasesIn, useReleaseStore } from "@/features/releases/store";

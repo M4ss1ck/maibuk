@@ -357,11 +357,21 @@ What it does:
 1. Ensures you are on a `release/v<version>` branch, creating it if needed.
 2. Bumps the version in `package.json`, `src-tauri/Cargo.toml`,
    `src-tauri/Cargo.lock` and `src-tauri/tauri.conf.json`.
-3. Generates a `CHANGELOG.md` section for the commits since the last tag.
-4. Commits the bump + changelog, creates the `v<version>` tag, and (after a
-   confirmation) pushes the branch and the tag. Pushing the tag triggers the
-   release workflow, which reads the latest `CHANGELOG.md` section into the
-   GitHub release notes.
+3. Generates an English Release Notes section for the commits since the last
+   tag.
+4. Translates that section into every other app language.
+5. Updates every `CHANGELOG*.md` — `CHANGELOG.md` and each
+   `CHANGELOG.<locale>.md` — and commits them together with the version bump.
+6. Creates the `v<version>` tag, and (after a confirmation) pushes the branch
+   and the tag. Pushing the tag triggers the release workflow, which reads the
+   latest `CHANGELOG.md` section into the GitHub release notes.
+
+The English section may still fall back to a grouped commit list when AI is
+not configured. Translations cannot fall back: every Release ships every
+language. A release needs a working AI provider, and a run — `--dry-run`
+included — stops before writing anything when no provider can translate. There
+is no English-only release. A missing `CHANGELOG.<locale>.md` is an error too;
+the script never creates a translated file.
 
 The workflow builds Linux, Windows, Android and Arch packages in parallel. Each
 build attaches its binaries to a draft release; once all four have finished, the
@@ -375,19 +385,19 @@ or publish the draft by hand if the missing platform can wait.
 After the build finishes, open a PR from the `release/v<version>` branch into
 `main` and merge it.
 
-### AI-assisted changelog (optional)
+### AI-assisted changelog
 
-The changelog can be written by an AI model. This is entirely optional — with no
-configuration the script falls back to a grouped list of commit messages and
-never errors out. Configure it via a local `.env` file (git-ignored; copy
-`.env.example` to get started):
+The Release Notes are translated by an AI model. The English section can still
+be a grouped list of commit messages without one, but translations require a
+provider, so no release can be cut without one. Configure it via a local `.env`
+file (git-ignored; copy `.env.example` to get started):
 
 Both providers are OpenAI-compatible HTTP APIs and require an API key, plus
 `curl` and `jq` installed locally.
 
 | Variable                | Purpose                                                                                      |
 | ----------------------- | -------------------------------------------------------------------------------------------- |
-| `CHANGELOG_AI_PROVIDER` | `opencode`, `openai`, or empty to disable AI                                                 |
+| `CHANGELOG_AI_PROVIDER` | `opencode`, `openai`, or empty to disable AI (then no release can be cut)                    |
 | `CHANGELOG_AI_MODEL`    | Model id. opencode: required (e.g. `deepseek-v4.1-flash`); openai: defaults to `gpt-4o-mini` |
 | `OPENCODE_API_KEY`      | Required for `opencode` (from [opencode.ai/auth](https://opencode.ai/auth))                  |
 | `OPENCODE_BASE_URL`     | Optional; defaults to `https://opencode.ai/zen/go/v1`                                        |
@@ -406,17 +416,21 @@ Both providers are OpenAI-compatible HTTP APIs and require an API key, plus
   (commit messages are untrusted input). It needs `opencode` on your `PATH`, signed in with
   `opencode auth login`; it ignores `OPENCODE_API_KEY` from `.env`. Free models can be
   slow and there is no time limit; each attempt logs when it starts and how
-  long it took. If every attempt fails, the grouped commit list is used.
+  long it took. If every attempt fails, the English section falls back to the
+  grouped commit list, then the release stops because the translations failed.
 - **openai** targets OpenAI or any other OpenAI-compatible `/chat/completions`
   endpoint via `OPENAI_BASE_URL` (OpenRouter, Groq, local, ...).
 
-Use `--dry-run` to preview the generated changelog before committing anything.
+Use `--dry-run` to preview the generated English section and its translations
+before committing anything. It still needs a working provider, and stops at the
+same point as a real run when the notes cannot be translated.
 
 If the provider rejects the request the script prints the HTTP status and the
-provider's error body, then falls back to the grouped commit list — the release
-never fails because of the changelog. Watch for a `[WARNING]` line: a silent
-fallback is what made a provider-side API change (opencode Go starting to
-require an `x-opencode-session` header) go unnoticed for four releases.
+provider's error body. The English section then falls back to the grouped
+commit list, but the release stops before writing anything; retry with a
+provider that answers. Watch for a `[WARNING]` line: a silent fallback is what
+made a provider-side API change (opencode Go starting to require an
+`x-opencode-session` header) go unnoticed for four releases.
 
 Run `pnpm test:release` to exercise the generator offline; it stubs the network
 and asserts the provider request shape, so a change like that one fails a test

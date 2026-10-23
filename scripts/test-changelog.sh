@@ -524,6 +524,281 @@ assert_eq "openai provider failing never tries the free models" \
 assert_contains "openai provider failing -> grouped commit list" "$out" "### Added"
 CURL_STATUS=200
 
+# --- The changelog file ----------------------------------------------------
+echo "changelog_latest_release_body"
+
+# The awk it replaced, kept as the reference for the latest Release body.
+awk '/^## \[/{c++} c==1' "$REPO_ROOT/CHANGELOG.md" | tail -n +2 > "$WORK/awk-body.txt"
+changelog_latest_release_body "$REPO_ROOT/CHANGELOG.md" > "$WORK/body.txt"
+if cmp -s "$WORK/body.txt" "$WORK/awk-body.txt"; then
+    ok "the real CHANGELOG.md gives a body byte-identical to the awk it replaced"
+else
+    no "the real CHANGELOG.md gives a body byte-identical to the awk it replaced" \
+        "$(diff -u "$WORK/awk-body.txt" "$WORK/body.txt" | head -n 20)"
+fi
+assert_eq "drops the '## [' heading line" "$(head -n 1 "$WORK/body.txt")" ""
+assert_not_contains "stops at the next Release heading" "$(cat "$WORK/body.txt")" "## ["
+assert_not_contains "never includes the closing note" "$(cat "$WORK/body.txt")" "Older releases"
+
+# A file whose only Release is followed by the closing note: the note and the
+# blank lines before it must not reach the body. (The body keeps the blank line
+# after its heading, exactly like the awk that emptied the heading line.)
+printf '%s\n' '# Changelog' '' 'Preamble.' '' \
+    '## [1.0.0] - 2026-01-01' '' '### Added' '- one thing' '' \
+    '> Older releases are listed on the [GitHub Releases](https://example.com) page.' \
+    > "$WORK/one-release.md"
+assert_eq "a one-Release file yields just its body" \
+    "$(changelog_latest_release_body "$WORK/one-release.md")" $'\n### Added\n- one thing'
+
+printf '%s\n' '# Changelog' '' 'Preamble only, no Release yet.' > "$WORK/no-release.md"
+assert_eq "a file without a Release heading prints nothing" \
+    "$(changelog_latest_release_body "$WORK/no-release.md")" ""
+
+out="$(changelog_latest_release_body "$WORK/does-not-exist.md")"; rc=$?
+assert_eq "a missing file prints nothing" "$out" ""
+assert_eq "a missing file exits 0, so the release falls back to generated notes" "$rc" "0"
+
+echo "changelog_insert_release"
+entry="## [0.2.0] - 2026-01-02"$'\n\n'"### Added"$'\n'"- new thing"
+
+# A translated changelog: its preamble differs from CHANGELOG_DEFAULT_HEADER.
+printf '%s\n' '# Registro de cambios' '' \
+    'Todos los cambios notables de este proyecto se documentan aquí.' '' \
+    '## [0.1.0] - 2026-01-01' '' '### Añadido' '- algo' '' \
+    '> Las versiones anteriores están en la página de Releases.' > "$WORK/own.md"
+changelog_insert_release "$WORK/own.md" "$entry"
+printf '%s\n' '# Registro de cambios' '' \
+    'Todos los cambios notables de este proyecto se documentan aquí.' '' \
+    '## [0.2.0] - 2026-01-02' '' '### Added' '- new thing' '' \
+    '## [0.1.0] - 2026-01-01' '' '### Añadido' '- algo' '' \
+    '> Las versiones anteriores están en la página de Releases.' > "$WORK/own-expected.md"
+if cmp -s "$WORK/own.md" "$WORK/own-expected.md"; then
+    ok "inserts after the file's own preamble and keeps the closing note verbatim"
+else
+    no "inserts after the file's own preamble and keeps the closing note verbatim" \
+        "$(diff -u "$WORK/own-expected.md" "$WORK/own.md" | head -n 20)"
+fi
+assert_not_contains "never writes the default preamble over an existing one" \
+    "$(cat "$WORK/own.md")" "All notable changes"
+
+# Removing the latest Release from the real file and inserting it back must
+# reproduce the file byte for byte: no visible change.
+first="$(grep -n -m1 '^## \[' "$REPO_ROOT/CHANGELOG.md" | cut -d: -f1)"
+second="$(grep -n '^## \[' "$REPO_ROOT/CHANGELOG.md" | sed -n 2p | cut -d: -f1)"
+sed "${first},$((second - 1))d" "$REPO_ROOT/CHANGELOG.md" > "$WORK/roundtrip.md"
+changelog_insert_release "$WORK/roundtrip.md" \
+    "$(sed -n "${first},$((second - 2))p" "$REPO_ROOT/CHANGELOG.md")"
+if cmp -s "$WORK/roundtrip.md" "$REPO_ROOT/CHANGELOG.md"; then
+    ok "re-inserting the real latest Release reproduces CHANGELOG.md byte for byte"
+else
+    no "re-inserting the real latest Release reproduces CHANGELOG.md byte for byte" \
+        "$(diff -u "$REPO_ROOT/CHANGELOG.md" "$WORK/roundtrip.md" | head -n 20)"
+fi
+
+changelog_insert_release "$WORK/created.md" "$entry"
+assert_eq "a missing file is created from the default header" \
+    "$(cat "$WORK/created.md")" \
+    "$CHANGELOG_DEFAULT_HEADER"$'\n'"## [0.2.0] - 2026-01-02"$'\n\n'"### Added"$'\n'"- new thing"
+
+# --- Localized Release Notes (ADR 0034) ------------------------------------
+#
+# A fixture repo with two app languages besides English drives the whole path:
+# languages from src/locales, term pairs from GLOSSARY.md, one changelog file per
+# language. It is a real git repo so "the repo was left unchanged" is checked
+# with git, not with a copy.
+REL="$WORK/relrepo"
+mkdir -p "$REL/src/locales"
+printf '{}\n' > "$REL/src/locales/en.json"
+printf '{}\n' > "$REL/src/locales/es.json"
+printf '{}\n' > "$REL/src/locales/fr.json"
+cat > "$REL/GLOSSARY.md" <<'EOF'
+# Glossary
+
+**What's new**:
+The dialog listing a Release's notes.
+_UI_: en "What's new" / es "Novedades"
+
+**Sync log**:
+The record of sync runs.
+_UI_: en "Sync log" / es "Registro de sincronización"; en "Templates" / es "Plantillas"
+_UI_: es "Lanzamientos" for Releases
+_UI_: en "Stopped"
+EOF
+printf '# Changelog\n\nEnglish preamble.\n\n## [0.0.1] - 2026-01-01\n\n### Added\n- old\n' \
+    > "$REL/CHANGELOG.md"
+printf '# Registro de cambios\n\nPreámbulo español.\n\n## [0.0.1] - 2026-01-01\n\n### Added\n- viejo\n' \
+    > "$REL/CHANGELOG.es.md"
+printf '# Journal\n\nPréambule français.\n\n## [0.0.1] - 2026-01-01\n\n### Added\n- ancien\n' \
+    > "$REL/CHANGELOG.fr.md"
+(
+    cd "$REL" || exit 1
+    git init -q .
+    git config user.email t@t.t; git config user.name t
+    git add -A
+    git commit -q -m "seed"
+)
+
+echo "changelog_languages / changelog_file"
+assert_eq "every locale file but English is a language" \
+    "$(changelog_languages "$REL/src/locales" | paste -sd ' ' -)" "es fr"
+assert_eq "English ships CHANGELOG.md" "$(changelog_file en)" "CHANGELOG.md"
+assert_eq "a language ships its own changelog" "$(changelog_file es)" "CHANGELOG.es.md"
+
+echo "changelog_glossary_pairs"
+PAIRS_GLOSSARY="$REL/GLOSSARY.md"
+assert_eq "reads every en/es pair in file order, skipping lines without one" \
+    "$(changelog_glossary_pairs "$PAIRS_GLOSSARY" es | tr '\t' '=' | paste -sd '|' -)" \
+    "What's new=Novedades|Sync log=Registro de sincronización|Templates=Plantillas"
+assert_eq "a language with no pairs yields nothing" \
+    "$(changelog_glossary_pairs "$PAIRS_GLOSSARY" fr)" ""
+assert_eq "a missing glossary yields nothing" \
+    "$(changelog_glossary_pairs "$WORK/no-glossary.md" es)" ""
+
+echo "changelog_language_name"
+assert_contains "es is named in English" "$(changelog_language_name es)" "Spanish"
+assert_eq "an unknown code stands for itself" "$(changelog_language_name zz)" "zz"
+assert_eq "an invalid code stands for itself" "$(changelog_language_name 'not a code')" "not a code"
+
+echo "changelog_structure_signature"
+EN_SECTION="$(cat <<'EOF'
+### Added
+- Add a What's new dialog
+
+### Fixed
+- Stop the crash
+EOF
+)"
+assert_eq "names each kind with its item count, in order" \
+    "$(changelog_structure_signature "$EN_SECTION")" $'Added\t1\nFixed\t1'
+assert_eq "a missing bullet changes the count" \
+    "$(changelog_structure_signature $'### Added\n- one\n\n### Fixed')" \
+    $'Added\t1\nFixed\t0'
+assert_eq "two sections of one kind stay apart" \
+    "$(changelog_structure_signature $'### Added\n- one\n\n### Added\n- two')" \
+    $'Added\t1\nAdded\t1'
+
+echo "translate_changelog"
+cd "$REL" || exit 1
+export CHANGELOG_AI_PROVIDER=opencode OPENCODE_API_KEY=k CHANGELOG_AI_MODEL=m
+export CHANGELOG_LOCALES_DIR=src/locales CHANGELOG_GLOSSARY=GLOSSARY.md
+
+translate_body() {
+    jq -Rs '{choices: [{message: {content: .}}]}' > "$CURL_BODY_FILE"
+}
+
+# A preamble and code fences around the translation. (The existing section
+# extraction drops what precedes the first "### " line, not prose after it.)
+reset_free; : > "$CURL_ARGS_FILE"; CURL_STATUS=200
+translated_section=$'Here is your translation:\n\n```markdown\n### Added\n- Añade un diálogo de Novedades\n\n### Fixed\n- Detén el fallo\n```\n'
+printf '%s' "$translated_section" | translate_body
+out="$(translate_changelog "$EN_SECTION" es 2>/dev/null)"; rc=$?
+assert_eq "the stubbed translation is accepted" "$rc" "0"
+assert_eq "a preamble and code fences are cleaned before the structure check" \
+    "$out" $'### Added\n- Añade un diálogo de Novedades\n\n### Fixed\n- Detén el fallo'
+payload="$(jq -r '.messages[0].content' "$CURL_PAYLOAD_FILE")"
+assert_contains "the prompt carries the English section" "$payload" "Add a What's new dialog"
+assert_contains "the prompt carries the target language" "$payload" "Spanish"
+assert_contains "the prompt carries the glossary term pairs" \
+    "$payload" '"What'\''s new" -> "Novedades"'
+assert_contains "the prompt pins the section headings" "$payload" "### Kind"
+
+# A one-section English text, so the fake CLI's matching reply can win.
+EN_FIXED=$'### Fixed\n- Stop the crash'
+
+# Same kind, one bullet too many: rejected, so the next provider is tried.
+reset_free; CURL_STATUS=200
+printf '%s' $'### Fixed\n- one bullet too many\n- and another' | translate_body
+out="$(translate_changelog "$EN_FIXED" es 2>/dev/null)"; rc=$?
+assert_eq "a reply whose item counts differ from English is rejected" "$rc" "0"
+assert_eq "the next provider in the chain wrote the accepted section" \
+    "$out" $'### Fixed\n- free m-free'
+assert_eq "the free models are tried after Go" "$(calls)" "m-free"
+
+# Same item count, different kind: rejected for the kinds alone.
+reset_free; CURL_STATUS=200
+printf '%s' $'### Changed\n- Detén el fallo' | translate_body
+out="$(translate_changelog "$EN_FIXED" es 2>/dev/null)"; rc=$?
+assert_eq "a reply whose kinds differ from English is rejected" "$rc" "0"
+assert_eq "the matching free-model reply wins instead" "$out" $'### Fixed\n- free m-free'
+
+echo "translate_changelog_all"
+# Every provider failing for one language: non-zero, names the language, and
+# nothing in the repo changes.
+reset_free; : > "$CURL_ARGS_FILE"; CURL_STATUS=200
+printf '%s' $'### Changed\n- wrong structure' | translate_body
+OPENCODE_FAIL="*"
+mkdir -p "$WORK/translations"
+repo_before="$(git status --porcelain; cat CHANGELOG*.md | sha1sum)"
+err="$(translate_changelog_all "$EN_SECTION" "$WORK/translations" 2>&1 >/dev/null)"; rc=$?
+assert_eq "every provider failing stops with a non-zero exit" "$rc" "1"
+assert_contains "the error names the language" "$err" "'es'"
+assert_eq "no translation is written" "$(ls "$WORK/translations")" ""
+assert_eq "the repo is unchanged" \
+    "$(git status --porcelain; cat CHANGELOG*.md | sha1sum)" "$repo_before"
+OPENCODE_FAIL=""
+
+# A missing translated changelog is an error, checked before any AI call.
+reset_free; : > "$CURL_ARGS_FILE"; CURL_STATUS=200
+mv "$REL/CHANGELOG.fr.md" "$WORK/CHANGELOG.fr.md.bak"
+err="$(translate_changelog_all "$EN_SECTION" "$WORK/translations" 2>&1 >/dev/null)"; rc=$?
+assert_eq "a missing translated changelog fails the release" "$rc" "1"
+assert_contains "the error names the missing file" "$err" "CHANGELOG.fr.md"
+assert_contains "the error names the language" "$err" "'fr'"
+assert_eq "no AI call is made when a file is missing" \
+    "$(cat "$CURL_ARGS_FILE")$(calls)" ""
+if [ -f "$REL/CHANGELOG.fr.md" ]; then
+    no "the missing file is never created" "CHANGELOG.fr.md was created"
+else
+    ok "the missing file is never created"
+fi
+mv "$WORK/CHANGELOG.fr.md.bak" "$REL/CHANGELOG.fr.md"
+
+echo "changelog_print_translations"
+mkdir -p "$WORK/printed"
+printf '### Added\n- Hola\n' > "$WORK/printed/es"
+printf '### Added\n- Bonjour\n' > "$WORK/printed/fr"
+out="$(changelog_print_translations "$WORK/printed" 9.9.9 2026-01-01)"
+assert_contains "the dry run prints the Spanish entry under [es]" "$out" "[es]"
+assert_contains "the dry run prints the French entry under [fr]" "$out" "[fr]"
+assert_contains "the Spanish entry carries its version heading" \
+    "$out" "## [9.9.9] - 2026-01-01"$'\n\n'"### Added"$'\n'"- Hola"
+assert_contains "the French entry is printed too" "$out" "- Bonjour"
+
+echo "changelog_insert_releases"
+# A real run: translate every language, then insert the English entry and every
+# translation into its own file, after that file's preamble.
+reset_free; CURL_STATUS=200
+printf '%s' $'### Added\n- Añade un diálogo de Novedades\n\n### Fixed\n- Detén el fallo' | translate_body
+mkdir -p "$WORK/translated"
+translate_changelog_all "$EN_SECTION" "$WORK/translated" >/dev/null 2>&1; rc=$?
+assert_eq "translates every language before the insertion" "$rc" "0"
+assert_eq "one translated body per language" \
+    "$(ls "$WORK/translated" | paste -sd ' ' -)" "es fr"
+assert_eq "every changelog file the release touches" \
+    "$(changelog_files | paste -sd ' ' -)" "CHANGELOG.md CHANGELOG.es.md CHANGELOG.fr.md"
+
+changelog_insert_releases "$WORK/translated" "0.2.0" "2026-02-02" "$EN_SECTION"
+for file in CHANGELOG.md CHANGELOG.es.md CHANGELOG.fr.md; do
+    assert_contains "$file gets the new Release heading" \
+        "$(cat "$file")" "## [0.2.0] - 2026-02-02"
+    assert_contains "$file keeps its previous Release" \
+        "$(cat "$file")" "## [0.0.1] - 2026-01-01"
+done
+assert_contains "English keeps its own preamble" "$(head -n 1 CHANGELOG.md)" "# Changelog"
+assert_contains "Spanish keeps its own preamble" \
+    "$(head -n 1 CHANGELOG.es.md)" "# Registro de cambios"
+assert_contains "French keeps its own preamble" "$(head -n 1 CHANGELOG.fr.md)" "# Journal"
+assert_not_contains "the default header is never written into a translation" \
+    "$(cat CHANGELOG.es.md CHANGELOG.fr.md)" "All notable changes"
+
+# The result is the parity guard's contract: same kinds, same item counts.
+en_signature="$(changelog_structure_signature "$(changelog_latest_release_body CHANGELOG.md)")"
+for file in CHANGELOG.es.md CHANGELOG.fr.md; do
+    assert_eq "$file keeps parity with English" \
+        "$(changelog_structure_signature "$(changelog_latest_release_body "$file")")" \
+        "$en_signature"
+done
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

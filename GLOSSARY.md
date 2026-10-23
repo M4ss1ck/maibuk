@@ -554,7 +554,7 @@ A published build of Maibuk, known by its number (0.10.1). Not a Version: a Vers
 _Avoid_: version, app version, build
 
 **Release Notes**:
-What changed in each Release, grouped as added, changed, and fixed.
+What changed in each Release, grouped as added, changed, and fixed. Written in English first, then translated into every app language, one to one: each language lists the same Releases with the same items. An author reads them in their app language.
 _UI_: en "What's new" / es "Novedades"
 _Avoid_: changelog, update log, patch notes
 

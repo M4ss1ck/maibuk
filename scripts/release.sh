@@ -9,14 +9,20 @@
 #   1. Loads optional config from .env (AI changelog settings).
 #   2. Ensures you are on a release/v<version> branch (creates it if needed).
 #   3. Bumps the version across package.json, Cargo.toml, Cargo.lock and tauri.conf.json.
-#   4. Generates a CHANGELOG.md section for commits since the last tag
-#      (AI-assisted if configured, otherwise a grouped commit list).
-#   5. Commits the bump + changelog, creates an annotated tag, and pushes
-#      the release branch and the tag (the tag triggers the GitHub release workflow).
+#   4. Generates an English Release Notes section for commits since the last tag
+#      (AI-assisted if configured, otherwise a grouped commit list) and
+#      translates it into every other app language's changelog file.
+#   5. Updates and commits every CHANGELOG*.md (CHANGELOG.md and each
+#      CHANGELOG.<locale>.md) together with the version bump, creates an
+#      annotated tag, and pushes the release branch and the tag (the tag
+#      triggers the GitHub release workflow).
 #   6. Prints the gh command that opens the release PR into BASE_BRANCH.
 #
-# AI changelog is fully optional: with no .env config it falls back to a
-# plain grouped commit list and never errors out.
+# The English section may still fall back to a grouped commit list without AI,
+# but translations need a working AI provider, so a release (dry run included)
+# stops before writing anything when no provider can translate. Every
+# CHANGELOG*.md is updated and committed; there is no English-only release
+# (ADR 0034: every Release ships every language).
 #
 # See .env.example and the "Releasing" section of README.md for details.
 
@@ -122,6 +128,19 @@ CHANGELOG_SECTION="$(generate_changelog "$RANGE")"
 TODAY="$(date +%Y-%m-%d)"
 NEW_ENTRY="## [$VERSION] - $TODAY"$'\n\n'"$CHANGELOG_SECTION"
 
+# --- Translate the Release Notes (ADR 0034) --------------------------------
+#
+# Every Release ships every app language, so the English section is translated
+# before anything is written. The translations land in a temp dir: a failure
+# here must leave the repo untouched, dry run included, which is why it stops
+# before the summary below.
+TRANSLATIONS_DIR="$(mktemp -d)"
+trap 'rm -rf "$TRANSLATIONS_DIR"' EXIT
+if ! translate_changelog_all "$CHANGELOG_SECTION" "$TRANSLATIONS_DIR"; then
+    print_error "Release aborted: the Release Notes are not translated into every app language."
+    exit 1
+fi
+
 # --- Dry run: show what would happen and stop ------------------------------
 if [ "$DRY_RUN" = true ]; then
     echo
@@ -134,6 +153,9 @@ if [ "$DRY_RUN" = true ]; then
     echo -e "${BLUE}=== Generated CHANGELOG entry ===${NC}"
     echo
     printf '%s\n' "$NEW_ENTRY"
+    echo
+    echo -e "${BLUE}=== Translated CHANGELOG entries ===${NC}"
+    changelog_print_translations "$TRANSLATIONS_DIR" "$VERSION" "$TODAY"
     echo
     print_status "Create the PR:"
     release_pr_command "$VERSION" "$BASE_BRANCH"
@@ -176,36 +198,19 @@ sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.j
 print_status "Updating Cargo.lock"
 (cd src-tauri && cargo update -p maibuk --precise "$VERSION" 2>/dev/null || cargo check --quiet 2>/dev/null || true)
 
-# --- Update CHANGELOG.md ---------------------------------------------------
-print_status "Updating CHANGELOG.md"
-CHANGELOG_HEADER="# Changelog
-
-All notable changes to this project are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-"
-
-if [ -f CHANGELOG.md ]; then
-    # Insert the new entry right after the header, before the first existing entry.
-    TMP_CHANGELOG="$(mktemp)"
-    EXISTING_BODY="$(awk 'found || /^## \[/{found=1; print}' CHANGELOG.md)"
-    {
-        printf '%s\n' "$CHANGELOG_HEADER"
-        printf '%s\n\n' "$NEW_ENTRY"
-        [ -n "$EXISTING_BODY" ] && printf '%s\n' "$EXISTING_BODY"
-    } > "$TMP_CHANGELOG"
-    mv "$TMP_CHANGELOG" CHANGELOG.md
-else
-    {
-        printf '%s\n' "$CHANGELOG_HEADER"
-        printf '%s\n' "$NEW_ENTRY"
-    } > CHANGELOG.md
-fi
+# --- Update the changelog files ---------------------------------------------
+#
+# The new Release goes after each file's own preamble, so a hand-edited or
+# translated header and the closing note survive. CHANGELOG_DEFAULT_HEADER only
+# creates the English file when it does not exist yet; a translated file that is
+# missing is an error, checked before translation.
+print_status "Updating CHANGELOG.md and every translated changelog"
+changelog_insert_releases "$TRANSLATIONS_DIR" "$VERSION" "$TODAY" "$CHANGELOG_SECTION"
 
 # --- Commit, tag, push -----------------------------------------------------
 print_status "Creating git commit"
-git add package.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json CHANGELOG.md
+git add package.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json
+release_stage_changelogs
 git commit -m "chore: bump version to $VERSION"
 
 print_status "Creating git tag $TAG"

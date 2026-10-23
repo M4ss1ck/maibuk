@@ -55,8 +55,13 @@ vi.mock("@/lib/metrics/MetricsService", () => ({
   },
 }));
 
-// The launch check would reach GitHub; release-check.test.ts covers it.
-vi.mock("@/features/releases/release-check", () => ({ installReleaseCheck: () => () => {} }));
+// The launch check would reach GitHub; release-check.test.ts covers it. The
+// rest of the module stays real: the Release Notes dialog mounts app-wide and
+// reads its notes from here, so a stub listing one export throws on the others.
+vi.mock("@/features/releases/release-check", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/releases/release-check")>()),
+  installReleaseCheck: () => () => {},
+}));
 
 vi.mock("@/features/backup/lifecycle", () => ({
   // The launch Backup never settles here, so the Version storage upgrade never starts.
