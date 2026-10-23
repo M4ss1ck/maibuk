@@ -524,6 +524,82 @@ assert_eq "openai provider failing never tries the free models" \
 assert_contains "openai provider failing -> grouped commit list" "$out" "### Added"
 CURL_STATUS=200
 
+# --- The changelog file ----------------------------------------------------
+echo "changelog_latest_release_body"
+
+# The awk it replaced, kept as the reference for the latest Release body.
+awk '/^## \[/{c++} c==1' "$REPO_ROOT/CHANGELOG.md" | tail -n +2 > "$WORK/awk-body.txt"
+changelog_latest_release_body "$REPO_ROOT/CHANGELOG.md" > "$WORK/body.txt"
+if cmp -s "$WORK/body.txt" "$WORK/awk-body.txt"; then
+    ok "the real CHANGELOG.md gives a body byte-identical to the awk it replaced"
+else
+    no "the real CHANGELOG.md gives a body byte-identical to the awk it replaced" \
+        "$(diff -u "$WORK/awk-body.txt" "$WORK/body.txt" | head -n 20)"
+fi
+assert_eq "drops the '## [' heading line" "$(head -n 1 "$WORK/body.txt")" ""
+assert_not_contains "stops at the next Release heading" "$(cat "$WORK/body.txt")" "## ["
+assert_not_contains "never includes the closing note" "$(cat "$WORK/body.txt")" "Older releases"
+
+# A file whose only Release is followed by the closing note: the note and the
+# blank lines before it must not reach the body. (The body keeps the blank line
+# after its heading, exactly like the awk that emptied the heading line.)
+printf '%s\n' '# Changelog' '' 'Preamble.' '' \
+    '## [1.0.0] - 2026-01-01' '' '### Added' '- one thing' '' \
+    '> Older releases are listed on the [GitHub Releases](https://example.com) page.' \
+    > "$WORK/one-release.md"
+assert_eq "a one-Release file yields just its body" \
+    "$(changelog_latest_release_body "$WORK/one-release.md")" $'\n### Added\n- one thing'
+
+printf '%s\n' '# Changelog' '' 'Preamble only, no Release yet.' > "$WORK/no-release.md"
+assert_eq "a file without a Release heading prints nothing" \
+    "$(changelog_latest_release_body "$WORK/no-release.md")" ""
+
+out="$(changelog_latest_release_body "$WORK/does-not-exist.md")"; rc=$?
+assert_eq "a missing file prints nothing" "$out" ""
+assert_eq "a missing file exits 0, so the release falls back to generated notes" "$rc" "0"
+
+echo "changelog_insert_release"
+entry="## [0.2.0] - 2026-01-02"$'\n\n'"### Added"$'\n'"- new thing"
+
+# A translated changelog: its preamble differs from CHANGELOG_DEFAULT_HEADER.
+printf '%s\n' '# Registro de cambios' '' \
+    'Todos los cambios notables de este proyecto se documentan aquí.' '' \
+    '## [0.1.0] - 2026-01-01' '' '### Añadido' '- algo' '' \
+    '> Las versiones anteriores están en la página de Releases.' > "$WORK/own.md"
+changelog_insert_release "$WORK/own.md" "$entry"
+printf '%s\n' '# Registro de cambios' '' \
+    'Todos los cambios notables de este proyecto se documentan aquí.' '' \
+    '## [0.2.0] - 2026-01-02' '' '### Added' '- new thing' '' \
+    '## [0.1.0] - 2026-01-01' '' '### Añadido' '- algo' '' \
+    '> Las versiones anteriores están en la página de Releases.' > "$WORK/own-expected.md"
+if cmp -s "$WORK/own.md" "$WORK/own-expected.md"; then
+    ok "inserts after the file's own preamble and keeps the closing note verbatim"
+else
+    no "inserts after the file's own preamble and keeps the closing note verbatim" \
+        "$(diff -u "$WORK/own-expected.md" "$WORK/own.md" | head -n 20)"
+fi
+assert_not_contains "never writes the default preamble over an existing one" \
+    "$(cat "$WORK/own.md")" "All notable changes"
+
+# Removing the latest Release from the real file and inserting it back must
+# reproduce the file byte for byte: no visible change.
+first="$(grep -n -m1 '^## \[' "$REPO_ROOT/CHANGELOG.md" | cut -d: -f1)"
+second="$(grep -n '^## \[' "$REPO_ROOT/CHANGELOG.md" | sed -n 2p | cut -d: -f1)"
+sed "${first},$((second - 1))d" "$REPO_ROOT/CHANGELOG.md" > "$WORK/roundtrip.md"
+changelog_insert_release "$WORK/roundtrip.md" \
+    "$(sed -n "${first},$((second - 2))p" "$REPO_ROOT/CHANGELOG.md")"
+if cmp -s "$WORK/roundtrip.md" "$REPO_ROOT/CHANGELOG.md"; then
+    ok "re-inserting the real latest Release reproduces CHANGELOG.md byte for byte"
+else
+    no "re-inserting the real latest Release reproduces CHANGELOG.md byte for byte" \
+        "$(diff -u "$REPO_ROOT/CHANGELOG.md" "$WORK/roundtrip.md" | head -n 20)"
+fi
+
+changelog_insert_release "$WORK/created.md" "$entry"
+assert_eq "a missing file is created from the default header" \
+    "$(cat "$WORK/created.md")" \
+    "$CHANGELOG_DEFAULT_HEADER"$'\n'"## [0.2.0] - 2026-01-02"$'\n\n'"### Added"$'\n'"- new thing"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

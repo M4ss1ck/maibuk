@@ -11,6 +11,10 @@
 # AI model; otherwise (or on any failure) it falls back to a grouped commit list.
 # For the opencode provider, a failed Go call first retries on OpenCode Zen's
 # free models through the opencode CLI (see generate_with_free_models).
+#
+# Also reads and writes the changelog file itself: changelog_latest_release_body
+# feeds the GitHub Release body (.github/workflows/release.yml) and
+# changelog_insert_release adds a new Release section to a file.
 
 # Group raw commits by Conventional Commit prefix. Used as the AI input and as
 # the no-AI fallback output.
@@ -321,4 +325,84 @@ generate_changelog() {
     fi
 
     generate_fallback_changelog "$range"
+}
+
+# --- The changelog file ----------------------------------------------------
+#
+# Preamble written when the changelog file does not exist yet. It is the only
+# hardcoded preamble: an existing file keeps its own, so a translated header is
+# never overwritten when a new Release is inserted.
+CHANGELOG_DEFAULT_HEADER="# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+"
+
+# Prints the latest Release section of a changelog file without its "## ["
+# heading line, as the GitHub Release body. Stops at the next "## [" heading and
+# keeps the blank lines before it, so the body stays byte-identical to
+# `awk '/^## \[/{c++} c==1' file | tail -n +2`; stops at the closing
+# "> Older releases are listed ..." blockquote too, dropping the blank lines
+# before it. Prints nothing when the file is missing, which leaves the release
+# on GitHub's generated notes.
+changelog_latest_release_body() {
+    local file="$1"
+    [ -f "$file" ] || return 0
+    # Blank lines are buffered instead of printed: only the ones before the
+    # closing note must go, while a section that ends at the next heading keeps
+    # its trailing blank line. END flushes them unless the note stopped us.
+    awk '
+        /^## \[/ { if (seen) exit; seen = 1; next }
+        !seen { next }
+        /^> Older releases are listed/ { at_note = 1; exit }
+        /^[[:space:]]*$/ { blank = blank "\n"; next }
+        { if (blank != "") { printf "%s", blank; blank = "" } print }
+        END { if (!at_note) printf "%s", blank }
+    ' "$file"
+}
+
+# Inserts a Release section at the top of a changelog file, right after its
+# existing preamble (everything before the first "## [" heading), and keeps the
+# rest of the file byte-for-byte, closing note included. The header is used only
+# to create the file when it is missing.
+# Args: file, new entry ("## [version] - date" plus its body), [header].
+changelog_insert_release() {
+    local file="$1" entry="$2"
+    local header="${3:-$CHANGELOG_DEFAULT_HEADER}"
+    local first tmp
+
+    if [ ! -f "$file" ]; then
+        {
+            printf '%s\n' "$header"
+            printf '%s\n' "$entry"
+        } > "$file"
+        return 0
+    fi
+
+    first="$(grep -n -m1 '^## \[' "$file" | cut -d: -f1 || true)"
+    tmp="$(mktemp)"
+
+    if [ -n "$first" ]; then
+        head -n "$((first - 1))" "$file" > "$tmp"
+    else
+        cat "$file" > "$tmp"
+    fi
+
+    # One blank line between the preamble and the new heading: add the missing
+    # part. (A last line without a trailing newline gets one first.)
+    if [ -s "$tmp" ]; then
+        [ -n "$(tail -c 1 "$tmp")" ] && printf '\n' >> "$tmp"
+        [ -n "$(tail -n 1 "$tmp")" ] && printf '\n' >> "$tmp"
+    fi
+
+    {
+        printf '%s\n\n' "$entry"
+        if [ -n "$first" ]; then
+            tail -n +"$first" "$file"
+        fi
+    } >> "$tmp"
+
+    mv "$tmp" "$file"
 }

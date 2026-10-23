@@ -177,31 +177,12 @@ print_status "Updating Cargo.lock"
 (cd src-tauri && cargo update -p maibuk --precise "$VERSION" 2>/dev/null || cargo check --quiet 2>/dev/null || true)
 
 # --- Update CHANGELOG.md ---------------------------------------------------
+#
+# The new Release goes after the file's own preamble, so a hand-edited or
+# translated header and the closing note survive. CHANGELOG_DEFAULT_HEADER only
+# creates the file when it does not exist yet.
 print_status "Updating CHANGELOG.md"
-CHANGELOG_HEADER="# Changelog
-
-All notable changes to this project are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-"
-
-if [ -f CHANGELOG.md ]; then
-    # Insert the new entry right after the header, before the first existing entry.
-    TMP_CHANGELOG="$(mktemp)"
-    EXISTING_BODY="$(awk 'found || /^## \[/{found=1; print}' CHANGELOG.md)"
-    {
-        printf '%s\n' "$CHANGELOG_HEADER"
-        printf '%s\n\n' "$NEW_ENTRY"
-        [ -n "$EXISTING_BODY" ] && printf '%s\n' "$EXISTING_BODY"
-    } > "$TMP_CHANGELOG"
-    mv "$TMP_CHANGELOG" CHANGELOG.md
-else
-    {
-        printf '%s\n' "$CHANGELOG_HEADER"
-        printf '%s\n' "$NEW_ENTRY"
-    } > CHANGELOG.md
-fi
+changelog_insert_release "CHANGELOG.md" "$NEW_ENTRY"
 
 # --- Commit, tag, push -----------------------------------------------------
 print_status "Creating git commit"

@@ -41,11 +41,10 @@ jobs:
           # Pull the top (latest) section from CHANGELOG.md, dropping the version
           # header line. Falls back to empty if CHANGELOG.md is missing, in which
           # case the release steps use GitHub's auto-generated notes.
-          if [ -f CHANGELOG.md ]; then
-            NOTES=$(awk '/^## \[/{c++} c==1' CHANGELOG.md | tail -n +2)
-          else
-            NOTES=""
-          fi
+          # The parsing lives in scripts/lib/changelog.sh so test:release covers it.
+          # shellcheck source=scripts/lib/changelog.sh
+          source ./scripts/lib/changelog.sh
+          NOTES="$(changelog_latest_release_body CHANGELOG.md)"
           {
             echo 'notes<<CHANGELOG_EOF'
             echo "$NOTES"
