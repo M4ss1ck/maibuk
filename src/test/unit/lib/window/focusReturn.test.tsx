@@ -12,7 +12,10 @@ vi.mock("@/features/settings/store", () => ({
 }));
 
 // The private path focusReturn imports: this fails first if React Aria moves it.
-import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
+import {
+  getInteractionModality,
+  setInteractionModality,
+} from "react-aria/private/interactions/useFocusVisible";
 import { PaneFocusFrame } from "@/components/PaneFocusFrame";
 import { installFocusReturn } from "@/lib/window/focusReturn";
 
@@ -49,6 +52,12 @@ function returnToWindow(el: HTMLElement) {
     fireEvent.focus(window);
     el.focus();
   });
+}
+
+// A bare event: Testing Library's fireEvent.focus and fireEvent.blur also
+// dispatch focusin and focusout, which WebKitGTK does not fire here.
+function raw(target: EventTarget, type: "focus" | "blur") {
+  target.dispatchEvent(new FocusEvent(type));
 }
 
 let uninstall: () => void;
@@ -109,6 +118,35 @@ describe("installFocusReturn", () => {
     expect(screen.getByRole("textbox", { name: "Text" })).toHaveFocus();
     expect(pane()).toHaveAttribute("data-pane-active");
     expect(frame().style.opacity).toBe("1");
+  });
+
+  it("hides rings on WebKitGTK's return: focus without focusin, fired twice", async () => {
+    const user = userEvent.setup();
+    render(<Fixture />);
+    const bold = screen.getByRole("button", { name: "Bold" });
+    await user.tab();
+    expect(bold).toHaveAttribute("data-focus-visible");
+
+    // The Linux desktop app's webview blurs the control and the window with
+    // no focusout, then fires window and control focus twice with no focusin.
+    act(() => {
+      raw(bold, "blur");
+      raw(window, "blur");
+    });
+    act(() => {
+      raw(window, "focus");
+      raw(bold, "focus");
+    });
+    // React Aria reads the second, trusted focus as virtual, which shows rings.
+    act(() => setInteractionModality("virtual"));
+    act(() => {
+      raw(window, "focus");
+      raw(bold, "focus");
+    });
+
+    expect(getInteractionModality()).toBe("pointer");
+    expect(bold).not.toHaveAttribute("data-focus-visible");
+    expect(pane()).not.toHaveAttribute("data-pane-active");
   });
 
   it("keeps the keyboard modality when a key moved focus after the window came back", async () => {
