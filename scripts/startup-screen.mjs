@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Paints the startup screen on the first frame, before any JavaScript bundle
 // loads (issue #624). `transformIndexHtml` copies the logo, the light/dark token
-// defaults, and the logo entrance keyframes out of their real sources at build
-// and dev time, then inlines them with the boot theme script in index.html. A
-// refactor of those sources breaks the build here instead of drifting silently.
+// defaults, the logo entrance keyframes, and the `.loading-entrance` timing out
+// of their real sources at build and dev time, then inlines them with the boot
+// theme script in index.html. A refactor of those sources breaks the build here
+// instead of drifting silently.
 //
 // Imported by vite.config.ts and by its unit test; there is no CLI.
 import { readFileSync } from "node:fs";
@@ -19,6 +20,15 @@ export const SCREEN_TOKENS = ["--color-background", "--color-primary"];
 
 /** The keyframes the logo entrance borrows from the stylesheet. */
 export const ENTRANCE_KEYFRAMES = "logo-entrance";
+
+/**
+ * The rule the inline copy takes its timing from, so a hand-copied duration
+ * cannot drift from the screen the app shows once React is up.
+ */
+export const ENTRANCE_RULE = ".loading-entrance";
+
+/** What the inline copy renames the borrowed keyframes to. */
+export const STARTUP_ENTRANCE_KEYFRAMES = "startup-logo-entrance";
 
 const ROOT_MARKER = /<div\s+id="root"\s*><\/div>/;
 
@@ -88,12 +98,36 @@ export function extractKeyframes(css, name) {
   ).trim();
 }
 
+/** One declaration's value from the first block whose header matches. */
+export function extractRuleDeclaration(css, selector, property) {
+  const source = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const body = blockBody(source, new RegExp(`${escapeRegExp(selector)}\\s*\\{`), selector);
+  const match = new RegExp(`(?:^|[;{])\\s*${escapeRegExp(property)}\\s*:\\s*([^;]+);`).exec(body);
+  if (!match) fail(`${property} is missing from the ${selector} rule in ${CSS_SOURCE}`);
+  return match[1].trim();
+}
+
+/** The `.loading-entrance` animation, with the borrowed keyframes renamed. */
+export function startupEntranceAnimation(css) {
+  const animation = extractRuleDeclaration(css, ENTRANCE_RULE, "animation");
+  const swapped = animation.replace(
+    new RegExp(`^${escapeRegExp(ENTRANCE_KEYFRAMES)}(?![\\w-])`),
+    STARTUP_ENTRANCE_KEYFRAMES
+  );
+  if (swapped === animation) {
+    fail(
+      `the ${ENTRANCE_RULE} animation in ${CSS_SOURCE} does not start with @keyframes ${ENTRANCE_KEYFRAMES}`
+    );
+  }
+  return swapped;
+}
+
 /**
  * The inline `<head>` (style plus boot script) and the root markup that fills
  * `<div id="root">`. The visible logo is decorative; the status span carries
  * the screen-reader text until React replaces it with the localized one.
  */
-export function renderStartupScreen({ logo, tokens, keyframes, bootScript }) {
+export function renderStartupScreen({ logo, tokens, keyframes, animation, bootScript }) {
   const lightBackground = tokens.light["--color-background"];
   const darkBackground = tokens.dark["--color-background"];
   const lightPrimary = tokens.light["--color-primary"];
@@ -105,9 +139,9 @@ export function renderStartupScreen({ logo, tokens, keyframes, bootScript }) {
     `html[data-booting] body{transition:none!important}`,
     `#startup-screen{display:flex;align-items:center;justify-content:center;height:100dvh;background-color:var(--color-background,${lightBackground})}`,
     `.dark #startup-screen{background-color:var(--color-background,${darkBackground})}`,
-    `#startup-screen svg{width:5rem;height:5rem;color:var(--color-primary,${lightPrimary});animation:startup-logo-entrance .5s cubic-bezier(0.16,1,0.3,1) forwards}`,
+    `#startup-screen svg{width:5rem;height:5rem;color:var(--color-primary,${lightPrimary});animation:${animation}}`,
     `.dark #startup-screen svg{color:var(--color-primary,${darkPrimary})}`,
-    `@keyframes startup-logo-entrance{${keyframes.replace(/\s+/g, " ")}}`,
+    `@keyframes ${STARTUP_ENTRANCE_KEYFRAMES}{${keyframes.replace(/\s+/g, " ")}}`,
     `@media (prefers-reduced-motion: reduce){#startup-screen svg{animation:none;opacity:1}}`,
     `.startup-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}`,
   ].join("");
@@ -155,6 +189,7 @@ export function startupScreenPlugin({ root }) {
           logo,
           tokens: extractTokenDefaults(css),
           keyframes: extractKeyframes(css, ENTRANCE_KEYFRAMES),
+          animation: startupEntranceAnimation(css),
           bootScript: readFileSync(join(root, BOOT_SCRIPT_SOURCE), "utf8"),
         });
         return applyStartupScreen(html, parts);

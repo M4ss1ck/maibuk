@@ -8,8 +8,10 @@ import { MaibukLogo } from "@/components/icons/MaibukLogo";
 import {
   extractKeyframes,
   extractLogoSvg,
+  extractRuleDeclaration,
   extractTokenDefaults,
   renderStartupScreen,
+  startupEntranceAnimation,
   startupScreenPlugin,
 } from "../../../../scripts/startup-screen.mjs";
 
@@ -30,6 +32,7 @@ function parts() {
     logo: logo(),
     tokens: extractTokenDefaults(CSS),
     keyframes: extractKeyframes(CSS, "logo-entrance"),
+    animation: startupEntranceAnimation(CSS),
     bootScript: BOOT_SCRIPT,
   });
 }
@@ -44,6 +47,11 @@ function tokenInBlock(css: string, block: string, token: string): string {
   const end = css.indexOf("}", start);
   const match = new RegExp(`${token}\\s*:\\s*([^;]+);`).exec(css.slice(start, end));
   return (match?.[1] ?? "").trim();
+}
+
+/** One declaration read independently of the script, the way `.loading-entrance` declares it. */
+function declarationInRule(css: string, selector: string, property: string): string {
+  return tokenInBlock(css, `${selector} {`, property);
 }
 
 function attribute(markup: string, name: string): string | undefined {
@@ -120,6 +128,42 @@ describe("extractKeyframes()", () => {
   });
 });
 
+describe("extractRuleDeclaration()", () => {
+  it("reads the animation the .loading-entrance rule declares", () => {
+    expect(extractRuleDeclaration(CSS, ".loading-entrance", "animation")).toBe(
+      declarationInRule(CSS, ".loading-entrance", "animation")
+    );
+  });
+
+  it("throws when the rule is missing", () => {
+    expect(() =>
+      extractRuleDeclaration(".other { animation: fade-in 1s; }", ".loading-entrance", "animation")
+    ).toThrow(/\.loading-entrance/);
+  });
+
+  it("throws when the declaration is missing", () => {
+    expect(() =>
+      extractRuleDeclaration(".loading-entrance { opacity: 1; }", ".loading-entrance", "animation")
+    ).toThrow(/animation/);
+  });
+});
+
+describe("startupEntranceAnimation()", () => {
+  it("is the stylesheet's animation with only the keyframes renamed", () => {
+    const stylesheet = declarationInRule(CSS, ".loading-entrance", "animation");
+
+    expect(startupEntranceAnimation(CSS)).toBe(
+      stylesheet.replace(/^logo-entrance/, "startup-logo-entrance")
+    );
+  });
+
+  it("throws when the rule does not borrow the logo-entrance keyframes", () => {
+    expect(() => startupEntranceAnimation(".loading-entrance { animation: fade-in 1s; }")).toThrow(
+      /logo-entrance/
+    );
+  });
+});
+
 describe("renderStartupScreen()", () => {
   it("renders the root markup with a decorative logo and a status label", () => {
     const { root: markup } = parts();
@@ -148,6 +192,15 @@ describe("renderStartupScreen()", () => {
     expect(head).toContain("@media (prefers-reduced-motion: reduce)");
     expect(head).toContain("animation:none");
     expect(head).toContain("html[data-booting] body{transition:none!important}");
+    expect(head).toContain("@keyframes startup-logo-entrance");
+  });
+
+  it("times the inline logo exactly as the stylesheet's .loading-entrance rule does", () => {
+    const stylesheet = declarationInRule(CSS, ".loading-entrance", "animation");
+    const expected = stylesheet.replace(/^logo-entrance/, "startup-logo-entrance");
+    const { head } = parts();
+
+    expect(head).toContain(`animation:${expected}`);
     expect(head).toContain("@keyframes startup-logo-entrance");
   });
 

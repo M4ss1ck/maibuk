@@ -228,6 +228,13 @@ export default defineConfig(() => ({
         "src/components/editor/plain-text-offsets.ts",
         "src/features/settings/toolbar-config.ts",
         "src/features/theme/store.ts",
+        // Startup first frame (#624): the snapshot the inline boot script reads,
+        // the window background report, and the capture LoadingScreen continues.
+        // `boot-theme-script.js` is a classic script read as text and inlined, so
+        // it is never imported and cannot be instrumented; its own test runs it.
+        "src/features/theme/boot-theme.ts",
+        "src/features/theme/window-background.ts",
+        "src/lib/startup-screen.ts",
         "src/features/sync/store.ts",
         "src/hooks/useAutoSave.ts",
         "src/hooks/usePluginSecrets.ts",
