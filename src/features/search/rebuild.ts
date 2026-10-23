@@ -243,7 +243,10 @@ async function rebuildLoop(): Promise<void> {
 export function requestSearchRebuild(): Promise<void> {
   if (currentRun) {
     restartRequested = true;
-    return currentRun;
+    // If the running pass already checked the flag before this request
+    // arrived, start one more after it settles; a Restore must never be
+    // answered by a pass that began before its data landed.
+    return currentRun.then(() => (restartRequested ? requestSearchRebuild() : undefined));
   }
   setRebuilding(true);
   currentRun = rebuildLoop().finally(() => {

@@ -300,6 +300,7 @@ describe("chapter write path", () => {
         if (selects > 2) throw new Error("read failed");
         return realDb.select<T>(sql, params);
       },
+      executeAtomic: realDb.executeAtomic.bind(realDb),
     } as DatabaseAdapter);
 
     const stored = await updateChapterRow("ch-1", { content: "<p>Durable</p>" }, "local");

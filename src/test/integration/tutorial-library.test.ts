@@ -41,7 +41,16 @@ async function dump(db: DatabaseAdapter): Promise<string> {
   );
   const out: Record<string, unknown[]> = {};
   for (const { name } of tables) {
-    out[name] = await db.select(`SELECT * FROM "${name}" ORDER BY rowid`);
+    let rows: unknown[];
+    try {
+      rows = await db.select(`SELECT * FROM "${name}" ORDER BY rowid`);
+    } catch {
+      // FTS5 shadow tables are ordinary tables without a rowid column. Their
+      // contents still compare; a stable JSON order stands in for rowid.
+      rows = await db.select(`SELECT * FROM "${name}"`);
+      rows.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    }
+    out[name] = rows;
   }
   return JSON.stringify(out);
 }

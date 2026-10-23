@@ -343,6 +343,10 @@ describe("Library Search index sync and Restore hooks", () => {
       "Pulled paragraph two",
     ]);
     await expect(ftsMatches("pulled")).resolves.toHaveLength(2);
+
+    // A pulled Book that no longer has the Chapter removes its index rows too.
+    await applyBookSnapshotData({ ...snapshot, chapters: [] }, "remote");
+    expect(await rowsFor("chapter", "chapter-sync")).toEqual([]);
   });
 
   it("indexes a Note and a Canvas applied from synced snapshots", async () => {
@@ -392,6 +396,34 @@ describe("Library Search index sync and Restore hooks", () => {
 
     expect(textOf(await rowsFor("note", "note-sync"))).toEqual(["Pulled note body"]);
     expect(textOf(await rowsFor("canvas", "canvas-sync"))).toEqual(["Pulled card"]);
+  });
+
+  it("re-adds rows when a deleted Note is restored from a snapshot", async () => {
+    const note = await createNoteRow({ title: "Note", content: "<p>Restored body</p>" }, "local");
+    await deleteNoteRow(note.id, "local");
+    expect(await rowsFor("note", note.id)).toEqual([]);
+
+    await applyNoteSnapshotData(
+      {
+        note: {
+          id: note.id,
+          bookId: null,
+          title: "Note",
+          content: "<p>Restored body</p>",
+          language: "en",
+          tags: "[]",
+          pinned: false,
+          order: 0,
+          wordCount: 2,
+          collapsedHeadings: "[]",
+          createdAt: note.createdAt,
+          updatedAt: note.updatedAt,
+        },
+      },
+      "local"
+    );
+
+    expect(textOf(await rowsFor("note", note.id))).toEqual(["Restored body"]);
   });
 
   it("rebuilds the index after a Restore so it matches the restored Library", async () => {
@@ -589,6 +621,28 @@ describe("Library Search background rebuild", () => {
     expect(isSearchIndexRebuilding()).toBe(false);
     expect(seen).toContain(true);
     expect(seen[seen.length - 1]).toBe(false);
+  });
+
+  it("rebuilds when the stored index version is older than the schema's", async () => {
+    const book = await createBookRow({ title: "Old index", authorName: "Author" }, "local");
+    await seedChapter(book.id, "<p>Body after migration</p>");
+    await db.execute("DELETE FROM search_text");
+    await db.execute(
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, '0', 1000)
+       ON CONFLICT(key) DO UPDATE SET value = '0', updated_at = 1000`,
+      [SEARCH_INDEX_VERSION_KEY]
+    );
+
+    await ensureSearchIndex();
+    await awaitSearchIndexRebuild();
+
+    const rows = await indexRows();
+    expect(rows.some((row) => row.text === "Body after migration")).toBe(true);
+    const stored = await db.select<{ value: string }[]>(
+      "SELECT value FROM settings WHERE key = ?",
+      [SEARCH_INDEX_VERSION_KEY]
+    );
+    expect(stored[0].value).toBe(String(SEARCH_INDEX_VERSION));
   });
 
   it("rebuilds on first launch when the index is empty but the Library is not", async () => {
