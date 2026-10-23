@@ -1189,6 +1189,10 @@
     "saveFailed": "No se pudo guardar tu último texto, así que no se abrió nada",
     "noResults": "Sin resultados",
     "pageAnnouncement": "Mostrando {{page}}",
+    "modes": {
+      "commands": "Modo comandos",
+      "library": "Modo búsqueda"
+    },
     "pages": {
       "chapters": "Abrir capítulo…",
       "books": "Ir a libro…",
@@ -1204,6 +1208,7 @@
     "sections": {
       "recent": "Recientes",
       "suggested": "Sugerencias",
+      "pages": "Páginas",
       "commands": "Comandos",
       "chapters": "Capítulos",
       "notes": "Notas",
@@ -1227,6 +1232,7 @@
     "toggleAlwaysOnTop": "Alternar siempre visible",
     "openReleaseNotes": "Mostrar novedades",
     "openCommandPalette": "Abrir paleta de comandos",
+    "searchLibrary": "Buscar en la biblioteca",
     "syncNow": "Sincronizar ahora",
     "newBook": "Crear libro nuevo",
     "jumpBooks": "Ir al libro por número",

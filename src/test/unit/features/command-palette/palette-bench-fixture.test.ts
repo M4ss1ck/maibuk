@@ -49,6 +49,7 @@ describe("palette bench fixture", () => {
     for (const query of PALETTE_BENCH_QUERIES) {
       expect(() =>
         searchPalette(index, {
+          mode: "library",
           query,
           page: "root",
           recent: [],
@@ -58,6 +59,7 @@ describe("palette bench fixture", () => {
     }
     expect(() =>
       searchPalette(index, {
+        mode: "library",
         query: "ch",
         page: "chapters",
         recent: [],

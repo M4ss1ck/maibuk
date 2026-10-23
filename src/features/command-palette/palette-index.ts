@@ -10,9 +10,15 @@ export type PaletteItemKind =
   | "canvas"
   | "settingsRow";
 export type PalettePage = "root" | "chapters" | "books" | "notes" | "canvases";
+/**
+ * What the palette lists: Commands (Commands mode) or the Library's work
+ * (Library Search). The mode follows the input, never a switch.
+ */
+export type PaletteMode = "commands" | "library";
 export type PaletteSectionId =
   | "recent"
   | "suggested"
+  | "pages"
   | "commands"
   | "chapters"
   | "notes"
@@ -23,6 +29,7 @@ export type PaletteSectionId =
 export const PALETTE_SECTION_ORDER: readonly PaletteSectionId[] = [
   "recent",
   "suggested",
+  "pages",
   "commands",
   "chapters",
   "notes",
@@ -36,16 +43,40 @@ export const PALETTE_SECTION_CAP = 50;
 /** How many rows an empty query lists on root: Recent first, then Suggested. */
 export const PALETTE_EMPTY_ROOT_LIMIT = 10;
 
+/** The character that puts the palette in Commands mode; it is never searched. */
+export const PALETTE_COMMAND_PREFIX = ">";
+
+/** Which mode the typed input asks for: a leading `>` means Commands. */
+export function paletteModeOf(input: string): PaletteMode {
+  return input.startsWith(PALETTE_COMMAND_PREFIX) ? "commands" : "library";
+}
+
+/** What to search for: the input without the Commands prefix. */
+export function paletteQueryText(input: string): string {
+  return input.startsWith(PALETTE_COMMAND_PREFIX)
+    ? input.slice(PALETTE_COMMAND_PREFIX.length)
+    : input;
+}
+
 /**
- * What an empty palette offers besides Recent, in order. The nested pages come
- * first because they are how the author learns a Book or Note is findable here.
- * A key the screen does not offer, or cannot run now, is skipped.
+ * The kinds each mode lists. A nested page narrows Library Search, so it
+ * belongs to that mode alone; Commands mode never lists the author's work and
+ * Library Search never lists Commands or Settings rows.
  */
-export const PALETTE_SUGGESTED_KEYS: readonly string[] = [
-  "page:chapters",
-  "page:books",
-  "page:notes",
-  "page:canvases",
+const MODE_KINDS: Readonly<Record<PaletteMode, ReadonlySet<PaletteItemKind>>> = {
+  commands: new Set<PaletteItemKind>(["command", "settingsRow"]),
+  library: new Set<PaletteItemKind>(["page", "book", "chapter", "note", "canvas"]),
+};
+
+function modeKeeps(item: PaletteItem, mode: PaletteMode): boolean {
+  return MODE_KINDS[mode].has(item.kind);
+}
+
+/**
+ * What an empty Commands mode offers besides Recent, in order. A key the
+ * screen does not offer, or cannot run now, is skipped.
+ */
+export const PALETTE_SUGGESTED_COMMAND_KEYS: readonly string[] = [
   "command:bookList.newBook",
   "command:notes.newNote",
   "command:canvas.newCanvas",
@@ -55,6 +86,17 @@ export const PALETTE_SUGGESTED_KEYS: readonly string[] = [
   "command:global.showHelp",
   "command:global.gotoEphemeral",
   "command:global.gotoMetrics",
+];
+
+/**
+ * What an empty Library Search offers besides Recent: the nested pages, in the
+ * order the kinds are named, how the author learns each one is browsable here.
+ */
+export const PALETTE_SUGGESTED_PAGE_KEYS: readonly string[] = [
+  "page:chapters",
+  "page:books",
+  "page:notes",
+  "page:canvases",
 ];
 
 /** Labels, descriptions, and keyword lists; the caller's `t` cast to accept registry keys. */
@@ -87,6 +129,7 @@ export interface PaletteSection {
 }
 
 export interface PaletteQuery {
+  mode: PaletteMode;
   query: string;
   page: PalettePage;
   recent: readonly string[];
@@ -119,8 +162,9 @@ function fold(s: string): string {
 function sectionOf(item: PaletteItem): PaletteSectionId {
   switch (item.kind) {
     case "command":
-    case "page":
       return "commands";
+    case "page":
+      return "pages";
     case "chapter":
       return "chapters";
     case "note":
@@ -145,8 +189,11 @@ function pageKeeps(item: PaletteItem, query: PaletteQuery): boolean {
     case "canvases":
       return item.kind === "canvas";
     case "chapters":
+      // The Chapters page narrows to the open Book's Chapters in the Book
+      // Editor; outside it there is no open Book, so it lists every Chapter.
       return (
-        item.kind === "chapter" && query.openBookId != null && item.bookId === query.openBookId
+        item.kind === "chapter" &&
+        (query.openBookId == null || item.bookId === query.openBookId)
       );
   }
 }
@@ -324,24 +371,32 @@ export function searchPalette(index: PaletteIndex, query: PaletteQuery): Palette
       const results: PaletteResult[] = [];
       for (const key of query.recent) {
         const entry = index.byKey.get(key);
-        if (entry) results.push({ item: entry.item, score: 0, highlights: [] });
+        if (entry && modeKeeps(entry.item, query.mode)) {
+          results.push({ item: entry.item, score: 0, highlights: [] });
+        }
       }
       const sections: PaletteSection[] = [];
       if (results.length > 0) sections.push({ id: "recent", results });
-      const shown = new Set(query.recent);
+      const shown = new Set(results.map((result) => result.item.key));
+      const commandsMode = query.mode === "commands";
+      const suggestedKeys = commandsMode ? PALETTE_SUGGESTED_COMMAND_KEYS : PALETTE_SUGGESTED_PAGE_KEYS;
       const suggested: PaletteResult[] = [];
-      for (const key of PALETTE_SUGGESTED_KEYS) {
+      for (const key of suggestedKeys) {
         if (results.length + suggested.length >= PALETTE_EMPTY_ROOT_LIMIT) break;
         const entry = index.byKey.get(key);
         if (!entry || shown.has(key) || entry.item.state === "disabled") continue;
         suggested.push({ item: entry.item, score: 0, highlights: [] });
       }
-      if (suggested.length > 0) sections.push({ id: "suggested", results: suggested });
+      if (suggested.length > 0) {
+        // Library Search suggests pages, Commands mode suggests Commands, so
+        // the header names what the author can come back to.
+        sections.push({ id: commandsMode ? "suggested" : "pages", results: suggested });
+      }
       return sections;
     }
     const results: PaletteResult[] = [];
     for (const entry of index.entries) {
-      if (pageKeeps(entry.item, query)) {
+      if (modeKeeps(entry.item, query.mode) && pageKeeps(entry.item, query)) {
         results.push({ item: entry.item, score: 0, highlights: [] });
       }
     }
@@ -370,6 +425,7 @@ export function searchPalette(index: PaletteIndex, query: PaletteQuery): Palette
   const entries = index.entries;
   for (let i = 0; i < entries.length; i += 1) {
     const entry = entries[i];
+    if (!modeKeeps(entry.item, query.mode)) continue;
     if (!rootPage && !pageKeeps(entry.item, query)) continue;
     const scored = scoreEntry(entry, trimmed, foldedQuery, chapterBoostBookId);
     if (!scored) continue;

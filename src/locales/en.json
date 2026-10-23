@@ -1190,6 +1190,10 @@
     "saveFailed": "Your latest text could not be saved, so nothing was opened",
     "noResults": "No results",
     "pageAnnouncement": "Showing {{page}}",
+    "modes": {
+      "commands": "Commands mode",
+      "library": "Search mode"
+    },
     "pages": {
       "chapters": "Open Chapter…",
       "books": "Go to Book…",
@@ -1205,6 +1209,7 @@
     "sections": {
       "recent": "Recent",
       "suggested": "Suggested",
+      "pages": "Pages",
       "commands": "Commands",
       "chapters": "Chapters",
       "notes": "Notes",
@@ -1228,6 +1233,7 @@
     "toggleAlwaysOnTop": "Toggle always on top",
     "openReleaseNotes": "Show what's new",
     "openCommandPalette": "Open command palette",
+    "searchLibrary": "Search Library",
     "syncNow": "Sync now",
     "newBook": "Create new book",
     "jumpBooks": "Jump to book by number",

@@ -12,5 +12,7 @@ export type {
 } from "@/features/command-palette/entity-items";
 export { buildSettingsItems } from "@/features/command-palette/settings-items";
 export type { BuildSettingsItemsOptions } from "@/features/command-palette/settings-items";
+export { searchLibrary } from "@/features/command-palette/library-search";
+export type { SearchLibraryOptions } from "@/features/command-palette/library-search";
 export * from "@/features/command-palette/palette-index";
 export { loadPaletteEntities } from "@/features/command-palette/load-entities";

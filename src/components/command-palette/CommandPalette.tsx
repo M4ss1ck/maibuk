@@ -38,7 +38,11 @@ import {
   buildSettingsItems,
   liveRecentKeys,
   loadPaletteEntities,
+  paletteModeOf,
+  paletteQueryText,
+  PALETTE_COMMAND_PREFIX,
   preparePaletteIndex,
+  searchLibrary,
   searchPalette,
   useCommandPaletteRecentStore,
   useCommandPaletteStore,
@@ -46,6 +50,7 @@ import {
 import type {
   PaletteItem,
   PaletteItemKind,
+  PaletteMode,
   PalettePage,
   PaletteResult,
   PaletteTranslate,
@@ -64,10 +69,12 @@ import { formatShortcut } from "@/lib/shortcut-keys";
 import type { CommandId } from "@/lib/shortcut-registry";
 
 /**
- * The Command Palette dialog: every mounted Command, searchable by label,
- * Voice Command phrase, and keywords, with the device-local Recent first.
- * Mounted once beside GlobalShortcuts (so never on /embed); renders only
- * while open, and the index is prepared once per open, never per keystroke.
+ * The Command Palette dialog in its two modes: a leading `>` asks for Commands,
+ * Plugin Commands, and Settings rows; its absence asks Library Search for a
+ * Book, Chapter, Note, or Canvas by title. Each mode lists its own device-local
+ * Recent, and an empty field suggests what to start with. Mounted once beside
+ * GlobalShortcuts (so never on /embed); renders only while open, and the index
+ * is prepared once per open, never per keystroke.
  */
 export function CommandPalette() {
   const isOpen = useCommandPaletteStore((state) => state.isOpen);
@@ -112,7 +119,7 @@ function OpenCommandPalette() {
   const recordRecent = useCommandPaletteRecentStore((state) => state.record);
   const removeRecent = useCommandPaletteRecentStore((state) => state.remove);
   const pruneRecent = useCommandPaletteRecentStore((state) => state.prune);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => useCommandPaletteStore.getState().initialQuery);
   const [page, setPage] = useState<PalettePage>("root");
   const [activeKeyIsRecent, setActiveKeyIsRecent] = useState(false);
   const [entities, setEntities] = useState<Awaited<ReturnType<typeof loadPaletteEntities>> | null>(
@@ -123,6 +130,8 @@ function OpenCommandPalette() {
   const activeKeyRef = useRef<string | null>(null);
   const removalRef = useRef(false);
   const previousCountRef = useRef(-1);
+  // Null until the first render has settled the mode the palette opened in.
+  const previousModeRef = useRef<PaletteMode | null>(null);
   const mac = isMac();
   const navigate = useNavigate();
   const location = useLocation();
@@ -158,14 +167,7 @@ function OpenCommandPalette() {
     };
   }, []);
 
-  const pageItems = useMemo(
-    () =>
-      buildPageItems({
-        t: translate,
-        inBookEditor: openBookId !== null,
-      }),
-    [translate, openBookId]
-  );
+  const pageItems = useMemo(() => buildPageItems({ t: translate }), [translate]);
   const settingsItems = useMemo(
     () =>
       buildSettingsItems({
@@ -208,15 +210,22 @@ function OpenCommandPalette() {
   // The results are the same, one frame later; a key pressed inside that
   // window acts on the row the author still sees (useDeferredValue, #552).
   const deferredQuery = useDeferredValue(query);
+  // The mode is the leading `>`, never a switch: the same input both says which
+  // mode and what to search for, so deleting the prefix changes the mode back.
+  const mode: PaletteMode = paletteModeOf(deferredQuery);
+  const searchText = paletteQueryText(deferredQuery);
   const sections = useMemo(
     () =>
-      searchPalette(index, {
-        query: deferredQuery,
-        page,
-        recent: recentKeys,
-        openBookId,
-      }),
-    [index, deferredQuery, page, recentKeys, openBookId]
+      mode === "commands"
+        ? searchPalette(index, {
+            mode,
+            query: searchText,
+            page: "root",
+            recent: recentKeys,
+            openBookId,
+          })
+        : searchLibrary({ index, query: searchText, page, recent: recentKeys, openBookId }),
+    [index, mode, searchText, page, recentKeys, openBookId]
   );
   const flatResults = useMemo(() => sections.flatMap((section) => section.results), [sections]);
   const count = flatResults.length;
@@ -238,9 +247,9 @@ function OpenCommandPalette() {
     }
     // A nested page with an empty query announces the page, not the count the
     // deferred query is about to replace; its own results are "N results".
-    if (page !== "root" && deferredQuery === "") return;
+    if (page !== "root" && searchText === "") return;
     announce(t("commandPalette.resultCount", { count }));
-  }, [count, t, page, deferredQuery, announce]);
+  }, [count, t, page, searchText, announce]);
 
   // Entering or leaving a nested page is announced after the count it changes,
   // so this effect sits below the count's on purpose.
@@ -248,6 +257,17 @@ function OpenCommandPalette() {
     if (page === "root") return;
     announce(t("commandPalette.pageAnnouncement", { page: t(`commandPalette.chips.${page}`) }));
   }, [page, t, announce]);
+
+  // A mode change changes what the list holds, so it is announced last: the
+  // author hears "Commands mode" or "Search mode" over the count it caused.
+  // The first mode is the one the palette opened in, already known from the
+  // Command that opened it, so only a change speaks.
+  useEffect(() => {
+    const previous = previousModeRef.current;
+    previousModeRef.current = mode;
+    if (previous === null || previous === mode) return;
+    announce(t(`commandPalette.modes.${mode}`));
+  }, [mode, t, announce]);
 
   // The active result lives in React Aria's virtual focus (the caret stays in
   // the field), so read it off the input's active descendant. Only the one
@@ -283,11 +303,17 @@ function OpenCommandPalette() {
     [announce, t, removeRecent]
   );
 
-  const changeQuery = useCallback((value: string) => {
-    // Typing after a removal that changed no count: the next count is news.
-    removalRef.current = false;
-    setQuery(value);
-  }, []);
+  const changeQuery = useCallback(
+    (value: string) => {
+      // Typing after a removal that changed no count: the next count is news.
+      removalRef.current = false;
+      // `>` always means Commands, so it also leaves a nested Library page
+      // instead of searching inside it.
+      if (paletteModeOf(value) === "commands" && page !== "root") setPage("root");
+      setQuery(value);
+    },
+    [page]
+  );
 
   const removeActiveRecent = () => {
     const activeKey = activeKeyRef.current;
@@ -311,6 +337,18 @@ function OpenCommandPalette() {
       event.preventDefault();
       removeActiveRecent();
       return;
+    }
+    // Backspace on the lone `>` leaves Commands mode for Library Search with
+    // an empty field, so one keystroke walks back to where the palette started
+    // instead of closing it.
+    if (event.key === "Backspace" && page === "root" && query === PALETTE_COMMAND_PREFIX) {
+      const input = inputRef.current;
+      const caretAfterPrefix = input !== null && input.selectionStart === 1 && input.selectionEnd === 1;
+      if (caretAfterPrefix) {
+        event.preventDefault();
+        changeQuery("");
+        return;
+      }
     }
     // Backspace on an empty field steps out of a nested page instead of leaving
     // the palette: the chip says which page the results are narrowed to.
@@ -484,7 +522,7 @@ function OpenCommandPalette() {
           />
         </SearchField>
         {count === 0 ? (
-          deferredQuery.trim() !== "" && (
+          searchText.trim() !== "" && (
             <p className="px-3 pb-3 pt-1 text-sm text-muted-foreground">
               {t("commandPalette.noResults")}
             </p>

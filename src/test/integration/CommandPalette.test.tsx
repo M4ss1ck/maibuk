@@ -257,9 +257,16 @@ async function settleOn(screenPath: string) {
 }
 
 const PALETTE_NAME = "Command palette";
+const COMMANDS_PREFIX = ">";
 
 async function openPaletteWithF1(user: ReturnType<typeof userEvent.setup>) {
   await user.keyboard("{F1}");
+  return screen.findByRole("dialog", { name: PALETTE_NAME });
+}
+
+/** Opens the palette straight into Library Search, as the Search Library Command does. */
+async function openLibrarySearch(user: ReturnType<typeof userEvent.setup>) {
+  await user.keyboard("{Control>}{Alt>}p{/Alt}{/Control}");
   return screen.findByRole("dialog", { name: PALETTE_NAME });
 }
 
@@ -378,17 +385,20 @@ afterEach(() => {
 });
 
 describe("Command Palette", () => {
-  it("opens with F1 with focus in the search field", async () => {
+  it("opens with F1 with focus in the search field, in Commands mode", async () => {
     const user = userEvent.setup();
     renderApp("/");
     await settleOn("/");
 
-    await user.keyboard("{F1}");
-    const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
-    expect(paletteSearch(dialog)).toHaveFocus();
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    expect(search).toHaveFocus();
+    // F1 is the Commands shortcut: the prefix is already typed, so the field
+    // starts half-written and one Backspace reaches Library Search.
+    expect(search).toHaveValue(COMMANDS_PREFIX);
   });
 
-  it("opens with Mod+Shift+P on desktop", async () => {
+  it("opens Commands mode with Mod+Shift+P on desktop", async () => {
     const user = userEvent.setup();
     renderApp("/");
     await settleOn("/");
@@ -396,6 +406,34 @@ describe("Command Palette", () => {
     await user.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
     const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
     expect(paletteSearch(dialog)).toHaveFocus();
+    expect(paletteSearch(dialog)).toHaveValue(COMMANDS_PREFIX);
+  });
+
+  it("opens Library Search empty with Mod+Alt+P", async () => {
+    await createBookRow({ title: "Shortcut Book", authorName: "Author" }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+    expect(useBoundShortcutStore.getState().counts["global.searchLibrary"]).toBeGreaterThan(0);
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    expect(search).toHaveFocus();
+    expect(search).toHaveValue("");
+
+    // No prefix means Library Search: typing a Book title finds it.
+    await user.keyboard("Shortcut");
+    await within(dialog).findByRole("option", { name: "Shortcut Book" });
+  });
+
+  it("lists the Search Library Command in Commands mode", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    await user.keyboard("Search Library");
+    expect(await within(dialog).findByRole("option", { name: "Search Library" })).toBeVisible();
   });
 
   it("answers to F1 only on the web build", async () => {
@@ -861,7 +899,7 @@ describe("Command Palette entities and pages", () => {
     renderApp("/");
     await settleOn("/");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Alpha");
     const book = await within(dialog).findByRole("option", { name: "Alpha" });
@@ -888,7 +926,7 @@ describe("Command Palette entities and pages", () => {
     renderApp(`/book/${mine.id}`);
     await settleOn(`/book/${mine.id}`);
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Prologue");
     const options = await within(dialog).findAllByRole("option", { name: "Prologue" });
@@ -922,7 +960,7 @@ describe("Command Palette entities and pages", () => {
     renderApp(`/book/${mine.id}`);
     await settleOn(`/book/${mine.id}`);
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Shared Title");
     await waitFor(() => expect(within(dialog).getAllByRole("option").length).toBeGreaterThan(1));
@@ -949,7 +987,7 @@ describe("Command Palette entities and pages", () => {
     renderApp(`/book/${mine.id}`);
     await settleOn(`/book/${mine.id}`);
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Open Chapter");
     const page = await within(dialog).findByRole("option", { name: "Open Chapter…" });
@@ -967,16 +1005,16 @@ describe("Command Palette entities and pages", () => {
     // Backspace on the empty field steps back out to the root page.
     await user.keyboard("{Backspace}");
     await waitFor(() => expect(within(dialog).queryByText("Open Chapter")).toBeNull());
-    // Root with an empty query lists Suggested, nothing has been chosen yet.
+    // Root with an empty query lists the pages, nothing has been chosen yet.
     expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull();
-    expect(sectionOptions(dialog, "Suggested").map(optionLabel)).toContain("Open Chapter…");
+    expect(sectionOptions(dialog, "Pages").map(optionLabel)).toContain("Open Chapter…");
     // The other Book's Chapter is reachable again, which the narrowed page hid.
     await user.keyboard("Theirs");
     const theirs = await within(dialog).findByRole("option", { name: "Theirs Only" });
     expect(theirs.textContent).toContain("Other One");
   });
 
-  it("offers Open Chapter… only in the Book Editor", async () => {
+  it("offers the four nested pages in Library Search on every screen", async () => {
     const book = await createBookRow({ title: "Only Book", authorName: "Author" }, "local");
     await createChapterRow({ bookId: book.id, title: "Prologue" }, "local");
 
@@ -984,17 +1022,24 @@ describe("Command Palette entities and pages", () => {
     renderApp("/notes");
     await settleOn("/notes");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
+    // Nothing typed: the four pages are how the author browses each kind.
+    expect(sectionOptions(dialog, "Pages").map(optionLabel)).toEqual([
+      "Open Chapter…",
+      "Go to Book…",
+      "Open Note…",
+      "Open Canvas…",
+    ]);
     const search = paletteSearch(dialog);
-    // "Open" reaches every Open… page, so the absence of one is the fact.
     await user.keyboard("Open ");
     await within(dialog).findByRole("option", { name: "Open Note…" });
     await within(dialog).findByRole("option", { name: "Open Canvas…" });
-    expect(within(dialog).queryByRole("option", { name: "Open Chapter…" })).toBeNull();
+    // Outside the Book Editor the Chapters page lists every Chapter.
+    await within(dialog).findByRole("option", { name: "Open Chapter…" });
     expect(search).toHaveValue("Open ");
   });
 
-  it("narrows to Books, Notes, and Canvases on their pages", async () => {
+  it("narrows to Books, Chapters, Notes, and Canvases on their pages", async () => {
     const book = await createBookRow({ title: "Paged Book", authorName: "Author" }, "local");
     await createChapterRow({ bookId: book.id, title: "Paged Chapter" }, "local");
     await createNoteRow({ title: "Paged Note", bookId: null }, "local");
@@ -1004,10 +1049,11 @@ describe("Command Palette entities and pages", () => {
     renderApp("/");
     await settleOn("/");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
 
     for (const [pageLabel, chip, expected] of [
+      ["Open Chapter…", "Open Chapter", ["Paged Chapter"]],
       ["Go to Book…", "Go to Book", ["Paged Book"]],
       ["Open Note…", "Open Note", ["Paged Note"]],
       ["Open Canvas…", "Open Canvas", ["Paged Canvas"]],
@@ -1084,7 +1130,7 @@ describe("Command Palette entities and pages", () => {
 
     // A row every platform has is still there.
     await user.clear(search);
-    await user.keyboard("Choose your preferred theme");
+    await user.keyboard(">Choose your preferred theme");
     expect(await within(dialog).findByRole("option", { name: "Theme" })).toBeInTheDocument();
   });
 
@@ -1100,7 +1146,7 @@ describe("Command Palette entities and pages", () => {
     // Deleted through the Notes write path, the same one the Item Menu uses.
     await act(() => useNoteStore.getState().deleteNote(doomed.id));
 
-    await openPaletteWithF1(user);
+    await openLibrarySearch(user);
     const dialog = screen.getByRole("dialog", { name: PALETTE_NAME });
     await waitFor(() =>
       expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Keeper"])
@@ -1111,25 +1157,25 @@ describe("Command Palette entities and pages", () => {
     expect(screen.queryByText("Doomed")).toBeNull();
   });
 
-  it("suggests the nested pages first when nothing is recent, and choosing one narrows", async () => {
+  it("lists the four pages when nothing is recent, and choosing one narrows", async () => {
     await createNoteRow({ title: "Findable", bookId: null }, "local");
     const user = userEvent.setup();
     renderApp("/");
     await settleOn("/");
 
-    await openPaletteWithF1(user);
-    const dialog = screen.getByRole("dialog", { name: PALETTE_NAME });
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
-    const suggested = sectionOptions(dialog, "Suggested");
-    expect(suggested.length).toBeGreaterThanOrEqual(5);
-    expect(suggested.length).toBeLessThanOrEqual(10);
-    expect(suggested.slice(0, 3).map(optionLabel)).toEqual([
+    expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull();
+    expect(sectionOptions(dialog, "Pages").map(optionLabel)).toEqual([
+      "Open Chapter…",
       "Go to Book…",
       "Open Note…",
       "Open Canvas…",
     ]);
 
-    // Nothing is active until the first arrow: the list opens on Suggested.
+    // Nothing is active until the first arrow: the list opens on the pages.
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => expect(activeResultLabel(search)).toContain("Open Chapter…"));
     await user.keyboard("{ArrowDown}");
     await waitFor(() => expect(activeResultLabel(search)).toContain("Go to Book…"));
     await user.keyboard("{ArrowDown}");
@@ -1165,7 +1211,7 @@ describe("Command Palette entities and pages", () => {
     );
     expect(beforeRows[0]?.content ?? "").not.toContain("Typed straight through");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Destination");
     const row = await within(dialog).findByRole("option", { name: "Destination" });
@@ -1186,7 +1232,7 @@ describe("Command Palette entities and pages", () => {
     renderApp("/");
     await settleOn("/");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Loose");
     const note = await within(dialog).findByRole("option", { name: "Loose Thought" });
@@ -1203,7 +1249,7 @@ describe("Command Palette entities and pages", () => {
     renderApp("/canvas");
     await settleOn("/canvas");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Story Arcs");
     const row = await within(dialog).findByRole("option", { name: "Story Arcs" });
@@ -1211,6 +1257,176 @@ describe("Command Palette entities and pages", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
     await waitFor(() => expect(path).toBe(`/canvas/${canvas.id}`));
+  });
+});
+
+describe("Command Palette modes", () => {
+  it("switches to Commands mode on a leading > and back to Library Search when it goes", async () => {
+    await createBookRow({ title: "Paged Book", authorName: "Author" }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Paged");
+    await within(dialog).findByRole("option", { name: "Paged Book" });
+    expect(within(dialog).getByText("Books")).toBeInTheDocument();
+
+    // A leading > asks for Commands, and says so.
+    await user.clear(search);
+    await user.keyboard(">");
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        en("commandPalette.modes.commands")
+      )
+    );
+    await user.keyboard("Paged");
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("option", { name: "Paged Book" })).toBeNull()
+    );
+    expect(within(dialog).queryByText("Books")).toBeNull();
+
+    // Deleting the prefix goes back to Library Search, and says so.
+    await user.clear(search);
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        en("commandPalette.modes.library")
+      )
+    );
+    await user.keyboard("Paged");
+    expect(await within(dialog).findByRole("option", { name: "Paged Book" })).toBeInTheDocument();
+  });
+
+  it("Backspace on a lone > switches to Library Search instead of closing", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    expect(search).toHaveValue(COMMANDS_PREFIX);
+
+    await user.keyboard("{Backspace}");
+
+    // Still open, empty, and searching the Library.
+    expect(screen.getByRole("dialog", { name: PALETTE_NAME })).toBeInTheDocument();
+    expect(search).toHaveValue("");
+    expect(sectionOptions(dialog, "Pages").map(optionLabel)).toEqual([
+      "Open Chapter…",
+      "Go to Book…",
+      "Open Note…",
+      "Open Canvas…",
+    ]);
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        en("commandPalette.modes.library")
+      )
+    );
+  });
+
+  it("typing > inside a nested page leaves it for Commands mode", async () => {
+    await createNoteRow({ title: "Nested Note", bookId: null }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Open Note");
+    const page = await within(dialog).findByRole("option", { name: "Open Note…" });
+    await arrowToAndChoose(user, dialog, search, page);
+    expect(await within(dialog).findByText("Showing Open Note")).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("option").map(optionLabel)).toEqual(["Nested Note"]);
+
+    // > always means Commands, so it leaves the page instead of searching it.
+    await user.keyboard(">");
+    await waitFor(() => expect(within(dialog).queryByText("Showing Open Note")).toBeNull());
+    expect(search).toHaveValue(COMMANDS_PREFIX);
+    await waitFor(() => expect(sectionOptions(dialog, "Suggested").length).toBeGreaterThan(0));
+    expect(within(dialog).queryByRole("option", { name: "Nested Note" })).toBeNull();
+  });
+
+  it("lists recent Commands and Settings rows, then suggested Commands, with nothing typed", async () => {
+    useCommandPaletteRecentStore.setState({
+      keys: ["command:global.themeDark", "settingsRow:theme"],
+    });
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Dark", "Theme"]);
+    const suggested = sectionOptions(dialog, "Suggested").map(optionLabel);
+    expect(suggested.length).toBeGreaterThan(0);
+    expect(suggested).toContain("Create new book");
+    // Commands mode has no Library pages to browse.
+    expect(within(dialog).queryByRole("group", { name: "Pages" })).toBeNull();
+  });
+
+  it("lists recent Library items, then the four pages, with nothing typed", async () => {
+    const book = await createBookRow({ title: "Recent Book", authorName: "Author" }, "local");
+    useCommandPaletteRecentStore.setState({
+      keys: [`book:${book.id}`, "command:global.themeDark"],
+    });
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await waitFor(() =>
+      expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Recent Book"])
+    );
+    expect(sectionOptions(dialog, "Pages").map(optionLabel)).toEqual([
+      "Open Chapter…",
+      "Go to Book…",
+      "Open Note…",
+      "Open Canvas…",
+    ]);
+    // Library Search has no Commands to suggest.
+    expect(within(dialog).queryByRole("group", { name: "Suggested" })).toBeNull();
+  });
+
+  it("keeps one recent list, filtered per mode, and removes from it in both", async () => {
+    const note = await createNoteRow({ title: "Recent Note", bookId: null }, "local");
+    useCommandPaletteRecentStore.setState({
+      keys: ["command:global.themeDark", `note:${note.id}`],
+    });
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    // Commands mode shows only the Command of the two.
+    let dialog = await openPaletteWithF1(user);
+    await waitFor(() => expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Dark"]));
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
+
+    // Library Search shows only the Note; removing it leaves the Command.
+    dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await waitFor(() =>
+      expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Recent Note"])
+    );
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => expect(activeResultLabel(search)).toContain("Recent Note"));
+    await user.keyboard("{Shift>}{Delete}{/Shift}");
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull()
+    );
+    expect(useCommandPaletteRecentStore.getState().keys).toEqual(["command:global.themeDark"]);
+
+    // The Command's own mode still lists it, and removes it too.
+    await user.keyboard("{Escape}");
+    dialog = await openPaletteWithF1(user);
+    expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Dark"]);
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Shift>}{Delete}{/Shift}");
+    await waitFor(() => expect(useCommandPaletteRecentStore.getState().keys).toEqual([]));
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull()
+    );
+    expect(sectionOptions(dialog, "Suggested").length).toBeGreaterThan(0);
   });
 });
 

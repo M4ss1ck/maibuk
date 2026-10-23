@@ -264,6 +264,11 @@ export const COMMANDS = {
     defaults: [["F1"], ["Mod+Shift+p"]],
     web: [["F1"]],
   },
+  "global.searchLibrary": {
+    labelKey: "shortcuts.searchLibrary",
+    contexts: ["global"],
+    defaults: [["Mod+Alt+p"]],
+  },
   "commandPalette.removeRecent": {
     labelKey: "commandPalette.removeFromRecent",
     contexts: ["commandPalette"],
