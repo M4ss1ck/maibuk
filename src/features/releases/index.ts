@@ -1,16 +1,20 @@
 export {
   BUNDLED_RELEASES,
+  cachedBundledReleaseNotes,
   loadBundledReleaseNotes,
   releaseNotesLanguage,
 } from "@/features/releases/bundled";
-export { compareChangelogParity } from "@/features/releases/changelog-parity";
+export {
+  compareReleaseNotesParity,
+  releaseNotesFile,
+} from "@/features/releases/release-notes-parity";
 export { compareReleaseNumbers, isNewerRelease } from "@/features/releases/compare";
 export {
   checkForNewerReleases,
   fetchLocalizedReleaseNotes,
   installReleaseCheck,
   loadLocalizedNewerReleases,
-  localizedChangelogUrl,
+  localizedReleaseNotesUrl,
   newerReleasesFrom,
   RELEASE_CHECK_INTERVAL_MS,
   RELEASES_URL,

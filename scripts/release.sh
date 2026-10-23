@@ -9,16 +9,19 @@
 #   1. Loads optional config from .env (AI changelog settings).
 #   2. Ensures you are on a release/v<version> branch (creates it if needed).
 #   3. Bumps the version across package.json, Cargo.toml, Cargo.lock and tauri.conf.json.
-#   4. Generates a CHANGELOG.md section for commits since the last tag
+#   4. Generates an English Release Notes section for commits since the last tag
 #      (AI-assisted if configured, otherwise a grouped commit list) and
 #      translates it into every other app language's changelog file.
-#   5. Commits the bump + changelogs, creates an annotated tag, and pushes
-#      the release branch and the tag (the tag triggers the GitHub release workflow).
+#   5. Updates and commits every CHANGELOG*.md (CHANGELOG.md and each
+#      CHANGELOG.<locale>.md) together with the version bump, creates an
+#      annotated tag, and pushes the release branch and the tag (the tag
+#      triggers the GitHub release workflow).
 #   6. Prints the gh command that opens the release PR into BASE_BRANCH.
 #
-# AI changelog is optional for the English section: with no .env config it
-# falls back to a plain grouped commit list. Translations cannot fall back, so a
-# release needs a working provider; without one it stops before writing anything
+# The English section may still fall back to a grouped commit list without AI,
+# but translations need a working AI provider, so a release (dry run included)
+# stops before writing anything when no provider can translate. Every
+# CHANGELOG*.md is updated and committed; there is no English-only release
 # (ADR 0034: every Release ships every language).
 #
 # See .env.example and the "Releasing" section of README.md for details.

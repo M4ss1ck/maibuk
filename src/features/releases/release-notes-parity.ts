@@ -10,8 +10,12 @@ import type {
   ReleaseSection,
 } from "@/features/releases/release-notes";
 
-/** The changelog file a locale ships: `CHANGELOG.md` for English. */
-export function changelogFile(locale: string): string {
+/**
+ * The Release Notes file a locale ships: `CHANGELOG.md` for English, one
+ * `CHANGELOG.<locale>.md` per other language. The loader, this guard, and the
+ * raw URL a newer Release reads all name files through it.
+ */
+export function releaseNotesFile(locale: string): string {
   return locale === "en" ? "CHANGELOG.md" : `CHANGELOG.${locale}.md`;
 }
 
@@ -73,12 +77,12 @@ function compareSections(
  * list is parity. `locale` is the changelog's language ("es"), so the message
  * names the file the author would have to open.
  */
-export function compareChangelogParity(
+export function compareReleaseNotesParity(
   english: ParsedChangelog,
   translated: ParsedChangelog,
   locale: string
 ): string[] {
-  const file = changelogFile(locale);
+  const file = releaseNotesFile(locale);
   const differences: string[] = [];
 
   for (const problem of translated.problems) {

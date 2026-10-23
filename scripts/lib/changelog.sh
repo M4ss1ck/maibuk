@@ -378,14 +378,26 @@ changelog_files() {
     done
 }
 
-# Human-readable language name for the prompt. An unknown code stands for
+# Human-readable language name for the prompt. Node's Intl knows every code
+# the app ships; without node, or for a code it rejects, the code stands for
 # itself, which still names the target language unambiguously.
 changelog_language_name() {
-    case "$1" in
-        en) printf 'English\n' ;;
-        es) printf 'Spanish (español)\n' ;;
-        *) printf '%s\n' "$1" ;;
-    esac
+    local code="$1" name=""
+    if command -v node >/dev/null 2>&1; then
+        name="$(node -e '
+            try {
+                const name = new Intl.DisplayNames(["en"], { type: "language" }).of(process.argv[1]);
+                if (name) process.stdout.write(name);
+            } catch {
+                process.exit(1);
+            }
+        ' "$code" 2>/dev/null)" || name=""
+    fi
+    if [ -n "$name" ]; then
+        printf '%s\n' "$name"
+    else
+        printf '%s\n' "$code"
+    fi
 }
 
 # Prints "English<TAB>translation" for every UI term pair the glossary pins for

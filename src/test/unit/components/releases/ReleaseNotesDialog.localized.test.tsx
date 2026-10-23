@@ -7,9 +7,10 @@ import { act, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import { ReleaseNotesDialog } from "@/components/releases/ReleaseNotesDialog";
+import { loadBundledReleaseNotes } from "@/features/releases/bundled";
 import {
   checkForNewerReleases,
-  localizedChangelogUrl,
+  localizedReleaseNotesUrl,
   RELEASES_URL,
 } from "@/features/releases/release-check";
 import type { ReleaseNotes } from "@/features/releases/release-notes";
@@ -118,6 +119,20 @@ describe("Release Notes dialog in the app language", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders Spanish on the first render when its file is already loaded", async () => {
+    await loadBundledReleaseNotes("es");
+    await i18n.changeLanguage("es");
+
+    const dialog = renderOpenDialog();
+
+    // No `findBy` and no wait: the state starts from the parsed cache, so the
+    // English bullet is never in the DOM, not even for one render.
+    const latest = article(dialog, "0.15.2");
+    expect(within(latest).getByText(SPANISH)).toBeInTheDocument();
+    expect(within(latest).queryByText(ENGLISH)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(ENGLISH)).not.toBeInTheDocument();
+  });
+
   it("swaps the notes when the app language changes with the dialog open", async () => {
     const dialog = renderOpenDialog();
     expect(await within(article(dialog, "0.15.2")).findByText(ENGLISH)).toBeInTheDocument();
@@ -140,7 +155,7 @@ describe("Release Notes dialog in the app language", () => {
 });
 
 describe("Newer Releases in the app language", () => {
-  const CHANGELOG_ES = localizedChangelogUrl("v99.1.0", "es");
+  const CHANGELOG_ES = localizedReleaseNotesUrl("v99.1.0", "es");
 
   it("renders a newer Release's Spanish bullets read from the changelog at its tag", async () => {
     await i18n.changeLanguage("es");

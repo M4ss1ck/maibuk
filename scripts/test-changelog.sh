@@ -654,6 +654,11 @@ assert_eq "a language with no pairs yields nothing" \
 assert_eq "a missing glossary yields nothing" \
     "$(changelog_glossary_pairs "$WORK/no-glossary.md" es)" ""
 
+echo "changelog_language_name"
+assert_contains "es is named in English" "$(changelog_language_name es)" "Spanish"
+assert_eq "an unknown code stands for itself" "$(changelog_language_name zz)" "zz"
+assert_eq "an invalid code stands for itself" "$(changelog_language_name 'not a code')" "not a code"
+
 echo "changelog_structure_signature"
 EN_SECTION="$(cat <<'EOF'
 ### Added

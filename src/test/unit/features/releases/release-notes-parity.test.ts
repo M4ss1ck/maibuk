@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { changelogFile, compareChangelogParity } from "@/features/releases/changelog-parity";
+import { releaseNotesFile, compareReleaseNotesParity } from "@/features/releases/release-notes-parity";
 import { parseChangelog } from "@/features/releases/release-notes";
 
 const SOURCE = [
@@ -24,10 +24,10 @@ const SOURCE = [
 const ENGLISH = parseChangelog(SOURCE);
 
 function compare(translated: string, locale = "es"): string[] {
-  return compareChangelogParity(ENGLISH, parseChangelog(translated), locale);
+  return compareReleaseNotesParity(ENGLISH, parseChangelog(translated), locale);
 }
 
-describe("compareChangelogParity()", () => {
+describe("compareReleaseNotesParity()", () => {
   it("is silent for a translation that matches one to one", () => {
     expect(compare(SOURCE)).toEqual([]);
   });
@@ -89,8 +89,8 @@ describe("compareChangelogParity()", () => {
   });
 
   it("names the English file for English and the localized one otherwise", () => {
-    expect(changelogFile("en")).toBe("CHANGELOG.md");
-    expect(changelogFile("es")).toBe("CHANGELOG.es.md");
+    expect(releaseNotesFile("en")).toBe("CHANGELOG.md");
+    expect(releaseNotesFile("es")).toBe("CHANGELOG.es.md");
   });
 });
 
@@ -111,7 +111,7 @@ describe("the shipped changelogs", () => {
     const differences: string[] = [];
     for (const locale of locales) {
       if (locale === "en") continue;
-      const file = changelogFile(locale);
+      const file = releaseNotesFile(locale);
       let source: string;
       try {
         source = readFileSync(`${root}/${file}`, "utf8");
@@ -119,7 +119,7 @@ describe("the shipped changelogs", () => {
         differences.push(`${file} is missing; every app language needs its own changelog`);
         continue;
       }
-      differences.push(...compareChangelogParity(english, parseChangelog(source), locale));
+      differences.push(...compareReleaseNotesParity(english, parseChangelog(source), locale));
     }
     expect(differences).toEqual([]);
   });

@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { NewReleaseChip } from "@/components/releases/ReleaseBadge";
 import {
   BUNDLED_RELEASES,
+  cachedBundledReleaseNotes,
   loadBundledReleaseNotes,
   releaseNotesLanguage,
 } from "@/features/releases/bundled";
@@ -118,19 +119,29 @@ export function ReleaseNotesDialog() {
   // read straight from the hook and the loads below follow it.
   const language = i18n.language;
 
-  // English until the language's changelog file resolves; the loader never
-  // rejects and answers English for a language without a file.
-  const [bundledReleases, setBundledReleases] = useState<readonly ReleaseNotes[]>(BUNDLED_RELEASES);
+  // The dialog is mounted app-wide, so the language's own file loads at mount
+  // and on every language change, not when the author opens it. A loaded
+  // language renders from the parsed cache on the first render, so a
+  // non-English author never sees an English flash.
+  const [bundled, setBundled] = useState<{
+    language: string;
+    releases: readonly ReleaseNotes[];
+  }>(() => ({ language, releases: cachedBundledReleaseNotes(language) ?? BUNDLED_RELEASES }));
   useEffect(() => {
-    if (!isOpen) return;
     let current = true;
+    const cached = cachedBundledReleaseNotes(language);
+    if (cached) setBundled({ language, releases: cached });
     void loadBundledReleaseNotes(language).then((releases) => {
-      if (current) setBundledReleases(releases);
+      if (current) setBundled({ language, releases });
     });
     return () => {
       current = false;
     };
-  }, [isOpen, language]);
+  }, [language]);
+  const bundledReleases =
+    bundled.language === language
+      ? bundled.releases
+      : (cachedBundledReleaseNotes(language) ?? BUNDLED_RELEASES);
 
   // A language switch with the dialog open reads that language's notes for the
   // newer Releases; a language already read costs no request, and this never

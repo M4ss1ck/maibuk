@@ -1,4 +1,5 @@
 import changelog from "/CHANGELOG.md?raw";
+import { releaseNotesFile } from "@/features/releases/release-notes-parity";
 import { parseChangelog, type ReleaseNotes } from "@/features/releases/release-notes";
 
 /** The Release Notes this build shipped with, newest first. */
@@ -21,7 +22,11 @@ function loadersByLocale(): Map<string, () => Promise<string>> {
   const loaders = new Map<string, () => Promise<string>>();
   for (const [path, load] of Object.entries(LOCALIZED_CHANGELOGS)) {
     const locale = LOCALIZED_FILE.exec(path)?.[1];
-    if (locale) loaders.set(locale.toLowerCase(), load);
+    // The same rule names the file everywhere: this loader, the parity guard,
+    // and the raw URL a newer Release reads.
+    if (locale && path.slice(1) === releaseNotesFile(locale)) {
+      loaders.set(locale.toLowerCase(), load);
+    }
   }
   return loaders;
 }
@@ -32,6 +37,19 @@ const PARSED = new Map<string, readonly ReleaseNotes[]>();
 /** The base language the way `src/i18n.ts` reads it: "es-ES" -> "es". */
 export function releaseNotesLanguage(language: string | undefined): string {
   return (language ?? "").split("-")[0].trim().toLowerCase();
+}
+
+/**
+ * The bundled Release Notes already parsed for `language`, or undefined while
+ * its file is still loading. English, and a language with no file, is ready
+ * from the start, so the dialog can read it synchronously on its first render.
+ */
+export function cachedBundledReleaseNotes(
+  language: string
+): readonly ReleaseNotes[] | undefined {
+  const locale = releaseNotesLanguage(language);
+  if (locale === "en" || !LOADERS.has(locale)) return BUNDLED_RELEASES;
+  return PARSED.get(locale);
 }
 
 /**

@@ -1,7 +1,10 @@
 declare const __APP_VERSION__: string;
 
 export const APP_VERSION = __APP_VERSION__;
-export const DOWNLOAD_PAGE = "https://github.com/M4ss1ck/maibuk/releases";
+
+/** The one GitHub repository the app reads Releases from and sends authors to. */
+export const REPOSITORY = "M4ss1ck/maibuk";
+export const DOWNLOAD_PAGE = `https://github.com/${REPOSITORY}/releases`;
 
 export const CANVAS_TEXT_NODE_DEFAULT_WIDTH = 288;
 // Matches the Text Node's `min-h-24` (6rem). Used only to give React Flow a
