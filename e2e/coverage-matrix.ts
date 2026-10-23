@@ -1973,6 +1973,22 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "web-library-locked",
+    area: "library-data",
+    workflow:
+      "A second tab on the same web Library shows the full-screen locked message (localized) and never opens the Library; asserts: the locked heading, focus on Try again, the Books gallery absent in the second tab",
+    edges: [
+      "Try again while the other tab still holds the Library keeps the locked screen",
+      "The other tab leaves the Library; Try again opens it",
+    ],
+    terms: ["Library", "Book"],
+    shortcuts: [],
+    routes: ["/"],
+    fixture: "backupsPresent",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "backup-create-list",
     area: "library-data",
     workflow:

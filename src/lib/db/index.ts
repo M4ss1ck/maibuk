@@ -45,6 +45,16 @@ export async function getAuthorDatabase(): Promise<DatabaseAdapter> {
 /** Delays between attempts to open the Library; a busy file usually frees up within seconds. */
 export const DATABASE_OPEN_RETRY_DELAYS_MS = [250, 1000, 3000];
 
+/**
+ * Another tab holding the web Library is not a busy file: it will not free up
+ * on its own, and retrying would keep the author waiting instead of showing
+ * the locked screen with its Try again. The web adapter names the error, so
+ * the shared opener needs no platform import.
+ */
+function isLibraryLocked(error: unknown): boolean {
+  return error instanceof Error && error.name === "LibraryLockedError";
+}
+
 async function openAuthorDatabase(): Promise<DatabaseAdapter> {
   const dbPath = IS_TAURI ? "sqlite:maibuk.db" : "maibuk.db";
   for (let attempt = 0; ; attempt++) {
@@ -57,7 +67,7 @@ async function openAuthorDatabase(): Promise<DatabaseAdapter> {
     } catch (error) {
       const delay = DATABASE_OPEN_RETRY_DELAYS_MS[attempt];
       console.error(`[db] opening the Library failed (attempt ${attempt + 1})`, error);
-      if (delay === undefined) throw error;
+      if (delay === undefined || isLibraryLocked(error)) throw error;
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }

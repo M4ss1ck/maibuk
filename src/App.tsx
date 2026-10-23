@@ -15,6 +15,7 @@ import { Ephemeral } from "@/pages/Ephemeral";
 import { Embed } from "@/pages/Embed";
 import { PluginPage } from "@/pages/PluginPage";
 import { StartupRedirect } from "@/components/StartupRedirect";
+import { WebLibraryGate } from "@/components/library/WebLibraryGate";
 import { PathTracker } from "@/components/PathTracker";
 import { PluginCommands } from "@/components/plugins/PluginCommands";
 import { PluginChangeNotices } from "@/components/plugins/PluginChangeNotices";
@@ -37,7 +38,7 @@ import { installAutoSync } from "@/features/sync/auto-sync";
 import { installReleaseCheck } from "@/features/releases/release-check";
 import { installViewRefresh } from "@/features/sync/view-refresh";
 import { isEmbedPath } from "@/lib/embed";
-import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
+import { IS_ANDROID, IS_DESKTOP, IS_WEB } from "@/lib/platform";
 import { installAndroidBackHandler } from "@/lib/window/androidBack";
 import { installAndroidLifecycleHandler } from "@/lib/window/androidLifecycle";
 import { installWindowCloseHandler } from "@/lib/window/closeHandler";
@@ -112,7 +113,7 @@ function App() {
     return <Navigate to={CONFORMANCE_ROUTE} replace />;
   }
 
-  return (
+  const app = (
     <>
       <DeepLinkHandler />
       <AndroidBackNavigator />
@@ -162,6 +163,11 @@ function App() {
       </StartupRedirect>
     </>
   );
+
+  // The web Library's open result decides whether the app mounts at all
+  // (ADR 0035): a tab that does not own the Library gets the locked screen,
+  // and no store or write happens before the Library is open.
+  return IS_WEB ? <WebLibraryGate>{app}</WebLibraryGate> : app;
 }
 
 export default App;

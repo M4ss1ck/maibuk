@@ -35,6 +35,12 @@ interface Options {
   builtInPlugins: BuiltInPluginSeed[];
   /** The test installs a Plugin with none seeded; WebKit then needs a persistent context. */
   usesPluginDirectory: boolean;
+  /**
+   * A spec whose Library must survive a reload. WebKit has OPFS only in a
+   * persistent context, and an in-memory fallback Library is not kept, so the
+   * spec gets one there; every other engine keeps its normal context.
+   */
+  persistentContext: boolean;
   /** Set by the mac-platform project. */
   macPlatform: boolean;
 }
@@ -92,6 +98,7 @@ export const test = base.extend<Options & Fixtures>({
   pluginApprovals: [[], { option: true }],
   builtInPlugins: [[], { option: true }],
   usesPluginDirectory: [false, { option: true }],
+  persistentContext: [false, { option: true }],
   macPlatform: [false, { option: true }],
 
   mod: async ({ macPlatform }, use) => {
@@ -102,10 +109,21 @@ export const test = base.extend<Options & Fixtures>({
   // same hooks as the default one: the project's launch options, its and
   // `test.use`'s context options, tracing, and failure screenshots all apply.
   context: async (
-    { context, browserName, playwright, plugins, unapprovedPlugins, usesPluginDirectory },
+    {
+      context,
+      browserName,
+      playwright,
+      plugins,
+      unapprovedPlugins,
+      usesPluginDirectory,
+      persistentContext,
+    },
     use
   ) => {
-    if (!needsPersistentContext({ browserName, plugins, unapprovedPlugins, usesPluginDirectory })) {
+    const wantsPersistent =
+      needsPersistentContext({ browserName, plugins, unapprovedPlugins, usesPluginDirectory }) ||
+      (persistentContext && browserName === "webkit");
+    if (!wantsPersistent) {
       await use(context);
       return;
     }

@@ -2111,6 +2111,22 @@
     "body": "Tu trabajo sigue en este dispositivo. No se cambió ni se borró nada. Vuelve a intentarlo, o reinicia Maibuk si sigue fallando.",
     "retry": "Reintentar"
   },
+  "webLibrary": {
+    "locked": {
+      "title": "Maibuk está abierto en otra pestaña",
+      "body": "Tu biblioteca solo puede estar abierta en una pestaña a la vez. Cierra la otra pestaña para seguir escribiendo aquí; esta pestaña no la ha abierto.",
+      "tryAgain": "Reintentar"
+    },
+    "memory": {
+      "title": "Tu biblioteca no se conservará",
+      "body": "Este navegador no permite que Maibuk guarde tu biblioteca. Todo lo que escribas aquí se perderá al recargar o cerrar esta ventana."
+    },
+    "migrationFailed": {
+      "title": "No se pudo trasladar tu biblioteca",
+      "body": "Maibuk abrió tu biblioteca anterior tal como estaba, así que no se cambió nada. Se intentará trasladar de nuevo la próxima vez que abras Maibuk.",
+      "quota": "No hay suficiente espacio de almacenamiento para trasladar tu biblioteca. Libera espacio en este dispositivo y vuelve a abrir Maibuk. Tu biblioteca no se ha cambiado."
+    }
+  },
   "releases": {
     "title": "Novedades",
     "badge": "Maibuk {{release}}, Novedades",

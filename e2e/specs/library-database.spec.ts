@@ -8,7 +8,11 @@ import { expect, test } from "../support/test";
 // Database File and Reset (issue #213): Export and Import the SQL Database
 // File, and Reset the Library, all from Settings > Advanced by keyboard. The
 // web build downloads the file and reads one back through a file chooser.
-test.use({ library: "backupsPresent" });
+//
+// Reset must still be empty after the reload it does, so the Library has to
+// persist across that reload: WebKit gets its persistent context, the one
+// place it has OPFS, and an in-memory fallback never pretends to keep a Reset.
+test.use({ library: "backupsPresent", persistentContext: true });
 
 const INVALID_SQL = resolve(import.meta.dirname, "../fixtures/not-a-database.sql");
 const booksRow = (page: Page) => page.getByRole("grid", { name: "Books" }).getByRole("row");
