@@ -584,6 +584,21 @@ export function normaliseToUpsert(statement: string): string {
   return `INSERT INTO ${table} (${columns.join(", ")}) ${values.trim()} ON CONFLICT DO UPDATE SET ${updates}`;
 }
 
+/**
+ * Rebuilds the search index after a bulk write replaced or merged the Library.
+ * The index is derived data: the rebuild runs in the background, and its
+ * failure never turns a committed load into a failure. The import is dynamic
+ * because the index module reads the Library through this one.
+ */
+async function rebuildSearchIndexAfterBulkWrite(): Promise<void> {
+  try {
+    const { requestSearchRebuild } = await import("@/features/search/rebuild");
+    await requestSearchRebuild();
+  } catch (error) {
+    console.warn("[db] rebuilding the search index after a bulk write failed:", error);
+  }
+}
+
 export async function importDatabase(sqlContent: string): Promise<void> {
   // Pending editor text lands first; a failed save stops the load before anything changes.
   // A newer app's dump has tables and columns this one does not know.
@@ -618,5 +633,8 @@ export async function importDatabase(sqlContent: string): Promise<void> {
   }
 
   // The merged rows persisted; only a completed load announces it.
+  // The search index is derived data, like after a Restore: rebuild it from
+  // the merged rows in the background before declaring the load done.
+  await rebuildSearchIndexAfterBulkWrite();
   await emitChange({ scope: "all", reason: "databaseLoad" });
 }

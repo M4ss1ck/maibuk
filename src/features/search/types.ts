@@ -22,3 +22,64 @@ export interface IndexedSearchBlock extends SearchBlock {
   itemId: string;
   bookId: string | null;
 }
+
+/** The one call the palette, the Plugin API, and the tests make. */
+export interface SearchLibraryOptions {
+  query: string;
+  /** Match case is off by default; accents are always exact. */
+  matchCase?: boolean;
+  wholeWord?: boolean;
+  regex?: boolean;
+  /** Restricts results to these kinds. Absent means every kind. */
+  kinds?: readonly SearchItemKind[];
+  /**
+   * The Book open behind the palette. It never filters: it only breaks a tie
+   * after title, match count, and recency, so the author's current Book wins.
+   */
+  openBookId?: string | null;
+  limit?: number;
+  /** The `nextCursor` of the previous page. */
+  cursor?: string | null;
+}
+
+/** What one result points at, so the caller can open it. */
+export interface SearchResultIds {
+  itemId: string;
+  bookId: string | null;
+  /** Set for a Canvas result: the same id as `itemId`. */
+  canvasId?: string;
+  /** Set for a Canvas result: the card the snippet's block belongs to. */
+  cardId?: string;
+}
+
+/** The text around the best match, with the matches in it highlighted. */
+export interface SearchSnippet {
+  text: string;
+  /** `[start, end)` ranges inside `text`, in order. */
+  highlights: Array<[number, number]>;
+}
+
+/** One row of Library Search: one item, however many times it matched. */
+export interface SearchResult {
+  kind: SearchItemKind;
+  ids: SearchResultIds;
+  title: string;
+  /** Total matches across every block of the item. */
+  matchCount: number;
+  snippet: SearchSnippet;
+  /** The first match's offset inside the block the snippet came from. */
+  firstMatchOffset: number;
+}
+
+export interface SearchResults {
+  results: SearchResult[];
+  nextCursor?: string;
+}
+
+/** An invalid Regex returns an error result instead of throwing. */
+export interface SearchError {
+  error: "invalid-regex";
+  message: string;
+}
+
+export type SearchLibraryResult = SearchResults | SearchError;

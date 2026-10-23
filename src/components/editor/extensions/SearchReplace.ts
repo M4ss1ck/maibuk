@@ -2,32 +2,14 @@ import { Extension } from "@tiptap/core";
 import type { Node as ProsemirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { buildSearchRegExp, matchRanges, type SearchOptions } from "@/lib/search/expression";
+
+export type { SearchOptions } from "@/lib/search/expression";
+export { buildSearchRegExp } from "@/lib/search/expression";
 
 export interface SearchMatch {
   from: number;
   to: number;
-}
-
-export interface SearchOptions {
-  caseSensitive: boolean;
-  wholeWord: boolean;
-  regex: boolean;
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
- * Builds the RegExp used for searching. Throws if the user-supplied pattern is
- * an invalid regular expression, so callers can surface the error.
- */
-export function buildSearchRegExp(term: string, options: SearchOptions): RegExp {
-  let pattern = options.regex ? term : escapeRegExp(term);
-  if (options.wholeWord) {
-    pattern = `\\b${pattern}\\b`;
-  }
-  return new RegExp(pattern, options.caseSensitive ? "g" : "gi");
 }
 
 /** Scans the document for matches of `term`. Returns [] for empty or invalid input. */
@@ -48,18 +30,9 @@ export function findMatches(
 
   doc.descendants((node, pos) => {
     if (!node.isText || !node.text) return;
-    const text = node.text;
-    regex.lastIndex = 0;
-
-    for (let match = regex.exec(text); match !== null; match = regex.exec(text)) {
-      if (match[0].length > 0) {
-        const from = pos + match.index;
-        matches.push({ from, to: from + match[0].length });
-      }
-      // Guard against zero-length matches causing an infinite loop.
-      if (match.index === regex.lastIndex) {
-        regex.lastIndex++;
-      }
+    for (const range of matchRanges(regex, node.text)) {
+      const from = pos + range.start;
+      matches.push({ from, to: pos + range.end });
     }
   });
 

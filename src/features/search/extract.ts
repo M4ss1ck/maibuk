@@ -73,16 +73,39 @@ export function bookFieldBlocks(book: {
  * card it came from. Note references and edges carry no body text.
  */
 export function canvasBlocks(doc: unknown): SearchBlock[] {
+  return toSearchBlocks(
+    canvasCardBlocks(doc).map((entry) => entry.text),
+    "card"
+  );
+}
+
+interface CanvasCardBlock {
+  cardId: string;
+  text: string;
+}
+
+function canvasCardBlocks(doc: unknown): CanvasCardBlock[] {
   if (doc === null || typeof doc !== "object") return [];
   const nodes = (doc as { nodes?: unknown }).nodes;
   if (!Array.isArray(nodes)) return [];
 
-  const blocks: string[] = [];
+  const blocks: CanvasCardBlock[] = [];
   for (const node of nodes) {
     if (node === null || typeof node !== "object") continue;
-    const { kind, html } = node as { kind?: unknown; html?: unknown };
+    const { id, kind, html } = node as { id?: unknown; kind?: unknown; html?: unknown };
     if (kind !== "text" || typeof html !== "string") continue;
-    blocks.push(...htmlBlocks(html));
+    for (const text of htmlBlocks(html)) {
+      if (text.trim().length === 0) continue;
+      blocks.push({ cardId: typeof id === "string" ? id : "", text });
+    }
   }
-  return toSearchBlocks(blocks, "card");
+  return blocks;
+}
+
+/**
+ * For each block `canvasBlocks()` returns, in order, the card node's id. The
+ * two walk the Canvas the same way, so a block ordinal maps back to its card.
+ */
+export function canvasCardIdsByBlock(doc: unknown): string[] {
+  return canvasCardBlocks(doc).map((block) => block.cardId);
 }
