@@ -1192,7 +1192,7 @@
     "pageAnnouncement": "Showing {{page}}",
     "modes": {
       "commands": "Commands mode",
-      "library": "Search mode"
+      "library": "Search"
     },
     "pages": {
       "chapters": "Open Chapter…",

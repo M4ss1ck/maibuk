@@ -259,7 +259,7 @@ function OpenCommandPalette() {
   }, [page, t, announce]);
 
   // A mode change changes what the list holds, so it is announced last: the
-  // author hears "Commands mode" or "Search mode" over the count it caused.
+  // author hears "Commands mode" or "Search" over the count it caused.
   // The first mode is the one the palette opened in, already known from the
   // Command that opened it, so only a change speaks.
   useEffect(() => {

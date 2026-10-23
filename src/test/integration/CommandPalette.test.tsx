@@ -224,6 +224,8 @@ const { DEFAULT_SHORTCUT_SETTINGS } = await import("@/lib/shortcut-resolve");
 const { resetSyncEngineForTests } = await import("@/features/sync/sync-engine");
 const { resetAutoSyncForTests } = await import("@/features/sync/auto-sync");
 const { lastFocusedEditor } = await import("@/components/editor/editor-command-source");
+const { runCommand } = await import("@/lib/command-runner");
+const { defaultWholeLinePhrases } = await import("@/features/dictation/voice-commands");
 
 const en = (key: string, options?: Record<string, unknown>) =>
   (i18n.t as unknown as (k: string, o?: Record<string, unknown>) => string)(key, {
@@ -404,6 +406,24 @@ describe("Command Palette", () => {
     await settleOn("/");
 
     await user.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
+    const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
+    expect(paletteSearch(dialog)).toHaveFocus();
+    expect(paletteSearch(dialog)).toHaveValue(COMMANDS_PREFIX);
+  });
+
+  it("opens Commands mode with > typed when its Voice Command runs", async () => {
+    renderApp("/");
+    await settleOn("/");
+    // The Command answers to its label in the Dictation Language (ADR 0016);
+    // the phrase is what a speaker says, before the interpreter hands it over.
+    expect(defaultWholeLinePhrases("global.openCommandPalette", "en")).toContain(
+      "Open command palette"
+    );
+
+    await act(async () => {
+      expect(await runCommand("global.openCommandPalette", { source: "voice" })).toBe("ran");
+    });
+
     const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
     expect(paletteSearch(dialog)).toHaveFocus();
     expect(paletteSearch(dialog)).toHaveValue(COMMANDS_PREFIX);

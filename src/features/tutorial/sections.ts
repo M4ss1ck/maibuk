@@ -244,7 +244,11 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
     "decided, not built (ADR 0021); it draws inside a Plugin's own page, and there is no Plugin in the app to point at",
   Pane: "a keyboard concept: F6 and the arrow keys move between Panes, and a Tutorial run keeps the app inert, so no step can show focus travelling",
   "Command Palette":
-    "Opened from any screen with F1 or its button; the Tutorial runs keep the app inert and the palette refuses to open during a run, so no step can show it.",
+    "Opened from any screen with F1, Mod+Shift+P, or the Search Library Command; the Tutorial runs keep the app inert and the palette refuses to open during a run, so no step can show it.",
+  "Commands mode":
+    "One of the Command Palette's two modes: the Tutorial runs keep the app inert and the palette refuses to open during a run, so no step can show it.",
+  "Library Search":
+    "One of the Command Palette's two modes: the Tutorial runs keep the app inert and the palette refuses to open during a run, so no step can show it.",
   "Reset settings":
     "lives inside the Advanced settings section and runs a destructive confirm dialog; steps never open dialogs",
   Watermark:

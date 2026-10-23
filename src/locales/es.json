@@ -1191,7 +1191,7 @@
     "pageAnnouncement": "Mostrando {{page}}",
     "modes": {
       "commands": "Modo comandos",
-      "library": "Modo búsqueda"
+      "library": "Buscar"
     },
     "pages": {
       "chapters": "Abrir capítulo…",

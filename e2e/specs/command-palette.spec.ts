@@ -1,5 +1,6 @@
 // Command Palette (issue #353): find and run anything by name, keyboard-only.
-// Every test opens the palette with F1 and drives the search field, the
+// F1 and Mod+Shift+P open Commands mode with `>` typed; the Search Library
+// Command opens Library Search empty. Every test drives the search field, the
 // virtual-focus list, and the nested pages with the keyboard alone.
 
 import type { Page } from "@playwright/test";
@@ -23,12 +24,22 @@ async function openPalette(page: Page): Promise<void> {
   await expect(searchbox(page)).toBeFocused();
 }
 
+/** Opens the palette in Library Search, as Mod+Alt+P and the Search Library Command do. */
+async function openLibrarySearch(page: Page): Promise<void> {
+  await page.keyboard.press("Control+Alt+p");
+  await expect(dialog(page)).toBeVisible();
+  await expect(searchbox(page)).toBeFocused();
+  await expect(searchbox(page)).toHaveValue("");
+}
+
 /**
  * Types a query and waits for React Aria to settle the active result: it moves
  * the input's aria-activedescendant 500 ms after typing, so arrows pressed
  * before that land on a stale row.
  */
 async function search(page: Page, query: string): Promise<void> {
+  // A mode prefix is already typed; End keeps it and appends the query.
+  await page.keyboard.press("End");
   await page.keyboard.type(query);
   await expect.poll(async () => searchbox(page).getAttribute("aria-activedescendant")).toBeTruthy();
 }
@@ -58,7 +69,7 @@ async function arrowTo(page: Page, key: string, { max = 30 } = {}): Promise<void
 async function openBookEditorOnArrival(page: Page): Promise<void> {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
-  await openPalette(page);
+  await openLibrarySearch(page);
   await search(page, SEED_CHAPTERS[0].title);
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/book\/[^/]+$/);
@@ -68,7 +79,7 @@ async function openBookEditorOnArrival(page: Page): Promise<void> {
 async function openNoteViaPalette(page: Page): Promise<void> {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
-  await openPalette(page);
+  await openLibrarySearch(page);
   await search(page, SEED_NOTES.tideTables);
   await expect(option(page, SEED_NOTES.tideTables)).toBeVisible();
   await page.keyboard.press("Enter");
@@ -96,11 +107,10 @@ test.describe("Command Palette open and close @wf:command-palette", () => {
 
     await page.keyboard.press("F1");
     await expect(dialog(page)).toBeVisible();
-    // "light" matches a Command, a Book, and a Settings row: all three
+    // "light" matches the Light Command and the Theme Settings row: both
     // sections fit in one frame for the screenshot.
     await search(page, "light");
     await expect(option(page, "Light")).toBeVisible();
-    await expect(option(page, SEED_BOOK.title)).toBeVisible();
     await expect(option(page, "Theme")).toBeVisible();
     await expectTabContained(page, dialog(page));
     await capture(page, "palette-open");
@@ -109,6 +119,74 @@ test.describe("Command Palette open and close @wf:command-palette", () => {
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toBeHidden();
     await expect(trigger).toBeFocused();
+  });
+});
+
+test.describe("Command Palette Commands mode @wf:command-palette-commands-mode", () => {
+  test("F1 opens with > typed and finds a Command by name without listing a Book @sc:global.openCommandPalette", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openPalette(page);
+    // Commands mode is the field's own content: the prefix is already there.
+    await expect(searchbox(page)).toHaveValue(">");
+
+    await search(page, "light");
+    await expect(option(page, "Light")).toBeVisible();
+    await expect(option(page, "Theme")).toBeVisible();
+    // "light" is part of the seeded Book's title, yet Library items stay out.
+    await expect(option(page, SEED_BOOK.title)).toHaveCount(0);
+    await capture(page, "palette-commands-mode");
+  });
+});
+
+test.describe("Command Palette Library Search @wf:command-palette-library-search", () => {
+  test("Backspace on a lone > switches to Library Search instead of closing", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openPalette(page);
+    await expect(searchbox(page)).toHaveValue(">");
+    await page.keyboard.press("End");
+    await page.keyboard.press("Backspace");
+
+    // Still open, now empty, and listing Library pages rather than Commands.
+    await expect(dialog(page)).toBeVisible();
+    await expect(searchbox(page)).toBeFocused();
+    await expect(searchbox(page)).toHaveValue("");
+    await expect(section(page, "Pages").getByRole("option").first()).toHaveAccessibleName(
+      "Open Chapter…"
+    );
+    await expect(section(page, "Suggested")).toHaveCount(0);
+    await capture(page, "palette-library-search-empty");
+  });
+
+  test("typing a Book title without a prefix finds it and opens the Book", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openLibrarySearch(page);
+    await search(page, SEED_BOOK.title);
+    await expect(option(page, SEED_BOOK.title)).toBeVisible();
+    await capture(page, "palette-library-search-book");
+
+    await page.keyboard.press("Enter");
+    await expect(dialog(page)).toBeHidden();
+    await expect(page).toHaveURL(/\/book\/[^/]+$/);
+    await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
+  });
+
+  test("Mod+Alt+P opens Library Search empty @sc:global.searchLibrary", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openLibrarySearch(page);
+    await expect(searchbox(page)).toHaveValue("");
+    await expect(section(page, "Pages").getByRole("option")).toHaveCount(4);
+    // No Commands are suggested in Library Search.
+    await expect(section(page, "Suggested")).toHaveCount(0);
   });
 });
 
@@ -152,7 +230,7 @@ test.describe("Command Palette entities @wf:command-palette", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
-    await openPalette(page);
+    await openLibrarySearch(page);
     await search(page, SEED_CHAPTERS[2].title);
     await expect(option(page, SEED_CHAPTERS[2].title)).toBeVisible();
     await page.keyboard.press("Enter");
@@ -167,7 +245,7 @@ test.describe("Command Palette entities @wf:command-palette", () => {
   test("a nested page narrows with a chip and Backspace goes back", async ({ page }) => {
     await openBookEditorOnArrival(page);
 
-    await openPalette(page);
+    await openLibrarySearch(page);
     await search(page, "open chapter");
     await page.keyboard.press("Enter");
 
@@ -310,26 +388,25 @@ test.describe("Command Palette recent @wf:command-palette", () => {
   });
 });
 
-test.describe("Command Palette suggested @wf:command-palette", () => {
-  test("an empty query lists Suggested, and a suggested page narrows the list", async ({
+test.describe("Command Palette pages @wf:command-palette", () => {
+  test("an empty Library Search lists the four pages, and a page narrows the list", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
-    await openPalette(page);
-    const suggested = section(page, "Suggested").getByRole("option");
-    await expect(suggested.first()).toHaveAccessibleName("Go to Book…");
-    expect(await suggested.count()).toBeGreaterThanOrEqual(5);
-    expect(await suggested.count()).toBeLessThanOrEqual(10);
+    await openLibrarySearch(page);
+    const pages = section(page, "Pages").getByRole("option");
+    await expect(pages.first()).toHaveAccessibleName("Open Chapter…");
+    await expect(pages).toHaveCount(4);
     // The last row sits whole inside the list, not cut by its bottom edge.
     const list = dialog(page).getByRole("listbox");
     const listBox = await list.boundingBox();
-    const lastBox = await suggested.last().boundingBox();
+    const lastBox = await pages.last().boundingBox();
     expect(listBox && lastBox && lastBox.y + lastBox.height <= listBox.y + listBox.height).toBe(
       true
     );
-    await capture(page, "palette-suggested");
+    await capture(page, "palette-library-pages");
 
     await arrowTo(page, "page:books");
     await page.keyboard.press("Enter");
