@@ -42,6 +42,7 @@ import { installAndroidBackHandler } from "@/lib/window/androidBack";
 import { installAndroidLifecycleHandler } from "@/lib/window/androidLifecycle";
 import { installWindowCloseHandler } from "@/lib/window/closeHandler";
 import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
+import { installFocusReturn } from "@/lib/window/focusReturn";
 
 /**
  * The test-only Plugin conformance route (#447, D3). `VITE_PLUGIN_CONFORMANCE`
@@ -76,6 +77,9 @@ function App() {
   // Plain text fields register as Dictation targets while focused, for the app
   // lifetime, independent of whatever else mounts.
   useEffect(() => installDictationFieldTracker(), []);
+
+  // Focus the browser hands back when the window returns shows no focus ring.
+  useEffect(() => installFocusReturn(), []);
 
   useEffect(() => {
     if (embedMode) return;
