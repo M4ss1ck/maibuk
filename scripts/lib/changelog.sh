@@ -15,6 +15,11 @@
 # Also reads and writes the changelog file itself: changelog_latest_release_body
 # feeds the GitHub Release body (.github/workflows/release.yml) and
 # changelog_insert_release adds a new Release section to a file.
+#
+# Finally it translates a finished English section into every other app
+# language (ADR 0034), one changelog file per language. A translation that
+# cannot be produced fails the release before anything is written: there is no
+# English-only release.
 
 # Group raw commits by Conventional Commit prefix. Used as the AI input and as
 # the no-AI fallback output.
@@ -237,10 +242,14 @@ call_opencode_cli() {
 }
 
 # Fallback for when OpenCode Go fails (quota, outage, bad reply): try Zen's free
-# models one by one until one returns a real changelog section. No time limit:
-# free models can be slow, so every attempt logs before and after instead.
+# models one by one until one returns a reply the caller accepts. No time limit:
+# free models can be slow, so every attempt logs before and after.
+# Args: prompt, [accept function]. The accept function gets the raw reply and
+# decides whether it is usable; it defaults to is_changelog_section, and the
+# translation path passes one that also compares the structure with English.
 generate_with_free_models() {
-    local prompt="$1" models model result started attempt=0 total found
+    local prompt="$1" accept="${2:-is_changelog_section}"
+    local models model result started attempt=0 total found
     if ! command -v opencode >/dev/null 2>&1; then
         print_warning "AI changelog: opencode CLI not found; cannot try the free models." >&2
         return 1
@@ -261,12 +270,12 @@ generate_with_free_models() {
         started=$SECONDS
         # On failure call_opencode_cli has already logged why and how long.
         result="$(call_opencode_cli "$model" "$prompt")" || continue
-        if is_changelog_section "$result"; then
+        if "$accept" "$result"; then
             print_status "AI changelog: written by $model (OpenCode Zen, free) in $((SECONDS - started))s." >&2
             printf '%s' "$result"
             return 0
         fi
-        print_warning "AI changelog: $model replied without a '### ' section after $((SECONDS - started))s." >&2
+        print_warning "AI changelog: $model replied with an unusable section after $((SECONDS - started))s." >&2
     done <<< "$models"
     return 1
 }
@@ -325,6 +334,249 @@ generate_changelog() {
     fi
 
     generate_fallback_changelog "$range"
+}
+
+# --- Localized Release Notes (ADR 0034) ------------------------------------
+#
+# Every Release ships every app language: the finished English section is
+# translated one to one into each other language, and each language keeps its
+# own changelog file after its own preamble. The translated files are never
+# created here; a missing one is an error, since its header is hand-written.
+
+# The app languages live where the app's translations do; UI term pairs come
+# from the glossary's `_UI_` lines.
+CHANGELOG_LOCALES_DIR="${CHANGELOG_LOCALES_DIR:-src/locales}"
+CHANGELOG_GLOSSARY="${CHANGELOG_GLOSSARY:-GLOSSARY.md}"
+
+# Every app language that is not English, one per line, in file order.
+changelog_languages() {
+    local dir="${1:-$CHANGELOG_LOCALES_DIR}" file
+    for file in "$dir"/*.json; do
+        [ -f "$file" ] || continue
+        file="${file##*/}"
+        file="${file%.json}"
+        [ "$file" = "en" ] && continue
+        printf '%s\n' "$file"
+    done | sort
+}
+
+# The changelog file a language ships: CHANGELOG.md for English.
+changelog_file() {
+    if [ "$1" = "en" ]; then
+        printf 'CHANGELOG.md\n'
+    else
+        printf 'CHANGELOG.%s.md\n' "$1"
+    fi
+}
+
+# Every changelog file a Release touches: English first, then each language.
+changelog_files() {
+    local locale
+    changelog_file en
+    for locale in $(changelog_languages); do
+        changelog_file "$locale"
+    done
+}
+
+# Human-readable language name for the prompt. An unknown code stands for
+# itself, which still names the target language unambiguously.
+changelog_language_name() {
+    case "$1" in
+        en) printf 'English\n' ;;
+        es) printf 'Spanish (español)\n' ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
+# Prints "English<TAB>translation" for every UI term pair the glossary pins for
+# this language, in file order. A `_UI_` line holds one or more
+# "en \"...\" / es \"...\"" groups separated by ";"; a group missing either
+# side is skipped, and lists are paired by position. Nothing else on the line
+# (a note after the labels, a "(known mismatch)" marker) is read.
+changelog_glossary_pairs() {
+    local glossary="${1:-$CHANGELOG_GLOSSARY}" locale="$2"
+    [ -f "$glossary" ] || return 0
+    awk -v lang="$locale" '
+        function strings(text,    out, s) {
+            out = ""
+            while (match(text, /"[^"]*"/)) {
+                s = substr(text, RSTART + 1, RLENGTH - 2)
+                out = out (out == "" ? "" : "\001") s
+                text = substr(text, RSTART + RLENGTH)
+            }
+            return out
+        }
+        /^_UI_: / {
+            groups = split(substr($0, 7), parts, ";")
+            for (g = 1; g <= groups; g++) {
+                group = parts[g]
+                en_at = index(group, "en \"")
+                lg_at = index(group, lang " \"")
+                if (en_at == 0 || lg_at == 0) continue
+                # Each side stops where the other starts, so quoted labels
+                # never leak into the other language list.
+                if (en_at < lg_at) {
+                    en_text = substr(group, en_at, lg_at - en_at)
+                    lg_text = substr(group, lg_at)
+                } else {
+                    lg_text = substr(group, lg_at, en_at - lg_at)
+                    en_text = substr(group, en_at)
+                }
+                en_list = strings(en_text)
+                lg_list = strings(lg_text)
+                if (en_list == "" || lg_list == "") continue
+                n_en = split(en_list, ens, "\001")
+                n_lg = split(lg_list, lgs, "\001")
+                for (i = 1; i <= n_en && i <= n_lg; i++)
+                    printf "%s\t%s\n", ens[i], lgs[i]
+            }
+        }
+    ' "$glossary"
+}
+
+# The shape the parity guard compares: every "### Kind" with its item count, in
+# order. Two sections of the same kind stay separate, so a repetition cannot
+# cancel out.
+changelog_structure_signature() {
+    printf '%s\n' "$1" | awk '
+        /^### / {
+            if (seen) print kind "\t" count
+            kind = substr($0, 5); count = 0; seen = 1; next
+        }
+        /^- / { count++ }
+        END { if (seen) print kind "\t" count }
+    '
+}
+
+# Whether a provider's reply is the English section's translation: after the
+# same extraction the generated section goes through, its kinds and item counts
+# must equal the English ones. Reads CHANGELOG_ENGLISH_STRUCTURE, set by
+# translate_changelog so the accept callback can compare across the provider
+# chain's subshells.
+changelog_translation_ok() {
+    local cleaned
+    [ -n "${CHANGELOG_ENGLISH_STRUCTURE:-}" ] || return 1
+    cleaned="$(extract_changelog_section "$1")"
+    [ -n "$cleaned" ] || return 1
+    [ "$(changelog_structure_signature "$cleaned")" = "$CHANGELOG_ENGLISH_STRUCTURE" ]
+}
+
+# Build the prompt that translates one Release section into one language. The
+# glossary pairs carry the shipped UI labels, so a translated bullet uses the
+# same words as the screen it describes.
+build_translation_prompt() {
+    local english="$1" locale="$2" language pairs
+    language="$(changelog_language_name "$locale")"
+    pairs="$(changelog_glossary_pairs "$CHANGELOG_GLOSSARY" "$locale" |
+        awk -F '\t' 'NF >= 2 { printf "- \"%s\" -> \"%s\"\n", $1, $2 }')"
+    [ -z "$pairs" ] && pairs="- (none recorded)"
+    cat <<EOF
+You are translating the Release Notes for version $VERSION of "Maibuk", a desktop
+writing app, from English into $language. Translate the section below and
+nothing else.
+
+Rules:
+- Keep every "### Kind" line unchanged; do not translate the section headings.
+- Keep backticked code and every link target unchanged.
+- Output exactly one translated bullet for every English bullet, in the same order.
+- Keep the same sections in the same order as the English section.
+- Do not add prose, notes or code fences before or after the sections.
+
+UI term pairs (English -> target language), use the translated term:
+$pairs
+
+English section:
+$english
+EOF
+}
+
+# Tries the configured provider chain in order — OpenCode Go, then OpenCode
+# Zen's free models (or the single `openai` provider) — until the accept
+# function takes a reply. Args: prompt, accept function. Prints the accepted
+# reply. The accept function only sees the reply; translators set
+# CHANGELOG_ENGLISH_STRUCTURE before calling.
+generate_with_provider_chain() {
+    local prompt="$1" accept="$2" provider="${CHANGELOG_AI_PROVIDER:-}" result
+    case "$provider" in
+        opencode)
+            result="$(generate_with_opencode "$prompt")" || result=""
+            if "$accept" "$result"; then
+                printf '%s' "$result"
+                return 0
+            fi
+            [ -n "$result" ] &&
+                print_warning "AI changelog: OpenCode Go replied with a section that does not match; trying the free models." >&2
+            result="$(generate_with_free_models "$prompt" "$accept")" || result=""
+            if "$accept" "$result"; then
+                printf '%s' "$result"
+                return 0
+            fi
+            ;;
+        openai)
+            result="$(generate_with_openai "$prompt")" || result=""
+            if "$accept" "$result"; then
+                printf '%s' "$result"
+                return 0
+            fi
+            ;;
+        "")
+            print_warning "AI changelog: no CHANGELOG_AI_PROVIDER is configured; cannot translate." >&2
+            ;;
+        *)
+            print_warning "Unknown CHANGELOG_AI_PROVIDER '$provider'; cannot translate." >&2
+            ;;
+    esac
+    return 1
+}
+
+# Translates one English section into one language. Prints the cleaned
+# translated section, or returns non-zero when no provider produced a reply
+# with the English structure.
+translate_changelog() {
+    local english="$1" locale="$2" prompt reply
+    prompt="$(build_translation_prompt "$english" "$locale")"
+    CHANGELOG_ENGLISH_STRUCTURE="$(changelog_structure_signature "$english")"
+    print_status "AI changelog: translating into '$locale'..." >&2
+    reply="$(generate_with_provider_chain "$prompt" changelog_translation_ok)" || return 1
+    extract_changelog_section "$reply"
+}
+
+# Translates the English section into every other app language and writes each
+# translated body to <dir>/<locale>. Nothing is written to the repo, so a
+# failure leaves it untouched. Fails, naming the language, when that language's
+# changelog file is missing (checked before any AI call) or when every provider
+# failed for it.
+# Args: English section, output dir.
+translate_changelog_all() {
+    local english="$1" dir="$2" locale languages translated
+    languages="$(changelog_languages)"
+    if [ -z "$languages" ]; then
+        print_warning "No app language other than English; nothing to translate." >&2
+        return 0
+    fi
+    for locale in $languages; do
+        if [ ! -f "$(changelog_file "$locale")" ]; then
+            print_warning "Missing changelog file $(changelog_file "$locale") for language '$locale'. A translated changelog is never created; add it (or remove the locale) first." >&2
+            return 1
+        fi
+    done
+    for locale in $languages; do
+        if ! translated="$(translate_changelog "$english" "$locale")"; then
+            print_warning "Could not translate the Release Notes into '$locale': every AI provider failed or replied with a different structure." >&2
+            return 1
+        fi
+        printf '%s\n' "$translated" > "$dir/$locale"
+    done
+}
+
+# Prints the translated entries for the dry run, each under its language code.
+# Args: translations dir, version, date.
+changelog_print_translations() {
+    local dir="$1" version="$2" date="$3" locale
+    for locale in $(changelog_languages); do
+        printf '\n[%s]\n\n%s\n' "$locale" \
+            "## [$version] - $date"$'\n\n'"$(cat "$dir/$locale")"
+    done
 }
 
 # --- The changelog file ----------------------------------------------------
@@ -405,4 +657,17 @@ changelog_insert_release() {
     } >> "$tmp"
 
     mv "$tmp" "$file"
+}
+
+# Inserts the English Release and every translated one into its language's
+# changelog file, after each file's own preamble. Translated files never get the
+# default header: they must already exist.
+# Args: translations dir, version, date, English section.
+changelog_insert_releases() {
+    local dir="$1" version="$2" date="$3" english="$4" locale entry
+    changelog_insert_release "$(changelog_file en)" "## [$version] - $date"$'\n\n'"$english"
+    for locale in $(changelog_languages); do
+        entry="$(cat "$dir/$locale")"
+        changelog_insert_release "$(changelog_file "$locale")" "## [$version] - $date"$'\n\n'"$entry"
+    done
 }
