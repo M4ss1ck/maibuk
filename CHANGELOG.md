@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1] - 2026-10-22
+
+### Added
+- Show a warning marker and reason for Stopped Plugins in the sidebar on desktop and mobile
+- Add a Stopped Plugin panel with the reason, Try again, and Review in Settings actions
+- Keep refused enabled Plugins’ saved sidebar entries marked for the next launch
+- Show the time of day for notes edited today in sidebar rows, with the full edit date on hover and as the focused row description
+
+### Changed
+- Label the Link dialog’s internal targets as “In Maibuk” instead of “In this book”
+
+### Fixed
+- Prevent restored window focus from showing keyboard focus rings after Alt+Tab, taskbar clicks, or unminimizing when using the mouse
+- Delete a Book’s or Chapter’s dependents together with it on every platform, including links, EPUB metadata, styles, metadata, assets, and chapters
+- Prevent stale reads from reordering the Notes Gallery, Library, and Canvas galleries
+- Show enabled Plugins’ sidebar entries in the first frame instead of waiting for launch sync or session checks
+
 ## [0.15.0] - 2026-10-22
 
 ### Changed
