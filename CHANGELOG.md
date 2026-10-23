@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.2] - 2026-10-23
+
+### Changed
+- Startup screen uses the selected theme from the first frame, including a persisted boot theme snapshot and localized loading status
+- Desktop window opens on the theme background instead of white
+
+### Fixed
+- Main window appears only after its page loads, with a fallback, preventing a white flash on WebKitGTK
+- Embedded views apply their own theme on the first frame and stale entrance captures expire
+
 ## [0.15.1] - 2026-10-22
 
 ### Added
