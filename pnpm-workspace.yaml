@@ -3,6 +3,8 @@ allowBuilds:
   esbuild: true
 onlyBuiltDependencies:
   - esbuild
+patchedDependencies:
+  epub-gen-memory@1.1.2: patches/epub-gen-memory@1.1.2.patch
 peerDependencyRules:
   # i18next types only; checked clean under TypeScript 7.
   allowedVersions:

@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  epub-gen-memory@1.1.2: 50a39de08ff8d6d65199e93965e32d0b919ac2b975cc09b6a744a45ef88a77a9
+
 importers:
 
   .:
@@ -202,7 +205,7 @@ importers:
         version: 0.45.1(@types/sql.js@1.4.9)(sql.js@1.13.0)
       epub-gen-memory:
         specifier: ^1.1.2
-        version: 1.1.2
+        version: 1.1.2(patch_hash=50a39de08ff8d6d65199e93965e32d0b919ac2b975cc09b6a744a45ef88a77a9)
       es-module-lexer:
         specifier: 1.7.0
         version: 1.7.0
@@ -5688,7 +5691,7 @@ snapshots:
   '@types/sql.js@1.4.9':
     dependencies:
       '@types/emscripten': 1.41.5
-      '@types/node': 25.0.10
+      '@types/node': 22.20.4
     optional: true
 
   '@types/tough-cookie@4.0.5': {}
@@ -6213,7 +6216,7 @@ snapshots:
 
   entities@6.0.1: {}
 
-  epub-gen-memory@1.1.2:
+  epub-gen-memory@1.1.2(patch_hash=50a39de08ff8d6d65199e93965e32d0b919ac2b975cc09b6a744a45ef88a77a9):
     dependencies:
       abort-controller: 3.0.0
       css-select: 4.3.0

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createMemoryDatabase } from "@/lib/db/memory-database";
 
 describe("createMemoryDatabase()", () => {
@@ -36,5 +36,19 @@ describe("createMemoryDatabase()", () => {
     await expect(
       db.select("SELECT x FROM folded WHERE folded MATCH 'cancion'")
     ).resolves.toEqual([{ x: "canción del faro" }]);
+  });
+
+  it("opens after the EPUB exporter has loaded, which once replaced SharedArrayBuffer", async () => {
+    // epub-gen-memory's browser bundle assigned a plain object to
+    // window.SharedArrayBuffer; SQLite's bootstrap then threw on its
+    // `instanceof` check and no Tutorial Library could open (#646).
+    const real = globalThis.SharedArrayBuffer;
+    await import("epub-gen-memory/bundle");
+    expect(globalThis.SharedArrayBuffer).toBe(real);
+
+    vi.resetModules();
+    const fresh = await import("@/lib/db/memory-database");
+    const db = await fresh.createMemoryDatabase();
+    await expect(db.select("SELECT 1 AS one")).resolves.toEqual([{ one: 1 }]);
   });
 });

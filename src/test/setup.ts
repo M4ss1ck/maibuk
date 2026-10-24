@@ -37,20 +37,6 @@ beforeEach(({ task }) => {
 // This setup is for the jsdom suites. A `// @vitest-environment node` suite
 // (the browser-free E2E coverage guard) has no DOM, so skip the polyfills.
 if (typeof window !== "undefined") {
-  // `epub-gen-memory`'s browser bundle runs `window.SharedArrayBuffer =
-  // { prototype: { byteLength: 0 } }` when it loads. The official SQLite WASM
-  // build uses the global as an `instanceof` target while it bootstraps, so
-  // the stub makes every in-memory Library fail to open. Keep the real
-  // constructor readable no matter what a bundle assigns.
-  if (typeof globalThis.SharedArrayBuffer === "function") {
-    const SharedArrayBufferConstructor = globalThis.SharedArrayBuffer;
-    Object.defineProperty(globalThis, "SharedArrayBuffer", {
-      configurable: true,
-      get: () => SharedArrayBufferConstructor,
-      set: () => {},
-    });
-  }
-
   // Polyfill getClientRects for TipTap/ProseMirror in jsdom
   // ProseMirror calls this during scrollToSelection / dispatch, which crashes in jsdom
   if (typeof Element.prototype.getClientRects !== "function") {
