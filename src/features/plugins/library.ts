@@ -1,6 +1,6 @@
 /**
  * The Library reads the Plugin API serves (ADR 0022): Books, Chapters by Book,
- * Notes, and Canvases. Every read goes to the Library directly; nothing is
+ * Notes, Canvases, and Library Search (#641). Every read goes to the Library directly; nothing is
  * published to a store, and nothing but plain text and sanitized HTML crosses
  * the API. Chapters report their containing Book as their Change entity, so a
  * reader that wants Chapter edits subscribes to `library.changed` and pulls.
@@ -35,12 +35,16 @@ import { countWords } from "@/features/metrics/word-count";
 import { normalizeNoteTags } from "@/features/notes/tags";
 import { createNoteRow, deleteNoteRow, updateNoteRow } from "@/features/notes/write";
 import type {
+  PluginApiInput,
+  PluginApiOutput,
   PluginBook,
   PluginCanvasSummary,
   PluginChapterSummary,
   PluginContent,
   PluginNoteSummary,
 } from "@/features/plugins/types";
+import { DEFAULT_SEARCH_LIMIT, searchLibrary } from "@/features/search/search";
+import type { SearchResult } from "@/features/search/types";
 import { PendingEditsFlushError, flushPendingEdits } from "@/features/sync/pending-edits";
 import {
   TutorialIdLeakError,
@@ -210,6 +214,120 @@ export async function getPluginCanvas(canvasId: string): Promise<PluginCanvasSum
   const db = await getDatabase();
   const rows = await db.select<Row[]>("SELECT * FROM canvases WHERE id = ?", [canvasId]);
   return rows.length > 0 ? toCanvasSummary(rows[0]) : null;
+}
+
+/** One `library.search` row, with the reference the matching get call takes. */
+type PluginSearchResult = Extract<
+  PluginApiOutput<"library.search">,
+  { results: Array<unknown> }
+>["results"][number];
+
+/** A search hit as the `library.search` row serves it: snippet offsets as ranges. */
+function toPluginSearchResult(result: SearchResult): PluginSearchResult {
+  const snippet = {
+    text: result.snippet.text,
+    highlights: result.snippet.highlights.map(([start, end]) => ({ from: start, to: end })),
+  };
+  const base = {
+    title: result.title,
+    snippet,
+    firstMatchOffset: result.firstMatchOffset,
+    matchCount: result.matchCount,
+  };
+  switch (result.kind) {
+    case "book":
+      return { kind: "book", bookId: result.ids.itemId, ...base };
+    case "chapter": {
+      // Chapters always belong to a Book; a null here means the index row is
+      // corrupt, and the Plugin sees a host failure rather than a bare id.
+      if (result.ids.bookId === null) {
+        throw new PluginApiError({
+          code: "internal-error",
+          message: `Chapter ${result.ids.itemId} has no Book`,
+        });
+      }
+      return { kind: "chapter", chapterId: result.ids.itemId, bookId: result.ids.bookId, ...base };
+    }
+    case "note":
+      return { kind: "note", noteId: result.ids.itemId, bookId: result.ids.bookId, ...base };
+    case "canvas":
+      return {
+        kind: "canvas",
+        canvasId: result.ids.itemId,
+        ...(result.ids.cardId === undefined ? {} : { cardId: result.ids.cardId }),
+        ...base,
+      };
+  }
+}
+
+/** Whether a search hit belongs to the filtered Book. Canvases carry no Book. */
+function matchesSearchBook(result: SearchResult, bookId: string): boolean {
+  switch (result.kind) {
+    case "book":
+      return result.ids.itemId === bookId;
+    case "chapter":
+    case "note":
+      return result.ids.bookId === bookId;
+    case "canvas":
+      return false;
+  }
+}
+
+/**
+ * Searches the Library's text for the `library.search` row (#641): the same
+ * query and switches as Library Search, through its one public function, with
+ * item references the matching `library.*.get` call takes. An invalid Regex
+ * comes back as the search module's error result, never a host throw. A
+ * `bookId` filter is applied over consecutive search pages, each fetched for
+ * exactly the remaining slots so a page never skips a hit it already read: a
+ * filtered page may hold fewer than `limit` results, and the Plugin follows
+ * `nextCursor` until it is absent.
+ */
+export async function searchPluginLibrary(
+  input: PluginApiInput<"library.search">
+): Promise<PluginApiOutput<"library.search">> {
+  const db = await getDatabase();
+  const limit = input.limit ?? DEFAULT_SEARCH_LIMIT;
+  const options = {
+    query: input.query,
+    matchCase: input.matchCase ?? false,
+    wholeWord: input.wholeWord ?? false,
+    regex: input.regex ?? false,
+    ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
+    limit,
+  };
+
+  if (input.bookId === undefined) {
+    const result = await searchLibrary(db, { ...options, cursor: input.cursor ?? undefined });
+    if ("error" in result) return result;
+    return {
+      results: result.results.map(toPluginSearchResult),
+      ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
+    };
+  }
+
+  const bookId = input.bookId;
+  const collected: PluginSearchResult[] = [];
+  let cursor = input.cursor ?? undefined;
+  for (;;) {
+    const page = await searchLibrary(db, { ...options, limit: limit - collected.length, cursor });
+    if ("error" in page) return page;
+    for (const item of page.results) {
+      if (matchesSearchBook(item, bookId)) collected.push(toPluginSearchResult(item));
+      if (collected.length >= limit) break;
+    }
+    // Every hit of the fetched page is either returned or discarded as
+    // another Book's, so resuming after the page skips nothing.
+    if (collected.length >= limit || page.nextCursor === undefined) {
+      return {
+        results: collected,
+        ...(collected.length >= limit && page.nextCursor !== undefined
+          ? { nextCursor: page.nextCursor }
+          : {}),
+      };
+    }
+    cursor = page.nextCursor;
+  }
 }
 
 // Library writes (#452). A fragment is plain text or an HTML fragment the host

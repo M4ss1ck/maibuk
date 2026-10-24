@@ -16,7 +16,7 @@ import { CHAPTER_STATUSES, CHAPTER_TYPES } from "@/features/chapters/types";
 import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.7";
+export const PLUGIN_API_VERSION = "0.1.8";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -109,6 +109,55 @@ const range = z.strictObject({
   to: z.int().min(0),
 });
 
+/** The text around a search hit, with the matches in it highlighted. */
+const searchSnippet = z.strictObject({
+  text: z.string(),
+  highlights: z.array(range).describe("[from, to) ranges inside text, in order."),
+});
+
+/** The fields every `library.search` result carries, whatever its kind. */
+const searchResultBase = {
+  title: z.string(),
+  snippet: searchSnippet,
+  firstMatchOffset: z
+    .int()
+    .min(0)
+    .describe("The first match's offset inside the block the snippet came from."),
+  matchCount: z.int().min(1).describe("Total matches across every block of the item."),
+};
+
+/**
+ * One `library.search` row: the item's kind with the reference the matching
+ * `library.*.get` method takes (a Chapter also names its Book; a Note names
+ * its Book, null when Unfiled; a Canvas names the snippet's card when the hit
+ * is in a card), so a Plugin passes the reference straight to the get call.
+ */
+const searchResult = z.union([
+  z.strictObject({
+    kind: z.literal("book"),
+    bookId: id.describe("Pass to library.books.get."),
+    ...searchResultBase,
+  }),
+  z.strictObject({
+    kind: z.literal("chapter"),
+    chapterId: id.describe("Pass to library.chapters.get."),
+    bookId: id,
+    ...searchResultBase,
+  }),
+  z.strictObject({
+    kind: z.literal("note"),
+    noteId: id.describe("Pass to library.notes.get."),
+    bookId: id.nullable().describe("Null when the Note is Unfiled."),
+    ...searchResultBase,
+  }),
+  z.strictObject({
+    kind: z.literal("canvas"),
+    canvasId: id.describe("Pass to library.canvases.get."),
+    cardId: id.optional().describe("The card the snippet came from; absent for a title hit."),
+    ...searchResultBase,
+  }),
+]);
+
 const fragment = z
   .union([
     z.strictObject({ text: z.string() }),
@@ -192,6 +241,35 @@ export const PLUGIN_API_TABLE = [
     description: "Reads one Canvas's metadata, or null when it does not exist.",
     input: z.strictObject({ canvasId: id }),
     output: canvasSummary.nullable(),
+    ...libraryRead,
+  }),
+  defineApiRow({
+    id: "library.search",
+    description:
+      "Searches the Library's text with the same query and switches as Library Search: one row per matching item with a snippet, match counts, and a cursor for the next page. An invalid Regex comes back as an invalid-regex error, never a refusal. When bookId is given, only that Book's items come back and a page may hold fewer than limit results; follow nextCursor until it is absent. Canvases carry no Book, so a bookId filter never returns one.",
+    input: z.strictObject({
+      query: z.string().min(1).max(500),
+      matchCase: z.boolean().optional(),
+      wholeWord: z.boolean().optional(),
+      regex: z.boolean().optional(),
+      kinds: z.array(z.enum(["book", "chapter", "note", "canvas"])).min(1).max(4).optional(),
+      bookId: id.optional(),
+      limit: z.int().min(1).max(50).optional(),
+      cursor: z.string().min(1).max(4096).nullable().optional(),
+    }),
+    output: z.union([
+      z.strictObject({
+        results: z.array(searchResult),
+        nextCursor: z
+          .string()
+          .optional()
+          .describe("Pass as cursor for the next page; absent when done."),
+      }),
+      z.strictObject({
+        error: z.literal("invalid-regex"),
+        message: z.string(),
+      }),
+    ]),
     ...libraryRead,
   }),
   defineApiRow({
