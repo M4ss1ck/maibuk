@@ -374,6 +374,9 @@ function OpenCommandPalette() {
     matchCase,
     wholeWord,
     regex,
+    // A rebuild that ends must rerun the query: a query typed mid-rebuild may
+    // have been answered from a partial index, and nothing else would rerun it.
+    indexing,
     debouncedTextSearch,
     runTextSearch,
   ]);

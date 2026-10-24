@@ -10,11 +10,25 @@ import { mockVirtualizerLayout } from "@/test/support/virtualizer-layout";
 // with real keys. Only what jsdom cannot run is stubbed: the Fabric cover
 // stage, React Flow's canvas surface, the metrics worker, Dictation, and the
 // update check. Prior art: tutorial-app.test.tsx, navigating-commands.test.tsx.
-const { authorDb, platform, web } = vi.hoisted(() => ({
+const { authorDb, platform, web, indexBlank } = vi.hoisted(() => ({
   authorDb: { current: null as DatabaseAdapter | null },
   platform: { desktop: true },
   web: { value: false },
+  // While set, the indexed Library search answers nothing, as an index that is
+  // still filling would.
+  indexBlank: { value: false },
 }));
+
+vi.mock("@/features/search", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/search")>();
+  return {
+    ...actual,
+    searchLibrary: vi.fn(async (...args: Parameters<typeof actual.searchLibrary>) => {
+      if (indexBlank.value) return { results: [] };
+      return actual.searchLibrary(...args);
+    }),
+  };
+});
 
 vi.mock("@/lib/platform/target", () => ({
   get IS_WEB() {
@@ -1846,6 +1860,50 @@ describe("Command Palette text results", () => {
       ).toBeInTheDocument();
       expect(await within(dialog).findByRole("group", { name: "Text" })).toBeInTheDocument();
     } finally {
+      releaseRebuild();
+      await rebuildPromise;
+      resetSearchIndexForTests();
+      adapter.executeAtomic = realExecuteAtomic;
+    }
+  });
+
+  it("reruns the Text query when a rebuild ends, with no further keystroke", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Lookout" }, "local");
+    await updateChapterRow(chapter.id, { content: "<p>The harbour light blinked</p>" }, "local");
+
+    // The index answers nothing while the rebuild runs, then the match appears
+    // once it ends. Nothing types after the rebuild ends.
+    indexBlank.value = true;
+    const adapter = authorDb.current as DatabaseAdapter;
+    const realExecuteAtomic = adapter.executeAtomic.bind(adapter);
+    let releaseRebuild!: () => void;
+    const rebuildGate = new Promise<void>((resolve) => {
+      releaseRebuild = resolve;
+    });
+    adapter.executeAtomic = (async (statements) => {
+      await rebuildGate;
+      return realExecuteAtomic(statements);
+    }) as DatabaseAdapter["executeAtomic"];
+    const rebuildPromise = requestSearchRebuild();
+    try {
+      const user = userEvent.setup();
+      renderApp("/");
+      await settleOn("/");
+
+      const dialog = await openLibrarySearch(user);
+      await user.keyboard("harbour");
+      expect(
+        await within(dialog).findByText(en("commandPalette.textIndexing"))
+      ).toBeInTheDocument();
+      expect(within(dialog).queryByRole("group", { name: "Text" })).toBeNull();
+
+      indexBlank.value = false;
+      releaseRebuild();
+      await rebuildPromise;
+      expect(await within(dialog).findByRole("group", { name: "Text" })).toBeInTheDocument();
+    } finally {
+      indexBlank.value = false;
       releaseRebuild();
       await rebuildPromise;
       resetSearchIndexForTests();
