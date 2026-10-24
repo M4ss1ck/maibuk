@@ -43,7 +43,8 @@ describe("createMemoryDatabase()", () => {
     // window.SharedArrayBuffer; SQLite's bootstrap then threw on its
     // `instanceof` check and no Tutorial Library could open (#646).
     const real = globalThis.SharedArrayBuffer;
-    await import("epub-gen-memory/bundle");
+    const { loadEpubGen } = await import("@/features/export/load-epub-gen");
+    await loadEpubGen();
     expect(globalThis.SharedArrayBuffer).toBe(real);
 
     vi.resetModules();
