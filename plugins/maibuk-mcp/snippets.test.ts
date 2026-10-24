@@ -72,9 +72,12 @@ http_headers = { Authorization = "Bearer 0123456789abcdef0123456789abcdef" }`);
     expect(SNIPPET_KINDS).toEqual(["claudeCode", "codex", "openCode", "cursor"]);
     for (const kind of SNIPPET_KINDS) {
       expect(snippet(kind, { url: URL, key: KEY })).toBe(
-        { claudeCode: claudeCodeSnippet, codex: codexSnippet, openCode: openCodeSnippet, cursor: cursorSnippet }[
-          kind
-        ]({ url: URL, key: KEY })
+        {
+          claudeCode: claudeCodeSnippet,
+          codex: codexSnippet,
+          openCode: openCodeSnippet,
+          cursor: cursorSnippet,
+        }[kind]({ url: URL, key: KEY })
       );
     }
   });
