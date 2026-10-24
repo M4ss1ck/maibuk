@@ -49,8 +49,9 @@ export class MemoryDatabaseAdapter implements DatabaseAdapter {
 let sqlJs: Promise<SqlJsStatic> | null = null;
 
 // The wasm ships inside the app bundle so the Tutorial works offline and in
-// the Tauri webview, which never loads sql.js otherwise.
-function loadSqlJs(): Promise<SqlJsStatic> {
+// the Tauri webview, which never loads sql.js otherwise. It must come from the
+// installed sql.js: a wasm from another release fails to link against its glue.
+export function loadSqlJs(): Promise<SqlJsStatic> {
   sqlJs ??= initSqlJs({ locateFile: () => sqlWasmUrl }).catch((error: unknown) => {
     sqlJs = null;
     throw error;

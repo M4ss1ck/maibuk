@@ -48,8 +48,6 @@ interface Fixtures {
   mod: "ControlOrMeta" | "Meta";
 }
 
-const SQL_WASM = resolve(REPO_ROOT, "node_modules/sql.js/dist/sql-wasm.wasm");
-
 const VENDOR_MODELS = resolve(REPO_ROOT, "vendor/moonshine/models");
 // The catalog is the same data the app ships; read it as data so the harness
 // needs no app import. Each entry's file `url` maps to the file
@@ -71,19 +69,13 @@ const MODEL_FILES = new Map(
  */
 export async function makeHermetic(context: BrowserContext): Promise<void> {
   await context.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
-  // The web adapter loads sql.js wasm from sql.js.org; serve the copy the
-  // bundled JS glue ships with, so it is offline and version-matched.
-  await context.route("https://sql.js.org/dist/sql-wasm.wasm", (route) =>
-    route.fulfill({ path: SQL_WASM, contentType: "application/wasm" })
-  );
   // The update check reads GitHub tags; no tags means "no update".
   await context.route("https://api.github.com/repos/M4ss1ck/maibuk/tags*", (route) =>
     route.fulfill({ json: [] })
   );
   // Dictation Models come from vendor/ (pnpm fetch:dictation --test-assets),
   // never the network. Unknown files 404, which the settings spec relies on.
-  // Registered after the catch-all abort, like the sql.js route: a later
-  // route takes precedence.
+  // Registered after the catch-all abort: a later route takes precedence.
   await context.route(/^https:\/\/download\.moonshine\.ai\//, (route) => {
     const file = MODEL_FILES.get(route.request().url());
     return file && existsSync(file)
@@ -134,7 +126,16 @@ export const test = base.extend<Options & Fixtures>({
   },
 
   page: async (
-    { page, library, tutorialProgress, plugins, unapprovedPlugins, pluginApprovals, builtInPlugins, macPlatform },
+    {
+      page,
+      library,
+      tutorialProgress,
+      plugins,
+      unapprovedPlugins,
+      pluginApprovals,
+      builtInPlugins,
+      macPlatform,
+    },
     use
   ) => {
     await makeHermetic(page.context());

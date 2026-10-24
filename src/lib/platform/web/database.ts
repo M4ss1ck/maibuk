@@ -1,6 +1,7 @@
-import initSqlJs, { Database as SqlJsDatabase } from "sql.js";
+import type { Database as SqlJsDatabase } from "sql.js";
 import type { AtomicStatement, DatabaseAdapter } from "@/lib/platform/types";
 import { runAtomicSqlJs } from "@/lib/db/atomic";
+import { loadSqlJs } from "@/lib/db/memory-database";
 import { exportSqlDump } from "@/lib/db/sql-export";
 
 const DB_STORAGE_KEY = "maibuk-database";
@@ -140,10 +141,7 @@ async function loadFromIndexedDB(): Promise<Uint8Array | null> {
 }
 
 export async function createWebDatabase(_path: string): Promise<DatabaseAdapter> {
-  const SQL = await initSqlJs({
-    // Load sql.js WASM from CDN
-    locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
-  });
+  const SQL = await loadSqlJs();
 
   // IndexedDB is the primary (and only) persistence target.
   // A saved Library that cannot be read or parsed must stop the open, never
