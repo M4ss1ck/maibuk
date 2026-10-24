@@ -119,6 +119,62 @@ describe("useFlipReorder", () => {
     );
   });
 
+  it("glides the element named by target and leaves the row's own transform clear", () => {
+    // React Aria measures the wrapper around each row, so a glide on the row
+    // itself would change what that measurement reads (NotesList passes the wrapper).
+    function WrappedHarness({ order }: { order: string[] }) {
+      const ref = useRef<HTMLDivElement>(null);
+      useFlipReorder(ref, order, { target: (row) => row.parentElement ?? row });
+      return (
+        <div ref={ref} data-testid="list">
+          {order.map((key) => (
+            <div key={key} data-view="">
+              <div data-key={key}>{key}</div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    // Rows sit inside wrappers here, so the row's index comes from the list, not its parent.
+    rectSpy.mockImplementation(function (this: Element) {
+      const list = this.closest<HTMLElement>('[data-testid="list"]');
+      const rows = Array.from(list?.querySelectorAll("[data-key]") ?? []);
+      const index = rows.indexOf(this);
+      const top = index * ROW_HEIGHT - (list?.scrollTop ?? 0);
+      return {
+        top,
+        bottom: top + ROW_HEIGHT,
+        left: 0,
+        right: 300,
+        height: ROW_HEIGHT,
+        width: 300,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+    const { getByTestId, rerender } = render(<WrappedHarness order={["a", "b", "c"]} />);
+    const container = getByTestId("list");
+    const rowAnimate = vi.fn();
+    const wrapperAnimate = vi.fn(
+      (_keyframes: Keyframe[], _options: KeyframeAnimationOptions) =>
+        ({ cancel: vi.fn() }) as unknown as Animation
+    );
+    for (const row of rowsOf(container)) row.animate = rowAnimate;
+    for (const wrapper of container.querySelectorAll<HTMLElement>("[data-view]")) {
+      wrapper.animate = wrapperAnimate;
+    }
+
+    rerender(<WrappedHarness order={["a", "c", "b"]} />);
+
+    expect(rowAnimate).not.toHaveBeenCalled();
+    expect(wrapperAnimate).toHaveBeenCalledTimes(2);
+    expect(wrapperAnimate).toHaveBeenCalledWith(
+      [{ transform: "translateY(40px)" }, { transform: "translateY(0)" }],
+      { duration: 220, easing: "cubic-bezier(0.2, 0, 0, 1)" }
+    );
+  });
+
   it("moves rows without gliding when the scope changes with the order", () => {
     const { getByTestId, rerender } = render(
       <Harness order={["a", "b", "c"]} options={{ scope: "list" }} />

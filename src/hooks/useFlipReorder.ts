@@ -33,12 +33,20 @@ const SCOPE_SEPARATOR = "\u0001";
  * the container; it never sets its scroll position. `skipKey` names a row that
  * should snap instead of gliding. A change of `scope` (another view, or a
  * search) moves rows without gliding: only a reorder within one scope glides. Reduced motion and environments without
- * `Element.animate` skip the animation.
+ * `Element.animate` skip the animation. `target` names the element that glides
+ * for a row (default: the row itself). A caller whose layout measures the
+ * element around each row must glide that element instead, because a running
+ * transform on a measured subtree changes the size the measurement reads.
  */
 export function useFlipReorder(
   containerRef: RefObject<HTMLElement | null>,
   order: readonly string[],
-  options?: { selector?: string; skipKey?: string | null; scope?: string }
+  options?: {
+    selector?: string;
+    skipKey?: string | null;
+    scope?: string;
+    target?: (row: HTMLElement) => HTMLElement;
+  }
 ): void {
   const topsRef = useRef<Map<string, number> | null>(null);
   const signatureRef = useRef<string | null>(null);
@@ -49,6 +57,7 @@ export function useFlipReorder(
     if (!container) return;
     const selector = options?.selector ?? DEFAULT_SELECTOR;
     const skipKey = options?.skipKey ?? null;
+    const targetOf = options?.target ?? ((row: HTMLElement) => row);
     const attribute = keyAttributeOf(selector);
     if (!attribute) return;
 
@@ -58,7 +67,7 @@ export function useFlipReorder(
     for (const row of container.querySelectorAll<HTMLElement>(selector)) {
       const key = row.getAttribute(attribute);
       if (key === null) continue;
-      const offset = animationsRef.current.has(key) ? glideOffset(row) : 0;
+      const offset = animationsRef.current.has(key) ? glideOffset(targetOf(row)) : 0;
       offsets.set(key, offset);
       tops.set(key, row.getBoundingClientRect().top - offset - containerTop + container.scrollTop);
     }
@@ -83,10 +92,11 @@ export function useFlipReorder(
       if (previousTop === undefined || currentTop === undefined) continue;
       const delta = previousTop + (offsets.get(key) ?? 0) - currentTop;
       if (Math.abs(delta) < MIN_MOVE_PX) continue;
-      if (typeof row.animate !== "function") continue;
+      const glider = targetOf(row);
+      if (typeof glider.animate !== "function") continue;
 
       animationsRef.current.get(key)?.cancel();
-      const animation = row.animate(
+      const animation = glider.animate(
         [{ transform: `translateY(${delta}px)` }, { transform: "translateY(0)" }],
         { duration: OUTLINE_MOTION_MS, easing: OUTLINE_EASING }
       );
