@@ -568,6 +568,7 @@ test.describe("Markdown and text Import @wf:books-import-md-txt", () => {
       /Tide Tables/,
     ]);
     // The last imported Chapter is open; open the Markdown one from the list.
+    await expect(page.getByRole("textbox", { name: "Text of Tide Tables" })).toBeVisible();
     const journalRow = page
       .getByRole("grid", { name: "Chapters" })
       .getByRole("row", { name: "The Keeper's Journal" });

@@ -767,7 +767,11 @@ test.describe("footnotes on a phone @wf:editor-footnote", () => {
 
     await chooseFootnoteAction(page, "Footnote 1", "Delete Footnote");
     await expect(grid.getByRole("row", { name: "1. The log ends here." })).toBeFocused();
-    await expect(editorText(page).locator("sup.footnote-ref")).toHaveText(["1"]);
+    // The side panel is a dialog here, which hides the text from assistive
+    // technology (aria-hidden), so the text is found with includeHidden.
+    await expect(
+      page.getByRole("textbox", { name: /^Text of /, includeHidden: true }).locator("sup.footnote-ref")
+    ).toHaveText(["1"]);
   });
 });
 

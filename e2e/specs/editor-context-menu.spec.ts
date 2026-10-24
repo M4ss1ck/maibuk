@@ -234,7 +234,11 @@ test.describe("selection toolbar @wf:editor-selection-toolbar", () => {
     await expect(dialog).toBeVisible();
     await expectFocusWithin(dialog);
     await expectTabContained(page, dialog);
-    await expect(editorText(page).locator(".selection-kept")).toHaveText("The s");
+    // The open dialog hides the page from assistive technology (aria-hidden),
+    // so the text is found with includeHidden while the range stays painted.
+    await expect(
+      page.getByRole("textbox", { name: /^Text of /, includeHidden: true }).locator(".selection-kept")
+    ).toHaveText("The s");
 
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
