@@ -4,8 +4,8 @@
  * never backed up, never part of a Restore, and rebuilt from the Library
  * whenever it is missing or stale.
  *
- * `trigram` is case-insensitive by default and keeps diacritics exact, which
- * is the editor's own Find and Replace default. Queries shorter than three
+ * `trigram` with `remove_diacritics` is case- and accent-insensitive, which is
+ * the editor's own Find and Replace default. Queries shorter than three
  * characters cannot use it; unit 2 scans the plain text for those.
  */
 
@@ -13,6 +13,24 @@ import type { DatabaseAdapter } from "@/lib/platform/types";
 
 export const SEARCH_TEXT_TABLE = "search_text";
 export const SEARCH_FTS_TABLE = "search_text_fts";
+
+/**
+ * The FTS5 tokenizer: trigrams that ignore diacritics, so the index narrows
+ * accent-insensitively (`cancion` reaches `canción`). Needs SQLite 3.45 or
+ * newer; the desktop build, the web WASM build, and the bench's node:sqlite
+ * all ship newer, pinned by test.
+ */
+export const SEARCH_FTS_TOKENIZE = "trigram remove_diacritics 1";
+
+/** Creates the FTS index over `search_text`. Safe to run on every open. */
+export function createSearchFtsStatement(): string {
+  return `CREATE VIRTUAL TABLE IF NOT EXISTS ${SEARCH_FTS_TABLE} USING fts5(
+      text,
+      content='${SEARCH_TEXT_TABLE}',
+      content_rowid='id',
+      tokenize='${SEARCH_FTS_TOKENIZE}'
+    )`;
+}
 
 /**
  * The settings row that marks a rebuild in progress. While it is `"1"` the FTS
@@ -62,10 +80,13 @@ export function dropSearchTriggerStatements(): string[] {
 
 /**
  * Creates the index on both platforms and on the in-memory test Library.
- * Safe to run on every open: every statement is `IF NOT EXISTS`.
+ * Safe to run on every open: every statement is `IF NOT EXISTS`. An index
+ * created before accents were folded keeps its old tokenizer until it is
+ * dropped and recreated here; the version bump makes `ensureSearchIndex`
+ * rebuild its rows right after.
  */
 export async function ensureSearchSchema(
-  db: Pick<DatabaseAdapter, "execute">
+  db: Pick<DatabaseAdapter, "execute" | "select" | "executeAtomic">
 ): Promise<void> {
   await db.execute(`
     CREATE TABLE IF NOT EXISTS ${SEARCH_TEXT_TABLE} (
@@ -95,14 +116,18 @@ export async function ensureSearchSchema(
 
   // External content: the FTS5 index points at search_text instead of
   // storing a second copy of every block.
-  await db.execute(`
-    CREATE VIRTUAL TABLE IF NOT EXISTS ${SEARCH_FTS_TABLE} USING fts5(
-      text,
-      content='${SEARCH_TEXT_TABLE}',
-      content_rowid='id',
-      tokenize='trigram'
-    )
-  `);
+  const existing = await db.select<{ sql: string | null }[]>(
+    `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`,
+    [SEARCH_FTS_TABLE]
+  );
+  if (existing.length === 0) {
+    await db.execute(createSearchFtsStatement());
+  } else if ((existing[0]?.sql ?? "").includes("remove_diacritics") === false) {
+    // The tokenizer is fixed when the table is created, so an old index
+    // cannot learn the new one: drop and recreate it, in one batch so no
+    // write lands in between. Triggers address the table by name and survive.
+    await db.executeAtomic([`DROP TABLE ${SEARCH_FTS_TABLE}`, createSearchFtsStatement()]);
+  }
 
   // `IF NOT EXISTS` also rebuilds the triggers a crash left dropped (#639).
   for (const statement of createSearchTriggerStatements()) {

@@ -1,18 +1,27 @@
 /**
  * Library Search: the one public read of the device-local index.
  *
- * It narrows candidates through the FTS5 `trigram` index for a literal query
- * of three or more characters, and scans the plain-text table for a shorter
- * query or a Regex, then confirms every match in JS with the same expression
- * Find and Replace uses. That is what keeps a snippet, a count, and the
- * editor's own matches in agreement, and why a match never spans a block.
+ * It narrows candidates through the FTS5 `trigram` index (with diacritics
+ * removed) for a literal query of three or more characters, and scans the
+ * plain-text table for a shorter query or a Regex, then confirms every match
+ * in JS with the same expression Find and Replace uses. That is what keeps a
+ * snippet, a count, and the editor's own matches in agreement, and why a
+ * match never spans a block. Literal matching is accent-insensitive by
+ * default; a Regex pins the exact accents.
  *
  * One result per item, ranked by a title match, then match count, then most
  * recently edited, then the open Book as a tiebreaker.
  */
 
 import type { DatabaseAdapter } from "@/lib/platform/types";
-import { buildSearchRegExp, matchRanges, type MatchRange } from "@/lib/search/expression";
+import {
+  buildFoldedLiteralRegExp,
+  buildSearchRegExp,
+  findMatchRanges,
+  matchFoldedRanges,
+  matchRanges,
+  type MatchRange,
+} from "@/lib/search/expression";
 import { canvasCardIdsByBlock } from "@/features/search/extract";
 import type {
   SearchItemKind,
@@ -75,8 +84,9 @@ function placeholders(count: number): string {
 
 /**
  * Escapes a literal query as an FTS5 string. Quoted, every operator is
- * literal; the trigram tokenizer turns it into substring matching, which is a
- * case-insensitive superset of what the shared matcher will confirm.
+ * literal; the trigram tokenizer (with diacritics removed) turns it into
+ * accent-insensitive substring matching, which is a superset of what the
+ * shared matcher will confirm.
  */
 function ftsPhrase(query: string): string {
   return `"${query.replace(/"/g, '""')}"`;
@@ -106,11 +116,26 @@ async function indexedRows(
 }
 
 /** Groups matching blocks into one item each, keeping the best block. */
-function groupMatches(rows: readonly IndexRow[], regex: RegExp): ItemMatch[] {
+function groupMatches(
+  rows: readonly IndexRow[],
+  term: string,
+  options: { caseSensitive: boolean; wholeWord: boolean; regex: boolean },
+  regex: RegExp
+): ItemMatch[] {
   const items = new Map<string, ItemMatch>();
+  // A literal query compiles once; every block folds and runs it. A null
+  // folded query (only combining marks) matches exactly, like before.
+  const folded =
+    options.regex || term.length === 0 ? null : buildFoldedLiteralRegExp(term, options);
 
   for (const row of rows) {
-    const ranges = matchRanges(regex, row.text);
+    // The shared matcher confirms every candidate: a literal query folds
+    // accents on both sides, a Regex runs against the text as written.
+    const ranges = options.regex
+      ? matchRanges(regex, row.text)
+      : (folded !== null
+        ? matchFoldedRanges(folded, row.text)
+        : findMatchRanges(row.text, term, options));
     if (ranges.length === 0) continue;
 
     const key = `${row.item_kind}:${row.item_id}`;
@@ -326,7 +351,19 @@ export async function searchLibrary(
     ? await indexedRows(db, options.query, options.kinds)
     : await scanRows(db, options.kinds);
 
-  const ranked = rankMatches(groupMatches(rows, regex), options.openBookId);
+  const ranked = rankMatches(
+    groupMatches(
+      rows,
+      options.query,
+      {
+        caseSensitive: options.matchCase ?? false,
+        wholeWord: options.wholeWord ?? false,
+        regex: options.regex ?? false,
+      },
+      regex
+    ),
+    options.openBookId
+  );
 
   const limit = Math.max(1, options.limit ?? DEFAULT_SEARCH_LIMIT);
   const offset = decodeCursor(options.cursor);

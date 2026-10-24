@@ -115,6 +115,16 @@ describe("FindReplace", () => {
     unmount();
   });
 
+  it("counts accent-insensitive matches in the panel", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderFindReplace(() => {}, "<p>La canción del faro, cancion</p>");
+
+    await user.click(screen.getByPlaceholderText("editor.find"));
+    await user.keyboard("cancion");
+    await waitFor(() => expect(document.querySelectorAll(".search-result")).toHaveLength(2));
+    unmount();
+  });
+
   it("lists its Enter, Shift+Enter and Escape keys as bound while open", () => {
     const { unmount } = renderFindReplace(() => {});
 

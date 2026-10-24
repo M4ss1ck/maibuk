@@ -2,7 +2,14 @@ import { Extension } from "@tiptap/core";
 import type { Node as ProsemirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import { buildSearchRegExp, matchRanges, type SearchOptions } from "@/lib/search/expression";
+import {
+  buildFoldedLiteralRegExp,
+  buildSearchRegExp,
+  findMatchRanges,
+  matchFoldedRanges,
+  matchRanges,
+  type SearchOptions,
+} from "@/lib/search/expression";
 
 export type { SearchOptions } from "@/lib/search/expression";
 export { buildSearchRegExp } from "@/lib/search/expression";
@@ -27,10 +34,20 @@ export function findMatches(
   } catch {
     return matches;
   }
+  // A literal query compiles once; every text node folds and runs it. A null
+  // folded query (only combining marks) matches exactly, like before.
+  const folded =
+    options.regex || term.length === 0 ? null : buildFoldedLiteralRegExp(term, options);
 
   doc.descendants((node, pos) => {
     if (!node.isText || !node.text) return;
-    for (const range of matchRanges(regex, node.text)) {
+    // A literal query folds accents on both sides; a Regex runs as written.
+    const ranges = options.regex
+      ? matchRanges(regex, node.text)
+      : folded !== null
+        ? matchFoldedRanges(folded, node.text)
+        : findMatchRanges(node.text, term, options);
+    for (const range of ranges) {
       const from = pos + range.start;
       matches.push({ from, to: pos + range.end });
     }

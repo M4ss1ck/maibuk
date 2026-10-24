@@ -4,7 +4,7 @@ import { persist } from "zustand/middleware";
 export const SEARCH_SWITCHES_STORAGE_KEY = "maibuk-search-switches";
 
 export interface SearchSwitches {
-  /** Match the query's case exactly; off ignores case, accents stay exact. */
+  /** Match the query's case exactly; off ignores case. Literal queries always ignore accents. */
   matchCase: boolean;
   /** Match whole words only. */
   wholeWord: boolean;

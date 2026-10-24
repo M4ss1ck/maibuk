@@ -45,7 +45,7 @@ import {
 } from "@/features/search/statements";
 
 /** Bumped whenever a stored index no longer matches what extraction produces. */
-export const SEARCH_INDEX_VERSION = 1;
+export const SEARCH_INDEX_VERSION = 2;
 
 export const SEARCH_INDEX_VERSION_KEY = "search_index_version";
 

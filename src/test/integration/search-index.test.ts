@@ -619,12 +619,12 @@ describe("Library Search FTS5 trigram index", () => {
     expect(matches.map((row) => row.text)).toEqual(["Elena Madrigal walked in."]);
   });
 
-  it("keeps accents exact", async () => {
+  it("matches with diacritics removed", async () => {
     const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
     await seedChapter(book.id, "<p>La canción del faro</p>");
 
     await expect(ftsMatches("canción")).resolves.toHaveLength(1);
-    await expect(ftsMatches("cancion")).resolves.toEqual([]);
+    await expect(ftsMatches("cancion")).resolves.toHaveLength(1);
   });
 
   it("never matches across two blocks", async () => {
@@ -632,6 +632,37 @@ describe("Library Search FTS5 trigram index", () => {
     await seedChapter(book.id, "<p>alpha</p><p>beta</p>");
 
     await expect(ftsMatches("alpha beta")).resolves.toEqual([]);
+  });
+
+  it("runs on SQLite new enough for diacritic-insensitive trigrams", async () => {
+    const rows = await db.select<{ version: string }[]>(
+      "SELECT sqlite_version() AS version"
+    );
+    const [major, minor] = rows[0].version.split(".").map(Number);
+    expect(major > 3 || (major === 3 && minor >= 45)).toBe(true);
+  });
+
+  it("recreates an index left on the old tokenizer", async () => {
+    const { ensureSearchSchema, SEARCH_FTS_TABLE } = await import(
+      "@/features/search/schema"
+    );
+    await db.execute(`DROP TABLE ${SEARCH_FTS_TABLE}`);
+    await db.execute(
+      `CREATE VIRTUAL TABLE ${SEARCH_FTS_TABLE} USING fts5(
+        text,
+        content='search_text',
+        content_rowid='id',
+        tokenize='trigram'
+      )`
+    );
+
+    await ensureSearchSchema(db);
+
+    const rows = await db.select<{ sql: string | null }[]>(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`,
+      [SEARCH_FTS_TABLE]
+    );
+    expect(rows[0]?.sql).toContain("remove_diacritics");
   });
 });
 

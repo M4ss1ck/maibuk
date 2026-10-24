@@ -398,7 +398,7 @@ A transform applied to selected text: upper, lower, and playful effects such as 
 _UI_: es "Mayúsculas y minúsculas"
 
 **Find and Replace**:
-The panel in the editor that finds each match of a query in the open Chapter or Note and replaces it, sharing its Match case, Whole word, and Regular expression switches with Library Search.
+The panel in the editor that finds each match of a query in the open Chapter or Note and replaces it, sharing its Match case, Whole word, and Regular expression switches with Library Search. Literal matching ignores accents as the fixed default, with no fourth switch: "cancion" finds "canción" and back, and "ELENA" finds "Eléna" unless Match case is on. A Regular expression runs against the text as written, so it pins the exact accents.
 _UI_: en "Find & Replace" / es "Buscar y Reemplazar"
 
 **Paste Cleanup**:
@@ -524,7 +524,7 @@ _UI_: en "Commands mode" / es "Modo comandos"
 _Avoid_: command mode, palette mode
 
 **Library Search**:
-The Command Palette without a prefix: it finds a Book, Chapter, Note, or Canvas by typing part of its name and opens it. Typing `>` in the field leaves it for Commands mode, and Backspace on a lone `>` switches to it instead of closing the palette. With the field empty it lists the Library items opened most recently on this device, then the Chapters, Books, Notes, and Canvases pages, which narrow the search to one kind.
+The Command Palette without a prefix: it finds a Book, Chapter, Note, or Canvas by typing part of its name and opens it. Typing `>` in the field leaves it for Commands mode, and Backspace on a lone `>` switches to it instead of closing the palette. With the field empty it lists the Library items opened most recently on this device, then the Chapters, Books, Notes, and Canvases pages, which narrow the search to one kind. Literal matching ignores accents as the fixed default, with no fourth switch, and counts the same matches Find and Replace counts for the same query and switches; a Regular expression pins the exact accents.
 _UI_: en "Search" / es "Buscar"
 _Avoid_: global search, library filter, quick open
 

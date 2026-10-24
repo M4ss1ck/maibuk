@@ -153,14 +153,56 @@ describe("searchLibrary matching", () => {
     expect("message" in result && result.message.length).toBeGreaterThan(0);
   });
 
-  it("keeps accents exact", async () => {
+  it("ignores accents by default, in both directions", async () => {
+    const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
+    await seedChapter(book.id, "<p>La canción del faro</p><p>Eléna walked in</p>");
+
+    const unaccented = await search({ query: "cancion", kinds: ["chapter"] });
+    expect(unaccented.results).toHaveLength(1);
+    expect(unaccented.results[0].matchCount).toBe(1);
+
+    const accented = await search({ query: "canción", kinds: ["chapter"] });
+    expect(accented.results).toHaveLength(1);
+    expect(accented.results[0].matchCount).toBe(1);
+
+    const name = await search({ query: "ELENA", kinds: ["chapter"] });
+    expect(name.results).toHaveLength(1);
+  });
+
+  it("narrows an accented Library through the index and highlights the accents", async () => {
+    const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
+    await seedChapter(book.id, "<p>La canción del faro</p>");
+    const recorder = recordingAdapter();
+
+    const found = resultsOf(await searchLibrary(recorder.db, { query: "cancion" }));
+
+    expect(recorder.queries.some((sql) => sql.includes("MATCH"))).toBe(true);
+    expect(found.results).toHaveLength(1);
+    expect(found.results[0].matchCount).toBe(1);
+    const [start, end] = found.results[0].snippet.highlights[0];
+    expect(found.results[0].snippet.text.slice(start, end)).toBe("canción");
+  });
+
+  it("folds accents for a short query that scans the plain text", async () => {
+    const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
+    await seedChapter(book.id, "<p>El niño sé fue</p>");
+    const recorder = recordingAdapter();
+
+    const found = resultsOf(await searchLibrary(recorder.db, { query: "se", kinds: ["chapter"] }));
+
+    expect(recorder.queries.some((sql) => sql.includes("MATCH"))).toBe(false);
+    expect(found.results).toHaveLength(1);
+    expect(found.results[0].matchCount).toBe(1);
+  });
+
+  it("keeps a Regex pinned to the exact accents", async () => {
     const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
     await seedChapter(book.id, "<p>La canción del faro</p>");
 
-    await expect(search({ query: "cancion" })).resolves.toEqual(
-      expect.objectContaining({ results: [] })
-    );
-    const found = await search({ query: "canción", kinds: ["chapter"] });
+    await expect(
+      search({ query: "cancion", regex: true, kinds: ["chapter"] })
+    ).resolves.toEqual(expect.objectContaining({ results: [] }));
+    const found = await search({ query: "canci.n", regex: true, kinds: ["chapter"] });
     expect(found.results).toHaveLength(1);
   });
 
@@ -481,6 +523,31 @@ describe("searchLibrary agrees with the shared expression", () => {
       options: { wholeWord: true },
     },
     { name: "Regex", query: "[a-z]\\d", text: "a1 b2 c3", options: { regex: true } },
+    { name: "accent-insensitive literal", query: "cancion", text: "La canción del faro", options: {} },
+    {
+      name: "accent-insensitive literal, reversed",
+      query: "canción",
+      text: "La cancion del faro",
+      options: {},
+    },
+    {
+      name: "Match case with accents",
+      query: "ELENA",
+      text: "Eléna and ELÉNA walked in",
+      options: { matchCase: true },
+    },
+    {
+      name: "Whole word with accents",
+      query: "cancion",
+      text: "cancionero canta la canción",
+      options: { wholeWord: true },
+    },
+    {
+      name: "Regex pins the exact accents",
+      query: "canci.n",
+      text: "La canción del faro",
+      options: { regex: true },
+    },
     { name: "literal punctuation", query: "a.b", text: "price is $5 (a.b)", options: {} },
     {
       name: "literal after punctuation",

@@ -26,7 +26,7 @@ export interface IndexedSearchBlock extends SearchBlock {
 /** The one call the palette, the Plugin API, and the tests make. */
 export interface SearchLibraryOptions {
   query: string;
-  /** Match case is off by default; accents are always exact. */
+  /** Match case is off by default; literal queries always ignore accents. */
   matchCase?: boolean;
   wholeWord?: boolean;
   regex?: boolean;

@@ -141,6 +141,26 @@ describe("search bench fixture", () => {
     expect(SEARCH_BENCH_SCAN_QUERIES[1].regex).toBe(true);
   });
 
+  it("runs both engines on SQLite new enough for diacritic-insensitive trigrams", async () => {
+    for (const kind of ["desktop", "web"] as const) {
+      const engine = await createSearchBenchEngine(kind);
+      const rows = await engine.db.select<{ version: string }[]>(
+        "SELECT sqlite_version() AS version"
+      );
+      const [major, minor] = rows[0].version.split(".").map(Number);
+      expect(major > 3 || (major === 3 && minor >= 45)).toBe(true);
+
+      await engine.db.execute(
+        "CREATE VIRTUAL TABLE folded USING fts5(x, tokenize='trigram remove_diacritics 1')"
+      );
+      await engine.db.execute("INSERT INTO folded (x) VALUES ('canción del faro')");
+      await expect(
+        engine.db.select("SELECT x FROM folded WHERE folded MATCH 'cancion'")
+      ).resolves.toEqual([{ x: "canción del faro" }]);
+      await engine.close();
+    }
+  });
+
   it("reaches the index, scan, save, and rebuild paths on both engines", async () => {
     for (const kind of ["desktop", "web"] as const) {
       const engine = await createSearchBenchEngine(kind);
@@ -150,7 +170,6 @@ describe("search bench fixture", () => {
       expect(seeded.notes).toBe(GATE_SEED.notes);
       expect(seeded.canvases).toBe(GATE_SEED.canvases);
       expect(seeded.blocks).toBeGreaterThan(0);
-
       for (const query of SEARCH_BENCH_INDEXED_QUERIES) {
         const { result, queries } = await runQuery(engine.db, query.query);
         expect(resultOf(result).results.length).toBeGreaterThan(0);

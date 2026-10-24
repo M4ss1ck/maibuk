@@ -27,7 +27,13 @@ import {
 } from "@/features/plugins/endpoint";
 import { assertToggleButton } from "@/features/plugins/handlers";
 import { fragmentToHtml, htmlToPlainText } from "@/features/plugins/library";
-import { buildSearchRegExp, matchRanges } from "@/lib/search/expression";
+import {
+  buildFoldedLiteralRegExp,
+  buildSearchRegExp,
+  findMatchRanges,
+  matchFoldedRanges,
+  matchRanges,
+} from "@/lib/search/expression";
 import { normalizeNoteTags } from "@/features/notes/tags";
 import { applyPluginLocale } from "@/features/plugins/manifest-validate";
 import { pluginFetch } from "@/features/plugins/network";
@@ -168,6 +174,7 @@ function searchTestLibrary(
   }
 ): PluginApiOutput<"library.search"> {
   let expression: RegExp;
+  const folded = (input.regex ?? false) === false;
   try {
     expression = buildSearchRegExp(input.query, {
       caseSensitive: input.matchCase ?? false,
@@ -185,6 +192,14 @@ function searchTestLibrary(
     input.kinds === undefined
       ? undefined
       : new Set<TestSearchKind>(input.kinds as TestSearchKind[]);
+  // A literal query compiles once; the folded side confirms every field. A
+  // null folded query (only combining marks) matches exactly, like before.
+  const foldedQuery = folded
+    ? buildFoldedLiteralRegExp(input.query, {
+        caseSensitive: input.matchCase ?? false,
+        wholeWord: input.wholeWord ?? false,
+      })
+    : null;
   const scored = [];
   for (const row of rows) {
     if (kinds !== undefined && !kinds.has(row.kind)) continue;
@@ -198,7 +213,17 @@ function searchTestLibrary(
     let snippet: { text: string; from: number; to: number }[] | null = null;
     let firstMatchOffset = 0;
     for (const [index, field] of row.fields.entries()) {
-      const ranges = matchRanges(expression, field);
+      // The same expression the app confirms with: a literal query folds
+      // accents on both sides, a Regex runs against the text as written.
+      const ranges = foldedQuery
+        ? matchFoldedRanges(foldedQuery, field)
+        : folded
+          ? findMatchRanges(field, input.query, {
+              caseSensitive: input.matchCase ?? false,
+              wholeWord: input.wholeWord ?? false,
+              regex: false,
+            })
+          : matchRanges(expression, field);
       if (ranges.length === 0) continue;
       if (index === 0) titleMatch = true;
       matchCount += ranges.length;
