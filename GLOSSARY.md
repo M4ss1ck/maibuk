@@ -397,6 +397,10 @@ _UI_: en "Insert symbol" / es "Insertar símbolo"
 A transform applied to selected text: upper, lower, and playful effects such as mirrored or upside-down letters.
 _UI_: es "Mayúsculas y minúsculas"
 
+**Find and Replace**:
+The panel in the editor that finds each match of a query in the open Chapter or Note and replaces it, sharing its Match case, Whole word, and Regular expression switches with Library Search.
+_UI_: en "Find & Replace" / es "Buscar y Reemplazar"
+
 **Paste Cleanup**:
 The rules that reshape pasted text before it lands in a Chapter or Note, such as "Match my book".
 _UI_: en "Paste cleanup" / es "Limpieza al pegar"

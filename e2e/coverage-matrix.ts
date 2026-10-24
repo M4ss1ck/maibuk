@@ -364,6 +364,25 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "command-palette-text-search",
+    area: "shell",
+    workflow:
+      "Library Search over item text: typing a word from a Chapter's text lists a Text row with its snippet; the Match case, Whole word, and Regex switches reshape the Text rows; choosing the Chapter text row opens the editor with Find and Replace on the query; Enter steps through the matches; leaving and returning never reopens it; a Canvas card text row opens the Canvas with the card selected; Alt+W in the editor's Find and Replace toggles Whole word",
+    edges: [
+      "the Match case, Whole word, and Regex switches reshape the Text rows",
+      "the Chapter text row opens the editor with Find and Replace on the query, and Enter steps from 1 of 2 to 2 of 2",
+      "closing Find and Replace, leaving with Backspace, and reopening never brings it back",
+      "a Canvas card text row opens the Canvas with the card selected",
+      "Alt+W in the editor's Find and Replace toggles Whole word and the count drops out",
+    ],
+    terms: ["Command Palette", "Library Search", "Find and Replace"],
+    shortcuts: ["global.searchLibrary", "common.matchCase", "common.wholeWord", "common.useRegex"],
+    routes: ["/", "/book/:bookId", "/canvas/:canvasId"],
+    fixture: "paletteLibrary",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "books-empty-state",
     area: "books",
     workflow:

@@ -52,9 +52,14 @@ interface EditorToolbarProps {
   /**
    * A Library Search text row opened this editor: open Find and Replace with
    * its query. One-shot per object identity, so Back/Forward (whose history
-   * entries carry no handoff) never reopens it.
+   * entries carry no handoff) never reopens it. Reported through
+   * `onHandoffApplied`, which is when the page clears it: clearing on chapter
+   * match instead would drop a handoff that arrives before the editor (and
+   * this toolbar) has mounted.
    */
   findHandoff?: SearchHandoff | null;
+  /** The handoff above opened Find and Replace; the page clears it now. */
+  onHandoffApplied?: () => void;
 }
 
 export function EditorToolbar({
@@ -71,6 +76,7 @@ export function EditorToolbar({
   onExitToolbar,
   tutorialAnchor,
   findHandoff = null,
+  onHandoffApplied,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
@@ -137,7 +143,8 @@ export function EditorToolbar({
     if (!findHandoff || appliedFindHandoffRef.current === findHandoff) return;
     appliedFindHandoffRef.current = findHandoff;
     openFindReplace();
-  }, [findHandoff, openFindReplace]);
+    onHandoffApplied?.();
+  }, [findHandoff, onHandoffApplied, openFindReplace]);
 
   const handleHtmlPanelReady = useCallback(
     (handle: { highlightRange: (from: number, to: number) => void } | null) => {

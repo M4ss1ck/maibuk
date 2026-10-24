@@ -144,14 +144,17 @@ export function Notes() {
     });
   }, [location.state, location.pathname, noteId, currentNote?.id, navigate]);
 
-  // Consume the one-shot handoff: the editor (keyed by note) applied it in
-  // this commit's child effects, so clearing now never closes its panel, and
-  // a later visit finds nothing to reopen.
+  // The toolbar clears an applied handoff through `onHandoffApplied`, once its
+  // panel has the query: clearing on note match instead would drop a handoff
+  // that arrives before the editor (and its toolbar) has mounted. Only a
+  // handoff its note is gone from is cleared here, so a later visit finds
+  // nothing to reopen.
+  const handleHandoffApplied = useCallback(() => setFindHandoff(null), []);
   useEffect(() => {
-    if (findHandoff && currentNote?.id === findHandoff.noteId) {
+    if (findHandoff && currentNote && currentNote.id !== findHandoff.noteId) {
       setFindHandoff(null);
     }
-  }, [findHandoff, currentNote?.id]);
+  }, [findHandoff, currentNote]);
 
   useShortcuts([
     {
@@ -287,6 +290,7 @@ export function Notes() {
               suppressRestore={hasPendingHeadingScroll}
               titleBarContainer={titleBarSlot}
               findHandoff={findHandoff?.noteId === currentNote.id ? findHandoff.handoff : null}
+              onHandoffApplied={handleHandoffApplied}
             />
           ) : (
             <EmptyNotes onCreateNote={handleCreateNote} onBack={() => navigate("/notes")} />

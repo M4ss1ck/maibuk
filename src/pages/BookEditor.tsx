@@ -477,14 +477,17 @@ export function BookEditor() {
     navigate(location.pathname, { replace: true, state: null });
   }, [chapters, location, navigate, setCurrentChapter]);
 
-  // Consume the one-shot Library Search handoff: the editor (keyed by chapter)
-  // applied it in this commit's child effects, so clearing now never closes
-  // its panel, and a later visit finds nothing to reopen.
+  // The toolbar clears an applied handoff through `onHandoffApplied`, once its
+  // panel has the query: clearing on chapter match instead would drop a
+  // handoff that arrives before the editor (and its toolbar) has mounted.
+  // Only a handoff its chapter is gone from is cleared here, so a later
+  // visit finds nothing to reopen.
+  const handleHandoffApplied = useCallback(() => setFindHandoff(null), []);
   useEffect(() => {
-    if (findHandoff && currentChapter?.id === findHandoff.chapterId) {
+    if (findHandoff && currentChapter && currentChapter.id !== findHandoff.chapterId) {
       setFindHandoff(null);
     }
-  }, [findHandoff, currentChapter?.id]);
+  }, [findHandoff, currentChapter]);
 
   // Update word count display and sync editor content ref when chapter changes
   useEffect(() => {
@@ -1408,6 +1411,7 @@ export function BookEditor() {
               findHandoff={
                 findHandoff?.chapterId === currentChapter.id ? findHandoff.handoff : null
               }
+              onHandoffApplied={handleHandoffApplied}
               spellCheckLanguage={normalizeLanguage(currentBook.language)}
               onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
               restoreKey={`chapter:${currentChapter.id}`}

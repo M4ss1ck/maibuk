@@ -19,6 +19,7 @@ import {
   SEED_NOTE_TAGS,
   SHELF_BOOKS,
   LANGUAGE_BOOKS,
+  PALETTE_CANVAS,
 } from "./names";
 import { checkpointHistory } from "./checkpoint-history";
 import { checkpointBacklog } from "./checkpoint-backlog";
@@ -166,11 +167,14 @@ async function paletteLibrary(): Promise<void> {
   let words = 0;
   for (const chapter of [SEED_CHAPTERS[0], SEED_CHAPTERS[1]]) {
     const created = await createChapterRow({ bookId: book.id, title: chapter.title }, "local");
-    const saved = await updateChapterRow(
-      created.id,
-      { content: `<p>${chapter.text}</p>` },
-      "local"
-    );
+    // Arrival carries the text specs' words: "ferry" twice (so the handoff
+    // lands on "1 of 2") and "timetable" once (so Whole word drops "table"
+    // out), while still ending on "dusk." like the shared seed text.
+    const content =
+      chapter.title === SEED_CHAPTERS[0].title
+        ? `<p>A ferry timetable hung by the door. ${chapter.text}</p>`
+        : `<p>${chapter.text}</p>`;
+    const saved = await updateChapterRow(created.id, { content }, "local");
     words += saved?.wordCount ?? 0;
   }
   await updateBookWordCountRow(book.id, words);
@@ -194,6 +198,29 @@ async function paletteLibrary(): Promise<void> {
     {
       title: SEED_NOTES.tideTables,
       content: "<p>High water at six. Low water at noon.</p>",
+    },
+    "local"
+  );
+
+  // The text specs' Canvas landing: one card holding "beacon", a word that
+  // appears nowhere else in this Library.
+  const chart = await createCanvasRow({ title: PALETTE_CANVAS.title }, "local");
+  await updateCanvasDocRow(
+    chart.id,
+    {
+      schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
+      nodes: [
+        {
+          id: PALETTE_CANVAS.cardId,
+          kind: "text",
+          html: "<p>The beacon marks the harbor mouth.</p>",
+          position: { x: 0, y: 0 },
+          width: 288,
+        },
+      ],
+      edges: [],
+      strokes: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
     },
     "local"
   );

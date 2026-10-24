@@ -147,6 +147,8 @@ interface EditorProps {
    * its query. One-shot per object identity (see EditorToolbar).
    */
   findHandoff?: SearchHandoff | null;
+  /** The handoff above opened Find and Replace; the page clears it now. */
+  onHandoffApplied?: () => void;
   /**
    * The language the text is written in, reported to Plugins with the content:
    * a Note's own else its Book's, or a Chapter's Book's. Omitted or blank, the
@@ -189,6 +191,7 @@ export function Editor({
   pluginEntity = null,
   pluginLanguage = null,
   findHandoff = null,
+  onHandoffApplied,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
@@ -639,6 +642,7 @@ export function Editor({
           onExportImage={onExportImage}
           tutorialAnchor={tutorialAnchors?.toolbar}
           findHandoff={findHandoff}
+          onHandoffApplied={onHandoffApplied}
         />
       )}
 

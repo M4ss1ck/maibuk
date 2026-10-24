@@ -58,7 +58,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
       ]),
       step("book-editor.text", ["Heading", "Scene Break", "Footnote"]),
       step("book-editor.outline", ["Outline"]),
-      step("book-editor.toolbar", ["Spell Check", "Word Lookup", "Symbol", "Text Case"]),
+      step("book-editor.toolbar", ["Find and Replace", "Spell Check", "Word Lookup", "Symbol", "Text Case"]),
       step("book-editor.save-status", ["Save Status", "Edit Session", "Flush"]),
       step("book-editor.book-notes", ["Book Note"]),
       step("book-editor.history", [

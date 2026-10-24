@@ -219,6 +219,8 @@ interface NoteEditorProps {
    * its query. One-shot per object identity (see EditorToolbar).
    */
   findHandoff?: SearchHandoff | null;
+  /** The handoff above opened Find and Replace; the page clears it now. */
+  onHandoffApplied?: () => void;
   /**
    * Where the title bar renders. `undefined` keeps it inline (standalone use);
    * `null` renders no title bar yet (the slot is not mounted); an element
@@ -237,6 +239,7 @@ export function NoteEditor({
   suppressRestore = false,
   titleBarContainer,
   findHandoff = null,
+  onHandoffApplied,
 }: NoteEditorProps) {
   const { t, i18n } = useTranslation();
   const title = note.title;
@@ -727,6 +730,7 @@ export function NoteEditor({
         suppressRestore={suppressRestore}
         placeholder={t("notes.bodyPlaceholder")}
         findHandoff={findHandoff}
+        onHandoffApplied={onHandoffApplied}
         extraExtensions={allNotesExtensions}
         internalTargets={internalTargets}
         onEditorReady={handleEditorReady}
