@@ -8,7 +8,6 @@
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import type { PluginClient } from "@/plugin-sdk";
-import type { PluginApiOutput } from "@/features/plugins/types";
 import { bookLine } from "./books";
 import {
   errorResult,
@@ -31,7 +30,8 @@ export interface SearchLibraryArgs {
   cursor?: string;
 }
 
-type SearchSuccess = Extract<PluginApiOutput<"library.search">, { results: unknown }>;
+type SearchOutput = Awaited<ReturnType<PluginClient["library"]["search"]>>;
+type SearchSuccess = Extract<SearchOutput, { results: unknown }>;
 type SearchResult = SearchSuccess["results"][number];
 
 /**
