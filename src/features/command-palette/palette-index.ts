@@ -24,7 +24,8 @@ export type PaletteSectionId =
   | "notes"
   | "books"
   | "canvases"
-  | "settings";
+  | "settings"
+  | "text";
 
 export const PALETTE_SECTION_ORDER: readonly PaletteSectionId[] = [
   "recent",
@@ -36,6 +37,7 @@ export const PALETTE_SECTION_ORDER: readonly PaletteSectionId[] = [
   "books",
   "canvases",
   "settings",
+  "text",
 ];
 
 export const PALETTE_SECTION_CAP = 50;
@@ -115,6 +117,20 @@ export interface PaletteItem {
   detail?: string;
   bookId?: string;
   targetPage?: PalettePage;
+  /**
+   * Text-section only: the best snippet with its highlight ranges, and the
+   * total matches across the item. Title rows never carry these.
+   */
+  snippet?: {
+    text: string;
+    highlights: readonly (readonly [number, number])[];
+  };
+  matchCount?: number;
+  /**
+   * Text-section only: the accessible name, naming the kind, title, Book,
+   * and snippet text. Title rows name themselves through their label.
+   */
+  accessibleName?: string;
 }
 
 export interface PaletteResult {

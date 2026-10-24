@@ -225,6 +225,9 @@ const { useSearchSwitchesStore, SEARCH_SWITCHES_STORAGE_KEY } = await import(
 );
 const { DEFAULT_SHORTCUT_SETTINGS } = await import("@/lib/shortcut-resolve");
 const { resetSyncEngineForTests } = await import("@/features/sync/sync-engine");
+const { requestSearchRebuild, resetSearchIndexForTests } = await import(
+  "@/features/search/rebuild"
+);
 const { resetAutoSyncForTests } = await import("@/features/sync/auto-sync");
 const { lastFocusedEditor } = await import("@/components/editor/editor-command-source");
 const { runCommand } = await import("@/lib/command-runner");
@@ -1604,6 +1607,300 @@ describe("Command Palette search switches", () => {
 
     await user.keyboard("{Alt>}r{/Alt}");
     await waitFor(() => expect(switches().regex).toBe(true));
+  });
+});
+
+describe("Command Palette text results", () => {
+  async function seedHarbour() {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Lookout" }, "local");
+    await updateChapterRow(
+      chapter.id,
+      { content: "<p>The harbour light blinked, harbour dark</p>" },
+      "local"
+    );
+    const note = await createNoteRow(
+      { title: "Marginalia", content: "<p>harbour gossip</p>" },
+      "local"
+    );
+    return { book, chapter, note };
+  }
+
+  /** The Text group's options, by each one's accessible name. */
+  function textOptionsByName(dialog: HTMLElement): Map<string, HTMLElement> {
+    return new Map(
+      sectionOptions(dialog, "Text").map(
+        (option) => [option.getAttribute("aria-label") ?? "", option] as const
+      )
+    );
+  }
+
+  it("lists title matches first, then one Text row per item", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Harbour Watch" }, "local");
+    await updateChapterRow(
+      chapter.id,
+      { content: "<p>The harbour light blinked, harbour dark</p>" },
+      "local"
+    );
+    await createNoteRow(
+      { title: "Marginalia", content: "<p>harbour gossip</p>" },
+      "local"
+    );
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.keyboard("harbour");
+
+    const textGroup = await within(dialog).findByRole("group", { name: "Text" });
+    // The Text section trails every title section.
+    const chaptersGroup = within(dialog).getByRole("group", { name: "Chapters" });
+    expect(chaptersGroup.compareDocumentPosition(textGroup) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    // One row per item, however many times the item matched.
+    expect(sectionOptions(dialog, "Text")).toHaveLength(2);
+    // Two matches fit well under the cap, so no refine line.
+    expect(within(dialog).queryByText(en("commandPalette.textRefine"))).toBeNull();
+  });
+
+  it("highlights the snippet, names the Book, says how many more, and announces it all", async () => {
+    await seedHarbour();
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.keyboard("harbour");
+    await within(dialog).findByRole("group", { name: "Text" });
+
+    const byName = textOptionsByName(dialog);
+    const chapterName = [...byName.keys()].find((name) => name.includes("Lookout"));
+    expect(chapterName).toBeDefined();
+    const chapterOption = byName.get(chapterName as string) as HTMLElement;
+    // The accessible name carries kind, title, Book, and snippet text.
+    expect(chapterName).toContain("Chapter");
+    expect(chapterName).toContain("Lookout");
+    expect(chapterName).toContain("Atlas");
+    expect(chapterName).toContain("harbour");
+    // The match is highlighted where it stands.
+    const mark = chapterOption.querySelector("mark");
+    expect(mark?.textContent).toBe("harbour");
+    // The Book is the detail, and two matches say one more.
+    expect(chapterOption.textContent).toContain("Atlas");
+    expect(chapterOption.textContent).toContain(en("commandPalette.textMore", { count: 1 }));
+
+    // The single-match Note names no "+N more".
+    const noteName = [...byName.keys()].find((name) => name.includes("Marginalia"));
+    expect(noteName).toBeDefined();
+    expect(noteName).toContain("Note");
+    expect(noteName).toContain("harbour");
+    expect((byName.get(noteName as string) as HTMLElement).textContent).not.toContain("+");
+  });
+
+  it("announces the result count with the text results in it", async () => {
+    await seedHarbour();
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.keyboard("harbour");
+    await within(dialog).findByRole("group", { name: "Text" });
+
+    // No title matches "harbour": the two text rows are the whole count.
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        en("commandPalette.resultCount", { count: 2 })
+      )
+    );
+  });
+
+  it("caps the Text section at 50 rows with a line asking to refine", async () => {
+    for (let index = 0; index < 55; index += 1) {
+      await createNoteRow(
+        { title: `Cap Note ${index}`, content: "<p>capybara meadow</p>" },
+        "local"
+      );
+    }
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.keyboard("capybara");
+
+    await within(dialog).findByRole("group", { name: "Text" });
+    // The list virtualizes to its viewport, so jsdom mounts only the visible
+    // rows: the cap shows as the refine line, which renders only when the
+    // module reports more than the Text section's 50 rows.
+    expect(await within(dialog).findByText(en("commandPalette.textRefine"))).toBeInTheDocument();
+    const rendered = sectionOptions(dialog, "Text");
+    expect(rendered.length).toBeGreaterThan(2);
+    expect(rendered.length).toBeLessThanOrEqual(50);
+  });
+
+  it("narrows the text results on a nested page", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    await createChapterRow({ bookId: book.id, title: "Lookout" }, "local").then((chapter) =>
+      updateChapterRow(chapter.id, { content: "<p>sharedword in a chapter</p>" }, "local")
+    );
+    await createNoteRow(
+      { title: "Marginalia", content: "<p>sharedword in a note</p>" },
+      "local"
+    );
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Open Note");
+    const page = await within(dialog).findByRole("option", { name: "Open Note…" });
+    await arrowToAndChoose(user, dialog, search, page);
+    expect(await within(dialog).findByText("Showing Open Note")).toBeInTheDocument();
+
+    await user.keyboard("sharedword");
+    await within(dialog).findByRole("group", { name: "Text" });
+    await waitFor(() => expect(sectionOptions(dialog, "Text")).toHaveLength(1));
+    const names = [...textOptionsByName(dialog).keys()];
+    expect(names.some((name) => name.includes("Marginalia"))).toBe(true);
+    expect(names.some((name) => name.includes("Lookout"))).toBe(false);
+  });
+
+  it("follows Match case: toggling it changes the text results", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Felines" }, "local");
+    await updateChapterRow(chapter.id, { content: "<p>Cat cat</p>" }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.keyboard("Cat");
+    await within(dialog).findByRole("group", { name: "Text" });
+    // Case ignored: both fall on one row with one more.
+    await waitFor(() =>
+      expect(sectionOptions(dialog, "Text")[0].textContent).toContain(
+        en("commandPalette.textMore", { count: 1 })
+      )
+    );
+
+    await user.keyboard("{Alt>}c{/Alt}");
+    // Case matched: one match left, so the "+N more" goes.
+    await waitFor(() =>
+      expect(sectionOptions(dialog, "Text")[0].textContent).not.toContain(
+        en("commandPalette.textMore", { count: 1 })
+      )
+    );
+    expect(sectionOptions(dialog, "Text")).toHaveLength(1);
+  });
+
+  it("shows an error line instead of text results for an invalid Regex", async () => {
+    await seedHarbour();
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    // Alt+R keeps focus in the field; a click would leave it on the button.
+    await user.keyboard("{Alt>}r{/Alt}");
+    // "[" would read as user-event's repeat syntax; "(" is an invalid Regex
+    // all the same and types literally.
+    await user.keyboard("(unclosed");
+
+    expect(
+      await within(dialog).findByText(en("commandPalette.textInvalidRegex"), { exact: false })
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("group", { name: "Text" })).toBeNull();
+  });
+
+  it("shows Indexing… while a rebuild runs, with the results found so far", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Lookout" }, "local");
+    await updateChapterRow(chapter.id, { content: "<p>The harbour light blinked</p>" }, "local");
+
+    // Stall the rebuild inside its first write: the flag stays up while the
+    // text search (plain SELECTs) still answers.
+    const adapter = authorDb.current as DatabaseAdapter;
+    const realExecuteAtomic = adapter.executeAtomic.bind(adapter);
+    let releaseRebuild!: () => void;
+    const rebuildGate = new Promise<void>((resolve) => {
+      releaseRebuild = resolve;
+    });
+    adapter.executeAtomic = (async (statements) => {
+      await rebuildGate;
+      return realExecuteAtomic(statements);
+    }) as DatabaseAdapter["executeAtomic"];
+    const rebuildPromise = requestSearchRebuild();
+    try {
+      const user = userEvent.setup();
+      renderApp("/");
+      await settleOn("/");
+
+      const dialog = await openLibrarySearch(user);
+      await user.keyboard("harbour");
+      expect(
+        await within(dialog).findByText(en("commandPalette.textIndexing"))
+      ).toBeInTheDocument();
+      expect(await within(dialog).findByRole("group", { name: "Text" })).toBeInTheDocument();
+    } finally {
+      releaseRebuild();
+      await rebuildPromise;
+      resetSearchIndexForTests();
+      adapter.executeAtomic = realExecuteAtomic;
+    }
+  });
+
+  it("ignores a stale scan: el then quickly ela shows only the latest", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const short = await createChapterRow({ bookId: book.id, title: "Gato" }, "local");
+    await updateChapterRow(short.id, { content: "<p>el gato duerme</p>" }, "local");
+    const long = await createChapterRow({ bookId: book.id, title: "Elastico" }, "local");
+    await updateChapterRow(long.id, { content: "<p>material elastico</p>" }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    // "el" scans, so it waits for a pause; "ela" queries at once and drops it.
+    await user.keyboard("el");
+    await user.keyboard("a");
+    expect(search).toHaveValue("ela");
+
+    await within(dialog).findByRole("group", { name: "Text" });
+    await waitFor(() => {
+      const names = [...textOptionsByName(dialog).keys()];
+      expect(names.some((name) => name.includes("Elastico"))).toBe(true);
+      expect(names.some((name) => name.includes("Gato"))).toBe(false);
+    });
+  });
+
+  it("opens a text row on the same item its title row would open", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Beacon" }, "local");
+    await updateChapterRow(chapter.id, { content: "<p>The lighthouse keeper waits</p>" }, "local");
+    const user = userEvent.setup();
+    renderApp(`/book/${book.id}`);
+    await settleOn(`/book/${book.id}`);
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("lighthouse");
+    const options = await waitFor(() => {
+      const found = sectionOptions(dialog, "Text");
+      expect(found).toHaveLength(1);
+      return found;
+    });
+    expect(options[0].getAttribute("aria-label")).toContain("Beacon");
+    await arrowToAndChoose(user, dialog, search, options[0]);
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
+    await waitFor(() => expect(path).toBe(`/book/${book.id}`));
+    await waitFor(() => expect(openChapterTitle()).toBe("Beacon"));
+    expect(chapter).toBeDefined();
   });
 });
 

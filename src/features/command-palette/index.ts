@@ -14,5 +14,14 @@ export { buildSettingsItems } from "@/features/command-palette/settings-items";
 export type { BuildSettingsItemsOptions } from "@/features/command-palette/settings-items";
 export { searchLibrary } from "@/features/command-palette/library-search";
 export type { SearchLibraryOptions } from "@/features/command-palette/library-search";
+export {
+  buildTextResults,
+  isTextScanQuery,
+  textSearchKinds,
+  TEXT_SEARCH_DEBOUNCE_MS,
+  TEXT_SEARCH_INDEX_MIN_CHARS,
+  TEXT_SEARCH_LIMIT,
+} from "@/features/command-palette/library-search";
+export type { BuildTextResultsOptions } from "@/features/command-palette/library-search";
 export * from "@/features/command-palette/palette-index";
 export { loadPaletteEntities } from "@/features/command-palette/load-entities";

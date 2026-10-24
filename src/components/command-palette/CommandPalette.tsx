@@ -37,6 +37,8 @@ import {
   buildEntityItems,
   buildPageItems,
   buildSettingsItems,
+  buildTextResults,
+  isTextScanQuery,
   liveRecentKeys,
   loadPaletteEntities,
   paletteModeOf,
@@ -45,6 +47,9 @@ import {
   preparePaletteIndex,
   searchLibrary,
   searchPalette,
+  textSearchKinds,
+  TEXT_SEARCH_DEBOUNCE_MS,
+  TEXT_SEARCH_LIMIT,
   useCommandPaletteRecentStore,
   useCommandPaletteStore,
 } from "@/features/command-palette";
@@ -54,8 +59,21 @@ import type {
   PaletteMode,
   PalettePage,
   PaletteResult,
+  PaletteSection,
   PaletteTranslate,
 } from "@/features/command-palette/palette-index";
+import type {
+  SearchItemKind,
+  SearchLibraryResult,
+  SearchResult,
+} from "@/features/search/types";
+import { searchLibrary as searchLibraryIndex } from "@/features/search";
+import {
+  isSearchIndexRebuilding,
+  subscribeSearchIndexStatus,
+} from "@/features/search/rebuild";
+import { getDatabase } from "@/lib/db";
+import { useDebouncedCallback } from "@/hooks/useAutoSave";
 import type { SettingsRowId } from "@/components/settings/settings-sections";
 import { focusSettingsRow } from "@/features/settings/focus-row";
 import { currentSettingsPlatform } from "@/features/settings/rows";
@@ -228,7 +246,7 @@ function OpenCommandPalette() {
   // keys do nothing there. Read the raw query, so a keystroke switches at once.
   const libraryField = paletteModeOf(query) === "library";
   const queryEmpty = paletteQueryText(query) === "";
-  const sections = useMemo(
+  const titleSections = useMemo(
     () =>
       mode === "commands"
         ? searchPalette(index, {
@@ -249,6 +267,131 @@ function OpenCommandPalette() {
             regex,
           }),
     [index, mode, searchText, page, recentKeys, openBookId, matchCase, wholeWord, regex]
+  );
+
+  // The Text section reads the search index off the keystroke's frame: the
+  // field echoes every keystroke while this runs in the background. A literal
+  // query of 3 or more characters queries immediately through the trigram
+  // index; a shorter query or a Regex waits for a pause in typing and is
+  // cancelled by the next keystroke, so a scan never lags the field. A stale
+  // response never overwrites a newer one: each run carries a sequence number
+  // and only the latest may write state.
+  const [textResults, setTextResults] = useState<readonly SearchResult[]>([]);
+  const [textError, setTextError] = useState<string | null>(null);
+  const [textCapped, setTextCapped] = useState(false);
+  const [indexing, setIndexing] = useState<boolean>(() => isSearchIndexRebuilding());
+  useEffect(
+    () => subscribeSearchIndexStatus(() => setIndexing(isSearchIndexRebuilding())),
+    []
+  );
+  const searchSeqRef = useRef(0);
+  const runTextSearch = useCallback(
+    async (args: {
+      query: string;
+      kinds: readonly SearchItemKind[] | undefined;
+      openBookId: string | null;
+      matchCase: boolean;
+      wholeWord: boolean;
+      regex: boolean;
+      seq: number;
+    }) => {
+      if (searchSeqRef.current !== args.seq) return;
+      let outcome: SearchLibraryResult;
+      try {
+        const db = await getDatabase();
+        if (searchSeqRef.current !== args.seq) return;
+        outcome = await searchLibraryIndex(db, {
+          query: args.query,
+          kinds: args.kinds,
+          openBookId: args.openBookId,
+          matchCase: args.matchCase,
+          wholeWord: args.wholeWord,
+          regex: args.regex,
+          limit: TEXT_SEARCH_LIMIT,
+        });
+      } catch {
+        return;
+      }
+      if (searchSeqRef.current !== args.seq) return;
+      if ("error" in outcome) {
+        setTextError(outcome.message);
+        setTextResults([]);
+        setTextCapped(false);
+      } else {
+        setTextError(null);
+        setTextResults(outcome.results);
+        setTextCapped(outcome.nextCursor !== undefined);
+      }
+    },
+    []
+  );
+  const debouncedTextSearch = useDebouncedCallback(runTextSearch, TEXT_SEARCH_DEBOUNCE_MS);
+  useEffect(() => {
+    if (mode !== "library" || searchText.trim() === "") {
+      searchSeqRef.current += 1;
+      debouncedTextSearch.cancel();
+      setTextResults([]);
+      setTextError(null);
+      setTextCapped(false);
+      return;
+    }
+    const seq = searchSeqRef.current + 1;
+    searchSeqRef.current = seq;
+    const args = {
+      query: searchText,
+      kinds: textSearchKinds(page),
+      openBookId,
+      matchCase,
+      wholeWord,
+      regex,
+      seq,
+    };
+    // The scan path waits for a pause; the indexed path runs at once, and
+    // either way a pending scan is dropped by the next keystroke.
+    if (isTextScanQuery(searchText, regex)) {
+      debouncedTextSearch(args);
+    } else {
+      debouncedTextSearch.cancel();
+      void runTextSearch(args);
+    }
+  }, [
+    mode,
+    searchText,
+    page,
+    openBookId,
+    matchCase,
+    wholeWord,
+    regex,
+    debouncedTextSearch,
+    runTextSearch,
+  ]);
+
+  // The Book titles the text rows name, from the entities already loaded.
+  const bookTitles = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const book of entities?.books ?? []) map.set(book.id, book.title);
+    return map;
+  }, [entities]);
+  const textPaletteResults = useMemo(
+    () =>
+      textResults.length === 0
+        ? []
+        : buildTextResults({ results: textResults, bookTitles, t: translate }),
+    [textResults, bookTitles, translate]
+  );
+  // Title matches first, as now, then the Text section.
+  const textSections = useMemo<PaletteSection[]>(
+    () =>
+      mode !== "library" || searchText.trim() === "" || textError !== null
+        ? []
+        : textPaletteResults.length === 0
+          ? []
+          : [{ id: "text", results: textPaletteResults }],
+    [mode, searchText, textError, textPaletteResults]
+  );
+  const sections = useMemo(
+    () => [...titleSections, ...textSections],
+    [titleSections, textSections]
   );
   const flatResults = useMemo(() => sections.flatMap((section) => section.results), [sections]);
   const count = flatResults.length;
@@ -435,7 +578,10 @@ function OpenCommandPalette() {
    */
   const openResult = useCallback(
     (item: PaletteItem) => {
-      recordRecent(item.key);
+      // A text row records its title row's key, so Recent keeps working: the
+      // text key itself is not in the palette index and would be pruned.
+      const recentKey = item.key.startsWith("text:") ? item.key.slice("text:".length) : item.key;
+      recordRecent(recentKey);
       close();
       void (async () => {
         // Let the Modal unmount (and lift its gate) before moving.
@@ -613,6 +759,27 @@ function OpenCommandPalette() {
             </ListBox>
           </Virtualizer>
         )}
+        {/* Status lines, never options: the invalid-Regex error replaces the
+            Text section, the refine line closes a capped one, and Indexing…
+            says the results found so far may be incomplete. */}
+        {mode === "library" && searchText.trim() !== "" && textError !== null && (
+          <p className="px-3 pb-3 pt-1 text-sm text-destructive">
+            {t("commandPalette.textInvalidRegex")}: {textError}
+          </p>
+        )}
+        {mode === "library" &&
+          searchText.trim() !== "" &&
+          textError === null &&
+          textCapped && (
+            <p className="px-3 pb-3 pt-1 text-sm text-muted-foreground">
+              {t("commandPalette.textRefine")}
+            </p>
+          )}
+        {mode === "library" && indexing && (
+          <p className="px-3 pb-3 pt-1 text-xs text-muted-foreground">
+            {t("commandPalette.textIndexing")}
+          </p>
+        )}
       </Autocomplete>
       <div ref={announcementRef} aria-live="polite" role="status" className="sr-only" />
     </Modal>
@@ -638,6 +805,41 @@ function renderHighlightedLabel(label: string, result: PaletteResult): ReactNode
   return parts;
 }
 
+function renderSnippetText(
+  text: string,
+  highlights: readonly (readonly [number, number])[]
+): ReactNode {
+  if (highlights.length === 0) return text;
+  const parts: ReactNode[] = [];
+  let at = 0;
+  highlights.forEach(([start, end], index) => {
+    if (start > at) parts.push(text.slice(at, start));
+    parts.push(
+      <mark key={`snippet-${index}`} className="rounded-sm bg-primary/20 text-foreground">
+        {text.slice(start, end)}
+      </mark>
+    );
+    at = end;
+  });
+  if (at < text.length) parts.push(text.slice(at));
+  return parts;
+}
+
+/**
+ * A text row names its item and shows the snippet around the best match.
+ * The accessible name (kind, title, Book, snippet) comes from the item's
+ * aria-label, so the visible separator stays out of it.
+ */
+function renderTextLabel(item: PaletteItem): ReactNode {
+  if (!item.snippet) return item.label;
+  return (
+    <>
+      {item.label}
+      <span className="text-muted-foreground"> — </span>
+      {renderSnippetText(item.snippet.text, item.snippet.highlights)}
+    </>
+  );
+}
 /** The icon each kind is recognized by, where the feature has one. */
 const KIND_ICONS: Partial<Record<PaletteItemKind, ComponentType<{ className?: string }>>> = {
   book: ProjectsIcon,
@@ -732,6 +934,10 @@ const PaletteRow = memo(function PaletteRow({
   const item = result.item;
   const unavailable = item.state === "disabled";
   const Icon = KIND_ICONS[item.kind];
+  // A text row carries its snippet, its Book, and how many more matches the
+  // item holds; its accessible name already names the kind, title, Book, and
+  // snippet text.
+  const isTextRow = item.snippet !== undefined;
   // A disabled Command stays reachable with the arrow keys and announced as
   // disabled. React Aria offers either skipping disabled items or never
   // marking them, so the row stays an ordinary option and carries
@@ -748,7 +954,8 @@ const PaletteRow = memo(function PaletteRow({
     <ListBoxItem
       id={item.key}
       ref={markUnavailable}
-      textValue={item.label}
+      textValue={item.accessibleName ?? item.label}
+      aria-label={item.accessibleName}
       onAction={() => onChoose(item)}
       className={`mx-1 flex min-h-8 items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none pointer-coarse:min-h-11 data-focused:bg-primary/15 data-focus-visible:ring-1 data-focus-visible:ring-inset data-focus-visible:ring-primary ${
         unavailable ? "cursor-default opacity-60" : "cursor-pointer"
@@ -756,13 +963,20 @@ const PaletteRow = memo(function PaletteRow({
     >
       {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
       {/* The label names the option; the detail and the live Shortcut are its
-          description, so they are announced after the name, not glued to it. */}
+          description, so they are announced after the name, not glued to it.
+          A text row's aria-label already carries kind, title, Book, and
+          snippet, so its visible label shows the title beside the snippet. */}
       <Text slot="label" className="min-w-0 flex-1 truncate">
-        {renderHighlightedLabel(item.label, result)}
+        {isTextRow ? renderTextLabel(item) : renderHighlightedLabel(item.label, result)}
       </Text>
       <Text slot="description" className="flex shrink-0 items-center gap-2">
         {item.detail && (
           <span className="truncate text-xs text-muted-foreground">{item.detail}</span>
+        )}
+        {isTextRow && (item.matchCount ?? 0) > 1 && (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {t("commandPalette.textMore", { count: (item.matchCount ?? 0) - 1 })}
+          </span>
         )}
         {item.kind === "command" && <PaletteShortcuts id={item.id as CommandId} mac={mac} />}
       </Text>

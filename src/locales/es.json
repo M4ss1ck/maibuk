@@ -1188,6 +1188,17 @@
     "unavailable": "Ese comando ya no está disponible aquí",
     "saveFailed": "No se pudo guardar tu último texto, así que no se abrió nada",
     "noResults": "Sin resultados",
+    "textMore_one": "+{{count}} más",
+    "textMore_other": "+{{count}} más",
+    "textRefine": "Demasiadas coincidencias — precisa tu búsqueda para ver más.",
+    "textIndexing": "Indexando…",
+    "textInvalidRegex": "Patrón no válido",
+    "kinds": {
+      "book": "Libro",
+      "chapter": "Capítulo",
+      "note": "Nota",
+      "canvas": "Lienzo"
+    },
     "pageAnnouncement": "Mostrando {{page}}",
     "modes": {
       "commands": "Modo comandos",
@@ -1214,7 +1225,8 @@
       "notes": "Notas",
       "books": "Libros",
       "canvases": "Lienzos",
-      "settings": "Configuración"
+      "settings": "Configuración",
+      "text": "Texto"
     }
   },
   "shortcuts": {
