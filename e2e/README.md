@@ -639,7 +639,7 @@ node scripts/plugins-bench-budget.mjs .bench/plugins-chromium.json
 ## MCP Server Agent eval
 
 `pnpm eval:mcp` checks that a real Agent can use the MCP Server Built-in Plugin
-(`plugins/maibuk-mcp/`, issue #595). For each of six tasks it runs one headless
+(`plugins/maibuk-mcp/`, issue #595). For each of seven tasks it runs one headless
 Claude Code session against a fixture Library, then reads the Library back and
 judges the result. It costs money, because every task is a real model session
 (about $0.01 to $0.10 per task on `sonnet`). It never runs in CI. Run it before
@@ -661,12 +661,13 @@ port checks) is covered by its own tests.
 
 | Task | Prompt asks for | The Library must show afterwards | Budget |
 | --- | --- | --- | --- |
-| 1 | The Note tagged `keeper`, read it | Nothing changed; the tagged Note was read, not the decoy whose title says keeper; the answer names Ottilie Marsh and 31 years | 2,766 |
-| 2 | Append a scene to "Storm" | The old HTML kept byte for byte, then the two scene paragraphs; no whole replace; one Checkpoint | 2,866 |
-| 3 | Fix the one typo in "Arrival" | The HTML equals the original with that one word fixed, formatting intact; `edit_chapter`, never `write_chapter` | 3,166 |
-| 4 | Create "Interlude", then move it after "Arrival" | The Chapter exists with its text, and the order is Arrival, Interlude, Storm, The Lamp Room, Epilogue | 2,866 |
-| 5 | Replace "The Lamp Room" whole while the author types | The stale replace was refused, then the Chapter was re-read and written (a whole replace or edits); the new version and the author's typed paragraph are both in the Chapter | 3,066 |
-| 6 | Rename a Book in read-only mode | Only the five read tools were offered; nothing changed; the answer says it cannot write | 1,181 |
+| 1 | The Note tagged `keeper`, read it | Nothing changed; the tagged Note was read, not the decoy whose title says keeper; the answer names Ottilie Marsh and 31 years | 3,014 |
+| 2 | Append a scene to "Storm" | The old HTML kept byte for byte, then the two scene paragraphs; no whole replace; one Checkpoint | 3,114 |
+| 3 | Fix the one typo in "Arrival" | The HTML equals the original with that one word fixed, formatting intact; `edit_chapter`, never `write_chapter` | 3,414 |
+| 4 | Create "Interlude", then move it after "Arrival" | The Chapter exists with its text, and the order is Arrival, Interlude, Storm, The Lamp Room, Epilogue | 3,114 |
+| 5 | Replace "The Lamp Room" whole while the author types | The stale replace was refused, then the Chapter was re-read and written (a whole replace or edits); the new version and the author's typed paragraph are both in the Chapter | 3,314 |
+| 6 | Rename a Book in read-only mode | Only the six read tools were offered; nothing changed; the answer says it cannot write | 1,429 |
+| 7 | Find the passage "bell on the reef" with search, then read it | Nothing changed; `search_library` ran before `read_chapter` of "Arrival"; the answer quotes "There was no bell on the reef." | 3,314 |
 
 In task 5 the author's typing is simulated. Right after the Agent's first
 read of the Chapter, the eval records unsaved editor text
@@ -682,11 +683,12 @@ call's arguments and result count every time. A task passes when every check
 holds and its MCP tokens stay within its budget. Each budget is the fixed cost,
 plus the expected path, plus room for one orienting or repeated call:
 
-- The fixed cost is 2,266 (2,174 for the 12 tool definitions, 92 for the
-  instructions), or 731 in read-only mode.
+- The fixed cost is 2,514 (2,394 for the 13 tool definitions, 120 for the
+  instructions), or 979 in read-only mode.
 - On this fixture, `list_books` costs about 30, `get_book` about 100, a
   tag-filtered `list_notes` about 27, `read_note` about 96, a 204-word
-  `read_chapter` about 315, and a write's answer about 25.
+  `read_chapter` about 315, a two-hit `search_library` about 85, and a write's
+  answer about 25.
 
 The reasoning for each task sits beside its number in
 `src/test/support/mcp-eval/tasks.ts`. The budgets were fixed before the first
@@ -715,7 +717,7 @@ eval runs on that login. It does not use `--bare`, which reads only
 `ANTHROPIC_API_KEY`.
 
 ```bash
-pnpm eval:mcp                      # all six tasks on sonnet
+pnpm eval:mcp                      # all seven tasks on sonnet
 pnpm eval:mcp --task 3,5           # some tasks
 pnpm eval:mcp --model opus         # another model
 pnpm eval:mcp --help               # every option
