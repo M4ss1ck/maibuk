@@ -7,6 +7,7 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
 import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "@/features/notes";
+import type { SearchHandoff } from "@/features/search/types";
 import { useEditSession } from "@/features/edit-session";
 import { useNoteStore } from "@/features/notes/store";
 import { normalizeNoteTags } from "@/features/notes/tags";
@@ -214,6 +215,11 @@ interface NoteEditorProps {
   returnLabel?: string;
   suppressRestore?: boolean;
   /**
+   * A Library Search text row opened this note: open Find and Replace with
+   * its query. One-shot per object identity (see EditorToolbar).
+   */
+  findHandoff?: SearchHandoff | null;
+  /**
    * Where the title bar renders. `undefined` keeps it inline (standalone use);
    * `null` renders no title bar yet (the slot is not mounted); an element
    * portals it there so it can span the whole app width.
@@ -230,6 +236,7 @@ export function NoteEditor({
   returnLabel,
   suppressRestore = false,
   titleBarContainer,
+  findHandoff = null,
 }: NoteEditorProps) {
   const { t, i18n } = useTranslation();
   const title = note.title;
@@ -719,6 +726,7 @@ export function NoteEditor({
         onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
         suppressRestore={suppressRestore}
         placeholder={t("notes.bodyPlaceholder")}
+        findHandoff={findHandoff}
         extraExtensions={allNotesExtensions}
         internalTargets={internalTargets}
         onEditorReady={handleEditorReady}

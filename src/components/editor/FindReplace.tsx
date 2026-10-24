@@ -25,6 +25,7 @@ import {
   findMatches,
   type SearchMatch,
 } from "@/components/editor/extensions/SearchReplace";
+import type { SearchHandoff } from "@/features/search/types";
 import { useSearchSwitchesStore } from "@/features/search/switches";
 import { Tooltip, TooltipGroup } from "@/components/ui";
 import type { CommandId } from "@/lib/shortcut-registry";
@@ -36,6 +37,12 @@ interface FindReplaceProps {
   isOpen: boolean;
   onClose: () => void;
   focusSignal?: number;
+  /**
+   * A Library Search text row opened this editor: the query to search for.
+   * One-shot per object identity; the switches arrive through the shared
+   * store, applied by the destination before the panel mounts.
+   */
+  handoff?: SearchHandoff | null;
 }
 
 function IconButton({
@@ -70,7 +77,13 @@ function IconButton({
   );
 }
 
-export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindReplaceProps) {
+export function FindReplace({
+  editor,
+  isOpen,
+  onClose,
+  focusSignal = 0,
+  handoff = null,
+}: FindReplaceProps) {
   const { t } = useTranslation();
   // Enter, Shift+Enter and Escape are handled by the find field itself.
   useBoundShortcutIds(
@@ -78,7 +91,7 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
     isOpen
   );
 
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(handoff?.query ?? "");
   const [replaceTerm, setReplaceTerm] = useState("");
   // The switches live in the shared store with Library Search, so toggling
   // here changes the palette's search and vice versa. The query and the
@@ -153,9 +166,24 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
     [editor, searchTerm, options]
   );
 
+  // A Library Search handoff sets the term instead of the selection: it runs
+  // before the prefill below, and the prefill skips the open it caused.
+  const appliedHandoffRef = useRef<SearchHandoff | null>(null);
+  const handedOffRef = useRef(false);
+  useEffect(() => {
+    if (!handoff || appliedHandoffRef.current === handoff) return;
+    appliedHandoffRef.current = handoff;
+    handedOffRef.current = true;
+    setSearchTerm(handoff.query);
+  }, [handoff]);
+
   // Prefill from the current editor selection when the panel opens.
   useEffect(() => {
     if (!isOpen) return;
+    if (handedOffRef.current) {
+      handedOffRef.current = false;
+      return;
+    }
     const { from, to } = editor.state.selection;
     if (from !== to) {
       const selected = editor.state.doc.textBetween(from, to);
@@ -214,9 +242,11 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
 
   // Clear highlights when the panel closes. The query and the replacement
   // stay local so they are restored on reopen; the switches live in the
-  // shared store, so they survive the panel too.
+  // shared store, so they survive the panel too. A consumed handoff must not
+  // swallow the next manual open's selection prefill.
   useEffect(() => {
     if (isOpen) return;
+    handedOffRef.current = false;
     editor.commands.clearSearchHighlights();
     setMatches([]);
   }, [isOpen, editor]);

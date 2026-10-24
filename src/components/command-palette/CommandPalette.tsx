@@ -63,6 +63,7 @@ import type {
   PaletteTranslate,
 } from "@/features/command-palette/palette-index";
 import type {
+  SearchHandoff,
   SearchItemKind,
   SearchLibraryResult,
   SearchResult,
@@ -277,6 +278,10 @@ function OpenCommandPalette() {
   // response never overwrites a newer one: each run carries a sequence number
   // and only the latest may write state.
   const [textResults, setTextResults] = useState<readonly SearchResult[]>([]);
+  // The query and switches the listed text rows were counted with, so choosing
+  // one hands the destination the exact search to reopen. Keystrokes past the
+  // deferred query the rows came from must not leak into it.
+  const textHandoffRef = useRef<SearchHandoff | null>(null);
   const [textError, setTextError] = useState<string | null>(null);
   const [textCapped, setTextCapped] = useState(false);
   const [indexing, setIndexing] = useState<boolean>(() => isSearchIndexRebuilding());
@@ -321,6 +326,12 @@ function OpenCommandPalette() {
         setTextError(null);
         setTextResults(outcome.results);
         setTextCapped(outcome.nextCursor !== undefined);
+        textHandoffRef.current = {
+          query: args.query,
+          matchCase: args.matchCase,
+          wholeWord: args.wholeWord,
+          regex: args.regex,
+        };
       }
     },
     []
@@ -333,6 +344,7 @@ function OpenCommandPalette() {
       setTextResults([]);
       setTextError(null);
       setTextCapped(false);
+      textHandoffRef.current = null;
       return;
     }
     const seq = searchSeqRef.current + 1;
@@ -574,13 +586,28 @@ function OpenCommandPalette() {
   /**
    * Leaves the palette and lands on the entity, Settings row, or page the
    * result named. Open editor text lands first: navigating away from a Chapter
-   * with unsaved keystrokes would lose them.
+   * with unsaved keystrokes would lose them. A text row lands exactly where
+   * its title row would, plus the handoff its destination reopens with: a
+   * Chapter or Note row opens the editor with Find and Replace on the query
+   * and switches the matches were counted with, a Canvas row centers that
+   * card selected, and a Book row opens the Book.
    */
   const openResult = useCallback(
     (item: PaletteItem) => {
       // A text row records its title row's key, so Recent keeps working: the
       // text key itself is not in the palette index and would be pruned.
       const recentKey = item.key.startsWith("text:") ? item.key.slice("text:".length) : item.key;
+      // A text row's query is the one its rows were counted with, not whatever
+      // the field holds by the time it is chosen.
+      const isTextRow = item.snippet !== undefined;
+      const handoff: SearchHandoff | null = isTextRow
+        ? (textHandoffRef.current ?? {
+            query: searchText,
+            matchCase,
+            wholeWord,
+            regex,
+          })
+        : null;
       recordRecent(recentKey);
       close();
       void (async () => {
@@ -602,19 +629,29 @@ function OpenCommandPalette() {
           return;
         }
         if (item.kind === "chapter") {
-          navigate(`/book/${item.bookId}`, { state: { openChapterId: item.id } });
+          navigate(`/book/${item.bookId}`, {
+            state: {
+              openChapterId: item.id,
+              ...(handoff ? { searchHandoff: handoff } : {}),
+            },
+          });
           return;
         }
         if (item.kind === "note") {
-          navigate(`/notes/${item.id}`);
+          if (handoff) navigate(`/notes/${item.id}`, { state: { searchHandoff: handoff } });
+          else navigate(`/notes/${item.id}`);
           return;
         }
         if (item.kind === "canvas") {
-          navigate(`/canvas/${item.id}`);
+          if (handoff && item.cardId) {
+            navigate(`/canvas/${item.id}`, { state: { focusCardId: item.cardId } });
+          } else {
+            navigate(`/canvas/${item.id}`);
+          }
         }
       })();
     },
-    [recordRecent, close, t, navigate, location.pathname]
+    [recordRecent, close, t, navigate, location.pathname, searchText, matchCase, wholeWord, regex]
   );
 
   const choose = useCallback(

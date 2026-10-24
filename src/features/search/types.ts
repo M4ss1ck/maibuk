@@ -52,6 +52,20 @@ export interface SearchResultIds {
   cardId?: string;
 }
 
+/**
+ * A Library Search text row opening its Chapter or Note in the editor: the
+ * query and the shared switches the matches were counted with. Carried in
+ * router location state beside `openChapterId` (Chapters) or alone (Notes),
+ * consumed once on arrival so Back/Forward never reopens Find and Replace.
+ * A stale result still navigates; the editor then counts the live document,
+ * so the panel shows the real matches (possibly none) and no error.
+ */
+export interface SearchHandoff {
+  query: string;
+  matchCase: boolean;
+  wholeWord: boolean;
+  regex: boolean;
+}
 /** The text around the best match, with the matches in it highlighted. */
 export interface SearchSnippet {
   text: string;

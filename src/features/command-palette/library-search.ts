@@ -85,10 +85,14 @@ export interface BuildTextResultsOptions {
 
 /**
  * One palette row per text result, in the module's rank order. Choosing one
- * navigates exactly as choosing the same item's title row: the key carries a
- * `text:` prefix so it never collides with the title row's, and the caller
- * records the title row's key for Recent. The accessible name carries the
- * kind, title, Book, and snippet text; the detail carries the Book.
+ * navigates exactly as choosing the same item's title row, plus the handoff
+ * the destination needs: a Chapter or Note row opens the editor with Find and
+ * Replace on the query and switches the matches were counted with, a Canvas
+ * row carries the card the snippet's block belongs to, and a Book row opens
+ * the Book. The key carries a `text:` prefix so it never collides with the
+ * title row's, and the caller records the title row's key for Recent. The
+ * accessible name carries the kind, title, Book, and snippet text; the detail
+ * carries the Book.
  */
 export function buildTextResults({
   results,
@@ -119,6 +123,7 @@ export function buildTextResults({
           text: result.snippet.text,
           highlights: result.snippet.highlights,
         },
+        ...(result.ids.cardId ? { cardId: result.ids.cardId } : {}),
         matchCount: result.matchCount,
         accessibleName: nameParts.join(" "),
       },

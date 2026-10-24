@@ -12,6 +12,8 @@ import {
 import { FocusScope, useOverlay } from "react-aria";
 import { useBookStore } from "@/features/books/store";
 import { useChapterStore } from "@/features/chapters/store";
+import type { SearchHandoff } from "@/features/search/types";
+import { useSearchSwitchesStore } from "@/features/search/switches";
 import { requestEditorReveal } from "@/features/plugins/editor-host";
 import type { PluginRevealRange } from "@/features/plugins/types";
 import type { Chapter, ChapterStatus, ChapterType } from "@/features/chapters/types";
@@ -137,6 +139,12 @@ export function BookEditor() {
   // A Chapter the author just created opens with the caret in its text; any
   // other Chapter takes focus only when it was lost (the Book just opened).
   const [focusEditorForChapterId, setFocusEditorForChapterId] = useState<string | null>(null);
+  // A Library Search text row opened this chapter: the handoff Find and
+  // Replace opens with, cleared once the editor applied it.
+  const [findHandoff, setFindHandoff] = useState<{
+    chapterId: string;
+    handoff: SearchHandoff;
+  } | null>(null);
   const [wordCount, setWordCount] = useState(0);
   const [editorStats, setEditorStats] = useState<EditorStats | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -427,6 +435,7 @@ export function BookEditor() {
     const state = location.state as {
       openChapterId?: string;
       scrollToHeadingId?: string;
+      searchHandoff?: SearchHandoff;
       reveal?: PluginRevealRange;
     } | null;
     if (!state?.openChapterId || chapters.length === 0) return;
@@ -434,6 +443,18 @@ export function BookEditor() {
     const target = chapters.find((c) => c.id === state.openChapterId);
     if (target) {
       setCurrentChapter(target);
+      // A Library Search text row opened this chapter: Find and Replace opens
+      // with its query and the switches the matches were counted with. The
+      // switches live in the shared store the panel reads, so they are set
+      // before the editor mounts.
+      if (state.searchHandoff) {
+        useSearchSwitchesStore.setState({
+          matchCase: state.searchHandoff.matchCase,
+          wholeWord: state.searchHandoff.wholeWord,
+          regex: state.searchHandoff.regex,
+        });
+        setFindHandoff({ chapterId: target.id, handoff: state.searchHandoff });
+      }
       // A Plugin's `navigation.openEntity(..., reveal)` lands the caret on its
       // spot once this Chapter's editor mounts (the host queues the range).
       if (state.reveal) {
@@ -455,6 +476,15 @@ export function BookEditor() {
     // Clear the navigation state so re-renders don't re-trigger.
     navigate(location.pathname, { replace: true, state: null });
   }, [chapters, location, navigate, setCurrentChapter]);
+
+  // Consume the one-shot Library Search handoff: the editor (keyed by chapter)
+  // applied it in this commit's child effects, so clearing now never closes
+  // its panel, and a later visit finds nothing to reopen.
+  useEffect(() => {
+    if (findHandoff && currentChapter?.id === findHandoff.chapterId) {
+      setFindHandoff(null);
+    }
+  }, [findHandoff, currentChapter?.id]);
 
   // Update word count display and sync editor content ref when chapter changes
   useEffect(() => {
@@ -1375,6 +1405,9 @@ export function BookEditor() {
               chapterId={currentChapter.id}
               pluginEntity={{ kind: "chapter", id: currentChapter.id }}
               pluginLanguage={currentBook.language}
+              findHandoff={
+                findHandoff?.chapterId === currentChapter.id ? findHandoff.handoff : null
+              }
               spellCheckLanguage={normalizeLanguage(currentBook.language)}
               onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
               restoreKey={`chapter:${currentChapter.id}`}

@@ -3,6 +3,8 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ResizeHandle } from "@/components/ui";
 import { useNoteStore } from "@/features/notes";
+import type { SearchHandoff } from "@/features/search/types";
+import { useSearchSwitchesStore } from "@/features/search/switches";
 import type { Note, ReorderNoteItem, UpdateNoteInput } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
 import { requestEditorReveal } from "@/features/plugins/editor-host";
@@ -49,6 +51,12 @@ export function Notes() {
     label: string;
   } | null>(null);
   const [titleBarSlot, setTitleBarSlot] = useState<HTMLElement | null>(null);
+  // A Library Search text row opened this note: the handoff Find and Replace
+  // opens with, cleared once the editor applied it.
+  const [findHandoff, setFindHandoff] = useState<{
+    noteId: string;
+    handoff: SearchHandoff;
+  } | null>(null);
 
   const getBookLanguage = useCallback(
     (bookId?: string | null) =>
@@ -112,6 +120,38 @@ export function Notes() {
     if (!reveal) return;
     requestEditorReveal({ kind: "note", id: noteId }, reveal);
   }, [location.key, location.state, noteId, currentNote?.id]);
+
+  // A Library Search text row opened this note: Find and Replace opens with
+  // its query and the switches the matches were counted with. The switches
+  // live in the shared store the panel reads, so they are set before the
+  // editor applies the handoff. Only the handoff is cleared, keeping returnTo
+  // and any other keys, so Back/Forward entries carry none and never reopen.
+  useEffect(() => {
+    if (!noteId) return;
+    if (currentNote?.id !== noteId) return;
+    const handoff = (location.state as { searchHandoff?: SearchHandoff } | null)?.searchHandoff;
+    if (!handoff) return;
+    useSearchSwitchesStore.setState({
+      matchCase: handoff.matchCase,
+      wholeWord: handoff.wholeWord,
+      regex: handoff.regex,
+    });
+    setFindHandoff({ noteId, handoff });
+    const { searchHandoff: _consumed, ...rest } = (location.state as Record<string, unknown>) ?? {};
+    navigate(location.pathname, {
+      replace: true,
+      state: Object.keys(rest).length > 0 ? rest : null,
+    });
+  }, [location.state, location.pathname, noteId, currentNote?.id, navigate]);
+
+  // Consume the one-shot handoff: the editor (keyed by note) applied it in
+  // this commit's child effects, so clearing now never closes its panel, and
+  // a later visit finds nothing to reopen.
+  useEffect(() => {
+    if (findHandoff && currentNote?.id === findHandoff.noteId) {
+      setFindHandoff(null);
+    }
+  }, [findHandoff, currentNote?.id]);
 
   useShortcuts([
     {
@@ -246,6 +286,7 @@ export function Notes() {
               returnLabel={returnTarget?.label}
               suppressRestore={hasPendingHeadingScroll}
               titleBarContainer={titleBarSlot}
+              findHandoff={findHandoff?.noteId === currentNote.id ? findHandoff.handoff : null}
             />
           ) : (
             <EmptyNotes onCreateNote={handleCreateNote} onBack={() => navigate("/notes")} />

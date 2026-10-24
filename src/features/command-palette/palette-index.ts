@@ -126,6 +126,8 @@ export interface PaletteItem {
     highlights: readonly (readonly [number, number])[];
   };
   matchCount?: number;
+  /** Text-section Canvas rows only: the card the snippet's block belongs to. */
+  cardId?: string;
   /**
    * Text-section only: the accessible name, naming the kind, title, Book,
    * and snippet text. Title rows name themselves through their label.

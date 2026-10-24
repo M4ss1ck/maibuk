@@ -3,6 +3,7 @@ export type {
   SearchBlock,
   SearchError,
   SearchField,
+  SearchHandoff,
   SearchItemKind,
   SearchLibraryOptions,
   SearchLibraryResult,

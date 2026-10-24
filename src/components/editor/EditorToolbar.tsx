@@ -25,6 +25,7 @@ import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettin
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
+import type { SearchHandoff } from "@/features/search/types";
 import type { Language } from "@/features/settings/types";
 import { openExternal } from "@/lib/platform";
 import { isModKey } from "@/lib/keyboard";
@@ -48,6 +49,12 @@ interface EditorToolbarProps {
   onExitToolbar?: () => void;
   /** The Tutorial step that points at this toolbar, if any. */
   tutorialAnchor?: string;
+  /**
+   * A Library Search text row opened this editor: open Find and Replace with
+   * its query. One-shot per object identity, so Back/Forward (whose history
+   * entries carry no handoff) never reopens it.
+   */
+  findHandoff?: SearchHandoff | null;
 }
 
 export function EditorToolbar({
@@ -63,6 +70,7 @@ export function EditorToolbar({
   onExportImage,
   onExitToolbar,
   tutorialAnchor,
+  findHandoff = null,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
@@ -119,6 +127,17 @@ export function EditorToolbar({
     setShowFindReplace(true);
     setFindReplaceFocusSignal((current) => current + 1);
   }, []);
+
+  // A Library Search text row opened this editor: open Find and Replace with
+  // its query. The switches arrive through the shared store, applied by the
+  // destination before this mounted. One-shot per handoff object, so a
+  // Back/Forward entry (which carries no handoff) never reopens it.
+  const appliedFindHandoffRef = useRef<SearchHandoff | null>(null);
+  useEffect(() => {
+    if (!findHandoff || appliedFindHandoffRef.current === findHandoff) return;
+    appliedFindHandoffRef.current = findHandoff;
+    openFindReplace();
+  }, [findHandoff, openFindReplace]);
 
   const handleHtmlPanelReady = useCallback(
     (handle: { highlightRange: (from: number, to: number) => void } | null) => {
@@ -404,6 +423,7 @@ export function EditorToolbar({
           isOpen={showFindReplace}
           onClose={() => setShowFindReplace(false)}
           focusSignal={findReplaceFocusSignal}
+          handoff={findHandoff}
         />
         <ImageInsertDialog
           editor={editor}
