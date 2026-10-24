@@ -65,7 +65,7 @@ async function runCommand(page: Page, label: string): Promise<void> {
   const dialog = page.getByRole("dialog", { name: "Command palette" });
   await expect(dialog).toBeVisible();
   await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(label);
+  await page.keyboard.type(`>${label}`);
   const option = dialog.getByRole("option", { name: label, exact: true });
   await expect(option).toBeVisible();
   await page.keyboard.press("Enter");

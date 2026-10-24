@@ -134,7 +134,7 @@ async function openPalette(page: Page): Promise<Locator> {
 async function runPaletteCommand(page: Page, label: string): Promise<void> {
   const dialog = await openPalette(page);
   await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(label);
+  await page.keyboard.type(`>${label}`);
   const option = dialog.getByRole("option", { name: label, exact: true });
   await expect(option).toBeVisible();
   await page.keyboard.press("Enter");

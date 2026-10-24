@@ -38,7 +38,7 @@ async function openPalette(page: Page) {
 async function openEchoesFromPalette(page: Page) {
   const dialog = await openPalette(page);
   await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type("Open Echoes");
+  await page.keyboard.type(">Open Echoes");
   await expect(dialog.getByRole("option", { name: "Open Echoes", exact: true })).toBeVisible({
     timeout: 15_000,
   });

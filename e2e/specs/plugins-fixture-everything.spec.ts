@@ -86,7 +86,7 @@ async function openPalette(page: Page, name = "Command palette"): Promise<Locato
 /** Types a palette query into the open palette and returns the matching item. */
 async function paletteItem(page: Page, dialog: Locator, query: string): Promise<Locator> {
   await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(query);
+  await page.keyboard.type(`>${query}`);
   const option = dialog.getByRole("option", { name: query, exact: true });
   await expect(option).toBeVisible();
   return option;
@@ -100,7 +100,7 @@ async function selectPaletteItem(
   key: string
 ): Promise<void> {
   await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(query);
+  await page.keyboard.type(`>${query}`);
   const searchbox = dialog.getByRole("searchbox");
   await expect
     .poll(async () => (await searchbox.getAttribute("aria-activedescendant")) ?? "")

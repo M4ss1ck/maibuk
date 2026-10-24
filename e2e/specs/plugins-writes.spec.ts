@@ -41,7 +41,7 @@ async function openPalette(page: Page): Promise<Locator> {
 /** Types a palette query and leaves its matching option visible. */
 async function paletteItem(page: Page, dialog: Locator, query: string): Promise<Locator> {
   await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(query);
+  await page.keyboard.type(`>${query}`);
   const option = dialog.getByRole("option", { name: query, exact: true });
   await expect(option).toBeVisible();
   return option;
