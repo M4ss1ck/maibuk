@@ -744,44 +744,52 @@ function OpenCommandPalette() {
               {chipLabel}
             </span>
           )}
-          <Input
-            ref={inputRef}
-            data-autofocus
-            onKeyDown={handleSearchEscapeCapture}
-            placeholder={t("commandPalette.placeholder")}
-            className="h-8 min-w-0 flex-1 rounded-md border border-primary bg-background px-2 text-sm text-foreground outline-none placeholder:text-muted-foreground pointer-coarse:h-11 [&::-webkit-search-cancel-button]:hidden"
-          />
-          {libraryField && (
-            <div className="flex shrink-0 items-center gap-1">
-              <SearchSwitchButton
-                id="common.matchCase"
-                label={t("editor.matchCase")}
-                pressed={matchCase}
-                onToggle={toggleMatchCase}
-                showShortcut={queryEmpty}
-                mac={mac}
-                Icon={CaseSensitive}
-              />
-              <SearchSwitchButton
-                id="common.wholeWord"
-                label={t("editor.matchWholeWord")}
-                pressed={wholeWord}
-                onToggle={toggleWholeWord}
-                showShortcut={queryEmpty}
-                mac={mac}
-                Icon={WholeWord}
-              />
-              <SearchSwitchButton
-                id="common.useRegex"
-                label={t("editor.useRegex")}
-                pressed={regex}
-                onToggle={toggleRegex}
-                showShortcut={queryEmpty}
-                mac={mac}
-                Icon={Regex}
-              />
-            </div>
-          )}
+          {/* The switches sit inside the field, at its trailing edge, as in
+              VS Code's search box. The input reserves room for them. */}
+          <div className="relative min-w-0 flex-1">
+            <Input
+              ref={inputRef}
+              data-autofocus
+              onKeyDown={handleSearchEscapeCapture}
+              placeholder={t("commandPalette.placeholder")}
+              className={`h-8 w-full rounded-md border border-primary bg-background pl-2 text-sm text-foreground outline-none placeholder:text-muted-foreground pointer-coarse:h-11 [&::-webkit-search-cancel-button]:hidden ${
+                libraryField
+                  ? `${queryEmpty ? "pr-56" : "pr-24"} pointer-coarse:pr-36`
+                  : "pr-2"
+              }`}
+            />
+            {libraryField && (
+              <div className="absolute inset-y-0 right-1 flex items-center gap-0.5">
+                <SearchSwitchButton
+                  id="common.matchCase"
+                  label={t("editor.matchCase")}
+                  pressed={matchCase}
+                  onToggle={toggleMatchCase}
+                  showShortcut={queryEmpty}
+                  mac={mac}
+                  Icon={CaseSensitive}
+                />
+                <SearchSwitchButton
+                  id="common.wholeWord"
+                  label={t("editor.matchWholeWord")}
+                  pressed={wholeWord}
+                  onToggle={toggleWholeWord}
+                  showShortcut={queryEmpty}
+                  mac={mac}
+                  Icon={WholeWord}
+                />
+                <SearchSwitchButton
+                  id="common.useRegex"
+                  label={t("editor.useRegex")}
+                  pressed={regex}
+                  onToggle={toggleRegex}
+                  showShortcut={queryEmpty}
+                  mac={mac}
+                  Icon={Regex}
+                />
+              </div>
+            )}
+          </div>
         </SearchField>
         {count === 0 ? (
           searchText.trim() !== "" && (
@@ -922,7 +930,7 @@ function SearchSwitchButton({
       onPress={onToggle}
       data-command={id}
       className={({ isSelected, isFocusVisible }) =>
-        `flex h-8 min-w-8 items-center justify-center gap-1 rounded-md px-1.5 outline-none pointer-coarse:h-11 pointer-coarse:min-w-11 ${
+        `flex h-6 min-w-6 items-center justify-center gap-1 rounded px-1 outline-none pointer-coarse:h-11 pointer-coarse:min-w-11 ${
           isSelected
             ? "bg-primary text-primary-foreground"
             : "text-muted-foreground hover:bg-muted hover:text-foreground"

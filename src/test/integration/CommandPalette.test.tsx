@@ -1525,6 +1525,40 @@ describe("Command Palette search switches", () => {
     expect(search).toHaveValue("Cat");
   });
 
+  it("renders the switches inside the search field's wrapper", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const input = paletteSearch(dialog);
+    const field = switchButton(dialog, MATCH_CASE).closest(".relative");
+    expect(field).not.toBeNull();
+    expect(field).toContainElement(input);
+    for (const name of [MATCH_CASE, WHOLE_WORD, REGEX]) {
+      expect(field).toContainElement(switchButton(dialog, name));
+    }
+  });
+
+  it("tabs from the search field to Match case, and Space flips it", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const input = paletteSearch(dialog);
+    await waitFor(() => expect(input).toHaveFocus());
+
+    await user.tab();
+    const matchCase = switchButton(dialog, MATCH_CASE);
+    expect(matchCase).toHaveFocus();
+    expect(matchCase).toHaveAttribute("aria-pressed", "false");
+
+    await user.keyboard(" ");
+    await waitFor(() => expect(switches().matchCase).toBe(true));
+    expect(matchCase).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("flips a switch back with its own key", async () => {
     const user = userEvent.setup();
     renderApp("/");
