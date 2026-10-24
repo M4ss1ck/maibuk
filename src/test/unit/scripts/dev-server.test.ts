@@ -29,7 +29,8 @@ describe("devWatchIgnored", () => {
     }
   });
 
-  it("ignores the native build, E2E, docs, build output, and tool folders", () => {
+  it("ignores the native build, E2E, docs, Plugin sources, and tool folders", () => {
+    // Root folders listed here are checked in, so they exist on every checkout.
     for (const path of [
       "src-tauri",
       "src-tauri/target/debug/build/out.js",
@@ -38,9 +39,8 @@ describe("devWatchIgnored", () => {
       "e2e/.output/web-dist/index.html",
       "docs/agents/design.md",
       "docs/plans",
-      "dist",
+      "dist/plugins/index.json",
       "plugins",
-      "coverage",
       ".github",
     ]) {
       expect(isIgnored(path), path).toBe(true);
@@ -50,12 +50,26 @@ describe("devWatchIgnored", () => {
   it("ignores a root folder it has never heard of, but not a root file", () => {
     const repo = mkdtempSync(join(tmpdir(), "dev-watch-"));
     try {
-      mkdirSync(join(repo, ".some-new-tool"));
       writeFileSync(join(repo, "some-new-config.json"), "{}");
       const ignoredHere = devWatchIgnored(repo);
       // chokidar asks first without stats, so the folder check reads the disk.
-      expect(ignoredHere(join(repo, ".some-new-tool"))).toBe(true);
+      for (const folder of [".some-new-tool", "dist", "coverage"]) {
+        mkdirSync(join(repo, folder));
+        expect(ignoredHere(join(repo, folder)), folder).toBe(true);
+      }
       expect(ignoredHere(join(repo, "some-new-config.json"))).toBe(false);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores a root folder created after the matcher first saw its path", () => {
+    const repo = mkdtempSync(join(tmpdir(), "dev-watch-"));
+    try {
+      const ignoredHere = devWatchIgnored(repo);
+      ignoredHere(join(repo, "coverage"));
+      mkdirSync(join(repo, "coverage"));
+      expect(ignoredHere(join(repo, "coverage"))).toBe(true);
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
@@ -116,7 +130,8 @@ describe("dev-server guard", () => {
 /** Worker entries the dev server never starts: the QuickJS runner is Android-only. */
 const ANDROID_ONLY_WORKERS = ["src/features/plugins/quickjs/worker-entry.ts"];
 
-const WORKER_ENTRY = /new Worker\(\s*new URL\(\s*["']([^"']+)["']|["']([^"']+)\?worker(?:&url)?["']/g;
+const WORKER_ENTRY =
+  /new Worker\(\s*new URL\(\s*["']([^"']+)["']|["']([^"']+)\?worker(?:&url)?["']/g;
 
 describe("DEP_SCAN_ENTRIES", () => {
   it("lists every Worker entry the app starts", () => {

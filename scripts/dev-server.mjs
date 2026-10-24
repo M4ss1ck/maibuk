@@ -68,17 +68,14 @@ export const DEP_EXCLUDE = ["@sqlite.org/sqlite-wasm"];
  * dev server should not watch. Paths outside `root` are left to Vite.
  */
 export function devWatchIgnored(root) {
-  const isDir = new Map();
+  // Not cached: a root folder such as `coverage/` can appear while the server runs.
   const isDirectory = (path, stats) => {
     if (stats) return stats.isDirectory();
-    if (!isDir.has(path)) {
-      try {
-        isDir.set(path, statSync(path).isDirectory());
-      } catch {
-        isDir.set(path, false);
-      }
+    try {
+      return statSync(path).isDirectory();
+    } catch {
+      return false;
     }
-    return isDir.get(path);
   };
   return (path, stats) => {
     const rel = relative(root, path).split(sep).join("/");
