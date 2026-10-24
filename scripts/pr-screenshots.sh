@@ -66,7 +66,7 @@ rm -rf "$WORKTREE/e2e/.output"
 # Same lockfile: share this checkout's node_modules. A branch that changes
 # dependencies needs the base's own install, or the base build cannot resolve
 # a package the branch removed; pnpm's store makes that offline and quick.
-if cmp -s "$ROOT/pnpm-lock.yaml" "$WORKTREE/pnpm-lock.yaml"; then
+if [[ ! -f "$ROOT/pnpm-lock.yaml" ]] || cmp -s "$ROOT/pnpm-lock.yaml" "$WORKTREE/pnpm-lock.yaml"; then
   ln -s "$ROOT/node_modules" "$WORKTREE/node_modules"
 else
   echo "[screenshots] before: lockfile differs, installing the base's dependencies"
