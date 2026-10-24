@@ -1,30 +1,30 @@
-// The MCP Server Agent eval's fixture Library and its six tasks (#595). Each
-// task is a prompt for headless Claude Code, a budget in MCP tokens, and the
-// checks that judge the Library afterwards, the wire, and the answer. Every
-// check is pure over a `TaskRun`, so `src/test/integration/mcp-eval-tasks.test.ts`
-// proves each one passes a scripted good Agent and fails a scripted bad one
-// without a paid run.
+// The MCP Server Agent eval's fixture Library and its seven tasks (#595, plus
+// the search task from #642). Each task is a prompt for headless Claude Code,
+// a budget in MCP tokens, and the checks that judge the Library afterwards,
+// the wire, and the answer. Every check is pure over a `TaskRun`, so
+// `src/test/integration/mcp-eval-tasks.test.ts` proves each one passes a
+// scripted good Agent and fails a scripted bad one without a paid run.
 //
 // Budgets are MCP tokens (characters over four), what the MCP Server puts in
 // the model's context: definitions and instructions once, then every call's
 // arguments and result. They were fixed before the first paid run, from the
 // costs measured on this fixture with the scripted Agent: the fixed cost is
-// 2,266 (2,174 definitions for 12 tools, 92 instructions) and 731 read-only
-// (5 tools); a call costs its result plus its arguments, list_books ~30,
+// 2,514 (2,394 definitions for 13 tools, 120 instructions) and 979 read-only
+// (6 tools); a call costs its result plus its arguments, list_books ~30,
 // get_book ~100, list_notes ~27, read_note ~96, read_chapter of Arrival ~315
-// as text, a write's answer ~25. Each budget is the fixed cost plus the
-// expected path plus room for one orienting or repeated call. The path costs
-// rest on the research's response rules (§3.3, §8.3): lists of short lines
-// with a cursor, one format a read (text by default), windowed prose, and
-// small edits instead of whole-Chapter rewrites; a server that broke one of
-// them would spend a task's room. The reasoning sits beside each number and
-// in `e2e/README.md`.
+// as text, search_library of "bell on the reef" ~85, a write's answer ~25.
+// Each budget is the fixed cost plus the expected path plus room for one
+// orienting or repeated call. The path costs rest on the research's response
+// rules (§3.3, §8.3): lists of short lines with a cursor, one format a read
+// (text by default), windowed prose, and small edits instead of
+// whole-Chapter rewrites; a server that broke one of them would spend a
+// task's room. The reasoning sits beside each number and in `e2e/README.md`.
 
 /** The fixed MCP cost of a session: every definition and the instructions, read-write. */
-export const FIXED_COST = 2_266;
+export const FIXED_COST = 2_514;
 
 /** The same with only the read tools, the read-only mode. */
-export const FIXED_COST_READ_ONLY = 731;
+export const FIXED_COST_READ_ONLY = 979;
 
 import { countWords } from "@/features/metrics/word-count";
 import { htmlToPlainText } from "@/features/plugins/library";
@@ -528,6 +528,47 @@ export const EVAL_TASKS: readonly EvalTask[] = [
           ),
           run.answer.slice(0, 300)
         ),
+      ];
+    },
+  },
+  {
+    id: "7",
+    title: "Find a passage with search, then read it",
+    prompt:
+      'In my Maibuk Library, one Chapter mentions the bell on the reef. Find that passage with search, read the Chapter, and quote the full sentence containing "bell on the reef". Do not change anything.',
+    // One search_library (~85 for two small hits) and one read_chapter of
+    // the 204-word Arrival (~315 as text, plus its arguments): ~400. Room
+    // for an orienting get_book (~100) and one repeated call: set at +800.
+    // Reading every Chapter instead of searching spends the room: four more
+    // Chapters at ~60 to ~315 each.
+    budget: FIXED_COST + 800,
+    check(run) {
+      const searchedAt = run.calls.findIndex(
+        (call) => call.name === "search_library" && !call.isError
+      );
+      const readAt = run.calls.findIndex(
+        (call) =>
+          call.name === "read_chapter" &&
+          !call.isError &&
+          IDS.arrival.startsWith(String(call.args.chapter ?? "").trim())
+      );
+      return [
+        check(
+          "searched before reading",
+          searchedAt !== -1 && readAt !== -1 && searchedAt < readAt,
+          run.calls.map((call) => call.name).join(", ")
+        ),
+        check(
+          "read the Arrival Chapter",
+          readAt !== -1,
+          run.calls.map((call) => call.name).join(", ")
+        ),
+        check(
+          "answer quotes the passage",
+          /There was no bell on the reef\./i.test(run.answer),
+          run.answer.slice(0, 300)
+        ),
+        libraryUnchanged(run),
       ];
     },
   },

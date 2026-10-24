@@ -97,6 +97,41 @@ function RemovedTargetHarness() {
 }
 
 /**
+ * A dialog whose action disables the control it was opened from: a disabled
+ * button cannot take focus, so the target is resolved again. Models Reset all
+ * in the Shortcut Editor, which nothing is left to reset after its confirm.
+ */
+function DisabledTargetHarness() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [customized, setCustomized] = useState(true);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <>
+      <input ref={searchRef} aria-label="Search" />
+      <button
+        ref={openerRef}
+        type="button"
+        disabled={!customized}
+        onClick={() => setIsOpen(true)}
+      >
+        Reset all
+      </button>
+      <Dialog
+        triggerRef={useRef<HTMLButtonElement>(null)}
+        isOpen={isOpen}
+        onClose={() => {
+          setCustomized(false);
+          setIsOpen(false);
+        }}
+        getTarget={() => (customized ? null : searchRef.current)}
+      />
+    </>
+  );
+}
+
+/**
  * A dialog that opens from one control but whose action belongs to the editor:
  * focus must return to the editor, not the (now unmounted) opener. Models the
  * Word Lookup prompt handing off to the definition dialog in the Book Editor.
@@ -165,6 +200,21 @@ describe("useRestoreFocus", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByRole("button", { name: "First" })).toBeNull();
     expect(screen.getByRole("button", { name: "Second" })).toHaveFocus();
+  });
+
+  it("resolves the target again when the dialog's action disabled the one captured on open", async () => {
+    const user = userEvent.setup();
+    render(<DisabledTargetHarness />);
+
+    await user.tab();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Reset all" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByRole("button", { name: "Reset all" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Search" })).toHaveFocus();
   });
 
   // Focusing the editor scrolled its scroller to the top, then ProseMirror

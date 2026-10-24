@@ -1,5 +1,6 @@
 import { createDatabase, IS_TAURI, type DatabaseAdapter } from "@/lib/platform";
 import { ensureMetricsSchema } from "@/features/metrics/events-repo";
+import { ensureSearchSchema } from "@/features/search/schema";
 import { getTutorialDatabase } from "@/features/tutorial/library-switch";
 import { DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
 import { compactLibrary } from "@/lib/db/compact";
@@ -45,6 +46,16 @@ export async function getAuthorDatabase(): Promise<DatabaseAdapter> {
 /** Delays between attempts to open the Library; a busy file usually frees up within seconds. */
 export const DATABASE_OPEN_RETRY_DELAYS_MS = [250, 1000, 3000];
 
+/**
+ * Another tab holding the web Library is not a busy file: it will not free up
+ * on its own, and retrying would keep the author waiting instead of showing
+ * the locked screen with its Try again. The web adapter names the error, so
+ * the shared opener needs no platform import.
+ */
+function isLibraryLocked(error: unknown): boolean {
+  return error instanceof Error && error.name === "LibraryLockedError";
+}
+
 async function openAuthorDatabase(): Promise<DatabaseAdapter> {
   const dbPath = IS_TAURI ? "sqlite:maibuk.db" : "maibuk.db";
   for (let attempt = 0; ; attempt++) {
@@ -57,7 +68,7 @@ async function openAuthorDatabase(): Promise<DatabaseAdapter> {
     } catch (error) {
       const delay = DATABASE_OPEN_RETRY_DELAYS_MS[attempt];
       console.error(`[db] opening the Library failed (attempt ${attempt + 1})`, error);
-      if (delay === undefined) throw error;
+      if (delay === undefined || isLibraryLocked(error)) throw error;
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -456,6 +467,7 @@ export async function initializeSchema(db: DatabaseAdapter): Promise<void> {
   `);
 
   await ensureMetricsSchema(db);
+  await ensureSearchSchema(db);
 }
 
 // Migration: add the Book Last Edited column (user-facing "modified" time,
@@ -513,6 +525,7 @@ export const RESET_LIBRARY_TABLES = [
   "sync_state",
   PLUGIN_STORAGE_TABLE,
   PLUGIN_DATA_VERSIONS_TABLE,
+  "search_text",
   "settings",
   "metrics_cache",
   "metrics_event_tombstones",
@@ -571,6 +584,21 @@ export function normaliseToUpsert(statement: string): string {
   return `INSERT INTO ${table} (${columns.join(", ")}) ${values.trim()} ON CONFLICT DO UPDATE SET ${updates}`;
 }
 
+/**
+ * Rebuilds the search index after a bulk write replaced or merged the Library.
+ * The index is derived data: the rebuild runs in the background, and its
+ * failure never turns a committed load into a failure. The import is dynamic
+ * because the index module reads the Library through this one.
+ */
+async function rebuildSearchIndexAfterBulkWrite(): Promise<void> {
+  try {
+    const { requestSearchRebuild } = await import("@/features/search/rebuild");
+    await requestSearchRebuild();
+  } catch (error) {
+    console.warn("[db] rebuilding the search index after a bulk write failed:", error);
+  }
+}
+
 export async function importDatabase(sqlContent: string): Promise<void> {
   // Pending editor text lands first; a failed save stops the load before anything changes.
   // A newer app's dump has tables and columns this one does not know.
@@ -605,5 +633,8 @@ export async function importDatabase(sqlContent: string): Promise<void> {
   }
 
   // The merged rows persisted; only a completed load announces it.
+  // The search index is derived data, like after a Restore: rebuild it from
+  // the merged rows in the background before declaring the load done.
+  await rebuildSearchIndexAfterBulkWrite();
   await emitChange({ scope: "all", reason: "databaseLoad" });
 }

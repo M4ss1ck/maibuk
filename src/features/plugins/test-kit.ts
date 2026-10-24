@@ -27,6 +27,13 @@ import {
 } from "@/features/plugins/endpoint";
 import { assertToggleButton } from "@/features/plugins/handlers";
 import { fragmentToHtml, htmlToPlainText } from "@/features/plugins/library";
+import {
+  buildFoldedLiteralRegExp,
+  buildSearchRegExp,
+  findMatchRanges,
+  matchFoldedRanges,
+  matchRanges,
+} from "@/lib/search/expression";
 import { normalizeNoteTags } from "@/features/notes/tags";
 import { applyPluginLocale } from "@/features/plugins/manifest-validate";
 import { pluginFetch } from "@/features/plugins/network";
@@ -45,6 +52,7 @@ import {
 import type {
   EndpointListenerState,
   PluginApiHandlers,
+  PluginApiOutput,
   PluginApproval,
   PluginManifest,
   PluginPermissionId,
@@ -125,6 +133,150 @@ function noteNotFound(noteId: string): PluginApiError {
     code: "invalid-params",
     message: `Note ${noteId} does not exist`,
   });
+}
+
+type TestSearchKind = "book" | "chapter" | "note" | "canvas";
+
+interface TestSearchRowBase {
+  id: string;
+  title: string;
+  updatedAt: number;
+  fields: string[];
+}
+
+type TestSearchRow =
+  | (TestSearchRowBase & { kind: "book"; bookId: null })
+  | (TestSearchRowBase & { kind: "chapter"; bookId: string })
+  | (TestSearchRowBase & { kind: "note"; bookId: string | null })
+  | (TestSearchRowBase & { kind: "canvas"; bookId: string | null });
+
+/**
+ * The in-memory `library.search` the MCP Server's `search_library` reads in
+ * tests (#642): the same query and switches as Library Search over the rows
+ * the other read handlers serve (Book titles and subtitles, Chapter and Note
+ * titles and plain-text content, Canvas titles), ranked title match first,
+ * then match count, then most recently edited, with a base64 offset cursor.
+ * An invalid Regex comes back as the invalid-regex error result, never a
+ * throw, like the app's handler. Canvases carry no Book, so a `bookId` filter
+ * never returns one.
+ */
+function searchTestLibrary(
+  rows: TestSearchRow[],
+  input: {
+    query: string;
+    matchCase?: boolean;
+    wholeWord?: boolean;
+    regex?: boolean;
+    kinds?: TestSearchKind[];
+    bookId?: string;
+    limit?: number;
+    cursor?: string | null;
+  }
+): PluginApiOutput<"library.search"> {
+  let expression: RegExp;
+  const folded = (input.regex ?? false) === false;
+  try {
+    expression = buildSearchRegExp(input.query, {
+      caseSensitive: input.matchCase ?? false,
+      wholeWord: input.wholeWord ?? false,
+      regex: input.regex ?? false,
+    });
+  } catch (error) {
+    return {
+      error: "invalid-regex",
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  const kinds =
+    input.kinds === undefined
+      ? undefined
+      : new Set<TestSearchKind>(input.kinds as TestSearchKind[]);
+  // A literal query compiles once; the folded side confirms every field. A
+  // null folded query (only combining marks) matches exactly, like before.
+  const foldedQuery = folded
+    ? buildFoldedLiteralRegExp(input.query, {
+        caseSensitive: input.matchCase ?? false,
+        wholeWord: input.wholeWord ?? false,
+      })
+    : null;
+  const scored = [];
+  for (const row of rows) {
+    if (kinds !== undefined && !kinds.has(row.kind)) continue;
+    if (input.bookId !== undefined) {
+      if (row.kind === "canvas") continue;
+      const owner = row.kind === "book" ? row.id : row.bookId;
+      if (owner !== input.bookId) continue;
+    }
+    let matchCount = 0;
+    let titleMatch = false;
+    let snippet: { text: string; from: number; to: number }[] | null = null;
+    let firstMatchOffset = 0;
+    for (const [index, field] of row.fields.entries()) {
+      // The same expression the app confirms with: a literal query folds
+      // accents on both sides, a Regex runs against the text as written.
+      const ranges = foldedQuery
+        ? matchFoldedRanges(foldedQuery, field)
+        : folded
+          ? findMatchRanges(field, input.query, {
+              caseSensitive: input.matchCase ?? false,
+              wholeWord: input.wholeWord ?? false,
+              regex: false,
+            })
+          : matchRanges(expression, field);
+      if (ranges.length === 0) continue;
+      if (index === 0) titleMatch = true;
+      matchCount += ranges.length;
+      if (snippet === null) {
+        snippet = ranges.map((range) => ({ text: field, from: range.start, to: range.end }));
+        firstMatchOffset = ranges[0].start;
+      }
+    }
+    if (snippet === null) continue;
+    const [first] = snippet;
+    const base = {
+      title: row.title,
+      snippet: {
+        text: first.text,
+        highlights: snippet.map((entry) => ({ from: entry.from, to: entry.to })),
+      },
+      firstMatchOffset,
+      matchCount,
+    };
+    const result =
+      row.kind === "book"
+        ? { kind: row.kind, bookId: row.id, ...base }
+        : row.kind === "chapter"
+          ? { kind: row.kind, chapterId: row.id, bookId: row.bookId, ...base }
+          : row.kind === "note"
+            ? { kind: row.kind, noteId: row.id, bookId: row.bookId, ...base }
+            : { kind: row.kind, canvasId: row.id, ...base };
+    scored.push({ result, titleMatch, matchCount, updatedAt: row.updatedAt, id: row.id });
+  }
+
+  scored.sort((a, b) => {
+    if (a.titleMatch !== b.titleMatch) return a.titleMatch ? -1 : 1;
+    if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount;
+    if (b.updatedAt !== a.updatedAt) return b.updatedAt - a.updatedAt;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+
+  let offset = 0;
+  if (typeof input.cursor === "string" && input.cursor !== "") {
+    try {
+      const decoded = atob(input.cursor);
+      if (/^\d+$/.test(decoded)) offset = Number(decoded);
+    } catch {
+      offset = 0;
+    }
+  }
+  const limit = Math.max(1, input.limit ?? 20);
+  const page = scored.slice(offset, offset + limit);
+  const results = page.map((entry) => entry.result);
+  if (offset + page.length < scored.length) {
+    return { results, nextCursor: btoa(String(offset + page.length)) };
+  }
+  return { results };
 }
 
 export function createTestHost(options: TestHostOptions): TestHost {
@@ -335,9 +487,10 @@ export function createTestHost(options: TestHostOptions): TestHost {
       const html = content === undefined ? undefined : fragmentToHtml(content);
       const chapterId = `chapter-created-${nextCreatedChapter}`;
       nextCreatedChapter += 1;
-      const nextOrder = chapters
-        .filter((chapter) => chapter.bookId === bookId)
-        .reduce((max, chapter) => Math.max(max, chapter.order), -1) + 1;
+      const nextOrder =
+        chapters
+          .filter((chapter) => chapter.bookId === bookId)
+          .reduce((max, chapter) => Math.max(max, chapter.order), -1) + 1;
       chapters.push({
         id: chapterId,
         bookId,
@@ -348,9 +501,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
         wordCount: html === undefined ? 0 : countWords(htmlToPlainText(html)),
         status: "draft",
         updatedAt: Date.now(),
-        ...(html === undefined
-          ? {}
-          : { content: { html, text: htmlToPlainText(html) } }),
+        ...(html === undefined ? {} : { content: { html, text: htmlToPlainText(html) } }),
       });
       // The row is appended, then the Book is put in the requested order, the
       // create-then-reorder pair the app uses to insert one.
@@ -514,6 +665,44 @@ export function createTestHost(options: TestHostOptions): TestHost {
       bookId === undefined ? canvases : canvases.filter((canvas) => canvas.bookId === bookId),
     "library.canvases.get": ({ canvasId }) =>
       canvases.find((canvas) => canvas.id === canvasId) ?? null,
+    "library.search": ({ query, matchCase, wholeWord, regex, kinds, bookId, limit, cursor }) =>
+      searchTestLibrary(
+        [
+          ...books.map((book) => ({
+            kind: "book" as const,
+            id: book.id,
+            bookId: null,
+            title: book.title,
+            updatedAt: book.updatedAt,
+            fields: [book.title, book.subtitle ?? ""],
+          })),
+          ...chapters.map((chapter) => ({
+            kind: "chapter" as const,
+            id: chapter.id,
+            bookId: chapter.bookId,
+            title: chapter.title,
+            updatedAt: chapter.updatedAt,
+            fields: [chapter.title, chapter.content?.text ?? ""],
+          })),
+          ...notes.map((note) => ({
+            kind: "note" as const,
+            id: note.id,
+            bookId: note.bookId,
+            title: note.title,
+            updatedAt: note.updatedAt,
+            fields: [note.title, note.content?.text ?? ""],
+          })),
+          ...canvases.map((canvas) => ({
+            kind: "canvas" as const,
+            id: canvas.id,
+            bookId: canvas.bookId,
+            title: canvas.title,
+            updatedAt: canvas.updatedAt,
+            fields: [canvas.title],
+          })),
+        ],
+        { query, matchCase, wholeWord, regex, kinds, bookId, limit, cursor }
+      ),
     "storage.get": ({ key }) => {
       const value = storage.get(key);
       return value === undefined ? null : value;

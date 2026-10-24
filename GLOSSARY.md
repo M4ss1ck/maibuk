@@ -397,6 +397,10 @@ _UI_: en "Insert symbol" / es "Insertar símbolo"
 A transform applied to selected text: upper, lower, and playful effects such as mirrored or upside-down letters.
 _UI_: es "Mayúsculas y minúsculas"
 
+**Find and Replace**:
+The panel in the editor that finds each match of a query in the open Chapter or Note and replaces it, sharing its Match case, Whole word, and Regular expression switches with Library Search. Literal matching ignores accents as the fixed default, with no fourth switch: "cancion" finds "canción" and back, and "ELENA" finds "Eléna" unless Match case is on. A Regular expression runs against the text as written, so it pins the exact accents.
+_UI_: en "Find & Replace" / es "Buscar y Reemplazar"
+
 **Paste Cleanup**:
 The rules that reshape pasted text before it lands in a Chapter or Note, such as "Match my book".
 _UI_: en "Paste cleanup" / es "Limpieza al pegar"
@@ -510,9 +514,19 @@ _UI_: en "Save to file", "Load from file" / es "Guardar en archivo", "Cargar des
 _Avoid_: export, import (reserved for Library content)
 
 **Command Palette**:
-Where the author finds a Command, a Book, Chapter, Note, or Canvas, or a Settings row by typing part of its name, and runs or opens it from anywhere in the app. The results chosen most recently on this device are listed first, and the author can remove any of them from that list. With nothing typed, it also suggests common destinations and Commands, so it is never empty.
+Where the author finds something by typing part of its name, and runs or opens it from anywhere in the app. It has two modes, chosen by the input itself: Commands mode with a leading `>`, and Library Search without one. The results chosen most recently on this device are listed first, one list filtered to each mode's kinds, and the author can remove any of them from that list. With nothing typed, each mode suggests what to start with, so it is never empty. F1 and Mod+Shift+P open Commands mode with `>` typed; the Search Library Command opens Library Search empty.
 _UI_: en "Command palette" / es "Paleta de comandos"
-_Avoid_: command bar, quick open, launcher, search (reserved for searching Library content)
+_Avoid_: command bar, quick open, launcher, search (alone for either mode)
+
+**Commands mode**:
+The Command Palette with a leading `>` typed: it finds Commands, Plugin Commands, and Settings rows, and never the author's Books, Chapters, Notes, or Canvases. Deleting the `>` switches the open palette to Library Search. With the field empty it lists the Commands and Settings rows chosen most recently on this device, then suggested Commands.
+_UI_: en "Commands mode" / es "Modo comandos"
+_Avoid_: command mode, palette mode
+
+**Library Search**:
+The Command Palette without a prefix: it finds a Book, Chapter, Note, or Canvas by typing part of its name and opens it. Typing `>` in the field leaves it for Commands mode, and Backspace on a lone `>` switches to it instead of closing the palette. With the field empty it lists the Library items opened most recently on this device, then the Chapters, Books, Notes, and Canvases pages, which narrow the search to one kind. Literal matching ignores accents as the fixed default, with no fourth switch, and counts the same matches Find and Replace counts for the same query and switches; a Regular expression pins the exact accents.
+_UI_: en "Search" / es "Buscar"
+_Avoid_: global search, library filter, quick open
 
 **Pane**:
 One area of a screen that the author moves focus between with F6 and Shift+F6, such as the Notes list, the note editor, or the navigation sidebar. When the keyboard moves focus into another Pane, the outline travels there and stays on the Pane holding focus until the author types, acts on a control, or presses Escape; the next keyboard move brings it back. F6 also names the Pane briefly. The Book side panel is a Pane.

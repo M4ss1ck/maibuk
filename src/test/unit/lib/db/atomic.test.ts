@@ -1,50 +1,62 @@
 import { describe, expect, it } from "vitest";
-import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
-import { AtomicStatementError, isTransactionControl, runAtomicSqlJs } from "@/lib/db/atomic";
+import sqlite3InitModule, {
+  type Database as SqliteDatabase,
+  type Sqlite3Static,
+} from "@sqlite.org/sqlite-wasm";
+import {
+  AtomicStatementError,
+  type AtomicDatabase,
+  isTransactionControl,
+  runAtomic,
+} from "@/lib/db/atomic";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
-async function createRawDb(): Promise<SqlJsDatabase> {
-  const SQL = await initSqlJs();
-  const db = new SQL.Database();
-  db.run("CREATE TABLE authors (id TEXT PRIMARY KEY, name TEXT)");
-  db.run("CREATE TABLE notes (id TEXT PRIMARY KEY, title TEXT)");
-  db.run("INSERT INTO authors (id, name) VALUES ('a1', 'Kept Author')");
-  db.run("INSERT INTO notes (id, title) VALUES ('n1', 'Kept Note')");
+let engine: Promise<Sqlite3Static> | null = null;
+
+function sqlite3(): Promise<Sqlite3Static> {
+  engine ??= sqlite3InitModule();
+  return engine;
+}
+
+async function createRawDb(): Promise<SqliteDatabase> {
+  const db = new (await sqlite3()).oo1.DB(":memory:", "c");
+  db.exec("CREATE TABLE authors (id TEXT PRIMARY KEY, name TEXT)");
+  db.exec("CREATE TABLE notes (id TEXT PRIMARY KEY, title TEXT)");
+  db.exec("INSERT INTO authors (id, name) VALUES ('a1', 'Kept Author')");
+  db.exec("INSERT INTO notes (id, title) VALUES ('n1', 'Kept Note')");
   return db;
 }
 
-/** The full contents of every table, keyed by table name. */
-function snapshot(db: SqlJsDatabase): Record<string, Record<string, unknown>[]> {
-  const names: string[] = [];
-  const list = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name");
-  try {
-    while (list.step()) {
-      names.push((list.getAsObject() as { name: string }).name);
-    }
-  } finally {
-    list.free();
-  }
-  const out: Record<string, Record<string, unknown>[]> = {};
-  for (const name of names) {
-    const select = db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`);
-    try {
-      const rows: Record<string, unknown>[] = [];
-      while (select.step()) {
-        rows.push(select.getAsObject());
+/** The runner `runAtomic` takes, built the way the in-memory adapter builds it. */
+function runner(db: SqliteDatabase): AtomicDatabase {
+  return {
+    run: (sql, params) => {
+      if (params === undefined) {
+        db.exec(sql);
+      } else {
+        db.exec({ sql, bind: params });
       }
-      out[name] = rows;
-    } finally {
-      select.free();
-    }
+    },
+  };
+}
+
+/** The full contents of every table, keyed by table name. */
+function snapshot(db: SqliteDatabase): Record<string, Record<string, unknown>[]> {
+  const names = db.selectObjects(
+    "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+  ) as { name: string }[];
+  const out: Record<string, Record<string, unknown>[]> = {};
+  for (const { name } of names) {
+    out[name] = db.selectObjects(`SELECT * FROM "${name}" ORDER BY rowid`);
   }
   return out;
 }
 
-describe("runAtomicSqlJs()", () => {
+describe("runAtomic()", () => {
   it("applies every statement on success", async () => {
     const db = await createRawDb();
 
-    runAtomicSqlJs(db, [
+    runAtomic(runner(db), [
       "INSERT INTO authors (id, name) VALUES ('a2', 'New Author')",
       "INSERT INTO notes (id, title) VALUES ('n2', 'New Note')",
     ]);
@@ -60,7 +72,7 @@ describe("runAtomicSqlJs()", () => {
 
     let error: unknown = null;
     try {
-      runAtomicSqlJs(db, [
+      runAtomic(runner(db), [
         "INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')",
         "INSERT INTO notes (id, title) VALUES ('n2', 'Doomed')",
         "INSERT INTO missing_table (id) VALUES ('x')",
@@ -83,7 +95,7 @@ describe("runAtomicSqlJs()", () => {
 
     let error: unknown = null;
     try {
-      runAtomicSqlJs(db, ["INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')", "COMMIT"]);
+      runAtomic(runner(db), ["INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')", "COMMIT"]);
     } catch (e) {
       error = e;
     }
@@ -104,7 +116,7 @@ describe("runAtomicSqlJs()", () => {
 
       let error: unknown = null;
       try {
-        runAtomicSqlJs(db, [
+        runAtomic(runner(db), [
           "INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')",
           statement,
           "INSERT INTO notes (id, title) VALUES ('n2', 'Doomed')",
@@ -123,7 +135,7 @@ describe("runAtomicSqlJs()", () => {
   it("skips whitespace-only statements", async () => {
     const db = await createRawDb();
 
-    runAtomicSqlJs(db, [
+    runAtomic(runner(db), [
       "   ",
       "INSERT INTO authors (id, name) VALUES ('a2', 'New Author')",
       "\n\t ",
@@ -134,13 +146,13 @@ describe("runAtomicSqlJs()", () => {
   });
 });
 
-describe("runAtomicSqlJs() with bound statements", () => {
+describe("runAtomic() with bound statements", () => {
   it("stores a bound value with quotes, semicolons and 1 MB exactly", async () => {
     const db = await createRawDb();
     const tricky = "O'Brien; DROP TABLE authors; --";
     const big = "a'b;".repeat(250_000); // 1,000,000 characters
 
-    runAtomicSqlJs(db, [
+    runAtomic(runner(db), [
       { sql: "INSERT INTO authors (id, name) VALUES (?, ?)", params: ["a2", tricky] },
       { sql: "INSERT INTO notes (id, title) VALUES (?, ?)", params: ["n2", big] },
     ]);
@@ -154,7 +166,7 @@ describe("runAtomicSqlJs() with bound statements", () => {
   it("commits plain and bound statements together", async () => {
     const db = await createRawDb();
 
-    runAtomicSqlJs(db, [
+    runAtomic(runner(db), [
       "INSERT INTO authors (id, name) VALUES ('a2', 'Plain')",
       { sql: "INSERT INTO notes (id, title) VALUES (?, ?)", params: ["n2", "Bound"] },
       "   ",
@@ -171,7 +183,7 @@ describe("runAtomicSqlJs() with bound statements", () => {
 
     let error: unknown = null;
     try {
-      runAtomicSqlJs(db, [
+      runAtomic(runner(db), [
         "INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')",
         { sql: "INSERT INTO notes (id, title) VALUES (?, ?)", params: ["n1", "Duplicate id"] },
       ]);
@@ -192,7 +204,7 @@ describe("runAtomicSqlJs() with bound statements", () => {
 
     let error: unknown = null;
     try {
-      runAtomicSqlJs(db, [
+      runAtomic(runner(db), [
         "INSERT INTO authors (id, name) VALUES ('a2', 'Doomed')",
         { sql: "BEGIN", params: [] },
       ]);

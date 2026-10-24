@@ -612,7 +612,7 @@ describe("useCanvasStore", () => {
     const canvas = await useCanvasStore.getState().createCanvas();
     await useCanvasStore.getState().loadCanvas(canvas.id);
     useCanvasStore.getState().addNode(textNode("a"));
-    vi.spyOn(testDb, "execute").mockRejectedValueOnce(new Error("disk full"));
+    vi.spyOn(testDb, "executeAtomic").mockRejectedValueOnce(new Error("disk full"));
     await useCanvasStore.getState().persistCurrent();
     expect(useCanvasStore.getState()).toMatchObject({ dirty: true, saveState: "error" });
   });

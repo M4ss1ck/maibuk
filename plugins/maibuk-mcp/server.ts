@@ -13,6 +13,7 @@ import { listBooks, getBook } from "./books";
 import { readChapter } from "./chapters";
 import { editChapter, writeChapter, type WriteGuard } from "./edits";
 import { deleteNote, editNote, listNotes, readNote, writeNote } from "./notes";
+import { searchLibrary } from "./search";
 import {
   BOOK_STATUSES,
   CHAPTER_STATUSES,
@@ -28,7 +29,7 @@ import {
  * result.
  */
 const SERVER_INSTRUCTIONS =
-  "Maibuk MCP Server. The Library holds the author's Books; each Book holds ordered Chapters and Notes with Tags. Tools take a Book, Chapter, or Note id, or an 8+ character prefix of one; an ambiguous prefix answers with its candidates. Lists are plain-text lines with a cursor and a total. Reads come in windows of characters; pass the returned next offset to continue.";
+  "Maibuk MCP Server. The Library holds the author's Books; each Book holds ordered Chapters and Notes with Tags. To find a word, name, or passage, call search_library first and read its hits, instead of reading every Chapter. Tools take a Book, Chapter, or Note id, or an 8+ character prefix of one; an ambiguous prefix answers with its candidates. Lists are plain-text lines with a cursor and a total. Reads come in windows of characters; pass the returned next offset to continue.";
 
 /**
  * The id of the most specific item the call names: a Note over its Chapter
@@ -103,7 +104,7 @@ export function buildMcpServer(
   canWrite = true
 ): McpServer {
   const server = new McpServer(
-    { name: "maibuk", version: "0.1.0" },
+    { name: "maibuk", version: "0.2.0" },
     {
       instructions: SERVER_INSTRUCTIONS,
       capabilities: { tools: { listChanged: true } },
@@ -113,7 +114,8 @@ export function buildMcpServer(
       },
     }
   );
-  // list_books first, then get_book: the order `tools/list` advertises.
+  // Read tools register in the order `tools/list` advertises: list_books,
+  // get_book, read_chapter, list_notes, read_note, then search_library.
   server.registerTool(
     "list_books",
     {
@@ -191,6 +193,30 @@ export function buildMcpServer(
       annotations: { readOnlyHint: true },
     },
     recorded(record, "read_note", async (args) => readNote(client, args as any))
+  );
+  server.registerTool(
+    "search_library",
+    {
+      title: "Search library",
+      description:
+        "Search the Library's Books, Chapters, Notes, and Canvases for a word, name, or passage, instead of reading every Chapter; at most 50 hits per page. Each hit carries the id its read tool takes: a Chapter hit feeds read_chapter, a Note hit read_note, a Book hit get_book.",
+      inputSchema: z.object({
+        query: z.string().min(1).max(500),
+        matchCase: z.boolean().optional(),
+        wholeWord: z.boolean().optional(),
+        regex: z.boolean().optional(),
+        kinds: z
+          .array(z.enum(["book", "chapter", "note", "canvas"]))
+          .min(1)
+          .max(4)
+          .optional(),
+        book: z.string().optional(),
+        limit: z.number().int().min(1).optional(),
+        cursor: z.string().optional(),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    recorded(record, "search_library", async (args) => searchLibrary(client, args as any))
   );
   // The write tools register only while the author grants `library:write`
   // (see `canWrite` above): a read-only Agent lists and calls the read tools

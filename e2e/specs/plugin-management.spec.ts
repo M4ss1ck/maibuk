@@ -344,8 +344,9 @@ test.describe("Plugin management: restart a stopped Plugin @wf:plugin-management
     ).toBeVisible();
     await capture(page, "plugin-management-stopped");
 
-    const restart = main(page).getByRole("button", { name: "Restart", exact: true });
-    await tabTo(page, restart, { max: 20 });
+    // A Stopped Plugin's Settings row offers "Try again" (#618), not "Restart".
+    const tryAgain = main(page).getByRole("button", { name: "Try again", exact: true });
+    await tabTo(page, tryAgain, { max: 20 });
     await page.keyboard.press("Enter");
     await expect(main(page).getByText("Stopped", { exact: true })).toHaveCount(0);
     await expect(
@@ -476,7 +477,7 @@ test.describe("Plugin management by touch @touch", () => {
   test.describe("restart a stopped Plugin", () => {
     test.use({ library: "empty", plugins: ["remote-ui"] });
 
-    test("taps Restart on a stopped Plugin @wf:plugin-management-restart", async ({
+    test("taps Try again on a stopped Plugin @wf:plugin-management-restart", async ({
       page,
     }) => {
       await page.goto("/");
@@ -508,7 +509,7 @@ test.describe("Plugin management by touch @touch", () => {
         .getByRole("button", { name: /^Remote UI Fixture/ })
         .tap();
       await expect(main(page).getByText("Stopped", { exact: true })).toBeVisible();
-      await main(page).getByRole("button", { name: "Restart", exact: true }).tap();
+      await main(page).getByRole("button", { name: "Try again", exact: true }).tap();
       await expect(main(page).getByText("Stopped", { exact: true })).toHaveCount(0);
     });
   });

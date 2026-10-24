@@ -1,12 +1,19 @@
 // Command Palette (issue #353): find and run anything by name, keyboard-only.
-// Every test opens the palette with F1 and drives the search field, the
+// F1 and Mod+Shift+P open Commands mode with `>` typed; the Search Library
+// Command opens Library Search empty. Every test drives the search field, the
 // virtual-focus list, and the nested pages with the keyboard alone.
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectFocusWithin, expectTabContained, tabTo } from "../support/keyboard";
 import { seedWebBackups } from "../support/storage";
-import { SEED_BOOK, SEED_CHAPTERS, SEED_NOTES, SHELF_BOOKS } from "../support/seed/names";
+import {
+  SEED_BOOK,
+  SEED_CHAPTERS,
+  SEED_NOTES,
+  SHELF_BOOKS,
+  PALETTE_CANVAS,
+} from "../support/seed/names";
 import { expect, test } from "../support/test";
 
 test.use({ library: "paletteLibrary" });
@@ -23,12 +30,22 @@ async function openPalette(page: Page): Promise<void> {
   await expect(searchbox(page)).toBeFocused();
 }
 
+/** Opens the palette in Library Search, as Mod+Alt+P and the Search Library Command do. */
+async function openLibrarySearch(page: Page): Promise<void> {
+  await page.keyboard.press("Control+Alt+p");
+  await expect(dialog(page)).toBeVisible();
+  await expect(searchbox(page)).toBeFocused();
+  await expect(searchbox(page)).toHaveValue("");
+}
+
 /**
  * Types a query and waits for React Aria to settle the active result: it moves
  * the input's aria-activedescendant 500 ms after typing, so arrows pressed
  * before that land on a stale row.
  */
 async function search(page: Page, query: string): Promise<void> {
+  // A mode prefix is already typed; End keeps it and appends the query.
+  await page.keyboard.press("End");
   await page.keyboard.type(query);
   await expect.poll(async () => searchbox(page).getAttribute("aria-activedescendant")).toBeTruthy();
 }
@@ -36,6 +53,24 @@ async function search(page: Page, query: string): Promise<void> {
 /** The item key of the active result, read off the input's active descendant. */
 async function activeKey(page: Page): Promise<string> {
   return (await searchbox(page).getAttribute("aria-activedescendant")) ?? "";
+}
+
+/**
+ * Arrows until the active result carries `marker` (e.g. `option-text:`), then
+ * presses Enter. The text rows arrive asynchronously after the title rows and
+ * the deferred list can reset the active result, so a bare Enter can land on
+ * nothing; arrowing to the wanted row first makes the choice deterministic.
+ */
+async function chooseRow(page: Page, marker: string): Promise<void> {
+  await expect
+    .poll(async () => {
+      const active = await activeKey(page);
+      if (active.includes(marker)) return active;
+      await page.keyboard.press("ArrowDown");
+      return active;
+    })
+    .toContain(marker);
+  await page.keyboard.press("Enter");
 }
 
 /**
@@ -58,9 +93,9 @@ async function arrowTo(page: Page, key: string, { max = 30 } = {}): Promise<void
 async function openBookEditorOnArrival(page: Page): Promise<void> {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
-  await openPalette(page);
+  await openLibrarySearch(page);
   await search(page, SEED_CHAPTERS[0].title);
-  await page.keyboard.press("Enter");
+  await chooseRow(page, "option-chapter:");
   await expect(page).toHaveURL(/\/book\/[^/]+$/);
   await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
 }
@@ -68,7 +103,7 @@ async function openBookEditorOnArrival(page: Page): Promise<void> {
 async function openNoteViaPalette(page: Page): Promise<void> {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
-  await openPalette(page);
+  await openLibrarySearch(page);
   await search(page, SEED_NOTES.tideTables);
   await expect(option(page, SEED_NOTES.tideTables)).toBeVisible();
   await page.keyboard.press("Enter");
@@ -96,11 +131,10 @@ test.describe("Command Palette open and close @wf:command-palette", () => {
 
     await page.keyboard.press("F1");
     await expect(dialog(page)).toBeVisible();
-    // "light" matches a Command, a Book, and a Settings row: all three
+    // "light" matches the Light Command and the Theme Settings row: both
     // sections fit in one frame for the screenshot.
     await search(page, "light");
     await expect(option(page, "Light")).toBeVisible();
-    await expect(option(page, SEED_BOOK.title)).toBeVisible();
     await expect(option(page, "Theme")).toBeVisible();
     await expectTabContained(page, dialog(page));
     await capture(page, "palette-open");
@@ -109,6 +143,74 @@ test.describe("Command Palette open and close @wf:command-palette", () => {
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toBeHidden();
     await expect(trigger).toBeFocused();
+  });
+});
+
+test.describe("Command Palette Commands mode @wf:command-palette-commands-mode", () => {
+  test("F1 opens with > typed and finds a Command by name without listing a Book @sc:global.openCommandPalette", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openPalette(page);
+    // Commands mode is the field's own content: the prefix is already there.
+    await expect(searchbox(page)).toHaveValue(">");
+
+    await search(page, "light");
+    await expect(option(page, "Light")).toBeVisible();
+    await expect(option(page, "Theme")).toBeVisible();
+    // "light" is part of the seeded Book's title, yet Library items stay out.
+    await expect(option(page, SEED_BOOK.title)).toHaveCount(0);
+    await capture(page, "palette-commands-mode");
+  });
+});
+
+test.describe("Command Palette Library Search @wf:command-palette-library-search", () => {
+  test("Backspace on a lone > switches to Library Search instead of closing", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openPalette(page);
+    await expect(searchbox(page)).toHaveValue(">");
+    await page.keyboard.press("End");
+    await page.keyboard.press("Backspace");
+
+    // Still open, now empty, and listing Library pages rather than Commands.
+    await expect(dialog(page)).toBeVisible();
+    await expect(searchbox(page)).toBeFocused();
+    await expect(searchbox(page)).toHaveValue("");
+    await expect(section(page, "Pages").getByRole("option").first()).toHaveAccessibleName(
+      "Open Chapter…"
+    );
+    await expect(section(page, "Suggested")).toHaveCount(0);
+    await capture(page, "palette-library-search-empty");
+  });
+
+  test("typing a Book title without a prefix finds it and opens the Book", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openLibrarySearch(page);
+    await search(page, SEED_BOOK.title);
+    await expect(option(page, SEED_BOOK.title)).toBeVisible();
+    await capture(page, "palette-library-search-book");
+
+    await page.keyboard.press("Enter");
+    await expect(dialog(page)).toBeHidden();
+    await expect(page).toHaveURL(/\/book\/[^/]+$/);
+    await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
+  });
+
+  test("Mod+Alt+P opens Library Search empty @sc:global.searchLibrary", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openLibrarySearch(page);
+    await expect(searchbox(page)).toHaveValue("");
+    await expect(section(page, "Pages").getByRole("option")).toHaveCount(4);
+    // No Commands are suggested in Library Search.
+    await expect(section(page, "Suggested")).toHaveCount(0);
   });
 });
 
@@ -152,7 +254,7 @@ test.describe("Command Palette entities @wf:command-palette", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
-    await openPalette(page);
+    await openLibrarySearch(page);
     await search(page, SEED_CHAPTERS[2].title);
     await expect(option(page, SEED_CHAPTERS[2].title)).toBeVisible();
     await page.keyboard.press("Enter");
@@ -167,7 +269,7 @@ test.describe("Command Palette entities @wf:command-palette", () => {
   test("a nested page narrows with a chip and Backspace goes back", async ({ page }) => {
     await openBookEditorOnArrival(page);
 
-    await openPalette(page);
+    await openLibrarySearch(page);
     await search(page, "open chapter");
     await page.keyboard.press("Enter");
 
@@ -310,26 +412,25 @@ test.describe("Command Palette recent @wf:command-palette", () => {
   });
 });
 
-test.describe("Command Palette suggested @wf:command-palette", () => {
-  test("an empty query lists Suggested, and a suggested page narrows the list", async ({
+test.describe("Command Palette pages @wf:command-palette", () => {
+  test("an empty Library Search lists the four pages, and a page narrows the list", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
-    await openPalette(page);
-    const suggested = section(page, "Suggested").getByRole("option");
-    await expect(suggested.first()).toHaveAccessibleName("Go to Book…");
-    expect(await suggested.count()).toBeGreaterThanOrEqual(5);
-    expect(await suggested.count()).toBeLessThanOrEqual(10);
+    await openLibrarySearch(page);
+    const pages = section(page, "Pages").getByRole("option");
+    await expect(pages.first()).toHaveAccessibleName("Open Chapter…");
+    await expect(pages).toHaveCount(4);
     // The last row sits whole inside the list, not cut by its bottom edge.
     const list = dialog(page).getByRole("listbox");
     const listBox = await list.boundingBox();
-    const lastBox = await suggested.last().boundingBox();
+    const lastBox = await pages.last().boundingBox();
     expect(listBox && lastBox && lastBox.y + lastBox.height <= listBox.y + listBox.height).toBe(
       true
     );
-    await capture(page, "palette-suggested");
+    await capture(page, "palette-library-pages");
 
     await arrowTo(page, "page:books");
     await page.keyboard.press("Enter");
@@ -363,5 +464,140 @@ test.describe("Command Palette formatting @wf:command-palette", () => {
     await expect(dialog(page)).toBeHidden();
     await expect(text.locator("strong")).toHaveText("dusk.");
     await expect(text).toBeFocused();
+  });
+});
+
+test.describe("Library Search text results @wf:command-palette-text-search @sc:global.searchLibrary @sc:common.matchCase @sc:common.wholeWord @sc:common.useRegex", () => {
+  test("the Match case, Whole word, and Regex switches reshape the Text rows", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openLibrarySearch(page);
+    await search(page, "FERRY");
+    const textRow = section(page, "Text").getByRole("option").first();
+    await expect(textRow).toContainText("ferry");
+    await capture(page, "palette-text-results");
+
+    // Whole word still matches, case-insensitively: the row stays.
+    await page.keyboard.press("Alt+w");
+    await expect(
+      dialog(page).getByRole("button", { name: "Match Whole Word", exact: true })
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(section(page, "Text").getByRole("option")).toHaveCount(1);
+
+    // As a Regex it still matches: the row stays.
+    await page.keyboard.press("Alt+r");
+    await expect(
+      dialog(page).getByRole("button", { name: "Use Regular Expression", exact: true })
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(section(page, "Text").getByRole("option")).toHaveCount(1);
+
+    // Match case kills the all-caps query: no Text rows, no results at all.
+    await page.keyboard.press("Alt+c");
+    await expect(
+      dialog(page).getByRole("button", { name: "Match Case", exact: true })
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(section(page, "Text").getByRole("option")).toHaveCount(0);
+    await expect(dialog(page).getByText("No results")).toBeVisible();
+  });
+
+  test("the Chapter text row opens the editor with Find and Replace on the query, and Enter steps the matches", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openLibrarySearch(page);
+    await search(page, "ferry");
+    const textRow = section(page, "Text").getByRole("option").first();
+    await expect(textRow).toContainText("ferry");
+    await capture(page, "palette-library-search-text");
+    await chooseRow(page, "option-text:chapter:");
+
+    await expect(dialog(page)).toBeHidden();
+    await expect(page).toHaveURL(/\/book\/[^/]+$/);
+    await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
+    const find = page.getByPlaceholder("Find...");
+    await expect(find).toHaveValue("ferry");
+    await expect(page.getByText("1 of 2")).toBeVisible();
+    await capture(page, "find-replace-handoff");
+
+    await expect(find).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("2 of 2")).toBeVisible();
+  });
+
+  test("closing Find and Replace, leaving, and reopening never brings it back", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openLibrarySearch(page);
+    await search(page, "ferry");
+    await expect(section(page, "Text").getByRole("option").first()).toContainText("ferry");
+    await chooseRow(page, "option-text:chapter:");
+    const find = page.getByPlaceholder("Find...");
+    await expect(find).toHaveValue("ferry");
+
+    // Close Find and Replace, leave the editor for the chapter list, and go back.
+    await page.keyboard.press("Escape");
+    await expect(find).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
+    await page.keyboard.press("Backspace");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    // Reopen the same chapter through its title row: no Find and Replace.
+    await openLibrarySearch(page);
+    await search(page, SEED_CHAPTERS[0].title);
+    await expect(option(page, SEED_CHAPTERS[0].title)).toBeVisible();
+    await chooseRow(page, "option-chapter:");
+    await expect(dialog(page)).toBeHidden();
+    await expect(
+      page.getByRole("textbox", { name: `Text of ${SEED_CHAPTERS[0].title}` })
+    ).toBeVisible();
+    await expect(page.getByPlaceholder("Find...")).toHaveCount(0);
+  });
+
+  test("a Canvas card text row opens the Canvas with the card selected", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    await openLibrarySearch(page);
+    await search(page, "beacon");
+    const textRow = section(page, "Text").getByRole("option").first();
+    await expect(textRow).toContainText("beacon");
+    await chooseRow(page, "option-text:canvas:");
+
+    await expect(dialog(page)).toBeHidden();
+    await expect(page).toHaveURL(/\/canvas\/[\w-]+$/);
+    await expect(page.getByRole("toolbar", { name: "Tools" })).toBeVisible();
+    // React Flow's node wrapper exposes only a testid (`rf__node-<id>`) and
+    // carries no accessible name, so the seeded card is located by its id.
+    await expect(page.getByTestId(`rf__node-${PALETTE_CANVAS.cardId}`)).toHaveClass(/selected/);
+    await expect(page.getByRole("button", { name: "Connect to…" })).toBeVisible();
+  });
+
+  test("Alt+W in the editor's Find and Replace toggles Whole word and the count drops out", async ({
+    page,
+  }) => {
+    await openBookEditorOnArrival(page);
+    const text = page.getByRole("textbox", { name: `Text of ${SEED_CHAPTERS[0].title}` });
+    await expect(text).toBeVisible();
+    await tabTo(page, text, { max: 30 });
+
+    await page.keyboard.press("ControlOrMeta+f");
+    const find = page.getByPlaceholder("Find...");
+    await expect(find).toBeFocused();
+    // "table" only occurs inside "timetable".
+    await page.keyboard.type("table");
+    await expect(page.getByText("1 of 1")).toBeVisible();
+
+    await page.keyboard.press("Alt+w");
+    await expect(page.getByRole("button", { name: "Match Whole Word", exact: true })).toHaveClass(
+      /bg-primary/
+    );
+    await expect(page.getByText("No results")).toBeVisible();
   });
 });

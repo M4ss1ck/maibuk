@@ -4,7 +4,7 @@ import { parseTriggerFromFilename } from "@/features/backup/utils";
 import { isBulkSignal, onBeforeBulkReplace, onChange } from "@/features/sync/change-feed";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
-// Real sql.js database and the real SQL exporter: the only stand-ins are the
+// Real database and the real SQL exporter: the only stand-ins are the
 // database handle and the backup file store. Plugin data is Library data
 // (ADR 0023): Backups and Database Files carry it, Restore replaces it, older
 // Backups leave it alone, and loading a Database File merges it by Plugin id

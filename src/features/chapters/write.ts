@@ -22,6 +22,10 @@ import {
 } from "@/features/sync/change-feed";
 import { assignHeadingIds } from "@/features/links/heading-ids";
 import { reindexSource } from "@/features/links/link-index";
+import {
+  chapterSearchStatements,
+  deleteSearchChaptersStatement,
+} from "@/features/search/statements";
 import type {
   Chapter,
   ChapterStatus,
@@ -263,7 +267,20 @@ export async function updateChapterRow(
 
   values.push(id);
 
-  await db.execute(`UPDATE chapters SET ${updates.join(", ")} WHERE id = ?`, values);
+  const updateSql = `UPDATE chapters SET ${updates.join(", ")} WHERE id = ?`;
+  if (normalizedContent !== undefined) {
+    // The index follows the save in the same atomic batch: a failed index
+    // write leaves the Chapter unchanged rather than silently unsearchable.
+    await db.executeAtomic([
+      { sql: updateSql, params: values as (string | number | null)[] },
+      ...chapterSearchStatements(
+        { id, bookId: existing.bookId, content: normalizedContent },
+        now
+      ),
+    ]);
+  } else {
+    await db.execute(updateSql, values);
+  }
 
   // Capture this save's stored result before unrelated awaits (parent touch,
   // reindex, emission): a later save must not replace it with newer content.
@@ -330,6 +347,7 @@ export function chapterDependentDeletes(
       params,
     },
     { sql: `DELETE FROM chapter_epub_meta WHERE chapter_id IN (${chapterIdsSql})`, params },
+    deleteSearchChaptersStatement(chapterIdsSql, params),
   ];
 }
 

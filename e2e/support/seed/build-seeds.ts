@@ -7,9 +7,8 @@
 // its builder. Nothing here writes SQL itself: schema and rows come from
 // `initializeSchema()` and the per-entity write paths.
 
-import initSqlJs from "sql.js";
 import { initializeSchema } from "@/lib/db";
-import { MemoryDatabaseAdapter } from "@/lib/db/memory-database";
+import { createMemoryDatabase } from "@/lib/db/memory-database";
 import {
   activateTutorialDatabase,
   deactivateTutorialDatabase,
@@ -17,9 +16,7 @@ import {
 import { SEED_LIBRARIES, type SeedName } from "./libraries";
 
 export async function buildSeed(name: SeedName): Promise<Uint8Array> {
-  const SQL = await initSqlJs();
-  const sqlDb = new SQL.Database();
-  const adapter = new MemoryDatabaseAdapter(sqlDb);
+  const adapter = await createMemoryDatabase();
   await initializeSchema(adapter);
   activateTutorialDatabase(adapter);
   try {
@@ -27,9 +24,9 @@ export async function buildSeed(name: SeedName): Promise<Uint8Array> {
   } finally {
     deactivateTutorialDatabase();
   }
-  // The same serialization the web adapter persists to IndexedDB.
-  const bytes = sqlDb.export();
-  sqlDb.close();
+  // The database file bytes the web app imports into OPFS on first launch.
+  const bytes = adapter.exportBytes();
+  await adapter.close();
   return bytes;
 }
 

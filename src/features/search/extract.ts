@@ -1,0 +1,118 @@
+/**
+ * Plain-text extraction for Library Search.
+ *
+ * The index stores one row per block, never one string per item, so a query
+ * can never match across two paragraphs, list items, or headings. Chapter and
+ * Note bodies are stored as editor HTML here (not TipTap JSON), so the text
+ * comes from the same `htmlToPlainText()` the Plugin Library reads use: block
+ * nodes separate with TipTap's `"\n\n"`, a hard break with `"\n"`.
+ */
+
+import { htmlToPlainText } from "@/components/editor/html-to-text";
+import { fastHtmlBlocks } from "@/features/search/fast-extract";
+import type { SearchBlock, SearchField } from "@/features/search/types";
+
+function toBlocks(text: string): string[] {
+  return text.split(/\n{2,}/);
+}
+
+/**
+ * Editor HTML -> its non-empty blocks, in document order. The fast path is the
+ * one every save and the whole-index rebuild use; `htmlToPlainText()` stays the
+ * oracle for markup it does not handle (#639).
+ */
+function htmlBlocks(html: string | null | undefined): string[] {
+  if (!html) return [];
+  const fast = fastHtmlBlocks(html);
+  if (fast) return fast;
+  let text: string;
+  try {
+    text = htmlToPlainText(html);
+  } catch {
+    // Corrupt or unknown markup must not make a save fail: fall back to a
+    // tag strip, which still yields searchable text.
+    text = html.replace(/<[^>]*>/g, " ");
+  }
+  return toBlocks(text);
+}
+
+function toSearchBlocks(blocks: readonly string[], field: SearchField): SearchBlock[] {
+  const result: SearchBlock[] = [];
+  blocks.forEach((text, blockIndex) => {
+    if (text.trim().length === 0) return;
+    result.push({ field, blockIndex, text });
+  });
+  return result;
+}
+
+/** One row per paragraph, list item, heading, and other editor block. */
+export function chapterContentBlocks(content: string | null | undefined): SearchBlock[] {
+  return toSearchBlocks(htmlBlocks(content), "content");
+}
+
+/** Notes share the editor's HTML shape, so their blocks extract the same way. */
+export function noteContentBlocks(content: string | null | undefined): SearchBlock[] {
+  return toSearchBlocks(htmlBlocks(content), "content");
+}
+
+function plainFieldBlocks(value: string | null | undefined, field: SearchField): SearchBlock[] {
+  if (!value) return [];
+  // Book fields are plain text fields, one line per block.
+  return toSearchBlocks(value.split(/\r?\n/), field);
+}
+
+/** Book title, subtitle, and description; Cover data is deliberately absent. */
+export function bookFieldBlocks(book: {
+  title?: string | null;
+  subtitle?: string | null;
+  description?: string | null;
+}): SearchBlock[] {
+  return [
+    ...plainFieldBlocks(book.title, "title"),
+    ...plainFieldBlocks(book.subtitle, "subtitle"),
+    ...plainFieldBlocks(book.description, "description"),
+  ];
+}
+
+/**
+ * Canvas card text: every text node's HTML, one row per block. The block
+ * ordinal runs across the whole Canvas so unit 2 can map a match back to the
+ * card it came from. Note references and edges carry no body text.
+ */
+export function canvasBlocks(doc: unknown): SearchBlock[] {
+  return toSearchBlocks(
+    canvasCardBlocks(doc).map((entry) => entry.text),
+    "card"
+  );
+}
+
+interface CanvasCardBlock {
+  cardId: string;
+  text: string;
+}
+
+function canvasCardBlocks(doc: unknown): CanvasCardBlock[] {
+  if (doc === null || typeof doc !== "object") return [];
+  const nodes = (doc as { nodes?: unknown }).nodes;
+  if (!Array.isArray(nodes)) return [];
+
+  const blocks: CanvasCardBlock[] = [];
+  for (const node of nodes) {
+    if (node === null || typeof node !== "object") continue;
+    const { id, kind, html } = node as { id?: unknown; kind?: unknown; html?: unknown };
+    if (kind !== "text" || typeof html !== "string") continue;
+    for (const text of htmlBlocks(html)) {
+      if (text.trim().length === 0) continue;
+      blocks.push({ cardId: typeof id === "string" ? id : "", text });
+    }
+  }
+  return blocks;
+}
+
+/**
+ * For each block `canvasBlocks()` returns, in order, the card node's id. The
+ * two walk the Canvas the same way, so a block ordinal maps back to its card.
+ */
+export function canvasCardIdsByBlock(doc: unknown): string[] {
+  return canvasCardBlocks(doc).map((block) => block.cardId);
+}

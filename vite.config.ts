@@ -172,12 +172,7 @@ export default defineConfig(() => ({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
-    alias: [
-      {
-        find: /^sql\.js\/dist\/sql-wasm\.wasm\?url$/,
-        replacement: resolve(__dirname, "src/test/support/sql-wasm-url.ts"),
-      },
-    ],
+    alias: [],
     include: [
       "src/test/**/*.test.ts",
       "src/test/**/*.test.tsx",
@@ -277,12 +272,17 @@ export default defineConfig(() => ({
         "src/lib/checksum.ts",
         "src/lib/db/sql-parser.ts",
         "src/lib/db/atomic.ts",
+        "src/lib/db/worker-protocol.ts",
+        "src/lib/db/db-worker-handler.ts",
+        "src/lib/db/sqlite-parity.ts",
         "src/lib/db/index.ts",
         "src/lib/db/compact.ts",
         "src/lib/platform/tauri/backup.ts",
         "src/lib/platform/tauri/database.ts",
         "src/lib/platform/web/backup.ts",
         "src/lib/platform/web/database.ts",
+        "src/lib/platform/web/library-open.ts",
+        "src/lib/platform/web/legacy-storage.ts",
         "src/features/sync/sync-engine.ts",
         "src/features/sync/client.ts",
         "src/features/sync/tombstones.ts",

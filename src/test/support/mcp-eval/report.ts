@@ -316,7 +316,7 @@ export interface EvalOptions {
 }
 
 export const EVAL_USAGE = `usage: pnpm eval:mcp [options]
-  --task <ids>          comma-separated task ids to run (default: 1,2,3,4,5,6)
+  --task <ids>          comma-separated task ids to run (default: 1,2,3,4,5,6,7)
   --model <model>       Claude Code model alias or id (default: sonnet)
   --out <path>          JSON report path (default: .bench/mcp-eval.json)
   --max-turns <n>       turns a task may take (default: 20)

@@ -4,10 +4,10 @@ import { parseTriggerFromFilename } from "@/features/backup/utils";
 import { CURRENT_CANVAS_SCHEMA_VERSION } from "@/lib/canvas/defaultDoc";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
-// Real sql.js database (foreign keys on, like desktop), the real SQL
-// exporter, and the real atomic restore path: a Backup whose third restore
-// INSERT fails at execution must leave every table exactly as it was (#344),
-// because the deletes and inserts run in one transaction.
+// Real database (foreign keys on, like desktop), the real SQL exporter, and
+// the real atomic restore path: a Backup whose third restore INSERT fails at
+// execution must leave every table exactly as it was (#344), because the
+// deletes and inserts run in one transaction.
 
 const mockGetDatabase = vi.hoisted(() => vi.fn());
 const mockExportDatabase = vi.hoisted(() => vi.fn());

@@ -268,12 +268,20 @@ export function NotesList({
   const listSectionsRef = useRef(listSections);
   listSectionsRef.current = listSections;
   // Rows glide to the place a Sort gives them; another view or search just redraws.
+  // The glide runs on the Virtualizer's view wrapper, not the row: React Aria
+  // re-measures that wrapper's scrollHeight, which counts a transformed row's
+  // overflow. A row glided up by its own height measured 0px and was dropped
+  // from the layout (e2e notes-sidebar-sort.spec.ts "a drag while sorted").
   useFlipReorder(
     scrollViewRef,
     viewMode === "list"
       ? listSections.flatMap((section) => section.notes.map((note) => note.id))
       : sortNotesBy(filtered, treeSort).map((note) => note.id),
-    { skipKey: draggedId, scope: `${viewMode}:${treeGroupMode}:${query}` }
+    {
+      skipKey: draggedId,
+      scope: `${viewMode}:${treeGroupMode}:${query}`,
+      target: (row) => row.parentElement ?? row,
+    }
   );
   const pinnedCount = notes.filter((note) => note.pinned).length;
   const isSearchActive = query.length > 0;

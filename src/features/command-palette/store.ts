@@ -2,8 +2,17 @@ import { create } from "zustand";
 import { commandStates } from "@/lib/command-runner";
 import type { CommandId } from "@/lib/shortcut-registry";
 import { isTutorialRunInProgress } from "@/features/tutorial/library-switch";
+import {
+  PALETTE_COMMAND_PREFIX,
+  type PaletteMode,
+} from "@/features/command-palette/palette-index";
 
 export type PaletteCommandState = "runnable" | "disabled";
+
+export interface CommandPaletteOpenOptions {
+  /** Which mode to open in; Commands is the default, so F1 keeps its habit. */
+  mode?: PaletteMode;
+}
 
 interface CommandPaletteState {
   isOpen: boolean;
@@ -16,7 +25,9 @@ interface CommandPaletteState {
    * while the opener still has focus.
    */
   snapshot: Map<CommandId, PaletteCommandState>;
-  open: () => void;
+  /** What the field starts with: the Commands prefix, or nothing for Library Search. */
+  initialQuery: string;
+  open: (options?: CommandPaletteOpenOptions) => void;
   close: () => void;
 }
 
@@ -26,11 +37,17 @@ export const useCommandPaletteStore = create<CommandPaletteState>((set) => ({
   isOpen: false,
   opener: null,
   snapshot: new Map(),
-  open: () => {
+  initialQuery: PALETTE_COMMAND_PREFIX,
+  open: (options) => {
     if (isTutorialRunInProgress()) return;
     const active = document.activeElement;
     const opener = active instanceof HTMLElement && active !== document.body ? active : null;
-    set({ isOpen: true, opener, snapshot: commandStates() });
+    set({
+      isOpen: true,
+      opener,
+      snapshot: commandStates(),
+      initialQuery: options?.mode === "library" ? "" : PALETTE_COMMAND_PREFIX,
+    });
   },
   close: () => set({ isOpen: false }),
 }));

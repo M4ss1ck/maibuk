@@ -218,6 +218,13 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.searchLibrary",
+      allowInInput: true,
+      onTrigger: () => {
+        useCommandPaletteStore.getState().open({ mode: "library" });
+      },
+    },
+    {
       id: "dictation.toggle",
       allowInInput: true,
       enabled: dictationSupported && dictationEnabled,

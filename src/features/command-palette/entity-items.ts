@@ -94,20 +94,18 @@ export function buildEntityItems({
 
 export interface BuildPageItemsOptions {
   t: PaletteTranslate;
-  /** The Book Editor is the only screen with an open Book to list Chapters of. */
-  inBookEditor: boolean;
 }
 
+/** The nested pages Library Search narrows to, in the order its empty list shows them. */
+const PALETTE_PAGES: readonly PalettePage[] = ["chapters", "books", "notes", "canvases"];
+
 /**
- * The nested pages: each one narrows the list to one kind and is a root result
- * that sets the page instead of opening anything. Open Chapter… only exists in
- * the Book Editor, where there is an open Book whose Chapters can be listed.
+ * The nested pages: each one narrows Library Search to one kind and is a root
+ * result that sets the page instead of opening anything. The Chapters page
+ * lists the open Book's Chapters in the Book Editor, every Chapter elsewhere.
  */
-export function buildPageItems({ t, inBookEditor }: BuildPageItemsOptions): PaletteItem[] {
-  const pages: readonly PalettePage[] = inBookEditor
-    ? ["chapters", "books", "notes", "canvases"]
-    : ["books", "notes", "canvases"];
-  return pages.map((page) => {
+export function buildPageItems({ t }: BuildPageItemsOptions): PaletteItem[] {
+  return PALETTE_PAGES.map((page) => {
     const label = t(`commandPalette.pages.${page}`);
     return {
       key: `page:${page}`,

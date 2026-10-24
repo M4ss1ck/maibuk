@@ -1188,7 +1188,22 @@
     "unavailable": "Ese comando ya no está disponible aquí",
     "saveFailed": "No se pudo guardar tu último texto, así que no se abrió nada",
     "noResults": "Sin resultados",
+    "textMore_one": "+{{count}} más",
+    "textMore_other": "+{{count}} más",
+    "textRefine": "Demasiadas coincidencias — precisa tu búsqueda para ver más.",
+    "textIndexing": "Indexando…",
+    "textInvalidRegex": "Patrón no válido",
+    "kinds": {
+      "book": "Libro",
+      "chapter": "Capítulo",
+      "note": "Nota",
+      "canvas": "Lienzo"
+    },
     "pageAnnouncement": "Mostrando {{page}}",
+    "modes": {
+      "commands": "Modo comandos",
+      "library": "Buscar"
+    },
     "pages": {
       "chapters": "Abrir capítulo…",
       "books": "Ir a libro…",
@@ -1204,12 +1219,14 @@
     "sections": {
       "recent": "Recientes",
       "suggested": "Sugerencias",
+      "pages": "Páginas",
       "commands": "Comandos",
       "chapters": "Capítulos",
       "notes": "Notas",
       "books": "Libros",
       "canvases": "Lienzos",
-      "settings": "Configuración"
+      "settings": "Configuración",
+      "text": "Texto"
     }
   },
   "shortcuts": {
@@ -1227,6 +1244,7 @@
     "toggleAlwaysOnTop": "Alternar siempre visible",
     "openReleaseNotes": "Mostrar novedades",
     "openCommandPalette": "Abrir paleta de comandos",
+    "searchLibrary": "Buscar en la biblioteca",
     "syncNow": "Sincronizar ahora",
     "newBook": "Crear libro nuevo",
     "jumpBooks": "Ir al libro por número",
@@ -2110,6 +2128,22 @@
     "title": "Maibuk no pudo abrir tu biblioteca",
     "body": "Tu trabajo sigue en este dispositivo. No se cambió ni se borró nada. Vuelve a intentarlo, o reinicia Maibuk si sigue fallando.",
     "retry": "Reintentar"
+  },
+  "webLibrary": {
+    "locked": {
+      "title": "Maibuk está abierto en otra pestaña",
+      "body": "Tu biblioteca solo puede estar abierta en una pestaña a la vez. Cierra la otra pestaña para seguir escribiendo aquí; esta pestaña no la ha abierto.",
+      "tryAgain": "Reintentar"
+    },
+    "memory": {
+      "title": "Tu biblioteca no se conservará",
+      "body": "Este navegador no permite que Maibuk guarde tu biblioteca. Todo lo que escribas aquí se perderá al recargar o cerrar esta ventana."
+    },
+    "migrationFailed": {
+      "title": "No se pudo trasladar tu biblioteca",
+      "body": "Maibuk abrió tu biblioteca anterior tal como estaba, así que no se cambió nada. Se intentará trasladar de nuevo la próxima vez que abras Maibuk.",
+      "quota": "No hay suficiente espacio de almacenamiento para trasladar tu biblioteca. Libera espacio en este dispositivo y vuelve a abrir Maibuk. Tu biblioteca no se ha cambiado."
+    }
   },
   "releases": {
     "title": "Novedades",

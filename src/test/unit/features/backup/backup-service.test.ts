@@ -65,6 +65,10 @@ vi.mock("../../../../features/canvas/store", () => ({
   useCanvasStore: { getState: () => ({ loadCanvases: mockLoadCanvases }) },
 }));
 
+vi.mock("@/features/search/rebuild", () => ({
+  requestSearchRebuild: vi.fn(() => Promise.resolve()),
+}));
+
 const { BackupService } = await import("@/features/backup/backup-service");
 const librarySwitch = await import("@/features/tutorial/library-switch");
 
@@ -1008,6 +1012,21 @@ describe("BackupService", () => {
       }
 
       expect(order).toEqual(["flush", "saveBackup", "readBackup"]);
+    });
+
+    it("requests a search rebuild once after a successful restore", async () => {
+      const { requestSearchRebuild } = await import("@/features/search/rebuild");
+      mockAdapter.readBackup = vi.fn(async () => "restore sql");
+      mockParseSqlStatements.mockImplementation((sql: string) => {
+        if (sql === "restore sql") {
+          return ['INSERT INTO "books" VALUES ("book-1")'];
+        }
+        return [];
+      });
+
+      await service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
+
+      expect(vi.mocked(requestSearchRebuild)).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -1,5 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
-import { allowIndexedDbWrites, failIndexedDbWrites } from "../support/fault";
+import { allowLibraryWrites, failLibraryWrites } from "../support/fault";
 import { seedSettings } from "../support/storage";
 import {
   expectFocusWithin,
@@ -90,17 +90,17 @@ test.describe("typing and saving @wf:editor-type-save @sc:common.save", () => {
     await expect(editorText(page)).toContainText("The lamp burned on.");
   });
 
-  test("a failed IndexedDB write shows Not saved and the next edit retries @fault", async ({
+  test("a failed Library write shows Not saved and the next edit retries @fault", async ({
     page,
   }) => {
     await openEditor(page);
-    await failIndexedDbWrites(page);
+    await failLibraryWrites(page);
     await page.keyboard.press("End");
     await page.keyboard.type(" F");
 
     await expect(page.getByText("Not saved", { exact: true })).toBeVisible();
 
-    await allowIndexedDbWrites(page);
+    await allowLibraryWrites(page);
     await page.keyboard.type(" G");
     await expect(page.getByText("Saved", { exact: true })).toBeVisible();
     await expect(page.getByText("Not saved", { exact: true })).toHaveCount(0);

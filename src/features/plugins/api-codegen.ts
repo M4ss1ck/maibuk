@@ -65,6 +65,17 @@ function needsParens(type: string): boolean {
   return type.includes(" | ") && !type.startsWith("{");
 }
 
+/**
+ * Whether a schema is itself a union: its TypeScript always joins with a
+ * top-level ` | `, even when it starts with `{` (a union of objects), so an
+ * array of it needs parens where the string heuristic stays silent.
+ */
+function isUnionSchema(schema: JsonSchema): boolean {
+  return (
+    Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf) || Array.isArray(schema.type)
+  );
+}
+
 function objectType(schema: JsonSchema, indent: string): string {
   const properties = (schema.properties ?? {}) as Record<string, JsonSchema>;
   const required = new Set((schema.required ?? []) as string[]);
@@ -120,8 +131,9 @@ export function jsonSchemaToTypeScript(schema: JsonSchema, indent: string): stri
     case "null":
       return "null";
     case "array": {
-      const item = jsonSchemaToTypeScript((schema.items ?? {}) as JsonSchema, indent);
-      return needsParens(item) ? `(${item})[]` : `${item}[]`;
+      const items = (schema.items ?? {}) as JsonSchema;
+      const item = jsonSchemaToTypeScript(items, indent);
+      return isUnionSchema(items) || needsParens(item) ? `(${item})[]` : `${item}[]`;
     }
     case "object":
       return objectType(schema, indent);

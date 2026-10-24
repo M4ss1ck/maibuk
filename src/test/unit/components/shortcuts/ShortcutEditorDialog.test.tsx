@@ -266,6 +266,34 @@ describe("Shortcut Editor", () => {
     expect(custom()["editor.bold"]).toBeUndefined();
   });
 
+  it("lists the three search switches as Commands with their Default Shortcuts", async () => {
+    const { user } = await openEditor();
+    await narrowList(user, "editor.matchCase");
+
+    const grid = screen.getByRole("grid");
+    expect(within(grid).getByText("editor.matchCase")).toBeInTheDocument();
+    // The Default Shortcut is Alt+C on this (non-Mac) platform.
+    expect(grid.textContent ?? "").toContain("Alt");
+    expect(grid.textContent ?? "").toContain("C");
+
+    await user.clear(screen.getByRole("searchbox"));
+    await user.keyboard("editor.matchWholeWord");
+    expect(within(screen.getByRole("grid")).getByText("editor.matchWholeWord")).toBeInTheDocument();
+
+    await user.clear(screen.getByRole("searchbox"));
+    await user.keyboard("editor.useRegex");
+    expect(within(screen.getByRole("grid")).getByText("editor.useRegex")).toBeInTheDocument();
+  });
+
+  it("changes one search switch's Shortcut like any other Command", async () => {
+    const { user } = await openEditor();
+    await focusRow(user, "editor.matchCase");
+    await user.keyboard("{ArrowRight}{Enter}");
+    await user.keyboard("{Control>}{Alt>}k{/Alt}{/Control}{Enter}");
+
+    expect(custom()["common.matchCase"]).toEqual([["Mod+Alt+k"]]);
+  });
+
   it("removes and resets a Command's Shortcuts", async () => {
     const { user } = await openEditor();
     await focusRow(user, "shortcuts.syncNow");
@@ -309,6 +337,10 @@ describe("Shortcut Editor", () => {
     expect(document.activeElement).toHaveTextContent("shortcutEditor.resetAll");
     await user.keyboard("{Enter}");
     expect(custom()).toEqual({});
+    // Nothing is left to reset, so Reset all is disabled and cannot take focus
+    // back; it lands on search instead of falling to <body>.
+    expect(resetAll).toBeDisabled();
+    expect(screen.getByRole("searchbox")).toHaveFocus();
   });
 
   it("turns single-key Shortcuts off from the switch", async () => {

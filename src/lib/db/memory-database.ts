@@ -1,33 +1,38 @@
-import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from "sql.js";
-import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
+import type { Database as SqliteDatabase, SqlValue, Sqlite3Static } from "@sqlite.org/sqlite-wasm";
 import type { AtomicStatement, DatabaseAdapter } from "@/lib/platform/types";
-import { runAtomicSqlJs } from "@/lib/db/atomic";
+import { runAtomic } from "@/lib/db/atomic";
 import { exportSqlDump } from "@/lib/db/sql-export";
+import { exportSqliteBytes, loadSqlite3 } from "@/lib/db/sqlite-engine";
+import { toLibraryError, toLibraryRow } from "@/lib/db/sqlite-parity";
 
 /**
- * A sql.js Library that lives only in memory: nothing it holds is ever
- * persisted. The Tutorial Library (ADR 0008) and the store tests use it.
+ * A Library that lives only in memory: nothing it holds is ever persisted.
+ * The Tutorial Library (ADR 0008) and the store tests use it. It runs the
+ * SQLite project's own WASM build so FTS5 is available, in-process and
+ * without a Worker. The web Worker wraps the same class around its pooled
+ * database, so both paths share one set of row and error rules.
  */
 export class MemoryDatabaseAdapter implements DatabaseAdapter {
-  constructor(private db: SqlJsDatabase) {}
+  constructor(
+    private db: SqliteDatabase,
+    private sqlite3: Sqlite3Static
+  ) {}
 
   async execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }> {
-    this.db.run(sql, params as (string | number | null | Uint8Array)[]);
-    return { rowsAffected: this.db.getRowsModified() };
+    this.run(sql, params);
+    return { rowsAffected: this.db.changes() };
   }
 
   async select<T>(sql: string, params?: unknown[]): Promise<T> {
-    const stmt = this.db.prepare(sql);
-    if (params) {
-      stmt.bind(params as (string | number | null | Uint8Array)[]);
+    try {
+      const rows =
+        params === undefined
+          ? this.db.selectObjects(sql)
+          : this.db.selectObjects(sql, params as readonly SqlValue[]);
+      return rows.map(toLibraryRow) as T;
+    } catch (error) {
+      throw toLibraryError(error);
     }
-
-    const results: Record<string, unknown>[] = [];
-    while (stmt.step()) {
-      results.push(stmt.getAsObject());
-    }
-    stmt.free();
-    return results as T;
   }
 
   async close(): Promise<void> {
@@ -41,26 +46,37 @@ export class MemoryDatabaseAdapter implements DatabaseAdapter {
     return exportSqlDump(this);
   }
 
+  /** The database file's bytes, not a SQL dump: a seed, or an exported copy. */
+  exportBytes(): Uint8Array {
+    return exportSqliteBytes(this.sqlite3, this.db);
+  }
+
   async executeAtomic(statements: readonly AtomicStatement[]): Promise<void> {
-    runAtomicSqlJs(this.db, statements);
+    runAtomic({ run: (sql, params) => this.run(sql, params) }, statements);
+  }
+
+  /** The same statement runner `runAtomic` uses, on the official build's oo1 API. */
+  private run(sql: string, params?: readonly unknown[]): void {
+    if (sql.trim().length === 0) return;
+    try {
+      if (params === undefined) {
+        this.db.exec(sql);
+      } else {
+        this.db.exec({ sql, bind: params as readonly SqlValue[] });
+      }
+    } catch (error) {
+      throw toLibraryError(error);
+    }
   }
 }
 
-let sqlJs: Promise<SqlJsStatic> | null = null;
-
-// The wasm ships inside the app bundle so the Tutorial works offline and in
-// the Tauri webview, which never loads sql.js otherwise. It must come from the
-// installed sql.js: a wasm from another release fails to link against its glue.
-export function loadSqlJs(): Promise<SqlJsStatic> {
-  sqlJs ??= initSqlJs({ locateFile: () => sqlWasmUrl }).catch((error: unknown) => {
-    sqlJs = null;
-    throw error;
-  });
-  return sqlJs;
-}
-
 /** An empty in-memory Library, without a schema. */
-export async function createMemoryDatabase(): Promise<DatabaseAdapter> {
-  const SQL = await loadSqlJs();
-  return new MemoryDatabaseAdapter(new SQL.Database());
+export async function createMemoryDatabase(): Promise<MemoryDatabaseAdapter> {
+  const engine = await loadSqlite3();
+  const db = new engine.oo1.DB(":memory:", "c");
+  // The official build's WASM default is 8192; the engine this replaced used
+  // 4096. Keep the page size the Library size checks and Compaction were
+  // written against.
+  db.exec("PRAGMA page_size = 4096");
+  return new MemoryDatabaseAdapter(db, engine);
 }

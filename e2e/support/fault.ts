@@ -1,24 +1,41 @@
 // Fault injection at the browser-storage boundary only (decision 19). With
-// storage.ts, the only code in the suite allowed to touch IndexedDB; specs
-// call these helpers and never reach into storage themselves.
+// storage.ts, the only code in the suite allowed to touch IndexedDB or the
+// Library's OPFS files; specs call these helpers and never reach into storage
+// themselves.
 
-import type { Page } from "@playwright/test";
+import { expect, type Page, type Worker } from "@playwright/test";
 
 /**
- * Makes every IndexedDB put reject with a quota error until
- * `allowIndexedDbWrites` is called. Installed after the app has booted, so
- * the launch schema writes have already landed.
+ * The dedicated Worker that owns the web Library (ADR 0035). Its `opfs-sahpool`
+ * VFS is where every Library write reaches browser storage.
  */
-export async function failIndexedDbWrites(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const state = window as unknown as { __e2eFailPuts?: boolean };
-    state.__e2eFailPuts = true;
-    const proto = IDBObjectStore.prototype as IDBObjectStore & { __e2ePatched?: boolean };
+async function libraryWorker(page: Page): Promise<Worker> {
+  const find = () => page.workers().find((worker) => /\/db-worker[-.]/.test(worker.url()));
+  await expect.poll(() => find() !== undefined, { message: "the Library Worker" }).toBe(true);
+  return find() as Worker;
+}
+
+/**
+ * Makes every write to the Library's OPFS files fail with a quota error until
+ * `allowLibraryWrites` is called. SQLite's VFS turns it into SQLITE_IOERR, so
+ * the save fails the way a full disk would. Installed after the app has booted,
+ * so the launch schema writes have already landed.
+ */
+export async function failLibraryWrites(page: Page): Promise<void> {
+  const worker = await libraryWorker(page);
+  await worker.evaluate(() => {
+    const scope = self as unknown as { __e2eFailWrites?: boolean };
+    scope.__e2eFailWrites = true;
+    // The e2e project has no WebWorker types; the one method the VFS writes through.
+    type SyncAccessHandle = { write(...args: unknown[]): number; __e2ePatched?: boolean };
+    const proto = (
+      self as unknown as { FileSystemSyncAccessHandle: { prototype: SyncAccessHandle } }
+    ).FileSystemSyncAccessHandle.prototype;
     if (proto.__e2ePatched) return;
     proto.__e2ePatched = true;
-    const original = proto.put;
-    proto.put = function (this: IDBObjectStore, ...args: Parameters<typeof original>) {
-      if ((window as unknown as { __e2eFailPuts?: boolean }).__e2eFailPuts) {
+    const original = proto.write;
+    proto.write = function (this: SyncAccessHandle, ...args: unknown[]) {
+      if (scope.__e2eFailWrites) {
         throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
       }
       return original.apply(this, args);
@@ -48,10 +65,11 @@ export async function failBackupWrites(page: Page): Promise<void> {
   });
 }
 
-/** Lets IndexedDB writes through again, so the next save can succeed. */
-export async function allowIndexedDbWrites(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    (window as unknown as { __e2eFailPuts?: boolean }).__e2eFailPuts = false;
+/** Lets Library writes through again, so the next save can succeed. */
+export async function allowLibraryWrites(page: Page): Promise<void> {
+  const worker = await libraryWorker(page);
+  await worker.evaluate(() => {
+    (self as unknown as { __e2eFailWrites?: boolean }).__e2eFailWrites = false;
   });
 }
 

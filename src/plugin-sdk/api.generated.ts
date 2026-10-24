@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.7";
+export const PLUGIN_API_VERSION = "0.1.8";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -13,6 +13,7 @@ export const PLUGIN_API_METHODS = [
   "library.notes.get",
   "library.canvases.list",
   "library.canvases.get",
+  "library.search",
   "library.books.update",
   "library.books.checkpoint",
   "library.chapters.updateContent",
@@ -201,6 +202,100 @@ export interface PluginApiMethods {
       /** Milliseconds since the Unix epoch. */
       updatedAt: number;
     } | null;
+  };
+  /** Searches the Library's text with the same query and switches as Library Search: one row per matching item with a snippet, match counts, and a cursor for the next page. An invalid Regex comes back as an invalid-regex error, never a refusal. When bookId is given, only that Book's items come back and a page may hold fewer than limit results; follow nextCursor until it is absent. Canvases carry no Book, so a bookId filter never returns one. */
+  "library.search": {
+    input: {
+      query: string;
+      matchCase?: boolean;
+      wholeWord?: boolean;
+      regex?: boolean;
+      kinds?: ("book" | "chapter" | "note" | "canvas")[];
+      bookId?: string;
+      limit?: number;
+      cursor?: string | null;
+    };
+    output: {
+      results: ({
+        kind: "book";
+        /** Pass to library.books.get. */
+        bookId: string;
+        title: string;
+        snippet: {
+          text: string;
+          /** [from, to) ranges inside text, in order. */
+          highlights: {
+            from: number;
+            to: number;
+          }[];
+        };
+        /** The first match's offset inside the block the snippet came from. */
+        firstMatchOffset: number;
+        /** Total matches across every block of the item. */
+        matchCount: number;
+      } | {
+        kind: "chapter";
+        /** Pass to library.chapters.get. */
+        chapterId: string;
+        bookId: string;
+        title: string;
+        snippet: {
+          text: string;
+          /** [from, to) ranges inside text, in order. */
+          highlights: {
+            from: number;
+            to: number;
+          }[];
+        };
+        /** The first match's offset inside the block the snippet came from. */
+        firstMatchOffset: number;
+        /** Total matches across every block of the item. */
+        matchCount: number;
+      } | {
+        kind: "note";
+        /** Pass to library.notes.get. */
+        noteId: string;
+        /** Null when the Note is Unfiled. */
+        bookId: string | null;
+        title: string;
+        snippet: {
+          text: string;
+          /** [from, to) ranges inside text, in order. */
+          highlights: {
+            from: number;
+            to: number;
+          }[];
+        };
+        /** The first match's offset inside the block the snippet came from. */
+        firstMatchOffset: number;
+        /** Total matches across every block of the item. */
+        matchCount: number;
+      } | {
+        kind: "canvas";
+        /** Pass to library.canvases.get. */
+        canvasId: string;
+        /** The card the snippet came from; absent for a title hit. */
+        cardId?: string;
+        title: string;
+        snippet: {
+          text: string;
+          /** [from, to) ranges inside text, in order. */
+          highlights: {
+            from: number;
+            to: number;
+          }[];
+        };
+        /** The first match's offset inside the block the snippet came from. */
+        firstMatchOffset: number;
+        /** Total matches across every block of the item. */
+        matchCount: number;
+      })[];
+      /** Pass as cursor for the next page; absent when done. */
+      nextCursor?: string;
+    } | {
+      error: "invalid-regex";
+      message: string;
+    };
   };
   /** Updates a Book's title, Author Name, Genre, Book Status, or Target Word Count through the Book write path; give at least one. A null Genre or Target Word Count clears it. */
   "library.books.update": {
@@ -686,6 +781,8 @@ export interface PluginApi {
       /** Reads one Canvas's metadata, or null when it does not exist. */
       get(params: PluginApiMethods["library.canvases.get"]["input"]): Promise<PluginApiMethods["library.canvases.get"]["output"]>;
     };
+    /** Searches the Library's text with the same query and switches as Library Search: one row per matching item with a snippet, match counts, and a cursor for the next page. An invalid Regex comes back as an invalid-regex error, never a refusal. When bookId is given, only that Book's items come back and a page may hold fewer than limit results; follow nextCursor until it is absent. Canvases carry no Book, so a bookId filter never returns one. */
+    search(params: PluginApiMethods["library.search"]["input"]): Promise<PluginApiMethods["library.search"]["output"]>;
   };
   editor: {
     /** Reads the target editor's content and language. The target is the rich-text editor that last took focus, else the only one on screen; no-target when there is none. */

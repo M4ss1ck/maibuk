@@ -23,9 +23,10 @@ import {
   ListLayout,
   SearchField,
   Text,
+  ToggleButton,
   Virtualizer,
 } from "react-aria-components";
-import { NotebookPen, Workflow, X } from "lucide-react";
+import { NotebookPen, Workflow, X, CaseSensitive, Regex, WholeWord } from "lucide-react";
 import { ChapterIcon, ProjectsIcon, SettingsIcon } from "@/components/icons";
 import { Modal } from "@/components/ui/Modal";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
@@ -36,38 +37,65 @@ import {
   buildEntityItems,
   buildPageItems,
   buildSettingsItems,
+  buildTextResults,
+  isTextScanQuery,
   liveRecentKeys,
   loadPaletteEntities,
+  paletteModeOf,
+  paletteQueryText,
+  PALETTE_COMMAND_PREFIX,
   preparePaletteIndex,
+  searchLibrary,
   searchPalette,
+  textSearchKinds,
+  TEXT_SEARCH_DEBOUNCE_MS,
+  TEXT_SEARCH_LIMIT,
   useCommandPaletteRecentStore,
   useCommandPaletteStore,
 } from "@/features/command-palette";
 import type {
   PaletteItem,
   PaletteItemKind,
+  PaletteMode,
   PalettePage,
   PaletteResult,
+  PaletteSection,
   PaletteTranslate,
 } from "@/features/command-palette/palette-index";
+import type {
+  SearchHandoff,
+  SearchItemKind,
+  SearchLibraryResult,
+  SearchResult,
+} from "@/features/search/types";
+import { searchLibrary as searchLibraryIndex } from "@/features/search";
+import {
+  isSearchIndexRebuilding,
+  subscribeSearchIndexStatus,
+} from "@/features/search/rebuild";
+import { getDatabase } from "@/lib/db";
+import { useDebouncedCallback } from "@/hooks/useAutoSave";
 import type { SettingsRowId } from "@/components/settings/settings-sections";
 import { focusSettingsRow } from "@/features/settings/focus-row";
 import { currentSettingsPlatform } from "@/features/settings/rows";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
+import { useSearchSwitchesStore } from "@/features/search/switches";
 import { normalizeLanguage } from "@/features/settings/types";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
-import { useCommandKeys } from "@/lib/command-keys";
+import { pressRunsCommand, useCommandKeys } from "@/lib/command-keys";
 import { commandState, runCommand } from "@/lib/command-runner";
 import { isMac } from "@/lib/platform/detect";
 import { formatShortcut } from "@/lib/shortcut-keys";
 import type { CommandId } from "@/lib/shortcut-registry";
 
 /**
- * The Command Palette dialog: every mounted Command, searchable by label,
- * Voice Command phrase, and keywords, with the device-local Recent first.
- * Mounted once beside GlobalShortcuts (so never on /embed); renders only
- * while open, and the index is prepared once per open, never per keystroke.
+ * The Command Palette dialog in its two modes: a leading `>` asks for Commands,
+ * Plugin Commands, and Settings rows; its absence asks Library Search for a
+ * Book, Chapter, Note, or Canvas by title. Each mode lists its own device-local
+ * Recent, and an empty field suggests what to start with. Mounted once beside
+ * GlobalShortcuts (so never on /embed); renders only while open, and the index
+ * is prepared once per open, never per keystroke.
  */
 export function CommandPalette() {
   const isOpen = useCommandPaletteStore((state) => state.isOpen);
@@ -107,13 +135,21 @@ function OpenCommandPalette() {
   const layoutOptions = coarsePointer ? COARSE_POINTER_LAYOUT : FINE_POINTER_LAYOUT;
   const close = useCommandPaletteStore((state) => state.close);
   const snapshot = useCommandPaletteStore((state) => state.snapshot);
+  const toggleMatchCase = useSearchSwitchesStore((state) => state.toggleMatchCase);
+  const toggleWholeWord = useSearchSwitchesStore((state) => state.toggleWholeWord);
+  const toggleRegex = useSearchSwitchesStore((state) => state.toggleRegex);
   const customVoice = useShortcutSettingsStore((state) => state.shortcuts.voice);
   const recentKeys = useCommandPaletteRecentStore((state) => state.keys);
   const recordRecent = useCommandPaletteRecentStore((state) => state.record);
   const removeRecent = useCommandPaletteRecentStore((state) => state.remove);
   const pruneRecent = useCommandPaletteRecentStore((state) => state.prune);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => useCommandPaletteStore.getState().initialQuery);
   const [page, setPage] = useState<PalettePage>("root");
+  // The search switches are one shared device state with Find and Replace:
+  // toggling here changes the editor's search and vice versa.
+  const matchCase = useSearchSwitchesStore((state) => state.matchCase);
+  const wholeWord = useSearchSwitchesStore((state) => state.wholeWord);
+  const regex = useSearchSwitchesStore((state) => state.regex);
   const [activeKeyIsRecent, setActiveKeyIsRecent] = useState(false);
   const [entities, setEntities] = useState<Awaited<ReturnType<typeof loadPaletteEntities>> | null>(
     null
@@ -123,6 +159,8 @@ function OpenCommandPalette() {
   const activeKeyRef = useRef<string | null>(null);
   const removalRef = useRef(false);
   const previousCountRef = useRef(-1);
+  // Null until the first render has settled the mode the palette opened in.
+  const previousModeRef = useRef<PaletteMode | null>(null);
   const mac = isMac();
   const navigate = useNavigate();
   const location = useLocation();
@@ -158,14 +196,7 @@ function OpenCommandPalette() {
     };
   }, []);
 
-  const pageItems = useMemo(
-    () =>
-      buildPageItems({
-        t: translate,
-        inBookEditor: openBookId !== null,
-      }),
-    [translate, openBookId]
-  );
+  const pageItems = useMemo(() => buildPageItems({ t: translate }), [translate]);
   const settingsItems = useMemo(
     () =>
       buildSettingsItems({
@@ -208,15 +239,174 @@ function OpenCommandPalette() {
   // The results are the same, one frame later; a key pressed inside that
   // window acts on the row the author still sees (useDeferredValue, #552).
   const deferredQuery = useDeferredValue(query);
-  const sections = useMemo(
+  // The mode is the leading `>`, never a switch: the same input both says which
+  // mode and what to search for, so deleting the prefix changes the mode back.
+  const mode: PaletteMode = paletteModeOf(deferredQuery);
+  const searchText = paletteQueryText(deferredQuery);
+  // The switches belong to Library Search: Commands mode hides them and their
+  // keys do nothing there. Read the raw query, so a keystroke switches at once.
+  const libraryField = paletteModeOf(query) === "library";
+  const queryEmpty = paletteQueryText(query) === "";
+  const titleSections = useMemo(
     () =>
-      searchPalette(index, {
-        query: deferredQuery,
-        page,
-        recent: recentKeys,
-        openBookId,
-      }),
-    [index, deferredQuery, page, recentKeys, openBookId]
+      mode === "commands"
+        ? searchPalette(index, {
+            mode,
+            query: searchText,
+            page: "root",
+            recent: recentKeys,
+            openBookId,
+          })
+        : searchLibrary({
+            index,
+            query: searchText,
+            page,
+            recent: recentKeys,
+            openBookId,
+            matchCase,
+            wholeWord,
+            regex,
+          }),
+    [index, mode, searchText, page, recentKeys, openBookId, matchCase, wholeWord, regex]
+  );
+
+  // The Text section reads the search index off the keystroke's frame: the
+  // field echoes every keystroke while this runs in the background. A literal
+  // query of 3 or more characters queries immediately through the trigram
+  // index; a shorter query or a Regex waits for a pause in typing and is
+  // cancelled by the next keystroke, so a scan never lags the field. A stale
+  // response never overwrites a newer one: each run carries a sequence number
+  // and only the latest may write state.
+  const [textResults, setTextResults] = useState<readonly SearchResult[]>([]);
+  // The query and switches the listed text rows were counted with, so choosing
+  // one hands the destination the exact search to reopen. Keystrokes past the
+  // deferred query the rows came from must not leak into it.
+  const textHandoffRef = useRef<SearchHandoff | null>(null);
+  const [textError, setTextError] = useState<string | null>(null);
+  const [textCapped, setTextCapped] = useState(false);
+  const [indexing, setIndexing] = useState<boolean>(() => isSearchIndexRebuilding());
+  useEffect(
+    () => subscribeSearchIndexStatus(() => setIndexing(isSearchIndexRebuilding())),
+    []
+  );
+  const searchSeqRef = useRef(0);
+  const runTextSearch = useCallback(
+    async (args: {
+      query: string;
+      kinds: readonly SearchItemKind[] | undefined;
+      openBookId: string | null;
+      matchCase: boolean;
+      wholeWord: boolean;
+      regex: boolean;
+      seq: number;
+    }) => {
+      if (searchSeqRef.current !== args.seq) return;
+      let outcome: SearchLibraryResult;
+      try {
+        const db = await getDatabase();
+        if (searchSeqRef.current !== args.seq) return;
+        outcome = await searchLibraryIndex(db, {
+          query: args.query,
+          kinds: args.kinds,
+          openBookId: args.openBookId,
+          matchCase: args.matchCase,
+          wholeWord: args.wholeWord,
+          regex: args.regex,
+          limit: TEXT_SEARCH_LIMIT,
+        });
+      } catch {
+        return;
+      }
+      if (searchSeqRef.current !== args.seq) return;
+      if ("error" in outcome) {
+        setTextError(outcome.message);
+        setTextResults([]);
+        setTextCapped(false);
+      } else {
+        setTextError(null);
+        setTextResults(outcome.results);
+        setTextCapped(outcome.nextCursor !== undefined);
+        textHandoffRef.current = {
+          query: args.query,
+          matchCase: args.matchCase,
+          wholeWord: args.wholeWord,
+          regex: args.regex,
+        };
+      }
+    },
+    []
+  );
+  const debouncedTextSearch = useDebouncedCallback(runTextSearch, TEXT_SEARCH_DEBOUNCE_MS);
+  useEffect(() => {
+    if (mode !== "library" || searchText.trim() === "") {
+      searchSeqRef.current += 1;
+      debouncedTextSearch.cancel();
+      setTextResults([]);
+      setTextError(null);
+      setTextCapped(false);
+      textHandoffRef.current = null;
+      return;
+    }
+    const seq = searchSeqRef.current + 1;
+    searchSeqRef.current = seq;
+    const args = {
+      query: searchText,
+      kinds: textSearchKinds(page),
+      openBookId,
+      matchCase,
+      wholeWord,
+      regex,
+      seq,
+    };
+    // The scan path waits for a pause; the indexed path runs at once, and
+    // either way a pending scan is dropped by the next keystroke.
+    if (isTextScanQuery(searchText, regex)) {
+      debouncedTextSearch(args);
+    } else {
+      debouncedTextSearch.cancel();
+      void runTextSearch(args);
+    }
+  }, [
+    mode,
+    searchText,
+    page,
+    openBookId,
+    matchCase,
+    wholeWord,
+    regex,
+    // A rebuild that ends must rerun the query: a query typed mid-rebuild may
+    // have been answered from a partial index, and nothing else would rerun it.
+    indexing,
+    debouncedTextSearch,
+    runTextSearch,
+  ]);
+
+  // The Book titles the text rows name, from the entities already loaded.
+  const bookTitles = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const book of entities?.books ?? []) map.set(book.id, book.title);
+    return map;
+  }, [entities]);
+  const textPaletteResults = useMemo(
+    () =>
+      textResults.length === 0
+        ? []
+        : buildTextResults({ results: textResults, bookTitles, t: translate }),
+    [textResults, bookTitles, translate]
+  );
+  // Title matches first, as now, then the Text section.
+  const textSections = useMemo<PaletteSection[]>(
+    () =>
+      mode !== "library" || searchText.trim() === "" || textError !== null
+        ? []
+        : textPaletteResults.length === 0
+          ? []
+          : [{ id: "text", results: textPaletteResults }],
+    [mode, searchText, textError, textPaletteResults]
+  );
+  const sections = useMemo(
+    () => [...titleSections, ...textSections],
+    [titleSections, textSections]
   );
   const flatResults = useMemo(() => sections.flatMap((section) => section.results), [sections]);
   const count = flatResults.length;
@@ -238,9 +428,9 @@ function OpenCommandPalette() {
     }
     // A nested page with an empty query announces the page, not the count the
     // deferred query is about to replace; its own results are "N results".
-    if (page !== "root" && deferredQuery === "") return;
+    if (page !== "root" && searchText === "") return;
     announce(t("commandPalette.resultCount", { count }));
-  }, [count, t, page, deferredQuery, announce]);
+  }, [count, t, page, searchText, announce]);
 
   // Entering or leaving a nested page is announced after the count it changes,
   // so this effect sits below the count's on purpose.
@@ -248,6 +438,17 @@ function OpenCommandPalette() {
     if (page === "root") return;
     announce(t("commandPalette.pageAnnouncement", { page: t(`commandPalette.chips.${page}`) }));
   }, [page, t, announce]);
+
+  // A mode change changes what the list holds, so it is announced last: the
+  // author hears "Commands mode" or "Search" over the count it caused.
+  // The first mode is the one the palette opened in, already known from the
+  // Command that opened it, so only a change speaks.
+  useEffect(() => {
+    const previous = previousModeRef.current;
+    previousModeRef.current = mode;
+    if (previous === null || previous === mode) return;
+    announce(t(`commandPalette.modes.${mode}`));
+  }, [mode, t, announce]);
 
   // The active result lives in React Aria's virtual focus (the caret stays in
   // the field), so read it off the input's active descendant. Only the one
@@ -273,6 +474,9 @@ function OpenCommandPalette() {
   // useShortcuts pauses while this Modal is open, so Shift+Delete is handled
   // on the field itself; the id is still declared for the shortcut help.
   useBoundShortcutIds(["commandPalette.removeRecent"], activeKeyIsRecent);
+  // The switch Shortcuts likewise run on the field itself while the palette
+  // is open; the ids stay declared for the help and the coverage gate.
+  useBoundShortcutIds(["common.matchCase", "common.wholeWord", "common.useRegex"], libraryField);
 
   const removeByKey = useCallback(
     (key: string) => {
@@ -283,11 +487,17 @@ function OpenCommandPalette() {
     [announce, t, removeRecent]
   );
 
-  const changeQuery = useCallback((value: string) => {
-    // Typing after a removal that changed no count: the next count is news.
-    removalRef.current = false;
-    setQuery(value);
-  }, []);
+  const changeQuery = useCallback(
+    (value: string) => {
+      // Typing after a removal that changed no count: the next count is news.
+      removalRef.current = false;
+      // `>` always means Commands, so it also leaves a nested Library page
+      // instead of searching inside it.
+      if (paletteModeOf(value) === "commands" && page !== "root") setPage("root");
+      setQuery(value);
+    },
+    [page]
+  );
 
   const removeActiveRecent = () => {
     const activeKey = activeKeyRef.current;
@@ -311,6 +521,37 @@ function OpenCommandPalette() {
       event.preventDefault();
       removeActiveRecent();
       return;
+    }
+    // useShortcuts pauses under the Modal, so the field matches the live
+    // Shortcuts itself (Custom Shortcuts included) and flips the shared
+    // switches. The native event is what the matcher reads (SymbolsDialog).
+    const native = event.nativeEvent;
+    if (libraryField && pressRunsCommand(native, "common.matchCase")) {
+      event.preventDefault();
+      useSearchSwitchesStore.getState().toggleMatchCase();
+      return;
+    }
+    if (libraryField && pressRunsCommand(native, "common.wholeWord")) {
+      event.preventDefault();
+      useSearchSwitchesStore.getState().toggleWholeWord();
+      return;
+    }
+    if (libraryField && pressRunsCommand(native, "common.useRegex")) {
+      event.preventDefault();
+      useSearchSwitchesStore.getState().toggleRegex();
+      return;
+    }
+    // Backspace on the lone `>` leaves Commands mode for Library Search with
+    // an empty field, so one keystroke walks back to where the palette started
+    // instead of closing it.
+    if (event.key === "Backspace" && page === "root" && query === PALETTE_COMMAND_PREFIX) {
+      const input = inputRef.current;
+      const caretAfterPrefix = input !== null && input.selectionStart === 1 && input.selectionEnd === 1;
+      if (caretAfterPrefix) {
+        event.preventDefault();
+        changeQuery("");
+        return;
+      }
     }
     // Backspace on an empty field steps out of a nested page instead of leaving
     // the palette: the chip says which page the results are narrowed to.
@@ -348,11 +589,29 @@ function OpenCommandPalette() {
   /**
    * Leaves the palette and lands on the entity, Settings row, or page the
    * result named. Open editor text lands first: navigating away from a Chapter
-   * with unsaved keystrokes would lose them.
+   * with unsaved keystrokes would lose them. A text row lands exactly where
+   * its title row would, plus the handoff its destination reopens with: a
+   * Chapter or Note row opens the editor with Find and Replace on the query
+   * and switches the matches were counted with, a Canvas row centers that
+   * card selected, and a Book row opens the Book.
    */
   const openResult = useCallback(
     (item: PaletteItem) => {
-      recordRecent(item.key);
+      // A text row records its title row's key, so Recent keeps working: the
+      // text key itself is not in the palette index and would be pruned.
+      const recentKey = item.key.startsWith("text:") ? item.key.slice("text:".length) : item.key;
+      // A text row's query is the one its rows were counted with, not whatever
+      // the field holds by the time it is chosen.
+      const isTextRow = item.snippet !== undefined;
+      const handoff: SearchHandoff | null = isTextRow
+        ? (textHandoffRef.current ?? {
+            query: searchText,
+            matchCase,
+            wholeWord,
+            regex,
+          })
+        : null;
+      recordRecent(recentKey);
       close();
       void (async () => {
         // Let the Modal unmount (and lift its gate) before moving.
@@ -373,19 +632,29 @@ function OpenCommandPalette() {
           return;
         }
         if (item.kind === "chapter") {
-          navigate(`/book/${item.bookId}`, { state: { openChapterId: item.id } });
+          navigate(`/book/${item.bookId}`, {
+            state: {
+              openChapterId: item.id,
+              ...(handoff ? { searchHandoff: handoff } : {}),
+            },
+          });
           return;
         }
         if (item.kind === "note") {
-          navigate(`/notes/${item.id}`);
+          if (handoff) navigate(`/notes/${item.id}`, { state: { searchHandoff: handoff } });
+          else navigate(`/notes/${item.id}`);
           return;
         }
         if (item.kind === "canvas") {
-          navigate(`/canvas/${item.id}`);
+          if (handoff && item.cardId) {
+            navigate(`/canvas/${item.id}`, { state: { focusCardId: item.cardId } });
+          } else {
+            navigate(`/canvas/${item.id}`);
+          }
         }
       })();
     },
-    [recordRecent, close, t, navigate, location.pathname]
+    [recordRecent, close, t, navigate, location.pathname, searchText, matchCase, wholeWord, regex]
   );
 
   const choose = useCallback(
@@ -475,16 +744,55 @@ function OpenCommandPalette() {
               {chipLabel}
             </span>
           )}
-          <Input
-            ref={inputRef}
-            data-autofocus
-            onKeyDown={handleSearchEscapeCapture}
-            placeholder={t("commandPalette.placeholder")}
-            className="h-8 min-w-0 flex-1 rounded-md border border-primary bg-background px-2 text-sm text-foreground outline-none placeholder:text-muted-foreground pointer-coarse:h-11 [&::-webkit-search-cancel-button]:hidden"
-          />
+          {/* The switches sit inside the field, at its trailing edge, as in
+              VS Code's search box. The input reserves room for them. */}
+          <div className="relative min-w-0 flex-1">
+            <Input
+              ref={inputRef}
+              data-autofocus
+              onKeyDown={handleSearchEscapeCapture}
+              placeholder={t("commandPalette.placeholder")}
+              className={`h-8 w-full rounded-md border border-primary bg-background pl-2 text-sm text-foreground outline-none placeholder:text-muted-foreground pointer-coarse:h-11 [&::-webkit-search-cancel-button]:hidden ${
+                libraryField
+                  ? `${queryEmpty ? "pr-56" : "pr-24"} pointer-coarse:pr-36`
+                  : "pr-2"
+              }`}
+            />
+            {libraryField && (
+              <div className="absolute inset-y-0 right-1 flex items-center gap-0.5">
+                <SearchSwitchButton
+                  id="common.matchCase"
+                  label={t("editor.matchCase")}
+                  pressed={matchCase}
+                  onToggle={toggleMatchCase}
+                  showShortcut={queryEmpty}
+                  mac={mac}
+                  Icon={CaseSensitive}
+                />
+                <SearchSwitchButton
+                  id="common.wholeWord"
+                  label={t("editor.matchWholeWord")}
+                  pressed={wholeWord}
+                  onToggle={toggleWholeWord}
+                  showShortcut={queryEmpty}
+                  mac={mac}
+                  Icon={WholeWord}
+                />
+                <SearchSwitchButton
+                  id="common.useRegex"
+                  label={t("editor.useRegex")}
+                  pressed={regex}
+                  onToggle={toggleRegex}
+                  showShortcut={queryEmpty}
+                  mac={mac}
+                  Icon={Regex}
+                />
+              </div>
+            )}
+          </div>
         </SearchField>
         {count === 0 ? (
-          deferredQuery.trim() !== "" && (
+          searchText.trim() !== "" && (
             <p className="px-3 pb-3 pt-1 text-sm text-muted-foreground">
               {t("commandPalette.noResults")}
             </p>
@@ -498,6 +806,27 @@ function OpenCommandPalette() {
               {renderedSections}
             </ListBox>
           </Virtualizer>
+        )}
+        {/* Status lines, never options: the invalid-Regex error replaces the
+            Text section, the refine line closes a capped one, and Indexing…
+            says the results found so far may be incomplete. */}
+        {mode === "library" && searchText.trim() !== "" && textError !== null && (
+          <p className="px-3 pb-3 pt-1 text-sm text-destructive">
+            {t("commandPalette.textInvalidRegex")}: {textError}
+          </p>
+        )}
+        {mode === "library" &&
+          searchText.trim() !== "" &&
+          textError === null &&
+          textCapped && (
+            <p className="px-3 pb-3 pt-1 text-sm text-muted-foreground">
+              {t("commandPalette.textRefine")}
+            </p>
+          )}
+        {mode === "library" && indexing && (
+          <p className="px-3 pb-3 pt-1 text-xs text-muted-foreground">
+            {t("commandPalette.textIndexing")}
+          </p>
         )}
       </Autocomplete>
       <div ref={announcementRef} aria-live="polite" role="status" className="sr-only" />
@@ -524,6 +853,41 @@ function renderHighlightedLabel(label: string, result: PaletteResult): ReactNode
   return parts;
 }
 
+function renderSnippetText(
+  text: string,
+  highlights: readonly (readonly [number, number])[]
+): ReactNode {
+  if (highlights.length === 0) return text;
+  const parts: ReactNode[] = [];
+  let at = 0;
+  highlights.forEach(([start, end], index) => {
+    if (start > at) parts.push(text.slice(at, start));
+    parts.push(
+      <mark key={`snippet-${index}`} className="rounded-sm bg-primary/20 text-foreground">
+        {text.slice(start, end)}
+      </mark>
+    );
+    at = end;
+  });
+  if (at < text.length) parts.push(text.slice(at));
+  return parts;
+}
+
+/**
+ * A text row names its item and shows the snippet around the best match.
+ * The accessible name (kind, title, Book, snippet) comes from the item's
+ * aria-label, so the visible separator stays out of it.
+ */
+function renderTextLabel(item: PaletteItem): ReactNode {
+  if (!item.snippet) return item.label;
+  return (
+    <>
+      {item.label}
+      <span className="text-muted-foreground"> — </span>
+      {renderSnippetText(item.snippet.text, item.snippet.highlights)}
+    </>
+  );
+}
 /** The icon each kind is recognized by, where the feature has one. */
 const KIND_ICONS: Partial<Record<PaletteItemKind, ComponentType<{ className?: string }>>> = {
   book: ProjectsIcon,
@@ -532,6 +896,56 @@ const KIND_ICONS: Partial<Record<PaletteItemKind, ComponentType<{ className?: st
   canvas: Workflow,
   settingsRow: SettingsIcon,
 };
+
+interface SearchSwitchButtonProps {
+  id: CommandId;
+  label: string;
+  pressed: boolean;
+  onToggle: () => void;
+  showShortcut: boolean;
+  mac: boolean;
+  Icon: ComponentType<{ className?: string }>;
+}
+
+/**
+ * One search switch at the right of the Library Search field: a toggle button
+ * with its name, its live Shortcut while the field is empty, and a pressed
+ * state the screen reader announces. Tappable at 44px on coarse pointers.
+ */
+function SearchSwitchButton({
+  id,
+  label,
+  pressed,
+  onToggle,
+  showShortcut,
+  mac,
+  Icon,
+}: SearchSwitchButtonProps) {
+  const shortcuts = useCommandKeys(id);
+  const hint = showShortcut ? shortcuts[0] : undefined;
+  return (
+    <ToggleButton
+      aria-label={label}
+      isSelected={pressed}
+      onPress={onToggle}
+      data-command={id}
+      className={({ isSelected, isFocusVisible }) =>
+        `flex h-6 min-w-6 items-center justify-center gap-1 rounded px-1 outline-none pointer-coarse:h-11 pointer-coarse:min-w-11 ${
+          isSelected
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        } ${isFocusVisible ? "ring-2 ring-primary ring-inset" : ""}`
+      }
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+      {hint && (
+        <span className="pointer-coarse:hidden">
+          <KeyboardShortcut shortcut={formatShortcut(hint, mac)} />
+        </span>
+      )}
+    </ToggleButton>
+  );
+}
 
 /** A Command result's live Shortcuts; the other kinds are not Commands. */
 function PaletteShortcuts({ id, mac }: { id: CommandId; mac: boolean }) {
@@ -568,6 +982,10 @@ const PaletteRow = memo(function PaletteRow({
   const item = result.item;
   const unavailable = item.state === "disabled";
   const Icon = KIND_ICONS[item.kind];
+  // A text row carries its snippet, its Book, and how many more matches the
+  // item holds; its accessible name already names the kind, title, Book, and
+  // snippet text.
+  const isTextRow = item.snippet !== undefined;
   // A disabled Command stays reachable with the arrow keys and announced as
   // disabled. React Aria offers either skipping disabled items or never
   // marking them, so the row stays an ordinary option and carries
@@ -584,7 +1002,8 @@ const PaletteRow = memo(function PaletteRow({
     <ListBoxItem
       id={item.key}
       ref={markUnavailable}
-      textValue={item.label}
+      textValue={item.accessibleName ?? item.label}
+      aria-label={item.accessibleName}
       onAction={() => onChoose(item)}
       className={`mx-1 flex min-h-8 items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none pointer-coarse:min-h-11 data-focused:bg-primary/15 data-focus-visible:ring-1 data-focus-visible:ring-inset data-focus-visible:ring-primary ${
         unavailable ? "cursor-default opacity-60" : "cursor-pointer"
@@ -592,13 +1011,20 @@ const PaletteRow = memo(function PaletteRow({
     >
       {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
       {/* The label names the option; the detail and the live Shortcut are its
-          description, so they are announced after the name, not glued to it. */}
+          description, so they are announced after the name, not glued to it.
+          A text row's aria-label already carries kind, title, Book, and
+          snippet, so its visible label shows the title beside the snippet. */}
       <Text slot="label" className="min-w-0 flex-1 truncate">
-        {renderHighlightedLabel(item.label, result)}
+        {isTextRow ? renderTextLabel(item) : renderHighlightedLabel(item.label, result)}
       </Text>
       <Text slot="description" className="flex shrink-0 items-center gap-2">
         {item.detail && (
           <span className="truncate text-xs text-muted-foreground">{item.detail}</span>
+        )}
+        {isTextRow && (item.matchCount ?? 0) > 1 && (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {t("commandPalette.textMore", { count: (item.matchCount ?? 0) - 1 })}
+          </span>
         )}
         {item.kind === "command" && <PaletteShortcuts id={item.id as CommandId} mac={mac} />}
       </Text>

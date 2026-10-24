@@ -126,7 +126,9 @@ describe("MCP Server page", () => {
       const page = await host.renderPage(CONNECT_PAGE_ID);
       const user = userEvent.setup();
 
-      expect(await findSnippet(claudeCodeSnippet({ url: MCP_URL, key: oldKey }))).toBeInTheDocument();
+      expect(
+        await findSnippet(claudeCodeSnippet({ url: MCP_URL, key: oldKey }))
+      ).toBeInTheDocument();
 
       const make = screen.getByRole("button", { name: en.newKey });
       await tabTo(user, make);
@@ -135,7 +137,9 @@ describe("MCP Server page", () => {
 
       await waitFor(() => expect(storage.get("key")).not.toBe(oldKey));
       const freshKey = storage.get("key") as string;
-      expect(await findSnippet(claudeCodeSnippet({ url: MCP_URL, key: freshKey }))).toBeInTheDocument();
+      expect(
+        await findSnippet(claudeCodeSnippet({ url: MCP_URL, key: freshKey }))
+      ).toBeInTheDocument();
       expect(querySnippet(claudeCodeSnippet({ url: MCP_URL, key: oldKey }))).toBeNull();
 
       const refused = await mcpRequest(host, oldKey, initializeBody(1));
@@ -211,7 +215,9 @@ describe("MCP Server page", () => {
       const copy = screen.getAllByRole("button", { name: en.copy })[0];
       await tabTo(user, copy);
       await user.keyboard("{Enter}");
-      await waitFor(() => expect(host.clipboard).toBe(claudeCodeSnippet({ url: `${movedAddress}mcp`, key })));
+      await waitFor(() =>
+        expect(host.clipboard).toBe(claudeCodeSnippet({ url: `${movedAddress}mcp`, key }))
+      );
       expect(screen.queryByText(en.reconnect)).toBeNull();
 
       page.unmount();

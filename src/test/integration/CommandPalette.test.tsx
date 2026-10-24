@@ -10,11 +10,25 @@ import { mockVirtualizerLayout } from "@/test/support/virtualizer-layout";
 // with real keys. Only what jsdom cannot run is stubbed: the Fabric cover
 // stage, React Flow's canvas surface, the metrics worker, Dictation, and the
 // update check. Prior art: tutorial-app.test.tsx, navigating-commands.test.tsx.
-const { authorDb, platform, web } = vi.hoisted(() => ({
+const { authorDb, platform, web, indexBlank } = vi.hoisted(() => ({
   authorDb: { current: null as DatabaseAdapter | null },
   platform: { desktop: true },
   web: { value: false },
+  // While set, the indexed Library search answers nothing, as an index that is
+  // still filling would.
+  indexBlank: { value: false },
 }));
+
+vi.mock("@/features/search", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/search")>();
+  return {
+    ...actual,
+    searchLibrary: vi.fn(async (...args: Parameters<typeof actual.searchLibrary>) => {
+      if (indexBlank.value) return { results: [] };
+      return actual.searchLibrary(...args);
+    }),
+  };
+});
 
 vi.mock("@/lib/platform/target", () => ({
   get IS_WEB() {
@@ -220,10 +234,18 @@ const { useBoundShortcutStore } = await import("@/lib/bound-shortcuts");
 const { useModalStore } = await import("@/components/ui/modal-store");
 const { useCommandPaletteStore } = await import("@/features/command-palette/store");
 const { useCommandPaletteRecentStore } = await import("@/features/command-palette/recent-store");
+const { useSearchSwitchesStore, SEARCH_SWITCHES_STORAGE_KEY } = await import(
+  "@/features/search/switches"
+);
 const { DEFAULT_SHORTCUT_SETTINGS } = await import("@/lib/shortcut-resolve");
 const { resetSyncEngineForTests } = await import("@/features/sync/sync-engine");
+const { requestSearchRebuild, resetSearchIndexForTests } = await import(
+  "@/features/search/rebuild"
+);
 const { resetAutoSyncForTests } = await import("@/features/sync/auto-sync");
 const { lastFocusedEditor } = await import("@/components/editor/editor-command-source");
+const { runCommand } = await import("@/lib/command-runner");
+const { defaultWholeLinePhrases } = await import("@/features/dictation/voice-commands");
 
 const en = (key: string, options?: Record<string, unknown>) =>
   (i18n.t as unknown as (k: string, o?: Record<string, unknown>) => string)(key, {
@@ -257,9 +279,16 @@ async function settleOn(screenPath: string) {
 }
 
 const PALETTE_NAME = "Command palette";
+const COMMANDS_PREFIX = ">";
 
 async function openPaletteWithF1(user: ReturnType<typeof userEvent.setup>) {
   await user.keyboard("{F1}");
+  return screen.findByRole("dialog", { name: PALETTE_NAME });
+}
+
+/** Opens the palette straight into Library Search, as the Search Library Command does. */
+async function openLibrarySearch(user: ReturnType<typeof userEvent.setup>) {
+  await user.keyboard("{Control>}{Alt>}p{/Alt}{/Control}");
   return screen.findByRole("dialog", { name: PALETTE_NAME });
 }
 
@@ -361,6 +390,7 @@ beforeEach(async () => {
   useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   useCommandPaletteStore.setState({ isOpen: false, opener: null, snapshot: new Map() });
   useCommandPaletteRecentStore.setState({ keys: [] });
+  useSearchSwitchesStore.setState({ matchCase: false, wholeWord: false, regex: false });
   useSettingsRevealStore.setState({
     pendingRowId: null,
     advancedOpen: false,
@@ -378,17 +408,20 @@ afterEach(() => {
 });
 
 describe("Command Palette", () => {
-  it("opens with F1 with focus in the search field", async () => {
+  it("opens with F1 with focus in the search field, in Commands mode", async () => {
     const user = userEvent.setup();
     renderApp("/");
     await settleOn("/");
 
-    await user.keyboard("{F1}");
-    const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
-    expect(paletteSearch(dialog)).toHaveFocus();
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    expect(search).toHaveFocus();
+    // F1 is the Commands shortcut: the prefix is already typed, so the field
+    // starts half-written and one Backspace reaches Library Search.
+    expect(search).toHaveValue(COMMANDS_PREFIX);
   });
 
-  it("opens with Mod+Shift+P on desktop", async () => {
+  it("opens Commands mode with Mod+Shift+P on desktop", async () => {
     const user = userEvent.setup();
     renderApp("/");
     await settleOn("/");
@@ -396,6 +429,52 @@ describe("Command Palette", () => {
     await user.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
     const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
     expect(paletteSearch(dialog)).toHaveFocus();
+    expect(paletteSearch(dialog)).toHaveValue(COMMANDS_PREFIX);
+  });
+
+  it("opens Commands mode with > typed when its Voice Command runs", async () => {
+    renderApp("/");
+    await settleOn("/");
+    // The Command answers to its label in the Dictation Language (ADR 0016);
+    // the phrase is what a speaker says, before the interpreter hands it over.
+    expect(defaultWholeLinePhrases("global.openCommandPalette", "en")).toContain(
+      "Open command palette"
+    );
+
+    await act(async () => {
+      expect(await runCommand("global.openCommandPalette", { source: "voice" })).toBe("ran");
+    });
+
+    const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
+    expect(paletteSearch(dialog)).toHaveFocus();
+    expect(paletteSearch(dialog)).toHaveValue(COMMANDS_PREFIX);
+  });
+
+  it("opens Library Search empty with Mod+Alt+P", async () => {
+    await createBookRow({ title: "Shortcut Book", authorName: "Author" }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+    expect(useBoundShortcutStore.getState().counts["global.searchLibrary"]).toBeGreaterThan(0);
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    expect(search).toHaveFocus();
+    expect(search).toHaveValue("");
+
+    // No prefix means Library Search: typing a Book title finds it.
+    await user.keyboard("Shortcut");
+    await within(dialog).findByRole("option", { name: "Shortcut Book" });
+  });
+
+  it("lists the Search Library Command in Commands mode", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    await user.keyboard("Search Library");
+    expect(await within(dialog).findByRole("option", { name: "Search Library" })).toBeVisible();
   });
 
   it("answers to F1 only on the web build", async () => {
@@ -861,7 +940,7 @@ describe("Command Palette entities and pages", () => {
     renderApp("/");
     await settleOn("/");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Alpha");
     const book = await within(dialog).findByRole("option", { name: "Alpha" });
@@ -888,7 +967,7 @@ describe("Command Palette entities and pages", () => {
     renderApp(`/book/${mine.id}`);
     await settleOn(`/book/${mine.id}`);
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Prologue");
     const options = await within(dialog).findAllByRole("option", { name: "Prologue" });
@@ -922,7 +1001,7 @@ describe("Command Palette entities and pages", () => {
     renderApp(`/book/${mine.id}`);
     await settleOn(`/book/${mine.id}`);
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Shared Title");
     await waitFor(() => expect(within(dialog).getAllByRole("option").length).toBeGreaterThan(1));
@@ -949,7 +1028,7 @@ describe("Command Palette entities and pages", () => {
     renderApp(`/book/${mine.id}`);
     await settleOn(`/book/${mine.id}`);
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Open Chapter");
     const page = await within(dialog).findByRole("option", { name: "Open Chapter…" });
@@ -967,16 +1046,16 @@ describe("Command Palette entities and pages", () => {
     // Backspace on the empty field steps back out to the root page.
     await user.keyboard("{Backspace}");
     await waitFor(() => expect(within(dialog).queryByText("Open Chapter")).toBeNull());
-    // Root with an empty query lists Suggested, nothing has been chosen yet.
+    // Root with an empty query lists the pages, nothing has been chosen yet.
     expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull();
-    expect(sectionOptions(dialog, "Suggested").map(optionLabel)).toContain("Open Chapter…");
+    expect(sectionOptions(dialog, "Pages").map(optionLabel)).toContain("Open Chapter…");
     // The other Book's Chapter is reachable again, which the narrowed page hid.
     await user.keyboard("Theirs");
     const theirs = await within(dialog).findByRole("option", { name: "Theirs Only" });
     expect(theirs.textContent).toContain("Other One");
   });
 
-  it("offers Open Chapter… only in the Book Editor", async () => {
+  it("offers the four nested pages in Library Search on every screen", async () => {
     const book = await createBookRow({ title: "Only Book", authorName: "Author" }, "local");
     await createChapterRow({ bookId: book.id, title: "Prologue" }, "local");
 
@@ -984,17 +1063,24 @@ describe("Command Palette entities and pages", () => {
     renderApp("/notes");
     await settleOn("/notes");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
+    // Nothing typed: the four pages are how the author browses each kind.
+    expect(sectionOptions(dialog, "Pages").map(optionLabel)).toEqual([
+      "Open Chapter…",
+      "Go to Book…",
+      "Open Note…",
+      "Open Canvas…",
+    ]);
     const search = paletteSearch(dialog);
-    // "Open" reaches every Open… page, so the absence of one is the fact.
     await user.keyboard("Open ");
     await within(dialog).findByRole("option", { name: "Open Note…" });
     await within(dialog).findByRole("option", { name: "Open Canvas…" });
-    expect(within(dialog).queryByRole("option", { name: "Open Chapter…" })).toBeNull();
+    // Outside the Book Editor the Chapters page lists every Chapter.
+    await within(dialog).findByRole("option", { name: "Open Chapter…" });
     expect(search).toHaveValue("Open ");
   });
 
-  it("narrows to Books, Notes, and Canvases on their pages", async () => {
+  it("narrows to Books, Chapters, Notes, and Canvases on their pages", async () => {
     const book = await createBookRow({ title: "Paged Book", authorName: "Author" }, "local");
     await createChapterRow({ bookId: book.id, title: "Paged Chapter" }, "local");
     await createNoteRow({ title: "Paged Note", bookId: null }, "local");
@@ -1004,10 +1090,11 @@ describe("Command Palette entities and pages", () => {
     renderApp("/");
     await settleOn("/");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
 
     for (const [pageLabel, chip, expected] of [
+      ["Open Chapter…", "Open Chapter", ["Paged Chapter"]],
       ["Go to Book…", "Go to Book", ["Paged Book"]],
       ["Open Note…", "Open Note", ["Paged Note"]],
       ["Open Canvas…", "Open Canvas", ["Paged Canvas"]],
@@ -1084,7 +1171,7 @@ describe("Command Palette entities and pages", () => {
 
     // A row every platform has is still there.
     await user.clear(search);
-    await user.keyboard("Choose your preferred theme");
+    await user.keyboard(">Choose your preferred theme");
     expect(await within(dialog).findByRole("option", { name: "Theme" })).toBeInTheDocument();
   });
 
@@ -1100,7 +1187,7 @@ describe("Command Palette entities and pages", () => {
     // Deleted through the Notes write path, the same one the Item Menu uses.
     await act(() => useNoteStore.getState().deleteNote(doomed.id));
 
-    await openPaletteWithF1(user);
+    await openLibrarySearch(user);
     const dialog = screen.getByRole("dialog", { name: PALETTE_NAME });
     await waitFor(() =>
       expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Keeper"])
@@ -1111,25 +1198,25 @@ describe("Command Palette entities and pages", () => {
     expect(screen.queryByText("Doomed")).toBeNull();
   });
 
-  it("suggests the nested pages first when nothing is recent, and choosing one narrows", async () => {
+  it("lists the four pages when nothing is recent, and choosing one narrows", async () => {
     await createNoteRow({ title: "Findable", bookId: null }, "local");
     const user = userEvent.setup();
     renderApp("/");
     await settleOn("/");
 
-    await openPaletteWithF1(user);
-    const dialog = screen.getByRole("dialog", { name: PALETTE_NAME });
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
-    const suggested = sectionOptions(dialog, "Suggested");
-    expect(suggested.length).toBeGreaterThanOrEqual(5);
-    expect(suggested.length).toBeLessThanOrEqual(10);
-    expect(suggested.slice(0, 3).map(optionLabel)).toEqual([
+    expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull();
+    expect(sectionOptions(dialog, "Pages").map(optionLabel)).toEqual([
+      "Open Chapter…",
       "Go to Book…",
       "Open Note…",
       "Open Canvas…",
     ]);
 
-    // Nothing is active until the first arrow: the list opens on Suggested.
+    // Nothing is active until the first arrow: the list opens on the pages.
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => expect(activeResultLabel(search)).toContain("Open Chapter…"));
     await user.keyboard("{ArrowDown}");
     await waitFor(() => expect(activeResultLabel(search)).toContain("Go to Book…"));
     await user.keyboard("{ArrowDown}");
@@ -1165,7 +1252,7 @@ describe("Command Palette entities and pages", () => {
     );
     expect(beforeRows[0]?.content ?? "").not.toContain("Typed straight through");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Destination");
     const row = await within(dialog).findByRole("option", { name: "Destination" });
@@ -1186,7 +1273,7 @@ describe("Command Palette entities and pages", () => {
     renderApp("/");
     await settleOn("/");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Loose");
     const note = await within(dialog).findByRole("option", { name: "Loose Thought" });
@@ -1203,7 +1290,7 @@ describe("Command Palette entities and pages", () => {
     renderApp("/canvas");
     await settleOn("/canvas");
 
-    const dialog = await openPaletteWithF1(user);
+    const dialog = await openLibrarySearch(user);
     const search = paletteSearch(dialog);
     await user.keyboard("Story Arcs");
     const row = await within(dialog).findByRole("option", { name: "Story Arcs" });
@@ -1211,6 +1298,701 @@ describe("Command Palette entities and pages", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
     await waitFor(() => expect(path).toBe(`/canvas/${canvas.id}`));
+  });
+});
+
+describe("Command Palette modes", () => {
+  it("switches to Commands mode on a leading > and back to Library Search when it goes", async () => {
+    await createBookRow({ title: "Paged Book", authorName: "Author" }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Paged");
+    await within(dialog).findByRole("option", { name: "Paged Book" });
+    expect(within(dialog).getByText("Books")).toBeInTheDocument();
+
+    // A leading > asks for Commands, and says so.
+    await user.clear(search);
+    await user.keyboard(">");
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        en("commandPalette.modes.commands")
+      )
+    );
+    await user.keyboard("Paged");
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("option", { name: "Paged Book" })).toBeNull()
+    );
+    expect(within(dialog).queryByText("Books")).toBeNull();
+
+    // Deleting the prefix goes back to Library Search, and says so.
+    await user.clear(search);
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        en("commandPalette.modes.library")
+      )
+    );
+    await user.keyboard("Paged");
+    expect(await within(dialog).findByRole("option", { name: "Paged Book" })).toBeInTheDocument();
+  });
+
+  it("Backspace on a lone > switches to Library Search instead of closing", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    const search = paletteSearch(dialog);
+    expect(search).toHaveValue(COMMANDS_PREFIX);
+
+    await user.keyboard("{Backspace}");
+
+    // Still open, empty, and searching the Library.
+    expect(screen.getByRole("dialog", { name: PALETTE_NAME })).toBeInTheDocument();
+    expect(search).toHaveValue("");
+    expect(sectionOptions(dialog, "Pages").map(optionLabel)).toEqual([
+      "Open Chapter…",
+      "Go to Book…",
+      "Open Note…",
+      "Open Canvas…",
+    ]);
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        en("commandPalette.modes.library")
+      )
+    );
+  });
+
+  it("typing > inside a nested page leaves it for Commands mode", async () => {
+    await createNoteRow({ title: "Nested Note", bookId: null }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Open Note");
+    const page = await within(dialog).findByRole("option", { name: "Open Note…" });
+    await arrowToAndChoose(user, dialog, search, page);
+    expect(await within(dialog).findByText("Showing Open Note")).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("option").map(optionLabel)).toEqual(["Nested Note"]);
+
+    // > always means Commands, so it leaves the page instead of searching it.
+    await user.keyboard(">");
+    await waitFor(() => expect(within(dialog).queryByText("Showing Open Note")).toBeNull());
+    expect(search).toHaveValue(COMMANDS_PREFIX);
+    await waitFor(() => expect(sectionOptions(dialog, "Suggested").length).toBeGreaterThan(0));
+    expect(within(dialog).queryByRole("option", { name: "Nested Note" })).toBeNull();
+  });
+
+  it("lists recent Commands and Settings rows, then suggested Commands, with nothing typed", async () => {
+    useCommandPaletteRecentStore.setState({
+      keys: ["command:global.themeDark", "settingsRow:theme"],
+    });
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openPaletteWithF1(user);
+    expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Dark", "Theme"]);
+    const suggested = sectionOptions(dialog, "Suggested").map(optionLabel);
+    expect(suggested.length).toBeGreaterThan(0);
+    expect(suggested).toContain("Create new book");
+    // Commands mode has no Library pages to browse.
+    expect(within(dialog).queryByRole("group", { name: "Pages" })).toBeNull();
+  });
+
+  it("lists recent Library items, then the four pages, with nothing typed", async () => {
+    const book = await createBookRow({ title: "Recent Book", authorName: "Author" }, "local");
+    useCommandPaletteRecentStore.setState({
+      keys: [`book:${book.id}`, "command:global.themeDark"],
+    });
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await waitFor(() =>
+      expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Recent Book"])
+    );
+    expect(sectionOptions(dialog, "Pages").map(optionLabel)).toEqual([
+      "Open Chapter…",
+      "Go to Book…",
+      "Open Note…",
+      "Open Canvas…",
+    ]);
+    // Library Search has no Commands to suggest.
+    expect(within(dialog).queryByRole("group", { name: "Suggested" })).toBeNull();
+  });
+
+  it("keeps one recent list, filtered per mode, and removes from it in both", async () => {
+    const note = await createNoteRow({ title: "Recent Note", bookId: null }, "local");
+    useCommandPaletteRecentStore.setState({
+      keys: ["command:global.themeDark", `note:${note.id}`],
+    });
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    // Commands mode shows only the Command of the two.
+    let dialog = await openPaletteWithF1(user);
+    await waitFor(() => expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Dark"]));
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
+
+    // Library Search shows only the Note; removing it leaves the Command.
+    dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await waitFor(() =>
+      expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Recent Note"])
+    );
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => expect(activeResultLabel(search)).toContain("Recent Note"));
+    await user.keyboard("{Shift>}{Delete}{/Shift}");
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull()
+    );
+    expect(useCommandPaletteRecentStore.getState().keys).toEqual(["command:global.themeDark"]);
+
+    // The Command's own mode still lists it, and removes it too.
+    await user.keyboard("{Escape}");
+    dialog = await openPaletteWithF1(user);
+    expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Dark"]);
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Shift>}{Delete}{/Shift}");
+    await waitFor(() => expect(useCommandPaletteRecentStore.getState().keys).toEqual([]));
+    await waitFor(() =>
+      expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull()
+    );
+    expect(sectionOptions(dialog, "Suggested").length).toBeGreaterThan(0);
+  });
+});
+
+describe("Command Palette search switches", () => {
+  const MATCH_CASE = "Match Case";
+  const WHOLE_WORD = "Match Whole Word";
+  const REGEX = "Use Regular Expression";
+
+  function switchButton(dialog: HTMLElement, name: string): HTMLElement {
+    return within(dialog).getByRole("button", { name });
+  }
+
+  const switches = () => useSearchSwitchesStore.getState();
+
+  it("shows its three switches in Library Search only", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    // Commands mode stays plain.
+    let dialog = await openPaletteWithF1(user);
+    for (const name of [MATCH_CASE, WHOLE_WORD, REGEX]) {
+      expect(within(dialog).queryByRole("button", { name })).toBeNull();
+    }
+    // Its switch keys are inert there: no invisible state to flip.
+    await user.keyboard("{Alt>}c{/Alt}");
+    expect(switches().matchCase).toBe(false);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
+
+    dialog = await openLibrarySearch(user);
+    for (const name of [MATCH_CASE, WHOLE_WORD, REGEX]) {
+      expect(switchButton(dialog, name)).toBeVisible();
+    }
+  });
+
+  it("toggles each switch with Alt+C, Alt+W and Alt+R and keeps the typed query", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Cat");
+    expect(search).toHaveValue("Cat");
+
+    await user.keyboard("{Alt>}c{/Alt}");
+    await waitFor(() => expect(switches().matchCase).toBe(true));
+    await user.keyboard("{Alt>}w{/Alt}");
+    await waitFor(() => expect(switches().wholeWord).toBe(true));
+    await user.keyboard("{Alt>}r{/Alt}");
+    await waitFor(() => expect(switches().regex).toBe(true));
+
+    // The switch keys are not typed into the field.
+    expect(search).toHaveValue("Cat");
+  });
+
+  it("renders the switches inside the search field's wrapper", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const input = paletteSearch(dialog);
+    const field = switchButton(dialog, MATCH_CASE).closest(".relative");
+    expect(field).not.toBeNull();
+    expect(field).toContainElement(input);
+    for (const name of [MATCH_CASE, WHOLE_WORD, REGEX]) {
+      expect(field).toContainElement(switchButton(dialog, name));
+    }
+  });
+
+  it("tabs from the search field to Match case, and Space flips it", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const input = paletteSearch(dialog);
+    await waitFor(() => expect(input).toHaveFocus());
+
+    await user.tab();
+    const matchCase = switchButton(dialog, MATCH_CASE);
+    expect(matchCase).toHaveFocus();
+    expect(matchCase).toHaveAttribute("aria-pressed", "false");
+
+    await user.keyboard(" ");
+    await waitFor(() => expect(switches().matchCase).toBe(true));
+    expect(matchCase).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("flips a switch back with its own key", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    await openLibrarySearch(user);
+    await user.keyboard("{Alt>}c{/Alt}");
+    await waitFor(() => expect(switches().matchCase).toBe(true));
+
+    await user.keyboard("{Alt>}c{/Alt}");
+    await waitFor(() => expect(switches().matchCase).toBe(false));
+  });
+
+  it("toggles from a press, so the switches work without a keyboard", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.click(switchButton(dialog, WHOLE_WORD));
+    await waitFor(() => expect(switches().wholeWord).toBe(true));
+
+    await user.click(switchButton(dialog, WHOLE_WORD));
+    await waitFor(() => expect(switches().wholeWord).toBe(false));
+  });
+
+  it("shows each Shortcut while the field is empty and hides it once the author types", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    for (const name of [MATCH_CASE, WHOLE_WORD, REGEX]) {
+      expect(switchButton(dialog, name).textContent ?? "").toContain("Alt");
+    }
+
+    await user.keyboard("a");
+    for (const name of [MATCH_CASE, WHOLE_WORD, REGEX]) {
+      expect(switchButton(dialog, name).textContent ?? "").not.toContain("Alt");
+    }
+  });
+
+  it("remembers the switches when the palette reopens", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    let dialog = await openLibrarySearch(user);
+    await user.keyboard("{Alt>}c{/Alt}");
+    await waitFor(() => expect(switches().matchCase).toBe(true));
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
+
+    dialog = await openLibrarySearch(user);
+    expect(switches().matchCase).toBe(true);
+    // The reopened palette's buttons still carry the state.
+    expect(switchButton(dialog, MATCH_CASE)).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("keeps the switches across a simulated reload from this device's storage", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    await openLibrarySearch(user);
+    await user.keyboard("{Alt>}w{/Alt}");
+    await waitFor(() => expect(switches().wholeWord).toBe(true));
+    await user.keyboard("{Escape}");
+
+    const saved = localStorage.getItem(SEARCH_SWITCHES_STORAGE_KEY) ?? "";
+    expect(saved).not.toBe("");
+
+    // A reload starts from the defaults and reads the device's blob back.
+    useSearchSwitchesStore.setState({ matchCase: false, wholeWord: false, regex: false });
+    localStorage.setItem(SEARCH_SWITCHES_STORAGE_KEY, saved);
+    await useSearchSwitchesStore.persist.rehydrate();
+    expect(switches().wholeWord).toBe(true);
+
+    const dialog = await openLibrarySearch(user);
+    expect(switchButton(dialog, WHOLE_WORD)).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("flips the same switches from the Notes editor, with no palette open", async () => {
+    const note = await createNoteRow({ title: "Switch Note", bookId: null }, "local");
+    const user = userEvent.setup();
+    renderApp(`/notes/${note.id}`);
+    await settleOn(`/notes/${note.id}`);
+
+    await user.keyboard("{Alt>}c{/Alt}");
+    await waitFor(() => expect(switches().matchCase).toBe(true));
+
+    await user.keyboard("{Alt>}w{/Alt}");
+    await waitFor(() => expect(switches().wholeWord).toBe(true));
+
+    await user.keyboard("{Alt>}r{/Alt}");
+    await waitFor(() => expect(switches().regex).toBe(true));
+  });
+});
+
+describe("Command Palette text results", () => {
+  async function seedHarbour() {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Lookout" }, "local");
+    await updateChapterRow(
+      chapter.id,
+      { content: "<p>The harbour light blinked, harbour dark</p>" },
+      "local"
+    );
+    const note = await createNoteRow(
+      { title: "Marginalia", content: "<p>harbour gossip</p>" },
+      "local"
+    );
+    return { book, chapter, note };
+  }
+
+  /** The Text group's options, by each one's accessible name. */
+  function textOptionsByName(dialog: HTMLElement): Map<string, HTMLElement> {
+    return new Map(
+      sectionOptions(dialog, "Text").map(
+        (option) => [option.getAttribute("aria-label") ?? "", option] as const
+      )
+    );
+  }
+
+  it("lists title matches first, then one Text row per item", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Harbour Watch" }, "local");
+    await updateChapterRow(
+      chapter.id,
+      { content: "<p>The harbour light blinked, harbour dark</p>" },
+      "local"
+    );
+    await createNoteRow(
+      { title: "Marginalia", content: "<p>harbour gossip</p>" },
+      "local"
+    );
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.keyboard("harbour");
+
+    const textGroup = await within(dialog).findByRole("group", { name: "Text" });
+    // The Text section trails every title section.
+    const chaptersGroup = within(dialog).getByRole("group", { name: "Chapters" });
+    expect(chaptersGroup.compareDocumentPosition(textGroup) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    // One row per item, however many times the item matched.
+    expect(sectionOptions(dialog, "Text")).toHaveLength(2);
+    // Two matches fit well under the cap, so no refine line.
+    expect(within(dialog).queryByText(en("commandPalette.textRefine"))).toBeNull();
+  });
+
+  it("highlights the snippet, names the Book, says how many more, and announces it all", async () => {
+    await seedHarbour();
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.keyboard("harbour");
+    await within(dialog).findByRole("group", { name: "Text" });
+
+    const byName = textOptionsByName(dialog);
+    const chapterName = [...byName.keys()].find((name) => name.includes("Lookout"));
+    expect(chapterName).toBeDefined();
+    const chapterOption = byName.get(chapterName as string) as HTMLElement;
+    // The accessible name carries kind, title, Book, and snippet text.
+    expect(chapterName).toContain("Chapter");
+    expect(chapterName).toContain("Lookout");
+    expect(chapterName).toContain("Atlas");
+    expect(chapterName).toContain("harbour");
+    // The match is highlighted where it stands.
+    const mark = chapterOption.querySelector("mark");
+    expect(mark?.textContent).toBe("harbour");
+    // The Book is the detail, and two matches say one more.
+    expect(chapterOption.textContent).toContain("Atlas");
+    expect(chapterOption.textContent).toContain(en("commandPalette.textMore", { count: 1 }));
+
+    // The single-match Note names no "+N more".
+    const noteName = [...byName.keys()].find((name) => name.includes("Marginalia"));
+    expect(noteName).toBeDefined();
+    expect(noteName).toContain("Note");
+    expect(noteName).toContain("harbour");
+    expect((byName.get(noteName as string) as HTMLElement).textContent).not.toContain("+");
+  });
+
+  it("announces the result count with the text results in it", async () => {
+    await seedHarbour();
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.keyboard("harbour");
+    await within(dialog).findByRole("group", { name: "Text" });
+
+    // No title matches "harbour": the two text rows are the whole count.
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        en("commandPalette.resultCount", { count: 2 })
+      )
+    );
+  });
+
+  it("caps the Text section at 50 rows with a line asking to refine", async () => {
+    for (let index = 0; index < 55; index += 1) {
+      await createNoteRow(
+        { title: `Cap Note ${index}`, content: "<p>capybara meadow</p>" },
+        "local"
+      );
+    }
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.keyboard("capybara");
+
+    await within(dialog).findByRole("group", { name: "Text" });
+    // The list virtualizes to its viewport, so jsdom mounts only the visible
+    // rows: the cap shows as the refine line, which renders only when the
+    // module reports more than the Text section's 50 rows.
+    expect(await within(dialog).findByText(en("commandPalette.textRefine"))).toBeInTheDocument();
+    const rendered = sectionOptions(dialog, "Text");
+    expect(rendered.length).toBeGreaterThan(2);
+    expect(rendered.length).toBeLessThanOrEqual(50);
+  });
+
+  it("narrows the text results on a nested page", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    await createChapterRow({ bookId: book.id, title: "Lookout" }, "local").then((chapter) =>
+      updateChapterRow(chapter.id, { content: "<p>sharedword in a chapter</p>" }, "local")
+    );
+    await createNoteRow(
+      { title: "Marginalia", content: "<p>sharedword in a note</p>" },
+      "local"
+    );
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Open Note");
+    const page = await within(dialog).findByRole("option", { name: "Open Note…" });
+    await arrowToAndChoose(user, dialog, search, page);
+    expect(await within(dialog).findByText("Showing Open Note")).toBeInTheDocument();
+
+    await user.keyboard("sharedword");
+    await within(dialog).findByRole("group", { name: "Text" });
+    await waitFor(() => expect(sectionOptions(dialog, "Text")).toHaveLength(1));
+    const names = [...textOptionsByName(dialog).keys()];
+    expect(names.some((name) => name.includes("Marginalia"))).toBe(true);
+    expect(names.some((name) => name.includes("Lookout"))).toBe(false);
+  });
+
+  it("follows Match case: toggling it changes the text results", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Felines" }, "local");
+    await updateChapterRow(chapter.id, { content: "<p>Cat cat</p>" }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.keyboard("Cat");
+    await within(dialog).findByRole("group", { name: "Text" });
+    // Case ignored: both fall on one row with one more.
+    await waitFor(() =>
+      expect(sectionOptions(dialog, "Text")[0].textContent).toContain(
+        en("commandPalette.textMore", { count: 1 })
+      )
+    );
+
+    await user.keyboard("{Alt>}c{/Alt}");
+    // Case matched: one match left, so the "+N more" goes.
+    await waitFor(() =>
+      expect(sectionOptions(dialog, "Text")[0].textContent).not.toContain(
+        en("commandPalette.textMore", { count: 1 })
+      )
+    );
+    expect(sectionOptions(dialog, "Text")).toHaveLength(1);
+  });
+
+  it("shows an error line instead of text results for an invalid Regex", async () => {
+    await seedHarbour();
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    // Alt+R keeps focus in the field; a click would leave it on the button.
+    await user.keyboard("{Alt>}r{/Alt}");
+    // "[" would read as user-event's repeat syntax; "(" is an invalid Regex
+    // all the same and types literally.
+    await user.keyboard("(unclosed");
+
+    expect(
+      await within(dialog).findByText(en("commandPalette.textInvalidRegex"), { exact: false })
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("group", { name: "Text" })).toBeNull();
+  });
+
+  it("shows Indexing… while a rebuild runs, with the results found so far", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Lookout" }, "local");
+    await updateChapterRow(chapter.id, { content: "<p>The harbour light blinked</p>" }, "local");
+
+    // Stall the rebuild inside its first write: the flag stays up while the
+    // text search (plain SELECTs) still answers.
+    const adapter = authorDb.current as DatabaseAdapter;
+    const realExecuteAtomic = adapter.executeAtomic.bind(adapter);
+    let releaseRebuild!: () => void;
+    const rebuildGate = new Promise<void>((resolve) => {
+      releaseRebuild = resolve;
+    });
+    adapter.executeAtomic = (async (statements) => {
+      await rebuildGate;
+      return realExecuteAtomic(statements);
+    }) as DatabaseAdapter["executeAtomic"];
+    const rebuildPromise = requestSearchRebuild();
+    try {
+      const user = userEvent.setup();
+      renderApp("/");
+      await settleOn("/");
+
+      const dialog = await openLibrarySearch(user);
+      await user.keyboard("harbour");
+      expect(
+        await within(dialog).findByText(en("commandPalette.textIndexing"))
+      ).toBeInTheDocument();
+      expect(await within(dialog).findByRole("group", { name: "Text" })).toBeInTheDocument();
+    } finally {
+      releaseRebuild();
+      await rebuildPromise;
+      resetSearchIndexForTests();
+      adapter.executeAtomic = realExecuteAtomic;
+    }
+  });
+
+  it("reruns the Text query when a rebuild ends, with no further keystroke", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Lookout" }, "local");
+    await updateChapterRow(chapter.id, { content: "<p>The harbour light blinked</p>" }, "local");
+
+    // The index answers nothing while the rebuild runs, then the match appears
+    // once it ends. Nothing types after the rebuild ends.
+    indexBlank.value = true;
+    const adapter = authorDb.current as DatabaseAdapter;
+    const realExecuteAtomic = adapter.executeAtomic.bind(adapter);
+    let releaseRebuild!: () => void;
+    const rebuildGate = new Promise<void>((resolve) => {
+      releaseRebuild = resolve;
+    });
+    adapter.executeAtomic = (async (statements) => {
+      await rebuildGate;
+      return realExecuteAtomic(statements);
+    }) as DatabaseAdapter["executeAtomic"];
+    const rebuildPromise = requestSearchRebuild();
+    try {
+      const user = userEvent.setup();
+      renderApp("/");
+      await settleOn("/");
+
+      const dialog = await openLibrarySearch(user);
+      await user.keyboard("harbour");
+      expect(
+        await within(dialog).findByText(en("commandPalette.textIndexing"))
+      ).toBeInTheDocument();
+      expect(within(dialog).queryByRole("group", { name: "Text" })).toBeNull();
+
+      indexBlank.value = false;
+      releaseRebuild();
+      await rebuildPromise;
+      expect(await within(dialog).findByRole("group", { name: "Text" })).toBeInTheDocument();
+    } finally {
+      indexBlank.value = false;
+      releaseRebuild();
+      await rebuildPromise;
+      resetSearchIndexForTests();
+      adapter.executeAtomic = realExecuteAtomic;
+    }
+  });
+
+  it("ignores a stale scan: el then quickly ela shows only the latest", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const short = await createChapterRow({ bookId: book.id, title: "Gato" }, "local");
+    await updateChapterRow(short.id, { content: "<p>el gato duerme</p>" }, "local");
+    const long = await createChapterRow({ bookId: book.id, title: "Elastico" }, "local");
+    await updateChapterRow(long.id, { content: "<p>material elastico</p>" }, "local");
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    // "el" scans, so it waits for a pause; "ela" queries at once and drops it.
+    await user.keyboard("el");
+    await user.keyboard("a");
+    expect(search).toHaveValue("ela");
+
+    await within(dialog).findByRole("group", { name: "Text" });
+    await waitFor(() => {
+      const names = [...textOptionsByName(dialog).keys()];
+      expect(names.some((name) => name.includes("Elastico"))).toBe(true);
+      expect(names.some((name) => name.includes("Gato"))).toBe(false);
+    });
+  });
+
+  it("opens a text row on the same item its title row would open", async () => {
+    const book = await createBookRow({ title: "Atlas", authorName: "Author" }, "local");
+    const chapter = await createChapterRow({ bookId: book.id, title: "Beacon" }, "local");
+    await updateChapterRow(chapter.id, { content: "<p>The lighthouse keeper waits</p>" }, "local");
+    const user = userEvent.setup();
+    renderApp(`/book/${book.id}`);
+    await settleOn(`/book/${book.id}`);
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("lighthouse");
+    const options = await waitFor(() => {
+      const found = sectionOptions(dialog, "Text");
+      expect(found).toHaveLength(1);
+      return found;
+    });
+    expect(options[0].getAttribute("aria-label")).toContain("Beacon");
+    await arrowToAndChoose(user, dialog, search, options[0]);
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
+    await waitFor(() => expect(path).toBe(`/book/${book.id}`));
+    await waitFor(() => expect(openChapterTitle()).toBe("Beacon"));
+    expect(chapter).toBeDefined();
   });
 });
 

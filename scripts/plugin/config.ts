@@ -149,7 +149,7 @@ function pluginPaths(pluginRoot: string, maibukRoot: string): Record<string, str
   // The true fallback: a bare specifier nothing else matched is looked up in
   // the Plugin's own `node_modules` first. When that misses, TypeScript falls
   // back to ordinary node resolution, so the SDK and test kit's own deep
-  // dependencies (PostCSS's `lib/tokenize`, `sql.js`, …) still resolve through
+  // dependencies (PostCSS's `lib/tokenize`, `drizzle-kit`, …) still resolve through
   // their `exports` maps from the checkout.
   paths["*"] = [join(pluginRoot, "node_modules", "*")];
   return paths;

@@ -112,6 +112,7 @@ describe("MCP Server protocol", () => {
         "read_chapter",
         "list_notes",
         "read_note",
+        "search_library",
         "edit_chapter",
         "write_chapter",
         "manage_chapter",
@@ -201,6 +202,12 @@ describe("MCP Server protocol", () => {
           },
           {
             "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "search_library",
+          },
+          {
+            "annotations": {
               "destructiveHint": false,
               "idempotentHint": false,
               "openWorldHint": false,
@@ -277,6 +284,7 @@ describe("MCP Server protocol", () => {
           "read_chapter",
           "list_notes",
           "read_note",
+          "search_library",
         ]);
       });
       if (readonly === undefined) throw new Error("The read-only tools/list never arrived");
@@ -314,6 +322,12 @@ describe("MCP Server protocol", () => {
               "readOnlyHint": true,
             },
             "name": "read_note",
+          },
+          {
+            "annotations": {
+              "readOnlyHint": true,
+            },
+            "name": "search_library",
           },
         ]
       `);
@@ -708,6 +722,7 @@ describe("MCP Server read-only mode", () => {
         "read_chapter",
         "list_notes",
         "read_note",
+        "search_library",
         "edit_chapter",
         "write_chapter",
         "manage_chapter",
@@ -726,6 +741,7 @@ describe("MCP Server read-only mode", () => {
           "read_chapter",
           "list_notes",
           "read_note",
+          "search_library",
         ]);
       });
 
@@ -738,6 +754,7 @@ describe("MCP Server read-only mode", () => {
           "read_chapter",
           "list_notes",
           "read_note",
+          "search_library",
           "edit_chapter",
           "write_chapter",
           "manage_chapter",
@@ -765,6 +782,7 @@ describe("MCP Server read-only mode", () => {
           "read_chapter",
           "list_notes",
           "read_note",
+          "search_library",
         ]);
       });
 
