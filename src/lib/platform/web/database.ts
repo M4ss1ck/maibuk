@@ -1,167 +1,146 @@
-import type { Database as SqlJsDatabase } from "sql.js";
 import type { AtomicStatement, DatabaseAdapter } from "@/lib/platform/types";
-import { runAtomicSqlJs } from "@/lib/db/atomic";
-import { loadSqlJs } from "@/lib/db/memory-database";
-import { exportSqlDump } from "@/lib/db/sql-export";
+import type { DbOpenValue, DbRequestPayload } from "@/lib/db/worker-protocol";
+import { createDbWorkerTransport, type DbWorkerTransport } from "@/lib/platform/web/db-client";
+import {
+  WEB_LIBRARY_LOCK_NAME,
+  type LibraryClient,
+  type LibraryLock,
+  type LibraryOpenDeps,
+  openWebLibrary,
+  type WebLibraryOpenResult,
+} from "@/lib/platform/web/library-open";
+import {
+  deleteLegacyLibraryBytes,
+  loadLegacyLibraryBytes,
+} from "@/lib/platform/web/legacy-storage";
 
-const DB_STORAGE_KEY = "maibuk-database";
-
-export class WebDatabaseAdapter implements DatabaseAdapter {
-  // Serializes IndexedDB writes so overlapping persists don't race on the same
-  // transaction. Each persist enqueues a write of its own snapshot.
-  private writeChain: Promise<void> = Promise.resolve();
-
-  constructor(private db: SqlJsDatabase) {}
+/**
+ * The web Library is a thin client of the Worker that owns it (ADR 0035):
+ * every call is one protocol message. Durability comes from the `opfs-sahpool`
+ * VFS writing changed pages, so a save never exports the whole database.
+ */
+export class WebDatabaseAdapter implements LibraryClient {
+  constructor(private readonly transport: DbWorkerTransport) {}
 
   async execute(sql: string, params?: unknown[]): Promise<{ rowsAffected: number }> {
-    this.db.run(sql, params as (string | number | null | Uint8Array)[]);
-    // Resolve once the write is durable. A failed persist must reject the
-    // write: the Edit Session surfaces it as "Not saved" instead of "Saved".
-    await this.persist();
-    return { rowsAffected: this.db.getRowsModified() };
+    return this.request({ op: "execute", sql, params });
   }
 
-  async select<T>(sql: string, params?: unknown[]): Promise<T> {
-    const stmt = this.db.prepare(sql);
-    if (params) {
-      stmt.bind(params as (string | number | null | Uint8Array)[]);
-    }
-
-    const results: Record<string, unknown>[] = [];
-    while (stmt.step()) {
-      results.push(stmt.getAsObject());
-    }
-    stmt.free();
-    return results as T;
+  async select<T = unknown[]>(sql: string, params?: unknown[]): Promise<T> {
+    return this.request<T>({ op: "select", sql, params });
   }
 
   async close(): Promise<void> {
-    await this.persist();
-    this.db.close();
+    try {
+      await this.request({ op: "close" });
+    } finally {
+      this.terminate();
+    }
   }
 
   async exportData(): Promise<Uint8Array> {
-    // Exported through the shared worker-backed dump helper.
-    return exportSqlDump(this);
+    const buffer = await this.request<ArrayBuffer>({
+      op: "exportSqlDump",
+      exportedAt: new Date().toISOString(),
+    });
+    return new Uint8Array(buffer);
   }
 
   async executeAtomic(statements: readonly AtomicStatement[]): Promise<void> {
-    runAtomicSqlJs(this.db, statements);
-    await this.persist();
+    await this.request({ op: "runAtomic", statements });
   }
 
-  private persist(): Promise<void> {
-    // Always persist to IndexedDB. localStorage is avoided entirely: books can
-    // be metadata-heavy and base64-in-localStorage blows the ~5MB quota,
-    // surfacing as "Failed to persist database". IndexedDB stores the binary
-    // directly with a far larger quota.
-    const data = this.db.export();
-    this.writeChain = this.writeChain
-      // A previous failed write must not stop the next attempt.
-      .catch(() => {})
-      .then(() => this.persistToIndexedDB(data));
-    return this.writeChain;
-  }
-
-  /** One-time migration of a database previously persisted in localStorage. */
-  async migrateLegacyStorage(): Promise<void> {
-    await this.persist();
-    localStorage.removeItem(DB_STORAGE_KEY);
-  }
-
-  private async persistToIndexedDB(data: Uint8Array): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open("maibuk-db-storage", 1);
-
-      request.onerror = () => reject(request.error);
-
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains("database")) {
-          db.createObjectStore("database");
-        }
-      };
-
-      request.onsuccess = () => {
-        const db = request.result;
-        try {
-          const transaction = db.transaction("database", "readwrite");
-          const store = transaction.objectStore("database");
-          store.put(data, "main");
-          transaction.oncomplete = () => resolve();
-          transaction.onerror = () => reject(transaction.error);
-          transaction.onabort = () => reject(transaction.error);
-        } catch (error) {
-          // A synchronous put failure (quota, DataError) must reject too.
-          reject(error);
-        }
-      };
+  async open(options: Parameters<LibraryClient["open"]>[0]): Promise<DbOpenValue> {
+    return this.request({
+      op: "open",
+      mode: options.mode,
+      name: options.name,
+      bytes: options.bytes ? toArrayBuffer(options.bytes) : undefined,
     });
   }
+
+  async importBytes(bytes: Uint8Array, name: string): Promise<void> {
+    await this.request({ op: "importBytes", name, bytes: toArrayBuffer(bytes) });
+  }
+
+  terminate(): void {
+    this.transport.terminate();
+  }
+
+  private request<T>(payload: DbRequestPayload): Promise<T> {
+    return this.transport.request<T>(payload);
+  }
+}
+
+/** A copy that owns exactly the bytes the view holds, not the whole buffer. */
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 /**
- * The saved Library, or null only when none was ever saved. A failed read
- * rejects: treating it as "nothing saved" opened an empty Library, and its
- * first write replaced the author's saved one.
+ * Why `getAuthorDatabase()` was not allowed to open: another tab holds the
+ * Library. The result getter carries the same answer for the UI (unit 3).
  */
-async function loadFromIndexedDB(): Promise<Uint8Array | null> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("maibuk-db-storage", 1);
-
-    request.onerror = () => reject(request.error ?? new Error("Could not open IndexedDB"));
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains("database")) {
-        db.createObjectStore("database");
-      }
-    };
-
-    request.onsuccess = () => {
-      const db = request.result;
-      try {
-        const transaction = db.transaction("database", "readonly");
-        const store = transaction.objectStore("database");
-        const getRequest = store.get("main");
-        getRequest.onsuccess = () => {
-          db.close();
-          resolve((getRequest.result as Uint8Array | undefined) ?? null);
-        };
-        getRequest.onerror = () => {
-          db.close();
-          reject(getRequest.error ?? new Error("Could not read the saved Library"));
-        };
-      } catch (error) {
-        db.close();
-        reject(error);
-      }
-    };
-  });
+export class LibraryLockedError extends Error {
+  constructor() {
+    super("Maibuk is open in another tab.");
+    this.name = "LibraryLockedError";
+  }
 }
 
-export async function createWebDatabase(_path: string): Promise<DatabaseAdapter> {
-  const SQL = await loadSqlJs();
-
-  // IndexedDB is the primary (and only) persistence target.
-  // A saved Library that cannot be read or parsed must stop the open, never
-  // fall through to a new empty one that would be saved over it.
-  const indexedDBData = await loadFromIndexedDB();
-  if (indexedDBData) {
-    return new WebDatabaseAdapter(new SQL.Database(indexedDBData));
+/** Holds the `maibuk-library` Web Lock for as long as this page lives. */
+async function acquireSessionLock(): Promise<LibraryLock> {
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks) {
+    // No Web Locks on this engine: the pool's own install rejection is the
+    // only guard left.
+    return { held: true, release() {} };
   }
 
-  // Legacy: a database persisted by an older build still lives in localStorage.
-  // Load it, migrate it into IndexedDB, then drop the localStorage copy so we
-  // never hit the storage quota again.
-  const legacy = localStorage.getItem(DB_STORAGE_KEY);
-  if (legacy) {
-    const binary = Uint8Array.from(atob(legacy), (c) => c.charCodeAt(0));
-    const adapter = new WebDatabaseAdapter(new SQL.Database(binary));
-    await adapter.migrateLegacyStorage();
-    return adapter;
-  }
+  let release: (() => void) | null = null;
+  const held = await new Promise<boolean>((resolve) => {
+    locks
+      .request<void>(WEB_LIBRARY_LOCK_NAME, { ifAvailable: true }, (lock) => {
+        if (!lock) {
+          resolve(false);
+          return;
+        }
+        const heldForSession = new Promise<void>((releaseLock) => {
+          release = releaseLock;
+        });
+        resolve(true);
+        return heldForSession;
+      })
+      // A failed lock request is no proof of exclusivity; the pool install
+      // still gets its chance.
+      .catch(() => resolve(false));
+  });
 
-  // Create new database
-  return new WebDatabaseAdapter(new SQL.Database());
+  return held ? { held, release: () => release?.() } : { held: false, release() {} };
+}
+
+function defaultDeps(): LibraryOpenDeps {
+  return {
+    acquireLock: acquireSessionLock,
+    createClient: () => new WebDatabaseAdapter(createDbWorkerTransport()),
+    loadLegacyBytes: loadLegacyLibraryBytes,
+    deleteLegacyBytes: deleteLegacyLibraryBytes,
+  };
+}
+
+let webLibraryOpenResult: WebLibraryOpenResult | null = null;
+
+/** How the Library was opened, for the screen that tells the author. */
+export function getWebLibraryOpenResult(): WebLibraryOpenResult | null {
+  return webLibraryOpenResult;
+}
+
+export async function createWebDatabase(
+  _path: string,
+  deps: LibraryOpenDeps = defaultDeps()
+): Promise<DatabaseAdapter> {
+  const outcome = await openWebLibrary(deps);
+  webLibraryOpenResult = outcome.result;
+  if (!outcome.adapter) throw new LibraryLockedError();
+  return outcome.adapter;
 }

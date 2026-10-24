@@ -26,7 +26,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { ArrowLeft, Network, Redo2, Trash2, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { maibukArt } from "@/assets/ascii/maibuk";
 import { Button } from "@/components/ui/Button";
 import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
@@ -234,6 +234,7 @@ export function CanvasBackground() {
 function CanvasEditor() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { canvasId = "" } = useParams();
   const reactFlow = useReactFlow();
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -357,6 +358,28 @@ function CanvasEditor() {
   useEffect(() => {
     setTitleDraft(current?.title ?? "");
   }, [current?.id, current?.title]);
+
+  // A Library Search text row opened this canvas on its card: select the card
+  // and center the viewport on it. The history entry is replaced, so
+  // Back/Forward opens the canvas plainly; a card gone since the index row
+  // still opens the canvas, with nothing selected.
+  useEffect(() => {
+    if (loadState !== "ready") return;
+    const focusCardId = (location.state as { focusCardId?: string } | null)?.focusCardId;
+    if (!focusCardId) return;
+    navigate(location.pathname, { replace: true, state: null });
+    const node = doc.nodes.find((candidate) => candidate.id === focusCardId);
+    if (!node) return;
+    selectNode(focusCardId);
+    const measured = reactFlow.getNode(focusCardId)?.measured;
+    const fallbackWidth = node.kind === "text" ? (node.width ?? CANVAS_TEXT_NODE_DEFAULT_WIDTH) : 0;
+    const width = measured?.width ?? fallbackWidth;
+    const height = measured?.height ?? 0;
+    reactFlow.setCenter(node.position.x + width / 2, node.position.y + height / 2, {
+      zoom: reactFlow.getZoom(),
+      duration: 0,
+    });
+  }, [loadState, location.state, location.pathname, doc.nodes, navigate, reactFlow, selectNode]);
 
   const selectedEdge = doc.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
   const selectedNode = doc.nodes.find((node) => node.id === selectedNodeId) ?? null;

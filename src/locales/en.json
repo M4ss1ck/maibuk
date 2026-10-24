@@ -1189,7 +1189,22 @@
     "unavailable": "That command is not available here anymore",
     "saveFailed": "Your latest text could not be saved, so nothing was opened",
     "noResults": "No results",
+    "textMore_one": "+{{count}} more",
+    "textMore_other": "+{{count}} more",
+    "textRefine": "Too many matches — refine your search to see more.",
+    "textIndexing": "Indexing…",
+    "textInvalidRegex": "Invalid pattern",
+    "kinds": {
+      "book": "Book",
+      "chapter": "Chapter",
+      "note": "Note",
+      "canvas": "Canvas"
+    },
     "pageAnnouncement": "Showing {{page}}",
+    "modes": {
+      "commands": "Commands mode",
+      "library": "Search"
+    },
     "pages": {
       "chapters": "Open Chapter…",
       "books": "Go to Book…",
@@ -1205,12 +1220,14 @@
     "sections": {
       "recent": "Recent",
       "suggested": "Suggested",
+      "pages": "Pages",
       "commands": "Commands",
       "chapters": "Chapters",
       "notes": "Notes",
       "books": "Books",
       "canvases": "Canvases",
-      "settings": "Settings"
+      "settings": "Settings",
+      "text": "Text"
     }
   },
   "shortcuts": {
@@ -1228,6 +1245,7 @@
     "toggleAlwaysOnTop": "Toggle always on top",
     "openReleaseNotes": "Show what's new",
     "openCommandPalette": "Open command palette",
+    "searchLibrary": "Search Library",
     "syncNow": "Sync now",
     "newBook": "Create new book",
     "jumpBooks": "Jump to book by number",
@@ -2105,6 +2123,22 @@
     "title": "Maibuk couldn't open your Library",
     "body": "Your work is still on this device. Nothing was changed or deleted. Try again, or restart Maibuk if it keeps failing.",
     "retry": "Try again"
+  },
+  "webLibrary": {
+    "locked": {
+      "title": "Maibuk is open in another tab",
+      "body": "Your Library can only be open in one tab at a time. Close the other tab to keep writing here; this tab has not opened it.",
+      "tryAgain": "Try again"
+    },
+    "memory": {
+      "title": "Your Library will not be kept",
+      "body": "This browser will not let Maibuk store your Library. Anything you write here is lost when you reload or close this window."
+    },
+    "migrationFailed": {
+      "title": "Your Library could not be moved",
+      "body": "Maibuk opened your old Library as it was, so nothing was changed. Moving it will be tried again the next time you open Maibuk.",
+      "quota": "There was not enough storage space to move your Library. Free some space on this device, then reopen Maibuk. Your Library was not changed."
+    }
   },
   "releases": {
     "title": "What's new",

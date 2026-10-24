@@ -58,7 +58,9 @@ describe("MCP Server manifest", () => {
     const page = contributes?.pages?.find((candidate) => candidate.id === "connect");
     expect(page?.title).toBe("MCP Server");
     expect(page?.command).toBe("openConnect");
-    expect(contributes?.sidebarEntries?.find((entry) => entry.page === "connect")?.icon).toBe("plug");
+    expect(contributes?.sidebarEntries?.find((entry) => entry.page === "connect")?.icon).toBe(
+      "plug"
+    );
   });
 
   it("contributes one global copy Command per Agent snippet", () => {

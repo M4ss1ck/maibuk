@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { DEFAULT_CANVAS_DOC_JSON } from "@/lib/canvas/defaultDoc";
 
 // Books table
@@ -267,6 +267,31 @@ export const settings = sqliteTable("settings", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+// Device-local Library Search index (one row per block, plain text only). The
+// FTS5 trigram virtual table over it is created in `ensureSearchSchema()`:
+// Drizzle has no FTS5 table type. Never synced, never backed up.
+export const searchText = sqliteTable(
+  "search_text",
+  {
+    id: integer("id").primaryKey(),
+    itemKind: text("item_kind").notNull(),
+    itemId: text("item_id").notNull(),
+    bookId: text("book_id"),
+    field: text("field").notNull(),
+    blockIndex: integer("block_index").notNull(),
+    text: text("text").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_search_text_block").on(
+      table.itemKind,
+      table.itemId,
+      table.field,
+      table.blockIndex
+    ),
+  ]
+);
+
 // Plugin storage (ADR 0023): one JSON value per Plugin id and storage key.
 export const pluginStorage = sqliteTable(
   "plugin_storage",
@@ -315,5 +340,7 @@ export type LinkRow = typeof links.$inferSelect;
 export type NewLinkRow = typeof links.$inferInsert;
 export type PluginStorageRow = typeof pluginStorage.$inferSelect;
 export type NewPluginStorageRow = typeof pluginStorage.$inferInsert;
+export type SearchTextRow = typeof searchText.$inferSelect;
+export type NewSearchTextRow = typeof searchText.$inferInsert;
 export type PluginDataVersionRow = typeof pluginDataVersions.$inferSelect;
 export type NewPluginDataVersionRow = typeof pluginDataVersions.$inferInsert;

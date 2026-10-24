@@ -25,11 +25,13 @@ import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettin
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
+import type { SearchHandoff } from "@/features/search/types";
 import type { Language } from "@/features/settings/types";
 import { openExternal } from "@/lib/platform";
 import { isModKey } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import { useSearchSwitchesStore } from "@/features/search/switches";
 import { ChevronDown, ChevronUp, Settings2 } from "lucide-react";
 
 interface EditorToolbarProps {
@@ -47,6 +49,17 @@ interface EditorToolbarProps {
   onExitToolbar?: () => void;
   /** The Tutorial step that points at this toolbar, if any. */
   tutorialAnchor?: string;
+  /**
+   * A Library Search text row opened this editor: open Find and Replace with
+   * its query. One-shot per object identity, so Back/Forward (whose history
+   * entries carry no handoff) never reopens it. Reported through
+   * `onHandoffApplied`, which is when the page clears it: clearing on chapter
+   * match instead would drop a handoff that arrives before the editor (and
+   * this toolbar) has mounted.
+   */
+  findHandoff?: SearchHandoff | null;
+  /** The handoff above opened Find and Replace; the page clears it now. */
+  onHandoffApplied?: () => void;
 }
 
 export function EditorToolbar({
@@ -62,6 +75,8 @@ export function EditorToolbar({
   onExportImage,
   onExitToolbar,
   tutorialAnchor,
+  findHandoff = null,
+  onHandoffApplied,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
@@ -118,6 +133,18 @@ export function EditorToolbar({
     setShowFindReplace(true);
     setFindReplaceFocusSignal((current) => current + 1);
   }, []);
+
+  // A Library Search text row opened this editor: open Find and Replace with
+  // its query. The switches arrive through the shared store, applied by the
+  // destination before this mounted. One-shot per handoff object, so a
+  // Back/Forward entry (which carries no handoff) never reopens it.
+  const appliedFindHandoffRef = useRef<SearchHandoff | null>(null);
+  useEffect(() => {
+    if (!findHandoff || appliedFindHandoffRef.current === findHandoff) return;
+    appliedFindHandoffRef.current = findHandoff;
+    openFindReplace();
+    onHandoffApplied?.();
+  }, [findHandoff, onHandoffApplied, openFindReplace]);
 
   const handleHtmlPanelReady = useCallback(
     (handle: { highlightRange: (from: number, to: number) => void } | null) => {
@@ -209,6 +236,21 @@ export function EditorToolbar({
       id: "common.find",
       allowInInput: true,
       onTrigger: openFindReplace,
+    },
+    // The shared search switches, without the panel's inputs: typing in the
+    // Chapter or Note text keeps the platform keys (Option+C still types ç),
+    // while the open Find and Replace panel takes them in its own inputs.
+    {
+      id: "common.matchCase",
+      onTrigger: () => useSearchSwitchesStore.getState().toggleMatchCase(),
+    },
+    {
+      id: "common.wholeWord",
+      onTrigger: () => useSearchSwitchesStore.getState().toggleWholeWord(),
+    },
+    {
+      id: "common.useRegex",
+      onTrigger: () => useSearchSwitchesStore.getState().toggleRegex(),
     },
     {
       id: "editor.dictionary",
@@ -388,6 +430,7 @@ export function EditorToolbar({
           isOpen={showFindReplace}
           onClose={() => setShowFindReplace(false)}
           focusSignal={findReplaceFocusSignal}
+          handoff={findHandoff}
         />
         <ImageInsertDialog
           editor={editor}

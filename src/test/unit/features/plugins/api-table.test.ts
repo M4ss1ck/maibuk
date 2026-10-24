@@ -419,6 +419,14 @@ describe("jsonSchemaToTypeScript()", () => {
     expect(jsonSchemaToTypeScript({ type: ["integer", "null"] }, "")).toBe("number | null");
   });
 
+  it("parenthesizes an array of a union of objects, so only the array binds", () => {
+    const out = ts(
+      z.array(z.union([z.strictObject({ a: z.string() }), z.strictObject({ b: z.number() })]))
+    );
+    expect(out.startsWith("(")).toBe(true);
+    expect(out.endsWith(")[]")).toBe(true);
+  });
+
   it("maps objects with optional keys and descriptions as doc comments", () => {
     const out = ts(z.strictObject({ a: z.string().describe("The a."), b: z.int().optional() }));
     expect(out).toBe("{\n  /** The a. */\n  a: string;\n  b?: number;\n}");

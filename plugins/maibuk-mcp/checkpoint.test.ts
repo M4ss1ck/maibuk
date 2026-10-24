@@ -467,11 +467,7 @@ describe("write checkpoints", () => {
         { bookId: "bookalpha1", label: "Before Claude Code edits", versionId: expect.any(String) },
       ]);
       const created = /its id is (\S{8,})\./.exec(textOf(answer))?.[1];
-      const reread = await mcpRequest(
-        host,
-        key,
-        toolsCall("read_note", { note: created }, 3)
-      );
+      const reread = await mcpRequest(host, key, toolsCall("read_note", { note: created }, 3));
       expect(isError(reread)).toBe(false);
     } finally {
       host.stop();
@@ -538,11 +534,7 @@ describe("write checkpoints", () => {
     const { host, key } = await connect({ library: { books, notes } as any });
     try {
       await mcpRequest(host, key, initializeFrom("Claude Code"));
-      const reread = await mcpRequest(
-        host,
-        key,
-        toolsCall("read_note", { note: "notealpha1" }, 2)
-      );
+      const reread = await mcpRequest(host, key, toolsCall("read_note", { note: "notealpha1" }, 2));
       const answer = await mcpRequest(
         host,
         key,
@@ -573,11 +565,7 @@ describe("write checkpoints", () => {
     const { host, key } = await connect({ library: { books, notes } as any });
     try {
       await mcpRequest(host, key, initializeFrom("Claude Code"));
-      const created = await mcpRequest(
-        host,
-        key,
-        toolsCall("write_note", { title: "Loose" }, 2)
-      );
+      const created = await mcpRequest(host, key, toolsCall("write_note", { title: "Loose" }, 2));
       expect(isError(created)).toBe(false);
       const createdId = /its id is (\S{8,})\./.exec(textOf(created))?.[1];
       const createdRead = await mcpRequest(
@@ -586,11 +574,7 @@ describe("write checkpoints", () => {
         toolsCall("read_note", { note: createdId }, 5)
       );
       expect(createdRead.json.result.content[0].text).toContain("Book: Unfiled");
-      const reread = await mcpRequest(
-        host,
-        key,
-        toolsCall("read_note", { note: "notealpha1" }, 3)
-      );
+      const reread = await mcpRequest(host, key, toolsCall("read_note", { note: "notealpha1" }, 3));
       const replaced = await mcpRequest(
         host,
         key,
@@ -605,11 +589,7 @@ describe("write checkpoints", () => {
         )
       );
       expect(isError(replaced)).toBe(false);
-      const after = await mcpRequest(
-        host,
-        key,
-        toolsCall("read_note", { note: "notealpha1" }, 6)
-      );
+      const after = await mcpRequest(host, key, toolsCall("read_note", { note: "notealpha1" }, 6));
       expect(after.json.result.content[1].text).toBe("Replaced.");
       expect(host.checkpoints).toEqual([]);
     } finally {
@@ -809,11 +789,7 @@ describe("write checkpoints", () => {
     const { host, key } = await connect({ library: { books, notes } as any });
     try {
       await mcpRequest(host, key, initializeFrom("Claude Code"));
-      const reread = await mcpRequest(
-        host,
-        key,
-        toolsCall("read_note", { note: "notealpha1" }, 2)
-      );
+      const reread = await mcpRequest(host, key, toolsCall("read_note", { note: "notealpha1" }, 2));
       const lastEdited = lastEditedOf(textOf(reread));
       host.setPendingEdit("notealpha1", "<p>Typed</p>");
       const answer = await mcpRequest(

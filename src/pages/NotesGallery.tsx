@@ -41,6 +41,7 @@ import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
 import { AddIcon, MaibukLogo } from "@/components/icons";
 import { LibraryLoadError } from "@/components/LibraryLoadError";
 import { useShortcuts } from "@/lib/shortcuts";
+import { useSearchSwitchesStore } from "@/features/search/switches";
 import { droppedTextToEditorHtml } from "@/features/markdown";
 import { useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
@@ -366,6 +367,20 @@ export function NotesGallery() {
         id: "notes.advancedFilters",
         allowInInput: true,
         onTrigger: openAdvancedFilters,
+      },
+      // The shared search switches: the Gallery keeps its own search, but the
+      // switches flip the same device state Library Search reads.
+      {
+        id: "common.matchCase",
+        onTrigger: () => useSearchSwitchesStore.getState().toggleMatchCase(),
+      },
+      {
+        id: "common.wholeWord",
+        onTrigger: () => useSearchSwitchesStore.getState().toggleWholeWord(),
+      },
+      {
+        id: "common.useRegex",
+        onTrigger: () => useSearchSwitchesStore.getState().toggleRegex(),
       },
       {
         id: "notes.newNote",

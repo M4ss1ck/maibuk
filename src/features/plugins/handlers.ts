@@ -1,7 +1,7 @@
 /**
  * The host-side Plugin API handlers this app wires (ADR 0022, #440):
  * `notifications.show` renders a toast naming the Plugin; the Library reads
- * serve Books, Chapters, Notes, and Canvas metadata; the Library writes
+ * serve Books, Chapters, Notes, Canvas metadata, and Library Search (#641); the Library writes
  * (#452, #588) update a Book's details or take a Checkpoint, create, delete,
  * reorder, or update a Chapter, and create, update, or delete a Note through
  * the entity's own write path; the editor writes (`editor.insert` /
@@ -48,6 +48,7 @@ import {
   listPluginChapters,
   listPluginNotes,
   reorderPluginChapters,
+  searchPluginLibrary,
   updatePluginBook,
   updatePluginChapter,
   updatePluginChapterContent,
@@ -156,6 +157,7 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "library.notes.delete": ({ noteId }) => deletePluginNote(noteId),
     "library.canvases.list": ({ bookId }) => listPluginCanvases(bookId),
     "library.canvases.get": ({ canvasId }) => getPluginCanvas(canvasId),
+    "library.search": (params) => searchPluginLibrary(params),
     "editor.getContent": () => getPluginEditorContent(),
     "editor.getSelection": () => getPluginEditorSelection(),
     "editor.reveal": ({ range }) => revealInFocusedEditor(range),

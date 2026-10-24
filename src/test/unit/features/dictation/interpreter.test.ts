@@ -530,6 +530,21 @@ describe("interpret() Voice Commands", () => {
     });
   });
 
+  it("resolves the Search Library Command from its label (#638)", () => {
+    // The phrase comes from the label, so the Command's own name opens
+    // Library Search without a dedicated Voice Command spec.
+    expect(run("search library", enTable).result).toEqual({
+      kind: "voice_command",
+      id: "global.searchLibrary",
+      polarity: null,
+    });
+    expect(run("buscar en la biblioteca", esTable).result).toEqual({
+      kind: "voice_command",
+      id: "global.searchLibrary",
+      polarity: null,
+    });
+  });
+
   it("never counts a Voice Command as Spoken Punctuation and keeps the state", () => {
     const state = { capitalizeNext: true, noSpaceNext: false, allCaps: false };
     const out = interpret({

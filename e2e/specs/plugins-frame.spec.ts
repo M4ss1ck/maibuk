@@ -18,6 +18,7 @@ import type { FrameLocator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { loggedRequests } from "../support/request-log";
+import { runPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
 const PLUGIN_ID = "fixture-frame";
@@ -70,19 +71,6 @@ async function expectNoLeak(before: number): Promise<void> {
 async function openFramePage(page: Page): Promise<void> {
   await page.goto(`/plugin/${PLUGIN_ID}/frame`);
   await expect(pageFrame(page).getByTestId("pong")).toHaveText("pong", { timeout: 15_000 });
-}
-
-/** Runs one Plugin Command from the Command Palette, by keyboard. */
-async function runCommand(page: Page, label: string): Promise<void> {
-  await page.keyboard.press("F1");
-  const dialog = page.getByRole("dialog", { name: "Command palette" });
-  await expect(dialog).toBeVisible();
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(label);
-  const option = dialog.getByRole("option", { name: label, exact: true });
-  await expect(option).toBeVisible();
-  await page.keyboard.press("Enter");
-  await expect(dialog).toBeHidden();
 }
 
 /** Opens a React Aria Select by keyboard and picks the named option. */
@@ -188,7 +176,7 @@ test.describe("Frame custom UI @wf:plugins-frame @sandbox", () => {
   test("the Frame self-navigates to a data: document and logs nothing", async ({ page }) => {
     const before = await leakCount();
     await openFramePage(page);
-    await runCommand(page, "Frame navigate to data");
+    await runPaletteCommand(page, "Frame navigate to data");
     await page.waitForTimeout(NAV_SETTLE_MS);
     await expectNoLeak(before);
   });
@@ -196,7 +184,7 @@ test.describe("Frame custom UI @wf:plugins-frame @sandbox", () => {
   test("the Frame self-navigates to a blob: document and logs nothing", async ({ page }) => {
     const before = await leakCount();
     await openFramePage(page);
-    await runCommand(page, "Frame navigate to blob");
+    await runPaletteCommand(page, "Frame navigate to blob");
     await page.waitForTimeout(NAV_SETTLE_MS);
     await expectNoLeak(before);
   });

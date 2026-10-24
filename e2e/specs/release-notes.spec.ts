@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectTabContained, tabTo } from "../support/keyboard";
+import { expectActiveOption } from "../support/palette";
 import { expect, test } from "../support/test";
 
 const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
@@ -68,7 +69,9 @@ test.describe("Release Notes @wf:shell-release-notes", () => {
     const palette = page.getByRole("dialog", { name: "Command palette" });
     await expect(palette).toBeVisible();
     await page.keyboard.type("what's new");
-    await expect(palette.getByRole("option", { name: /Show what's new/ }).first()).toBeVisible();
+    const option = palette.getByRole("option", { name: /Show what's new/ }).first();
+    await expect(option).toBeVisible();
+    await expectActiveOption(palette, option);
     await page.keyboard.press("Enter");
 
     await expect(palette).toBeHidden();

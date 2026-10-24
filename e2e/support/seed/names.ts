@@ -66,6 +66,12 @@ export const SEED_CANVAS_NODES = {
   connection: "leads to",
 } as const;
 
+/** `paletteLibrary`: the Canvas card the Library Search text specs land on. */
+export const PALETTE_CANVAS = {
+  title: "Harbor Chart",
+  cardId: "card-beacon",
+} as const;
+
 /** `perfLongChapter`: the frame-rate lane's long Chapter plus twenty short ones. */
 export const PERF_BOOK = {
   title: "The Long Watch",

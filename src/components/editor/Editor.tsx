@@ -32,6 +32,7 @@ import { useBookStore } from "@/features/books/store";
 import { useNoteStore } from "@/features/notes/store";
 import { useReadingPosition } from "@/features/reading-position/useReadingPosition";
 import { useEditorZoomControls } from "@/components/editor/useEditorZoomControls";
+import type { SearchHandoff } from "@/features/search/types";
 import { assignHeadingIds } from "@/features/links/heading-ids";
 import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
 import { setContentSilently } from "@/features/metrics/programmatic";
@@ -142,6 +143,13 @@ interface EditorProps {
    */
   pluginEntity?: PluginEditorEntity | null;
   /**
+   * A Library Search text row opened this editor: open Find and Replace with
+   * its query. One-shot per object identity (see EditorToolbar).
+   */
+  findHandoff?: SearchHandoff | null;
+  /** The handoff above opened Find and Replace; the page clears it now. */
+  onHandoffApplied?: () => void;
+  /**
    * The language the text is written in, reported to Plugins with the content:
    * a Note's own else its Book's, or a Chapter's Book's. Omitted or blank, the
    * editor's Spell Check language stands in (the Ephemeral's case).
@@ -182,6 +190,8 @@ export function Editor({
   tutorialAnchors,
   pluginEntity = null,
   pluginLanguage = null,
+  findHandoff = null,
+  onHandoffApplied,
 }: EditorProps) {
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
@@ -631,6 +641,8 @@ export function Editor({
           onExportPdf={onExportPdf}
           onExportImage={onExportImage}
           tutorialAnchor={tutorialAnchors?.toolbar}
+          findHandoff={findHandoff}
+          onHandoffApplied={onHandoffApplied}
         />
       )}
 

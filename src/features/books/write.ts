@@ -13,6 +13,7 @@
 import { getDatabase } from "@/lib/db";
 import type { AtomicStatement } from "@/lib/platform/types";
 import { SWEEP_VERSION_CONTENT, withVersionWrites } from "@/features/versions/content-store";
+import { AtomicStatementError } from "@/lib/db/atomic";
 import { assertWritableId } from "@/features/tutorial/library-switch";
 import { recordTombstone } from "@/features/sync/tombstones";
 import { flushForOutsideWrite } from "@/features/sync/pending-edits";
@@ -28,6 +29,7 @@ import {
   toChapter,
 } from "@/features/chapters/write";
 import { reindexSource } from "@/features/links/link-index";
+import { bookSearchStatements, chapterSearchStatements, deleteSearchItemStatement } from "@/features/search/statements";
 import { appLanguage } from "@/features/settings/app-language";
 import type { Book, BookStatus, CreateBookInput, UpdateBookInput } from "@/features/books/types";
 import type { BookSnapshot } from "@/features/sync/types";
@@ -108,22 +110,33 @@ export async function createBookRow(
   const now = nowSeconds();
   const language = input.language ?? appLanguage();
 
-  await db.execute(
-    `INSERT INTO books (id, title, subtitle, author_name, description, genre, language, word_count, status, created_at, updated_at, content_updated_at)
+  await db.executeAtomic([
+    {
+      sql: `INSERT INTO books (id, title, subtitle, author_name, description, genre, language, word_count, status, created_at, updated_at, content_updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'draft', ?, ?, ?)`,
-    [
-      id,
-      input.title,
-      input.subtitle || null,
-      input.authorName,
-      input.description || null,
-      input.genre || null,
-      language,
-      now,
-      now,
-      now,
-    ]
-  );
+      params: [
+        id,
+        input.title,
+        input.subtitle || null,
+        input.authorName,
+        input.description || null,
+        input.genre || null,
+        language,
+        now,
+        now,
+        now,
+      ],
+    },
+    ...bookSearchStatements(
+      {
+        id,
+        title: input.title,
+        subtitle: input.subtitle || null,
+        description: input.description || null,
+      },
+      now
+    ),
+  ]);
 
   let stored: Book | null = null;
   try {
@@ -225,7 +238,28 @@ export async function updateBookRow(
 
   values.push(id);
 
-  await db.execute(`UPDATE books SET ${updates.join(", ")} WHERE id = ?`, values);
+  // The searchable fields after this save, computed before the write so the
+  // index rows share its atomic batch.
+  const finalTitle = input.title !== undefined ? input.title : existing.title;
+  const finalSubtitle = input.subtitle !== undefined ? input.subtitle : existing.subtitle;
+  const finalDescription =
+    input.description !== undefined ? input.description : existing.description;
+
+  await db.executeAtomic([
+    {
+      sql: `UPDATE books SET ${updates.join(", ")} WHERE id = ?`,
+      params: values as (string | number | null)[],
+    },
+    ...bookSearchStatements(
+      {
+        id,
+        title: finalTitle,
+        subtitle: finalSubtitle ?? null,
+        description: finalDescription ?? null,
+      },
+      now
+    ),
+  ]);
 
   // Capture this save's stored result before the emission's awaits: a later
   // save must not replace it. A read-back failure after the durable write
@@ -289,6 +323,7 @@ export function bookDependentDeletes(id: string): AtomicStatement[] {
       "book_versions",
       "chapters",
     ].map((table) => ({ sql: `DELETE FROM ${table} WHERE book_id = ?`, params: [id] })),
+    deleteSearchItemStatement("book", id),
   ];
 }
 
@@ -455,8 +490,9 @@ export async function applyBookSnapshotData(
   // Upsert book. Never INSERT OR REPLACE: REPLACE deletes the row first, and
   // on desktop (sqlx enables foreign_keys) that cascades to the Book's
   // Checkpoints, assets, and EPUB structure.
-  await db.execute(
-    `INSERT INTO books (
+  await db.executeAtomic([
+    {
+      sql: `INSERT INTO books (
       id, title, subtitle, author_name, description, genre, language,
       cover_image_path, cover_data, word_count, target_word_count, status,
       created_at, updated_at, content_updated_at, last_opened_at, last_chapter_id
@@ -470,26 +506,36 @@ export async function applyBookSnapshotData(
       status = excluded.status, created_at = excluded.created_at,
       updated_at = excluded.updated_at, content_updated_at = excluded.content_updated_at,
       last_opened_at = excluded.last_opened_at, last_chapter_id = excluded.last_chapter_id`,
-    [
-      book.id,
-      book.title,
-      book.subtitle,
-      book.authorName,
-      book.description,
-      book.genre,
-      book.language,
-      book.coverImagePath,
-      book.coverData,
-      book.wordCount,
-      book.targetWordCount,
-      book.status,
-      book.createdAt,
-      bookUpdatedAt,
-      bookContentUpdatedAt,
-      book.lastOpenedAt,
-      book.lastChapterId,
-    ]
-  );
+      params: [
+        book.id,
+        book.title,
+        book.subtitle,
+        book.authorName,
+        book.description,
+        book.genre,
+        book.language,
+        book.coverImagePath,
+        book.coverData,
+        book.wordCount,
+        book.targetWordCount,
+        book.status,
+        book.createdAt,
+        bookUpdatedAt,
+        bookContentUpdatedAt,
+        book.lastOpenedAt,
+        book.lastChapterId,
+      ],
+    },
+    ...bookSearchStatements(
+      {
+        id: book.id,
+        title: book.title,
+        subtitle: book.subtitle,
+        description: book.description,
+      },
+      now
+    ),
+  ]);
 
   const applyChapters = async (): Promise<void> => {
     // Drop only the chapters the snapshot no longer has, then upsert the
@@ -509,9 +555,11 @@ export async function applyBookSnapshotData(
 
     for (let i = 0; i < normalizedChapters.length; i++) {
       const ch = normalizedChapters[i];
+      const chapterUpdatedAt = origin === "local" ? now : ch.updatedAt;
       try {
-        await db.execute(
-          `INSERT INTO chapters (
+        await db.executeAtomic([
+          {
+            sql: `INSERT INTO chapters (
             id, book_id, title, content, synopsis, "order", parent_id,
             chapter_type, word_count, status, is_included_in_export,
             created_at, updated_at
@@ -523,24 +571,37 @@ export async function applyBookSnapshotData(
             chapter_type = excluded.chapter_type, word_count = excluded.word_count,
             status = excluded.status, is_included_in_export = excluded.is_included_in_export,
             created_at = excluded.created_at, updated_at = excluded.updated_at`,
-          [
-            ch.id,
-            ch.bookId,
-            ch.title,
-            ch.content,
-            ch.synopsis,
-            ch.order,
-            ch.parentId,
-            ch.chapterType,
-            ch.wordCount,
-            ch.status,
-            ch.isIncludedInExport ? 1 : 0,
-            ch.createdAt,
-            origin === "local" ? now : ch.updatedAt,
-          ]
-        );
+            params: [
+              ch.id,
+              ch.bookId,
+              ch.title,
+              ch.content,
+              ch.synopsis,
+              ch.order,
+              ch.parentId,
+              ch.chapterType,
+              ch.wordCount,
+              ch.status,
+              ch.isIncludedInExport ? 1 : 0,
+              ch.createdAt,
+              chapterUpdatedAt,
+            ],
+          },
+          // A pulled or restored Chapter is searchable exactly like a local save.
+          ...chapterSearchStatements(
+            { id: ch.id, bookId: ch.bookId, content: ch.content },
+            chapterUpdatedAt
+          ),
+        ]);
       } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
+        // executeAtomic wraps engine errors; unwrap so the author still reads
+        // the engine's own detail next to the Chapter's position and title.
+        const detail =
+          error instanceof AtomicStatementError
+            ? error.detail
+            : error instanceof Error
+              ? error.message
+              : String(error);
         throw new Error(
           `Sync apply failed on chapter ${i + 1}/${normalizedChapters.length} ("${ch.title}"): ${detail}`
         );

@@ -171,7 +171,7 @@ describe("MCP Server eval budgets", () => {
   });
 
   it("every task has its own id and a budget above its fixed cost", () => {
-    expect(new Set(EVAL_TASKS.map((entry) => entry.id)).size).toBe(6);
+    expect(new Set(EVAL_TASKS.map((entry) => entry.id)).size).toBe(7);
     for (const entry of EVAL_TASKS) {
       expect(entry.budget).toBeGreaterThan(entry.readOnly ? FIXED_COST_READ_ONLY : FIXED_COST);
     }
@@ -393,5 +393,36 @@ describe("MCP Server eval task 6: read-only mode", () => {
       "Library unchanged",
       "answer says it cannot write",
     ]);
+  });
+});
+
+describe("MCP Server eval task 7: find a passage with search, then read it", () => {
+  it("passes a search and a read of the Chapter it names", async () => {
+    const { outcome } = await runScripted(task("7"), async (agent) => {
+      const hits = await agent.call("search_library", { query: "bell on the reef" });
+      expect(hits).toContain("Arrival");
+      await agent.call("read_chapter", { chapter: short(IDS.arrival) });
+      return "The sentence is: There was no bell on the reef.";
+    });
+    expect(failed(outcome.checks)).toEqual([]);
+    expect(outcome.pass).toBe(true);
+  });
+
+  it("fails an Agent that reads Chapters without searching first", async () => {
+    const { checks } = await runScripted(task("7"), async (agent) => {
+      await agent.call("get_book", { book: short(IDS.lighthouse) });
+      await agent.call("read_chapter", { chapter: short(IDS.arrival) });
+      return "The sentence is: There was no bell on the reef.";
+    });
+    expect(failed(checks)).toEqual(["searched before reading"]);
+  });
+
+  it("fails an Agent that quotes the wrong passage", async () => {
+    const { checks } = await runScripted(task("7"), async (agent) => {
+      await agent.call("search_library", { query: "bell on the reef" });
+      await agent.call("read_chapter", { chapter: short(IDS.arrival) });
+      return "The keeper lit the lamp at dusk.";
+    });
+    expect(failed(checks)).toEqual(["answer quotes the passage"]);
   });
 });

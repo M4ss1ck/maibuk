@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { installRandomUuid, randomUuidV4, type RandomSource, type RandomUuidTarget } from "./crypto-shim";
+import {
+  installRandomUuid,
+  randomUuidV4,
+  type RandomSource,
+  type RandomUuidTarget,
+} from "./crypto-shim";
 
 /**
  * The sandbox Worker's Web Crypto: the real `getRandomValues`, and no

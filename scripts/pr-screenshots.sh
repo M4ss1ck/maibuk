@@ -63,7 +63,16 @@ git worktree add -q --detach "$WORKTREE" "$BEFORE_REF"
 rm -rf "$WORKTREE/e2e"
 cp -R "$ROOT/e2e" "$WORKTREE/e2e"
 rm -rf "$WORKTREE/e2e/.output"
-ln -s "$ROOT/node_modules" "$WORKTREE/node_modules"
+# Same lockfile: share this checkout's node_modules. A branch that changes
+# dependencies needs the base's own install, or the base build cannot resolve
+# a package the branch removed; pnpm's store makes that offline and quick.
+if [[ ! -f "$ROOT/pnpm-lock.yaml" ]] || cmp -s "$ROOT/pnpm-lock.yaml" "$WORKTREE/pnpm-lock.yaml"; then
+  ln -s "$ROOT/node_modules" "$WORKTREE/node_modules"
+else
+  echo "[screenshots] before: lockfile differs, installing the base's dependencies"
+  (cd "$WORKTREE" && { pnpm install --offline --frozen-lockfile --ignore-scripts >/dev/null \
+    || pnpm install --prefer-offline --frozen-lockfile --ignore-scripts >/dev/null; })
+fi
 # Dictation's downloaded runtime, models and fake-microphone audio are ignored
 # by git, just like node_modules. Both builds must use the same local assets.
 if [[ -d "$ROOT/vendor" ]]; then

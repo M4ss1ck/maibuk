@@ -273,6 +273,7 @@ describe("note snapshot serializer", () => {
         if (selects > 1) throw new Error("read failed");
         return realDb.select<T>(sql, params);
       },
+      executeAtomic: realDb.executeAtomic.bind(realDb),
     } as DatabaseAdapter);
 
     const seen: Change[] = [];

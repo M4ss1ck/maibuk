@@ -216,6 +216,7 @@ describe("book write path", () => {
         if (selects > 1) throw new Error("read failed");
         return realDb.select<T>(sql, params);
       },
+      executeAtomic: realDb.executeAtomic.bind(realDb),
     } as DatabaseAdapter);
 
     const stored = await updateBookRow("b1", { title: "Durable" }, "local");

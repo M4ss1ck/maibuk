@@ -1,26 +1,34 @@
 /**
  * In-memory database test context for Zustand store tests.
- * Uses sql.js to create a real SQLite database in memory,
- * wrapped in the same DatabaseAdapter interface the stores expect.
+ * Uses the official SQLite WASM build to create a real SQLite database in
+ * memory, wrapped in the same DatabaseAdapter interface the stores expect.
  *
  * Adapted from the kaont project's service-test-context pattern.
  */
-import initSqlJs from "sql.js";
 import type { DatabaseAdapter } from "@/lib/platform/types";
-import { MemoryDatabaseAdapter } from "@/lib/db/memory-database";
+import { createMemoryDatabase } from "@/lib/db/memory-database";
+import { ensureSearchSchema } from "@/features/search/schema";
 
 /**
  * Create an in-memory SQLite database with the Maibuk schema.
  * Returns a DatabaseAdapter suitable for mocking `getDatabase()`.
  */
 export async function createTestDatabase(): Promise<DatabaseAdapter> {
-  const SQL = await initSqlJs();
-  const sqlDb = new SQL.Database();
-  const adapter = new MemoryDatabaseAdapter(sqlDb);
+  const adapter = await createMemoryDatabase();
+  await ensureTestSchema(adapter);
+  return adapter;
+}
 
+/**
+ * Creates the Maibuk schema, including the Search index, on any adapter. The
+ * search bench's desktop engine uses it too, so both engines run the same
+ * tables the product does.
+ */
+export async function ensureTestSchema(adapter: DatabaseAdapter): Promise<void> {
   // Desktop enforces foreign keys (sqlx turns them on for every connection),
-  // so ON DELETE CASCADE runs there. Mirror it: the web and sql.js leave them
-  // off, which hid INSERT OR REPLACE wiping a Book's Checkpoints on desktop.
+  // so ON DELETE CASCADE runs there. Mirror it: the web and the in-memory
+  // engine leave them off, which hid INSERT OR REPLACE wiping a Book's
+  // Checkpoints on desktop.
   await adapter.execute("PRAGMA foreign_keys = ON");
 
   // Mirror the schema from src/lib/db/index.ts initializeSchema()
@@ -344,5 +352,5 @@ export async function createTestDatabase(): Promise<DatabaseAdapter> {
     `CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_type, target_id)`
   );
 
-  return adapter;
+  await ensureSearchSchema(adapter);
 }

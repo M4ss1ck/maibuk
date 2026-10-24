@@ -1,7 +1,7 @@
 // Deleting a Chapter has to remove the rows that hang off it itself: the web
-// (sql.js) leaves foreign_keys off, and `links` has no foreign key at all, so
-// neither dependents table cascades there. Both modes are covered so the
-// delete stays correct on desktop (cascade on) and web (cascade off).
+// leaves foreign_keys off, and `links` has no foreign key at all, so neither
+// dependents table cascades there. Both modes are covered so the delete stays
+// correct on desktop (cascade on) and web (cascade off).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";

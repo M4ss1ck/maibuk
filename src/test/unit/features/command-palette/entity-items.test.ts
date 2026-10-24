@@ -120,19 +120,27 @@ describe("buildEntityItems()", () => {
 });
 
 describe("buildPageItems()", () => {
-  it("offers Open Chapter… only in the Book Editor", () => {
-    const inEditor = buildPageItems({ t, inBookEditor: true }).map((item) => item.targetPage);
-    const elsewhere = buildPageItems({ t, inBookEditor: false }).map((item) => item.targetPage);
+  it("offers the four nested pages, Chapters first", () => {
+    const pages = buildPageItems({ t }).map((item) => item.targetPage);
 
-    expect(inEditor).toEqual(["chapters", "books", "notes", "canvases"]);
-    expect(elsewhere).toEqual(["books", "notes", "canvases"]);
+    expect(pages).toEqual(["chapters", "books", "notes", "canvases"]);
   });
 
   it("labels each page and carries its target", () => {
-    const items = buildPageItems({ t, inBookEditor: false });
+    const items = buildPageItems({ t });
 
-    expect(items.map((item) => item.key)).toEqual(["page:books", "page:notes", "page:canvases"]);
-    expect(items.map((item) => item.label)).toEqual(["Go to Book…", "Open Note…", "Open Canvas…"]);
+    expect(items.map((item) => item.key)).toEqual([
+      "page:chapters",
+      "page:books",
+      "page:notes",
+      "page:canvases",
+    ]);
+    expect(items.map((item) => item.label)).toEqual([
+      "Open Chapter…",
+      "Go to Book…",
+      "Open Note…",
+      "Open Canvas…",
+    ]);
     expect(items.every((item) => item.kind === "page")).toBe(true);
     expect(items.every((item) => item.state === "runnable")).toBe(true);
     expect(items.every((item) => item.targetPage === item.id)).toBe(true);

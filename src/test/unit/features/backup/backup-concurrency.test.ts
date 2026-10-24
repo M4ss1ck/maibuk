@@ -56,6 +56,10 @@ vi.mock("@/features/canvas/store", () => ({
   useCanvasStore: { getState: () => ({ loadCanvases: mockLoadCanvases }) },
 }));
 
+vi.mock("@/features/search/rebuild", () => ({
+  requestSearchRebuild: vi.fn(() => Promise.resolve()),
+}));
+
 const { BackupService, resetBackupQueueForTests } = await import(
   "@/features/backup/backup-service"
 );

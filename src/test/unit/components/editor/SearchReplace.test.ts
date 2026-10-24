@@ -57,6 +57,42 @@ describe("findMatches", () => {
     editor.destroy();
   });
 
+  it("finds accented text from an unaccented query and back", () => {
+    const editor = makeEditor("<p>La canción del faro, cancion</p>");
+    const forward = findMatches(editor.state.doc, "cancion", opts());
+    expect(forward).toHaveLength(2);
+    expect(editor.state.doc.textBetween(forward[0].from, forward[0].to)).toBe("canción");
+    expect(editor.state.doc.textBetween(forward[1].from, forward[1].to)).toBe("cancion");
+
+    const backward = findMatches(editor.state.doc, "canción", opts());
+    expect(backward).toHaveLength(2);
+    editor.destroy();
+  });
+
+  it("keeps Match case case-sensitive but accent-insensitive", () => {
+    const editor = makeEditor("<p>Eléna and ELÉNA walked in</p>");
+    expect(findMatches(editor.state.doc, "elena", opts())).toHaveLength(2);
+    const matches = findMatches(editor.state.doc, "ELENA", opts({ caseSensitive: true }));
+    expect(matches).toHaveLength(1);
+    expect(editor.state.doc.textBetween(matches[0].from, matches[0].to)).toBe("ELÉNA");
+    editor.destroy();
+  });
+
+  it("keeps Whole word working on folded text", () => {
+    const editor = makeEditor("<p>cancionero canta la canción</p>");
+    const matches = findMatches(editor.state.doc, "cancion", opts({ wholeWord: true }));
+    expect(matches).toHaveLength(1);
+    expect(editor.state.doc.textBetween(matches[0].from, matches[0].to)).toBe("canción");
+    editor.destroy();
+  });
+
+  it("keeps a Regex pinned to the exact accents", () => {
+    const editor = makeEditor("<p>La canción del faro</p>");
+    expect(findMatches(editor.state.doc, "cancion", opts({ regex: true }))).toHaveLength(0);
+    expect(findMatches(editor.state.doc, "canci.n", opts({ regex: true }))).toHaveLength(1);
+    editor.destroy();
+  });
+
   it("returns positions that map to the matched text", () => {
     const editor = makeEditor("<p>hello world</p>");
     const [match] = findMatches(editor.state.doc, "world", opts());

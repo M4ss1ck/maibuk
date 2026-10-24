@@ -4,8 +4,9 @@
 // own typing survives; the editor insert lands as one undoable step; without
 // the optional grant the insert is refused and changes nothing.
 
-import type { Locator, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { runPaletteCommand } from "../support/palette";
 import { seedSettings } from "../support/storage";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
@@ -29,23 +30,6 @@ const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary na
 const navOption = (page: Page, name: string) =>
   primaryNav(page).getByRole("option", { name: new RegExp(`^${name}`) });
 const chapterText = (page: Page) => page.getByRole("textbox", { name: `Text of ${CHAPTER}` });
-
-/** Opens the Command Palette and returns its dialog. */
-async function openPalette(page: Page): Promise<Locator> {
-  await page.keyboard.press("F1");
-  const dialog = page.getByRole("dialog", { name: "Command palette" });
-  await expect(dialog).toBeVisible();
-  return dialog;
-}
-
-/** Types a palette query and leaves its matching option visible. */
-async function paletteItem(page: Page, dialog: Locator, query: string): Promise<Locator> {
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(query);
-  const option = dialog.getByRole("option", { name: query, exact: true });
-  await expect(option).toBeVisible();
-  return option;
-}
 
 /**
  * Waits until the Plugin is ready, so its Commands are enabled in the palette.
@@ -92,13 +76,6 @@ async function openChapterEditor(page: Page): Promise<void> {
   await tabTo(page, text, { max: 20 });
   await expect(text).toBeFocused();
   await page.keyboard.press("ControlOrMeta+End");
-}
-
-/** Runs a Plugin Command from the Command Palette. */
-async function runPaletteCommand(page: Page, label: string): Promise<void> {
-  const dialog = await openPalette(page);
-  await paletteItem(page, dialog, label);
-  await page.keyboard.press("Enter");
 }
 
 test.describe("Plugin writes @wf:plugins-writes @sandbox", () => {

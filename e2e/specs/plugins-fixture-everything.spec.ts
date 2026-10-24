@@ -10,6 +10,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { isFocusWithin, expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { selectPaletteCommand } from "../support/palette";
 import { seedSettings } from "../support/storage";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
@@ -83,15 +84,6 @@ async function openPalette(page: Page, name = "Command palette"): Promise<Locato
   return dialog;
 }
 
-/** Types a palette query into the open palette and returns the matching item. */
-async function paletteItem(page: Page, dialog: Locator, query: string): Promise<Locator> {
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(query);
-  const option = dialog.getByRole("option", { name: query, exact: true });
-  await expect(option).toBeVisible();
-  return option;
-}
-
 /** Types a palette query and waits for the item with `key` to be the active result. */
 async function selectPaletteItem(
   page: Page,
@@ -100,7 +92,7 @@ async function selectPaletteItem(
   key: string
 ): Promise<void> {
   await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(query);
+  await page.keyboard.type(`>${query}`);
   const searchbox = dialog.getByRole("searchbox");
   await expect
     .poll(async () => (await searchbox.getAttribute("aria-activedescendant")) ?? "")
@@ -259,12 +251,12 @@ test.describe("fixture-everything contributions @wf:plugins-contributions", () =
     // on the Book list, so it is not runnable here; the test below runs it with
     // a Chapter open (#446).
     const dialog = await openPalette(page);
-    await paletteItem(page, dialog, "Open fixture page");
+    await selectPaletteCommand(page, dialog, "Open fixture page");
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
 
     const reopened = await openPalette(page);
-    await paletteItem(page, reopened, "English only");
+    await selectPaletteCommand(page, reopened, "English only");
   });
 
   test("the target Command is listed and runs from the palette on the open Chapter", async ({
@@ -290,7 +282,7 @@ test.describe("fixture-everything contributions @wf:plugins-contributions", () =
     await expect(page.getByRole("textbox", { name: `Text of ${SEED_CHAPTERS[2].title}` })).toBeVisible();
 
     const dialog = await openPalette(page);
-    const option = await paletteItem(page, dialog, "Stamp");
+    const option = await selectPaletteCommand(page, dialog, "Stamp");
     await expect(option).toBeVisible();
     await page.keyboard.press("Enter");
 
@@ -362,13 +354,13 @@ test.describe("fixture-everything contributions @wf:plugins-contributions", () =
 
     const dialog = await openPalette(page, "Paleta de comandos");
     // The localized Command's Spanish label.
-    await paletteItem(page, dialog, "Abrir la página del fixture");
+    await selectPaletteCommand(page, dialog, "Abrir la página del fixture");
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
 
     // The English-only Command keeps its manifest label in Spanish.
     const reopened = await openPalette(page, "Paleta de comandos");
-    await paletteItem(page, reopened, "English only");
+    await selectPaletteCommand(page, reopened, "English only");
   });
 });
 
@@ -440,7 +432,7 @@ test.describe("fixture-everything target Command, four ways @wf:plugins-contribu
   }) => {
     await openChapterA(page);
     const dialog = await openPalette(page);
-    const option = await paletteItem(page, dialog, STAMP);
+    const option = await selectPaletteCommand(page, dialog, STAMP);
     await expect(option).toBeVisible();
     await capture(page, "plugins-target-palette");
     await page.keyboard.press("Enter");

@@ -24,6 +24,7 @@ import {
   type ChangeOrigin,
 } from "@/features/sync/change-feed";
 import { CURRENT_CANVAS_SCHEMA_VERSION } from "@/lib/canvas/defaultDoc";
+import { canvasSearchStatements, deleteSearchItemStatement } from "@/features/search/statements";
 import {
   createDefaultCanvasDoc,
   type Canvas,
@@ -170,10 +171,14 @@ export async function updateCanvasDocRow(
   if (!existing) return null;
   const now = nowSeconds();
 
-  await db.execute(
-    "UPDATE canvases SET doc = ?, updated_at = ?, content_updated_at = ? WHERE id = ?",
-    [stripViewportForStorage(doc), now, now, id]
-  );
+  await db.executeAtomic([
+    {
+      sql: "UPDATE canvases SET doc = ?, updated_at = ?, content_updated_at = ? WHERE id = ?",
+      params: [stripViewportForStorage(doc), now, now, id],
+    },
+    // Card text is searchable; a save and its index rows land together.
+    ...canvasSearchStatements({ id, doc }, now),
+  ]);
 
   const stored = await fetchStoredCanvas(id);
   // A read-back failure after the durable write still emits below.
@@ -286,7 +291,10 @@ export async function deleteCanvasRow(
       title: rows[0].title,
     });
   }
-  await db.execute("DELETE FROM canvases WHERE id = ?", [id]);
+  await db.executeAtomic([
+    { sql: "DELETE FROM canvases WHERE id = ?", params: [id] },
+    deleteSearchItemStatement("canvas", id),
+  ]);
   await emitChange(
     { entity: "canvas", id, origin, kind: "content" },
     viewMeta
@@ -302,7 +310,10 @@ export async function removeCanvasRow(id: string, origin: ChangeOrigin): Promise
   assertWritableId(id);
   await flushForOutsideWrite(origin);
   const db = await getDatabase();
-  await db.execute("DELETE FROM canvases WHERE id = ?", [id]);
+  await db.executeAtomic([
+    { sql: "DELETE FROM canvases WHERE id = ?", params: [id] },
+    deleteSearchItemStatement("canvas", id),
+  ]);
   await emitChange({ entity: "canvas", id, origin, kind: "content" });
 }
 
@@ -341,21 +352,25 @@ export async function applyCanvasSnapshotData(
         (existing.content_updated_at as number | null) ?? (existing.updated_at as number);
   }
 
-  await db.execute(
-    `INSERT OR REPLACE INTO canvases (
+  await db.executeAtomic([
+    {
+      sql: `INSERT OR REPLACE INTO canvases (
       id, title, doc, pinned, "order", created_at, updated_at, content_updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      canvas.id,
-      canvas.title,
-      JSON.stringify(canvas.doc),
-      canvas.pinned ? 1 : 0,
-      canvas.order,
-      canvas.createdAt,
-      updatedAt,
-      contentUpdatedAt,
-    ]
-  );
+      params: [
+        canvas.id,
+        canvas.title,
+        JSON.stringify(canvas.doc),
+        canvas.pinned ? 1 : 0,
+        canvas.order,
+        canvas.createdAt,
+        updatedAt,
+        contentUpdatedAt,
+      ],
+    },
+    // A synced or restored Canvas is searchable exactly like a local save.
+    ...canvasSearchStatements({ id: canvas.id, doc: canvas.doc }, now),
+  ]);
 
   // Capture this apply's stored result before the emission's awaits: a later
   // save must not replace it. A read-back failure after the durable write

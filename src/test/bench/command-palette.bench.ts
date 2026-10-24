@@ -17,6 +17,7 @@ describe("command palette", () => {
   for (const q of PALETTE_BENCH_QUERIES) {
     bench(`keystroke: ${JSON.stringify(q)}`, () => {
       searchPalette(index, {
+        mode: "library",
         query: q,
         page: "root",
         recent: [],
@@ -27,6 +28,7 @@ describe("command palette", () => {
 
   bench("keystroke: chapters page", () => {
     searchPalette(index, {
+      mode: "library",
       query: "ch",
       page: "chapters",
       recent: [],

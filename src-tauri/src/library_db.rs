@@ -8,7 +8,9 @@
 //! internally, so ATTACH '' is allowed while every other ATTACH target is
 //! denied (#196, ADR 0017). Only allow-listed PRAGMAs run, and only as reads
 //! apart from wal_checkpoint and table_info, so switches like
-//! temp_store_directory cannot redirect files. load_extension() is denied even
+//! temp_store_directory cannot redirect files. data_version is on the list
+//! because FTS5 reads it inside its own constructor, so the Library Search
+//! index (#639) cannot open without it. load_extension() is denied even
 //! though the connection never enables extensions.
 
 use std::ffi::CStr;
@@ -44,6 +46,7 @@ const ALLOWED_PRAGMAS: &[&str] = &[
     "page_count",
     "freelist_count",
     "wal_checkpoint",
+    "data_version",
 ];
 
 // A pragma value arrives as arg2, so `PRAGMA foreign_keys = OFF` and
@@ -536,6 +539,93 @@ mod tests {
                 .fetch_all(&pool)
                 .await
                 .unwrap();
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // The Library Search index (#639), with the statements from
+    // src/features/search/schema.ts. FTS5 runs `PRAGMA main.data_version`
+    // inside its constructor, so a denied pragma fails the open with code 23
+    // ("vtable constructor failed: search_text_fts"). The second install
+    // reopens the file, which takes FTS5's xConnect path rather than xCreate.
+    #[test]
+    fn library_search_fts5_index_works_through_the_authorizer() {
+        let dir = temp_dir("guard-fts5");
+        let _ = std::fs::remove_dir_all(&dir);
+        {
+            let app = build_app();
+            install_at(app.handle(), &dir).unwrap();
+            let pool = installed_pool(app.handle());
+            tauri::async_runtime::block_on(async {
+                for sql in [
+                    "CREATE TABLE search_text (id INTEGER PRIMARY KEY, text TEXT NOT NULL)",
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS search_text_fts USING fts5(
+                        text,
+                        content='search_text',
+                        content_rowid='id',
+                        tokenize='trigram remove_diacritics 1'
+                    )",
+                    "CREATE TRIGGER search_text_ai AFTER INSERT ON search_text BEGIN
+                        INSERT INTO search_text_fts(rowid, text) VALUES (new.id, new.text);
+                    END",
+                    "INSERT INTO search_text (text) VALUES ('una canción de cuna')",
+                    "INSERT INTO search_text_fts(search_text_fts) VALUES('rebuild')",
+                ] {
+                    sqlx::query(sql).execute(&pool).await.unwrap();
+                }
+            });
+            tauri::async_runtime::block_on(pool.close());
+        }
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let pool = installed_pool(app.handle());
+        tauri::async_runtime::block_on(async {
+            let id: i64 = sqlx::query_scalar(
+                "SELECT rowid FROM search_text_fts WHERE search_text_fts MATCH ?",
+            )
+            .bind("\"cancion\"")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(id, 1);
+            sqlx::query("INSERT INTO search_text (text) VALUES ('otra nota')")
+                .execute(&pool)
+                .await
+                .unwrap();
+            let hits: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM search_text_fts WHERE search_text_fts MATCH ?",
+            )
+            .bind("\"nota\"")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(hits, 1);
+            // The rest of what rebuild.ts and ensureSearchSchema run: the
+            // trigger's 'delete' form, delete-all, and the tokenizer upgrade
+            // that drops and recreates the table.
+            for sql in [
+                "INSERT INTO search_text_fts(search_text_fts, rowid, text)
+                    VALUES ('delete', 2, 'otra nota')",
+                "INSERT INTO search_text_fts(search_text_fts) VALUES('delete-all')",
+                "DROP TABLE search_text_fts",
+                "CREATE VIRTUAL TABLE search_text_fts USING fts5(
+                    text,
+                    content='search_text',
+                    content_rowid='id',
+                    tokenize='trigram remove_diacritics 1'
+                )",
+                "INSERT INTO search_text_fts(search_text_fts) VALUES('rebuild')",
+            ] {
+                sqlx::query(sql).execute(&pool).await.unwrap();
+            }
+            let hits: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM search_text_fts WHERE search_text_fts MATCH ?",
+            )
+            .bind("\"cuna\"")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(hits, 1);
         });
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -1145,6 +1235,8 @@ mod tests {
         assert!(!pragma_allowed(Some(c"page_size"), Some(c"1024")));
         assert!(pragma_allowed(Some(c"wal_checkpoint"), Some(c"TRUNCATE")));
         assert!(pragma_allowed(Some(c"table_info"), Some(c"notes")));
+        assert!(pragma_allowed(Some(c"data_version"), None));
+        assert!(!pragma_allowed(Some(c"data_version"), Some(c"1")));
     }
 
     #[test]

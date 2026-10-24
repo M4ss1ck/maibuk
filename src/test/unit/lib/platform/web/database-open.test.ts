@@ -1,15 +1,15 @@
 import "fake-indexeddb/auto";
 import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// Drop the locateFile config so Node loads the wasm from node_modules.
-vi.mock("sql.js", async () => {
-  const actual = await vi.importActual<typeof import("sql.js")>("sql.js");
-  return { default: () => actual.default() };
-});
-
-import initSqlJs from "sql.js";
-import { createWebDatabase } from "@/lib/platform/web/database";
+import { createDbWorkerHandler } from "@/lib/db/db-worker-handler";
+import { createMemoryDatabase } from "@/lib/db/memory-database";
+import { createWebDatabase, getWebLibraryOpenResult } from "@/lib/platform/web/database";
+import {
+  deleteLegacyLibraryBytes,
+  loadLegacyLibraryBytes,
+} from "@/lib/platform/web/legacy-storage";
+import type { LibraryOpenDeps } from "@/lib/platform/web/library-open";
+import { createTestWebDatabase } from "@/test/support/db-worker";
 import { initializeSchema } from "@/lib/db";
 
 const DB_NAME = "maibuk-db-storage";
@@ -40,12 +40,28 @@ function withStore<T>(
 const saveBytes = (bytes: Uint8Array) => withStore("readwrite", (s) => s.put(bytes, "main"));
 const savedBytes = () => withStore<Uint8Array | undefined>("readonly", (s) => s.get("main"));
 
+/**
+ * The real open sequence with one substitution: the Worker handler runs
+ * in-process. OPFS is absent under Node, so these exercise the in-memory
+ * fallback with the saved copy, which is the path the author sees when the
+ * pooled VFS cannot be installed.
+ */
+function testDeps(): LibraryOpenDeps {
+  return {
+    acquireLock: async () => ({ held: true, release() {} }),
+    createClient: () => createTestWebDatabase(createDbWorkerHandler()),
+    loadLegacyBytes: loadLegacyLibraryBytes,
+    deleteLegacyBytes: deleteLegacyLibraryBytes,
+  };
+}
+
 async function librarySavedWith(title: string): Promise<Uint8Array> {
-  const SQL = await initSqlJs();
-  const db = new SQL.Database();
-  db.run("CREATE TABLE books (id TEXT PRIMARY KEY, title TEXT)");
-  db.run("INSERT INTO books VALUES ('b1', ?)", [title]);
-  return db.export();
+  const db = await createMemoryDatabase();
+  await db.execute("CREATE TABLE books (id TEXT PRIMARY KEY, title TEXT)");
+  await db.execute("INSERT INTO books VALUES ('b1', ?)", [title]);
+  const bytes = db.exportBytes();
+  await db.close();
+  return bytes;
 }
 
 describe("createWebDatabase()", () => {
@@ -57,13 +73,14 @@ describe("createWebDatabase()", () => {
   it("opens the saved Library", async () => {
     await saveBytes(await librarySavedWith("Saved"));
 
-    const db = await createWebDatabase("maibuk.db");
+    const db = await createWebDatabase("maibuk.db", testDeps());
 
     expect(await db.select("SELECT title FROM books")).toEqual([{ title: "Saved" }]);
+    expect(getWebLibraryOpenResult()).toEqual({ kind: "memory" });
   });
 
   it("starts an empty Library only when nothing was ever saved", async () => {
-    const db = await createWebDatabase("maibuk.db");
+    const db = await createWebDatabase("maibuk.db", testDeps());
 
     expect(await db.select("SELECT name FROM sqlite_master")).toEqual([]);
   });
@@ -81,7 +98,7 @@ describe("createWebDatabase()", () => {
     });
 
     try {
-      await expect(createWebDatabase("maibuk.db")).rejects.toThrow(/operation failed/);
+      await expect(createWebDatabase("maibuk.db", testDeps())).rejects.toThrow(/operation failed/);
     } finally {
       get.mockRestore();
     }
@@ -92,7 +109,7 @@ describe("createWebDatabase()", () => {
     const garbage = new TextEncoder().encode("not a SQLite file, but the author's only copy");
     await saveBytes(garbage);
 
-    const db = await createWebDatabase("maibuk.db");
+    const db = await createWebDatabase("maibuk.db", testDeps());
     await expect(initializeSchema(db)).rejects.toThrow();
 
     expect(Array.from((await savedBytes()) ?? [])).toEqual(Array.from(garbage));

@@ -15,6 +15,7 @@
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { runPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
 const PLUGIN_ID = "fixture-stopped";
@@ -59,22 +60,9 @@ async function openReport(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: BODY_HEADING })).toBeVisible({ timeout: 15_000 });
 }
 
-/** Runs one Plugin Command from the Command Palette, by keyboard. */
-async function runCommand(page: Page, label: string): Promise<void> {
-  await page.keyboard.press("F1");
-  const dialog = page.getByRole("dialog", { name: "Command palette" });
-  await expect(dialog).toBeVisible();
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(label);
-  const option = dialog.getByRole("option", { name: label, exact: true });
-  await expect(option).toBeVisible();
-  await page.keyboard.press("Enter");
-  await expect(dialog).toBeHidden();
-}
-
 /** Crashes the Plugin from the palette and waits for both surfaces to say so. */
 async function crash(page: Page): Promise<void> {
-  await runCommand(page, CRASH);
+  await runPaletteCommand(page, CRASH);
   // The Worker died of its own uncaught error: the panel replaces the body and
   // names the reason.
   await expect(page.getByRole("alert")).toHaveText(REASON, { timeout: 15_000 });
@@ -90,7 +78,7 @@ test.describe("Stopped Plugin surfaces", () => {
     page,
   }) => {
     await openReport(page);
-    await runCommand(page, CRASH);
+    await runPaletteCommand(page, CRASH);
     // The body goes on every build, so the "before" screenshot run (a build
     // without the panel) still reaches the captures below.
     await expect(page.getByRole("heading", { name: BODY_HEADING })).toBeHidden({

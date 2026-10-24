@@ -1082,9 +1082,7 @@ describe("write_note", () => {
       expect(reread.json.result.content[0].text).toContain("Book:");
       expect(reread.json.result.content[0].text).toContain("The Book");
       expect(reread.json.result.content[1].text).toBe("One\n\nTwo");
-      expect(lastEditedOf(reread.json.result.content[0].text)).toBe(
-        lastEditedOf(textOf(answer))
-      );
+      expect(lastEditedOf(reread.json.result.content[0].text)).toBe(lastEditedOf(textOf(answer)));
     } finally {
       host.stop();
     }

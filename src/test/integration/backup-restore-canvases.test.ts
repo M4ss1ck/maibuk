@@ -4,7 +4,7 @@ import { parseTriggerFromFilename } from "@/features/backup/utils";
 import { CURRENT_CANVAS_SCHEMA_VERSION } from "@/lib/canvas/defaultDoc";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
-// Real sql.js database and the real SQL exporter: the only stand-ins are the
+// Real database and the real SQL exporter: the only stand-ins are the
 // database handle and the backup file store. A Canvas must survive a Backup
 // round trip, and Backups taken before Canvases were exported must not
 // delete the Canvases already on this device.

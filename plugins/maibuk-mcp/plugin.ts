@@ -27,11 +27,7 @@ import { isLibraryUnavailable, LIBRARY_UNAVAILABLE_TEXT } from "./books";
 import type { WriteGuard } from "./edits";
 import { errorResult, isWritePermissionDenied, readOnlyResult } from "./library";
 import { publishConnections, type ConnectionRecord } from "./live";
-import {
-  CONNECT_PAGE_ID,
-  createConnectPage,
-  createConnectStore,
-} from "./page";
+import { CONNECT_PAGE_ID, createConnectPage, createConnectStore } from "./page";
 import { buildMcpServer } from "./server";
 import { mcpUrl, snippet, type SnippetKind } from "./snippets";
 
@@ -632,9 +628,7 @@ export function startMcp(client: PluginClient, serve?: McpServe): void {
     .address()
     .then(({ url }) => connect.setAddress(url))
     .catch(() => {});
-  void client
-    .on("endpoint.addressChanged", ({ url }) => connect.setAddress(url))
-    .catch(() => {});
+  void client.on("endpoint.addressChanged", ({ url }) => connect.setAddress(url)).catch(() => {});
 
   /**
    * Makes a fresh Key, so the open page's snippets refresh and the old Key stops

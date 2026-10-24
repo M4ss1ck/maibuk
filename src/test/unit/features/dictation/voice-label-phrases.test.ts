@@ -121,6 +121,18 @@ describe("voice label refusals", () => {
   });
 });
 
+describe("Search Library (#638)", () => {
+  it("answers to its label in English and Spanish", () => {
+    const spoken = (language: DictationLanguage) =>
+      defaultWholeLinePhrases("global.searchLibrary", language).map((phrase) =>
+        phraseWords(phrase).join(" ")
+      );
+
+    expect(spoken("en")).toEqual(["search library"]);
+    expect(spoken("es")).toEqual(["buscar en la biblioteca"]);
+  });
+});
+
 describe("Sort Voice Commands (#524)", () => {
   it("answers to each Sort's label in English and Spanish", () => {
     const spoken = (id: CommandId, language: DictationLanguage) =>

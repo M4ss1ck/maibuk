@@ -1,10 +1,11 @@
-import type { Database as SqlJsDatabase } from "sql.js";
 import type { AtomicStatement } from "@/lib/platform/types";
 
 /** One statement of an atomic load failed, or the load itself could not run. */
 export class AtomicStatementError extends Error {
   readonly index: number | null;
   readonly detail: string;
+  /** How many statements the load had, so a rebuilt error reads the same. */
+  readonly total: number;
 
   constructor(index: number | null, detail: string, total: number) {
     super(
@@ -15,11 +16,13 @@ export class AtomicStatementError extends Error {
     this.name = "AtomicStatementError";
     this.index = index;
     this.detail = detail;
+    this.total = total;
   }
 }
 
-// sql.js has no authorizer, and SQLite allows ATTACH inside a transaction, so
-// the web load refuses it up front the way desktop's authorizer does (#196).
+// The web engine has no authorizer, and SQLite allows ATTACH inside a
+// transaction, so the web load refuses it up front the way desktop's
+// authorizer does (#196).
 const ATTACH_RE = /^ATTACH\b/i;
 
 const TRANSACTION_CONTROL_RE = /^(BEGIN|COMMIT|END|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
@@ -37,11 +40,17 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** The one surface an atomic load needs from a database engine. */
+export interface AtomicDatabase {
+  run(sql: string, params?: readonly (string | number | null)[]): void;
+}
+
 /**
- * Runs every statement inside one sql.js transaction, or none. Synchronous on
- * purpose: nothing else can interleave with sql.js mid-load.
+ * Runs every statement inside one transaction, or none. Synchronous on
+ * purpose: the engine is single-threaded and in-process, so nothing else can
+ * interleave with it mid-load.
  */
-export function runAtomicSqlJs(db: SqlJsDatabase, statements: readonly AtomicStatement[]): void {
+export function runAtomic(db: AtomicDatabase, statements: readonly AtomicStatement[]): void {
   const total = statements.length;
   const normalised = statements.map((statement) =>
     typeof statement === "string"
@@ -66,11 +75,7 @@ export function runAtomicSqlJs(db: SqlJsDatabase, statements: readonly AtomicSta
     const { sql, params } = normalised[index];
     if (sql.trim().length === 0) continue;
     try {
-      if (params) {
-        db.run(sql, params as (string | number | null)[]);
-      } else {
-        db.run(sql);
-      }
+      db.run(sql, params);
     } catch (error) {
       try {
         db.run("ROLLBACK");

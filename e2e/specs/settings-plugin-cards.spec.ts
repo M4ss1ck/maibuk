@@ -16,6 +16,7 @@ import {
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
+import { selectPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
 const PLUGIN_NAME = "Echoes";
@@ -125,11 +126,7 @@ test.describe("Settings Plugin cards @wf:settings-plugin-cards", () => {
     await page.keyboard.press("F1");
     const palette = page.getByRole("dialog", { name: "Command palette" });
     await expect(palette).toBeVisible();
-    await page.keyboard.press("ControlOrMeta+a");
-    await page.keyboard.type("Open Echoes");
-    await expect(palette.getByRole("option", { name: "Open Echoes", exact: true })).toBeVisible({
-      timeout: 20_000,
-    });
+    await selectPaletteCommand(page, palette, "Open Echoes", { timeout: 20_000 });
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/plugin\/maibuk-echoes\/report$/);
     await expect(page.getByRole("heading", { name: PLUGIN_NAME, level: 1 })).toBeVisible();
