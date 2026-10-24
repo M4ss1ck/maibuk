@@ -18,6 +18,11 @@ const { mockFlushPendingEdits } = vi.hoisted(() => ({
   mockFlushPendingEdits: vi.fn(),
 }));
 
+// A Database File load rebuilds the derived search index; this suite counts
+// the load's own statements, so the rebuild is stubbed (search-index.test.ts
+// covers it against a real Library).
+vi.mock("@/features/search/rebuild", () => ({ requestSearchRebuild: vi.fn(() => Promise.resolve()) }));
+
 vi.mock("../../../../lib/platform", () => ({
   createDatabase: mockCreateDatabase,
   IS_TAURI: false,

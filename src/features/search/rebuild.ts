@@ -8,15 +8,40 @@
  *
  * The Tutorial Library has its own in-memory database and no rebuild: the job
  * skips while the Tutorial is active, like every other Library background job.
+ *
+ * The load is one bulk pass (#639). The FTS triggers stand down for its
+ * duration: they would re-index the whole Library one row at a time, and the
+ * final `rebuild` command recreates the index from `search_text` once instead.
+ * Saving during a rebuild still works: every save writes `search_text`, the
+ * sweep after the page loads re-reads every item saved since the pass began,
+ * and the final `rebuild` indexes whatever the table holds. The in-progress
+ * marker and the dropped triggers are what a later launch looks at to finish
+ * an interrupted pass.
  */
 
+import type { AtomicStatement } from "@/lib/platform/types";
 import { getDatabase } from "@/lib/db";
 import { isTutorialLibraryActive } from "@/features/tutorial/library-switch";
+import {
+  SEARCH_FTS_DELETE_ALL,
+  SEARCH_FTS_REBUILD,
+  SEARCH_REBUILD_MARKER_KEY,
+  SEARCH_TEXT_TABLE,
+  createSearchTriggerStatements,
+  dropSearchTriggerStatements,
+} from "@/features/search/schema";
+import {
+  bookFieldBlocks,
+  canvasBlocks,
+  chapterContentBlocks,
+  noteContentBlocks,
+} from "@/features/search/extract";
 import {
   bookSearchStatements,
   canvasSearchStatements,
   chapterSearchStatements,
   noteSearchStatements,
+  rebuildSearchRowsStatements,
 } from "@/features/search/statements";
 
 /** Bumped whenever a stored index no longer matches what extraction produces. */
@@ -59,14 +84,16 @@ function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-async function setIndexVersion(version: number): Promise<void> {
-  const db = await getDatabase();
-  const now = Math.floor(Date.now() / 1000);
-  await db.execute(
-    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+function nowSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+function settingStatement(key: string, value: string): AtomicStatement {
+  return {
+    sql: `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    [SEARCH_INDEX_VERSION_KEY, String(version), now]
-  );
+    params: [key, value, nowSeconds()],
+  };
 }
 
 interface BookPageRow {
@@ -107,18 +134,16 @@ async function rebuildBooks(): Promise<void> {
       [after, PAGE_SIZE]
     );
     if (page.length === 0) break;
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     await db.executeAtomic(
-      page.flatMap((row) =>
-        bookSearchStatements(
-          {
-            id: row.id,
-            title: row.title,
-            subtitle: row.subtitle,
-            description: row.description,
-          },
-          now
-        )
+      rebuildSearchRowsStatements(
+        page.map((row) => ({
+          itemKind: "book",
+          itemId: row.id,
+          bookId: row.id,
+          blocks: bookFieldBlocks(row),
+          updatedAt: now,
+        }))
       )
     );
     after = page[page.length - 1].rowid;
@@ -137,13 +162,16 @@ async function rebuildChapters(): Promise<void> {
       [after, PAGE_SIZE]
     );
     if (page.length === 0) break;
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     await db.executeAtomic(
-      page.flatMap((row) =>
-        chapterSearchStatements(
-          { id: row.id, bookId: row.book_id, content: row.content },
-          now
-        )
+      rebuildSearchRowsStatements(
+        page.map((row) => ({
+          itemKind: "chapter",
+          itemId: row.id,
+          bookId: row.book_id,
+          blocks: chapterContentBlocks(row.content),
+          updatedAt: now,
+        }))
       )
     );
     after = page[page.length - 1].rowid;
@@ -162,13 +190,16 @@ async function rebuildNotes(): Promise<void> {
       [after, PAGE_SIZE]
     );
     if (page.length === 0) break;
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     await db.executeAtomic(
-      page.flatMap((row) =>
-        noteSearchStatements(
-          { id: row.id, bookId: row.book_id, content: row.content },
-          now
-        )
+      rebuildSearchRowsStatements(
+        page.map((row) => ({
+          itemKind: "note",
+          itemId: row.id,
+          bookId: row.book_id,
+          blocks: noteContentBlocks(row.content),
+          updatedAt: now,
+        }))
       )
     );
     after = page[page.length - 1].rowid;
@@ -196,15 +227,94 @@ async function rebuildCanvases(): Promise<void> {
       [after, PAGE_SIZE]
     );
     if (page.length === 0) break;
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     await db.executeAtomic(
-      page.flatMap((row) =>
-        canvasSearchStatements({ id: row.id, doc: parseCanvasDoc(row.doc) }, now)
+      rebuildSearchRowsStatements(
+        page.map((row) => ({
+          itemKind: "canvas",
+          itemId: row.id,
+          bookId: null,
+          blocks: canvasBlocks(parseCanvasDoc(row.doc)),
+          updatedAt: now,
+        }))
       )
     );
     after = page[page.length - 1].rowid;
     if (page.length < PAGE_SIZE) break;
     await yieldToEventLoop();
+  }
+}
+
+/**
+ * Re-reads every item saved since the pass began. A page read before a save
+ * carries older text, and its write can land after the save's own; rewriting
+ * the saved items from the Library as it is now removes that ordering hazard.
+ * Every save in between also wrote `search_text`, so the final FTS rebuild
+ * indexes it even when this sweep did not need to.
+ */
+async function sweepSavedItems(since: number): Promise<void> {
+  const db = await getDatabase();
+  const [books, chapters, notes, canvases] = await Promise.all([
+    db.select<BookPageRow[]>(
+      `SELECT rowid, id, title, subtitle, description FROM books
+       WHERE updated_at >= ? ORDER BY rowid`,
+      [since]
+    ),
+    db.select<ChapterPageRow[]>(
+      `SELECT rowid, id, book_id, content FROM chapters
+       WHERE updated_at >= ? ORDER BY rowid`,
+      [since]
+    ),
+    db.select<NotePageRow[]>(
+      `SELECT rowid, id, book_id, content FROM notes
+       WHERE updated_at >= ? ORDER BY rowid`,
+      [since]
+    ),
+    db.select<CanvasPageRow[]>(
+      `SELECT rowid, id, doc FROM canvases
+       WHERE updated_at >= ? ORDER BY rowid`,
+      [since]
+    ),
+  ]);
+  if (books.length + chapters.length + notes.length + canvases.length === 0) return;
+
+  const now = nowSeconds();
+  await db.executeAtomic([
+    ...books.flatMap((row) =>
+      bookSearchStatements(
+        { id: row.id, title: row.title, subtitle: row.subtitle, description: row.description },
+        now
+      )
+    ),
+    ...chapters.flatMap((row) =>
+      chapterSearchStatements({ id: row.id, bookId: row.book_id, content: row.content }, now)
+    ),
+    ...notes.flatMap((row) =>
+      noteSearchStatements({ id: row.id, bookId: row.book_id, content: row.content }, now)
+    ),
+    ...canvases.flatMap((row) =>
+      canvasSearchStatements({ id: row.id, doc: parseCanvasDoc(row.doc) }, now)
+    ),
+  ]);
+}
+
+/**
+ * Best effort after a failed pass: recreate the FTS index from what the table
+ * holds, bring the triggers back, and record a stale version so the next launch
+ * starts over. If even this fails the marker stays set and the launch check
+ * answers it.
+ */
+async function closeInterruptedRebuild(): Promise<void> {
+  try {
+    const db = await getDatabase();
+    await db.executeAtomic([
+      SEARCH_FTS_REBUILD,
+      ...createSearchTriggerStatements(),
+      settingStatement(SEARCH_REBUILD_MARKER_KEY, "0"),
+      settingStatement(SEARCH_INDEX_VERSION_KEY, "0"),
+    ]);
+  } catch (error) {
+    console.warn("[search] closing an interrupted index rebuild failed:", error);
   }
 }
 
@@ -214,17 +324,40 @@ async function rebuildOnce(): Promise<void> {
   if (isTutorialLibraryActive()) return;
 
   const db = await getDatabase();
-  // Clearing first keeps a rebuild idempotent: rows for items deleted while
-  // the app was closed do not survive, and the FTS index follows the delete
-  // triggers.
-  await db.execute("DELETE FROM search_text");
+  // Anything saved from here on is re-read by the sweep at the end.
+  const startedAt = nowSeconds() - 1;
 
-  await rebuildBooks();
-  await rebuildChapters();
-  await rebuildNotes();
-  await rebuildCanvases();
+  // One batch: mark the pass, stand the FTS triggers down, empty the content
+  // table, and empty the FTS index the cheap way instead of one delete entry
+  // per row. Clearing first keeps the rebuild idempotent: rows for items
+  // deleted while the app was closed do not survive.
+  await db.executeAtomic([
+    settingStatement(SEARCH_REBUILD_MARKER_KEY, "1"),
+    ...dropSearchTriggerStatements(),
+    SEARCH_FTS_DELETE_ALL,
+    `DELETE FROM ${SEARCH_TEXT_TABLE}`,
+  ]);
 
-  await setIndexVersion(SEARCH_INDEX_VERSION);
+  try {
+    await rebuildBooks();
+    await rebuildChapters();
+    await rebuildNotes();
+    await rebuildCanvases();
+    await sweepSavedItems(startedAt);
+
+    // One batch: FTS reindexes the whole content table in one pass, the
+    // triggers come back, the marker clears, and the version says the index is
+    // current. A save lands before this batch or after it, never inside it.
+    await db.executeAtomic([
+      SEARCH_FTS_REBUILD,
+      ...createSearchTriggerStatements(),
+      settingStatement(SEARCH_REBUILD_MARKER_KEY, "0"),
+      settingStatement(SEARCH_INDEX_VERSION_KEY, String(SEARCH_INDEX_VERSION)),
+    ]);
+  } catch (error) {
+    await closeInterruptedRebuild();
+    throw error;
+  }
 }
 
 async function rebuildLoop(): Promise<void> {
@@ -263,15 +396,25 @@ export async function awaitSearchIndexRebuild(): Promise<void> {
   }
 }
 
-async function readIndexVersion(): Promise<number | null> {
+interface IndexState {
+  version: number | null;
+  /** A rebuild was interrupted before it restored the triggers. */
+  interrupted: boolean;
+}
+
+async function readIndexState(): Promise<IndexState> {
   const db = await getDatabase();
-  const rows = await db.select<{ value: string }[]>(
-    "SELECT value FROM settings WHERE key = ?",
-    [SEARCH_INDEX_VERSION_KEY]
+  const rows = await db.select<{ key: string; value: string }[]>(
+    "SELECT key, value FROM settings WHERE key IN (?, ?)",
+    [SEARCH_INDEX_VERSION_KEY, SEARCH_REBUILD_MARKER_KEY]
   );
-  if (rows.length === 0) return null;
-  const version = Number.parseInt(rows[0].value, 10);
-  return Number.isFinite(version) ? version : null;
+  const values = new Map(rows.map((row) => [row.key, row.value]));
+  const rawVersion = values.get(SEARCH_INDEX_VERSION_KEY);
+  const version = rawVersion === undefined ? Number.NaN : Number.parseInt(rawVersion, 10);
+  return {
+    version: Number.isFinite(version) ? version : null,
+    interrupted: values.get(SEARCH_REBUILD_MARKER_KEY) === "1",
+  };
 }
 
 async function countRows(sql: string): Promise<number> {
@@ -283,13 +426,15 @@ async function countRows(sql: string): Promise<number> {
 /**
  * The launch check: rebuild when the stored index version is not the current
  * one (a schema change that needs it, or the first launch after the feature
- * shipped), and when the index is empty while the Library is not.
+ * shipped), when the last pass was interrupted (its marker is still set and
+ * the triggers may have been down for saves ever since), and when the index is
+ * empty while the Library is not.
  */
 export async function ensureSearchIndex(): Promise<void> {
   if (isTutorialLibraryActive()) return;
 
-  const version = await readIndexVersion();
-  if (version !== SEARCH_INDEX_VERSION) {
+  const state = await readIndexState();
+  if (state.interrupted || state.version !== SEARCH_INDEX_VERSION) {
     await requestSearchRebuild();
     return;
   }

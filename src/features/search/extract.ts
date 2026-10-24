@@ -9,15 +9,22 @@
  */
 
 import { htmlToPlainText } from "@/components/editor/html-to-text";
+import { fastHtmlBlocks } from "@/features/search/fast-extract";
 import type { SearchBlock, SearchField } from "@/features/search/types";
 
 function toBlocks(text: string): string[] {
   return text.split(/\n{2,}/);
 }
 
-/** Editor HTML -> its non-empty blocks, in document order. */
+/**
+ * Editor HTML -> its non-empty blocks, in document order. The fast path is the
+ * one every save and the whole-index rebuild use; `htmlToPlainText()` stays the
+ * oracle for markup it does not handle (#639).
+ */
 function htmlBlocks(html: string | null | undefined): string[] {
   if (!html) return [];
+  const fast = fastHtmlBlocks(html);
+  if (fast) return fast;
   let text: string;
   try {
     text = htmlToPlainText(html);

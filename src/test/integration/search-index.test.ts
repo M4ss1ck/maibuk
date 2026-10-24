@@ -55,6 +55,8 @@ const {
   resetSearchIndexForTests,
   subscribeSearchIndexStatus,
 } = await import("@/features/search/rebuild");
+const { SEARCH_REBUILD_MARKER_KEY } = await import("@/features/search/schema");
+const { searchLibrary } = await import("@/features/search/search");
 
 interface SearchRow {
   item_kind: string;
@@ -101,6 +103,37 @@ async function ftsMatches(term: string): Promise<SearchRow[]> {
 
 function textOf(rows: SearchRow[]): string[] {
   return rows.map((row) => row.text);
+}
+
+async function triggerNames(): Promise<string[]> {
+  const rows = await db.select<{ name: string }[]>(
+    `SELECT name FROM sqlite_master
+      WHERE type = 'trigger' AND name LIKE 'search_text_%'
+      ORDER BY name`
+  );
+  return rows.map((row) => row.name);
+}
+
+async function ftsRowCount(): Promise<number> {
+  const rows = await db.select<{ count: number }[]>(
+    "SELECT COUNT(*) AS count FROM search_text_fts"
+  );
+  return rows[0]?.count ?? 0;
+}
+
+async function searchRowCount(): Promise<number> {
+  const rows = await db.select<{ count: number }[]>(
+    "SELECT COUNT(*) AS count FROM search_text"
+  );
+  return rows[0]?.count ?? 0;
+}
+
+async function setting(key: string): Promise<string | null> {
+  const rows = await db.select<{ value: string }[]>(
+    "SELECT value FROM settings WHERE key = ?",
+    [key]
+  );
+  return rows[0]?.value ?? null;
 }
 
 function createMemoryBackupAdapter(): BackupAdapter & { files: Map<string, Uint8Array> } {
@@ -661,5 +694,118 @@ describe("Library Search background rebuild", () => {
     const rows = await indexRows();
     expect(rows.some((row) => row.text === "Existing body")).toBe(true);
     expect(rows.some((row) => row.text === "First launch")).toBe(true);
+  });
+});
+
+describe("Library Search rebuild without FTS triggers (#639)", () => {
+  it("keeps a Chapter saved during the rebuild searchable", async () => {
+    const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
+    const chapter = await seedChapter(book.id, "<p>Original rebuild text</p>");
+
+    const originalSelect = db.select.bind(db);
+    let saved = false;
+    const selectSpy = vi.spyOn(db, "select").mockImplementation((async <T>(
+      sql: string,
+      params?: unknown[]
+    ): Promise<T> => {
+      // Pause the pass after the Chapters are written: the triggers are down
+      // and the FTS index is empty, so only the final 'rebuild' can pick up
+      // the save.
+      if (!saved && sql.includes("FROM notes")) {
+        saved = true;
+        const triggers = await originalSelect<{ name: string }[]>(
+          `SELECT name FROM sqlite_master
+            WHERE type = 'trigger' AND name LIKE 'search_text_%'`
+        );
+        expect(triggers).toEqual([]);
+
+        await updateChapterRow(chapter.id, { content: "<p>Saved while rebuilding</p>" }, "local");
+        const indexed = await originalSelect<{ count: number }[]>(
+          "SELECT COUNT(*) AS count FROM search_text WHERE text = ?",
+          ["Saved while rebuilding"]
+        );
+        expect(indexed[0]?.count).toBe(1);
+        const inFts = await originalSelect<SearchRow[]>(
+          `SELECT s.item_kind, s.item_id, s.book_id, s.field, s.block_index, s.text
+             FROM search_text_fts f
+             JOIN search_text s ON s.id = f.rowid
+            WHERE search_text_fts MATCH ?`,
+          ["Saved while"]
+        );
+        expect(inFts).toEqual([]);
+      }
+      return originalSelect<T>(sql, params);
+    }) as typeof db.select);
+
+    try {
+      await requestSearchRebuild();
+    } finally {
+      selectSpy.mockRestore();
+    }
+
+    expect(saved).toBe(true);
+    expect(await triggerNames()).toHaveLength(3);
+    const results = await searchLibrary(db, { query: "Saved while rebuilding" });
+    expect("results" in results).toBe(true);
+    if (!("results" in results)) return;
+    expect(results.results.map((result) => result.ids.itemId)).toContain(chapter.id);
+  });
+
+  it("restores the triggers and the index after a mid-way failure", async () => {
+    const book = await createBookRow({ title: "Midway Novel", authorName: "Author" }, "local");
+    await seedChapter(book.id, "<p>alpha midway omega</p>");
+    await createNoteRow({ title: "Midway note", content: "<p>midway note body</p>" }, "local");
+
+    const rowsBefore = await indexRows();
+    const resultsBefore = await searchLibrary(db, { query: "midway" });
+
+    const originalSelect = db.select.bind(db);
+    let thrown = false;
+    const selectSpy = vi.spyOn(db, "select").mockImplementation((async <T>(
+      sql: string,
+      params?: unknown[]
+    ): Promise<T> => {
+      if (!thrown && sql.includes("FROM notes")) {
+        thrown = true;
+        throw new Error("rebuild interrupted on purpose");
+      }
+      return originalSelect<T>(sql, params);
+    }) as typeof db.select);
+
+    try {
+      await expect(requestSearchRebuild()).rejects.toThrow("rebuild interrupted on purpose");
+    } finally {
+      selectSpy.mockRestore();
+    }
+    expect(thrown).toBe(true);
+
+    // The failed pass closed itself: the triggers are back, the FTS index
+    // matches the rows it had written, and the version says "stale".
+    expect(await triggerNames()).toHaveLength(3);
+    expect(await setting(SEARCH_REBUILD_MARKER_KEY)).toBe("0");
+    expect(await setting(SEARCH_INDEX_VERSION_KEY)).toBe("0");
+    expect(await ftsRowCount()).toBe(await searchRowCount());
+
+    // The next launch check finishes the job, and it matches incremental
+    // indexing exactly.
+    await ensureSearchIndex();
+    await awaitSearchIndexRebuild();
+
+    expect(await setting(SEARCH_INDEX_VERSION_KEY)).toBe(String(SEARCH_INDEX_VERSION));
+    expect(await indexRows()).toEqual(rowsBefore);
+    expect(await searchLibrary(db, { query: "midway" })).toEqual(resultsBefore);
+  });
+
+  it("restores the triggers and leaves FTS in step after a whole rebuild", async () => {
+    const book = await createBookRow({ title: "Rebuilt Novel", authorName: "Author" }, "local");
+    await seedChapter(book.id, "<p>The rebuilt paragraph</p>");
+
+    await requestSearchRebuild();
+
+    expect(await triggerNames()).toHaveLength(3);
+    expect(await setting(SEARCH_REBUILD_MARKER_KEY)).toBe("0");
+    expect(await ftsRowCount()).toBe(await searchRowCount());
+    expect(await ftsRowCount()).toBeGreaterThan(0);
+    await expect(ftsMatches("paragraph")).resolves.toHaveLength(1);
   });
 });

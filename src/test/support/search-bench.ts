@@ -289,6 +289,11 @@ export function searchBenchChapterHtml(
   return paragraphs.join("");
 }
 
+/** One seeded Note's HTML; the parity test checks extraction against it too. */
+export function searchBenchNoteHtml(index: number): string {
+  return searchBenchNoteContent(index);
+}
+
 function searchBenchNoteContent(index: number): string {
   const next = createRng((0x9e3779b9 ^ (index * 2654435761)) >>> 0);
   const spanish = index % 5 === 0;

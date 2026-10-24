@@ -25,6 +25,7 @@ export {
   deleteSearchChaptersStatement,
   deleteSearchItemStatement,
   noteSearchStatements,
+  rebuildSearchRowsStatements,
   replaceSearchRowsStatements,
   type SearchItemText,
 } from "@/features/search/statements";

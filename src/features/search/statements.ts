@@ -21,6 +21,51 @@ export interface SearchItemText {
   updatedAt: number;
 }
 
+/**
+ * Rows per multi-row INSERT. Each row binds seven parameters, far below
+ * SQLite's variable limit, and a page of the rebuild becomes a handful of
+ * statements instead of one per block: on the web engine every statement is a
+ * fresh prepare, and that overhead, not the data, was most of the load (#639).
+ */
+const BLOCKS_PER_INSERT = 200;
+
+/**
+ * Many items' rows in as few statements as SQLite allows. The whole-index
+ * rebuild uses this after clearing the table: `OR REPLACE` overwrites a block a
+ * save wrote mid-pass instead of failing its unique key, and the rebuild's
+ * sweep re-reads that saved item before the FTS rebuild.
+ */
+export function rebuildSearchRowsStatements(
+  items: readonly SearchItemText[]
+): AtomicStatement[] {
+  const rows: (string | number | null)[][] = [];
+  for (const item of items) {
+    for (const block of item.blocks) {
+      rows.push([
+        item.itemKind,
+        item.itemId,
+        item.bookId,
+        block.field,
+        block.blockIndex,
+        block.text,
+        item.updatedAt,
+      ]);
+    }
+  }
+
+  const statements: AtomicStatement[] = [];
+  for (let index = 0; index < rows.length; index += BLOCKS_PER_INSERT) {
+    const chunk = rows.slice(index, index + BLOCKS_PER_INSERT);
+    statements.push({
+      sql: `INSERT OR REPLACE INTO search_text
+        (item_kind, item_id, book_id, field, block_index, text, updated_at)
+        VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?, ?)").join(", ")}`,
+      params: chunk.flat(),
+    });
+  }
+  return statements;
+}
+
 /** Deletes the item's old rows, then inserts one row per block. */
 export function replaceSearchRowsStatements(item: SearchItemText): AtomicStatement[] {
   const statements: AtomicStatement[] = [
