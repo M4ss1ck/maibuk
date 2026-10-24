@@ -7,7 +7,13 @@ import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectFocusWithin, expectTabContained, tabTo } from "../support/keyboard";
 import { seedWebBackups } from "../support/storage";
-import { SEED_BOOK, SEED_CHAPTERS, SEED_NOTES, SHELF_BOOKS, PALETTE_CANVAS } from "../support/seed/names";
+import {
+  SEED_BOOK,
+  SEED_CHAPTERS,
+  SEED_NOTES,
+  SHELF_BOOKS,
+  PALETTE_CANVAS,
+} from "../support/seed/names";
 import { expect, test } from "../support/test";
 
 test.use({ library: "paletteLibrary" });
@@ -462,9 +468,7 @@ test.describe("Command Palette formatting @wf:command-palette", () => {
 });
 
 test.describe("Library Search text results @wf:command-palette-text-search @sc:global.searchLibrary @sc:common.matchCase @sc:common.wholeWord @sc:common.useRegex", () => {
-  test("the Match case, Whole word, and Regex switches reshape the Text rows", async ({
-    page,
-  }) => {
+  test("the Match case, Whole word, and Regex switches reshape the Text rows", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
@@ -472,6 +476,7 @@ test.describe("Library Search text results @wf:command-palette-text-search @sc:g
     await search(page, "FERRY");
     const textRow = section(page, "Text").getByRole("option").first();
     await expect(textRow).toContainText("ferry");
+    await capture(page, "palette-text-results");
 
     // Whole word still matches, case-insensitively: the row stays.
     await page.keyboard.press("Alt+w");
@@ -515,6 +520,7 @@ test.describe("Library Search text results @wf:command-palette-text-search @sc:g
     const find = page.getByPlaceholder("Find...");
     await expect(find).toHaveValue("ferry");
     await expect(page.getByText("1 of 2")).toBeVisible();
+    await capture(page, "find-replace-handoff");
 
     await expect(find).toBeFocused();
     await page.keyboard.press("Enter");

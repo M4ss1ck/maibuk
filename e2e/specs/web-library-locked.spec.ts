@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { BACKUPS_BOOK } from "../support/seed/backups-present";
 import { expect, test } from "../support/test";
 
@@ -14,7 +15,10 @@ const lockedTitle = (page: Page) =>
   page.getByRole("heading", { name: "Maibuk is open in another tab" });
 const booksHeading = (page: Page) => page.getByRole("heading", { name: "My Books", level: 1 });
 const seededBook = (page: Page) =>
-  page.getByRole("grid", { name: "Books" }).getByRole("row").filter({ hasText: BACKUPS_BOOK.title });
+  page
+    .getByRole("grid", { name: "Books" })
+    .getByRole("row")
+    .filter({ hasText: BACKUPS_BOOK.title });
 
 test.describe("another tab holds the Library @wf:web-library-locked", () => {
   test("the second tab shows the locked screen and never opens the Library", async ({ page }) => {
@@ -29,6 +33,7 @@ test.describe("another tab holds the Library @wf:web-library-locked", () => {
     await second.goto("/");
 
     await expect(lockedTitle(second)).toBeVisible();
+    await capture(second, "web-library-locked");
     const retry = second.getByRole("button", { name: "Try again" });
     await expect(retry).toBeFocused();
     // The Library was never opened in this tab.
