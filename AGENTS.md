@@ -72,10 +72,6 @@ pnpm plugin:check <path>  # Plugin tooling for a Plugin in its own repo (plugins
 
 Every other script is in `package.json`; each measurement lane (`bench:*`, `conformance:*`, `screenshots`, `test:e2e:sync`) is documented beside the tool it measures, in `docs/agents/utilities-and-components.md` or `e2e/README.md`.
 
-<!-- headroom:rtk-instructions -->
-Prefix shell commands with `rtk` (`rtk git status`, `rtk pnpm test:run`) to cut output tokens; it passes unfiltered commands through unchanged. Prefix each segment of a chain. Run the raw command when debugging; `rtk proxy <cmd>` runs it unfiltered but tracked.
-<!-- /headroom:rtk-instructions -->
-
 ## Updating AGENTS.md
 
 This file has a 2,000-word budget, checked in CI (`scripts/agents-word-budget.mjs`). Reference material goes behind a pointer, not in here:
