@@ -6,6 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { createReadStream, statSync } from "node:fs";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { version } from "./package.json";
+import { DEP_EXCLUDE, DEP_SCAN_ENTRIES, devWatchIgnored } from "./scripts/dev-server.mjs";
 import { startupScreenPlugin } from "./scripts/startup-screen.mjs";
 import { TEST_TIMEOUT_MS } from "./src/test/time-budget";
 
@@ -131,6 +132,20 @@ function quickJsRunnerWorkerBundle(): Plugin {
   };
 }
 
+// Shared by both dev lanes. `watch` keeps the watcher to what the app imports
+// (scripts/dev-server.mjs). `warmup` transforms the app's static module graph
+// as soon as the server starts, while `tauri dev` is still compiling Rust or
+// before the browser tab opens: the first page load drops from about 5.5s to
+// 2.7s once the warmup has finished. Vitest reuses this config and its watch
+// mode runs on the same watcher, which has to keep seeing `plugins/` and
+// `templates/` tests, so neither applies under Vitest.
+const devServer = process.env.VITEST
+  ? {}
+  : {
+      watch: { ignored: devWatchIgnored(__dirname) },
+      warmup: { clientFiles: ["./src/main.tsx"] },
+    };
+
 // Cross-origin isolation for threaded Dictation (SharedArrayBuffer). Matches
 // public/_headers in production; the E2E suite runs against `vite preview`, so
 // it inherits isolation from the `preview` block too.
@@ -161,6 +176,11 @@ export default defineConfig(() => ({
         replacement: resolve(__dirname, "vendor/moonshine/wasm/dist/$1"),
       },
     ],
+  },
+  // Pre-bundle what Workers import at startup, not mid-session (scripts/dev-server.mjs).
+  optimizeDeps: {
+    entries: DEP_SCAN_ENTRIES,
+    exclude: DEP_EXCLUDE,
   },
   worker: {
     format: "es" as const,
@@ -542,6 +562,7 @@ export default defineConfig(() => ({
   ...(isWeb
     ? {
         server: {
+          ...devServer,
           headers: isolation,
         },
       }
@@ -561,10 +582,8 @@ export default defineConfig(() => ({
                 port: 1421,
               }
             : undefined,
-          watch: {
-            // 3. tell Vite to ignore watching `src-tauri`
-            ignored: ["**/src-tauri/**"],
-          },
+          // 3. watch neither `src-tauri` nor anything else outside the app
+          ...devServer,
           headers: isolation,
         },
       }),
