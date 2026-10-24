@@ -33,8 +33,15 @@ export interface SearchLibraryOptions {
   /** Restricts results to these kinds. Absent means every kind. */
   kinds?: readonly SearchItemKind[];
   /**
+   * Restricts results to the rows of one Book: that Book's own fields plus
+   * the Chapters and Notes filed under it. Canvases and Unfiled Notes never
+   * match. Absent means every Book.
+   */
+  bookId?: string;
+  /**
    * The Book open behind the palette. It never filters: it only breaks a tie
    * after title, match count, and recency, so the author's current Book wins.
+   * When a Book filter is set without an open Book, the filter is the tiebreak.
    */
   openBookId?: string | null;
   limit?: number;

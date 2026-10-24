@@ -94,25 +94,42 @@ function ftsPhrase(query: string): string {
 
 async function scanRows(
   db: DatabaseAdapter,
-  kinds: readonly SearchItemKind[] | undefined
+  kinds: readonly SearchItemKind[] | undefined,
+  bookId: string | undefined
 ): Promise<IndexRow[]> {
-  const where = kinds ? `WHERE item_kind IN (${placeholders(kinds.length)})` : "";
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  if (kinds) {
+    conditions.push(`item_kind IN (${placeholders(kinds.length)})`);
+    params.push(...kinds);
+  }
+  if (bookId !== undefined) {
+    conditions.push("book_id = ?");
+    params.push(bookId);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const sql = `SELECT ${ROW_COLUMNS} FROM search_text ${where} ORDER BY id`;
-  return db.select<IndexRow[]>(sql, kinds ? [...kinds] : undefined);
+  return db.select<IndexRow[]>(sql, params.length > 0 ? params : undefined);
 }
 
 async function indexedRows(
   db: DatabaseAdapter,
   query: string,
-  kinds: readonly SearchItemKind[] | undefined
+  kinds: readonly SearchItemKind[] | undefined,
+  bookId: string | undefined
 ): Promise<IndexRow[]> {
   const kindWhere = kinds ? `AND s.item_kind IN (${placeholders(kinds.length)})` : "";
+  const bookWhere = bookId !== undefined ? "AND s.book_id = ?" : "";
   const sql = `SELECT s.id, s.item_kind, s.item_id, s.book_id, s.field, s.block_index, s.text, s.updated_at
     FROM search_text_fts f
     JOIN search_text s ON s.id = f.rowid
-    WHERE search_text_fts MATCH ? ${kindWhere}
+    WHERE search_text_fts MATCH ? ${kindWhere} ${bookWhere}
     ORDER BY s.id`;
-  return db.select<IndexRow[]>(sql, [ftsPhrase(query), ...(kinds ?? [])]);
+  return db.select<IndexRow[]>(sql, [
+    ftsPhrase(query),
+    ...(kinds ?? []),
+    ...(bookId !== undefined ? [bookId] : []),
+  ]);
 }
 
 /** Groups matching blocks into one item each, keeping the best block. */
@@ -348,8 +365,8 @@ export async function searchLibrary(
 
   const useIndex = !options.regex && options.query.length >= INDEX_MIN_CHARS;
   const rows = useIndex
-    ? await indexedRows(db, options.query, options.kinds)
-    : await scanRows(db, options.kinds);
+    ? await indexedRows(db, options.query, options.kinds, options.bookId)
+    : await scanRows(db, options.kinds, options.bookId);
 
   const ranked = rankMatches(
     groupMatches(
@@ -362,7 +379,7 @@ export async function searchLibrary(
       },
       regex
     ),
-    options.openBookId
+    options.openBookId ?? options.bookId
   );
 
   const limit = Math.max(1, options.limit ?? DEFAULT_SEARCH_LIMIT);

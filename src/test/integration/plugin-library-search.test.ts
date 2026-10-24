@@ -347,6 +347,51 @@ describe("library.search through the broker (#641)", () => {
     }
   });
 
+  it("pages a Book filter with limit 1 without duplicates", async () => {
+    const first = await createBookRow({ title: "First", authorName: "Author" }, "local");
+    const second = await createBookRow({ title: "Second", authorName: "Author" }, "local");
+    for (let index = 0; index < 3; index += 1) {
+      await createNoteRow(
+        { title: `First ${index}`, bookId: first.id, content: "<p>paged common</p>" },
+        "local"
+      );
+    }
+    for (let index = 0; index < 2; index += 1) {
+      await createNoteRow(
+        { title: `Second ${index}`, bookId: second.id, content: "<p>paged common</p>" },
+        "local"
+      );
+    }
+
+    const { client, close } = connectLibraryWritePlugin({ granted: ["library:read"] });
+    try {
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      for (;;) {
+        const page = await client.library.search({
+          query: "paged",
+          bookId: first.id,
+          limit: 1,
+          ...(cursor === undefined ? {} : { cursor }),
+        });
+        resultsOf(page);
+        expect(page.results.length).toBeLessThanOrEqual(1);
+        for (const row of page.results) {
+          if (row.kind !== "note") throw new Error("expected only notes");
+          expect(row.bookId).toBe(first.id);
+          seen.push(row.noteId);
+        }
+        if (page.nextCursor === undefined) break;
+        cursor = page.nextCursor;
+      }
+
+      expect(seen).toHaveLength(3);
+      expect(new Set(seen).size).toBe(3);
+    } finally {
+      close();
+    }
+  });
+
   it("refuses without the read-Library Plugin Permission, like the other reads", async () => {
     const { client, close } = connectLibraryWritePlugin({ granted: [] });
     try {

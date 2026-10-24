@@ -328,6 +328,43 @@ describe("searchLibrary filters and paging", () => {
     expect(found.results.map((result) => result.ids.itemId)).toEqual([note.id]);
   });
 
+  it("filters by Book on both the index and scan paths", async () => {
+    const first = await createBookRow(
+      { title: "First", subtitle: "A harbour tale", authorName: "Author" },
+      "local"
+    );
+    const second = await createBookRow({ title: "Second", authorName: "Author" }, "local");
+    await seedChapter(first.id, "<p>harbour light</p>");
+    await seedChapter(second.id, "<p>harbour light</p>");
+
+    const indexedRecorder = recordingAdapter();
+    const indexed = resultsOf(
+      await searchLibrary(indexedRecorder.db, { query: "harbour", bookId: first.id })
+    );
+    expect(indexedRecorder.queries.some((sql) => sql.includes("MATCH"))).toBe(true);
+    expect(indexed.results.length).toBeGreaterThan(0);
+    for (const result of indexed.results) {
+      const inBook =
+        result.ids.bookId === first.id ||
+        (result.kind === "book" && result.ids.itemId === first.id);
+      expect(inBook).toBe(true);
+    }
+    expect(indexed.results.some((result) => result.kind === "book")).toBe(true);
+    expect(indexed.results.some((result) => result.kind === "chapter")).toBe(true);
+
+    const scanRecorder = recordingAdapter();
+    const scanned = resultsOf(
+      await searchLibrary(scanRecorder.db, {
+        query: "ha",
+        kinds: ["chapter"],
+        bookId: first.id,
+      })
+    );
+    expect(scanRecorder.queries.some((sql) => sql.includes("MATCH"))).toBe(false);
+    expect(scanned.results).toHaveLength(1);
+    expect(scanned.results[0].ids.bookId).toBe(first.id);
+  });
+
   it("pages with a cursor without repeating a result", async () => {
     const notes = [];
     for (let index = 0; index < 5; index += 1) {

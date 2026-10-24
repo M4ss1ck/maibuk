@@ -260,74 +260,34 @@ function toPluginSearchResult(result: SearchResult): PluginSearchResult {
   }
 }
 
-/** Whether a search hit belongs to the filtered Book. Canvases carry no Book. */
-function matchesSearchBook(result: SearchResult, bookId: string): boolean {
-  switch (result.kind) {
-    case "book":
-      return result.ids.itemId === bookId;
-    case "chapter":
-    case "note":
-      return result.ids.bookId === bookId;
-    case "canvas":
-      return false;
-  }
-}
-
 /**
  * Searches the Library's text for the `library.search` row (#641): the same
  * query and switches as Library Search, through its one public function, with
  * item references the matching `library.*.get` call takes. An invalid Regex
  * comes back as the search module's error result, never a host throw. A
- * `bookId` filter is applied over consecutive search pages, each fetched for
- * exactly the remaining slots so a page never skips a hit it already read: a
- * filtered page may hold fewer than `limit` results, and the Plugin follows
- * `nextCursor` until it is absent.
+ * `bookId` filter is applied inside Library Search, so the page and its
+ * `nextCursor` already cover only that Book's items.
  */
 export async function searchPluginLibrary(
   input: PluginApiInput<"library.search">
 ): Promise<PluginApiOutput<"library.search">> {
   const db = await getDatabase();
   const limit = input.limit ?? DEFAULT_SEARCH_LIMIT;
-  const options = {
+  const result = await searchLibrary(db, {
     query: input.query,
     matchCase: input.matchCase ?? false,
     wholeWord: input.wholeWord ?? false,
     regex: input.regex ?? false,
     ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
+    ...(input.bookId === undefined ? {} : { bookId: input.bookId }),
     limit,
+    cursor: input.cursor ?? undefined,
+  });
+  if ("error" in result) return result;
+  return {
+    results: result.results.map(toPluginSearchResult),
+    ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
   };
-
-  if (input.bookId === undefined) {
-    const result = await searchLibrary(db, { ...options, cursor: input.cursor ?? undefined });
-    if ("error" in result) return result;
-    return {
-      results: result.results.map(toPluginSearchResult),
-      ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
-    };
-  }
-
-  const bookId = input.bookId;
-  const collected: PluginSearchResult[] = [];
-  let cursor = input.cursor ?? undefined;
-  for (;;) {
-    const page = await searchLibrary(db, { ...options, limit: limit - collected.length, cursor });
-    if ("error" in page) return page;
-    for (const item of page.results) {
-      if (matchesSearchBook(item, bookId)) collected.push(toPluginSearchResult(item));
-      if (collected.length >= limit) break;
-    }
-    // Every hit of the fetched page is either returned or discarded as
-    // another Book's, so resuming after the page skips nothing.
-    if (collected.length >= limit || page.nextCursor === undefined) {
-      return {
-        results: collected,
-        ...(collected.length >= limit && page.nextCursor !== undefined
-          ? { nextCursor: page.nextCursor }
-          : {}),
-      };
-    }
-    cursor = page.nextCursor;
-  }
 }
 
 // Library writes (#452). A fragment is plain text or an HTML fragment the host
