@@ -337,6 +337,10 @@ describe("Shortcut Editor", () => {
     expect(document.activeElement).toHaveTextContent("shortcutEditor.resetAll");
     await user.keyboard("{Enter}");
     expect(custom()).toEqual({});
+    // Nothing is left to reset, so Reset all is disabled and cannot take focus
+    // back; it lands on search instead of falling to <body>.
+    expect(resetAll).toBeDisabled();
+    expect(screen.getByRole("searchbox")).toHaveFocus();
   });
 
   it("turns single-key Shortcuts off from the switch", async () => {

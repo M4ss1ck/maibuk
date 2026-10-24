@@ -789,6 +789,8 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
         isOpen={confirmResetAll}
         onClose={() => setConfirmResetAll(false)}
         title={t("shortcutEditor.resetAllTitle")}
+        // Once everything is reset, Reset all is disabled and cannot take focus back.
+        restoreFocusTarget={() => (customizedCount > 0 ? null : searchRef.current)}
         footer={
           <>
             <Button variant="secondary" onClick={() => setConfirmResetAll(false)}>

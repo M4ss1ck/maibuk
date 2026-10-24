@@ -6,7 +6,8 @@ import { useEffect, useRef } from "react";
  * belongs to a control other than the opener (a dialog opened from another
  * dialog, whose opener is already gone): the target wins when it returns one.
  * `getTarget` is read again on close when the element it first returned is
- * gone, so an action that removes its own row can name the row that survived.
+ * gone or disabled, so an action that removes its own row can name the row
+ * that survived.
  *
  * The restore runs in a passive effect on purpose. A modal hides the rest of
  * the page while open and lifts that in a passive-effect cleanup; a
@@ -15,6 +16,11 @@ import { useEffect, useRef } from "react";
  * unmount while open also lifts it first. jsdom has no `inert`;
  * e2e/specs/books-create.spec.ts proves the timing in real browsers.
  */
+/** A disabled control ignores `focus()`, which would strand focus on <body>. */
+function canTakeFocus(target: HTMLElement | null): target is HTMLElement {
+  return !!target?.isConnected && target !== document.body && !target.matches(":disabled");
+}
+
 export function useRestoreFocus(
   isOpen: boolean,
   {
@@ -47,14 +53,15 @@ export function useRestoreFocus(
       return;
     }
     openedRef.current = false;
-    // A dialog whose action removed the element captured on open resolves its
-    // target again, so deleting a Note lands focus on the row that survived.
+    // A dialog whose action removed or disabled the element captured on open
+    // resolves its target again, so deleting a Note lands focus on the row
+    // that survived, and Reset all, with nothing left to reset, on search.
     let target = targetRef.current;
-    if ((!target || !target.isConnected || target === document.body) && getTargetRef.current) {
+    if (!canTakeFocus(target) && getTargetRef.current) {
       target = getTargetRef.current();
     }
     targetRef.current = null;
-    if (!target?.isConnected || target === document.body) return;
+    if (!canTakeFocus(target)) return;
     // Another dialog took focus meanwhile; leave it there.
     if (skipRef.current && document.activeElement?.closest?.('[role="dialog"]')) return;
     // The page did not move under the overlay, so neither should focus.
