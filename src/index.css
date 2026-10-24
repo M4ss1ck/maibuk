@@ -1,4 +1,7 @@
-@import "tailwindcss";
+/* Classes come from src/ only: scanning the whole repo made every edit under
+   e2e/ or docs/ rebuild this stylesheet in dev, and leaked theme tokens that
+   only Markdown mentions into the build. */
+@import "tailwindcss" source(".");
 
 @theme {
   /* Semantic colors for light mode (default) */
