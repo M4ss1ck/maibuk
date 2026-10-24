@@ -5,6 +5,29 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-10-24
+
+### Added
+- Búsqueda de la Biblioteca en toda la Biblioteca, con fragmentos, recuentos de resultados y estado de indexación
+- Modo comandos en la paleta de comandos, abierto con `>` y Búsqueda de la Biblioteca sin prefijo
+- Opciones Coincidir mayúsculas y minúsculas, Palabra completa y Regex dentro del campo de Búsqueda de la Biblioteca
+- Abrir un resultado de la Búsqueda de la Biblioteca en su primera coincidencia en Buscar y Reemplazar, o abrir el Canvas de la nota desde su tarjeta
+- Un método `library.search` de la API de complementos y una herramienta `search_library` de MCP
+- Notas de la versión en todos los idiomas de la aplicación, con el idioma del autor como respaldo para las versiones más recientes
+
+### Changed
+- La Biblioteca web funciona con SQLite WASM sobre OPFS para un almacenamiento y una búsqueda más fiables
+- La Búsqueda de la Biblioteca y Buscar y Reemplazar ignoran los acentos
+
+### Fixed
+- La Biblioteca web carga el WASM de sql.js incluido en lugar de un CDN, lo que evita errores de enlace
+- La Biblioteca de tutoriales se abre correctamente cuando se carga el código de exportación a EPUB
+- La Biblioteca de escritorio se abre con el índice de búsqueda FTS5 habilitado
+- Restablecer todo en el Editor de atajos devuelve el foco al campo de búsqueda
+- Arrastrar una nota mientras la lista está ordenada ya no la quita de la barra lateral
+- Una consulta de Búsqueda de la Biblioteca introducida durante la reconstrucción del índice se vuelve a ejecutar cuando finaliza la indexación
+- Filtrar por Libro en la Búsqueda de la Biblioteca de complementos devuelve páginas exactas
+
 ## [0.15.2] - 2026-10-23
 
 ### Changed
