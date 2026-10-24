@@ -21,7 +21,7 @@ import { capture } from "../support/capture";
 import { readClipboard } from "../support/clipboard";
 import { dispatchEndpoint, setEndpointAddress } from "../support/endpoint";
 import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
-import { runPaletteCommand } from "../support/palette";
+import { expectActiveOption, runPaletteCommand } from "../support/palette";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -378,10 +378,13 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
 
     // The whole Library change is visible: the Chapter opens with the text the
     // Agent appended, after the text the seed gave it.
+    // F1 opens Commands mode with `>` typed; replacing it searches the Library.
     const dialog = await openPalette(page);
+    await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.type(CHAPTER);
     const option = dialog.getByRole("option", { name: new RegExp(CHAPTER) }).first();
     await expect(option).toBeVisible();
+    await expectActiveOption(dialog, option);
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/book\/[^/]+$/);
     const chapterText = page.getByRole("textbox", { name: `Text of ${CHAPTER}` });

@@ -30,10 +30,15 @@ export async function selectPaletteCommand(
   await page.keyboard.type(`>${label}`);
   const option = dialog.getByRole("option", { name: label, exact: true });
   await expect(option).toBeVisible({ timeout: options.timeout });
-  const id = await option.getAttribute("id");
-  expect(id, `the "${label}" option has no id to be the active descendant`).toBeTruthy();
-  await expect(dialog.getByRole("searchbox")).toHaveAttribute("aria-activedescendant", id!);
+  await expectActiveOption(dialog, option);
   return option;
+}
+
+/** Waits until `option` is the palette's active result, the row Enter acts on. */
+export async function expectActiveOption(dialog: Locator, option: Locator): Promise<void> {
+  const id = await option.getAttribute("id");
+  expect(id, "the option has no id to be the active descendant").toBeTruthy();
+  await expect(dialog.getByRole("searchbox")).toHaveAttribute("aria-activedescendant", id!);
 }
 
 /** Opens the palette with F1, runs the Command named `label`, and waits for it to close. */
