@@ -220,6 +220,9 @@ const { useBoundShortcutStore } = await import("@/lib/bound-shortcuts");
 const { useModalStore } = await import("@/components/ui/modal-store");
 const { useCommandPaletteStore } = await import("@/features/command-palette/store");
 const { useCommandPaletteRecentStore } = await import("@/features/command-palette/recent-store");
+const { useSearchSwitchesStore, SEARCH_SWITCHES_STORAGE_KEY } = await import(
+  "@/features/search/switches"
+);
 const { DEFAULT_SHORTCUT_SETTINGS } = await import("@/lib/shortcut-resolve");
 const { resetSyncEngineForTests } = await import("@/features/sync/sync-engine");
 const { resetAutoSyncForTests } = await import("@/features/sync/auto-sync");
@@ -370,6 +373,7 @@ beforeEach(async () => {
   useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
   useCommandPaletteStore.setState({ isOpen: false, opener: null, snapshot: new Map() });
   useCommandPaletteRecentStore.setState({ keys: [] });
+  useSearchSwitchesStore.setState({ matchCase: false, wholeWord: false, regex: false });
   useSettingsRevealStore.setState({
     pendingRowId: null,
     advancedOpen: false,
@@ -1447,6 +1451,159 @@ describe("Command Palette modes", () => {
       expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull()
     );
     expect(sectionOptions(dialog, "Suggested").length).toBeGreaterThan(0);
+  });
+});
+
+describe("Command Palette search switches", () => {
+  const MATCH_CASE = "Match Case";
+  const WHOLE_WORD = "Match Whole Word";
+  const REGEX = "Use Regular Expression";
+
+  function switchButton(dialog: HTMLElement, name: string): HTMLElement {
+    return within(dialog).getByRole("button", { name });
+  }
+
+  const switches = () => useSearchSwitchesStore.getState();
+
+  it("shows its three switches in Library Search only", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    // Commands mode stays plain.
+    let dialog = await openPaletteWithF1(user);
+    for (const name of [MATCH_CASE, WHOLE_WORD, REGEX]) {
+      expect(within(dialog).queryByRole("button", { name })).toBeNull();
+    }
+    // Its switch keys are inert there: no invisible state to flip.
+    await user.keyboard("{Alt>}c{/Alt}");
+    expect(switches().matchCase).toBe(false);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
+
+    dialog = await openLibrarySearch(user);
+    for (const name of [MATCH_CASE, WHOLE_WORD, REGEX]) {
+      expect(switchButton(dialog, name)).toBeVisible();
+    }
+  });
+
+  it("toggles each switch with Alt+C, Alt+W and Alt+R and keeps the typed query", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    const search = paletteSearch(dialog);
+    await user.keyboard("Cat");
+    expect(search).toHaveValue("Cat");
+
+    await user.keyboard("{Alt>}c{/Alt}");
+    await waitFor(() => expect(switches().matchCase).toBe(true));
+    await user.keyboard("{Alt>}w{/Alt}");
+    await waitFor(() => expect(switches().wholeWord).toBe(true));
+    await user.keyboard("{Alt>}r{/Alt}");
+    await waitFor(() => expect(switches().regex).toBe(true));
+
+    // The switch keys are not typed into the field.
+    expect(search).toHaveValue("Cat");
+  });
+
+  it("flips a switch back with its own key", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    await openLibrarySearch(user);
+    await user.keyboard("{Alt>}c{/Alt}");
+    await waitFor(() => expect(switches().matchCase).toBe(true));
+
+    await user.keyboard("{Alt>}c{/Alt}");
+    await waitFor(() => expect(switches().matchCase).toBe(false));
+  });
+
+  it("toggles from a press, so the switches work without a keyboard", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    await user.click(switchButton(dialog, WHOLE_WORD));
+    await waitFor(() => expect(switches().wholeWord).toBe(true));
+
+    await user.click(switchButton(dialog, WHOLE_WORD));
+    await waitFor(() => expect(switches().wholeWord).toBe(false));
+  });
+
+  it("shows each Shortcut while the field is empty and hides it once the author types", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    const dialog = await openLibrarySearch(user);
+    for (const name of [MATCH_CASE, WHOLE_WORD, REGEX]) {
+      expect(switchButton(dialog, name).textContent ?? "").toContain("Alt");
+    }
+
+    await user.keyboard("a");
+    for (const name of [MATCH_CASE, WHOLE_WORD, REGEX]) {
+      expect(switchButton(dialog, name).textContent ?? "").not.toContain("Alt");
+    }
+  });
+
+  it("remembers the switches when the palette reopens", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    let dialog = await openLibrarySearch(user);
+    await user.keyboard("{Alt>}c{/Alt}");
+    await waitFor(() => expect(switches().matchCase).toBe(true));
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
+
+    dialog = await openLibrarySearch(user);
+    expect(switches().matchCase).toBe(true);
+    // The reopened palette's buttons still carry the state.
+    expect(switchButton(dialog, MATCH_CASE)).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("keeps the switches across a simulated reload from this device's storage", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    await settleOn("/");
+
+    await openLibrarySearch(user);
+    await user.keyboard("{Alt>}w{/Alt}");
+    await waitFor(() => expect(switches().wholeWord).toBe(true));
+    await user.keyboard("{Escape}");
+
+    const saved = localStorage.getItem(SEARCH_SWITCHES_STORAGE_KEY) ?? "";
+    expect(saved).not.toBe("");
+
+    // A reload starts from the defaults and reads the device's blob back.
+    useSearchSwitchesStore.setState({ matchCase: false, wholeWord: false, regex: false });
+    localStorage.setItem(SEARCH_SWITCHES_STORAGE_KEY, saved);
+    await useSearchSwitchesStore.persist.rehydrate();
+    expect(switches().wholeWord).toBe(true);
+
+    const dialog = await openLibrarySearch(user);
+    expect(switchButton(dialog, WHOLE_WORD)).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("flips the same switches from the Notes editor, with no palette open", async () => {
+    const note = await createNoteRow({ title: "Switch Note", bookId: null }, "local");
+    const user = userEvent.setup();
+    renderApp(`/notes/${note.id}`);
+    await settleOn(`/notes/${note.id}`);
+
+    await user.keyboard("{Alt>}c{/Alt}");
+    await waitFor(() => expect(switches().matchCase).toBe(true));
+
+    await user.keyboard("{Alt>}w{/Alt}");
+    await waitFor(() => expect(switches().wholeWord).toBe(true));
+
+    await user.keyboard("{Alt>}r{/Alt}");
+    await waitFor(() => expect(switches().regex).toBe(true));
   });
 });
 

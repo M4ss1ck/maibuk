@@ -25,9 +25,11 @@ import {
   findMatches,
   type SearchMatch,
 } from "@/components/editor/extensions/SearchReplace";
+import { useSearchSwitchesStore } from "@/features/search/switches";
 import { Tooltip, TooltipGroup } from "@/components/ui";
 import type { CommandId } from "@/lib/shortcut-registry";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import { useShortcuts } from "@/lib/shortcuts";
 
 interface FindReplaceProps {
   editor: Editor;
@@ -78,9 +80,23 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
 
   const [searchTerm, setSearchTerm] = useState("");
   const [replaceTerm, setReplaceTerm] = useState("");
-  const [caseSensitive, setCaseSensitive] = useState(false);
-  const [wholeWord, setWholeWord] = useState(false);
-  const [regex, setRegex] = useState(false);
+  // The switches live in the shared store with Library Search, so toggling
+  // here changes the palette's search and vice versa. The query and the
+  // replacement stay local to this panel.
+  const caseSensitive = useSearchSwitchesStore((state) => state.matchCase);
+  const wholeWord = useSearchSwitchesStore((state) => state.wholeWord);
+  const regex = useSearchSwitchesStore((state) => state.regex);
+  const toggleMatchCase = useSearchSwitchesStore((state) => state.toggleMatchCase);
+  const toggleWholeWord = useSearchSwitchesStore((state) => state.toggleWholeWord);
+  const toggleRegex = useSearchSwitchesStore((state) => state.toggleRegex);
+  useShortcuts(
+    [
+      { id: "common.matchCase", allowInInput: true, onTrigger: toggleMatchCase },
+      { id: "common.wholeWord", allowInInput: true, onTrigger: toggleWholeWord },
+      { id: "common.useRegex", allowInInput: true, onTrigger: toggleRegex },
+    ],
+    { enabled: isOpen }
+  );
   const [matches, setMatches] = useState<SearchMatch[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [regexError, setRegexError] = useState(false);
@@ -196,8 +212,9 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
     editor.commands.setSearchHighlights({ matches, activeIndex });
   }, [isOpen, editor, matches, activeIndex]);
 
-  // Clear highlights when the panel closes, but preserve the search criteria
-  // (query, replacement and toggles) so they are restored on reopen.
+  // Clear highlights when the panel closes. The query and the replacement
+  // stay local so they are restored on reopen; the switches live in the
+  // shared store, so they survive the panel too.
   useEffect(() => {
     if (isOpen) return;
     editor.commands.clearSearchHighlights();
@@ -345,22 +362,25 @@ export function FindReplace({ editor, isOpen, onClose, focusSignal = 0 }: FindRe
             <div className="absolute inset-y-0 right-1 flex items-center gap-0.5">
               <IconButton
                 active={caseSensitive}
-                onClick={() => setCaseSensitive((v) => !v)}
+                onClick={toggleMatchCase}
                 label={t("editor.matchCase")}
+                shortcut="common.matchCase"
               >
                 <CaseSensitive className="h-4 w-4" />
               </IconButton>
               <IconButton
                 active={wholeWord}
-                onClick={() => setWholeWord((v) => !v)}
+                onClick={toggleWholeWord}
                 label={t("editor.matchWholeWord")}
+                shortcut="common.wholeWord"
               >
                 <WholeWord className="h-4 w-4" />
               </IconButton>
               <IconButton
                 active={regex}
-                onClick={() => setRegex((v) => !v)}
+                onClick={toggleRegex}
                 label={t("editor.useRegex")}
+                shortcut="common.useRegex"
               >
                 <Regex className="h-4 w-4" />
               </IconButton>

@@ -30,6 +30,7 @@ import { openExternal } from "@/lib/platform";
 import { isModKey } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import { useSearchSwitchesStore } from "@/features/search/switches";
 import { ChevronDown, ChevronUp, Settings2 } from "lucide-react";
 
 interface EditorToolbarProps {
@@ -209,6 +210,21 @@ export function EditorToolbar({
       id: "common.find",
       allowInInput: true,
       onTrigger: openFindReplace,
+    },
+    // The shared search switches, without the panel's inputs: typing in the
+    // Chapter or Note text keeps the platform keys (Option+C still types ç),
+    // while the open Find and Replace panel takes them in its own inputs.
+    {
+      id: "common.matchCase",
+      onTrigger: () => useSearchSwitchesStore.getState().toggleMatchCase(),
+    },
+    {
+      id: "common.wholeWord",
+      onTrigger: () => useSearchSwitchesStore.getState().toggleWholeWord(),
+    },
+    {
+      id: "common.useRegex",
+      onTrigger: () => useSearchSwitchesStore.getState().toggleRegex(),
     },
     {
       id: "editor.dictionary",

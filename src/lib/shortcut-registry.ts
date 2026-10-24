@@ -470,6 +470,26 @@ export const COMMANDS = {
     defaults: [["Mod+f"]],
     voice: { phrases: { en: ["find text"], es: ["buscar texto"] } },
   },
+  // The Library Search and Find and Replace switches: one shared state, so
+  // the palette field, the editor panel, and the Notes Gallery stay in
+  // agreement. The voice phrases come from the labels (ADR 0016). Like
+  // `commandPalette.removeRecent` they carry the palette Context for the
+  // field's own keys, so Commands mode leaves its list plain.
+  "common.matchCase": {
+    labelKey: "editor.matchCase",
+    contexts: ["commandPalette", "editor", "notes"],
+    defaults: [["Alt+c"]],
+  },
+  "common.wholeWord": {
+    labelKey: "editor.matchWholeWord",
+    contexts: ["commandPalette", "editor", "notes"],
+    defaults: [["Alt+w"]],
+  },
+  "common.useRegex": {
+    labelKey: "editor.useRegex",
+    contexts: ["commandPalette", "editor", "notes"],
+    defaults: [["Alt+r"]],
+  },
 
   "bookList.newBook": {
     labelKey: "shortcuts.newBook",

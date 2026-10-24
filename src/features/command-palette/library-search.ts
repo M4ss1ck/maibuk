@@ -13,6 +13,14 @@ export interface SearchLibraryOptions {
   page: PalettePage;
   recent: readonly string[];
   openBookId?: string | null;
+  /**
+   * The shared search switches, read from the switches store by the caller.
+   * Title ranking ignores them; the Text section reads them (unit 2), so the
+   * palette and Find and Replace count the same matches.
+   */
+  matchCase?: boolean;
+  wholeWord?: boolean;
+  regex?: boolean;
 }
 
 /**

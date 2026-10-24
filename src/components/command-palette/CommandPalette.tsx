@@ -23,9 +23,10 @@ import {
   ListLayout,
   SearchField,
   Text,
+  ToggleButton,
   Virtualizer,
 } from "react-aria-components";
-import { NotebookPen, Workflow, X } from "lucide-react";
+import { NotebookPen, Workflow, X, CaseSensitive, Regex, WholeWord } from "lucide-react";
 import { ChapterIcon, ProjectsIcon, SettingsIcon } from "@/components/icons";
 import { Modal } from "@/components/ui/Modal";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
@@ -59,10 +60,11 @@ import type { SettingsRowId } from "@/components/settings/settings-sections";
 import { focusSettingsRow } from "@/features/settings/focus-row";
 import { currentSettingsPlatform } from "@/features/settings/rows";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
+import { useSearchSwitchesStore } from "@/features/search/switches";
 import { normalizeLanguage } from "@/features/settings/types";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
-import { useCommandKeys } from "@/lib/command-keys";
+import { pressRunsCommand, useCommandKeys } from "@/lib/command-keys";
 import { commandState, runCommand } from "@/lib/command-runner";
 import { isMac } from "@/lib/platform/detect";
 import { formatShortcut } from "@/lib/shortcut-keys";
@@ -114,6 +116,9 @@ function OpenCommandPalette() {
   const layoutOptions = coarsePointer ? COARSE_POINTER_LAYOUT : FINE_POINTER_LAYOUT;
   const close = useCommandPaletteStore((state) => state.close);
   const snapshot = useCommandPaletteStore((state) => state.snapshot);
+  const toggleMatchCase = useSearchSwitchesStore((state) => state.toggleMatchCase);
+  const toggleWholeWord = useSearchSwitchesStore((state) => state.toggleWholeWord);
+  const toggleRegex = useSearchSwitchesStore((state) => state.toggleRegex);
   const customVoice = useShortcutSettingsStore((state) => state.shortcuts.voice);
   const recentKeys = useCommandPaletteRecentStore((state) => state.keys);
   const recordRecent = useCommandPaletteRecentStore((state) => state.record);
@@ -121,6 +126,11 @@ function OpenCommandPalette() {
   const pruneRecent = useCommandPaletteRecentStore((state) => state.prune);
   const [query, setQuery] = useState(() => useCommandPaletteStore.getState().initialQuery);
   const [page, setPage] = useState<PalettePage>("root");
+  // The search switches are one shared device state with Find and Replace:
+  // toggling here changes the editor's search and vice versa.
+  const matchCase = useSearchSwitchesStore((state) => state.matchCase);
+  const wholeWord = useSearchSwitchesStore((state) => state.wholeWord);
+  const regex = useSearchSwitchesStore((state) => state.regex);
   const [activeKeyIsRecent, setActiveKeyIsRecent] = useState(false);
   const [entities, setEntities] = useState<Awaited<ReturnType<typeof loadPaletteEntities>> | null>(
     null
@@ -214,6 +224,10 @@ function OpenCommandPalette() {
   // mode and what to search for, so deleting the prefix changes the mode back.
   const mode: PaletteMode = paletteModeOf(deferredQuery);
   const searchText = paletteQueryText(deferredQuery);
+  // The switches belong to Library Search: Commands mode hides them and their
+  // keys do nothing there. Read the raw query, so a keystroke switches at once.
+  const libraryField = paletteModeOf(query) === "library";
+  const queryEmpty = paletteQueryText(query) === "";
   const sections = useMemo(
     () =>
       mode === "commands"
@@ -224,8 +238,17 @@ function OpenCommandPalette() {
             recent: recentKeys,
             openBookId,
           })
-        : searchLibrary({ index, query: searchText, page, recent: recentKeys, openBookId }),
-    [index, mode, searchText, page, recentKeys, openBookId]
+        : searchLibrary({
+            index,
+            query: searchText,
+            page,
+            recent: recentKeys,
+            openBookId,
+            matchCase,
+            wholeWord,
+            regex,
+          }),
+    [index, mode, searchText, page, recentKeys, openBookId, matchCase, wholeWord, regex]
   );
   const flatResults = useMemo(() => sections.flatMap((section) => section.results), [sections]);
   const count = flatResults.length;
@@ -293,6 +316,9 @@ function OpenCommandPalette() {
   // useShortcuts pauses while this Modal is open, so Shift+Delete is handled
   // on the field itself; the id is still declared for the shortcut help.
   useBoundShortcutIds(["commandPalette.removeRecent"], activeKeyIsRecent);
+  // The switch Shortcuts likewise run on the field itself while the palette
+  // is open; the ids stay declared for the help and the coverage gate.
+  useBoundShortcutIds(["common.matchCase", "common.wholeWord", "common.useRegex"], libraryField);
 
   const removeByKey = useCallback(
     (key: string) => {
@@ -336,6 +362,25 @@ function OpenCommandPalette() {
     if (event.key === "Delete" && event.shiftKey) {
       event.preventDefault();
       removeActiveRecent();
+      return;
+    }
+    // useShortcuts pauses under the Modal, so the field matches the live
+    // Shortcuts itself (Custom Shortcuts included) and flips the shared
+    // switches. The native event is what the matcher reads (SymbolsDialog).
+    const native = event.nativeEvent;
+    if (libraryField && pressRunsCommand(native, "common.matchCase")) {
+      event.preventDefault();
+      useSearchSwitchesStore.getState().toggleMatchCase();
+      return;
+    }
+    if (libraryField && pressRunsCommand(native, "common.wholeWord")) {
+      event.preventDefault();
+      useSearchSwitchesStore.getState().toggleWholeWord();
+      return;
+    }
+    if (libraryField && pressRunsCommand(native, "common.useRegex")) {
+      event.preventDefault();
+      useSearchSwitchesStore.getState().toggleRegex();
       return;
     }
     // Backspace on the lone `>` leaves Commands mode for Library Search with
@@ -520,6 +565,37 @@ function OpenCommandPalette() {
             placeholder={t("commandPalette.placeholder")}
             className="h-8 min-w-0 flex-1 rounded-md border border-primary bg-background px-2 text-sm text-foreground outline-none placeholder:text-muted-foreground pointer-coarse:h-11 [&::-webkit-search-cancel-button]:hidden"
           />
+          {libraryField && (
+            <div className="flex shrink-0 items-center gap-1">
+              <SearchSwitchButton
+                id="common.matchCase"
+                label={t("editor.matchCase")}
+                pressed={matchCase}
+                onToggle={toggleMatchCase}
+                showShortcut={queryEmpty}
+                mac={mac}
+                Icon={CaseSensitive}
+              />
+              <SearchSwitchButton
+                id="common.wholeWord"
+                label={t("editor.matchWholeWord")}
+                pressed={wholeWord}
+                onToggle={toggleWholeWord}
+                showShortcut={queryEmpty}
+                mac={mac}
+                Icon={WholeWord}
+              />
+              <SearchSwitchButton
+                id="common.useRegex"
+                label={t("editor.useRegex")}
+                pressed={regex}
+                onToggle={toggleRegex}
+                showShortcut={queryEmpty}
+                mac={mac}
+                Icon={Regex}
+              />
+            </div>
+          )}
         </SearchField>
         {count === 0 ? (
           searchText.trim() !== "" && (
@@ -570,6 +646,56 @@ const KIND_ICONS: Partial<Record<PaletteItemKind, ComponentType<{ className?: st
   canvas: Workflow,
   settingsRow: SettingsIcon,
 };
+
+interface SearchSwitchButtonProps {
+  id: CommandId;
+  label: string;
+  pressed: boolean;
+  onToggle: () => void;
+  showShortcut: boolean;
+  mac: boolean;
+  Icon: ComponentType<{ className?: string }>;
+}
+
+/**
+ * One search switch at the right of the Library Search field: a toggle button
+ * with its name, its live Shortcut while the field is empty, and a pressed
+ * state the screen reader announces. Tappable at 44px on coarse pointers.
+ */
+function SearchSwitchButton({
+  id,
+  label,
+  pressed,
+  onToggle,
+  showShortcut,
+  mac,
+  Icon,
+}: SearchSwitchButtonProps) {
+  const shortcuts = useCommandKeys(id);
+  const hint = showShortcut ? shortcuts[0] : undefined;
+  return (
+    <ToggleButton
+      aria-label={label}
+      isSelected={pressed}
+      onPress={onToggle}
+      data-command={id}
+      className={({ isSelected, isFocusVisible }) =>
+        `flex h-8 min-w-8 items-center justify-center gap-1 rounded-md px-1.5 outline-none pointer-coarse:h-11 pointer-coarse:min-w-11 ${
+          isSelected
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        } ${isFocusVisible ? "ring-2 ring-primary ring-inset" : ""}`
+      }
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+      {hint && (
+        <span className="pointer-coarse:hidden">
+          <KeyboardShortcut shortcut={formatShortcut(hint, mac)} />
+        </span>
+      )}
+    </ToggleButton>
+  );
+}
 
 /** A Command result's live Shortcuts; the other kinds are not Commands. */
 function PaletteShortcuts({ id, mac }: { id: CommandId; mac: boolean }) {
