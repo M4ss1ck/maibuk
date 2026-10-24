@@ -21,6 +21,7 @@ import { capture } from "../support/capture";
 import { readClipboard } from "../support/clipboard";
 import { dispatchEndpoint, setEndpointAddress } from "../support/endpoint";
 import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { runPaletteCommand } from "../support/palette";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -128,17 +129,6 @@ async function openPalette(page: Page): Promise<Locator> {
   const dialog = page.getByRole("dialog", { name: "Command palette" });
   await expect(dialog).toBeVisible();
   return dialog;
-}
-
-/** Runs one Command from the Command Palette by its label. */
-async function runPaletteCommand(page: Page, label: string): Promise<void> {
-  const dialog = await openPalette(page);
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(`>${label}`);
-  const option = dialog.getByRole("option", { name: label, exact: true });
-  await expect(option).toBeVisible();
-  await page.keyboard.press("Enter");
-  await expect(dialog).toBeHidden();
 }
 
 /** Opens the MCP Server page through its navigating Command. */

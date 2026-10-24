@@ -8,6 +8,7 @@
 import type { Page } from "@playwright/test";
 import { caretText, pressUntilFocused, tabTo } from "../support/keyboard";
 import { capture } from "../support/capture";
+import { selectPaletteCommand } from "../support/palette";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -37,11 +38,7 @@ async function openPalette(page: Page) {
 /** Opens the report through the Command Palette's Open Echoes Command. */
 async function openEchoesFromPalette(page: Page) {
   const dialog = await openPalette(page);
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(">Open Echoes");
-  await expect(dialog.getByRole("option", { name: "Open Echoes", exact: true })).toBeVisible({
-    timeout: 15_000,
-  });
+  await selectPaletteCommand(page, dialog, "Open Echoes", { timeout: 15_000 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-echoes\/report$/);
   await expect(page.getByRole("heading", { name: "Echoes", level: 1 })).toBeVisible();

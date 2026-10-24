@@ -9,6 +9,7 @@
 
 import type { Locator, Page } from "@playwright/test";
 import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { runPaletteCommand } from "../support/palette";
 import { loggedRequests } from "../support/request-log";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
@@ -74,19 +75,6 @@ async function waitForReady(page: Page): Promise<void> {
   await expect(page.getByText("Sandbox escape fixture.")).toBeVisible({ timeout: 15_000 });
 }
 
-/** Runs one Plugin Command from the Command Palette, by keyboard. */
-async function runCommand(page: Page, label: string): Promise<void> {
-  await page.keyboard.press("F1");
-  const dialog = page.getByRole("dialog", { name: "Command palette" });
-  await expect(dialog).toBeVisible();
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type(`>${label}`);
-  const option = dialog.getByRole("option", { name: label, exact: true });
-  await expect(option).toBeVisible();
-  await page.keyboard.press("Enter");
-  await expect(dialog).toBeHidden();
-}
-
 /** Jumps to the Plugins section through the Settings outline, by keyboard. */
 async function openPluginsSection(page: Page): Promise<void> {
   await page.goto("/settings");
@@ -138,7 +126,7 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox", () => {
     test(`${attempt.label} fails safely with a typed refusal`, async ({ page }) => {
       const before = await leakCount();
       await waitForReady(page);
-      await runCommand(page, attempt.label);
+      await runPaletteCommand(page, attempt.label);
       await expect(status(page).filter({ hasText: attempt.report })).toBeVisible({
         timeout: 15_000,
       });
@@ -149,12 +137,12 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox", () => {
   test("Hostile spoofed reply is ignored and the Plugin stays ready", async ({ page }) => {
     const before = await leakCount();
     await waitForReady(page);
-    await runCommand(page, "Hostile spoofed reply");
+    await runPaletteCommand(page, "Hostile spoofed reply");
     await expect(
       status(page).filter({ hasText: "hostile escapeSpoofedReply ignored" })
     ).toBeVisible({ timeout: 15_000 });
     // Still answering: a second Command runs.
-    await runCommand(page, "Hostile unknown method");
+    await runPaletteCommand(page, "Hostile unknown method");
     await expect(
       status(page).filter({ hasText: "hostile escapeUnknownMethod refused: unknown-method" })
     ).toBeVisible({ timeout: 15_000 });
@@ -164,7 +152,7 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox", () => {
   test("Hostile message flood is refused as rate-limited", async ({ page }) => {
     const before = await leakCount();
     await waitForReady(page);
-    await runCommand(page, "Hostile message flood");
+    await runPaletteCommand(page, "Hostile message flood");
     await expect(
       status(page).filter({ hasText: "hostile escapeFlood refused: rate-limited" })
     ).toBeVisible({ timeout: 20_000 });
@@ -174,7 +162,7 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox", () => {
   test("Hostile busy loop stops the Plugin as unresponsive", async ({ page }) => {
     const before = await leakCount();
     await waitForReady(page);
-    await runCommand(page, "Hostile busy loop");
+    await runPaletteCommand(page, "Hostile busy loop");
     await expect(
       status(page).filter({ hasText: "stopped responding and was closed." })
     ).toBeVisible({ timeout: 20_000 });
@@ -184,7 +172,7 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox", () => {
   test("Hostile allocation stops the Plugin with a memory reason", async ({ page }) => {
     const before = await leakCount();
     await waitForReady(page);
-    await runCommand(page, "Hostile allocation");
+    await runPaletteCommand(page, "Hostile allocation");
     // The Worker dies of memory pressure: the host reports out-of-memory, or,
     // when the engine gives no message, a crash or an unanswered heartbeat.
     await expect(
@@ -198,7 +186,7 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox", () => {
   test("Hostile UI violation stops the Plugin with remote-ui-limit", async ({ page }) => {
     const before = await leakCount();
     await waitForReady(page);
-    await runCommand(page, "Hostile UI violation");
+    await runPaletteCommand(page, "Hostile UI violation");
     await expect(
       status(page).filter({ hasText: "declared an interface Maibuk could not accept" })
     ).toBeVisible({ timeout: 15_000 });
@@ -208,7 +196,7 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox", () => {
   test("Hostile UI flood stops the Plugin with remote-ui-limit", async ({ page }) => {
     const before = await leakCount();
     await waitForReady(page);
-    await runCommand(page, "Hostile UI flood");
+    await runPaletteCommand(page, "Hostile UI flood");
     await expect(
       status(page).filter({ hasText: "declared an interface Maibuk could not accept" })
     ).toBeVisible({ timeout: 15_000 });
@@ -235,7 +223,7 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox", () => {
 
     // Reload with the revoked grant and run the Command: the read is refused.
     await waitForReady(page);
-    await runCommand(page, "Hostile after revoke");
+    await runPaletteCommand(page, "Hostile after revoke");
     await expect(
       status(page).filter({ hasText: "hostile escapeAfterRevoke refused: permission-denied" })
     ).toBeVisible({ timeout: 15_000 });
