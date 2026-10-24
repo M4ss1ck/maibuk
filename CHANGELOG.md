@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-10-24
+
+### Added
+- Library Search across the Library, with snippets, result counts, and indexing status
+- Commands mode in the command palette, opened with `>` and Library Search without a prefix
+- Match case, Whole word, and Regex options inside the Library Search field
+- Opening a Library Search result at its first match in Find and Replace, or opening the note's Canvas from its card
+- A `library.search` Plugin API method and an MCP `search_library` tool
+- Release Notes in every app language, with fallback to the author's language for newer releases
+
+### Changed
+- The web Library runs on SQLite WASM over OPFS for more reliable storage and search
+- Library Search and Find and Replace ignore accents
+
+### Fixed
+- The web Library loads the bundled sql.js WASM instead of a CDN, avoiding link errors
+- The Tutorial Library opens correctly when EPUB export code is loaded
+- The desktop Library opens with the FTS5 search index enabled
+- Reset all in the Shortcut Editor returns focus to the search field
+- Dragging a note while sorted no longer removes it from the sidebar
+- A Library Search query entered during the index rebuild reruns when indexing completes
+- Filtering by Book in plugin Library Search returns exact pages
+
 ## [0.15.2] - 2026-10-23
 
 ### Changed
