@@ -134,13 +134,18 @@ export async function searchLibrary(
       return { content: [{ type: "text", text: `No matches for "${query}".` }] };
     }
 
+    // Short references are unique prefixes within a kind, so only the kinds on
+    // this page need their id lists.
+    const kindsShown = new Set(answer.results.map((result) => result.kind));
     const allChapters: Awaited<ReturnType<PluginClient["library"]["chapters"]["list"]>> = [];
-    for (const book of books) {
-      const chapters = await client.library.chapters.list({ bookId: book.id });
-      allChapters.push(...chapters);
+    if (kindsShown.has("chapter")) {
+      for (const book of books) {
+        const chapters = await client.library.chapters.list({ bookId: book.id });
+        allChapters.push(...chapters);
+      }
     }
-    const notes = await client.library.notes.list();
-    const canvases = await client.library.canvases.list();
+    const notes = kindsShown.has("note") ? await client.library.notes.list() : [];
+    const canvases = kindsShown.has("canvas") ? await client.library.canvases.list() : [];
     const ids = {
       books: allBookIds,
       chapters: allChapters.map((chapter) => chapter.id),
