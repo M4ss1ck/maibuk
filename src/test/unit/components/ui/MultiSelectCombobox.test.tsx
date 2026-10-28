@@ -20,6 +20,32 @@ describe("MultiSelectCombobox", () => {
     expect(screen.getByText("ideas")).toBeInTheDocument();
   });
 
+  it("closes the dropdown when Tab moves focus past it", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <>
+        <MultiSelectCombobox value={[]} onChange={() => {}} options={options} />
+        <button type="button">Next field</button>
+      </>
+    );
+
+    await user.click(screen.getByRole("combobox"));
+    expect(screen.getByRole("checkbox", { name: "research" })).toBeInTheDocument();
+
+    // Tab walks the field's own controls and the list's checkboxes first, so
+    // the list stays open while focus is inside it.
+    const draft = screen.getByRole("checkbox", { name: "draft" });
+    while (document.activeElement !== draft) await user.tab();
+    expect(screen.getByRole("checkbox", { name: "research" })).toBeInTheDocument();
+
+    while (document.activeElement !== screen.getByRole("button", { name: "Next field" })) {
+      await user.tab();
+    }
+
+    expect(screen.queryByRole("checkbox", { name: "research" })).not.toBeInTheDocument();
+  });
+
   it("keeps the dropdown open when an item checkbox is clicked", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

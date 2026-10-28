@@ -92,7 +92,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
     steps: [
       step("notes.gallery", ["Note", "Gallery"]),
       step("notes.card", ["Pinned", "Book Note", "Tag", "Item Menu"]),
-      step("notes.filters", ["Tag"]),
+      step("notes.filters", ["Tag", "Note Filter"]),
       step("notes.new", ["Unfiled Note"]),
       step("notes.tree", ["Book Note", "Unfiled Note", "Sort", "Custom Order"], {
         route: NOTE_ROUTE,

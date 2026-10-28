@@ -11,7 +11,14 @@ import { CURRENT_CANVAS_SCHEMA_VERSION, type CanvasDoc } from "@/features/canvas
 import { createChapterRow, updateChapterRow } from "@/features/chapters/write";
 import { createNoteRow } from "@/features/notes/write";
 import { longChapterHtml, random, sentence } from "@/test/support/long-chapter";
-import { PERF_BOOK, PERF_CANVAS, PERF_MANY_CHAPTERS_BOOK, PERF_NOTES, PERF_SIZES } from "./names";
+import {
+  PERF_BOOK,
+  PERF_CANVAS,
+  PERF_MANY_CHAPTERS_BOOK,
+  PERF_NOTES,
+  PERF_SIZES,
+  PERF_TAGGED_NOTES,
+} from "./names";
 
 async function perfLongChapter(): Promise<void> {
   const book = await createBookRow({ ...PERF_BOOK }, "local");
@@ -94,6 +101,25 @@ async function perfManyNotes(): Promise<void> {
   }
 }
 
+/**
+ * `perfTaggedNotes`: 2,000 Notes, each tagged so excluding one Tag drops a
+ * third of them, to stress the Notes list when the Note Filter changes.
+ */
+async function perfTaggedNotes(): Promise<void> {
+  const next = random(2872);
+  const [task, idea, draft] = PERF_TAGGED_NOTES.tags;
+  for (let i = 1; i <= PERF_SIZES.taggedNotes; i++) {
+    await createNoteRow(
+      {
+        title: `${PERF_TAGGED_NOTES.titlePrefix} ${i}`,
+        content: `<p>${sentence(next)}</p>`,
+        tags: i % 3 === 0 ? [task] : i % 3 === 1 ? [idea] : [idea, draft],
+      },
+      "local"
+    );
+  }
+}
+
 /** `perfManyChapters`: one Book of many short Chapters, to stress the Outline. */
 async function perfManyChapters(): Promise<void> {
   const book = await createBookRow(
@@ -120,5 +146,6 @@ export const PERF_SEED_LIBRARIES = {
   perfLongChapter,
   perfDenseCanvas,
   perfManyNotes,
+  perfTaggedNotes,
   perfManyChapters,
 };

@@ -313,6 +313,132 @@ test.describe("Notes search and filters @wf:notes-search-filter", () => {
   });
 });
 
+test.describe("Notes list filter @wf:notes-list-filter", () => {
+  const filtersButton = (page: Page) => page.getByRole("button", { name: "Filters", exact: true });
+
+  /** Opens the sidebar's Filters Popover by keyboard; it lands on "Any tag". */
+  async function openSidebarFilters(page: Page) {
+    await tabTo(page, filtersButton(page), { max: 60 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByPlaceholder("Any tag")).toBeFocused();
+  }
+
+  /**
+   * Excludes a Tag in the open sidebar Popover. The include combobox opens as
+   * Tab passes through it, so an excluded Tag's checkbox is the last one with
+   * that name, and the exclusion field keeps no placeholder once it holds a
+   * chip, so it stays the Popover's second combobox.
+   */
+  async function excludeTag(page: Page, tag: string) {
+    const fields = page.getByRole("dialog", { name: "Filters" });
+    await tabTo(page, fields.getByRole("combobox").nth(1), { max: 40 });
+    await tabTo(page, fields.getByRole("checkbox", { name: tag }).last(), { max: 12 });
+    await page.keyboard.press("Space");
+  }
+
+  test("excluding a Tag in the Popover hides its Notes and Escape returns to the trigger", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    const header = [
+      page.getByPlaceholder("Search notes..."),
+      page.getByRole("button", { name: /^Sort notes/ }),
+    ];
+    await capture(page, "notes-list-filter-idle", { around: header });
+    await openSidebarFilters(page);
+
+    await excludeTag(page, SEED_NOTE_TAGS.harbor);
+    await capture(page, "notes-list-filter-open", {
+      around: [...header, page.getByRole("dialog", { name: "Filters" })],
+    });
+
+    // The open Popover hides the page behind it from assistive technology, so
+    // the rows and the trigger are read by role once Escape closes it.
+    await page.keyboard.press("Escape");
+    await expect(page.getByPlaceholder("Any tag")).toBeHidden();
+    await expect(notesListRow(page, SEED_NOTES.harborNotes)).toHaveCount(0);
+    await expect(notesListRow(page, SEED_NOTES.keeperLog)).toBeVisible();
+    await expect(notesListRow(page, SEED_NOTES.tideTables)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Filters, 1 active", exact: true })
+    ).toBeFocused();
+    await capture(page, "notes-list-filter-active", { around: header });
+  });
+
+  test("Mod+Shift+F opens the Popover with focus in the tag filter @sc:notes.advancedFilters", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await expect(filtersButton(page)).toBeVisible();
+
+    await page.keyboard.press("ControlOrMeta+Shift+f");
+
+    const tagFilter = page.getByPlaceholder("Any tag");
+    await expect(tagFilter).toBeVisible();
+    await expect(tagFilter).toBeFocused();
+  });
+
+  test("a Tag excluded in the sidebar stays excluded in the Gallery", async ({ page }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await openSidebarFilters(page);
+    await excludeTag(page, SEED_NOTE_TAGS.harbor);
+    await page.keyboard.press("Escape");
+
+    await page.goto("/notes");
+
+    await expect(galleryGrid(page).getByRole("row")).toHaveCount(2);
+    await expect(galleryCard(page, SEED_NOTES.harborNotes)).toHaveCount(0);
+    const galleryFilters = page.getByRole("button", { name: "Filters, 1 active", exact: true });
+    await capture(page, "notes-gallery-filter-active", {
+      around: [page.getByPlaceholder("Search notes..."), galleryFilters],
+    });
+    await expect(galleryFilters).toBeVisible();
+  });
+
+  test("excluding every Tagged Note shows the no-matches state, whose Clear filters restores them @sc:notes.clearFilters", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await openSidebarFilters(page);
+
+    // research hides Keeper's Log and Tide Tables; harbor hides Harbor Notes.
+    await excludeTag(page, SEED_NOTE_TAGS.research);
+    await excludeTag(page, SEED_NOTE_TAGS.harbor);
+    await page.keyboard.press("Escape");
+
+    await expect(page.getByText("No notes match")).toBeVisible();
+    await expect(notesListRow(page, SEED_NOTES.keeperLog)).toHaveCount(0);
+    await expect(notesListRow(page, SEED_NOTES.tideTables)).toHaveCount(0);
+    await expect(notesListRow(page, SEED_NOTES.harborNotes)).toHaveCount(0);
+
+    await tabTo(page, page.getByRole("button", { name: "Clear filters" }), { max: 40 });
+    await page.keyboard.press("Enter");
+
+    await expect(notesListRow(page, SEED_NOTES.keeperLog)).toBeVisible();
+    await expect(notesListRow(page, SEED_NOTES.tideTables)).toBeVisible();
+    await expect(notesListRow(page, SEED_NOTES.harborNotes)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Filters", exact: true })).toBeVisible();
+  });
+
+  test("Escape in the From calendar closes only the calendar", async ({ page }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await openSidebarFilters(page);
+
+    await tabTo(page, page.getByRole("button", { name: "Updated from", exact: true }), {
+      max: 40,
+    });
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "Previous month" })).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Previous month" })).toBeHidden();
+    await expect(page.getByPlaceholder("Any tag")).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByPlaceholder("Any tag")).toBeHidden();
+  });
+});
+
 test.describe("Notes list grouping, view and sort @wf:notes-list-group-sort", () => {
   test("the sort menu reorders the Gallery by keyboard and persists", async ({ page }) => {
     await page.goto("/notes");

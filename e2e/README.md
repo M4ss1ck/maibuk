@@ -457,8 +457,11 @@ focus target is decided, excluding the focus change
 p95 as the handler-time line. Their in-window focus checks use CSS locators,
 since a role query walks the whole 500-row list and its cost would land in
 the measured frames. `pane-slide` presses F6 every 250 ms to slide the Pane
-frame. They run on the `perfLongChapter`, `perfDenseCanvas`, `perfManyNotes`
-(500 Notes) and `perfManyChapters` (100 Chapters) seeds
+frame. `notes-filter-toggle` opens the Notes list's Filters Popover and
+presses Space twenty times on the excluded `task` Tag, so a third of 2,000
+Notes leave the list and come back. They run on the `perfLongChapter`,
+`perfDenseCanvas`, `perfManyNotes` (500 Notes), `perfTaggedNotes` (2,000
+tagged Notes) and `perfManyChapters` (100 Chapters) seeds
 (`support/seed/perf-libraries.ts`), built through the real write paths like
 every other seed. Repetitions run back
 to back after one warm-up; the table shows every run and the pooled verdict.

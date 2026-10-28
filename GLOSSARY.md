@@ -119,6 +119,11 @@ _Avoid_: "Sin archivar" (reads as not Archived)
 A word an author puts on Notes to group and filter them.
 _Avoid_: label
 
+**Note Filter**:
+The Tags a Note must have, the Tags it must not have, and the Last Edited range that narrow which Notes are shown. One Note Filter applies to both the Notes Gallery and the Notes list, and each device keeps its own. Search is separate: each place keeps its own search text.
+_UI_: en "Filters" / es "Filtros"
+_Avoid_: advanced filters, tag filter (for the whole thing)
+
 **Pinned**:
 Kept at the top of its Gallery by the author's choice, for Notes and Canvases.
 _Avoid_: favorite, starred

@@ -6,6 +6,7 @@ import {
   buildDateNoteGroups,
   buildListNoteSections,
   buildTagNoteGroups,
+  countFilterCriteria,
   filterNotes,
   normalizeNotesSidebarSort,
   notePlainText,
@@ -465,6 +466,40 @@ describe("notes list model", () => {
       { id: "this-week", title: "This week", notes: [thisWeek] },
       { id: "2025", title: "2025", notes: [lastYear] },
     ]);
+  });
+});
+
+describe("countFilterCriteria()", () => {
+  it("counts nothing when the Note Filter is empty", () => {
+    expect(countFilterCriteria({ tags: [], excludeTags: [], dateFrom: "", dateTo: "" })).toBe(0);
+  });
+
+  it("counts each Tag, included or excluded, as one", () => {
+    expect(
+      countFilterCriteria({ tags: ["craft"], excludeTags: [], dateFrom: "", dateTo: "" })
+    ).toBe(1);
+    expect(
+      countFilterCriteria({
+        tags: ["craft", "draft"],
+        excludeTags: ["archive"],
+        dateFrom: "",
+        dateTo: "",
+      })
+    ).toBe(3);
+  });
+
+  it("counts each date as one", () => {
+    expect(
+      countFilterCriteria({ tags: [], excludeTags: [], dateFrom: "2026-06-01", dateTo: "" })
+    ).toBe(1);
+    expect(
+      countFilterCriteria({
+        tags: [],
+        excludeTags: [],
+        dateFrom: "2026-06-01",
+        dateTo: "2026-06-30",
+      })
+    ).toBe(2);
   });
 });
 
