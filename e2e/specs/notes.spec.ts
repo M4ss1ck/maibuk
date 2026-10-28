@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
+import { capCenterOffset, coveredTopEdge, stacksAbove } from "../support/layout";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { SEED_BOOK, SEED_NOTES, SEED_NOTE_TAGS } from "../support/seed/names";
 import { expect, test } from "../support/test";
@@ -223,11 +224,11 @@ test.describe("Notes search and filters @wf:notes-search-filter", () => {
   async function toggleTag(page: Page, inputName: string, tag: string) {
     const input = page.getByPlaceholder(inputName);
     await tabTo(page, input, { max: 30 });
-    // The include combobox opens as Tab passes through it, so an excluded Tag's
-    // checkbox is the last one with that name.
-    const checkbox = page.getByRole("checkbox", { name: tag });
-    const target = inputName === "Any tag" ? checkbox.first() : checkbox.last();
-    await tabTo(page, target, { max: 8 });
+    // ArrowDown enters the field's own list; Tab never walks into it.
+    await page.keyboard.press("ArrowDown");
+    await pressUntilFocused(page, "ArrowDown", page.getByRole("checkbox", { name: tag }), {
+      max: 8,
+    });
     await page.keyboard.press("Space");
   }
 
@@ -324,16 +325,20 @@ test.describe("Notes list filter @wf:notes-list-filter", () => {
   }
 
   /**
-   * Excludes a Tag in the open sidebar Popover. The include combobox opens as
-   * Tab passes through it, so an excluded Tag's checkbox is the last one with
-   * that name, and the exclusion field keeps no placeholder once it holds a
-   * chip, so it stays the Popover's second combobox.
+   * Excludes a Tag in the open sidebar Popover. The exclusion field keeps no
+   * placeholder once it holds a chip, so it stays the Popover's second
+   * combobox; ArrowDown walks its list, and Escape closes the list alone.
    */
   async function excludeTag(page: Page, tag: string) {
     const fields = page.getByRole("dialog", { name: "Filters" });
     await tabTo(page, fields.getByRole("combobox").nth(1), { max: 40 });
-    await tabTo(page, fields.getByRole("checkbox", { name: tag }).last(), { max: 12 });
+    await page.keyboard.press("ArrowDown");
+    await pressUntilFocused(page, "ArrowDown", fields.getByRole("checkbox", { name: tag }), {
+      max: 8,
+    });
     await page.keyboard.press("Space");
+    await page.keyboard.press("Escape");
+    await expect(fields.getByRole("checkbox")).toHaveCount(0);
   }
 
   test("excluding a Tag in the Popover hides its Notes and Escape returns to the trigger", async ({
@@ -418,6 +423,90 @@ test.describe("Notes list filter @wf:notes-list-filter", () => {
     await expect(notesListRow(page, SEED_NOTES.tideTables)).toBeVisible();
     await expect(notesListRow(page, SEED_NOTES.harborNotes)).toBeVisible();
     await expect(page.getByRole("button", { name: "Filters", exact: true })).toBeVisible();
+  });
+
+  test("the include list opened on arrival closes with Escape or Tab, never the Popover first", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await openSidebarFilters(page);
+    const fields = page.getByRole("dialog", { name: "Filters" });
+    const tagFilter = page.getByPlaceholder("Any tag");
+    await expect(fields.getByRole("checkbox").first()).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await capture(page, "notes-list-filter-escape-closes-list", {
+      around: [page.getByPlaceholder("Search notes..."), fields],
+    });
+    await expect(fields.getByRole("checkbox")).toHaveCount(0);
+    await expect(fields).toBeVisible();
+    await expect(tagFilter).toBeFocused();
+
+    // ArrowDown reopens it at the first option; Escape there returns to the
+    // field with the list closed.
+    await page.keyboard.press("ArrowDown");
+    await expect(fields.getByRole("checkbox").first()).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(fields.getByRole("checkbox")).toHaveCount(0);
+    await expect(tagFilter).toBeFocused();
+
+    // Tab leaves the field and takes the list with it. Shift+Tab out and Tab
+    // back in reopens it, since focus arriving on the field shows the list.
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    await expect(tagFilter).toBeFocused();
+    await expect(fields.getByRole("checkbox").first()).toBeVisible();
+    await page.keyboard.press("Tab");
+    await expect(fields.getByRole("checkbox")).toHaveCount(0);
+    await expect(
+      fields.getByRole("button", { name: "Hides notes that have any of these tags" })
+    ).toBeFocused();
+  });
+
+  test("each uppercase field label centers its icons on its capital letters", async ({ page }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await openSidebarFilters(page);
+    await page.keyboard.press("Escape");
+    const fields = page.getByRole("dialog", { name: "Filters" });
+    await capture(page, "notes-list-filter-label-icons", { around: [fields] });
+
+    for (const [label, help] of [
+      ["Tag", "Shows only notes that have all of these tags"],
+      ["Exclude tags", "Hides notes that have any of these tags"],
+    ]) {
+      const text = fields.getByText(label, { exact: true });
+      const info = fields.getByRole("button", { name: help });
+      const { offset, trimmed } = await capCenterOffset(text, info);
+      expect(trimmed, `${label} is trimmed to its caps`).toBe(true);
+      expect(offset, `${label}'s help icon sits on its caps`).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  test("the exclude help Tooltip paints above the Popover, and the count badge above the header", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await openSidebarFilters(page);
+
+    // Focus shows the Tooltip as hover does. React Aria gives the Popover an
+    // inline z-index; the Tooltip has to clear it.
+    const help = page.getByRole("button", { name: "Hides notes that have any of these tags" });
+    await tabTo(page, help, { max: 12 });
+    const tip = page.getByRole("tooltip").filter({ hasText: "Hides notes" });
+    await expect(tip).toBeVisible();
+    const fields = page.getByRole("dialog", { name: "Filters" });
+    await capture(page, "notes-list-filter-help-tooltip", { around: [fields, tip] });
+    const popover = fields.locator("..");
+    expect(await stacksAbove(tip, popover)).toBe(true);
+
+    await excludeTag(page, SEED_NOTE_TAGS.harbor);
+    await page.keyboard.press("Escape");
+    const trigger = page.getByRole("button", { name: "Filters, 1 active", exact: true });
+    await expect(trigger).toBeFocused();
+    await capture(page, "notes-list-filter-badge", { around: [trigger] });
+    // The badge rises past the row's top edge; whatever paints at its top
+    // must be the badge itself, not the header above the row.
+    expect(await coveredTopEdge(trigger.getByText("1", { exact: true }))).toBeNull();
   });
 
   test("Escape in the From calendar closes only the calendar", async ({ page }) => {
@@ -505,7 +594,10 @@ test.describe("Notes list grouping, view and sort @wf:notes-list-group-sort", ()
     // The virtualized section wrapper has no box of its own; its header is
     // what proves the group is on screen.
     await expect(
-      page.getByTestId(/^book-group-/).first().getByRole("button", { name: SEED_BOOK.title })
+      page
+        .getByTestId(/^book-group-/)
+        .first()
+        .getByRole("button", { name: SEED_BOOK.title })
     ).toBeVisible();
     await capture(page, "notes-tree-view");
 
@@ -515,9 +607,7 @@ test.describe("Notes list grouping, view and sort @wf:notes-list-group-sort", ()
     const notesGrid = page.getByRole("grid", { name: "Notes" });
     await tabTo(page, notesGrid.getByRole("row", { name: SEED_NOTES.keeperLog }), { max: 60 });
     await page.keyboard.press("ArrowUp");
-    await expect(
-      notesGrid.getByRole("row", { name: SEED_BOOK.title, exact: true })
-    ).toBeFocused();
+    await expect(notesGrid.getByRole("row", { name: SEED_BOOK.title, exact: true })).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(notesGrid.getByRole("row", { name: SEED_NOTES.keeperLog })).toBeFocused();
 

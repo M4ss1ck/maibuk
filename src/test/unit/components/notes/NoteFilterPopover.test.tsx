@@ -104,10 +104,10 @@ describe("NoteFilterPopover", () => {
     render(<FilterHarness />);
     await openFromKeyboard(user);
 
-    // Focus opened the include list; Tab walks into its checkboxes.
+    // ArrowDown enters the include list at its first option, "draft".
+    await user.keyboard("{ArrowDown}");
     const dialog = screen.getByRole("dialog", { name: "Filters" });
-    const draft = within(dialog).getAllByRole("checkbox", { name: "draft" })[0];
-    while (document.activeElement !== draft) await user.tab();
+    expect(within(dialog).getByRole("checkbox", { name: "draft" })).toHaveFocus();
     await user.keyboard(" ");
 
     expect(useSettingsStore.getState().notesFilters.tags).toEqual(["draft"]);
@@ -127,21 +127,44 @@ describe("NoteFilterPopover", () => {
 
     expect(useSettingsStore.getState().notesFilters.excludeTags).toEqual(["task"]);
 
-    // The open Popover hides the page from assistive technology, so the
-    // trigger is read by name once it is back on screen.
+    // The first Escape closes the exclude list, the second the Popover. The
+    // open Popover hides the page from assistive technology, so the trigger
+    // is read by name once it is back on screen.
+    await user.keyboard("{Escape}");
     await user.keyboard("{Escape}");
     await waitFor(() => expect(trigger("Filters, 1 active")).toBeInTheDocument());
   });
 
-  it("Escape closes the Popover and returns focus to the trigger", async () => {
+  it("Escape closes the open Tag list first, then the Popover, returning focus to the trigger", async () => {
     const user = userEvent.setup();
     render(<FilterHarness />);
     const button = await openFromKeyboard(user);
+    const dialog = screen.getByRole("dialog", { name: "Filters" });
+    expect(within(dialog).getByRole("checkbox", { name: "draft" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(within(dialog).queryByRole("checkbox", { name: "draft" })).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Any tag")).toHaveFocus();
 
     await user.keyboard("{Escape}");
 
     await waitFor(() => expect(screen.queryByPlaceholderText("Any tag")).not.toBeInTheDocument());
     await waitFor(() => expect(button).toHaveFocus());
+  });
+
+  it("Tab from the include field closes its list and moves to the exclude field's help", async () => {
+    const user = userEvent.setup();
+    render(<FilterHarness />);
+    await openFromKeyboard(user);
+    const dialog = screen.getByRole("dialog", { name: "Filters" });
+
+    await user.tab();
+
+    expect(
+      within(dialog).getByRole("button", { name: "Hides notes that have any of these tags" })
+    ).toHaveFocus();
+    expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
   it("Escape with the date calendar open closes only the calendar", async () => {
@@ -183,6 +206,8 @@ describe("NoteFilterPopover", () => {
     // field instead of falling out of the Popover.
     expect(screen.getByPlaceholderText("Any tag")).toHaveFocus();
 
+    // Focus opened the include list: Escape closes it, then the Popover.
+    await user.keyboard("{Escape}");
     await user.keyboard("{Escape}");
     await waitFor(() => expect(trigger("Filters")).toHaveFocus());
   });

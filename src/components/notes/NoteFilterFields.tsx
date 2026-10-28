@@ -13,6 +13,15 @@ import { Tooltip } from "@/components/ui/Tooltip";
  */
 export const NOTE_FILTER_ACTIVE_CLASS = "border-primary/40! bg-primary/10! text-primary!";
 
+/**
+ * The field labels are uppercase: caps have no descenders, so their ink sits
+ * above the middle of the line box that `items-center` centers the icons on,
+ * by up to 1.6px in the mono and serif App Fonts. Trimming the text box to the
+ * cap height centers the icons on the letters for any font; a browser without
+ * `text-box` keeps the line-box centering.
+ */
+const LABEL_TEXT_CLASS = "[text-box:trim-both_cap_alphabetic]";
+
 /** How many criteria the Note Filter has, pinned to its trigger's top-right corner. */
 export function NoteFilterCountBadge({ count }: { count: number }) {
   if (count === 0) return null;
@@ -47,7 +56,7 @@ export function NoteFilterFields({ filter, className, tagInputRef }: NoteFilterF
       <div className="min-w-0">
         <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <Tags className="h-3.5 w-3.5" />
-          {t("notes.tagFilter")}
+          <span className={LABEL_TEXT_CLASS}>{t("notes.tagFilter")}</span>
           <FilterHelp label={t("notes.tagFilterHelp")} />
         </span>
         <MultiSelectCombobox
@@ -63,7 +72,7 @@ export function NoteFilterFields({ filter, className, tagInputRef }: NoteFilterF
       <div className="min-w-0">
         <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <EyeOff className="h-3.5 w-3.5" />
-          {t("notes.excludeTagFilter")}
+          <span className={LABEL_TEXT_CLASS}>{t("notes.excludeTagFilter")}</span>
           <FilterHelp label={t("notes.excludeTagFilterHelp")} />
         </span>
         <MultiSelectCombobox
@@ -78,7 +87,7 @@ export function NoteFilterFields({ filter, className, tagInputRef }: NoteFilterF
       <div>
         <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <CalendarDays className="h-3.5 w-3.5" />
-          {t("notes.dateFrom")}
+          <span className={LABEL_TEXT_CLASS}>{t("notes.dateFrom")}</span>
         </span>
         <DateFilter
           value={filter.dateFrom}
@@ -94,7 +103,7 @@ export function NoteFilterFields({ filter, className, tagInputRef }: NoteFilterF
       <div>
         <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <CalendarDays className="h-3.5 w-3.5" />
-          {t("notes.dateTo")}
+          <span className={LABEL_TEXT_CLASS}>{t("notes.dateTo")}</span>
         </span>
         <DateFilter
           value={filter.dateTo}
