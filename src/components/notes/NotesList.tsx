@@ -20,11 +20,18 @@ import {
   List,
   Search,
   Tags,
+  X,
 } from "lucide-react";
 import type { Book } from "@/features/books/types";
 import type { ReorderNoteItem } from "@/features/notes";
 import { AddIcon } from "@/components/icons/AddIcon";
-import { FileDropImportStatus, ResponsiveToggleGroup, SortSelect, Tooltip } from "@/components/ui";
+import {
+  Button,
+  FileDropImportStatus,
+  ResponsiveToggleGroup,
+  SortSelect,
+  Tooltip,
+} from "@/components/ui";
 import {
   SectionDropIndicators,
   SectionedDropTargetDelegate,
@@ -33,6 +40,7 @@ import { keepRowFromActing } from "@/lib/arrow-navigation";
 import { toast } from "@/components/ui/Toast";
 import type { ResponsiveToggleOption } from "@/components/ui";
 import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
+import { NoteFilterPopover } from "@/components/notes/NoteFilterPopover";
 import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import { NoteListItem } from "@/components/notes/NoteListItem";
 import type { NoteMoveTarget } from "@/components/notes/NoteListItem";
@@ -45,6 +53,7 @@ import { dropTargetFromPoint } from "@/lib/drop-target";
 import type { ListDropTarget } from "@/lib/drop-target";
 import { useDragAutoScroll } from "@/hooks/useDragAutoScroll";
 import { useFlipReorder } from "@/hooks/useFlipReorder";
+import { useNoteFilter } from "@/hooks/useNoteFilter";
 import { useSettingsStore } from "@/features/settings/store";
 import { useShortcuts } from "@/lib/shortcuts";
 import { revealVirtualRow } from "@/lib/reveal-virtual-row";
@@ -172,6 +181,8 @@ export function NotesList({
   const newNoteButtonRef = useRef<HTMLButtonElement>(null);
   const activatedNoteIdsRef = useRef(new Set<string>());
   const [search, setSearch] = useState("");
+  const [isFilterOpen, setFilterOpen] = useState(false);
+  const filter = useNoteFilter(notes);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
@@ -263,8 +274,16 @@ export function NotesList({
     sortOptions.find((option) => option.value === activeSort)?.label ?? sortOptions[0].label;
 
   const query = search.trim().toLowerCase();
-  const filtered = filterNotes(notes, query);
-  const listSections = buildListNoteSections(notes, query, listSort);
+  const { tags, excludeTags, dateFrom, dateTo } = filter;
+  const filtered = useMemo(
+    () => filterNotes(notes, { query, tags, excludeTags, dateFrom, dateTo }),
+    [notes, query, tags, excludeTags, dateFrom, dateTo]
+  );
+  // Sections split the Notes already filtered, so the Library is walked once.
+  const listSections = useMemo(
+    () => buildListNoteSections(filtered, "", listSort),
+    [filtered, listSort]
+  );
   const listSectionsRef = useRef(listSections);
   listSectionsRef.current = listSections;
   // Rows glide to the place a Sort gives them; another view or search just redraws.
@@ -284,10 +303,15 @@ export function NotesList({
     }
   );
   const pinnedCount = notes.filter((note) => note.pinned).length;
-  const isSearchActive = query.length > 0;
+  const isFiltering = query.length > 0 || filter.hasFilter;
   // The list view reorders through React Aria drag-and-drop, which is also its
-  // keyboard path. Search hides Notes, so an order written then would be partial.
-  const canReorder = viewMode === "list" && !isSearchActive && filtered.length > 0;
+  // keyboard path. Search or a Note Filter hides Notes, so an order written
+  // then would be partial.
+  const canReorder = viewMode === "list" && !isFiltering && filtered.length > 0;
+  const clearFilters = () => {
+    filter.clear();
+    setSearch("");
+  };
 
   // A list Sort is a view; leaving it keeps the order it showed as the Custom
   // Order (ADR 0028). The tree's Sort never writes.
@@ -310,6 +334,8 @@ export function NotesList({
       onTrigger: () => onCreateNote(books[0]?.id ?? null),
     },
     ...NOTES_SORT_COMMANDS.map(({ id, sort }) => ({ id, onTrigger: () => applySort(sort) })),
+    { id: "notes.advancedFilters", allowInInput: true, onTrigger: () => setFilterOpen(true) },
+    { id: "notes.clearFilters", enabled: isFiltering, onTrigger: clearFilters },
   ]);
 
   const resolveFileDropTarget = useCallback(
@@ -351,7 +377,7 @@ export function NotesList({
   };
 
   const handleDragStart = (e: DragEvent<HTMLDivElement>, id: string) => {
-    if (isSearchActive) return;
+    if (isFiltering) return;
     setDraggedId(id);
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", id);
@@ -369,7 +395,7 @@ export function NotesList({
     if (!draggedId) return;
     e.stopPropagation();
     handleDragOver(e);
-    if (isSearchActive) return;
+    if (isFiltering) return;
     setDropTarget({ sectionId, targetId: null, placement: "after" });
   };
 
@@ -467,7 +493,7 @@ export function NotesList({
     e.preventDefault();
     e.stopPropagation();
     autoScroll.stop();
-    if (isSearchActive) return;
+    if (isFiltering) return;
 
     const draggedNote = notes.find((note) => note.id === draggedId);
     const nextSections =
@@ -725,14 +751,18 @@ export function NotesList({
 
   const treeGroups: TreeGroup[] =
     treeGroupMode === "book"
-      ? buildBookNoteGroups(filtered, books, treeSort).map((group) => ({
-          id: group.id,
-          title: group.id === "unfiled" ? t("notes.unfiled") : group.title,
-          notes: group.notes,
-          book: group.book,
-          icon: group.id === "unfiled" ? "feather" : "book",
-          defaultCollapsed: Boolean(group.book && group.notes.length === 0),
-        }))
+      ? buildBookNoteGroups(filtered, books, treeSort)
+          // A Note Filter or search hides Notes, so a Book with none left
+          // would only add a row of nothing to the tree.
+          .filter((group) => !isFiltering || group.notes.length > 0)
+          .map((group) => ({
+            id: group.id,
+            title: group.id === "unfiled" ? t("notes.unfiled") : group.title,
+            notes: group.notes,
+            book: group.book,
+            icon: group.id === "unfiled" ? "feather" : "book",
+            defaultCollapsed: Boolean(group.book && group.notes.length === 0),
+          }))
       : treeGroupMode === "tag"
         ? buildTagNoteGroups(filtered, treeSort).map((group) => ({
             id: group.id,
@@ -811,7 +841,7 @@ export function NotesList({
           onTogglePinned={() => togglePinned(note)}
           moveTargets={moveTargets}
           onMove={moveNote}
-          draggable={treeGroupMode === "book" && !isSearchActive ? true : undefined}
+          draggable={treeGroupMode === "book" && !isFiltering ? true : undefined}
           onDragStart={(e) => handleDragStart(e, note.id)}
           onDragEnd={handleDragEnd}
           isDragging={draggedId === note.id}
@@ -934,6 +964,7 @@ export function NotesList({
               className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:bg-background"
             />
           </div>
+          <NoteFilterPopover filter={filter} isOpen={isFilterOpen} onOpenChange={setFilterOpen} />
           <SortSelect
             look="icon"
             value={activeSort}
@@ -965,8 +996,26 @@ export function NotesList({
         {...(onImportFiles ? dropHandlers : {})}
       >
         {(isImportingFiles || activeReactAriaImports > 0) && <FileDropImportStatus />}
-        {filtered.length === 0 &&
-        (viewMode !== "tree" || treeGroupMode !== "book" || books.length === 0) ? (
+        {notes.length > 0 && isFiltering && filtered.length === 0 ? (
+          <div className="flex flex-col items-center px-4 py-8 text-center text-sm">
+            <div className="mb-3 rounded-full bg-muted p-3 text-muted-foreground">
+              <Search className="h-5 w-5" />
+            </div>
+            <p className="font-semibold">{t("notes.noMatches")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("notes.noMatchesDescription")}</p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={clearFilters}
+              className="mt-3"
+            >
+              <X className="h-4 w-4" />
+              {t("notes.clearFilters")}
+            </Button>
+          </div>
+        ) : filtered.length === 0 &&
+          (viewMode !== "tree" || treeGroupMode !== "book" || books.length === 0) ? (
           <div className="text-center py-8 px-4 text-muted-foreground text-sm">
             <p>{t("notes.empty")}</p>
           </div>
@@ -990,7 +1039,7 @@ export function NotesList({
                   draggedId,
                   dragOverGroupId,
                   treeGroupMode,
-                  isSearchActive,
+                  isFiltering,
                   onDeleteNote,
                   onDuplicateNote,
                   onRenameNote,

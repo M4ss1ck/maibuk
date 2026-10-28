@@ -232,6 +232,8 @@
     "search": "Search notes...",
     "advancedFilters": "Filters",
     "clearFilters": "Clear filters",
+    "filtersActive_one": "Filters, {{count}} active",
+    "filtersActive_other": "Filters, {{count}} active",
     "matchingCount_one": "{{count}} of {{total}} note",
     "matchingCount_other": "{{count}} of {{total}} notes",
     "anyTag": "Any tag",

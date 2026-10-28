@@ -12,7 +12,11 @@ import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage } from "@/features/settings/types";
 import { NoteCard } from "@/components/notes";
 import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
-import { NoteFilterFields } from "@/components/notes/NoteFilterFields";
+import {
+  NOTE_FILTER_ACTIVE_CLASS,
+  NoteFilterCountBadge,
+  NoteFilterFields,
+} from "@/components/notes/NoteFilterFields";
 import {
   duplicateNoteInput,
   filterNotes,
@@ -409,13 +413,20 @@ export function NotesGallery() {
                   data-tutorial="notes.filters"
                   onClick={() => setShowAdvanced(!showAdvanced)}
                   aria-expanded={showAdvanced}
-                  aria-label={t("notes.advancedFilters")}
-                  className="h-11 shrink-0 border border-border"
+                  aria-label={
+                    filter.hasFilter
+                      ? t("notes.filtersActive", { count: filter.activeCount })
+                      : t("notes.advancedFilters")
+                  }
+                  className={`relative h-11 shrink-0 border border-border ${
+                    filter.hasFilter ? NOTE_FILTER_ACTIVE_CLASS : ""
+                  }`}
                 >
                   <SlidersHorizontal className="h-4 w-4" />
                   {/* Narrow panels keep the icon beside the search box; the
                       aria-label carries the name the hidden text gives up. */}
                   <span className="hidden @sm:inline">{t("notes.advancedFilters")}</span>
+                  <NoteFilterCountBadge count={filter.activeCount} />
                 </Button>
                 {hasFilters && (
                   <Tooltip content={t("notes.clearFilters")}>

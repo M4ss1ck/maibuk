@@ -232,6 +232,8 @@
     "search": "Buscar notas...",
     "advancedFilters": "Filtros",
     "clearFilters": "Limpiar filtros",
+    "filtersActive_one": "Filtros, {{count}} activo",
+    "filtersActive_other": "Filtros, {{count}} activos",
     "matchingCount_one": "{{count}} de {{total}} nota",
     "matchingCount_other": "{{count}} de {{total}} notas",
     "anyTag": "Cualquier etiqueta",

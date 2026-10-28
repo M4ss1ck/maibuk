@@ -6,6 +6,27 @@ import type { useNoteFilter } from "@/hooks/useNoteFilter";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import { Tooltip } from "@/components/ui/Tooltip";
 
+/**
+ * The tint both Filters buttons take while the Note Filter is not empty. It is
+ * important (`!`) because it overrides the Button variant's own background,
+ * border, and text colors, which no class order would settle.
+ */
+export const NOTE_FILTER_ACTIVE_CLASS = "border-primary/40! bg-primary/10! text-primary!";
+
+/** How many criteria the Note Filter has, pinned to its trigger's top-right corner. */
+export function NoteFilterCountBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"
+    >
+      {count}
+    </span>
+  );
+}
+
 interface NoteFilterFieldsProps {
   filter: ReturnType<typeof useNoteFilter>;
   className?: string;
@@ -171,7 +192,11 @@ function DateFilter({
       ref={rootRef}
       className="relative"
       onKeyDown={(event) => {
-        if (event.key === "Escape") setIsOpen(false);
+        // The calendar nests inside a Popover in the sidebar: Escape here
+        // closes only the calendar, so the Popover stays open.
+        if (event.key !== "Escape" || !isOpen) return;
+        event.stopPropagation();
+        setIsOpen(false);
       }}
     >
       <button
