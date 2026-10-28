@@ -1,10 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NOTE_ROW_ESTIMATE, NotesList } from "@/components/notes/NotesList";
 import { DEFAULT_NOTES_FILTERS } from "@/components/notes/notes-list-model";
 import type { Book } from "@/features/books/types";
 import type { Note } from "@/features/notes";
 import { useSettingsStore } from "@/features/settings/store";
+import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { runCommand } from "@/lib/command-runner";
 import { installPointerEvent } from "@/test/support/pointer-events";
 import { mockVirtualizer } from "@/test/support/virtualizer-layout";
@@ -206,6 +208,43 @@ describe("NotesList Note Filter", () => {
     expect(useSettingsStore.getState().notesFilters).toEqual(DEFAULT_NOTES_FILTERS);
     expect(screen.getByPlaceholderText("Search notes...")).toHaveValue("");
     expect(screen.getByText("Alpha")).toBeInTheDocument();
+  });
+
+  it("binds the Note Filter Commands on this screen", () => {
+    // Clear filters is bound only while there is something to clear.
+    setFilters({ tags: ["task"] });
+    renderList();
+
+    expect(Object.keys(useBoundShortcutStore.getState().counts)).toEqual(
+      expect.arrayContaining(["notes.advancedFilters", "notes.clearFilters"])
+    );
+  });
+
+  it("Mod+Shift+F opens the Popover from the sidebar search box", async () => {
+    const user = userEvent.setup();
+    renderList();
+    await user.click(screen.getByPlaceholderText("Search notes..."));
+
+    await user.keyboard("{Control>}{Shift>}f{/Shift}{/Control}");
+
+    await waitFor(() => expect(screen.getByPlaceholderText("Any tag")).toHaveFocus());
+  });
+
+  it("Mod+Shift+F does nothing while typing in the open Note's text", async () => {
+    const user = userEvent.setup();
+    renderList();
+    const editor = document.createElement("div");
+    // jsdom has no contentEditable property; the attribute is what the app reads.
+    editor.setAttribute("contenteditable", "true");
+    editor.tabIndex = 0;
+    document.body.append(editor);
+    editor.focus();
+
+    await user.keyboard("{Control>}{Shift>}f{/Shift}{/Control}");
+
+    expect(screen.queryByPlaceholderText("Any tag")).not.toBeInTheDocument();
+    expect(editor).toHaveFocus();
+    editor.remove();
   });
 
   it("opens the Popover from the notes.advancedFilters Command", async () => {

@@ -190,7 +190,7 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
     recordsInput: false,
     skip: {
       android:
-        "a phone keeps the Notes list in a drawer below md, so its Filters button is not on screen beside the open Note",
+        "below md the Notes list is hidden while a Note is open, so its Filters button is not on screen beside the Note",
     },
   },
   {

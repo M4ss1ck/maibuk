@@ -51,14 +51,19 @@ export function NoteFilterPopover({ filter, isOpen, onOpenChange }: NoteFilterPo
 
       <Popover
         placement="bottom end"
-        className="z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-background p-3 shadow-lg focus:outline-none"
+        className="z-50 mt-1 max-h-[calc(100dvh-1rem)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-border bg-background p-3 shadow-lg focus:outline-none"
       >
         <Dialog aria-label={t("notes.advancedFilters")} className="outline-none">
           <NoteFilterFields filter={filter} tagInputRef={tagInputRef} className="grid gap-3" />
           <div className="mt-3 border-t border-border pt-3">
             <Button
               isDisabled={!filter.hasFilter}
-              onPress={filter.clear}
+              onPress={() => {
+                filter.clear();
+                // The button disables itself once nothing is left to clear, so
+                // focus moves to the first field rather than falling to <body>.
+                tagInputRef.current?.focus();
+              }}
               className="inline-flex w-full items-center justify-center rounded-lg bg-muted px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/80 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t("notes.clearFilters")}

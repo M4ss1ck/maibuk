@@ -99,6 +99,21 @@ describe("NoteFilterPopover", () => {
     expect(screen.getByRole("dialog", { name: "Filters" })).toBeInTheDocument();
   });
 
+  it("Space on an include Tag's checkbox narrows to it, by keyboard alone", async () => {
+    const user = userEvent.setup();
+    render(<FilterHarness />);
+    await openFromKeyboard(user);
+
+    // Focus opened the include list; Tab walks into its checkboxes.
+    const dialog = screen.getByRole("dialog", { name: "Filters" });
+    const draft = within(dialog).getAllByRole("checkbox", { name: "draft" })[0];
+    while (document.activeElement !== draft) await user.tab();
+    await user.keyboard(" ");
+
+    expect(useSettingsStore.getState().notesFilters.tags).toEqual(["draft"]);
+    expect(useSettingsStore.getState().notesFilters.excludeTags).toEqual([]);
+  });
+
   it("choosing an exclude Tag persists it and names the trigger with the count", async () => {
     const user = userEvent.setup();
     render(<FilterHarness />);
@@ -157,17 +172,19 @@ describe("NoteFilterPopover", () => {
     await user.keyboard("{Enter}");
     await waitFor(() => expect(screen.getByPlaceholderText("Any tag")).toHaveFocus());
 
-    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    const clear = screen.getByRole("button", { name: "Clear filters" });
+    while (document.activeElement !== clear) await user.tab();
+    await user.keyboard("{Enter}");
 
     expect(useSettingsStore.getState().notesFilters).toEqual(DEFAULT_NOTES_FILTERS);
     expect(screen.getByRole("dialog", { name: "Filters" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
+    expect(clear).toBeDisabled();
+    // The pressed button disabled itself, so focus went back to the first
+    // field instead of falling out of the Popover.
+    expect(screen.getByPlaceholderText("Any tag")).toHaveFocus();
 
-    // Back into the fields, then out: the disabled footer button no longer
-    // takes keys.
-    await user.click(screen.getByPlaceholderText("Any tag"));
     await user.keyboard("{Escape}");
-    await waitFor(() => expect(trigger("Filters")).toBeInTheDocument());
+    await waitFor(() => expect(trigger("Filters")).toHaveFocus());
   });
 
   it("Clear filters is disabled while no criterion is set", async () => {

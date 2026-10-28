@@ -170,6 +170,15 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
         ref={rootRef}
         className={`relative ${className} ${isDisabled ? "opacity-50" : ""}`}
         aria-disabled={isDisabled || undefined}
+        // Tabbing past the list closes it, so it never covers the next field.
+        // A pointer press has no relatedTarget and is left to the pointerdown
+        // listener, which knows whether it landed inside.
+        onBlur={(event) => {
+          const next = event.relatedTarget;
+          if (!isOpen || !next || rootRef.current?.contains(next as Node)) return;
+          setOpen(false);
+          setQuery("");
+        }}
       >
         <div
           onMouseDown={(event) => {

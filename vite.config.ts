@@ -255,6 +255,7 @@ export default defineConfig(() => ({
         "src/hooks/usePluginSecrets.ts",
         "src/hooks/useItemContextMenu.ts",
         "src/hooks/useParkSelectionWhileDragging.ts",
+        "src/hooks/useNoteFilter.ts",
         "src/lib/park-selection.ts",
         "src/features/releases/release-notes.ts",
         "src/features/releases/release-check.ts",
@@ -273,6 +274,7 @@ export default defineConfig(() => ({
         "src/components/ui/Toast.tsx",
         "src/components/ui/Combobox.tsx",
         "src/components/ui/MultiSelectCombobox.tsx",
+        "src/components/notes/NoteFilterPopover.tsx",
         "src/components/ui/ItemActionsMenu.tsx",
         "src/components/dictation/PhraseRecording.tsx",
         // Phase 4: Integration (routing, providers, layout)

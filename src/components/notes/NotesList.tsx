@@ -312,6 +312,14 @@ export function NotesList({
     filter.clear();
     setSearch("");
   };
+  // The Command reaches the search box, like the Gallery's, but never the open
+  // Note's text, and it waits while the list is hidden (a Note open below md).
+  const openFilters = () => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest("[contenteditable='true']")) return;
+    if (listContainerRef.current?.checkVisibility?.() === false) return;
+    setFilterOpen(true);
+  };
 
   // A list Sort is a view; leaving it keeps the order it showed as the Custom
   // Order (ADR 0028). The tree's Sort never writes.
@@ -334,7 +342,7 @@ export function NotesList({
       onTrigger: () => onCreateNote(books[0]?.id ?? null),
     },
     ...NOTES_SORT_COMMANDS.map(({ id, sort }) => ({ id, onTrigger: () => applySort(sort) })),
-    { id: "notes.advancedFilters", allowInInput: true, onTrigger: () => setFilterOpen(true) },
+    { id: "notes.advancedFilters", allowInInput: true, onTrigger: openFilters },
     { id: "notes.clearFilters", enabled: isFiltering, onTrigger: clearFilters },
   ]);
 
