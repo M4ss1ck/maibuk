@@ -54,6 +54,7 @@
     "conformance:plugins": "tsx e2e/conformance/run-plugins.ts",
     "bench:dictation": "vitest bench --run src/test/bench/dictation-interpreter.bench.ts --outputJson .bench/dictation.json && node scripts/dictation-bench-budget.mjs .bench/dictation.json",
     "bench:palette": "vitest bench --run src/test/bench/command-palette.bench.ts --outputJson .bench/palette.json && node scripts/palette-bench-budget.mjs .bench/palette.json",
+    "bench:notes-filter": "vitest bench --run src/test/bench/notes-filter.bench.ts --outputJson .bench/notes-filter.json && node scripts/notes-filter-bench-budget.mjs .bench/notes-filter.json",
     "bench:search": "vitest bench --run --no-file-parallelism src/test/bench/search-desktop.bench.ts src/test/bench/search-web.bench.ts --outputJson .bench/search.json && node scripts/search-bench-budget.mjs .bench/search.json",
     "bench:plugin-start": "vitest bench --run src/test/bench/plugin-start.bench.ts --outputJson .bench/plugin-start.json && node scripts/plugin-start-bench-budget.mjs .bench/plugin-start.json",
     "bench:editor-highlights": "vitest bench --run src/test/bench/editor-highlights.bench.ts --outputJson .bench/editor-highlights.json && node scripts/editor-highlights-bench-budget.mjs .bench/editor-highlights.json",
