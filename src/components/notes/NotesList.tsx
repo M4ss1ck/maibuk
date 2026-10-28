@@ -960,7 +960,9 @@ export function NotesList({
         </Tooltip>
       </div>
 
-      <div className="px-3 pb-3 shrink-0">
+      {/* Stacks over the header (z-10) above it, which would otherwise clip the
+          Filters count badge that rises past the row's top edge. */}
+      <div className="relative z-10 px-3 pb-3 shrink-0">
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

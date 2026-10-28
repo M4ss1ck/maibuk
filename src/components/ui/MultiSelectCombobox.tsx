@@ -1,5 +1,6 @@
 import type { CSSProperties, ForwardedRef, KeyboardEvent } from "react";
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { ChevronDown, X } from "lucide-react";
 import { Tooltip } from "@/components/ui/Tooltip";
 
@@ -76,6 +77,10 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
   ) {
     const rootRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const listRef = useRef<HTMLDivElement>(null);
+    // Escape in the list hands focus back to the input, whose focus would
+    // otherwise reopen the list it just closed.
+    const keepClosedOnFocusRef = useRef(false);
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
     const selected = new Set(value.map(normalize));
@@ -139,7 +144,8 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
     };
 
     const createCustomValue = (shouldClose = closeOnCreate) => {
-      if (isDisabled || !allowCustom || !trimmedQuery || selected.has(normalize(trimmedQuery))) return;
+      if (isDisabled || !allowCustom || !trimmedQuery || selected.has(normalize(trimmedQuery)))
+        return;
       onChange(uniqueValues([...value, trimmedQuery]));
       setQuery("");
       if (shouldClose) setOpen(false);
@@ -151,11 +157,34 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
       onChange(value.filter((selectedItem) => normalize(selectedItem) !== key));
     };
 
+    const closeList = () => {
+      setOpen(false);
+      setQuery("");
+    };
+
+    const focusOption = (from: Element | null, step: 1 | -1) => {
+      const boxes = [
+        ...(listRef.current?.querySelectorAll<HTMLInputElement>("input[type=checkbox]") ?? []),
+      ];
+      const index = from ? boxes.indexOf(from as HTMLInputElement) : -1;
+      boxes[Math.min(Math.max(index + step, 0), boxes.length - 1)]?.focus();
+    };
+
     const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
       if (isDisabled) return;
+      // An open list is the innermost layer: Escape closes it alone, so a
+      // Dialog or Popover around the field stays open for a second Escape.
       if (event.key === "Escape") {
-        setOpen(false);
-        setQuery("");
+        if (!isOpen && !query) return;
+        event.stopPropagation();
+        closeList();
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        flushSync(() => setOpen(true));
+        focusOption(null, 1);
         return;
       }
 
@@ -226,7 +255,13 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
             aria-expanded={isOpen}
             disabled={isDisabled}
             value={query}
-            onFocus={() => setOpen(true)}
+            onFocus={() => {
+              if (keepClosedOnFocusRef.current) {
+                keepClosedOnFocusRef.current = false;
+                return;
+              }
+              setOpen(true);
+            }}
             onChange={(event) => {
               if (isDisabled) return;
               setQuery(event.target.value);
@@ -244,6 +279,8 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
               inputRef.current?.focus();
             }}
             disabled={isDisabled}
+            // A pointer affordance: the keyboard opens the list from the input.
+            tabIndex={-1}
             className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed"
             aria-expanded={isOpen}
           >
@@ -252,7 +289,24 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
         </div>
 
         {isOpen && (filteredOptions.length > 0 || showCustomOption) && (
-          <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-background p-1 shadow-lg">
+          <div
+            ref={listRef}
+            // The list walks its own options; the app's arrow navigation
+            // would otherwise move focus to the next region.
+            data-owns-arrows
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                focusOption(document.activeElement, event.key === "ArrowDown" ? 1 : -1);
+              } else if (event.key === "Escape") {
+                event.stopPropagation();
+                closeList();
+                keepClosedOnFocusRef.current = true;
+                inputRef.current?.focus();
+              }
+            }}
+            className="absolute left-0 top-full z-50 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-background p-1 shadow-lg"
+          >
             {showCustomOption && (
               <OptionRow
                 label={customOptionLabel(trimmedQuery)}
@@ -304,9 +358,12 @@ interface OptionRowProps {
 
 function OptionRow({ label, checked, onCheckboxChange, onItemClick }: OptionRowProps) {
   return (
-    <div className="flex items-center rounded-md hover:bg-muted">
+    <div className="flex items-center rounded-md hover:bg-muted focus-within:bg-muted">
+      {/* Out of the tab order: ArrowDown reaches the options, so Tab leaves the
+          field and its list closes behind it. */}
       <input
         type="checkbox"
+        tabIndex={-1}
         checked={checked}
         onChange={onCheckboxChange}
         onClick={(event) => event.stopPropagation()}
@@ -315,6 +372,7 @@ function OptionRow({ label, checked, onCheckboxChange, onItemClick }: OptionRowP
       />
       <button
         type="button"
+        tabIndex={-1}
         onClick={onItemClick}
         className="min-w-0 flex-1 px-2 py-1.5 text-left text-sm text-foreground"
       >

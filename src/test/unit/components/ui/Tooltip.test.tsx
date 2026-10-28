@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Tooltip, TooltipGroup } from "@/components/ui/Tooltip";
@@ -309,5 +310,28 @@ describe("Tooltip", () => {
     expect(screen.getByTestId("tooltip-primary-row")).toHaveTextContent("Bold");
     expect(screen.queryByTestId("tooltip-markdown-row")).toBeNull();
     expect(screen.getByRole("tooltip").querySelector("code")).toBeNull();
+  });
+
+  it("stacks above a React Aria Popover, so a help Tooltip inside one is never covered", () => {
+    render(
+      <DialogTrigger defaultOpen>
+        <Button>Filters</Button>
+        <Popover>
+          <Dialog aria-label="Filters">
+            <Tooltip content="Hides notes that have any of these tags">
+              <button type="button">Help</button>
+            </Tooltip>
+          </Dialog>
+        </Popover>
+      </DialogTrigger>
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Help" }));
+    act(() => vi.advanceTimersByTime(600));
+
+    const popover = screen.getByRole("dialog", { name: "Filters" }).parentElement as HTMLElement;
+    const tooltip = screen.getByRole("tooltip");
+    expect(Number(popover.style.zIndex)).toBeGreaterThan(0);
+    expect(Number(tooltip.style.zIndex)).toBeGreaterThan(Number(popover.style.zIndex));
   });
 });

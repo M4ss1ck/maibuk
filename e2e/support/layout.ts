@@ -152,3 +152,57 @@ export async function watchPlaceholderUnderPartial(
   return () =>
     editor.page().evaluate((key) => (window as unknown as Record<string, string[]>)[key], key);
 }
+
+/**
+ * Whether `floating` stacks above `overlay`: the z-index each computes, as
+ * both are portalled straight under <body> and share its stacking context. A
+ * React Aria Popover carries an inline z-index, so a Tooltip inside one has to
+ * clear it or it paints behind the Popover it explains.
+ */
+export async function stacksAbove(floating: Locator, overlay: Locator): Promise<boolean> {
+  const overlayZ = await overlay.evaluate((el) => Number(getComputedStyle(el).zIndex));
+  const floatingZ = await floating.evaluate((el) => Number(getComputedStyle(el).zIndex));
+  return floatingZ > overlayZ;
+}
+
+/**
+ * What paints at the top edge of `child`, when it is not `child` itself: the
+ * class of the element covering it, or null when nothing does. A badge that
+ * rises past its row's top edge can be painted over by the row above it.
+ * Ignores `pointer-events: none` on `child`, which hit testing would skip.
+ */
+export function coveredTopEdge(child: Locator): Promise<string | null> {
+  return child.evaluate((el) => {
+    const target = el as HTMLElement;
+    const previous = target.style.pointerEvents;
+    target.style.pointerEvents = "auto";
+    const box = target.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + 1);
+    target.style.pointerEvents = previous;
+    return target.contains(hit) ? null : String(hit?.className ?? "nothing");
+  });
+}
+
+/**
+ * How far the center of `text`'s box sits from the center of `icon`'s box, and
+ * whether the text box is trimmed below its line height. An uppercase label
+ * centered on its line box puts its caps above the icon beside it; trimmed to
+ * the cap height (`text-box`), its box is the caps, so equal centers mean the
+ * icon is centered on the letters.
+ */
+export async function capCenterOffset(
+  text: Locator,
+  icon: Locator
+): Promise<{ offset: number; trimmed: boolean }> {
+  const read = (el: Element) => {
+    const box = el.getBoundingClientRect();
+    return {
+      center: box.top + box.height / 2,
+      height: box.height,
+      lineHeight: Number.parseFloat(getComputedStyle(el).lineHeight),
+    };
+  };
+  const t = await text.evaluate(read);
+  const i = await icon.evaluate(read);
+  return { offset: Math.abs(t.center - i.center), trimmed: t.height < t.lineHeight };
+}

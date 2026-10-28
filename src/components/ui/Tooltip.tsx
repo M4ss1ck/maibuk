@@ -29,6 +29,13 @@ import type { CommandId } from "@/lib/shortcut-registry";
 
 const OPEN_DELAY = 500;
 
+/**
+ * React Aria positions every Popover with an inline `z-index: 100000`
+ * (`useOverlayPosition`), so a Tooltip inside one must sit above that or it
+ * paints behind the Popover it explains.
+ */
+export const TOOLTIP_Z_INDEX = 100001;
+
 type HastNode = ReturnType<typeof lowlight.highlight>["children"][number];
 
 /**
@@ -135,8 +142,7 @@ export function Tooltip({
         <FloatingPortal>
           <div
             ref={refs.setFloating}
-            className="z-60"
-            style={floatingStyles}
+            style={{ ...floatingStyles, zIndex: TOOLTIP_Z_INDEX }}
             {...getFloatingProps()}
           >
             <div
