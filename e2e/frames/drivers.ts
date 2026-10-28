@@ -24,7 +24,12 @@ import {
   waitHidden,
   waitVisible,
 } from "./frame-page";
-import { PERF_BOOK, PERF_CANVAS, PERF_MANY_CHAPTERS_BOOK } from "../support/seed/names";
+import {
+  PERF_BOOK,
+  PERF_CANVAS,
+  PERF_MANY_CHAPTERS_BOOK,
+  PERF_TAGGED_NOTES,
+} from "../support/seed/names";
 
 export interface FrameDriverContext {
   page: FramePage;
@@ -552,6 +557,68 @@ const notesGalleryArrows: FrameDriver = {
   },
 };
 
+/**
+ * The Tag the `notes-filter-toggle` scenario excludes: the `perfTaggedNotes`
+ * seed gives a third of its Notes this Tag and nothing else.
+ */
+const FILTER_TAG = PERF_TAGGED_NOTES.tags[0];
+
+/** Space presses per measured window: ten exclusions, each undone by the next. */
+const FILTER_TOGGLES = 20;
+
+const notesFilterButton = (page: FramePage) =>
+  page.getByRole("button", { name: "Filters", exact: true });
+const notesFilterDialog = (page: FramePage) => page.getByRole("dialog", { name: "Filters" });
+/**
+ * The Tag's checkbox in the exclude-Tags list. The Popover's fields are the
+ * include Tags, the exclude Tags, then the dates, so the exclusion list is the
+ * second field; the include list holds a checkbox with the same name, which the
+ * field scoping keeps out.
+ */
+const excludeTagCheckbox = (page: FramePage) =>
+  page.locator(
+    `[role="dialog"] > div:first-child > div:nth-child(2) input[type="checkbox"][aria-label="${FILTER_TAG}"]`
+  );
+
+const isChecked = (target: FrameLocator) =>
+  target.evaluate((el) => (el as HTMLInputElement).checked === true).catch(() => false);
+
+/**
+ * Toggles one Tag in the Notes list's Filter Popover, by keyboard only. The
+ * exclusion hides a third of the 2,000 Notes and brings them back on the next
+ * press, so the virtualized list behind the Popover filters twice per pair.
+ */
+const notesFilterToggle: FrameDriver = {
+  async prepare(ctx) {
+    const { page } = ctx;
+    await openFirstNote(ctx);
+    await tabTo(page, notesFilterButton(page), { max: 60 });
+    await page.keyboard.press("Enter");
+    // Opening lands on the include-Tags field, whose option list it opens; the
+    // exclusion field and its list follow it.
+    await waitVisible(notesFilterDialog(page));
+    await waitFocused(page.locator('input[placeholder="Any tag"]'));
+    await tabTo(page, excludeTagCheckbox(page), { max: 40 });
+    await sleep(300);
+  },
+  async arrange({ page }) {
+    // Each repetition ends with the Tag un-excluded (twenty presses) and the
+    // checkbox focused; this only puts back a repetition that lost either.
+    const checkbox = excludeTagCheckbox(page);
+    await waitVisible(checkbox);
+    if (!(await isFocused(checkbox))) await tabTo(page, checkbox, { max: 40 });
+    if (await isChecked(checkbox)) await page.keyboard.press("Space");
+    await sleep(300);
+  },
+  async measure({ page }) {
+    for (let i = 0; i < FILTER_TOGGLES; i++) {
+      await page.keyboard.press("Space");
+      await sleep(120);
+    }
+    await sleep(200);
+  },
+};
+
 const manyChaptersText = (page: FramePage) => page.locator('.ProseMirror[aria-label^="Text of "]');
 const openManyChaptersBook = (ctx: FrameDriverContext) =>
   openBook(ctx, PERF_MANY_CHAPTERS_BOOK.title, manyChaptersText(ctx.page));
@@ -764,6 +831,7 @@ export const FRAME_DRIVERS: Record<string, FrameDriver> = {
     noteText
   ),
   "notes-gallery-arrows": notesGalleryArrows,
+  "notes-filter-toggle": notesFilterToggle,
   "pane-slide": paneSlide,
   "plugin-remote-ui": pluginRemoteUi,
   "typing-with-highlights": typingWithHighlights,

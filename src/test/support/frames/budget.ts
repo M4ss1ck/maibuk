@@ -108,6 +108,9 @@ export const FRAME_BUDGETS: Readonly<Record<string, ScenarioBudget>> = {
     },
   },
   "pane-slide": { overrides: {}, reasons: {} },
+  // Issue #650: toggling a Tag in the Notes list's Popover drops no frames, so
+  // it stays on the frozen defaults like every scenario but the Gallery's.
+  "notes-filter-toggle": { overrides: {}, reasons: {} },
   "plugin-remote-ui": { overrides: {}, reasons: {} },
   "typing-with-highlights": {
     overrides: { inputP95Intervals: 1, minInputs: 60 },

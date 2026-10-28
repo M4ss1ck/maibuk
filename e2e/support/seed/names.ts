@@ -88,6 +88,12 @@ export const PERF_CANVAS = {
 /** `perfManyNotes`: Notes titled with this prefix and a number. */
 export const PERF_NOTES = { titlePrefix: "Watch note" } as const;
 
+/** `perfTaggedNotes`: Notes titled with this prefix, each carrying one of these Tags. */
+export const PERF_TAGGED_NOTES = {
+  titlePrefix: "Tagged note",
+  tags: ["task", "idea", "draft"],
+} as const;
+
 /** `perfManyChapters`: a Book whose Chapters are numbered with this prefix. */
 export const PERF_MANY_CHAPTERS_BOOK = {
   title: "The Hundred Logs",
@@ -103,6 +109,8 @@ export const PERF_SIZES = {
   canvasGrid: { columns: 20, rows: 12 },
   /** Enough Notes to make the Notes list scroll and virtualize. */
   manyNotes: 500,
+  /** Enough Notes that a Note Filter change re-renders a long, virtualized Notes list. */
+  taggedNotes: 2000,
   /** Enough Chapters to make the Outline long. */
   manyChapters: 100,
 } as const;

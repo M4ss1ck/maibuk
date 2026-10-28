@@ -179,6 +179,21 @@ export const FRAME_SCENARIOS: readonly FrameScenario[] = [
     },
   },
   {
+    id: "notes-filter-toggle",
+    title: "Note Filter toggle in the Notes list",
+    seed: "perfTaggedNotes",
+    warmUp:
+      "Open a Note from the Notes Gallery, Tab to the Notes list's Filters button, Enter to open the Popover, and Tab to the task checkbox in the exclude-Tags list.",
+    measured:
+      "Ten times: Space excludes the task Tag (a third of the 2,000 Notes leave the list), Space again brings them back.",
+    repetitions: 3,
+    recordsInput: false,
+    skip: {
+      android:
+        "a phone keeps the Notes list in a drawer below md, so its Filters button is not on screen beside the open Note",
+    },
+  },
+  {
     id: "notes-gallery-arrows",
     title: "Arrow moves across the Notes Gallery",
     seed: "perfManyNotes",

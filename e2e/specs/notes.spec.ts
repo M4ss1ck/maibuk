@@ -340,9 +340,17 @@ test.describe("Notes list filter @wf:notes-list-filter", () => {
     page,
   }) => {
     await openNote(page, SEED_NOTES.keeperLog);
+    const header = [
+      page.getByPlaceholder("Search notes..."),
+      page.getByRole("button", { name: /^Sort notes/ }),
+    ];
+    await capture(page, "notes-list-filter-idle", { around: header });
     await openSidebarFilters(page);
 
     await excludeTag(page, SEED_NOTE_TAGS.harbor);
+    await capture(page, "notes-list-filter-open", {
+      around: [...header, page.getByRole("dialog", { name: "Filters" })],
+    });
 
     // The open Popover hides the page behind it from assistive technology, so
     // the rows and the trigger are read by role once Escape closes it.
@@ -354,6 +362,7 @@ test.describe("Notes list filter @wf:notes-list-filter", () => {
     await expect(
       page.getByRole("button", { name: "Filters, 1 active", exact: true })
     ).toBeFocused();
+    await capture(page, "notes-list-filter-active", { around: header });
   });
 
   test("Mod+Shift+F opens the Popover with focus in the tag filter @sc:notes.advancedFilters", async ({
@@ -379,9 +388,11 @@ test.describe("Notes list filter @wf:notes-list-filter", () => {
 
     await expect(galleryGrid(page).getByRole("row")).toHaveCount(2);
     await expect(galleryCard(page, SEED_NOTES.harborNotes)).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Filters, 1 active", exact: true })
-    ).toBeVisible();
+    const galleryFilters = page.getByRole("button", { name: "Filters, 1 active", exact: true });
+    await capture(page, "notes-gallery-filter-active", {
+      around: [page.getByPlaceholder("Search notes..."), galleryFilters],
+    });
+    await expect(galleryFilters).toBeVisible();
   });
 
   test("excluding every Tagged Note shows the no-matches state, whose Clear filters restores them @sc:notes.clearFilters", async ({
