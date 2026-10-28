@@ -212,6 +212,14 @@ export interface NoteFilterCriteria {
   dateTo?: string;
 }
 
+/** The Note Filter alone: the criteria a screen persists, without any search text. */
+export interface NoteFilterCriteriaState {
+  tags: string[];
+  excludeTags: string[];
+  dateFrom: string;
+  dateTo: string;
+}
+
 function collectText(value: unknown): string {
   if (typeof value === "string") return value;
   if (!value || typeof value !== "object") return "";
@@ -296,6 +304,16 @@ export function filterNotes(
 
     return true;
   });
+}
+
+/** How many Note Filter criteria are set, each Tag and each date counting as one. */
+export function countFilterCriteria(criteria: NoteFilterCriteriaState): number {
+  return (
+    criteria.tags.length +
+    criteria.excludeTags.length +
+    (criteria.dateFrom ? 1 : 0) +
+    (criteria.dateTo ? 1 : 0)
+  );
 }
 
 export function buildListNoteSections(

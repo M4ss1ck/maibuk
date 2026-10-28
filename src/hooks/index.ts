@@ -15,3 +15,4 @@ export { useItemContextMenu, useTouchDragFromHandle } from "@/hooks/useItemConte
 export { useRestoreFocus } from "@/hooks/useRestoreFocus";
 export { useParkSelectionWhileDragging } from "@/hooks/useParkSelectionWhileDragging";
 export { useFlipReorder } from "@/hooks/useFlipReorder";
+export { useNoteFilter } from "@/hooks/useNoteFilter";

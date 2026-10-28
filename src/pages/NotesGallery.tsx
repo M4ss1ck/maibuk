@@ -4,20 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { GridList } from "react-aria-components/GridList";
 import { GridLayout, Size, Virtualizer } from "react-aria-components";
-import {
-  BookOpen,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  EyeOff,
-  Info,
-  Search,
-  SlidersHorizontal,
-  Tags,
-  Trash2,
-  X,
-} from "lucide-react";
+import { BookOpen, Copy, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { useNoteStore } from "@/features/notes";
 import type { Note } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
@@ -25,6 +12,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage } from "@/features/settings/types";
 import { NoteCard } from "@/components/notes";
 import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
+import { NoteFilterFields } from "@/components/notes/NoteFilterFields";
 import {
   duplicateNoteInput,
   filterNotes,
@@ -34,7 +22,6 @@ import {
 } from "@/components/notes/notes-list-model";
 import type { ItemAction } from "@/components/ui";
 import { Button } from "@/components/ui/Button";
-import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import { SortSelect } from "@/components/ui/SortSelect";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FileDropImportStatus } from "@/components/ui/FileDropImportStatus";
@@ -43,6 +30,7 @@ import { LibraryLoadError } from "@/components/LibraryLoadError";
 import { useShortcuts } from "@/lib/shortcuts";
 import { useSearchSwitchesStore } from "@/features/search/switches";
 import { droppedTextToEditorHtml } from "@/features/markdown";
+import { useNoteFilter } from "@/hooks/useNoteFilter";
 import { useTextFileDrop } from "@/hooks/useTextFileDrop";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
 import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
@@ -93,7 +81,7 @@ function useGalleryColumns(areaRef: RefObject<HTMLElement | null>, refreshKey: n
 }
 
 export function NotesGallery() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const notes = useNoteStore((s) => s.notes);
   const loadNotes = useNoteStore((s) => s.loadNotes);
@@ -114,29 +102,14 @@ export function NotesGallery() {
     .label;
   const notesFilters = useSettingsStore((s) => s.notesFilters);
   const setNotesFilters = useSettingsStore((s) => s.setNotesFilters);
-  const { search, showAdvanced, tags: tagFilters, excludeTags, dateFrom, dateTo } = notesFilters;
+  const { search, showAdvanced } = notesFilters;
+  const filter = useNoteFilter(notes);
   const setSearch = useCallback(
     (value: string) => setNotesFilters({ search: value }),
     [setNotesFilters]
   );
   const setShowAdvanced = useCallback(
     (value: boolean) => setNotesFilters({ showAdvanced: value }),
-    [setNotesFilters]
-  );
-  const setTagFilters = useCallback(
-    (value: string[]) => setNotesFilters({ tags: value }),
-    [setNotesFilters]
-  );
-  const setExcludeTags = useCallback(
-    (value: string[]) => setNotesFilters({ excludeTags: value }),
-    [setNotesFilters]
-  );
-  const setDateFrom = useCallback(
-    (value: string) => setNotesFilters({ dateFrom: value }),
-    [setNotesFilters]
-  );
-  const setDateTo = useCallback(
-    (value: string) => setNotesFilters({ dateTo: value }),
     [setNotesFilters]
   );
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -183,47 +156,22 @@ export function NotesGallery() {
     return map;
   }, [books]);
 
-  const tagOptions = useMemo(() => {
-    const tags = new Set<string>();
-    for (const note of notes) {
-      for (const rawTag of note.tags) {
-        const tag = rawTag.trim();
-        if (tag) tags.add(tag);
-      }
-    }
-
-    return [...tags].sort((a, b) => a.localeCompare(b));
-  }, [notes]);
-
-  // A tag can only mean one thing at a time, so each list drops what the other
-  // already claims rather than resolving a contradiction after the fact.
-  const includeTagOptions = useMemo(
-    () => tagOptions.filter((tag) => !excludeTags.includes(tag)),
-    [tagOptions, excludeTags]
-  );
-  const excludeTagOptions = useMemo(
-    () => tagOptions.filter((tag) => !tagFilters.includes(tag)),
-    [tagOptions, tagFilters]
-  );
-
   const filteredNotes = useMemo(
     () =>
       sortNotesBy(
         filterNotes(notes, {
           query: search,
-          tags: tagFilters,
-          excludeTags,
-          dateFrom,
-          dateTo,
+          tags: filter.tags,
+          excludeTags: filter.excludeTags,
+          dateFrom: filter.dateFrom,
+          dateTo: filter.dateTo,
         }),
         sort
       ),
-    [notes, search, tagFilters, excludeTags, dateFrom, dateTo, sort]
+    [notes, search, filter.tags, filter.excludeTags, filter.dateFrom, filter.dateTo, sort]
   );
 
-  const hasFilters = Boolean(
-    search.trim() || tagFilters.length > 0 || excludeTags.length > 0 || dateFrom || dateTo
-  );
+  const hasFilters = Boolean(search.trim() || filter.hasFilter);
 
   // The measured width only matters once the grid is on screen; re-measuring
   // as the result set changes catches the empty state giving way to cards.
@@ -332,7 +280,8 @@ export function NotesGallery() {
   };
 
   const clearFilters = () => {
-    setNotesFilters({ search: "", tags: [], excludeTags: [], dateFrom: "", dateTo: "" });
+    setNotesFilters({ search: "" });
+    filter.clear();
   };
 
   const openAdvancedFilters = useCallback(() => {
@@ -485,70 +434,11 @@ export function NotesGallery() {
             </div>
 
             {showAdvanced && (
-              <div className="mt-3 grid gap-3 border-t border-border pt-3 @md:grid-cols-2 @3xl:grid-cols-[minmax(200px,1.2fr)_minmax(200px,1.2fr)_minmax(150px,0.8fr)_minmax(150px,0.8fr)]">
-                <div className="min-w-0">
-                  <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    <Tags className="h-3.5 w-3.5" />
-                    {t("notes.tagFilter")}
-                    <FilterHelp label={t("notes.tagFilterHelp")} />
-                  </span>
-                  <MultiSelectCombobox
-                    ref={tagFilterInputRef}
-                    value={tagFilters}
-                    onChange={setTagFilters}
-                    options={includeTagOptions}
-                    placeholder={t("notes.anyTag")}
-                    removeLabel={(tag) => t("notes.removeTag", { tag })}
-                  />
-                </div>
-
-                <div className="min-w-0">
-                  <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    <EyeOff className="h-3.5 w-3.5" />
-                    {t("notes.excludeTagFilter")}
-                    <FilterHelp label={t("notes.excludeTagFilterHelp")} />
-                  </span>
-                  <MultiSelectCombobox
-                    value={excludeTags}
-                    onChange={setExcludeTags}
-                    options={excludeTagOptions}
-                    placeholder={t("notes.noExcludedTags")}
-                    removeLabel={(tag) => t("notes.removeExcludedTag", { tag })}
-                  />
-                </div>
-
-                <div>
-                  <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    {t("notes.dateFrom")}
-                  </span>
-                  <DateFilter
-                    value={dateFrom}
-                    onChange={setDateFrom}
-                    label={t("notes.dateFrom")}
-                    language={i18n.language}
-                    clearLabel={t("notes.clearDate")}
-                    previousMonthLabel={t("notes.previousMonth")}
-                    nextMonthLabel={t("notes.nextMonth")}
-                  />
-                </div>
-
-                <div>
-                  <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    {t("notes.dateTo")}
-                  </span>
-                  <DateFilter
-                    value={dateTo}
-                    onChange={setDateTo}
-                    label={t("notes.dateTo")}
-                    language={i18n.language}
-                    clearLabel={t("notes.clearDate")}
-                    previousMonthLabel={t("notes.previousMonth")}
-                    nextMonthLabel={t("notes.nextMonth")}
-                  />
-                </div>
-              </div>
+              <NoteFilterFields
+                filter={filter}
+                tagInputRef={tagFilterInputRef}
+                className="mt-3 grid gap-3 border-t border-border pt-3 @md:grid-cols-2 @3xl:grid-cols-[minmax(200px,1.2fr)_minmax(200px,1.2fr)_minmax(150px,0.8fr)_minmax(150px,0.8fr)]"
+              />
             )}
           </div>
         )}
@@ -642,217 +532,4 @@ export function NotesGallery() {
       />
     </div>
   );
-}
-
-/**
- * The tag filters read alike but behave differently — one requires every tag,
- * the other rejects any. The label carries the explanation so it reaches
- * screen readers and keyboard users, not just hover.
- */
-function FilterHelp({ label }: { label: string }) {
-  return (
-    <Tooltip content={label}>
-      <button
-        type="button"
-        aria-label={label}
-        className="inline-flex items-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-      >
-        <Info className="h-3.5 w-3.5" />
-      </button>
-    </Tooltip>
-  );
-}
-
-interface DateFilterProps {
-  value: string;
-  onChange: (value: string) => void;
-  label: string;
-  language: string;
-  clearLabel: string;
-  previousMonthLabel: string;
-  nextMonthLabel: string;
-}
-
-function DateFilter({
-  value,
-  onChange,
-  label,
-  language,
-  clearLabel,
-  previousMonthLabel,
-  nextMonthLabel,
-}: DateFilterProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const selectedDate = parseLocalDate(value);
-  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(selectedDate ?? new Date()));
-
-  useEffect(() => {
-    if (isOpen) {
-      setVisibleMonth(startOfMonth(selectedDate ?? new Date()));
-    }
-  }, [isOpen, selectedDate?.getTime()]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [isOpen]);
-
-  const formattedValue = selectedDate
-    ? new Intl.DateTimeFormat(language, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }).format(selectedDate)
-    : "";
-  const monthLabel = new Intl.DateTimeFormat(language, {
-    month: "long",
-    year: "numeric",
-  }).format(visibleMonth);
-
-  const days = buildCalendarDays(visibleMonth);
-  const weekLabels = buildWeekLabels(language);
-
-  return (
-    <div
-      ref={rootRef}
-      className="relative"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") setIsOpen(false);
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setIsOpen((current) => !current)}
-        aria-expanded={isOpen}
-        aria-label={label}
-        className="flex h-9 w-full items-center gap-2 rounded-lg border border-border bg-background px-3 text-left text-sm text-foreground outline-none transition-colors hover:border-primary/60 focus:border-primary focus:ring-2 focus:ring-primary/20"
-      >
-        <span className="min-w-0 flex-1 truncate">{formattedValue}</span>
-        <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
-      </button>
-
-      {isOpen && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-background p-3 shadow-lg">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}
-              aria-label={previousMonthLabel}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <div className="text-sm font-medium">{monthLabel}</div>
-            <button
-              type="button"
-              onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}
-              aria-label={nextMonthLabel}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            {weekLabels.map((day) => (
-              <div key={day}>{day}</div>
-            ))}
-          </div>
-          <div className="mt-1 grid grid-cols-7 gap-1">
-            {days.map((day, index) =>
-              day ? (
-                <button
-                  key={dateToValue(day)}
-                  type="button"
-                  onClick={() => {
-                    onChange(dateToValue(day));
-                    setIsOpen(false);
-                  }}
-                  className={`h-8 rounded-md text-sm transition-colors ${
-                    value === dateToValue(day)
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-muted"
-                  }`}
-                >
-                  {day.getDate()}
-                </button>
-              ) : (
-                <div key={`empty-${index}`} />
-              )
-            )}
-          </div>
-
-          {value && (
-            <button
-              type="button"
-              onClick={() => {
-                onChange("");
-                setIsOpen(false);
-              }}
-              className="mt-3 w-full rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              {clearLabel}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function parseLocalDate(value: string): Date | null {
-  if (!value) return null;
-  const parts = value.split("-").map(Number);
-  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
-  const [year, month, day] = parts;
-  const date = new Date(year, month - 1, day);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function startOfMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function addMonths(date: Date, months: number): Date {
-  return new Date(date.getFullYear(), date.getMonth() + months, 1);
-}
-
-function buildCalendarDays(month: Date): Array<Date | null> {
-  const firstDay = startOfMonth(month);
-  const startOffset = (firstDay.getDay() + 6) % 7;
-  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-  const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
-
-  return Array.from({ length: totalCells }, (_, index) => {
-    const day = index - startOffset + 1;
-    return day > 0 && day <= daysInMonth
-      ? new Date(month.getFullYear(), month.getMonth(), day)
-      : null;
-  });
-}
-
-function buildWeekLabels(language: string): string[] {
-  const monday = new Date(2026, 5, 1);
-  const formatter = new Intl.DateTimeFormat(language, { weekday: "short" });
-  return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + index);
-    return formatter.format(date).slice(0, 2);
-  });
-}
-
-function dateToValue(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
