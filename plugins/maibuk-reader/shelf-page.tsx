@@ -91,8 +91,7 @@ li { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
 li > :first-child { aspect-ratio: 2 / 3; width: 100%; overflow: hidden; border-radius: 0.375rem; background: var(--color-muted); display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgb(0 0 0 / 12%), 0 6px 16px rgb(0 0 0 / 8%); }
 li > :first-child img { width: 100%; height: 100%; max-width: none; object-fit: cover; border-radius: 0; }
 li > :first-child svg { width: 2.5rem; height: 2.5rem; }
-li > button:first-child { height: auto; padding: 0; border: 0; cursor: pointer; transition: transform 120ms ease, box-shadow 120ms ease; }
-li > button:first-child:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgb(0 0 0 / 14%), 0 10px 24px rgb(0 0 0 / 12%); }
+li > button:first-child { height: auto; padding: 0; border: 0; cursor: pointer; }
 li > div:nth-child(2) { gap: 0.125rem; }
 li > div:nth-child(2) > p { overflow-wrap: anywhere; }
 li > div:nth-child(2) > p:first-child { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.3; }
