@@ -13,6 +13,7 @@
 // shown.
 
 import type { FrameLocator, Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { chooseNextFile, installFilePicker, setFileMissing } from "../support/file-picker";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { runPaletteCommand } from "../support/palette";
@@ -110,6 +111,8 @@ test.describe("Reader", () => {
     async ({ page }) => {
       await page.goto("/");
       await openReader(page);
+      await expect(page.getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+      await capture(page, "reader-shelf-empty");
 
       await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), {
         max: 60,
@@ -133,6 +136,7 @@ test.describe("Reader", () => {
       await focusDocument(page);
       await pageForward(page, 2);
       await expect(pageIndicator(page)).toContainText("4 of 12");
+      await capture(page, "reader-page-view");
 
       await runHostCommand(page, "Find in Document");
       await expect(frame.getByRole("searchbox")).toBeVisible();
@@ -155,6 +159,8 @@ test.describe("Reader", () => {
       await runHostCommand(page, "Back to Shelf");
       await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
       await expect(page.getByText("p. 4 of 12", { exact: true })).toBeVisible();
+      await expect(page.getByText("twelve-pages", { exact: true })).toBeVisible();
+      await capture(page, "reader-shelf-filled");
 
       await page.reload();
       await openReader(page);
@@ -193,6 +199,7 @@ test.describe("Reader", () => {
         /The spice must flow across Arrakis\.|The journey continues past the desert\./
       );
       await expect(visible).toBeVisible();
+      await capture(page, "reader-flowing-view");
 
       await page.keyboard.press("Escape");
       await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
@@ -204,6 +211,25 @@ test.describe("Reader", () => {
           /The spice must flow across Arrakis\.|The journey continues past the desert\./
         )
       ).toBeVisible();
+
+      // Contents is the EPUB's nav (One, Two). It opens by the Command, so it
+      // runs before the search and no palette step follows the capture.
+      await focusDocument(page);
+      await runHostCommand(page, "Toggle contents");
+      await expect(frame.getByRole("tree").getByText("One", { exact: true })).toBeVisible();
+      await capture(page, "reader-contents");
+      await page.keyboard.press("Escape");
+      await expect(frame.getByRole("tree")).toBeHidden();
+
+      // Search runs inside the Frame: Ctrl+F opens the bar with focus in its
+      // input, the query types there, and Enter runs it. The status reads
+      // "1 of N" once the first match is shown.
+      await page.keyboard.press("ControlOrMeta+f");
+      await expect(frame.getByRole("searchbox")).toBeVisible();
+      await page.keyboard.type("spice");
+      await page.keyboard.press("Enter");
+      await expect(frame.locator("#search-status")).toHaveText(/^1 of \d+$/, { timeout: 30_000 });
+      await capture(page, "reader-search");
     }
   );
 
@@ -225,6 +251,7 @@ test.describe("Reader", () => {
     await goHome(page);
     await openReader(page);
     await expect(page.getByText("Missing Document", { exact: true })).toBeVisible();
+    await capture(page, "reader-missing-document");
 
     // Locate again… with the same bytes reattaches the Document.
     await setFileMissing(page, PDF, false);
