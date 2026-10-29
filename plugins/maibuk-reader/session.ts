@@ -11,13 +11,25 @@
  * `open`, so the long parse never blocks the Plugin Worker and the Frame talks
  * to the core directly.
  *
+ * Opening a zip-packed Document (EPUB and CBZ) makes the session read the
+ * archive's directory and answer `zip-entry` requests with inflated bytes, so
+ * the Frame never holds the whole file. The same `open` carries foliate's
+ * parsers and DOMPurify as source the Frame imports from `blob:` URLs.
+ *
  * Imports only `@/plugin-sdk` (types and the read cap) and this Plugin's files.
  */
 
 import { FILE_READ_MAX_BYTES, type PluginClient } from "@/plugin-sdk";
 import type { PluginApiErrorCode } from "@/plugin-sdk";
 import type { ReaderLibrary } from "./library";
-import { startPdfCore, pdfDisplaySource, pdfViewerCss, type PdfCore } from "./loaders";
+import {
+  foliateSource,
+  purifySource,
+  startPdfCore,
+  pdfDisplaySource,
+  pdfViewerCss,
+  type PdfCore,
+} from "./loaders";
 import {
   type FrameCommandId,
   type FrameEntry,
@@ -27,9 +39,13 @@ import {
   type FrameOpenMessage,
   type FramePositionMessage,
   type FrameReadMessage,
+  type FrameSettingsMessage,
   type FrameToWorkerMessage,
+  type FrameZipEntryRequest,
+  type FrameZipListRequest,
   type ReadingPosition,
 } from "./frame-protocol";
+import { ZipError, openZip, type ZipArchive } from "./zip";
 import {
   DEFAULT_READER_SETTINGS,
   clampSettings,
@@ -103,6 +119,16 @@ function frameEntry(entry: ShelfEntry): FrameEntry {
 export function readPosition(value: unknown, settings: ReaderSettings): ReadingPosition | null {
   if (typeof value !== "object" || value === null) return null;
   const record = value as Record<string, unknown>;
+  if (record.kind === "cfi" && typeof record.cfi === "string" && record.cfi !== "") {
+    return { kind: "cfi", cfi: record.cfi };
+  }
+  if (record.kind === "section" && typeof record.index === "number") {
+    const fraction =
+      typeof record.fraction === "number" && Number.isFinite(record.fraction)
+        ? Math.min(1, Math.max(0, record.fraction))
+        : 0;
+    return { kind: "section", index: Math.max(0, Math.floor(record.index)), fraction };
+  }
   const zoom =
     typeof record.zoom === "number"
       ? record.zoom
@@ -152,6 +178,12 @@ export function frameLabels(language: string): FrameLabels {
     errorEncrypted: translate(language, "viewer.errorEncrypted"),
     errorUnsupported: translate(language, "viewer.errorUnsupported"),
     errorGeneric: translate(language, "viewer.errorGeneric"),
+    errorDrm: translate(language, "viewer.errorDrm"),
+    errorDamaged: translate(language, "viewer.errorDamaged"),
+    errorTooLarge: translate(language, "viewer.errorTooLarge"),
+    sectionPage: translate(language, "viewer.sectionPage"),
+    increaseFontSize: translate(language, "viewer.increaseFontSize"),
+    decreaseFontSize: translate(language, "viewer.decreaseFontSize"),
   };
 }
 
@@ -177,6 +209,8 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   let metaApplied = false;
   let core: PdfCore | null = null;
   let pdfPort: MessagePort | null = null;
+  let archive: ZipArchive | null = null;
+  let openingArchive: Promise<ZipArchive> | null = null;
 
   function post(message: unknown, transfer?: Transferable[]): void {
     if (disposed) return;
@@ -233,8 +267,100 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       message.pdf = bridge.pdf;
       message.pdfPort = bridge.port;
       post(message, [bridge.port]);
+    } else if (entry !== null) {
+      message.foliate = { source: foliateSource(), purify: purifySource() };
+      post(message);
     } else {
       post(message);
+    }
+  }
+
+  /** Reads `length` bytes at `offset`, in the chunks the File Grant API allows. */
+  async function readRange(offset: number, length: number): Promise<Uint8Array> {
+    if (entry === null || length <= 0) return new Uint8Array(0);
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (total < length) {
+      const take = Math.min(length - total, FILE_READ_MAX_BYTES);
+      const buffer = await client.files.read({
+        grant: entry.grant,
+        offset: offset + total,
+        length: take,
+      });
+      const bytes = new Uint8Array(buffer);
+      if (bytes.byteLength === 0) break;
+      chunks.push(bytes);
+      total += bytes.byteLength;
+      if (bytes.byteLength < take) break;
+    }
+    return joinChunks(chunks, total);
+  }
+
+  /** Opens the archive once, reusing it for every later entry request. */
+  function ensureArchive(): Promise<ZipArchive> {
+    if (archive !== null) return Promise.resolve(archive);
+    if (openingArchive !== null) return openingArchive;
+    if (entry === null) {
+      return Promise.reject(new ZipError("corrupt", "No Document is open"));
+    }
+    const size = sizeFromFingerprint(entry.fingerprint);
+    const opening = openZip(readRange, size)
+      .then((opened) => {
+        archive = opened;
+        return opened;
+      })
+      .finally(() => {
+        openingArchive = null;
+      });
+    openingArchive = opening;
+    return opening;
+  }
+
+  function zipCode(error: unknown): "corrupt" | "drm" | "missing" {
+    return error instanceof ZipError ? error.code : "corrupt";
+  }
+
+  async function answerZipList(message: FrameZipListRequest): Promise<void> {
+    try {
+      const opened = await ensureArchive();
+      post({
+        kind: "zip-list",
+        id: message.id,
+        entries: opened.entries.map(({ name, size }) => ({ name, size })),
+      });
+    } catch (error) {
+      post({ kind: "zip-error", id: message.id, code: zipCode(error) });
+    }
+  }
+
+  async function answerZipEntry(message: FrameZipEntryRequest): Promise<void> {
+    try {
+      const opened = await ensureArchive();
+      if (message.as === "text") {
+        const text = await opened.readText(message.name);
+        if (text === null) {
+          post({ kind: "zip-error", id: message.id, code: "missing" });
+          return;
+        }
+        post({ kind: "zip-data", id: message.id, text });
+        return;
+      }
+      const bytes = await opened.read(message.name);
+      const buffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength
+      ) as ArrayBuffer;
+      post({ kind: "zip-data", id: message.id, buffer }, [buffer]);
+    } catch (error) {
+      post({ kind: "zip-error", id: message.id, code: zipCode(error) });
+    }
+  }
+
+  async function applySettings(message: FrameSettingsMessage): Promise<void> {
+    try {
+      await library.saveSettings(clampSettings(message.settings));
+    } catch {
+      // A settings refusal must not stop the author reading.
     }
   }
 
@@ -370,6 +496,15 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       case "read":
         void answerRead(message);
         return;
+      case "zip-list":
+        void answerZipList(message);
+        return;
+      case "zip-entry":
+        void answerZipEntry(message);
+        return;
+      case "settings":
+        void applySettings(message);
+        return;
       case "position":
         void savePosition(message);
         return;
@@ -390,6 +525,8 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   function dispose(): void {
     if (disposed) return;
     disposed = true;
+    archive = null;
+    openingArchive = null;
     if (pdfPort !== null) {
       try {
         pdfPort.close();
@@ -423,6 +560,8 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       entry = next;
       metaApplied = false;
       opened = false;
+      archive = null;
+      openingArchive = null;
       if (core !== null) {
         core.dispose();
         core = null;

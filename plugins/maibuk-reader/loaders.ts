@@ -15,6 +15,8 @@
  * - the foliate-js parsers: {@link foliateSource} is one self-contained ESM
  *   module, because foliate's modules import each other relatively and a
  *   `blob:` module in an opaque origin cannot resolve a relative specifier.
+ * - DOMPurify: {@link purifySource} is its browser ESM build, which the Frame
+ *   imports from a `blob:` URL and uses to sanitize every archive's markup.
  *
  * The Vite build has no code splitting, so these strings sit in the entry as
  * string literals; importing this module starts nothing.
@@ -24,6 +26,7 @@
  */
 
 import foliateParsersSource from "./vendor/foliate/foliate-parsers.min.mjs?raw";
+import domPurifySource from "./vendor/dompurify/purify.es.mjs?raw";
 import pdfDisplay from "./vendor/pdfjs/pdf.min.mjs?raw";
 import pdfWorker from "./vendor/pdfjs/pdf.worker.min.mjs?raw";
 import pdfViewerStyles from "./vendor/pdfjs/pdf_viewer.css.txt?raw";
@@ -90,4 +93,9 @@ export function pdfViewerCss(): string {
 /** The foliate-js parsers as one self-contained ESM module, for the Frame. */
 export function foliateSource(): string {
   return foliateParsersSource;
+}
+
+/** DOMPurify's browser ESM build, for the Frame to import from a `blob:` URL. */
+export function purifySource(): string {
+  return domPurifySource;
 }

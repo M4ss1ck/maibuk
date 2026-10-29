@@ -45,5 +45,11 @@
   "viewer.errorCorrupt": "This PDF is damaged, so Reader can't open it.",
   "viewer.errorEncrypted": "This PDF is encrypted, so Reader can't open it.",
   "viewer.errorUnsupported": "Reader can't open this file format yet.",
-  "viewer.errorGeneric": "Reader can't open this file."
+  "viewer.errorGeneric": "Reader can't open this file.",
+  "viewer.errorDrm": "This Document is protected by DRM, so Reader can't open it.",
+  "viewer.errorDamaged": "This file is damaged, so Reader can't open it.",
+  "viewer.errorTooLarge": "This file is too large for Reader to open.",
+  "viewer.sectionPage": "{{page}} of {{count}} in this section",
+  "viewer.increaseFontSize": "Increase font size",
+  "viewer.decreaseFontSize": "Decrease font size"
 }

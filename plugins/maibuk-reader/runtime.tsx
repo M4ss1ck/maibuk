@@ -61,6 +61,8 @@ const FRAME_COMMANDS: ReadonlySet<FrameCommandId> = new Set<FrameCommandId>([
   ZOOM_OUT,
   FIT_WIDTH,
   FIT_PAGE,
+  INCREASE_FONT_SIZE,
+  DECREASE_FONT_SIZE,
   BACK_TO_SHELF,
 ]);
 

@@ -6,7 +6,13 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { foliateSource, pdfDisplaySource, pdfViewerCss, startPdfCore } from "./loaders";
+import {
+  foliateSource,
+  pdfDisplaySource,
+  pdfViewerCss,
+  purifySource,
+  startPdfCore,
+} from "./loaders";
 
 /** The pdf.js release the vendored sources must carry. */
 const PDFJS_VERSION = "6.4.299";
@@ -110,6 +116,13 @@ describe("vendored source strings", () => {
     expect(source.length).toBeGreaterThan(10_000);
     expect(source).toMatch(/^[\w$]/);
   });
+
+  it("carries DOMPurify's browser build as code", () => {
+    const source = purifySource();
+    expect(source.length).toBeGreaterThan(50_000);
+    expect(source).toMatch(/^[\w$]/);
+    expect(source).toContain("DOMPurify");
+  });
 });
 
 describe("startPdfCore", () => {
@@ -147,6 +160,7 @@ describe("the foliate bundle", () => {
       "makeComicBook",
       "makeFB2",
       "search",
+      "unzlibSync",
     ]);
     expect(typeof module.EPUB).toBe("function");
     expect(typeof module.MOBI).toBe("function");
@@ -154,6 +168,7 @@ describe("the foliate bundle", () => {
     expect(typeof module.makeFB2).toBe("function");
     expect(typeof module.makeComicBook).toBe("function");
     expect(typeof module.search).toBe("function");
+    expect(typeof module.unzlibSync).toBe("function");
     expect(module.CFI).toBeTypeOf("object");
   });
 });

@@ -45,5 +45,11 @@
   "viewer.errorCorrupt": "Este PDF está dañado, así que Lector no puede abrirlo.",
   "viewer.errorEncrypted": "Este PDF está cifrado, así que Lector no puede abrirlo.",
   "viewer.errorUnsupported": "Lector todavía no puede abrir este formato.",
-  "viewer.errorGeneric": "Lector no puede abrir este archivo."
+  "viewer.errorGeneric": "Lector no puede abrir este archivo.",
+  "viewer.errorDrm": "Este documento está protegido con DRM, así que Lector no puede abrirlo.",
+  "viewer.errorDamaged": "Este archivo está dañado, así que Lector no puede abrirlo.",
+  "viewer.errorTooLarge": "Este archivo es demasiado grande para que Lector lo abra.",
+  "viewer.sectionPage": "{{page}} de {{count}} en esta sección",
+  "viewer.increaseFontSize": "Aumentar tamaño de letra",
+  "viewer.decreaseFontSize": "Reducir tamaño de letra"
 }

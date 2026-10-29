@@ -17,14 +17,33 @@ import type { ReaderSettings, ShelfProgress } from "./shelf";
 /** The page fit a fresh Document opens with, or a numeric zoom scale. */
 export type FrameZoom = number | "width" | "page";
 
-/** Where the author was in a fixed-page Document. */
-export interface ReadingPosition {
+/** Where the author was in a fixed-page Document: a PDF, a CBZ, or a fixed-layout EPUB. */
+export interface PagePosition {
   kind: "page";
   /** Zero-based page index. */
   page: number;
   /** The zoom the author left the page at. */
   zoom: FrameZoom;
 }
+
+/** Where the author was in a reflowable EPUB, by its canonical fragment identifier. */
+export interface CfiPosition {
+  kind: "cfi";
+  /** An `epubcfi(…)` string from foliate's `epubcfi.js`. */
+  cfi: string;
+}
+
+/** Where the author was in a format with no fragment identifier, by spine index. */
+export interface SectionPosition {
+  kind: "section";
+  /** Zero-based spine (or section) index. */
+  index: number;
+  /** How far into the section the author was, from 0 to 1. */
+  fraction: number;
+}
+
+/** Where the author was in a Document. */
+export type ReadingPosition = PagePosition | CfiPosition | SectionPosition;
 
 /** The Document fields the Frame draws; the File Grant never leaves the Worker. */
 export interface FrameEntry {
@@ -65,6 +84,20 @@ export interface FrameLabels {
   errorEncrypted: string;
   errorUnsupported: string;
   errorGeneric: string;
+  errorDrm: string;
+  errorDamaged: string;
+  errorTooLarge: string;
+  sectionPage: string;
+  increaseFontSize: string;
+  decreaseFontSize: string;
+}
+
+/** One entry in the archive a reflowable Document is packed in. */
+export interface FrameZipEntry {
+  /** The entry's path inside the archive, with `/` separators. */
+  name: string;
+  /** The entry's uncompressed size in bytes. */
+  size: number;
 }
 
 /** The pdf.js resources the Worker hands the Frame when a PDF opens. */
@@ -73,6 +106,17 @@ export interface FramePdf {
   displaySource: string;
   /** pdf.js's viewer CSS, which carries the text-layer rules. */
   css: string;
+}
+
+/**
+ * The modules the Frame evaluates for a reflowable or fixed-layout Document:
+ * foliate's parsers and DOMPurify, each imported from a `blob:` URL.
+ */
+export interface FrameFoliate {
+  /** foliate-js's parser modules, bundled into one self-contained ESM module. */
+  source: string;
+  /** DOMPurify's browser ESM build. */
+  purify: string;
 }
 
 /** The reading Commands the Frame handles while it is mounted. */
@@ -87,6 +131,8 @@ export type FrameCommandId =
   | "zoomOut"
   | "fitWidth"
   | "fitPage"
+  | "increaseFontSize"
+  | "decreaseFontSize"
   | "backToShelf";
 
 /* Worker -> Frame */
@@ -103,6 +149,8 @@ export interface FrameOpenMessage {
   language: string;
   pdf?: FramePdf;
   pdfPort?: MessagePort;
+  /** The parsers and sanitizer a non-PDF Document needs. */
+  foliate?: FrameFoliate;
 }
 
 /** Answers one `read`. The `buffer` is transferred. */
@@ -133,12 +181,38 @@ export interface FrameLanguageMessage {
   labels?: FrameLabels;
 }
 
+/** Lists every entry of the archive the Document is packed in. */
+export interface FrameZipListMessage {
+  kind: "zip-list";
+  id: number;
+  entries: FrameZipEntry[];
+}
+
+/** Answers one `zip-entry`; exactly one of `text` and `buffer` is set. */
+export interface FrameZipDataMessage {
+  kind: "zip-data";
+  id: number;
+  text?: string;
+  /** Transferred. */
+  buffer?: ArrayBuffer;
+}
+
+/** Refuses one archive request; `code` is `corrupt`, `drm`, or `missing`. */
+export interface FrameZipErrorMessage {
+  kind: "zip-error";
+  id: number;
+  code: "corrupt" | "drm" | "missing";
+}
+
 export type WorkerToFrameMessage =
   | FrameOpenMessage
   | FrameBytesMessage
   | FrameReadErrorMessage
   | FrameCommandMessage
-  | FrameLanguageMessage;
+  | FrameLanguageMessage
+  | FrameZipListMessage
+  | FrameZipDataMessage
+  | FrameZipErrorMessage;
 
 /* Frame -> Worker */
 
@@ -183,13 +257,39 @@ export interface FrameLoadErrorMessage {
   reason: string;
 }
 
+/** Asks the Worker to list the archive's entries. */
+export interface FrameZipListRequest {
+  kind: "zip-list";
+  id: number;
+}
+
+/**
+ * Asks for one archive entry. `as: "text"` decodes it as UTF-8, and
+ * `as: "bytes"` transfers the bytes for a `blob:` URL.
+ */
+export interface FrameZipEntryRequest {
+  kind: "zip-entry";
+  id: number;
+  name: string;
+  as: "text" | "bytes";
+}
+
+/** Reports a settings change the Frame made, such as a font size step. */
+export interface FrameSettingsMessage {
+  kind: "settings";
+  settings: ReaderSettings;
+}
+
 export type FrameToWorkerMessage =
   | FrameReadyMessage
   | FrameReadMessage
   | FramePositionMessage
   | FrameMetaMessage
   | FrameBackMessage
-  | FrameLoadErrorMessage;
+  | FrameLoadErrorMessage
+  | FrameZipListRequest
+  | FrameZipEntryRequest
+  | FrameSettingsMessage;
 
 /**
  * The Worker's handoff of one MessagePort to the nested pdf.js core Worker.

@@ -26,3 +26,6 @@ export { makeComicBook } from "./comic-book.js";
 export * as CFI from "./epubcfi.js";
 // @ts-expect-error -- vendored plain JavaScript, no type declarations
 export { search } from "./search.js";
+// `mobi.js` decompresses its embedded fonts through a caller-supplied zlib
+// inflater; the bundle carries one so the Frame needs no second module.
+export { unzlibSync } from "fflate";
