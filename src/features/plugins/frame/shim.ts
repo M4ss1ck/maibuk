@@ -38,6 +38,16 @@ export const FRAME_THEME_MESSAGE = { kind: "frame-theme" } as const;
 export const FRAME_READY_MESSAGE = { kind: "frame-ready" } as const;
 
 /**
+ * Frame -> host: `{ kind: "frame-fullscreen", on: boolean }` asks the host to
+ * fill the screen with this Frame, or to stop. The host answers every change,
+ * its own Escape included, with `{ kind: "frame-fullscreen-state", on }`.
+ * The host owns it because a sandboxed Frame's own Fullscreen API is refused
+ * in WebKit.
+ */
+export const FRAME_FULLSCREEN_MESSAGE = "frame-fullscreen";
+export const FRAME_FULLSCREEN_STATE_MESSAGE = "frame-fullscreen-state";
+
+/**
  * The shim the Frame document runs. It accepts messages only from
  * `window.parent`, one `frame-load` and any later `frame-theme`; creates the
  * Plugin's `blob:` URLs in-frame; rewrites relative CSS and HTML references;

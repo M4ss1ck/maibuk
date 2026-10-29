@@ -14,6 +14,8 @@ Set `customUi: true` in the manifest. A whole-page Frame declares `frame: "<rela
 { "id": "report", "title": "Report", "command": "openReport", "frame": "ui/report.html" }
 ```
 
+A whole-page Frame fills the page below its title and scrolls inside itself; the page around it never scrolls. Add `"hideTitle": true` when the Frame draws its own toolbar, so the title stays for screen readers only. For full screen, post `{ kind: "frame-fullscreen", on: true }` (or `false`) to `parent`: Maibuk fills the window with the Frame, puts the desktop window in full screen, and answers every change, its own Escape included, with `{ kind: "frame-fullscreen-state", on }` from `parent`. The Frame's own Fullscreen API is refused in WebKit.
+
 An embedded Frame uses the kit's `Frame` component inside a host-rendered tree, which is the `maibuk-frame` element in [ui-reference.md](ui-reference.md#maibuk-frame):
 
 ```ts

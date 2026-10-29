@@ -17,9 +17,12 @@ import { useTranslation } from "react-i18next";
 import {
   buildFrameLoadMessage,
   createFrameElement,
+  FRAME_FULLSCREEN_MESSAGE,
+  FRAME_FULLSCREEN_STATE_MESSAGE,
   FRAME_READY_MESSAGE,
   FRAME_THEME_MESSAGE,
 } from "@/features/plugins/frame";
+import { setWindowFullscreen } from "@/lib/platform";
 import { isPluginFrameAvailable } from "@/features/plugins/host-platform";
 import { useFrameThemeTokens } from "@/components/plugins/useFrameThemeTokens";
 import { pluginRunKey } from "@/components/plugins/plugin-run-key";
@@ -71,7 +74,10 @@ export function PluginFrame({
   const available = isPluginFrameAvailable();
   const customUi = runtime.manifest.customUi === true;
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
+  // The Frame asked to fill the screen (`frame-fullscreen`).
+  const [fullscreen, setFullscreen] = useState(false);
   const [failed, setFailed] = useState(false);
   // The public tokens, and the loaded iframe they update. `loadedRef` stays
   // false until `frame-load` has gone out, so no `frame-theme` can precede it.
@@ -128,7 +134,12 @@ export function PluginFrame({
       if (event.source !== iframe.contentWindow) return;
       const data: unknown = event.data;
       if (typeof data !== "object" || data === null) return;
-      if ((data as { kind?: unknown }).kind !== FRAME_READY_MESSAGE.kind) return;
+      const kind = (data as { kind?: unknown }).kind;
+      if (kind === FRAME_FULLSCREEN_MESSAGE) {
+        setFullscreen((data as { on?: unknown }).on === true);
+        return;
+      }
+      if (kind !== FRAME_READY_MESSAGE.kind) return;
       setReady(true);
     };
     window.addEventListener("message", onMessage);
@@ -143,6 +154,38 @@ export function PluginFrame({
       loadedRef.current = false;
     };
   }, [customUi, available, runtime, src, title]);
+
+  // Full screen: the Frame fills the window, the desktop window fills the
+  // screen, and the web asks the browser. Every change, the host's own Escape
+  // included, is reported back to the Frame.
+  useEffect(() => {
+    frameWindowRef.current?.postMessage(
+      { kind: FRAME_FULLSCREEN_STATE_MESSAGE, on: fullscreen },
+      "*"
+    );
+    if (!fullscreen) return;
+    void setWindowFullscreen(true).catch(() => {});
+    const wrapper = wrapperRef.current;
+    if (wrapper && typeof wrapper.requestFullscreen === "function" && !document.fullscreenElement) {
+      void Promise.resolve(wrapper.requestFullscreen()).catch(() => {});
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFullscreen(false);
+    };
+    const onBrowserExit = () => {
+      if (!document.fullscreenElement) setFullscreen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("fullscreenchange", onBrowserExit);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("fullscreenchange", onBrowserExit);
+      void setWindowFullscreen(false).catch(() => {});
+      if (document.fullscreenElement && typeof document.exitFullscreen === "function") {
+        void Promise.resolve(document.exitFullscreen()).catch(() => {});
+      }
+    };
+  }, [fullscreen]);
 
   // A live update (theme, accent, font): push the changed tokens to the loaded
   // Frame. `tokens` is a new object only when a value actually changed, and the
@@ -162,15 +205,24 @@ export function PluginFrame({
     return <FramePlaceholder variant={variant} message={t("plugins.ui.couldNotDisplay")} />;
   }
 
-  const wrapperClass = variant === "page" ? "flex h-full min-h-0 flex-col" : "flex w-full flex-col";
-  const frameClass =
-    variant === "page"
+  const wrapperClass = fullscreen
+    ? "fixed inset-0 z-50 flex flex-col bg-background"
+    : variant === "page"
+      ? "flex min-h-0 flex-1 flex-col"
+      : "flex w-full flex-col";
+  const frameClass = fullscreen
+    ? "relative min-h-0 flex-1 overflow-hidden bg-card"
+    : variant === "page"
       ? "relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card"
       : "relative h-64 w-full overflow-hidden rounded-lg border border-border bg-card";
 
   return (
-    <div data-plugin-frame={variant} className={wrapperClass}>
-      <p className="mb-2 text-sm text-muted-foreground">{t("plugins.management.custom")}</p>
+    <div
+      ref={wrapperRef}
+      data-plugin-frame={variant}
+      data-fullscreen={fullscreen ? "true" : undefined}
+      className={wrapperClass}
+    >
       <div ref={containerRef} aria-busy={!ready} className={frameClass} />
     </div>
   );

@@ -90,6 +90,9 @@ export interface FrameLabels {
   sectionPage: string;
   increaseFontSize: string;
   decreaseFontSize: string;
+  continuousScroll: string;
+  fullScreen: string;
+  exitFullScreen: string;
 }
 
 /** One entry in the archive a reflowable Document is packed in. */
@@ -133,6 +136,7 @@ export type FrameCommandId =
   | "fitPage"
   | "increaseFontSize"
   | "decreaseFontSize"
+  | "toggleContinuousScroll"
   | "backToShelf";
 
 /* Worker -> Frame */

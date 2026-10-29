@@ -51,5 +51,8 @@
   "viewer.errorTooLarge": "This file is too large for Reader to open.",
   "viewer.sectionPage": "{{page}} of {{count}} in this section",
   "viewer.increaseFontSize": "Increase font size",
-  "viewer.decreaseFontSize": "Decrease font size"
+  "viewer.decreaseFontSize": "Decrease font size",
+  "viewer.continuousScroll": "Continuous scroll",
+  "viewer.fullScreen": "Full screen",
+  "viewer.exitFullScreen": "Exit full screen"
 }

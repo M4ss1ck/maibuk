@@ -107,7 +107,7 @@ test.beforeEach(async ({ page }) => {
 
 test.describe("Reader", () => {
   test(
-    "page forward to page 4, back to the Shelf, reload, and reopen at page 4 @wf:reader-open-reopen @sc:plugin.maibuk-reader.openFile @sc:plugin.maibuk-reader.nextPage @sc:plugin.maibuk-reader.previousPage @sc:plugin.maibuk-reader.lastPage @sc:plugin.maibuk-reader.firstPage @sc:plugin.maibuk-reader.findInDocument @sc:plugin.maibuk-reader.toggleContents @sc:plugin.maibuk-reader.zoomIn @sc:plugin.maibuk-reader.zoomOut @sc:plugin.maibuk-reader.fitWidth @sc:plugin.maibuk-reader.fitPage @sc:plugin.maibuk-reader.backToShelf @sandbox",
+    "page forward to page 4, back to the Shelf, reload, and reopen at page 4 @wf:reader-open-reopen @sc:plugin.maibuk-reader.openFile @sc:plugin.maibuk-reader.nextPage @sc:plugin.maibuk-reader.previousPage @sc:plugin.maibuk-reader.lastPage @sc:plugin.maibuk-reader.firstPage @sc:plugin.maibuk-reader.findInDocument @sc:plugin.maibuk-reader.toggleContents @sc:plugin.maibuk-reader.zoomIn @sc:plugin.maibuk-reader.zoomOut @sc:plugin.maibuk-reader.fitWidth @sc:plugin.maibuk-reader.fitPage @sc:plugin.maibuk-reader.backToShelf @sc:plugin.maibuk-reader.toggleContinuousScroll @sandbox",
     async ({ page }) => {
       await page.goto("/");
       await openReader(page);
@@ -173,6 +173,16 @@ test.describe("Reader", () => {
       await expect(pageIndicator(page)).toContainText("12 of 12");
       await runHostCommand(page, "First page");
       await expect(pageIndicator(page)).toContainText("1 of 12");
+
+      // Continuous scroll stacks every page; the Command and the toolbar toggle agree.
+      const layout = frame.locator("#layout-toggle");
+      await runHostCommand(page, "Continuous scroll");
+      await expect(layout).toHaveAttribute("aria-pressed", "true");
+      await expect(frame.locator(".pdf-page:not([hidden])")).toHaveCount(12);
+      await capture(page, "reader-continuous-view");
+      await runHostCommand(page, "Continuous scroll");
+      await expect(layout).toHaveAttribute("aria-pressed", "false");
+      await expect(frame.locator(".pdf-page:not([hidden])")).toHaveCount(1);
     }
   );
 

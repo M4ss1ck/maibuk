@@ -445,3 +445,24 @@ describe("reopen()", () => {
     expect((map.get(SHELF_KEY) as ShelfEntry[])[0].state).toBe("ok");
   });
 });
+
+describe("the current Document", () => {
+  it("reopens the Document the Reading page had open, after a relaunch", async () => {
+    const { storage, library } = setup();
+    storage.set(SHELF_KEY, [
+      shelfEntry({ id: "doc-1", grant: "grant-1", lastReadAt: 2 }),
+      shelfEntry({ id: "doc-2", grant: "grant-2", lastReadAt: 1, title: "Emma" }),
+    ]);
+    expect(await library.loadCurrent()).toBeNull();
+    await library.rememberCurrent("doc-2");
+    expect((await library.loadCurrent())?.title).toBe("Emma");
+  });
+
+  it("forgets a Document that left the Shelf", async () => {
+    const { storage, library } = setup();
+    storage.set(SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]);
+    await library.rememberCurrent("doc-1");
+    await library.removeFromShelf("doc-1");
+    expect(await library.loadCurrent()).toBeNull();
+  });
+});

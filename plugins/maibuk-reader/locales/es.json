@@ -16,6 +16,7 @@
   "commands.fitPage.label": "Ajustar a la página",
   "commands.increaseFontSize.label": "Aumentar tamaño de letra",
   "commands.decreaseFontSize.label": "Reducir tamaño de letra",
+  "commands.toggleContinuousScroll.label": "Desplazamiento continuo",
   "commands.backToShelf.label": "Volver al estante",
   "pages.reader.title": "Lector",
   "pages.document.title": "Lectura"

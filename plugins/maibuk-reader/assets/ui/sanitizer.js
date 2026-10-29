@@ -304,18 +304,16 @@
   /**
    * The CSS Reader draws inside the shadow root around the book's own. The
    * book's rules stay scoped to the section; these override the reading
-   * typography and, in dark mode, force text and background while leaving
-   * images untouched.
+   * typography and draw the text in the app's live foreground token, over the
+   * page's own background, so a light/dark switch recolors an open section.
    * @param {{ fontSize: number, lineWidth: string }} settings
-   * @param {{ dark?: boolean }} [options]
    * @returns {string}
    */
-  function readingCss(settings, options) {
+  function readingCss(settings) {
     const scale = Math.max(0.6, Math.min(2, (settings.fontSize || 100) / 100));
     const width = LINE_WIDTHS[settings.lineWidth] || LINE_WIDTHS.medium;
-    const dark = options && options.dark === true;
-    const text = dark ? "#e5e5e5" : "var(--maibuk-color-foreground, #1a1a1a)";
-    const background = dark ? "#111111" : "transparent";
+    const text = "var(--maibuk-color-foreground, #1a1a1a)";
+    const background = "transparent";
     return [
       ":host { display: block; height: 100%; }",
       `.reader-flow { box-sizing: border-box; max-width: ${width}; margin: 0 auto;`,

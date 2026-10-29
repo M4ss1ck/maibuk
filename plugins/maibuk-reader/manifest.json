@@ -96,18 +96,24 @@
         "contexts": ["document"]
       },
       {
+        "id": "toggleContinuousScroll",
+        "label": "Continuous scroll",
+        "contexts": ["document"]
+      },
+      {
         "id": "backToShelf",
         "label": "Back to Shelf",
         "contexts": ["document"]
       }
     ],
     "pages": [
-      { "id": "reader", "title": "Reader", "command": "openReader" },
+      { "id": "reader", "title": "Reader", "command": "openReader", "hideTitle": true },
       {
         "id": "document",
         "title": "Reading",
         "command": "openDocument",
-        "frame": "assets/ui/reader.html"
+        "frame": "assets/ui/reader.html",
+        "hideTitle": true
       }
     ],
     "sidebarEntries": [{ "page": "reader", "icon": "book-open-text" }]

@@ -1,10 +1,10 @@
 /**
  * The Shelf page (#653): the Documents Reader remembers on this device, most
- * recently read first, drawn with SDK components so Maibuk owns focus, keyboard
- * behavior, and accessibility. Each row offers Open, Remove from Shelf, and,
- * for a Missing Document, Locate again; a Document the browser must ask about
- * again offers Reopen. The empty state explains what Reader does and offers the
- * same Open file… button.
+ * recently read first, as a grid of covers drawn with SDK components so Maibuk
+ * owns focus, keyboard behavior, and accessibility. Each card offers Open and
+ * Remove from Shelf as icon buttons, and, for a Missing Document, Locate again;
+ * a Document the browser must ask about again offers Reopen. The empty state
+ * explains what Reader does and offers the same Open file… button.
  *
  * The page holds no Document in memory beyond what it draws: opening one hands
  * its entry to the runtime, which stores `currentDocumentId` and opens the
@@ -80,6 +80,23 @@ function stateText(language: string, entry: ShelfEntry): string | null {
       return null;
   }
 }
+
+/**
+ * The Shelf grid, scoped to its Surface: covers fill as many columns as the page
+ * is wide, each card a cover over its title, details, and actions.
+ */
+export const SHELF_CSS = `
+ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 1.5rem 1rem; }
+li { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+li > :first-child { aspect-ratio: 2 / 3; width: 100%; overflow: hidden; border-radius: 0.375rem; background: var(--color-muted); display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgb(0 0 0 / 12%), 0 6px 16px rgb(0 0 0 / 8%); }
+li > :first-child img { width: 100%; height: 100%; max-width: none; object-fit: cover; border-radius: 0; }
+li > :first-child svg { width: 2.5rem; height: 2.5rem; }
+li > button:first-child { height: auto; padding: 0; border: 0; cursor: pointer; }
+li > div:nth-child(2) { gap: 0.125rem; }
+li > div:nth-child(2) > p { overflow-wrap: anywhere; }
+li > div:nth-child(2) > p:first-child { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.3; }
+li > div:last-child { margin-top: auto; gap: 0; }
+`;
 
 /** The pages the runtime serves by id. */
 export const SHELF_PAGE_ID = "reader";
@@ -162,54 +179,48 @@ export function createShelfPage(deps: ShelfPageDeps): ComponentType {
       }
     }
 
-    function rowActions(entry: ShelfEntry) {
-      const removeButton = (
-        <ui.Button variant="ghost" onPress={() => void remove(entry)}>
-          {translate(language, "shelf.remove")}
-        </ui.Button>
+    /** One labelled icon button, its name doubling as the pointer's tooltip. */
+    function action(label: string, icon: string, onPress: () => void) {
+      return (
+        <ui.Tooltip content={label}>
+          <ui.IconButton label={label} icon={icon} isDisabled={busy} onPress={onPress} />
+        </ui.Tooltip>
       );
+    }
+
+    function cover(entry: ShelfEntry) {
+      return entry.coverDataUrl === undefined ? (
+        <ui.Icon name="book-open-text" size="lg" tone="muted" />
+      ) : (
+        <ui.Image src={entry.coverDataUrl} alt={entry.title} />
+      );
+    }
+
+    function cardActions(entry: ShelfEntry) {
+      const removeButton = action(translate(language, "shelf.remove"), "trash-2", () => {
+        void remove(entry);
+      });
       switch (entry.state) {
         case "missing":
           return (
             <>
-              <ui.Button
-                variant="secondary"
-                icon="file-search"
-                isDisabled={busy}
-                onPress={() => void locate(entry)}
-              >
-                {translate(language, "shelf.locate")}
-              </ui.Button>
+              {action(translate(language, "shelf.locate"), "file-search", () => void locate(entry))}
               {removeButton}
             </>
           );
         case "needs-permission":
           return (
             <>
-              <ui.Button
-                variant="secondary"
-                icon="lock-open"
-                isDisabled={busy}
-                onPress={() => void reopen(entry)}
-              >
-                {translate(language, "shelf.reopen")}
-              </ui.Button>
+              {action(translate(language, "shelf.reopen"), "lock-open", () => void reopen(entry))}
               {removeButton}
             </>
           );
         case "unreadable":
-          return <>{removeButton}</>;
+          return removeButton;
         default:
           return (
             <>
-              <ui.Button
-                variant="secondary"
-                icon="book-open"
-                isDisabled={busy}
-                onPress={() => onOpenDocument(entry)}
-              >
-                {translate(language, "shelf.open")}
-              </ui.Button>
+              {action(translate(language, "shelf.open"), "book-open", () => onOpenDocument(entry))}
               {removeButton}
             </>
           );
@@ -254,25 +265,36 @@ export function createShelfPage(deps: ShelfPageDeps): ComponentType {
             {openFileButton}
           </ui.EmptyState>
         ) : (
-          <ui.List marker="none">
-            {shelf.map((entry) => {
-              const progress = progressText(language, entry.progress);
-              const state = stateText(language, entry);
-              const meta = [entry.author, entry.format.toUpperCase()]
-                .filter((part) => part !== "")
-                .join(" · ");
-              return (
-                <ui.ListItem key={entry.id}>
-                  <ui.View direction="row" gap="md" align="start">
-                    {entry.coverDataUrl === undefined ? (
-                      <ui.Icon name="book-open-text" size="lg" tone="muted" />
+          <ui.Surface css={SHELF_CSS}>
+            <ui.List marker="none">
+              {shelf.map((entry) => {
+                const progress = progressText(language, entry.progress);
+                const state = stateText(language, entry);
+                const meta = [entry.author, entry.format.toUpperCase()]
+                  .filter((part) => part !== "")
+                  .join(" · ");
+                const when =
+                  entry.lastReadAt === 0
+                    ? null
+                    : format(translate(language, "shelf.lastRead"), {
+                        when: relativeTimestamp(language, entry.lastReadAt),
+                      });
+                return (
+                  <ui.ListItem key={entry.id}>
+                    {entry.state === "ok" ? (
+                      // The cover opens the Document, like its Open button.
+                      <ui.Button
+                        variant="ghost"
+                        isDisabled={busy}
+                        onPress={() => onOpenDocument(entry)}
+                      >
+                        {cover(entry)}
+                      </ui.Button>
                     ) : (
-                      <ui.Image src={entry.coverDataUrl} alt={entry.title} width={48} height={64} />
+                      <ui.View>{cover(entry)}</ui.View>
                     )}
-                    <ui.View direction="column" gap="sm">
-                      <ui.Text size="lg" weight="semibold">
-                        {entry.title}
-                      </ui.Text>
+                    <ui.View direction="column">
+                      <ui.Text weight="semibold">{entry.title}</ui.Text>
                       {meta === "" ? null : (
                         <ui.Text size="sm" tone="muted">
                           {meta}
@@ -284,22 +306,20 @@ export function createShelfPage(deps: ShelfPageDeps): ComponentType {
                         </ui.Text>
                       )}
                       {progress === null ? null : <ui.Text size="sm">{progress}</ui.Text>}
-                      {entry.lastReadAt === 0 ? null : (
+                      {when === null ? null : (
                         <ui.Text size="sm" tone="muted">
-                          {format(translate(language, "shelf.lastRead"), {
-                            when: relativeTimestamp(language, entry.lastReadAt),
-                          })}
+                          {when}
                         </ui.Text>
                       )}
-                      <ui.View direction="row" gap="sm" wrap>
-                        {rowActions(entry)}
-                      </ui.View>
                     </ui.View>
-                  </ui.View>
-                </ui.ListItem>
-              );
-            })}
-          </ui.List>
+                    <ui.View direction="row" align="center">
+                      {cardActions(entry)}
+                    </ui.View>
+                  </ui.ListItem>
+                );
+              })}
+            </ui.List>
+          </ui.Surface>
         )}
       </ui.View>
     );

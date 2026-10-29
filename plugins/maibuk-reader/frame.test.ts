@@ -439,7 +439,11 @@ describe("search", () => {
     await user.keyboard("{Enter}");
     await vi.waitFor(() => expect(el("search-status").textContent).toBe("1 of 3"));
     // Page 1 holds two matches; the first is current and page 3 waits its turn.
-    const marks = () => Array.from(el("stage").querySelectorAll<HTMLElement>(".reader-search-hit"));
+    // The shown page's marks: the neighbors drawn ahead wait in hidden slots.
+    const marks = () =>
+      Array.from(
+        el("stage").querySelectorAll<HTMLElement>(".pdf-page:not([hidden]) .reader-search-hit")
+      );
     const current = () =>
       marks().flatMap((mark, index) => (mark.classList.contains("is-current") ? [index] : []));
     await vi.waitFor(() => expect(current()).toEqual([0]));
@@ -543,7 +547,193 @@ describe("labels", () => {
     frame.open();
     await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
     frame.port.deliver({ kind: "language", language: "es", labels: LABELS_ES });
-    expect(el("back").textContent).toBe("Volver al estante");
+    expect(el("back").getAttribute("aria-label")).toBe("Volver al estante");
     expect(el("page-indicator").textContent).toBe("1 de 12");
+  });
+});
+
+describe("toolbar and paging", () => {
+  /** The canvas drawn into a page's slot, once it has rendered. */
+  const slotCanvas = (index: number) =>
+    document.querySelector<HTMLCanvasElement>(`.pdf-page[data-page="${index}"] canvas`);
+
+  it("names every toolbar button for screen readers and the pointer, with no text", () => {
+    frame = loadFrame(createPdfStub());
+    for (const button of Array.from(document.querySelectorAll("header button"))) {
+      expect(button.getAttribute("aria-label"), button.id).toBeTruthy();
+      expect(button.getAttribute("title"), button.id).toBe(button.getAttribute("aria-label"));
+      expect(button.textContent?.trim(), button.id).toBe("");
+    }
+    expect(el("page-next").getAttribute("aria-label")).toBe(LABELS.nextPage);
+    expect(el("layout-toggle").getAttribute("aria-label")).toBe(LABELS.continuousScroll);
+  });
+
+  it("turns pages with the page buttons, and the first page's Previous does nothing", async () => {
+    frame = loadFrame(createPdfStub());
+    frame.open();
+    const indicator = el("page-indicator");
+    await vi.waitFor(() => expect(indicator.textContent).toBe("1 of 12"));
+    const user = userEvent.setup();
+    expect(el("page-previous").getAttribute("aria-disabled")).toBe("true");
+    await user.click(el("page-previous"));
+    expect(indicator.textContent).toBe("1 of 12");
+    await user.click(el("page-next"));
+    await vi.waitFor(() => expect(indicator.textContent).toBe("2 of 12"));
+    expect(el("page-previous").hasAttribute("aria-disabled")).toBe(false);
+    el("page-next").focus();
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(indicator.textContent).toBe("3 of 12"));
+  });
+
+  it("keeps a drawn page in the document while another page shows, so going back is never blank", async () => {
+    frame = loadFrame(createPdfStub());
+    frame.open();
+    await vi.waitFor(() => expect(slotCanvas(0)).not.toBeNull());
+    const first = slotCanvas(0);
+    const user = userEvent.setup();
+    await user.click(el("page-next"));
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("2 of 12"));
+    expect(first?.isConnected).toBe(true);
+    expect(first?.closest(".pdf-page")?.hasAttribute("hidden")).toBe(true);
+    await user.click(el("page-previous"));
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    expect(slotCanvas(0)).toBe(first);
+    expect(first?.closest(".pdf-page")?.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("does not turn the page when the mouse clicks the edge of the page", async () => {
+    frame = loadFrame(createPdfStub());
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    vi.spyOn(el("viewer"), "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 0, y: 0, width: 1000, height: 800 })
+    );
+    await userEvent
+      .setup()
+      .pointer([
+        { keys: "[MouseLeft]", target: el("viewer"), coords: { clientX: 980, clientY: 400 } },
+      ]);
+    expect(el("page-indicator").textContent).toBe("1 of 12");
+  });
+
+  it("turns one page per wheel gesture at the page's edge, and zooms with Ctrl", async () => {
+    let now = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    frame = loadFrame(createPdfStub());
+    frame.open();
+    const indicator = el("page-indicator");
+    await vi.waitFor(() => expect(indicator.textContent).toBe("1 of 12"));
+    const wheel = (init: WheelEventInit) => {
+      const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, ...init });
+      el("viewer").dispatchEvent(event);
+      return event;
+    };
+    expect(wheel({ deltaY: 100 }).defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(indicator.textContent).toBe("2 of 12"));
+    now += 16;
+    wheel({ deltaY: 100 });
+    expect(indicator.textContent).toBe("2 of 12");
+    now += 1000;
+    wheel({ deltaY: -100 });
+    await vi.waitFor(() => expect(indicator.textContent).toBe("1 of 12"));
+    now += 1000;
+    const zoom = el("zoom-level").textContent;
+    expect(wheel({ deltaY: -100, ctrlKey: true }).defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(el("zoom-level").textContent).not.toBe(zoom));
+    expect(indicator.textContent).toBe("1 of 12");
+  });
+
+  it("switches to Continuous scroll and back, remembering the choice", async () => {
+    frame = loadFrame(createPdfStub());
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    const shown = () => document.querySelectorAll(".pdf-page:not([hidden])").length;
+    expect(shown()).toBe(1);
+    await userEvent.setup().click(el("layout-toggle"));
+    await vi.waitFor(() => expect(shown()).toBe(12));
+    expect(el("layout-toggle").getAttribute("aria-pressed")).toBe("true");
+    expect(frame.port.messages).toContainEqual(
+      expect.objectContaining({
+        kind: "settings",
+        settings: expect.objectContaining({ pdfLayout: "continuous" }),
+      })
+    );
+    frame.port.deliver({ kind: "command", id: "lastPage" });
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("12 of 12"));
+    expect(shown()).toBe(12);
+    frame.port.deliver({ kind: "command", id: "toggleContinuousScroll" });
+    await vi.waitFor(() => expect(shown()).toBe(1));
+    expect(el("page-indicator").textContent).toBe("12 of 12");
+    expect(el("layout-toggle").getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("opens in Continuous scroll when the settings say so", async () => {
+    frame = loadFrame(createPdfStub());
+    frame.open({
+      settings: { fontSize: 100, lineWidth: "medium", pdfFit: "width", pdfLayout: "continuous" },
+    });
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    expect(document.querySelectorAll(".pdf-page:not([hidden])")).toHaveLength(12);
+  });
+
+  it("asks the host for full screen from the button and F, and follows the host's answer", async () => {
+    const post = vi.spyOn(window, "postMessage").mockImplementation(() => {});
+    frame = loadFrame(createPdfStub());
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    const toggle = el("fullscreen-toggle");
+    expect(toggle.hidden).toBe(false);
+    expect(toggle.getAttribute("aria-label")).toBe(LABELS.fullScreen);
+    const user = userEvent.setup();
+    await user.click(toggle);
+    expect(post).toHaveBeenLastCalledWith({ kind: "frame-fullscreen", on: true }, "*");
+    // Nothing changes until the host answers.
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    const answer = (on: boolean) =>
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { kind: "frame-fullscreen-state", on },
+          source: window,
+        })
+      );
+    answer(true);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(toggle.getAttribute("aria-label")).toBe(LABELS.exitFullScreen);
+    // Escape leaves full screen, not the Document.
+    await user.keyboard("{Escape}");
+    expect(post).toHaveBeenLastCalledWith({ kind: "frame-fullscreen", on: false }, "*");
+    expect(frame.port.messages.some((message) => message.kind === "back")).toBe(false);
+    answer(false);
+    await user.keyboard("f");
+    expect(post).toHaveBeenLastCalledWith({ kind: "frame-fullscreen", on: true }, "*");
+  });
+});
+
+describe("a page shown again", () => {
+  it("paints its saved bitmap back, since WebKit can drop a hidden canvas's pixels", async () => {
+    const bitmap = { close: vi.fn() };
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(async () => bitmap)
+    );
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage,
+      clearRect: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    try {
+      frame = loadFrame(createPdfStub());
+      frame.open();
+      await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+      const user = userEvent.setup();
+      await user.click(el("page-next"));
+      await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("2 of 12"));
+      drawImage.mockClear();
+      await user.click(el("page-previous"));
+      await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+      await vi.waitFor(() => expect(drawImage).toHaveBeenCalledWith(bitmap, 0, 0));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

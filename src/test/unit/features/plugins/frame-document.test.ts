@@ -55,6 +55,11 @@ describe("createFrameElement()", () => {
     expect(element.style.display).toBe("block");
     expect(element.srcdoc).toBe(FRAME_DOCUMENT);
   });
+
+  it("grants no permissions-policy feature; full screen goes through the host", () => {
+    const element = createFrameElement(document, { title: "Plugin custom UI" });
+    expect(element.hasAttribute("allow")).toBe(false);
+  });
 });
 
 describe("frameMimeType()", () => {

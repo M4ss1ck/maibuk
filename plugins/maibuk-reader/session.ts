@@ -186,6 +186,9 @@ export function frameLabels(language: string): FrameLabels {
     sectionPage: translate(language, "viewer.sectionPage"),
     increaseFontSize: translate(language, "viewer.increaseFontSize"),
     decreaseFontSize: translate(language, "viewer.decreaseFontSize"),
+    continuousScroll: translate(language, "viewer.continuousScroll"),
+    fullScreen: translate(language, "viewer.fullScreen"),
+    exitFullScreen: translate(language, "viewer.exitFullScreen"),
   };
 }
 

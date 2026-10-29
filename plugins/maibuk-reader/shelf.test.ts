@@ -285,6 +285,7 @@ describe("clampSettings()", () => {
       fontSize: 100,
       lineWidth: "medium",
       pdfFit: "width",
+      pdfLayout: "single",
     });
   });
 
@@ -303,6 +304,12 @@ describe("clampSettings()", () => {
       lineWidth: "wide",
       pdfFit: "page",
     });
+  });
+
+  it("keeps a known PDF layout and falls back to one page at a time", () => {
+    expect(clampSettings({ pdfLayout: "continuous" }).pdfLayout).toBe("continuous");
+    expect(clampSettings({ pdfLayout: "spread" }).pdfLayout).toBe("single");
+    expect(clampSettings({}).pdfLayout).toBe("single");
   });
 });
 

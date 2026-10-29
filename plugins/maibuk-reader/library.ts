@@ -12,6 +12,7 @@
 
 import type { PluginClient } from "@/plugin-sdk";
 import {
+  CURRENT_DOCUMENT_KEY,
   FINGERPRINT_WINDOW,
   SETTINGS_KEY,
   SHELF_KEY,
@@ -96,6 +97,10 @@ export interface ShelfService {
   locateAgain(id: string): Promise<LocateAgainResult>;
   /** Asks the browser for read access again; desktop always says yes. */
   reopen(id: string): Promise<boolean>;
+  /** Remembers which Document the Reading page has open. */
+  rememberCurrent(id: string): Promise<void>;
+  /** The Shelf row of the Document the Reading page last had open, if it is still on the Shelf. */
+  loadCurrent(): Promise<ShelfEntry | null>;
 }
 
 export function createShelfService(client: ReaderClient): ShelfService {
@@ -105,6 +110,24 @@ export function createShelfService(client: ReaderClient): ShelfService {
         return sortShelf(parseShelf(await client.storage.get({ key: SHELF_KEY })));
       } catch {
         return [];
+      }
+    },
+
+    async rememberCurrent(id): Promise<void> {
+      try {
+        await client.storage.set({ key: CURRENT_DOCUMENT_KEY, value: id });
+      } catch {
+        /* Storage full or blocked: a relaunch shows the Shelf's choice again. */
+      }
+    },
+
+    async loadCurrent(): Promise<ShelfEntry | null> {
+      try {
+        const id = await client.storage.get({ key: CURRENT_DOCUMENT_KEY });
+        if (typeof id !== "string") return null;
+        return (await library.loadShelf()).find((entry) => entry.id === id) ?? null;
+      } catch {
+        return null;
       }
     },
 
