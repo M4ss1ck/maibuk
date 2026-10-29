@@ -66,6 +66,7 @@ import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { planPluginModules } from "@/features/plugins/modules";
 import { applyPluginLocale } from "@/features/plugins/manifest-constants";
 import { reviewPluginCopy } from "@/features/plugins/review";
+import { getPluginFileGrantStore } from "@/features/plugins/file-grants";
 import { getPluginSecretStore } from "@/features/plugins/secret-store";
 import { clearPluginStorage, getPluginDataSize } from "@/features/plugins/storage";
 import type {
@@ -873,6 +874,11 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         if (!entry?.approval) return;
         const next = revokePermission(entry.approval, permission, entry.manifest);
         if (next === entry.approval) return;
+        // Revoking `files:pick` ends every File Grant the Plugin held: without
+        // the Plugin Permission there is no reason to keep a way to the files.
+        if (permission === "files:pick") {
+          await getPluginFileGrantStore()?.clearPlugin(pluginId);
+        }
         savePluginApproval(next);
         if (!next.enabled) {
           // A required grant is gone: the Plugin is disabled and unregistered.
@@ -1054,11 +1060,13 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         markPluginRemoved(pluginId);
         // The Plugin's saved credentials always go, not only when the "also
         // delete this Plugin's data" choice is on: that choice covers Library
-        // data, and secrets are never Library data. A store failure rejects
-        // the removal, like the folder and data steps above. Custom Shortcuts
-        // and custom Voice Commands are never touched: they stay, inactive until
-        // the Plugin returns.
+        // data, and secrets are never Library data. Its File Grants go for the
+        // same reason: a way to the author's files is not Library data either.
+        // A store failure rejects the removal, like the folder and data steps
+        // above. Custom Shortcuts and custom Voice Commands are never touched:
+        // they stay, inactive until the Plugin returns.
         await getPluginSecretStore()?.clearPlugin(pluginId);
+        await getPluginFileGrantStore()?.clearPlugin(pluginId);
         if (deleteDataOption) await clearPluginStorage(pluginId);
         await get().refresh();
         // Refresh the shown data size after the removal: `refresh()` rebuilds the

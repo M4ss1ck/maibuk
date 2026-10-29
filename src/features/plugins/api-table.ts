@@ -14,9 +14,10 @@ import { z } from "zod";
 import { BOOK_STATUSES } from "@/features/books/types";
 import { CHAPTER_STATUSES, CHAPTER_TYPES } from "@/features/chapters/types";
 import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
+import { FILE_READ_MAX_BYTES } from "@/plugin-sdk/protocol";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.8";
+export const PLUGIN_API_VERSION = "0.1.9";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -31,6 +32,7 @@ export const PLUGIN_API_NAMESPACES = [
   "notifications",
   "storage",
   "toolbar",
+  "files",
 ] as const;
 
 /** Names held for a later effort; every call into one refuses with `not-implemented`. */
@@ -55,6 +57,18 @@ const id = z.string().min(1).max(128);
 const timestamp = z.number().describe("Milliseconds since the Unix epoch.");
 const none = z.strictObject({});
 const ok = z.null();
+
+/**
+ * The bytes `files.read` returns. JSON Schema has no byte type, so the emitter
+ * turns this custom schema into an object with this description, and
+ * `api-codegen` maps that description back to `ArrayBuffer` in the SDK types.
+ */
+export const ARRAY_BUFFER_SCHEMA_DESCRIPTION =
+  "ArrayBuffer of the requested bytes; shorter than asked at the end of the file.";
+
+const arrayBuffer = z
+  .custom<ArrayBuffer>((value) => value instanceof ArrayBuffer, "ArrayBuffer")
+  .describe(ARRAY_BUFFER_SCHEMA_DESCRIPTION);
 
 const content = z.strictObject({
   text: z.string().describe("Plain text."),
@@ -663,6 +677,74 @@ export const PLUGIN_API_TABLE = [
     effect: "read",
     requiresLibrary: true,
   }),
+  defineApiRow({
+    id: "files.pick",
+    description:
+      "Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id.",
+    input: z.strictObject({
+      extensions: z
+        .array(z.string().regex(/^[a-z0-9]{1,16}$/))
+        .min(1)
+        .max(32)
+        .describe("Lowercase extensions without a dot, such as pdf or epub."),
+      multiple: z.literal(false).optional().describe("Only one file at a time for now."),
+    }),
+    output: z
+      .strictObject({ grant: z.string().min(1), name: z.string(), size: z.int() })
+      .nullable()
+      .describe("The picked File Grant, or null when the author cancelled."),
+    permission: "files:pick",
+    effect: "read",
+    requiresUserAction: true,
+  }),
+  defineApiRow({
+    id: "files.read",
+    description:
+      "Reads a byte range from a File Grant. A range past the end of the file returns the bytes that exist: shorter than asked, and empty at or past the end. Refused with file-missing when the file is gone or unreadable, or file-needs-permission on the web when the browser must ask the author again.",
+    input: z.strictObject({
+      grant: z.string().min(1),
+      offset: z.int().min(0),
+      length: z.int().min(1).max(FILE_READ_MAX_BYTES),
+    }),
+    output: arrayBuffer,
+    permission: "files:pick",
+    effect: "read",
+  }),
+  defineApiRow({
+    id: "files.stat",
+    description:
+      "Reads a File Grant's name, size, and last-modified time without reading its bytes, so a Plugin can mark a missing file.",
+    input: z.strictObject({ grant: z.string().min(1) }),
+    output: z.strictObject({ name: z.string(), size: z.int(), modified: timestamp }),
+    permission: "files:pick",
+    effect: "read",
+  }),
+  defineApiRow({
+    id: "files.requestAccess",
+    description:
+      "Asks for read access to a File Grant again, inside the author's click or Command run. On the web the browser asks the author; on desktop it always returns true.",
+    input: z.strictObject({ grant: z.string().min(1) }),
+    output: z.boolean(),
+    permission: "files:pick",
+    effect: "read",
+    requiresUserAction: true,
+  }),
+  defineApiRow({
+    id: "files.release",
+    description: "Ends a File Grant. The author's file itself is never deleted or changed.",
+    input: z.strictObject({ grant: z.string().min(1) }),
+    output: ok,
+    permission: "files:pick",
+    effect: "write",
+  }),
+  defineApiRow({
+    id: "files.list",
+    description: "Lists this Plugin's live File Grants on this device.",
+    input: none,
+    output: z.array(z.strictObject({ grant: z.string().min(1), name: z.string(), size: z.int() })),
+    permission: "files:pick",
+    effect: "read",
+  }),
 ] as const;
 
 export const PLUGIN_API_EVENTS = [
@@ -739,7 +821,15 @@ export const PLUGIN_API_EVENTS = [
 type JsonSchema = Record<string, unknown>;
 
 function toJsonSchema(schema: z.ZodType, io: "input" | "output"): JsonSchema {
-  const { $schema: _, ...rest } = z.toJSONSchema(schema, { io }) as JsonSchema;
+  const { $schema: _, ...rest } = z.toJSONSchema(schema, {
+    io,
+    unrepresentable: (ctx) =>
+      // `.describe()` wraps the custom schema, so the inner one arrives without
+      // the description: every custom schema in this table is the file bytes.
+      ctx.zodSchema._zod.def.type === "custom"
+        ? { type: "object", description: ARRAY_BUFFER_SCHEMA_DESCRIPTION }
+        : "throw",
+  }) as JsonSchema;
   return rest;
 }
 

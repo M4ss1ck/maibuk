@@ -24,6 +24,10 @@ import {
   createPluginManagementStore,
 } from "@/features/plugins/management";
 import {
+  createMemoryPluginFileGrantStore,
+  registerPluginFileGrantStore,
+} from "@/features/plugins/file-grants";
+import {
   createMemoryPluginSecretStore,
   registerPluginSecretStore,
 } from "@/features/plugins/secret-store";
@@ -64,6 +68,7 @@ beforeEach(() => {
 
 afterEach(() => {
   registerPluginSecretStore(null);
+  registerPluginFileGrantStore(null);
   localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
   localStorage.removeItem(PLUGIN_KNOWN_STORAGE_KEY);
 });
@@ -365,6 +370,24 @@ describe("Plugin management actions: remove", () => {
     await expect(secrets.read("echoes", "token")).resolves.toBe("echoes-token");
   });
 
+  it("removal ends this Plugin's File Grants and no other Plugin's", async () => {
+    const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
+    const dir = makeDirectory("web", [folder]);
+    const grants = createMemoryPluginFileGrantStore([
+      { pluginId: "tracer", name: "a.pdf", bytes: new Uint8Array([1]) },
+      { pluginId: "echoes", name: "b.pdf", bytes: new Uint8Array([2]) },
+    ]);
+    registerPluginFileGrantStore(grants);
+    const store = makeStore(dir.adapter);
+    await store.getState().refresh();
+
+    // deleteData is false: a way to the author's files is not Library data.
+    await store.getState().remove("tracer", { deleteData: false });
+
+    await expect(grants.list("tracer")).resolves.toEqual([]);
+    await expect(grants.list("echoes")).resolves.toMatchObject([{ name: "b.pdf" }]);
+  });
+
   it("lets a secret-store failure reject the removal, like the other removal steps", async () => {
     const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
     const dir = makeDirectory("web", [folder]);
@@ -382,6 +405,56 @@ describe("Plugin management actions: remove", () => {
     );
     // The steps before it ran: the folder is already gone.
     expect(dir.map.has("tracer")).toBe(false);
+  });
+});
+
+describe("Plugin management actions: revoke", () => {
+  const PERMISSIONS_WITH_FILES: PluginManifest["permissions"] = {
+    required: ["library:read"],
+    optional: ["files:pick", "secrets"],
+  };
+
+  async function setupWithFileGrants() {
+    const folder = pluginFolder(
+      {},
+      { id: "tracer", name: "Tracer", permissions: PERMISSIONS_WITH_FILES }
+    );
+    const dir = makeDirectory("web", [folder]);
+    savePluginApproval({
+      pluginId: "tracer",
+      pinnedHash: await hashPluginDirectory(folder.files),
+      granted: ["library:read", "files:pick", "secrets"],
+      enabled: true,
+      approvedVersion: "1.0.0",
+      approvedPermissions: PERMISSIONS_WITH_FILES,
+      approvedFiles: {},
+    });
+    const grants = createMemoryPluginFileGrantStore([
+      { pluginId: "tracer", name: "a.pdf", bytes: new Uint8Array([1]) },
+      { pluginId: "echoes", name: "b.pdf", bytes: new Uint8Array([2]) },
+    ]);
+    registerPluginFileGrantStore(grants);
+    const store = makeStore(dir.adapter);
+    await store.getState().refresh();
+    return { store, grants };
+  }
+
+  it("ends the Plugin's File Grants when files:pick is revoked", async () => {
+    const { store, grants } = await setupWithFileGrants();
+
+    await store.getState().revoke("tracer", "files:pick");
+
+    await expect(grants.list("tracer")).resolves.toEqual([]);
+    // Another Plugin's grants are never touched by one Plugin's revocation.
+    await expect(grants.list("echoes")).resolves.toMatchObject([{ name: "b.pdf" }]);
+  });
+
+  it("keeps the Plugin's File Grants when another permission is revoked", async () => {
+    const { store, grants } = await setupWithFileGrants();
+
+    await store.getState().revoke("tracer", "secrets");
+
+    await expect(grants.list("tracer")).resolves.toMatchObject([{ name: "a.pdf" }]);
   });
 });
 

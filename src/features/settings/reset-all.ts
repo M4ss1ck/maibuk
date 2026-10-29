@@ -17,6 +17,7 @@
  */
 
 import { clearPluginApprovals } from "@/features/plugins/approvals";
+import { getPluginFileGrantStore } from "@/features/plugins/file-grants";
 import { clearKnownPlugins } from "@/features/plugins/known";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { usePluginManagementStore } from "@/features/plugins/management";
@@ -35,6 +36,8 @@ export interface ResetAllSettingsOptions {
   known?: () => void;
   /** Deletes saved Plugin credentials. */
   clearCredentials?: () => Promise<void>;
+  /** Ends every File Grant on this device. */
+  clearFileGrants?: () => Promise<void>;
   /** Stops every running Plugin. */
   stopPlugins?: () => void;
   /** Re-reads the Plugin Directory and re-seeds untouched Built-ins. */
@@ -49,6 +52,15 @@ export interface ResetAllSettingsOptions {
  */
 async function clearPluginCredentials(): Promise<void> {
   await getPluginSecretStore()?.clearAll();
+}
+
+/**
+ * Ends every File Grant through the registered store. Like credentials, a
+ * store failure rejects so Reset settings reports it, but every other reset
+ * step still runs.
+ */
+async function clearPluginFileGrants(): Promise<void> {
+  await getPluginFileGrantStore()?.clearAll();
 }
 
 /** Stops every Plugin the lifecycle holds: none is approved after the reset. */
@@ -67,6 +79,7 @@ export async function resetAllSettings(options: ResetAllSettingsOptions = {}): P
   const clearApprovals = options.approvals ?? clearPluginApprovals;
   const clearKnown = options.known ?? clearKnownPlugins;
   const clearCredentials = options.clearCredentials ?? clearPluginCredentials;
+  const clearGrants = options.clearFileGrants ?? clearPluginFileGrants;
   const refreshPlugins =
     options.refreshPlugins ?? (() => usePluginManagementStore.getState().refresh());
 
@@ -76,9 +89,10 @@ export async function resetAllSettings(options: ResetAllSettingsOptions = {}): P
   resetShortcuts();
   clearApprovals();
   clearKnown();
-  // Deleting credentials can fail (a locked keychain, a platform error). Every
-  // other step still runs so the reset is not left half-applied; the failure is
-  // reported once the rest is done, so the UI can tell the author.
+  // Deleting credentials or ending File Grants can fail (a locked keychain, a
+  // platform error). Every other step still runs so the reset is not left
+  // half-applied; the first failure is reported once the rest is done, so the
+  // UI can tell the author.
   let credentialsError: unknown;
   let credentialsFailed = false;
   try {
@@ -86,6 +100,14 @@ export async function resetAllSettings(options: ResetAllSettingsOptions = {}): P
   } catch (error) {
     credentialsFailed = true;
     credentialsError = error;
+  }
+  try {
+    await clearGrants();
+  } catch (error) {
+    if (!credentialsFailed) {
+      credentialsFailed = true;
+      credentialsError = error;
+    }
   }
   // Re-seed the store: untouched Built-ins get fresh approvals (pre-granted, off),
   // modified copies stay review-required, and every third-party copy is

@@ -9,6 +9,7 @@
  */
 
 import {
+  ARRAY_BUFFER_SCHEMA_DESCRIPTION,
   PLUGIN_API_EVENTS,
   PLUGIN_API_RESERVED_NAMESPACES,
   PLUGIN_API_VERSION,
@@ -102,6 +103,11 @@ function objectType(schema: JsonSchema, indent: string): string {
 
 /** One JSON Schema as a TypeScript type expression, nested lines indented from `indent`. */
 export function jsonSchemaToTypeScript(schema: JsonSchema, indent: string): string {
+  // `files.read` hands back bytes, which JSON Schema has no type for: the
+  // emitter writes the marker object this description names.
+  if (schema.type === "object" && schema.description === ARRAY_BUFFER_SCHEMA_DESCRIPTION) {
+    return "ArrayBuffer";
+  }
   for (const keyword of Object.keys(schema)) {
     if (!IGNORED_KEYWORDS.has(keyword) && !TYPE_KEYWORDS.has(keyword)) {
       throw new Error(`JSON Schema keyword "${keyword}" is not translated to TypeScript`);

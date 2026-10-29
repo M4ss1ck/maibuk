@@ -585,6 +585,7 @@ describe("validateManifestValue: permissions", () => {
       "clipboard",
       "process",
       "serve",
+      "files:pick",
     ]) {
       const result = validateManifestValue(
         baseManifestWith((m) => (m.permissions = { required: [permission], optional: [] }))

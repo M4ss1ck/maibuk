@@ -1114,6 +1114,12 @@ export interface PluginApiRow<
   effect: PluginApiEffect;
   /** Refused with `library-unavailable` while the Library cannot be read or written. */
   requiresLibrary?: boolean;
+  /**
+   * True when the call needs the author's own action: it is refused with
+   * `user-action-required` unless the author's click, key press, or Command run
+   * caused it.
+   */
+  requiresUserAction?: true;
   /** At most one accepted call per this many milliseconds, per Plugin. */
   minIntervalMs?: number;
 }
@@ -1321,6 +1327,12 @@ export interface PluginBrokerOptions {
    * current value to send.
    */
   eventSnapshot?: (event: string) => unknown;
+  /**
+   * Whether the page has a live user activation right now, read for a
+   * `requiresUserAction` row. Defaults to `navigator.userActivation.isActive`,
+   * which is false outside a click, key press, or tap.
+   */
+  hasUserActivation?: () => boolean;
   onStop?: (reason: PluginStopReason) => void;
   /** Observes a call arriving from the Plugin (the on-demand idle window resets on activity). */
   onCall?: (method: string) => void;

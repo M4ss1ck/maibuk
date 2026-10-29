@@ -19,7 +19,7 @@
       "secrets",
       "network:api.fixture.test"
     ],
-    "optional": ["editor:write", "clipboard", "process", "serve"]
+    "optional": ["editor:write", "clipboard", "process", "serve", "files:pick"]
   },
   "contributes": {
     "commands": [

@@ -193,6 +193,14 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   const now = options.now ?? (() => performance.now());
   const isLibraryAvailable = options.isLibraryAvailable ?? (() => true);
   const trackLibraryWork = options.trackLibraryWork ?? (<T,>(work: Promise<T>) => work);
+  const hasUserActivation =
+    options.hasUserActivation ??
+    (() =>
+      (
+        globalThis as {
+          navigator?: { userActivation?: { isActive?: unknown } };
+        }
+      ).navigator?.userActivation?.isActive === true);
   const rows = new Map((options.table ?? PLUGIN_API_TABLE).map((row) => [row.id, row]));
   const events = new Map((options.events ?? PLUGIN_API_EVENTS).map((row) => [row.id, row]));
   const reserved: readonly string[] = PLUGIN_API_RESERVED_NAMESPACES;
@@ -232,8 +240,8 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     return false;
   }
 
-  function post(message: HostToPluginMessage) {
-    if (!stopped) port.postMessage(message);
+  function post(message: HostToPluginMessage, transfer?: Transferable[]) {
+    if (!stopped) port.postMessage(message, transfer);
   }
 
   function fail(id: number, error: PluginApiErrorData) {
@@ -482,6 +490,17 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       fail(id, refusal("library-unavailable", "The Library is not available", { method }));
       return;
     }
+    if (row.requiresUserAction && !hasRecentCommandRun() && !hasUserActivation()) {
+      fail(
+        id,
+        refusal(
+          "user-action-required",
+          `${method} needs the author's click, key press, or Command run`,
+          { method }
+        )
+      );
+      return;
+    }
     // While the host awaits this Plugin's own `command.run`, a call with a
     // `minIntervalMs` is answering the author: accept it, and leave
     // `lastAcceptedAt` alone so solicited announcements do not consume the
@@ -532,6 +551,12 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       }
       post({ kind: "result", id, ok: true, result: outcome.result });
       await streamBody(row, id, outcome.body);
+      return;
+    }
+    if (outcome instanceof ArrayBuffer) {
+      // `files.read` hands its bytes over rather than copying them, so a large
+      // range crosses the port once.
+      post({ kind: "result", id, ok: true, result: outcome }, [outcome]);
       return;
     }
     post({ kind: "result", id, ok: true, result: outcome });
