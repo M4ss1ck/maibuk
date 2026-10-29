@@ -34,16 +34,24 @@ export interface PickerFile {
    * a temporary directory), so `path` is read at call time.
    */
   absolute?: boolean;
+  /**
+   * Serve the bytes through a route instead of inlining them: Playwright
+   * streams `path` from disk when the page fetches the file, so a large
+   * fixture never becomes a base64 string in the init script or a main-thread
+   * decode in the page. The bench uses it for its 50 MB PDF. Implies
+   * `absolute`.
+   */
+  served?: boolean;
 }
 
 /** What the init script is handed: names and bytes only, so it clones cleanly. */
 interface PickerPayload {
-  files: { name: string; base64: string; type: string }[];
+  files: { name: string; base64?: string; url?: string; type: string }[];
 }
 
 /** The globals the init script installs, read by the helpers below. */
 interface FilePickerGlobal {
-  files: Map<string, { base64: string; type: string }>;
+  files: Map<string, { base64?: string; url?: string; type: string; blob?: Promise<Blob> }>;
   missing: Set<string>;
   next: string | null;
 }
@@ -54,20 +62,38 @@ const PICKER_GLOBAL = "__maibukE2EFilePicker";
  * Installs the picker and the handle methods for every navigation after this
  * call. Call once per test, before the interaction that opens the dialog.
  */
+/** The same-origin path a served file is fetched from. */
+const servedPath = (index: number) => `/__e2e-picker/${index}`;
+
 export async function installFilePicker(page: Page, files: PickerFile[]): Promise<void> {
   const payload: PickerPayload = {
-    files: files.map((file) => ({
-      name: file.name,
-      base64: readFileSync(file.absolute ? file.path : resolve(REPO_ROOT, file.path)).toString(
-        "base64"
-      ),
-      type: file.type ?? "application/octet-stream",
-    })),
+    files: files.map((file, index) => {
+      const type = file.type ?? "application/octet-stream";
+      if (file.served) {
+        return { name: file.name, url: servedPath(index), type };
+      }
+      return {
+        name: file.name,
+        base64: readFileSync(file.absolute ? file.path : resolve(REPO_ROOT, file.path)).toString(
+          "base64"
+        ),
+        type,
+      };
+    }),
   };
+  for (const [index, file] of files.entries()) {
+    if (!file.served) continue;
+    const path = file.absolute || file.served ? file.path : resolve(REPO_ROOT, file.path);
+    await page.route(`**${servedPath(index)}`, (route) =>
+      route.fulfill({ path, contentType: file.type ?? "application/octet-stream" })
+    );
+  }
   await page.addInitScript(
     ({ globalName, files: seeded }: { globalName: string; files: PickerPayload["files"] }) => {
       const state: FilePickerGlobal = {
-        files: new Map(seeded.map((file) => [file.name, { base64: file.base64, type: file.type }])),
+        files: new Map(
+          seeded.map((file) => [file.name, { base64: file.base64, url: file.url, type: file.type }])
+        ),
         missing: new Set<string>(),
         next: null,
       };
@@ -78,13 +104,20 @@ export async function installFilePicker(page: Page, files: PickerFile[]): Promis
         return Uint8Array.from(binary, (char) => char.charCodeAt(0));
       };
 
-      const fileFor = (name: string): File => {
+      // A fixed timestamp keeps `pickSessionOnly`'s equality check stable.
+      const LAST_MODIFIED = 1_700_000_000_000;
+      const fileFor = async (name: string): Promise<File> => {
         const entry = state.files.get(name);
         if (entry === undefined) throw new Error(`E2E picker has no file named ${name}`);
-        return new File([bytesOf(entry.base64).buffer as ArrayBuffer], name, {
+        if (entry.url !== undefined) {
+          // Fetched once and kept: the served bytes never pass through base64.
+          entry.blob ??= fetch(entry.url).then((response) => response.blob());
+          const blob = await entry.blob;
+          return new File([blob], name, { type: entry.type, lastModified: LAST_MODIFIED });
+        }
+        return new File([bytesOf(entry.base64 ?? "").buffer as ArrayBuffer], name, {
           type: entry.type,
-          // A fixed timestamp keeps `pickSessionOnly`'s equality check stable.
-          lastModified: 1_700_000_000_000,
+          lastModified: LAST_MODIFIED,
         });
       };
 
@@ -120,9 +153,7 @@ export async function installFilePicker(page: Page, files: PickerFile[]): Promis
           requestPermission: {
             configurable: true,
             writable: true,
-            value: async function () {
-              return "granted";
-            },
+            value: async () => "granted",
           },
           isSameEntry: {
             configurable: true,
@@ -143,7 +174,7 @@ export async function installFilePicker(page: Page, files: PickerFile[]): Promis
         const name = state.next ?? state.files.keys().next().value;
         if (typeof name !== "string") return [];
         state.next = null;
-        return [fileFor(name) as HandleFile];
+        return [(await fileFor(name)) as HandleFile];
       };
       (window as unknown as Record<string, unknown>).showOpenFilePicker = picker;
     },

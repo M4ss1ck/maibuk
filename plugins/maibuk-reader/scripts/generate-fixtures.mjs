@@ -690,6 +690,205 @@ export function buildAzw3() {
   return buildPalmDoc({ title: "Plates", text: MOBI_TEXT, version: 8 });
 }
 
+/* Large, bench-only fixtures ---------------------------------------------- */
+
+/**
+ * The bench PDF's page count and embedded image size. 96 pages of one raw RGB
+ * image each is about 50 MB (96 × 420 × 420 × 3 bytes), the size issue #653's
+ * performance gate names. The images are uncompressed on purpose: the file is
+ * large because it carries large image streams, like a scanned book, without
+ * spending generation time on a compressor.
+ */
+export const LARGE_PDF_PAGES = 96;
+export const LARGE_PDF_IMAGE = 420;
+
+/** The bench EPUB's section count: issue #653 asks for at least 300. */
+export const LARGE_EPUB_SECTIONS = 320;
+
+/** Escapes a PDF literal string's delimiters and backslash. */
+function pdfString(text) {
+  return text.replace(/([\\()])/g, "\\$1");
+}
+
+/** A deterministic RGB image body: a diagonal gradient, so no page is blank. */
+function gradientRgb(width, height) {
+  const raw = Buffer.alloc(width * height * 3);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const at = (y * width + x) * 3;
+      raw[at] = (x * 255) / (width - 1);
+      raw[at + 1] = (y * 255) / (height - 1);
+      raw[at + 2] = ((x + y) * 255) / (width + height - 2);
+    }
+  }
+  return raw;
+}
+
+/**
+ * Assembles a PDF from object bodies, each a string or a Buffer, with a classic
+ * xref table and a fixed trailer. Unlike {@link buildPdf}, a body may carry
+ * raw image bytes, so the large fixture never has to be base64 or latin1 text.
+ */
+function buildPdfFromBodies(bodies, trailerEntries) {
+  const parts = [Buffer.from("%PDF-1.5\n", "latin1")];
+  let offset = parts[0].length;
+  const offsets = [];
+  bodies.forEach((body, index) => {
+    offsets.push(offset);
+    const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body, "latin1");
+    const head = Buffer.from(`${index + 1} 0 obj\n`, "latin1");
+    const tail = Buffer.from("\nendobj\n", "latin1");
+    parts.push(head, bytes, tail);
+    offset += head.length + bytes.length + tail.length;
+  });
+  const xref = offset;
+  let table = `xref\n0 ${bodies.length + 1}\n0000000000 65535 f \n`;
+  for (const entry of offsets) table += `${String(entry).padStart(10, "0")} 00000 n \n`;
+  parts.push(Buffer.from(table, "latin1"));
+  parts.push(
+    Buffer.from(
+      `trailer\n<< /Size ${bodies.length + 1} ${trailerEntries} >>\nstartxref\n${xref}\n%%EOF\n`,
+      "latin1"
+    )
+  );
+  return Buffer.concat(parts);
+}
+
+/** The page's text lines: dense enough that extraction is real work. */
+function largePageText(pageNumber) {
+  const lines = [];
+  for (let line = 0; line < 40; line += 1) {
+    const marker = pageNumber % 30 === 1 && line === 20 ? "wanderlust " : "";
+    lines.push(
+      `${marker}Page ${pageNumber}, line ${line + 1}: the keeper counted the lamps along the shore ` +
+        `and wrote every one of them down before the tide came in.`
+    );
+  }
+  return lines;
+}
+
+/**
+ * A ~50 MB PDF: every page carries one uncompressed 420×420 RGB image plus a
+ * dense text layer, so opening, paging, and searching it exercises the parser
+ * and the renderer. `wanderlust` appears on pages 1, 31, 61, and 91, the word the
+ * bench searches for.
+ */
+export function buildLargePdf({ pages = LARGE_PDF_PAGES, imageSize = LARGE_PDF_IMAGE } = {}) {
+  const image = gradientRgb(imageSize, imageSize);
+  // Object 1 is the catalog, 2 the page tree, 3 the font; each page then owns
+  // three objects: the page, its content stream, and its image.
+  const bodies = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  const kids = [];
+  for (let index = 0; index < pages; index += 1) {
+    const pageNumber = index + 1;
+    const pageObj = bodies.length + 1;
+    const contentObj = pageObj + 1;
+    const imageObj = pageObj + 2;
+    kids.push(`${pageObj} 0 R`);
+
+    const lines = largePageText(pageNumber);
+    const text =
+      `q\n${imageSize} 0 0 ${imageSize} 96 280 cm\n/Im0 Do\nQ\n` +
+      `BT\n/F1 9 Tf\n11 TL\n40 760 Td\n` +
+      lines.map((line) => `(${pdfString(line)}) Tj\nT*`).join("\n") +
+      "\nET\n";
+    const content = Buffer.from(
+      `<< /Length ${Buffer.byteLength(text, "latin1")} >>\nstream\n${text}\nendstream`,
+      "latin1"
+    );
+    const imageBody = Buffer.concat([
+      Buffer.from(
+        `<< /Type /XObject /Subtype /Image /Width ${imageSize} /Height ${imageSize} ` +
+          `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${image.length} >>\nstream\n`,
+        "latin1"
+      ),
+      image,
+      Buffer.from("\nendstream", "latin1"),
+    ]);
+    bodies.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ` +
+        `/Resources << /Font << /F1 3 0 R >> /XObject << /Im0 ${imageObj} 0 R >> >> ` +
+        `/Contents ${contentObj} 0 R >>`,
+      content,
+      imageBody
+    );
+  }
+  bodies[1] = `<< /Type /Pages /Kids [${kids.join(" ")}] /Count ${pages} >>`;
+  return buildPdfFromBodies(bodies, `/Root 1 0 R /ID [<${FILE_ID}><${FILE_ID}>]`);
+}
+
+/** The large EPUB's one section, with `wanderlust` in a few of them. */
+function largeSection(index, total) {
+  const n = index + 1;
+  const marker =
+    n === 2 || n === 150 || n === 290
+      ? "The wanderlust of the desert carried them on."
+      : "The caravan moved at dawn.";
+  return xhtml(
+    `Section ${n}`,
+    `<section epub:type="chapter" id="s${n}">
+      <h1>Section ${n}</h1>
+      <p>${marker}</p>
+      <p>This is section ${n} of ${total}. The spice must flow across Arrakis, and the keeper wrote it down.</p>
+      <p>A second paragraph gives the flowing view enough text to paginate, so a page turn moves within the section before the next one loads.</p>
+    </section>`
+  );
+}
+
+/**
+ * A large reflowable EPUB: {@link LARGE_EPUB_SECTIONS} sections, a nav with one
+ * entry per section, a stylesheet, and the word `wanderlust` in sections 2,
+ * 150, and 290, the word the bench searches for.
+ */
+export function buildLargeEpub({ sections = LARGE_EPUB_SECTIONS } = {}) {
+  const files = [
+    { name: "mimetype", data: "application/epub+zip" },
+    { name: "META-INF/container.xml", data: CONTAINER_XML },
+  ];
+  const items = [
+    '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
+    '<item id="css" href="style.css" media-type="text/css"/>',
+  ];
+  const spine = [];
+  const nav = [];
+  for (let index = 0; index < sections; index += 1) {
+    const n = index + 1;
+    items.push(`<item id="s${n}" href="s${n}.xhtml" media-type="application/xhtml+xml"/>`);
+    spine.push(`<itemref idref="s${n}"/>`);
+    nav.push([`Section ${n}`, `s${n}.xhtml`]);
+    files.push({ name: `OEBPS/s${n}.xhtml`, data: largeSection(index, sections) });
+  }
+  files.push({
+    name: "OEBPS/content.opf",
+    data: `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:00000000-0000-4000-8000-000000000653</dc:identifier>
+    <dc:title>Long Book</dc:title>
+    <dc:creator>Maibuk</dc:creator>
+    <dc:language>en</dc:language>
+    <meta property="dcterms:modified">2024-01-01T00:00:00Z</meta>
+  </metadata>
+  <manifest>
+    ${items.join("\n    ")}
+  </manifest>
+  <spine>
+    ${spine.join("\n    ")}
+  </spine>
+</package>`,
+  });
+  files.push({ name: "OEBPS/nav.xhtml", data: navDocument(nav) });
+  files.push({
+    name: "OEBPS/style.css",
+    data: "body { font-family: serif; } p { margin: 0 0 1em; }",
+  });
+  return buildZip(files);
+}
+
 /** Every fixture this script writes, keyed by file name. */
 export function buildAll() {
   return {

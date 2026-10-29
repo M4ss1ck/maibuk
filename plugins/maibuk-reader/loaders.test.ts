@@ -7,12 +7,16 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  PDF_CORE_INLINE_FLAG,
+  classicPdfCoreSource,
   foliateSource,
+  pdfCoreInlineRequested,
   pdfDisplaySource,
   pdfViewerCss,
   purifySource,
   startPdfCore,
 } from "./loaders";
+import pdfWorkerSource from "./vendor/pdfjs/pdf.worker.min.mjs?raw";
 
 /** The pdf.js release the vendored sources must carry. */
 const PDFJS_VERSION = "6.4.299";
@@ -150,6 +154,39 @@ describe("startPdfCore", () => {
     expect(workers[0].terminate).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith(CORE_URL);
     expect(revokeObjectURL).toHaveBeenCalledWith(BOOTSTRAP_URL);
+  });
+
+  it("is nested by default: no flag and no option starts a Worker", () => {
+    stubWorkerGlobals();
+    expect(pdfCoreInlineRequested()).toBe(false);
+    const core = startPdfCore();
+    expect(workers).toHaveLength(1);
+    core.dispose();
+  });
+
+  it("runs inline only when the spike flag is set, and then starts no Worker", () => {
+    const { revokeObjectURL } = stubWorkerGlobals();
+    (globalThis as Record<string, unknown>)[PDF_CORE_INLINE_FLAG] = true;
+    try {
+      expect(pdfCoreInlineRequested()).toBe(true);
+      const core = startPdfCore();
+      expect(workers).toHaveLength(0);
+      // The inline core loads with the same classic importScripts as the nested
+      // one, so it carries the same rewrite of the module-only constructs.
+      expect(blobs).toHaveLength(1);
+      expect(blobs[0].parts).toEqual([classicPdfCoreSource(pdfWorkerSource)]);
+      core.dispose();
+      expect(revokeObjectURL).toHaveBeenCalledWith(CORE_URL);
+    } finally {
+      delete (globalThis as Record<string, unknown>)[PDF_CORE_INLINE_FLAG];
+    }
+  });
+
+  it("an explicit inline option overrides the flag's default", () => {
+    stubWorkerGlobals();
+    const core = startPdfCore({ inline: true });
+    expect(workers).toHaveLength(0);
+    core.dispose();
   });
 });
 

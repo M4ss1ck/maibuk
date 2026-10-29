@@ -31,16 +31,35 @@ import pdfDisplay from "./vendor/pdfjs/pdf.min.mjs?raw";
 import pdfWorker from "./vendor/pdfjs/pdf.worker.min.mjs?raw";
 import pdfViewerStyles from "./vendor/pdfjs/pdf_viewer.css.txt?raw";
 
-/** A started pdf.js core Worker and the way to give its resources back. */
+/** A started pdf.js core and the way to give its resources back. */
 export interface PdfCore {
   /**
-   * The nested Worker running the pdf.js core. Post it one
+   * The pdf.js core's message sink. Post it one
    * `{ kind: "maibuk:pdf-port", port }` message (transferred) to give the core
-   * the MessagePort the Frame holds the other end of.
+   * the MessagePort the Frame holds the other end of. Shipped, it is a nested
+   * Worker; the bench spike's inline mode answers in this Worker instead.
    */
-  worker: Worker;
-  /** Terminates the Worker and releases every `blob:` URL it created. */
+  worker: { postMessage(message: unknown, transfer?: Transferable[]): void };
+  /** Terminates the Worker (nested) and releases every `blob:` URL it created. */
   dispose(): void;
+}
+
+/**
+ * The manifest-free flag the threading spike's harness sets on its Plugin
+ * Worker to run the pdf.js core inline (issue #653, "Threading spike"). The
+ * app never sets it, so a shipped Reader always gets the nested Worker.
+ */
+export const PDF_CORE_INLINE_FLAG = "__maibukDebugPdfCoreInline";
+
+/** Whether the spike's flag asks for the inline core. */
+export function pdfCoreInlineRequested(): boolean {
+  return (globalThis as Record<string, unknown>)[PDF_CORE_INLINE_FLAG] === true;
+}
+
+/** Options for {@link startPdfCore}; the shipped call passes none. */
+export interface PdfCoreOptions {
+  /** Run the core in this Worker instead of a nested Worker (bench spike). */
+  inline?: boolean;
 }
 
 /**
@@ -61,13 +80,56 @@ export function classicPdfCoreSource(source: string): string {
 }
 
 /**
+ * The threading spike's inline core (issue #653): the pdf.js core runs in the
+ * Plugin Worker itself, loaded with the same classic `importScripts` the nested
+ * Worker uses, and answers the Frame's port there. It exists only so
+ * `bench:reader --spike` can measure what a long parse does to the Plugin
+ * Worker's replies. Nothing ships it: the flag that selects it is set by the
+ * bench, and no app code sets it. A dynamic `import()` of a `blob:` URL is not
+ * an option here: the Plugin host refuses any dynamic import whose argument is
+ * not a string literal (src/features/plugins/modules.ts), so the Plugin would
+ * not load at all.
+ */
+function startInlinePdfCore(): PdfCore {
+  const coreUrl = URL.createObjectURL(
+    new Blob([classicPdfCoreSource(pdfWorker)], { type: "text/javascript" })
+  );
+  let loaded = false;
+  return {
+    worker: {
+      postMessage(message: unknown) {
+        const data = message as { kind?: unknown; port?: MessagePort } | null;
+        if (!data || data.kind !== "maibuk:pdf-port" || !data.port) return;
+        const scope = globalThis as unknown as {
+          importScripts(url: string): void;
+          pdfjsWorker: { WorkerMessageHandler: { initializeFromPort(port: MessagePort): void } };
+        };
+        if (!loaded) {
+          loaded = true;
+          scope.importScripts(coreUrl);
+        }
+        scope.pdfjsWorker.WorkerMessageHandler.initializeFromPort(data.port);
+        data.port.start();
+      },
+    },
+    dispose() {
+      URL.revokeObjectURL(coreUrl);
+    },
+  };
+}
+
+/**
  * Starts pdf.js's core in a nested Worker of the Plugin Worker. The sandbox
  * allows `worker-src blob:`, so both the core and a tiny classic bootstrap that
  * `importScripts` it travel as Blobs. The bootstrap gives the core a MessagePort
  * the Plugin Worker transfers, instead of letting the core listen on its own
  * global: the Frame needs a port of its own to talk to the core.
+ *
+ * The inline mode is the spike's only; with no option and no flag this is the
+ * shipped nested Worker.
  */
-export function startPdfCore(): PdfCore {
+export function startPdfCore(options: PdfCoreOptions = {}): PdfCore {
+  if (options.inline ?? pdfCoreInlineRequested()) return startInlinePdfCore();
   const coreUrl = URL.createObjectURL(
     new Blob([classicPdfCoreSource(pdfWorker)], { type: "text/javascript" })
   );
