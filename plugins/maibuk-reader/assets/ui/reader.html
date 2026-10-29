@@ -228,6 +228,16 @@
         box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
       }
 
+      /* A Flowing Document reads as one page: the area around its text column
+         takes the page's color, so the column needs no visible edge. */
+      body[data-mode="flow"] #viewer {
+        background: var(--maibuk-color-background);
+      }
+
+      body[data-mode="flow"] #stage {
+        box-shadow: none;
+      }
+
       /* A PDF stage holds one slot per page: one shown at a time, or all of
          them stacked in Continuous scroll. Rendered pages stay in their slot. */
       #stage.pdf-pages {
