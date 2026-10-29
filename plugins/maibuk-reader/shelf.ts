@@ -245,6 +245,12 @@ export function positionKey(id: string): string {
   return `position:${id}`;
 }
 
+/**
+ * The key the open Document's id lives under, so a relaunch that lands on the
+ * Reading page reopens it instead of showing no Document.
+ */
+export const CURRENT_DOCUMENT_KEY = "currentDocument";
+
 /** The key Reader's settings live under. */
 export const SETTINGS_KEY = "settings";
 

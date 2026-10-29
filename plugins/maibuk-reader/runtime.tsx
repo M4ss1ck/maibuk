@@ -20,7 +20,7 @@ import {
 } from "@/plugin-sdk";
 import type { FrameCommandId } from "./frame-protocol";
 import { translate } from "./i18n";
-import { createShelfService } from "./library";
+import { createShelfService, type ShelfService } from "./library";
 import { createReaderSession, type ReaderSession } from "./session";
 import { SHELF_PAGE_ID, createShelfPage } from "./shelf-page";
 import type { ShelfEntry } from "./shelf";
@@ -82,7 +82,7 @@ export type ReaderServe = (
 ) => void;
 
 /** The runtime's own state; one per activation, so tests never share it. */
-interface ReaderRuntime {
+export interface ReaderRuntime {
   /** The Document whose Frame page is open, kept in memory only. */
   currentDocumentId: string | null;
   /** The row the open Frame draws its title from. */
@@ -91,6 +91,22 @@ interface ReaderRuntime {
   sessions: Map<string, ReaderSession>;
   /** The app language the Frame should draw its own chrome in. */
   language: string;
+}
+
+/**
+ * A relaunch that restores the Reading page has no Document in memory: reopen
+ * the one it last had open in every mounted Frame. A Document opened in the
+ * meantime wins.
+ */
+export async function restoreCurrentDocument(
+  runtime: Pick<ReaderRuntime, "currentEntry" | "currentDocumentId" | "sessions">,
+  library: Pick<ShelfService, "loadCurrent">
+): Promise<void> {
+  const entry = await library.loadCurrent();
+  if (entry === null || runtime.currentEntry !== null) return;
+  runtime.currentEntry = entry;
+  runtime.currentDocumentId = entry.id;
+  for (const session of runtime.sessions.values()) session.setEntry(entry);
 }
 
 /** Wires the client to the Shelf page, the document Frame, and the Commands. */
@@ -132,11 +148,13 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
     });
     runtime.sessions.set(frame.id, session);
     session.start();
+    if (runtime.currentEntry === null) void restoreCurrentDocument(runtime, library);
   });
 
   function openDocument(entry: ShelfEntry): void {
     runtime.currentEntry = entry;
     runtime.currentDocumentId = entry.id;
+    void library.rememberCurrent(entry.id);
     for (const session of runtime.sessions.values()) session.setEntry(entry);
     void client.navigation.openPage({ pageId: DOCUMENT_PAGE_ID });
   }
@@ -200,6 +218,7 @@ async function runReaderCommand(
       if (entry !== null) {
         runtime.currentEntry = entry;
         runtime.currentDocumentId = entry.id;
+        void library.rememberCurrent(entry.id);
         for (const session of runtime.sessions.values()) session.setEntry(entry);
         await client.navigation.openPage({ pageId: DOCUMENT_PAGE_ID });
       }
