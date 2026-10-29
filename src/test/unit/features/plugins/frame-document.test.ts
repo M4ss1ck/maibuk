@@ -56,9 +56,9 @@ describe("createFrameElement()", () => {
     expect(element.srcdoc).toBe(FRAME_DOCUMENT);
   });
 
-  it("may go full screen, and that is the only feature it is allowed", () => {
+  it("grants no permissions-policy feature; full screen goes through the host", () => {
     const element = createFrameElement(document, { title: "Plugin custom UI" });
-    expect(element.getAttribute("allow")).toBe("fullscreen");
+    expect(element.hasAttribute("allow")).toBe(false);
   });
 });
 

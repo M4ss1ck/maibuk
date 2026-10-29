@@ -404,10 +404,9 @@
     if (fitPageButton) fitPageButton.setAttribute("aria-pressed", String(zoomSetting === "page"));
     if (layoutToggle) layoutToggle.setAttribute("aria-pressed", String(isContinuous()));
     if (fullscreenToggle) {
-      const on = Boolean(document.fullscreenElement);
       fullscreenToggle.hidden = !fullscreenAvailable();
-      fullscreenToggle.setAttribute("aria-pressed", String(on));
-      labelButton(fullscreenToggle, t(on ? "exitFullScreen" : "fullScreen"));
+      fullscreenToggle.setAttribute("aria-pressed", String(fullscreen));
+      labelButton(fullscreenToggle, t(fullscreen ? "exitFullScreen" : "fullScreen"));
     }
   }
 
@@ -2204,34 +2203,30 @@
 
   /* Full screen ----------------------------------------------------------- */
 
-  /** Asked once: in a Frame the host does not allow, WebKit logs an error on every read. */
-  let fullscreenSupport = null;
+  /**
+   * The host fills the screen with the Frame on request (`frame-fullscreen`)
+   * and reports every change back; a sandboxed Frame's own Fullscreen API is
+   * refused in WebKit.
+   */
+  let fullscreen = false;
 
+  /** Every Frame lives in the host, which owns full screen. */
   function fullscreenAvailable() {
-    if (fullscreenSupport === null) {
-      fullscreenSupport =
-        typeof document.documentElement.requestFullscreen === "function" &&
-        document.fullscreenEnabled === true;
-    }
-    return fullscreenSupport;
+    return typeof parent !== "undefined";
   }
 
-  /** Fills the screen with the Reading page, or leaves full screen. */
   function toggleFullscreen() {
-    if (document.fullscreenElement) {
-      if (typeof document.exitFullscreen === "function") {
-        void Promise.resolve(document.exitFullscreen()).catch(() => {});
-      }
-      return;
-    }
     if (!fullscreenAvailable()) return;
-    void Promise.resolve(document.documentElement.requestFullscreen()).catch(() => {
-      /* The host refused; the page stays as it was. */
-    });
+    parent.postMessage({ kind: "frame-fullscreen", on: !fullscreen }, "*");
   }
 
-  function onFullscreenChange() {
-    document.documentElement.dataset.fullscreen = String(Boolean(document.fullscreenElement));
+  /** @param {MessageEvent} event */
+  function onHostMessage(event) {
+    if (event.source !== parent) return;
+    const data = event.data;
+    if (!data || typeof data !== "object" || data.kind !== "frame-fullscreen-state") return;
+    fullscreen = data.on === true;
+    document.documentElement.dataset.fullscreen = String(fullscreen);
     updateControls();
   }
 
@@ -3091,7 +3086,7 @@
     }
     if (event.key === "Escape") {
       event.preventDefault();
-      if (document.fullscreenElement) {
+      if (fullscreen) {
         toggleFullscreen();
         return;
       }
@@ -3240,7 +3235,7 @@
     viewer.removeEventListener("pointerup", onPointerUp);
     viewer.removeEventListener("wheel", onWheel);
     viewer.removeEventListener("scroll", onViewerScroll);
-    document.removeEventListener("fullscreenchange", onFullscreenChange);
+    window.removeEventListener("message", onHostMessage);
     destroyDocument();
   }
 
@@ -3292,7 +3287,7 @@
   viewer.addEventListener("pointerup", onPointerUp);
   viewer.addEventListener("wheel", onWheel, { passive: false });
   viewer.addEventListener("scroll", onViewerScroll, { passive: true });
-  document.addEventListener("fullscreenchange", onFullscreenChange);
+  window.addEventListener("message", onHostMessage);
   updateControls();
 
   if (port) {

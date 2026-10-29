@@ -108,6 +108,16 @@ export async function setWindowAlwaysOnTop(enabled: boolean): Promise<void> {
   await getCurrentWindow().setAlwaysOnTop(enabled);
 }
 
+// Fills the screen with the app window (a Frame's full screen request on
+// desktop, where the sandboxed Frame cannot use the Fullscreen API). No-op on web.
+export async function setWindowFullscreen(enabled: boolean): Promise<void> {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().setFullscreen(enabled);
+}
+
 // Swap the tray icon while a sync is running. No-op on web and on
 // platforms without a tray (the Rust command handles that).
 export async function setTraySyncing(syncing: boolean): Promise<void> {

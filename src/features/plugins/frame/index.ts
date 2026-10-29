@@ -9,6 +9,8 @@ export {
   FRAME_DOCUMENT,
   FRAME_LOAD_MESSAGE,
   FRAME_READY_MESSAGE,
+  FRAME_FULLSCREEN_MESSAGE,
+  FRAME_FULLSCREEN_STATE_MESSAGE,
   FRAME_THEME_MESSAGE,
   frameShim,
 } from "@/features/plugins/frame/shim";

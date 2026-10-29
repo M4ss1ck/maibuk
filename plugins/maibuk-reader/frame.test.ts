@@ -676,54 +676,36 @@ describe("toolbar and paging", () => {
     expect(document.querySelectorAll(".pdf-page:not([hidden])")).toHaveLength(12);
   });
 
-  it("hides full screen where the host does not allow it", () => {
+  it("asks the host for full screen from the button and F, and follows the host's answer", async () => {
+    const post = vi.spyOn(window, "postMessage").mockImplementation(() => {});
     frame = loadFrame(createPdfStub());
-    expect(el("fullscreen-toggle").hidden).toBe(true);
-  });
-
-  it("goes full screen from the button and F, and Escape leaves full screen, not the Document", async () => {
-    let fullscreen: Element | null = null;
-    Object.defineProperty(document, "fullscreenEnabled", { configurable: true, value: true });
-    Object.defineProperty(document, "fullscreenElement", {
-      configurable: true,
-      get: () => fullscreen,
-    });
-    const request = vi.fn(async () => {
-      fullscreen = document.documentElement;
-      document.dispatchEvent(new Event("fullscreenchange"));
-    });
-    const exit = vi.fn(async () => {
-      fullscreen = null;
-      document.dispatchEvent(new Event("fullscreenchange"));
-    });
-    Object.defineProperty(document.documentElement, "requestFullscreen", {
-      configurable: true,
-      value: request,
-    });
-    Object.defineProperty(document, "exitFullscreen", { configurable: true, value: exit });
-    try {
-      frame = loadFrame(createPdfStub());
-      frame.open();
-      await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
-      const toggle = el("fullscreen-toggle");
-      expect(toggle.hidden).toBe(false);
-      expect(toggle.getAttribute("aria-label")).toBe(LABELS.fullScreen);
-      const user = userEvent.setup();
-      await user.click(toggle);
-      await vi.waitFor(() => expect(toggle.getAttribute("aria-pressed")).toBe("true"));
-      expect(toggle.getAttribute("aria-label")).toBe(LABELS.exitFullScreen);
-      await user.keyboard("{Escape}");
-      await vi.waitFor(() => expect(exit).toHaveBeenCalledTimes(1));
-      expect(frame.port.messages.some((message) => message.kind === "back")).toBe(false);
-      el("viewer").focus();
-      await user.keyboard("f");
-      await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2));
-    } finally {
-      delete (document as unknown as Record<string, unknown>).fullscreenEnabled;
-      delete (document as unknown as Record<string, unknown>).fullscreenElement;
-      delete (document as unknown as Record<string, unknown>).exitFullscreen;
-      delete (document.documentElement as unknown as Record<string, unknown>).requestFullscreen;
-    }
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    const toggle = el("fullscreen-toggle");
+    expect(toggle.hidden).toBe(false);
+    expect(toggle.getAttribute("aria-label")).toBe(LABELS.fullScreen);
+    const user = userEvent.setup();
+    await user.click(toggle);
+    expect(post).toHaveBeenLastCalledWith({ kind: "frame-fullscreen", on: true }, "*");
+    // Nothing changes until the host answers.
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    const answer = (on: boolean) =>
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { kind: "frame-fullscreen-state", on },
+          source: window,
+        })
+      );
+    answer(true);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(toggle.getAttribute("aria-label")).toBe(LABELS.exitFullScreen);
+    // Escape leaves full screen, not the Document.
+    await user.keyboard("{Escape}");
+    expect(post).toHaveBeenLastCalledWith({ kind: "frame-fullscreen", on: false }, "*");
+    expect(frame.port.messages.some((message) => message.kind === "back")).toBe(false);
+    answer(false);
+    await user.keyboard("f");
+    expect(post).toHaveBeenLastCalledWith({ kind: "frame-fullscreen", on: true }, "*");
   });
 });
 

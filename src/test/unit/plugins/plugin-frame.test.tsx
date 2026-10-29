@@ -66,14 +66,37 @@ describe("PluginFrame", () => {
     expect(container.querySelector("iframe")).toBeNull();
   });
 
-  it("shows the reused custom-UI notice above the Frame", () => {
-    const { getByText, container } = renderFrame(frameHost());
-    expect(getByText("Custom UI: accessibility not verified by Maibuk")).toBeInTheDocument();
-    // The notice sits before the Frame's container in document order.
-    const notice = getByText("Custom UI: accessibility not verified by Maibuk");
-    const frame = container.querySelector("iframe");
-    expect(frame).not.toBeNull();
-    expect(notice.compareDocumentPosition(frame as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  it("draws no custom-UI notice on the page; Settings carries it", () => {
+    const { queryByText, container } = renderFrame(frameHost());
+    expect(container.querySelector("iframe")).not.toBeNull();
+    expect(queryByText(/Custom UI/)).toBeNull();
+  });
+
+  it("fills the window when its own Frame asks, answers it, and leaves on Escape", () => {
+    const { container } = renderFrame(frameHost(), { variant: "page" });
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+    const wrapper = container.querySelector('[data-plugin-frame="page"]') as HTMLElement;
+    const answers = vi.spyOn(iframe.contentWindow as Window, "postMessage");
+    const ask = (on: boolean, source: Window | null) =>
+      act(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", { data: { kind: "frame-fullscreen", on }, source })
+        );
+      });
+
+    ask(true, window);
+    expect(wrapper.dataset.fullscreen).toBeUndefined();
+
+    ask(true, iframe.contentWindow);
+    expect(wrapper.dataset.fullscreen).toBe("true");
+    expect(wrapper.className).toContain("fixed inset-0");
+    expect(answers).toHaveBeenLastCalledWith({ kind: "frame-fullscreen-state", on: true }, "*");
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(wrapper.dataset.fullscreen).toBeUndefined();
+    expect(answers).toHaveBeenLastCalledWith({ kind: "frame-fullscreen-state", on: false }, "*");
   });
 
   it("renders a named iframe that can only run scripts", () => {
