@@ -16,8 +16,8 @@
 
 import { inflateSync } from "fflate";
 
-/** Why an archive could not be read. */
-export type ZipErrorCode = "corrupt" | "drm";
+/** Why an archive could not be read: damaged, DRM-protected, or lacking an entry. */
+export type ZipErrorCode = "corrupt" | "drm" | "missing";
 
 /** An archive the Worker refuses to open or read. */
 export class ZipError extends Error {

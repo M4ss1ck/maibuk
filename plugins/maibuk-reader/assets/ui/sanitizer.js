@@ -167,7 +167,10 @@
     for (const style of Array.from(doc.querySelectorAll("style"))) {
       if (style.textContent !== null) style.textContent = scrubCss(style.textContent);
     }
-    purify.sanitize(doc.body, {
+    // An XHTML section parsed as XML has no `body` property; sanitize the
+    // document element in that case, and the whole section stays untrusted.
+    const target = doc.body || doc.querySelector("body") || doc.documentElement;
+    purify.sanitize(target, {
       IN_PLACE: true,
       FORBID_TAGS,
       ALLOWED_URI_REGEXP,

@@ -120,7 +120,9 @@ describe("vendored source strings", () => {
   it("carries DOMPurify's browser build as code", () => {
     const source = purifySource();
     expect(source.length).toBeGreaterThan(50_000);
-    expect(source).toMatch(/^[\w$]/);
+    // The build opens with its licence banner, which the Frame's `blob:` module
+    // keeps; the code follows it.
+    expect(source.replace(/^\s*\/\*[\s\S]*?\*\//, "").trim()).toMatch(/^[\w$]/);
     expect(source).toContain("DOMPurify");
   });
 });

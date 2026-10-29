@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">
+  <description>
+    <title-info>
+      <genre>fiction</genre>
+      <author><first-name>Ada</first-name><last-name>Lovelace</last-name></author>
+      <book-title>Notes from the Archive</book-title>
+      <lang>en</lang>
+      <coverpage><image l:href="#cover.png"/></coverpage>
+    </title-info>
+    <document-info>
+      <author><nickname>Maibuk</nickname></author>
+      <id>fixture-fb2</id>
+      <version>1</version>
+    </document-info>
+  </description>
+  <body>
+    <title><p>Notes from the Archive</p></title>
+    <section>
+      <title><p>One</p></title>
+      <p>The archive keeps every draft.</p>
+    </section>
+    <section>
+      <title><p>Two</p></title>
+      <p>A second section follows the first.</p>
+    </section>
+  </body>
+  <binary id="cover.png" content-type="image/png">iVBORw0KGgoAAAANSUhEUgAAABAAAAAYCAIAAAB8wupbAAAAGklEQVR4nGOw6YkiCTGMahjVMKphVANtNQAANiGzECBRuVcAAAAASUVORK5CYII=</binary>
+</FictionBook>

@@ -1,17 +1,22 @@
 /**
- * Writes Reader's small PDF fixtures (#653): a twelve-page Document with an
- * outline, a nested section, and page labels (i, ii, 1..10), and a
- * password-protected Document. Every object is written by hand here, with no
- * third-party code and no fonts or images, so the files stay tiny, readable,
- * and deterministic: running this script again leaves the tree unchanged.
+ * Writes Reader's small fixtures (#653): PDFs, EPUBs, a CBZ, an FB2, and
+ * MOBI/AZW3 files. Every object is written by hand here, with no third-party
+ * code and no fonts or images, so the files stay tiny, readable, and
+ * deterministic: running this script again leaves the tree unchanged.
  *
  * The password file uses PDF's Standard security handler, revision 2 (RC4,
  * 40-bit), which the format documents in full; MD5 and RC4 are implemented
  * below because no PDF library is a Reader dependency. `qpdf` is not needed.
  *
+ * The archives are stored-entry zips written by {@link buildZip}, and the
+ * images are the smallest valid PNGs {@link buildPng} can produce. The MOBI and
+ * AZW3 files carry a PalmDB header, a PalmDOC header, and one text record; the
+ * AZW3 marks itself KF8 without the INDX tables a real KF8 needs, so it exercises
+ * the unreadable path rather than a full parse.
+ *
  * Run: node plugins/maibuk-reader/scripts/generate-fixtures.mjs
  *
- * It sits in `scripts/`, not beside the PDFs: the Plugin tooling's import
+ * It sits in `scripts/`, not beside the fixtures: the Plugin tooling's import
  * boundary refuses Node builtins outside test files, and `scripts/` is the one
  * folder it never walks. The files it writes still land in `../fixtures`.
  */
@@ -19,6 +24,7 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { writeFileSync } from "node:fs";
+import { deflateSync } from "node:zlib";
 
 /** The `fixtures/` folder beside this script's own `scripts/` folder. */
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
@@ -218,11 +224,483 @@ export function buildPasswordPdf() {
   return buildPdf(bodies, `/Root 1 0 R /Encrypt 5 0 R /ID [<${FILE_ID}><${FILE_ID}>]`);
 }
 
+/* Archives ---------------------------------------------------------------- */
+
+/** CRC-32's lookup table, as the zip format defines it. */
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+
+/** CRC-32 of `bytes`, which every zip entry records. */
+export function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+const UTF8 = new TextEncoder();
+
+/**
+ * A zip whose entries are all stored (method 0), written by hand so the bytes
+ * never depend on a library's timestamp or compression level. `files` is an
+ * array of `{ name, data }`, with `data` a string or bytes, in archive order;
+ * EPUB requires `mimetype` first and stored, and every entry here is stored.
+ */
+export function buildZip(files) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = UTF8.encode(file.name);
+    const data = typeof file.data === "string" ? UTF8.encode(file.data) : file.data;
+    const crc = crc32(data);
+
+    const local = Buffer.alloc(30 + name.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6); // UTF-8 names
+    local.writeUInt16LE(0, 8); // stored
+    local.writeUInt16LE(0, 10); // fixed DOS time
+    local.writeUInt16LE(0x0021, 12); // fixed DOS date: 1980-01-01
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(0, 28);
+    local.set(name, 30);
+
+    const central = Buffer.alloc(46 + name.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt16LE(0, 10);
+    central.writeUInt16LE(0, 12);
+    central.writeUInt16LE(0x0021, 14);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+    central.set(name, 46);
+
+    locals.push(local, Buffer.from(data));
+    centrals.push(central);
+    offset += local.length + data.length;
+  }
+
+  const directory = Buffer.concat(centrals);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(files.length, 8);
+  eocd.writeUInt16LE(files.length, 10);
+  eocd.writeUInt32LE(directory.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, directory, eocd]);
+}
+
+/** One PNG chunk: length, type, data, and the CRC over type and data. */
+function pngChunk(type, data) {
+  const chunk = Buffer.alloc(12 + data.length);
+  chunk.writeUInt32BE(data.length, 0);
+  chunk.write(type, 4, "latin1");
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(chunk.subarray(4, 8 + data.length)), 8 + data.length);
+  return chunk;
+}
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** A solid-colour RGB PNG, small enough to stay a few hundred bytes. */
+export function buildPng(width, height, colour) {
+  const [red, green, blue] = colour;
+  const stride = width * 3 + 1;
+  const raw = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    raw[y * stride] = 0; // filter: none
+    for (let x = 0; x < width; x += 1) {
+      const at = y * stride + 1 + x * 3;
+      raw[at] = red;
+      raw[at + 1] = green;
+      raw[at + 2] = blue;
+    }
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // colour type: truecolour
+  return Buffer.concat([
+    PNG_SIGNATURE,
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+/* EPUB -------------------------------------------------------------------- */
+
+const CONTAINER_XML = `<?xml version="1.0" encoding="utf-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`;
+
+/** One EPUB XHTML section. `body` is trusted fixture markup, not user input. */
+function xhtml(title, body, head = "") {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en" lang="en">
+  <head>
+    <title>${title}</title>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+    ${head}
+  </head>
+  <body>
+    ${body}
+  </body>
+</html>`;
+}
+
+/** A nav document whose table of contents points at `entries`. */
+function navDocument(entries) {
+  const items = entries
+    .map(([label, href]) => `        <li><a href="${href}">${label}</a></li>`)
+    .join("\n");
+  return `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en" lang="en">
+  <head><title>Contents</title></head>
+  <body>
+    <nav epub:type="toc" id="toc">
+      <h1>Contents</h1>
+      <ol>
+${items}
+      </ol>
+    </nav>
+  </body>
+</html>`;
+}
+
+const FLOW_STYLE = `body { font-family: serif; }
+p { margin: 0 0 1em; }
+.figure { background: url("images/figure.png"); }
+.tracker { background: url(https://example.com/tracker.png); }
+@import url("https://example.com/evil.css");
+`;
+
+const FLOW_CHAPTER_ONE = xhtml(
+  "One",
+  `<section epub:type="chapter" id="ch1">
+      <h1>One</h1>
+      <p>The spice must flow across Arrakis.</p>
+      <p>Spice is life on Arrakis. The spice is the desert.</p>
+      <p class="figure">A desert planet, drawn once and stored in the archive.</p>
+      <img src="images/figure.png" alt="A figure"/>
+      <img src="https://example.com/tracker.png" alt="A tracker"/>
+      <img src="missing.png" alt="A missing figure"/>
+      <p class="tracker">An external background belongs to nobody.</p>
+    </section>`
+);
+
+const FLOW_CHAPTER_TWO = xhtml(
+  "Two",
+  `<section epub:type="chapter" id="ch2">
+      <h1>Two</h1>
+      <p>The journey continues past the desert.</p>
+      <script>globalThis.__readerScriptRan = true;</script>
+      <p onclick="globalThis.__readerHandlerRan = true">A paragraph with a handler.</p>
+      <form action="https://example.com/collect"><input name="q"/></form>
+      <iframe src="https://example.com/embed"></iframe>
+      <p><a href="javascript:globalThis.__readerLinkRan = true">A script link</a></p>
+      <p><a href="https://example.com/away">An external link</a></p>
+    </section>`
+);
+
+const FLOW_OPF = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:00000000-0000-4000-8000-000000000653</dc:identifier>
+    <dc:title>Dune</dc:title>
+    <dc:creator>Frank Herbert</dc:creator>
+    <dc:language>en</dc:language>
+    <meta property="dcterms:modified">2024-01-01T00:00:00Z</meta>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="css" href="style.css" media-type="text/css"/>
+    <item id="cover" href="images/cover.png" media-type="image/png" properties="cover-image"/>
+    <item id="figure" href="images/figure.png" media-type="image/png"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+  </spine>
+</package>`;
+
+/** A reflowable EPUB: two chapters, a style sheet, a cover, and hostile markup. */
+export function buildFlowingEpub() {
+  return buildZip([
+    { name: "mimetype", data: "application/epub+zip" },
+    { name: "META-INF/container.xml", data: CONTAINER_XML },
+    { name: "OEBPS/content.opf", data: FLOW_OPF },
+    {
+      name: "OEBPS/nav.xhtml",
+      data: navDocument([
+        ["One", "chapter1.xhtml"],
+        ["Two", "chapter2.xhtml"],
+      ]),
+    },
+    { name: "OEBPS/chapter1.xhtml", data: FLOW_CHAPTER_ONE },
+    { name: "OEBPS/chapter2.xhtml", data: FLOW_CHAPTER_TWO },
+    { name: "OEBPS/style.css", data: FLOW_STYLE },
+    { name: "OEBPS/images/cover.png", data: buildPng(16, 24, [180, 120, 60]) },
+    { name: "OEBPS/images/figure.png", data: buildPng(8, 8, [40, 80, 160]) },
+  ]);
+}
+
+const FIXED_OPF = `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:00000000-0000-4000-8000-000000000654</dc:identifier>
+    <dc:title>Plates</dc:title>
+    <dc:creator>Ada Lovelace</dc:creator>
+    <dc:language>en</dc:language>
+    <meta property="dcterms:modified">2024-01-01T00:00:00Z</meta>
+    <meta property="rendition:layout">pre-paginated</meta>
+  </metadata>
+  <manifest>
+    <item id="p1" href="page1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="p2" href="page2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="img1" href="images/page1.png" media-type="image/png"/>
+    <item id="img2" href="images/page2.png" media-type="image/png"/>
+  </manifest>
+  <spine>
+    <itemref idref="p1"/>
+    <itemref idref="p2"/>
+  </spine>
+</package>`;
+
+/** One pre-paginated plate: a fixed viewport and a single image. */
+function fixedPage(title, source) {
+  return xhtml(
+    title,
+    `<img src="${source}" alt="${title}"/>`,
+    '<meta name="viewport" content="width=600, height=800"/>'
+  );
+}
+
+/** A fixed-layout EPUB: two pre-paginated pages sized 600×800. */
+export function buildFixedLayoutEpub() {
+  return buildZip([
+    { name: "mimetype", data: "application/epub+zip" },
+    { name: "META-INF/container.xml", data: CONTAINER_XML },
+    { name: "OEBPS/content.opf", data: FIXED_OPF },
+    { name: "OEBPS/page1.xhtml", data: fixedPage("Plate one", "images/page1.png") },
+    { name: "OEBPS/page2.xhtml", data: fixedPage("Plate two", "images/page2.png") },
+    { name: "OEBPS/images/page1.png", data: buildPng(12, 16, [20, 40, 90]) },
+    { name: "OEBPS/images/page2.png", data: buildPng(12, 16, [90, 40, 20]) },
+  ]);
+}
+
+const ENCRYPTION_XML = `<?xml version="1.0" encoding="utf-8"?>
+<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container"
+            xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+  <enc:EncryptedData>
+    <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/>
+    <enc:CipherData>
+      <enc:CipherReference URI="OEBPS/chapter1.xhtml"/>
+    </enc:CipherData>
+  </enc:EncryptedData>
+</encryption>`;
+
+/** An EPUB whose content is DRM-encrypted: Reader must refuse it. */
+export function buildEncryptedEpub() {
+  return buildZip([
+    { name: "mimetype", data: "application/epub+zip" },
+    { name: "META-INF/container.xml", data: CONTAINER_XML },
+    { name: "META-INF/encryption.xml", data: ENCRYPTION_XML },
+    { name: "OEBPS/content.opf", data: FLOW_OPF },
+    { name: "OEBPS/chapter1.xhtml", data: FLOW_CHAPTER_ONE },
+    { name: "OEBPS/chapter2.xhtml", data: FLOW_CHAPTER_TWO },
+    { name: "OEBPS/style.css", data: FLOW_STYLE },
+  ]);
+}
+
+/** Bytes that are not a zip at all: no end-of-central-directory record. */
+export function buildCorruptEpub() {
+  return Buffer.from("PK\u0003\u0004this is not a readable archive", "latin1");
+}
+
+/* CBZ --------------------------------------------------------------------- */
+
+/** A comic book: eight PNG pages, named so natural order matters. */
+export function buildComicBook() {
+  const files = [{ name: "mimetype", data: "application/vnd.comicbook+zip" }];
+  for (let index = 1; index <= 8; index += 1) {
+    files.push({
+      name: `page-${index}.png`,
+      data: buildPng(10, 14, [index * 20, 60, 200 - index * 20]),
+    });
+  }
+  return buildZip(files);
+}
+
+/* FB2 --------------------------------------------------------------------- */
+
+const FB2_COVER = buildPng(16, 24, [60, 140, 90]).toString("base64");
+
+/** A FictionBook with two sections and an embedded cover. */
+export function buildFb2() {
+  return Buffer.from(
+    `<?xml version="1.0" encoding="utf-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">
+  <description>
+    <title-info>
+      <genre>fiction</genre>
+      <author><first-name>Ada</first-name><last-name>Lovelace</last-name></author>
+      <book-title>Notes from the Archive</book-title>
+      <lang>en</lang>
+      <coverpage><image l:href="#cover.png"/></coverpage>
+    </title-info>
+    <document-info>
+      <author><nickname>Maibuk</nickname></author>
+      <id>fixture-fb2</id>
+      <version>1</version>
+    </document-info>
+  </description>
+  <body>
+    <title><p>Notes from the Archive</p></title>
+    <section>
+      <title><p>One</p></title>
+      <p>The archive keeps every draft.</p>
+    </section>
+    <section>
+      <title><p>Two</p></title>
+      <p>A second section follows the first.</p>
+    </section>
+  </body>
+  <binary id="cover.png" content-type="image/png">${FB2_COVER}</binary>
+</FictionBook>
+`,
+    "utf8"
+  );
+}
+
+/* MOBI and AZW3 ----------------------------------------------------------- */
+
+/** The PalmDB header is 78 bytes, then one 8-byte offset per record, then a gap. */
+const PDB_HEADER_SIZE = 78;
+const PDB_GAP = 2;
+const MOBI_TEXT_RECORD_SIZE = 4096;
+
+/**
+ * A PalmDB container with one text record. The PalmDOC header carries the
+ * compression (1, none), the text length, the record count, and the encryption
+ * flag; the MOBI header carries the identifier, version, and title.
+ */
+function buildPalmDoc({ title, text, version, encryption = 0 }) {
+  const textBytes = UTF8.encode(text);
+  const titleBytes = UTF8.encode(title);
+  const headerLength = version >= 8 ? 264 : 232;
+  const titleOffset = 16 + headerLength;
+
+  const record0 = Buffer.alloc(titleOffset + titleBytes.length);
+  record0.writeUInt16LE(1, 0); // PalmDOC compression: none
+  record0.writeUInt32LE(textBytes.length, 4);
+  record0.writeUInt16LE(1, 8); // one text record
+  record0.writeUInt16LE(MOBI_TEXT_RECORD_SIZE, 10);
+  record0.writeUInt16LE(encryption, 12);
+
+  record0.write("MOBI", 16, "latin1");
+  record0.writeUInt32LE(headerLength, 20);
+  record0.writeUInt32LE(2, 24); // Mobipocket book
+  record0.writeUInt32LE(65001, 28); // UTF-8
+  record0.writeUInt32LE(1, 32); // unique id
+  record0.writeUInt32LE(version, 36);
+  record0.writeUInt32LE(titleOffset, 84);
+  record0.writeUInt32LE(titleBytes.length, 88);
+  record0.writeUInt32LE(0xffffffff, 108); // no resources
+  record0.writeUInt32LE(0, 128); // no EXTH
+  record0.writeUInt32LE(0, 240); // no trailing entries
+  record0.writeUInt32LE(0xffffffff, 244); // no INDX
+  if (version >= 8) {
+    record0.writeUInt32LE(0xffffffff, 192); // FDST
+    record0.writeUInt32LE(0xffffffff, 248); // fragment index
+    record0.writeUInt32LE(0xffffffff, 252); // skeleton index
+    record0.writeUInt32LE(0xffffffff, 260); // guide index
+  }
+  Buffer.from(titleBytes).copy(record0, titleOffset);
+
+  const records = [record0, Buffer.from(textBytes)];
+  const firstRecord = PDB_HEADER_SIZE + records.length * 8 + PDB_GAP;
+  const offsets = [];
+  let cursor = firstRecord;
+  for (const record of records) {
+    offsets.push(cursor);
+    cursor += record.length;
+  }
+
+  const pdb = Buffer.alloc(firstRecord);
+  pdb.write("Maibuk fixture", 0, "latin1");
+  pdb.write("BOOK", 60, "latin1");
+  pdb.write("MOBI", 64, "latin1");
+  pdb.writeUInt32LE(1, 68); // unique id seed
+  pdb.writeUInt16LE(records.length, 76);
+  offsets.forEach((offset, index) => pdb.writeUInt32LE(offset, 78 + index * 8));
+  return Buffer.concat([pdb, ...records]);
+}
+
+/** The HTML one MOBI text record carries. */
+const MOBI_TEXT = `<html><head><guide></guide></head><body>
+  <h1>Notes</h1>
+  <p>The desert keeps its own record of the journey.</p>
+  <p>A second paragraph follows the first.</p>
+</body></html>`;
+
+/** A readable MOBI 6 book: uncompressed text, no DRM, no images. */
+export function buildMobi() {
+  return buildPalmDoc({ title: "Notes", text: MOBI_TEXT, version: 6 });
+}
+
+/** A MOBI whose PalmDOC header says its text is encrypted. */
+export function buildDrmMobi() {
+  return buildPalmDoc({ title: "Locked", text: MOBI_TEXT, version: 6, encryption: 2 });
+}
+
+/**
+ * An AZW3 that marks itself KF8 (version 8) without the INDX tables a real KF8
+ * needs. Reader detects the format, finds no readable skeleton, and reports the
+ * file as damaged; a valid KF8 fixture would need hand-built INDX/SKEL/FRAG
+ * tables, which no test here depends on.
+ */
+export function buildAzw3() {
+  return buildPalmDoc({ title: "Plates", text: MOBI_TEXT, version: 8 });
+}
+
 /** Every fixture this script writes, keyed by file name. */
 export function buildAll() {
   return {
     "twelve-pages.pdf": buildTwelvePagePdf(),
     "password.pdf": buildPasswordPdf(),
+    "flowing.epub": buildFlowingEpub(),
+    "fixed-layout.epub": buildFixedLayoutEpub(),
+    "encrypted.epub": buildEncryptedEpub(),
+    "corrupt.epub": buildCorruptEpub(),
+    "pages.cbz": buildComicBook(),
+    "story.fb2": buildFb2(),
+    "story.mobi": buildMobi(),
+    "story.azw3": buildAzw3(),
+    "drm.mobi": buildDrmMobi(),
   };
 }
 
