@@ -368,7 +368,7 @@ The span from opening one Chapter, Note, or Canvas for editing to leaving it, du
 _Avoid_: editor state, autosave
 
 **Reading Position**:
-Where the author was on this device: caret and scroll in a Chapter or Note, and pan and zoom on a Canvas.
+Where the author was on this device: caret and scroll in a Chapter or Note, pan and zoom on a Canvas, and the spot a Plugin's reading view returns to.
 _Avoid_: bookmark, cursor position
 
 **Last Opened Chapter**:
@@ -599,6 +599,10 @@ _Avoid_: targets, supported OS
 **Plugin Permission**:
 One kind of access a Plugin declares, such as reading the Library or reaching a named web host, and that the author grants or revokes.
 _Avoid_: grant, scope, capability (Tauri's word in code)
+
+**File Grant**:
+Maibuk's leave for one Plugin to read again, on this device, a file the author picked for it. The Plugin never learns where the file lives. A File Grant is not part of the Library, so Backups and Sync never carry it; it ends when the Plugin lets it go, when the Plugin is removed, or when the author revokes the Plugin Permission that let the Plugin ask for files.
+_Avoid_: file handle, file path, file permission, bookmark
 
 **Plugin Endpoint**:
 The local address `http://127.0.0.1:<port>/plugin/<pluginId>/` where Maibuk hands each request to the Plugin its path names; only a Plugin holding the `serve` Plugin Permission answers, and Maibuk binds the one port only while an enabled Plugin holds `serve`, on the desktop app only. Maibuk picks that port once and keeps it across launches, moving it only when another program holds it at launch; a Plugin holding `serve` reads the address with `endpoint.address` and hears a move as `endpoint.addressChanged`. A request from a foreign Origin is refused (403), and so is one naming a foreign Host. (ADR 0031)
