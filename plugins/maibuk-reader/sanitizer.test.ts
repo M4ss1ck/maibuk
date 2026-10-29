@@ -239,12 +239,15 @@ describe("readingCss", () => {
     expect(normal).toContain("max-width: 38em");
   });
 
-  it("keeps the column width setting and forces dark colours", () => {
+  it("keeps the column width setting and follows the live theme instead of fixed colours", () => {
     const narrow = sanitizer.readingCss({ fontSize: 100, lineWidth: "narrow" });
     expect(narrow).toContain("max-width: 30em");
-    const dark = sanitizer.readingCss({ fontSize: 100, lineWidth: "wide" }, { dark: true });
-    expect(dark).toContain("#e5e5e5");
-    expect(dark).toContain("max-width: 48em");
+    const wide = sanitizer.readingCss({ fontSize: 100, lineWidth: "wide" });
+    expect(wide).toContain("max-width: 48em");
+    // A light/dark switch only updates the tokens; a baked-in colour would stay.
+    expect(wide).toContain("color: var(--maibuk-color-foreground");
+    expect(wide).toContain("background: transparent");
+    expect(wide).not.toMatch(/#111111|#e5e5e5/);
   });
 });
 

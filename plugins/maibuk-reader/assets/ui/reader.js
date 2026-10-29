@@ -1101,19 +1101,6 @@
 
   /* Rendering a section --------------------------------------------------- */
 
-  /** Whether the app currently paints a dark scheme. */
-  function isDark() {
-    try {
-      const value = getComputedStyle(document.documentElement)
-        .getPropertyValue("--maibuk-color-scheme")
-        .trim()
-        .toLowerCase();
-      return value === "dark" || document.documentElement.dataset.theme === "dark";
-    } catch {
-      return false;
-    }
-  }
-
   /**
    * Parses, sanitizes, and rewrites one section, then draws its body inside a
    * shadow root. The parsed Document stays alive so CFIs can be computed from
@@ -1141,7 +1128,7 @@
     );
     const shadow = host.attachShadow({ mode: "open" });
     const style = document.createElement("style");
-    style.textContent = sanitizer.readingCss(settings, { dark: isDark() });
+    style.textContent = sanitizer.readingCss(settings);
     if (options && options.fixed) {
       style.textContent +=
         "\n:host { display: block; width: 100%; height: 100%; overflow: hidden; }" +
