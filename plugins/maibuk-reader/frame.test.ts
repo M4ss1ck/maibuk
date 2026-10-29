@@ -726,3 +726,32 @@ describe("toolbar and paging", () => {
     }
   });
 });
+
+describe("a page shown again", () => {
+  it("paints its saved bitmap back, since WebKit can drop a hidden canvas's pixels", async () => {
+    const bitmap = { close: vi.fn() };
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(async () => bitmap)
+    );
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage,
+      clearRect: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    try {
+      frame = loadFrame(createPdfStub());
+      frame.open();
+      await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+      const user = userEvent.setup();
+      await user.click(el("page-next"));
+      await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("2 of 12"));
+      drawImage.mockClear();
+      await user.click(el("page-previous"));
+      await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+      await vi.waitFor(() => expect(drawImage).toHaveBeenCalledWith(bitmap, 0, 0));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

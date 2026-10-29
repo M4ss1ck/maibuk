@@ -2039,8 +2039,18 @@
     } catch {
       /* A page without a text layer is still readable. */
     }
+    // WebKit drops a canvas's pixels once it has been shown and then hidden,
+    // so a page keeps a bitmap copy to paint back when it shows again.
+    let bitmap = null;
+    if (typeof createImageBitmap === "function") {
+      try {
+        bitmap = await createImageBitmap(canvas);
+      } catch {
+        bitmap = null;
+      }
+    }
     /** @type {RenderedPage} */
-    const rendered = { index, canvas, textLayer, page, scale };
+    const rendered = { index, canvas, textLayer, page, scale, bitmap };
     // A zoom, a resize, or a layout switch rebuilt the slots meanwhile: this
     // drawing belongs to a view that is gone.
     if (destroyed || generation !== viewGeneration) return rendered;
@@ -2068,8 +2078,18 @@
     }
   }
 
+  /** Paints a page's saved bitmap back onto its canvas, for a page shown again. */
+  function repaint(rendered) {
+    if (!rendered.bitmap) return;
+    const context = rendered.canvas.getContext("2d");
+    if (!context || typeof context.drawImage !== "function") return;
+    context.clearRect(0, 0, rendered.canvas.width, rendered.canvas.height);
+    context.drawImage(rendered.bitmap, 0, 0);
+  }
+
   /** @param {RenderedPage} rendered */
   function showRendered(rendered) {
+    repaint(rendered);
     currentScale = rendered.scale;
     if (zoomLevel)
       zoomLevel.textContent = t("zoomLevel", { percent: Math.round(rendered.scale * 100) });
@@ -2091,6 +2111,8 @@
 
   /** Takes a drawn page out of its slot and frees its pixels. */
   function evict(rendered) {
+    if (rendered.bitmap && typeof rendered.bitmap.close === "function") rendered.bitmap.close();
+    rendered.bitmap = null;
     rendered.canvas.remove();
     rendered.textLayer.remove();
     rendered.canvas.width = 0;
@@ -2195,11 +2217,16 @@
 
   /* Full screen ----------------------------------------------------------- */
 
+  /** Asked once: in a Frame the host does not allow, WebKit logs an error on every read. */
+  let fullscreenSupport = null;
+
   function fullscreenAvailable() {
-    return (
-      document.fullscreenEnabled === true &&
-      typeof document.documentElement.requestFullscreen === "function"
-    );
+    if (fullscreenSupport === null) {
+      fullscreenSupport =
+        typeof document.documentElement.requestFullscreen === "function" &&
+        document.fullscreenEnabled === true;
+    }
+    return fullscreenSupport;
   }
 
   /** Fills the screen with the Reading page, or leaves full screen. */
