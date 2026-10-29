@@ -82,6 +82,9 @@ const loadPlugins = async () => {
   if (IS_DESKTOP) {
     const { createTauriPluginFileGrantStore } = await import("@/lib/platform/tauri/file-grants");
     registerPluginFileGrantStore(createTauriPluginFileGrantStore());
+  } else if (IS_WEB) {
+    const { createWebPluginFileGrantStore } = await import("@/lib/platform/web/file-grants");
+    registerPluginFileGrantStore(createWebPluginFileGrantStore());
   } else {
     registerPluginFileGrantStore(createMemoryPluginFileGrantStore());
   }
