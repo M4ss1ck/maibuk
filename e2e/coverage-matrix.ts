@@ -41,6 +41,13 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "term",
+    items: ["File Grant"],
+    reason:
+      "Decided, not built (ADR 0036, #653): no Plugin can ask for files yet; the implementation replaces this exclusion with a row",
+    owner: "#653",
+  },
+  {
+    kind: "term",
     items: ["Drawing"],
     reason: "Creating a Drawing and erasing are pointer gestures by nature (documented exemption)",
     owner: "Vitest canvas suites; keyboard tool switching is covered by canvas-tools",
