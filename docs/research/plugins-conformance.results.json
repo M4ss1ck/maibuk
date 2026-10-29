@@ -1,15 +1,15 @@
 {
   "schema": "maibuk-plugin-conformance/1",
-  "recordedAt": "2026-10-17T03:00:39.648Z",
+  "recordedAt": "2026-10-29T22:27:31.977Z",
   "stack": {
-    "tauri": "2.9.5",
-    "wry": "0.53.5",
+    "tauri": "2.12.4",
+    "wry": "0.57.1",
     "webkitgtk": "2.52.6",
     "androidWebView": "113.0.5672.136"
   },
   "platforms": {
     "linux": {
-      "ranAt": "2026-10-13T23:05:35.433Z",
+      "ranAt": "2026-10-29T22:27:31.921Z",
       "engine": {
         "name": "tauri-webkitgtk",
         "version": "2.52.6",
@@ -151,6 +151,11 @@
           "id": "T8-oom",
           "status": "pass",
           "detail": "no engine memory limit by 4096 MB; the Worker kept running and the host answered"
+        },
+        {
+          "id": "files-read-stat-release",
+          "status": "pass",
+          "detail": "read ranges, stat, and release agree with the seeded file"
         }
       ]
     },

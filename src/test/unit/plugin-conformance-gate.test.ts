@@ -34,16 +34,16 @@ function withoutPackage(pkg: string): string {
 
 describe("readCargoLockVersions()", () => {
   it("reads the exact tauri and wry entries, ignoring tauri-* siblings", () => {
-    expect(readCargoLockVersions(cargoLock)).toEqual({ tauri: "2.9.5", wry: "0.53.5" });
+    expect(readCargoLockVersions(cargoLock)).toEqual({ tauri: "2.12.4", wry: "0.57.1" });
   });
 
   it("reports null for a gated package the lock does not name", () => {
-    expect(readCargoLockVersions(withoutPackage("wry"))).toEqual({ tauri: "2.9.5", wry: null });
+    expect(readCargoLockVersions(withoutPackage("wry"))).toEqual({ tauri: "2.12.4", wry: null });
   });
 
   it("throws, naming the package and both versions, when a package appears twice", () => {
-    const duplicated = `${cargoLock}\n[[package]]\nname = "tauri"\nversion = "2.10.0"\n`;
-    expect(() => readCargoLockVersions(duplicated)).toThrow(/tauri.*2\.9\.5.*2\.10\.0/);
+    const duplicated = `${cargoLock}\n[[package]]\nname = "tauri"\nversion = "2.13.0"\n`;
+    expect(() => readCargoLockVersions(duplicated)).toThrow(/tauri.*2\.12\.4.*2\.13\.0/);
   });
 });
 
@@ -54,26 +54,26 @@ describe("checkConformanceGate()", () => {
 
   it("fails on a bumped tauri, naming the package, the lock version and the recorded one", () => {
     const { ok, problems } = checkConformanceGate(
-      withVersion(cargoLock, "tauri", "2.9.5", "2.10.0"),
+      withVersion(cargoLock, "tauri", "2.12.4", "2.13.0"),
       results
     );
     expect(ok).toBe(false);
     const report = problems.join("\n");
     expect(report).toContain("tauri");
-    expect(report).toContain("2.10.0");
-    expect(report).toContain("2.9.5");
+    expect(report).toContain("2.13.0");
+    expect(report).toContain("2.12.4");
   });
 
   it("fails on a bumped wry, naming the package, the lock version and the recorded one", () => {
     const { ok, problems } = checkConformanceGate(
-      withVersion(cargoLock, "wry", "0.53.5", "0.54.0"),
+      withVersion(cargoLock, "wry", "0.57.1", "0.58.0"),
       results
     );
     expect(ok).toBe(false);
     const report = problems.join("\n");
     expect(report).toContain("wry");
-    expect(report).toContain("0.54.0");
-    expect(report).toContain("0.53.5");
+    expect(report).toContain("0.58.0");
+    expect(report).toContain("0.57.1");
   });
 
   it("fails when the results record no stack.wry", () => {
@@ -92,11 +92,11 @@ describe("checkConformanceGate()", () => {
   });
 
   it("fails when tauri appears with two versions", () => {
-    const duplicated = `${cargoLock}\n[[package]]\nname = "tauri"\nversion = "2.10.0"\n`;
+    const duplicated = `${cargoLock}\n[[package]]\nname = "tauri"\nversion = "2.13.0"\n`;
     const { ok, problems } = checkConformanceGate(duplicated, results);
     expect(ok).toBe(false);
     expect(problems.join("\n")).toContain("tauri");
-    expect(problems.join("\n")).toContain("2.10.0");
+    expect(problems.join("\n")).toContain("2.13.0");
   });
 });
 
