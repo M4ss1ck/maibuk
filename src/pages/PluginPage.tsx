@@ -100,18 +100,33 @@ export function PluginPage() {
     );
   }
 
+  // A whole-page Frame fills the page and scrolls inside itself, so the page
+  // around it never scrolls; a page that draws its own heading keeps the title
+  // for screen readers and route focus only.
+  const isFrame = page?.frame !== undefined && !showPanel;
+  const hideTitle = page?.hideTitle === true && !showPanel;
   return (
-    <div className="h-full overflow-y-auto px-4 py-6 sm:px-6">
+    <div
+      className={
+        isFrame
+          ? `flex h-full min-h-0 flex-col overflow-hidden px-4 sm:px-6 ${hideTitle ? "py-4" : "py-6"}`
+          : `h-full overflow-y-auto px-4 sm:px-6 ${hideTitle ? "py-4" : "py-6"}`
+      }
+    >
       <h1
         ref={headingRef}
         tabIndex={-1}
         data-route-heading
-        className="text-xl font-semibold tracking-tight mb-6 outline-none"
+        className={
+          hideTitle
+            ? "sr-only"
+            : "text-xl font-semibold tracking-tight mb-6 outline-none shrink-0"
+        }
       >
         {title}
       </h1>
       {status === "unavailable" && !showPanel && (
-        <p role="status" className="mb-4 text-sm text-muted-foreground">
+        <p role="status" className="mb-4 shrink-0 text-sm text-muted-foreground">
           {t("plugins.stoppedPanel.notResponding", { name })}
         </p>
       )}

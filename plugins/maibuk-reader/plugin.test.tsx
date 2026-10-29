@@ -93,6 +93,25 @@ describe("Reader Shelf", () => {
     }
   });
 
+  it("lays the Shelf out as a grid of covers with icon-only actions", async () => {
+    const bytes = pdfBytes("a grid of one");
+    const storage = readerStorage();
+    storage.set(SHELF_KEY, [await seededEntry(bytes)]);
+    const { host } = hostFor({ files: [{ name: "Dune.pdf", bytes }], storage });
+    try {
+      const page = await host.renderPage(SHELF_PAGE_ID);
+      const open = await screen.findByRole("button", { name: en["shelf.open"] });
+      const remove = screen.getByRole("button", { name: en["shelf.remove"] });
+      for (const button of [open, remove]) expect(button.textContent?.trim()).toBe("");
+      const surface = open.closest("[data-plugin-ui]");
+      expect(surface?.querySelector("style")?.textContent).toMatch(/display:\s*grid/);
+      expect(surface?.querySelector("ul li")).toContainElement(open);
+      page.unmount();
+    } finally {
+      host.stop();
+    }
+  });
+
   it("locates a Missing Document again from the keyboard, keeping its Reading Position", async () => {
     const bytes = pdfBytes("the file that moved");
     const storage = readerStorage();

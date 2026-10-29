@@ -37,6 +37,8 @@ export interface PluginPageDef {
    * for a host-rendered page.
    */
   frame?: string;
+  /** The page draws its own heading: Maibuk keeps the title for screen readers only. */
+  hideTitle?: true;
   /** The navigating Command that opens the page. */
   commandId: PluginCommandId;
   icon?: PluginIconSpec;

@@ -162,7 +162,7 @@ export function PluginFrame({
     return <FramePlaceholder variant={variant} message={t("plugins.ui.couldNotDisplay")} />;
   }
 
-  const wrapperClass = variant === "page" ? "flex h-full min-h-0 flex-col" : "flex w-full flex-col";
+  const wrapperClass = variant === "page" ? "flex min-h-0 flex-1 flex-col" : "flex w-full flex-col";
   const frameClass =
     variant === "page"
       ? "relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card"
@@ -170,7 +170,6 @@ export function PluginFrame({
 
   return (
     <div data-plugin-frame={variant} className={wrapperClass}>
-      <p className="mb-2 text-sm text-muted-foreground">{t("plugins.management.custom")}</p>
       <div ref={containerRef} aria-busy={!ready} className={frameClass} />
     </div>
   );

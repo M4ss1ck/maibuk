@@ -55,6 +55,11 @@ describe("createFrameElement()", () => {
     expect(element.style.display).toBe("block");
     expect(element.srcdoc).toBe(FRAME_DOCUMENT);
   });
+
+  it("may go full screen, and that is the only feature it is allowed", () => {
+    const element = createFrameElement(document, { title: "Plugin custom UI" });
+    expect(element.getAttribute("allow")).toBe("fullscreen");
+  });
 });
 
 describe("frameMimeType()", () => {

@@ -122,13 +122,16 @@ export function buildFrameLoadMessage(
 }
 
 /**
- * Creates the Frame iframe, visible and named. The caller appends it; the host
+ * Creates the Frame iframe, visible and named, allowed to go full screen (a
+ * reader or a slideshow fills the screen; the request still needs a user
+ * gesture inside the Frame). The caller appends it; the host
  * posts `frame-load` to `element.contentWindow` once the document loads and
  * waits for `frame-ready`.
  */
 export function createFrameElement(doc: Document, options: { title: string }): HTMLIFrameElement {
   const element = createSandboxElement(doc);
   element.title = options.title;
+  element.setAttribute("allow", "fullscreen");
   element.style.cssText = "position:relative;display:block;width:100%;height:100%;border:0";
   element.srcdoc = FRAME_DOCUMENT;
   return element;

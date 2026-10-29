@@ -2614,6 +2614,7 @@ export const ROWS: MatrixRow[] = [
       "plugin.maibuk-reader.fitWidth",
       "plugin.maibuk-reader.fitPage",
       "plugin.maibuk-reader.backToShelf",
+      "plugin.maibuk-reader.toggleContinuousScroll",
     ],
     routes: ["/", "/plugin/:pluginId/:pageId"],
     fixture: "empty",

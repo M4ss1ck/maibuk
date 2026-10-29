@@ -34,7 +34,7 @@
    * @typedef {{ kind: "section", index: number, fraction: number }} SectionPosition
    * @typedef {PagePosition | CfiPosition | SectionPosition} ReadingPosition
    * @typedef {{ id: string, title: string, author: string, format: string }} FrameEntry
-   * @typedef {{ fontSize: number, lineWidth: string, pdfFit: "width" | "page" }} ReaderSettings
+   * @typedef {{ fontSize: number, lineWidth: string, pdfFit: "width" | "page", pdfLayout: "single" | "continuous" }} ReaderSettings
    * @typedef {{ displaySource: string, css: string }} FramePdf
    * @typedef {{ source: string, purify: string }} FrameFoliate
    * @typedef {{ name: string, size: number }} FrameZipEntry
@@ -74,6 +74,9 @@
    * @property {string} sectionPage
    * @property {string} increaseFontSize
    * @property {string} decreaseFontSize
+   * @property {string} continuousScroll
+   * @property {string} fullScreen
+   * @property {string} exitFullScreen
    * @typedef {{ kind: "open", entry: FrameEntry | null, position: ReadingPosition | null, settings: ReaderSettings, size: number, labels: FrameLabels, language: string, pdf?: FramePdf, pdfPort?: MessagePort, foliate?: FrameFoliate }} FrameOpenMessage
    * @typedef {{ kind: "bytes", id: number, buffer: ArrayBuffer }} FrameBytesMessage
    * @typedef {{ kind: "read-error", id: number, code: string }} FrameReadErrorMessage
@@ -123,6 +126,9 @@
       sectionPage: "{{page}} of {{count}} in this section",
       increaseFontSize: "Increase font size",
       decreaseFontSize: "Decrease font size",
+      continuousScroll: "Continuous scroll",
+      fullScreen: "Full screen",
+      exitFullScreen: "Exit full screen",
     },
     es: {
       back: "Volver al estante",
@@ -160,6 +166,9 @@
       sectionPage: "{{page}} de {{count}} en esta sección",
       increaseFontSize: "Aumentar tamaño de letra",
       decreaseFontSize: "Reducir tamaño de letra",
+      continuousScroll: "Desplazamiento continuo",
+      fullScreen: "Pantalla completa",
+      exitFullScreen: "Salir de pantalla completa",
     },
   };
 
@@ -169,6 +178,10 @@
   const INITIAL_CHUNK_BYTES = 1 << 20;
   const RANGE_CHUNK_BYTES = 1 << 20;
   const MAX_CACHED_PAGES = 5;
+  /** How far a wheel gesture pushes past a page's edge before it turns the page. */
+  const WHEEL_PAGE_THRESHOLD = 50;
+  /** A pause this long between wheel events starts a new gesture. */
+  const WHEEL_GESTURE_GAP_MS = 180;
   const COVER_MAX_WIDTH = 240;
   const COVER_MAX_BYTES = 50 * 1024;
 
@@ -185,6 +198,10 @@
   const zoomInButton = el("zoom-in");
   const fitWidthButton = el("fit-width");
   const fitPageButton = el("fit-page");
+  const layoutToggle = el("layout-toggle");
+  const fullscreenToggle = el("fullscreen-toggle");
+  const pagePreviousButton = el("page-previous");
+  const pageNextButton = el("page-next");
   const zoomLevel = el("zoom-level");
   const pageIndicator = el("page-indicator");
   const searchBar = el("search-bar");
@@ -212,7 +229,7 @@
   /** @type {FrameEntry | null} */
   let entry = null;
   /** @type {ReaderSettings} */
-  let settings = { fontSize: 100, lineWidth: "medium", pdfFit: "width" };
+  let settings = { fontSize: 100, lineWidth: "medium", pdfFit: "width", pdfLayout: "single" };
   /** @type {ReadingPosition | null} */
   let position = null;
   let fileSize = 0;
@@ -273,8 +290,19 @@
 
   /** @type {Map<number, RenderedPage>} */
   const pageCache = new Map();
-  /** @type {Set<number>} */
-  const renderingPages = new Set();
+  /** @type {Map<number, Promise<RenderedPage>>} The renders in flight, so a page never draws twice at once. */
+  const renderingPages = new Map();
+  /** @type {HTMLElement[]} One slot per PDF page; a drawn page lives in its slot until the cache drops it. */
+  let slots = [];
+  /** The first page's unscaled size, which every slot takes until its page renders. */
+  let pdfBase = null;
+  let slotObserver = null;
+  const visiblePages = new Set();
+  /** The scrollTop a programmatic scroll left, so the scroll sync ignores it. */
+  let scrollTarget = null;
+  let wheelCarry = 0;
+  let lastWheelAt = 0;
+  let wheelTurned = false;
   /** @type {Map<number, { resolve: (bytes: Uint8Array) => void, reject: (error: Error) => void }>} */
   const pendingReads = new Map();
   let nextReadId = 1;
@@ -304,57 +332,83 @@
     );
   }
 
+  /** Names an icon button for screen readers and its tooltip. */
+  function labelButton(button, label) {
+    if (!button) return;
+    button.setAttribute("aria-label", label);
+    button.title = label;
+  }
+
   function setLabels() {
     document.documentElement.lang = language;
-    if (backButton) {
-      backButton.textContent = t("back");
-      backButton.setAttribute("aria-label", t("back"));
-    }
-    if (contentsToggle) {
-      contentsToggle.textContent = t("contents");
-      contentsToggle.setAttribute("aria-label", t("contents"));
-    }
-    if (findToggle) {
-      findToggle.textContent = t("find");
-      findToggle.setAttribute("aria-label", t("find"));
-    }
-    if (zoomOutButton) {
-      zoomOutButton.textContent = "−";
-      zoomOutButton.setAttribute("aria-label", t("zoomOut"));
-      zoomOutButton.title = t("zoomOut");
-    }
-    if (zoomInButton) {
-      zoomInButton.textContent = "+";
-      zoomInButton.setAttribute("aria-label", t("zoomIn"));
-      zoomInButton.title = t("zoomIn");
-    }
-    if (fitWidthButton) {
-      fitWidthButton.textContent = t("fitWidth");
-      fitWidthButton.setAttribute("aria-label", t("fitWidth"));
-    }
-    if (fitPageButton) {
-      fitPageButton.textContent = t("fitPage");
-      fitPageButton.setAttribute("aria-label", t("fitPage"));
-    }
+    labelButton(backButton, t("back"));
+    labelButton(contentsToggle, t("contents"));
+    labelButton(findToggle, t("find"));
+    labelButton(pagePreviousButton, t("previousPage"));
+    labelButton(pageNextButton, t("nextPage"));
+    labelButton(fitWidthButton, t("fitWidth"));
+    labelButton(fitPageButton, t("fitPage"));
+    labelButton(layoutToggle, t("continuousScroll"));
     if (searchInput) searchInput.placeholder = t("searchPlaceholder");
-    if (searchPreviousButton) {
-      searchPreviousButton.textContent = t("searchPrevious");
-      searchPreviousButton.setAttribute("aria-label", t("searchPrevious"));
-    }
-    if (searchNextButton) {
-      searchNextButton.textContent = t("searchNext");
-      searchNextButton.setAttribute("aria-label", t("searchNext"));
-    }
-    if (searchCloseButton) {
-      searchCloseButton.textContent = t("searchClose");
-      searchCloseButton.setAttribute("aria-label", t("searchClose"));
-    }
+    labelButton(searchPreviousButton, t("searchPrevious"));
+    labelButton(searchNextButton, t("searchNext"));
+    labelButton(searchCloseButton, t("searchClose"));
     if (contentsTitle) contentsTitle.textContent = t("contents");
     if (passwordTitle) passwordTitle.textContent = t("passwordTitle");
     if (passwordLabel) passwordLabel.textContent = t("passwordLabel");
     if (passwordSubmit) passwordSubmit.textContent = t("passwordSubmit");
     updateIndicator();
     if (searchBar && !searchBar.hidden) updateSearchStatus();
+  }
+
+  /** A button that stays focusable while it does nothing, so focus never drops. */
+  function setInactive(button, inactive) {
+    if (!button) return;
+    if (inactive) button.setAttribute("aria-disabled", "true");
+    else button.removeAttribute("aria-disabled");
+  }
+
+  function isInactive(button) {
+    return button.getAttribute("aria-disabled") === "true";
+  }
+
+  /** Whether the shown page is the first and the last one. */
+  function pageBounds() {
+    if (pdfDoc) return { first: pageIndex <= 0, last: pageIndex >= pdfDoc.numPages - 1 };
+    if (mode === "flow" && flow && currentDocument) {
+      return {
+        first: flow.index <= 0 && flow.pageIndex <= 0,
+        last: flow.index >= currentDocument.sections.length - 1 && flow.pageIndex >= flow.pages - 1,
+      };
+    }
+    if (mode === "comic")
+      return { first: pageIndex <= 0, last: pageIndex >= comicFiles.length - 1 };
+    if (currentDocument) {
+      return { first: pageIndex <= 0, last: pageIndex >= currentDocument.sections.length - 1 };
+    }
+    return { first: true, last: true };
+  }
+
+  /** Brings the toolbar in line with the open Document and where the author is. */
+  function updateControls() {
+    const open = hasDocument();
+    document.body.dataset.mode = pdfDoc ? "pdf" : open ? mode : "";
+    const bounds = pageBounds();
+    setInactive(pagePreviousButton, !open || bounds.first);
+    setInactive(pageNextButton, !open || bounds.last);
+    const flowing = mode === "flow" && !pdfDoc;
+    labelButton(zoomOutButton, t(flowing ? "decreaseFontSize" : "zoomOut"));
+    labelButton(zoomInButton, t(flowing ? "increaseFontSize" : "zoomIn"));
+    if (fitWidthButton)
+      fitWidthButton.setAttribute("aria-pressed", String(zoomSetting === "width"));
+    if (fitPageButton) fitPageButton.setAttribute("aria-pressed", String(zoomSetting === "page"));
+    if (layoutToggle) layoutToggle.setAttribute("aria-pressed", String(isContinuous()));
+    if (fullscreenToggle) {
+      const on = Boolean(document.fullscreenElement);
+      fullscreenToggle.hidden = !fullscreenAvailable();
+      fullscreenToggle.setAttribute("aria-pressed", String(on));
+      labelButton(fullscreenToggle, t(on ? "exitFullScreen" : "fullScreen"));
+    }
   }
 
   /** @param {unknown} message @param {Transferable[]} [transfer] */
@@ -691,9 +745,15 @@
     stage.hidden = false;
     messageElement.hidden = true;
     passwordForm.hidden = true;
+    try {
+      const first = await pdfDoc.getPage(1);
+      pdfBase = first.getViewport({ scale: 1 });
+    } catch {
+      pdfBase = null;
+    }
+    if (destroyed || !pdfDoc) return;
     updateIndicator();
-    await renderCurrent();
-    renderNeighbors();
+    await rebuildPdfView();
     void sendMeta();
   }
 
@@ -1801,6 +1861,7 @@
   /* Rendering ------------------------------------------------------------- */
 
   function updateIndicator() {
+    updateControls();
     if (!pageIndicator) return;
     if (pdfDoc) {
       const number = pageIndex + 1;
@@ -1838,10 +1899,82 @@
     return byWidth;
   }
 
+  function isContinuous() {
+    return Boolean(pdfDoc) && settings.pdfLayout === "continuous";
+  }
+
+  /**
+   * Lays out one slot per page, each sized from the first page until its own
+   * page renders. A drawn canvas stays in its slot until the cache drops it:
+   * the Frame never detaches a canvas and shows it again, which WebKit can hand
+   * back blank.
+   */
+  function buildPdfSlots() {
+    if (!pdfDoc) return;
+    viewGeneration += 1;
+    stopObserving();
+    clearCache();
+    const base = pdfBase || { width: 612, height: 792 };
+    const scale = scaleFor(base);
+    const continuous = isContinuous();
+    stage.textContent = "";
+    stage.className = "pdf-pages";
+    stage.style.width = "";
+    stage.style.height = "";
+    slots = [];
+    for (let index = 0; index < pdfDoc.numPages; index += 1) {
+      const slot = document.createElement("div");
+      slot.className = "pdf-page";
+      slot.dataset.page = String(index);
+      slot.style.width = `${Math.round(base.width * scale)}px`;
+      slot.style.height = `${Math.round(base.height * scale)}px`;
+      slot.hidden = !continuous && index !== pageIndex;
+      slots.push(slot);
+    }
+    stage.append(...slots);
+    stage.hidden = false;
+    currentScale = scale;
+    if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent: Math.round(scale * 100) });
+  }
+
+  /**
+   * Draws the PDF in the current layout and zoom: the shown page and its
+   * neighbors, or, in Continuous scroll, the pages near the viewport.
+   * @returns {Promise<void>}
+   */
+  function rebuildPdfView() {
+    if (!pdfDoc) return Promise.resolve();
+    buildPdfSlots();
+    updateControls();
+    if (isContinuous()) {
+      observeSlots();
+      scrollToSlot(pageIndex);
+      return renderPage(pageIndex)
+        .then(() => revealPdfMatch())
+        .catch((error) => {
+          if (!destroyed) handleLoadError(error);
+        });
+    }
+    viewer.scrollTop = 0;
+    const shown = renderCurrent();
+    renderNeighbors();
+    return shown;
+  }
+
+  /** Shows only the current page's slot. */
+  function showSlot(index) {
+    for (const slot of slots) {
+      const shown = Number(slot.dataset.page) === index;
+      if (slot.hidden === shown) slot.hidden = !shown;
+    }
+  }
+
   async function renderCurrent() {
     if (!pdfDoc) return;
-    const generation = ++viewGeneration;
+    if (slots.length !== pdfDoc.numPages) buildPdfSlots();
+    const generation = viewGeneration;
     const index = pageIndex;
+    if (!isContinuous()) showSlot(index);
     try {
       const rendered = await renderPage(index);
       if (destroyed || generation !== viewGeneration || index !== pageIndex) return;
@@ -1851,64 +1984,92 @@
     }
   }
 
-  /** @param {number} index @returns {Promise<RenderedPage>} */
-  async function renderPage(index) {
+  /**
+   * The page drawn into its slot: from the cache, from the render already in
+   * flight, or freshly drawn.
+   * @param {number} index @returns {Promise<RenderedPage>}
+   */
+  function renderPage(index) {
     const cached = pageCache.get(index);
     if (cached) {
       pageCache.delete(index);
       pageCache.set(index, cached);
-      return cached;
+      return Promise.resolve(cached);
     }
+    const pending = renderingPages.get(index);
+    if (pending) return pending;
+    const promise = drawPage(index, viewGeneration).finally(() => {
+      if (renderingPages.get(index) === promise) renderingPages.delete(index);
+    });
+    renderingPages.set(index, promise);
+    return promise;
+  }
+
+  /** @param {number} index @param {number} generation @returns {Promise<RenderedPage>} */
+  async function drawPage(index, generation) {
     if (!pdfDoc) throw new Error("No Document open");
-    renderingPages.add(index);
+    const page = await pdfDoc.getPage(index + 1);
+    const base = page.getViewport({ scale: 1 });
+    const scale = scaleFor(base);
+    const ratio = window.devicePixelRatio || 1;
+    const viewport = page.getViewport({ scale: scale * ratio });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.floor(viewport.width));
+    canvas.height = Math.max(1, Math.floor(viewport.height));
+    canvas.style.width = `${base.width * scale}px`;
+    canvas.style.height = `${base.height * scale}px`;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("This device cannot draw the page");
+    const task = page.render({ canvasContext: context, viewport });
+    if (task && task.promise) await task.promise;
+    const textLayer = document.createElement("div");
+    textLayer.className = "textLayer";
+    textLayer.style.width = `${base.width * scale}px`;
+    textLayer.style.height = `${base.height * scale}px`;
     try {
-      const page = await pdfDoc.getPage(index + 1);
-      const base = page.getViewport({ scale: 1 });
-      const scale = scaleFor(base);
-      const ratio = window.devicePixelRatio || 1;
-      const viewport = page.getViewport({ scale: scale * ratio });
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.floor(viewport.width));
-      canvas.height = Math.max(1, Math.floor(viewport.height));
-      canvas.style.width = `${base.width * scale}px`;
-      canvas.style.height = `${base.height * scale}px`;
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("This device cannot draw the page");
-      const task = page.render({ canvasContext: context, viewport });
-      if (task && task.promise) await task.promise;
-      const textLayer = document.createElement("div");
-      textLayer.className = "textLayer";
-      textLayer.style.width = `${base.width * scale}px`;
-      textLayer.style.height = `${base.height * scale}px`;
-      try {
-        const textContent = await page.getTextContent();
-        if (pdfjs && pdfjs.TextLayer) {
-          const layer = new pdfjs.TextLayer({
-            textContentSource: textContent,
-            container: textLayer,
-            viewport: page.getViewport({ scale }),
-          });
-          await layer.render();
-        }
-      } catch {
-        /* A page without a text layer is still readable. */
+      const textContent = await page.getTextContent();
+      if (pdfjs && pdfjs.TextLayer) {
+        const layer = new pdfjs.TextLayer({
+          textContentSource: textContent,
+          container: textLayer,
+          viewport: page.getViewport({ scale }),
+        });
+        await layer.render();
       }
-      paintPdfMatches(textLayer, index);
-      /** @type {RenderedPage} */
-      const rendered = { index, canvas, textLayer, page, scale };
-      pageCache.set(index, rendered);
-      trimCache();
-      return rendered;
-    } finally {
-      renderingPages.delete(index);
+    } catch {
+      /* A page without a text layer is still readable. */
+    }
+    /** @type {RenderedPage} */
+    const rendered = { index, canvas, textLayer, page, scale };
+    // A zoom, a resize, or a layout switch rebuilt the slots meanwhile: this
+    // drawing belongs to a view that is gone.
+    if (destroyed || generation !== viewGeneration) return rendered;
+    paintPdfMatches(textLayer, index);
+    placeRendered(rendered);
+    pageCache.set(index, rendered);
+    trimCache();
+    return rendered;
+  }
+
+  /** Puts a drawn page in its slot, keeping the reading spot when a slot above it grows. */
+  function placeRendered(rendered) {
+    const slot = slots[rendered.index];
+    if (!slot) return;
+    const before = slot.offsetHeight;
+    const above = isContinuous() && stage.offsetTop + slot.offsetTop < viewer.scrollTop;
+    slot.textContent = "";
+    slot.style.width = rendered.canvas.style.width;
+    slot.style.height = rendered.canvas.style.height;
+    slot.append(rendered.canvas, rendered.textLayer);
+    const delta = slot.offsetHeight - before;
+    if (above && delta !== 0) {
+      viewer.scrollTop += delta;
+      scrollTarget = viewer.scrollTop;
     }
   }
 
   /** @param {RenderedPage} rendered */
   function showRendered(rendered) {
-    stage.textContent = "";
-    stage.append(rendered.canvas, rendered.textLayer);
-    stage.hidden = false;
     currentScale = rendered.scale;
     if (zoomLevel)
       zoomLevel.textContent = t("zoomLevel", { percent: Math.round(rendered.scale * 100) });
@@ -1928,22 +2089,180 @@
     }
   }
 
+  /** Takes a drawn page out of its slot and frees its pixels. */
+  function evict(rendered) {
+    rendered.canvas.remove();
+    rendered.textLayer.remove();
+    rendered.canvas.width = 0;
+    rendered.canvas.height = 0;
+  }
+
   function trimCache() {
     for (const [index, rendered] of pageCache) {
       if (pageCache.size <= MAX_CACHED_PAGES) break;
-      if (index === pageIndex) continue;
+      if (index === pageIndex || visiblePages.has(index)) continue;
       pageCache.delete(index);
-      rendered.canvas.remove();
-      rendered.textLayer.remove();
+      evict(rendered);
     }
   }
 
   function clearCache() {
-    for (const rendered of pageCache.values()) {
-      rendered.canvas.remove();
-      rendered.textLayer.remove();
-    }
+    for (const rendered of pageCache.values()) evict(rendered);
     pageCache.clear();
+    renderingPages.clear();
+  }
+
+  /* Continuous scroll ----------------------------------------------------- */
+
+  /** Draws the pages that come near the viewport as the author scrolls. */
+  function observeSlots() {
+    stopObserving();
+    if (typeof IntersectionObserver !== "function") {
+      renderNeighbors();
+      return;
+    }
+    slotObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const index = Number(/** @type {HTMLElement} */ (entry.target).dataset.page);
+          if (entry.isIntersecting) visiblePages.add(index);
+          else visiblePages.delete(index);
+        }
+        for (const index of visiblePages) {
+          void renderPage(index).catch(() => {
+            /* A page that fails to draw stays a blank slot; the rest still read. */
+          });
+        }
+      },
+      { root: viewer, rootMargin: "50% 0px" }
+    );
+    for (const slot of slots) slotObserver.observe(slot);
+  }
+
+  function stopObserving() {
+    if (slotObserver) slotObserver.disconnect();
+    slotObserver = null;
+    visiblePages.clear();
+  }
+
+  /** Scrolls a page's top into view, and marks the scroll as the Frame's own. */
+  function scrollToSlot(index) {
+    const slot = slots[index];
+    if (!slot) return;
+    viewer.scrollTop = Math.max(0, stage.offsetTop + slot.offsetTop - 16);
+    scrollTarget = viewer.scrollTop;
+  }
+
+  /** The page under the upper third of the viewport. */
+  function pageAtScroll() {
+    const line = viewer.scrollTop + viewer.clientHeight / 3 - stage.offsetTop;
+    let low = 0;
+    let high = slots.length - 1;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (slots[middle].offsetTop <= line) low = middle;
+      else high = middle - 1;
+    }
+    return low;
+  }
+
+  /** In Continuous scroll, the page the author scrolls to becomes the current page. */
+  function onViewerScroll() {
+    if (!isContinuous() || slots.length === 0) return;
+    if (scrollTarget !== null) {
+      if (Math.abs(viewer.scrollTop - scrollTarget) < 2) return;
+      scrollTarget = null;
+    }
+    const next = pageAtScroll();
+    if (next === pageIndex) return;
+    pageIndex = next;
+    updateIndicator();
+    schedulePosition();
+    updateSearchStatus();
+  }
+
+  /** @param {"single" | "continuous"} layout */
+  function setPdfLayout(layout) {
+    if (!pdfDoc || settings.pdfLayout === layout) return;
+    settings = { ...settings, pdfLayout: layout };
+    post({ kind: "settings", settings });
+    void rebuildPdfView();
+  }
+
+  function toggleContinuous() {
+    setPdfLayout(isContinuous() ? "single" : "continuous");
+  }
+
+  /* Full screen ----------------------------------------------------------- */
+
+  function fullscreenAvailable() {
+    return (
+      document.fullscreenEnabled === true &&
+      typeof document.documentElement.requestFullscreen === "function"
+    );
+  }
+
+  /** Fills the screen with the Reading page, or leaves full screen. */
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      if (typeof document.exitFullscreen === "function") {
+        void Promise.resolve(document.exitFullscreen()).catch(() => {});
+      }
+      return;
+    }
+    if (!fullscreenAvailable()) return;
+    void Promise.resolve(document.documentElement.requestFullscreen()).catch(() => {
+      /* The host refused; the page stays as it was. */
+    });
+  }
+
+  function onFullscreenChange() {
+    document.documentElement.dataset.fullscreen = String(Boolean(document.fullscreenElement));
+    updateControls();
+  }
+
+  /* Wheel ----------------------------------------------------------------- */
+
+  /**
+   * The wheel scrolls a page taller than the viewport and turns the page once
+   * the author pushes past its edge, one page per gesture. Ctrl or Cmd with the
+   * wheel zooms. Continuous scroll just scrolls.
+   * @param {WheelEvent} event
+   */
+  function onWheel(event) {
+    if (!hasDocument()) return;
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      if (event.deltaY !== 0) zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1);
+      return;
+    }
+    if (isContinuous()) return;
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewer.clientHeight : 1;
+    const delta = event.deltaY * unit;
+    if (delta === 0 || Math.abs(delta) < Math.abs(event.deltaX * unit)) return;
+    const now = nowMs();
+    if (now - lastWheelAt > WHEEL_GESTURE_GAP_MS) {
+      wheelCarry = 0;
+      wheelTurned = false;
+    }
+    lastWheelAt = now;
+    const forward = delta > 0;
+    const canScroll = forward
+      ? viewer.scrollTop + viewer.clientHeight < viewer.scrollHeight - 1
+      : viewer.scrollTop > 0;
+    if (canScroll) {
+      wheelCarry = 0;
+      return;
+    }
+    event.preventDefault();
+    if (wheelTurned) return;
+    if (wheelCarry !== 0 && wheelCarry > 0 !== forward) wheelCarry = 0;
+    wheelCarry += delta;
+    if (Math.abs(wheelCarry) < WHEEL_PAGE_THRESHOLD) return;
+    wheelCarry = 0;
+    wheelTurned = true;
+    if (forward) nextPage();
+    else previousPage({ atEnd: true });
   }
 
   function destroyDocument() {
@@ -2009,8 +2328,12 @@
       activePdfPort = null;
     }
     currentScale = 1;
+    stopObserving();
+    slots = [];
+    pdfBase = null;
     if (stage) {
       stage.textContent = "";
+      stage.className = "";
       stage.style.width = "";
       stage.style.height = "";
     }
@@ -2018,14 +2341,35 @@
 
   /* Navigation, zoom, position ------------------------------------------- */
 
-  /** @param {number} index */
-  function goToPage(index) {
+  /**
+   * @param {number} index
+   * @param {{ atEnd?: boolean }} [options] `atEnd` opens a tall page at its
+   *   bottom, the way paging back by wheel expects.
+   */
+  function goToPage(index, options = {}) {
     if (pdfDoc) {
       const next = clamp(Math.floor(index), 0, Math.max(0, pdfDoc.numPages - 1));
+      if (isContinuous()) {
+        pageIndex = next;
+        updateIndicator();
+        schedulePosition();
+        scrollToSlot(next);
+        void renderPage(next)
+          .then(() => {
+            if (next === pageIndex) revealPdfMatch();
+          })
+          .catch(() => {
+            /* The slot stays blank; scrolling on draws the rest. */
+          });
+        updateSearchStatus();
+        return;
+      }
       if (next === pageIndex) return;
       pageIndex = next;
       updateIndicator();
       schedulePosition();
+      showSlot(next);
+      viewer.scrollTop = options.atEnd ? viewer.scrollHeight : 0;
       void renderCurrent();
       renderNeighbors();
       updateSearchStatus();
@@ -2054,16 +2398,17 @@
     goToPage(pageIndex + 1);
   }
 
-  function previousPage() {
+  /** @param {{ atEnd?: boolean }} [options] */
+  function previousPage(options) {
     if (pdfDoc) {
-      goToPage(pageIndex - 1);
+      goToPage(pageIndex - 1, options);
       return;
     }
     if (mode === "flow") {
       previousFlowPage();
       return;
     }
-    goToPage(pageIndex - 1);
+    goToPage(pageIndex - 1, options);
   }
 
   /** @param {FrameZoom} next */
@@ -2072,13 +2417,13 @@
     zoomSetting = next;
     schedulePosition();
     if (pdfDoc) {
-      clearCache();
-      void renderCurrent();
+      void rebuildPdfView();
     } else if (mode === "comic") {
       void renderComicPage();
     } else if (mode === "fixed") {
       void renderFixedPage();
     }
+    updateControls();
   }
 
   /** @param {number} factor */
@@ -2711,6 +3056,9 @@
       case "decreaseFontSize":
         stepFontSize(-10);
         return;
+      case "toggleContinuousScroll":
+        toggleContinuous();
+        return;
       case "backToShelf":
         leave();
         return;
@@ -2729,6 +3077,10 @@
     }
     if (event.key === "Escape") {
       event.preventDefault();
+      if (document.fullscreenElement) {
+        toggleFullscreen();
+        return;
+      }
       if (!searchBar.hidden) {
         closeSearch(true);
         return;
@@ -2785,6 +3137,12 @@
         event.preventDefault();
         zoomBy(1 / 1.1);
         return;
+      case "f":
+      case "F":
+        if (event.ctrlKey || event.metaKey || event.altKey) return;
+        event.preventDefault();
+        toggleFullscreen();
+        return;
       default:
         return;
     }
@@ -2805,6 +3163,9 @@
     if (!pointerStart) return;
     const start = pointerStart;
     pointerStart = null;
+    // A mouse drags to select text and pages with the toolbar, the keys, or
+    // the wheel; the edge taps and swipes are for touch.
+    if (event.pointerType === "mouse") return;
     if (!hasDocument()) return;
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
@@ -2843,8 +3204,7 @@
     clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(() => {
       if (pdfDoc) {
-        clearCache();
-        void renderCurrent();
+        void rebuildPdfView();
       } else if (mode === "flow" && flow) {
         void repaginateFlow(flowCfi(), flow.index, flow.pageIndex);
       } else if (mode === "comic") {
@@ -2864,6 +3224,9 @@
     window.removeEventListener("resize", onResize);
     viewer.removeEventListener("pointerdown", onPointerDown);
     viewer.removeEventListener("pointerup", onPointerUp);
+    viewer.removeEventListener("wheel", onWheel);
+    viewer.removeEventListener("scroll", onViewerScroll);
+    document.removeEventListener("fullscreenchange", onFullscreenChange);
     destroyDocument();
   }
 
@@ -2878,6 +3241,16 @@
   if (zoomInButton) zoomInButton.addEventListener("click", () => zoomBy(1.1));
   if (fitWidthButton) fitWidthButton.addEventListener("click", () => setZoom("width"));
   if (fitPageButton) fitPageButton.addEventListener("click", () => setZoom("page"));
+  if (layoutToggle) layoutToggle.addEventListener("click", toggleContinuous);
+  if (fullscreenToggle) fullscreenToggle.addEventListener("click", toggleFullscreen);
+  if (pagePreviousButton)
+    pagePreviousButton.addEventListener("click", () => {
+      if (!isInactive(pagePreviousButton)) previousPage();
+    });
+  if (pageNextButton)
+    pageNextButton.addEventListener("click", () => {
+      if (!isInactive(pageNextButton)) nextPage();
+    });
   if (searchPreviousButton) searchPreviousButton.addEventListener("click", () => nextOrRun(true));
   if (searchNextButton) searchNextButton.addEventListener("click", () => nextOrRun(false));
   if (searchCloseButton) searchCloseButton.addEventListener("click", () => closeSearch(true));
@@ -2903,6 +3276,10 @@
   window.addEventListener("resize", onResize);
   viewer.addEventListener("pointerdown", onPointerDown);
   viewer.addEventListener("pointerup", onPointerUp);
+  viewer.addEventListener("wheel", onWheel, { passive: false });
+  viewer.addEventListener("scroll", onViewerScroll, { passive: true });
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+  updateControls();
 
   if (port) {
     port.onmessage = onMessage;

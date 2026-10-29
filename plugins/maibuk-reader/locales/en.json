@@ -16,6 +16,7 @@
   "commands.fitPage.label": "Fit page",
   "commands.increaseFontSize.label": "Increase font size",
   "commands.decreaseFontSize.label": "Decrease font size",
+  "commands.toggleContinuousScroll.label": "Continuous scroll",
   "commands.backToShelf.label": "Back to Shelf",
   "pages.reader.title": "Reader",
   "pages.document.title": "Reading"

@@ -47,6 +47,7 @@ export const FIT_WIDTH = "fitWidth";
 export const FIT_PAGE = "fitPage";
 export const INCREASE_FONT_SIZE = "increaseFontSize";
 export const DECREASE_FONT_SIZE = "decreaseFontSize";
+export const TOGGLE_CONTINUOUS_SCROLL = "toggleContinuousScroll";
 export const BACK_TO_SHELF = "backToShelf";
 
 /** The Commands the Frame handles itself, forwarded while it is open. */
@@ -63,6 +64,7 @@ const FRAME_COMMANDS: ReadonlySet<FrameCommandId> = new Set<FrameCommandId>([
   FIT_PAGE,
   INCREASE_FONT_SIZE,
   DECREASE_FONT_SIZE,
+  TOGGLE_CONTINUOUS_SCROLL,
   BACK_TO_SHELF,
 ]);
 

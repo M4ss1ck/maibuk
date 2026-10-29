@@ -71,6 +71,7 @@ describe("Reader manifest", () => {
       "fitPage",
       "increaseFontSize",
       "decreaseFontSize",
+      "toggleContinuousScroll",
       "backToShelf",
     ]);
     for (const id of ["openReader", "openFile"]) {
@@ -89,6 +90,7 @@ describe("Reader manifest", () => {
       "fitPage",
       "increaseFontSize",
       "decreaseFontSize",
+      "toggleContinuousScroll",
       "backToShelf",
     ]) {
       expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["document"]);

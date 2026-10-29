@@ -254,6 +254,8 @@ export interface ReaderSettings {
   fontSize: number;
   lineWidth: "narrow" | "medium" | "wide";
   pdfFit: "width" | "page";
+  /** One PDF page at a time, or every page stacked in Continuous scroll. */
+  pdfLayout: "single" | "continuous";
 }
 
 /** The settings a fresh Plugin uses. */
@@ -261,6 +263,7 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   fontSize: 100,
   lineWidth: "medium",
   pdfFit: "width",
+  pdfLayout: "single",
 };
 
 /** The bounds and step of the font size. */
@@ -281,8 +284,8 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback
 
 /**
  * Reader's settings, field by field, from anything stored: the font size snaps
- * to the 10% step and clamps to 60..200, and an unknown line width or PDF fit
- * falls back to the default.
+ * to the 10% step and clamps to 60..200, and an unknown line width, PDF fit,
+ * or PDF layout falls back to the default.
  */
 export function clampSettings(value: unknown): ReaderSettings {
   const record = isRecord(value) ? value : {};
@@ -294,6 +297,7 @@ export function clampSettings(value: unknown): ReaderSettings {
     fontSize,
     lineWidth: oneOf(record.lineWidth, ["narrow", "medium", "wide"], "medium"),
     pdfFit: oneOf(record.pdfFit, ["width", "page"], "width"),
+    pdfLayout: oneOf(record.pdfLayout, ["single", "continuous"], "single"),
   };
 }
 

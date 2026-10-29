@@ -123,6 +123,12 @@ const pageContribution = strictObject({
       "A relative path to an .html file in the Plugin folder; renders this page as a Frame (requires customUi)."
     )
     .optional(),
+  hideTitle: z
+    .literal(true)
+    .describe(
+      "Hide the page title Maibuk draws above the page; the page draws its own heading. Screen readers still hear the title."
+    )
+    .optional(),
   platforms: contributionPlatforms.optional(),
 });
 
