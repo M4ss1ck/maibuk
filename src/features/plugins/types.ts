@@ -1432,6 +1432,13 @@ export interface PluginBroker {
    */
   requestEndpoint(request: EndpointRequest, sink: PluginEndpointSink): void;
   /**
+   * True while the host still waits on this Plugin: a host request other than
+   * the heartbeat is unanswered, an Endpoint answer is streaming, or a Plugin
+   * call has not finished. An intent Plugin is not stopped while this holds
+   * (ADR 0019, amendment 2026-10-29).
+   */
+  hasOpenWork(): boolean;
+  /**
    * Delivers an event if the Plugin subscribed to it and still holds its
    * Plugin Permission. Returns whether it was sent. Throws when the payload
    * breaks the event's schema, so content can never leak through an event.

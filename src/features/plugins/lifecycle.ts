@@ -14,7 +14,9 @@
  *
  * A Plugin that declares `warmStart: "intent"` is not warmed by its sidebar
  * entry or by a Command's Context being on screen (ADR 0019, 2026-10-29): only
- * its page, an intent (`intend`), or running one of its Commands warms it.
+ * its page, an intent (`intend`), or running one of its Commands warms it. It
+ * stops `INTENT_IDLE_STOP_MS` after its last page closes, unless the host still
+ * waits on it (a Command run, a request, or a Plugin call not yet answered).
  *
  * Every stop carries a reason. A persistent Plugin stopped by a limit gets one
  * automatic restart per session; an on-demand Plugin stopped by a limit is not
@@ -107,6 +109,12 @@ export const HEARTBEAT_INTERVAL_MS = 1_000;
 export const HEARTBEAT_MISS_LIMIT = 5;
 /** An on-demand Plugin with no reachable surface and no calls stops after this. */
 export const IDLE_STOP_MS = 5 * 60_000;
+/**
+ * An intent Plugin (`warmStart: "intent"`) with no page, no Command run, and no
+ * other open host work stops this long after its last page closes (or after
+ * its hover-only warm). Reopening warms it again (ADR 0019, amendment 2026-10-29).
+ */
+export const INTENT_IDLE_STOP_MS = 3_000;
 /** Delay before a persistent Plugin's one automatic restart per session. */
 export const RESTART_DELAY_MS = 1_000;
 
@@ -417,10 +425,21 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     if (entry.installed.manifest.lifecycle !== "on-demand") return;
     if (hasWarmSurface(entry)) return;
     if (entry.state.status !== "ready" && entry.state.status !== "unavailable") return;
-    entry.idleTimer = setTimeout(() => {
-      entry.idleTimer = null;
-      stopEntry(entry, "idle");
-    }, IDLE_STOP_MS);
+    const intent = entry.installed.manifest.warmStart === "intent";
+    entry.idleTimer = setTimeout(
+      () => {
+        entry.idleTimer = null;
+        // The host still waits on an intent Plugin (a Command run, a request, or
+        // a call not yet answered): it is working for the author, so the grace
+        // window starts again. Surface Plugins never take this branch.
+        if (intent && entry.runtime?.broker.hasOpenWork()) {
+          armIdle(entry);
+          return;
+        }
+        stopEntry(entry, "idle");
+      },
+      intent ? INTENT_IDLE_STOP_MS : IDLE_STOP_MS
+    );
   }
 
   /**

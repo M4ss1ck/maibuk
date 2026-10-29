@@ -1480,3 +1480,67 @@ describe("File Grants (ADR 0036)", () => {
     expect(error.code).toBe("file-missing");
   });
 });
+
+describe("open work", () => {
+  it("reports no open work on a fresh broker", () => {
+    const { broker } = setup();
+    expect(broker.hasOpenWork()).toBe(false);
+  });
+
+  it("ignores the heartbeat: an unanswered health check is not open work", async () => {
+    const { broker, client } = setup();
+    client.onHostRequest(() => new Promise<null>(() => {}));
+    const beat = broker.request("health.check", {});
+    expect(broker.hasOpenWork()).toBe(false);
+    broker.stop("requested");
+    await expect(beat).rejects.toBeTruthy();
+  });
+
+  it("reports a host request as open work until the Plugin answers it", async () => {
+    const { broker, client } = setup();
+    let settle: () => void = () => {};
+    let reached: () => void = () => {};
+    const arrived = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    client.onHostRequest(
+      () =>
+        new Promise<null>((resolve) => {
+          reached();
+          settle = () => resolve(null);
+        })
+    );
+    const run = broker.request("command.run", { id: "nextEcho" });
+    await arrived;
+    expect(broker.hasOpenWork()).toBe(true);
+
+    settle();
+    await run;
+    expect(broker.hasOpenWork()).toBe(false);
+  });
+
+  it("reports a Plugin call as open work until its handler finishes", async () => {
+    let release: () => void = () => {};
+    let entered: () => void = () => {};
+    const handlerEntered = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const { broker, client } = setup({
+      handlers: {
+        "storage.keys": () => {
+          entered();
+          return new Promise<string[]>((resolve) => {
+            release = () => resolve(["a"]);
+          });
+        },
+      },
+    });
+    const keys = client.storage.keys();
+    await handlerEntered;
+    expect(broker.hasOpenWork()).toBe(true);
+
+    release();
+    await keys;
+    expect(broker.hasOpenWork()).toBe(false);
+  });
+});

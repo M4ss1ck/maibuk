@@ -30,7 +30,7 @@ An `on-demand` Plugin starts when a surface it contributes becomes reachable. `w
 - `surface`, the default: a sidebar entry, a Command whose Context is on screen (a Command in the global Context is on every screen), a page, a toolbar button, or a Settings row warms the Plugin.
 - `intent`: only the Plugin's own page, or the author's intent, warms it. Hovering, focusing, or pressing its sidebar entry, or running one of its Commands, is an intent. A sidebar entry or a Command's Context on screen does nothing, so the Plugin is not started at launch just because it is listed. Its Commands and Item Menu entries stay enabled while it is stopped, and running one starts it first.
 
-`warmStart: "intent"` applies only to an `on-demand` Plugin; a `persistent` one starts with the app either way. An on-demand Plugin with `intent` stops after five minutes with no page open, whatever its sidebar entry does. The Reader Built-in uses `intent` (ADR 0019, amendment of 2026-10-29).
+`warmStart: "intent"` applies only to an `on-demand` Plugin; a `persistent` one starts with the app either way. An on-demand Plugin with `intent` stops 3 seconds after its last page closes (or after a hover-only warm that never opened a page), whatever its sidebar entry does. It does not stop while the host still has open work on it: a Command run, another host request, or a Plugin call not yet answered. The stop is silent (no toast) and reopening the page warms it again. A surface Plugin still stops after five minutes with no surface and no call. The Reader Built-in uses `intent` (ADR 0019, amendment of 2026-10-29).
 
 ## Platforms
 

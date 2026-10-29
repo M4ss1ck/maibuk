@@ -74,6 +74,9 @@ export const THROTTLE_GAP_MS = (CALL_BURST / CALL_RATE_PER_SECOND) * 1000;
  */
 export const ENDPOINT_ANSWER_DEADLINE_MS = 35_000;
 
+/** The heartbeat's host request: it runs every beat, so it is never open work. */
+const HEALTH_CHECK_METHOD = "health.check";
+
 // The SDK writes `kind`, `id`, then `method` or `event` first, so a refused
 // message can be answered, with the method named, without decoding it.
 const MESSAGE_HEAD =
@@ -231,11 +234,21 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   const inFlightCommandRuns = new Map<number, number>();
   /** Endpoint requests whose answer has not finished, by host request id. */
   const endpoints = new Map<number, OpenEndpoint>();
+  /** Plugin calls whose handler (and any streamed body) has not finished. */
+  let openCalls = 0;
 
   function hasRecentCommandRun(): boolean {
     const time = now();
     for (const sentAt of inFlightCommandRuns.values()) {
       if (time - sentAt < COMMAND_RUN_EXEMPTION_MS) return true;
+    }
+    return false;
+  }
+
+  function hasOpenWork(): boolean {
+    if (openCalls > 0 || endpoints.size > 0) return true;
+    for (const method of pendingMethods.values()) {
+      if (method !== HEALTH_CHECK_METHOD) return true;
     }
     return false;
   }
@@ -700,7 +713,10 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     if (record.kind === "chunk" || record.kind === "end") return;
     if (typeof record.id !== "number") return;
     if (record.kind === "call" && typeof record.method === "string") {
-      void handleCall(record.id, record.method, record.params);
+      openCalls += 1;
+      void handleCall(record.id, record.method, record.params).finally(() => {
+        openCalls -= 1;
+      });
     } else if (
       (record.kind === "subscribe" || record.kind === "unsubscribe") &&
       typeof record.event === "string"
@@ -759,6 +775,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       return true;
     },
     stop,
+    hasOpenWork,
     get stopped() {
       return stopped;
     },

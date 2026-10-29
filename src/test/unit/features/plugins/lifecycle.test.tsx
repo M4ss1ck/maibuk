@@ -24,6 +24,7 @@ import {
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_MISS_LIMIT,
   IDLE_STOP_MS,
+  INTENT_IDLE_STOP_MS,
   PLUGIN_STOP_MESSAGE_KEYS,
   RESTART_DELAY_MS,
   createPluginLifecycle,
@@ -2219,6 +2220,7 @@ describe("Plugin lifecycle constants", () => {
     expect(HEARTBEAT_INTERVAL_MS).toBe(1_000);
     expect(HEARTBEAT_MISS_LIMIT).toBe(5);
     expect(IDLE_STOP_MS).toBe(5 * 60_000);
+    expect(INTENT_IDLE_STOP_MS).toBe(3_000);
     expect(STARTUP_TIMEOUT_MS).toBe(10_000);
   });
 });
@@ -2349,5 +2351,176 @@ describe("Plugin lifecycle: warm on intent", () => {
       status: "ready",
       startReason: "warmStart",
     });
+  });
+});
+
+/**
+ * Stop when the page closes (ADR 0019, amendment 2026-10-29): an intent Plugin
+ * with no page, no request in flight, and no Command run stops after the short
+ * grace window, not the five-minute idle window. A surface Plugin is unchanged.
+ */
+describe("Plugin lifecycle: intent idle grace", () => {
+  function intentPlugin(id: string): PluginFolder {
+    return makePlugin(id, {
+      lifecycle: "on-demand",
+      warmStart: "intent",
+      ...pagePluginOverrides(),
+    });
+  }
+
+  async function readyFromPage(h: Harness, id: string): Promise<void> {
+    h.lifecycle.surfaceReached(id, "page:report");
+    await advanceUntil(() => h.lifecycle.state(id)?.status === "ready", `${id} ready`);
+  }
+
+  it("stops an intent Plugin INTENT_IDLE_STOP_MS after its last page closes", async () => {
+    const h = await createHarness({ approved: [intentPlugin("intent-page")] });
+    await launchAll(h);
+    await readyFromPage(h, "intent-page");
+    const frame = h.framesFor("intent-page")[0];
+
+    h.lifecycle.surfaceLeft("intent-page", "page:report");
+    await advance(INTENT_IDLE_STOP_MS - 500);
+    expect(h.lifecycle.state("intent-page")?.status).toBe("ready");
+
+    await advance(1_000);
+    expect(h.lifecycle.state("intent-page")).toEqual({
+      status: "stopped",
+      reason: "idle",
+      refusal: null,
+    });
+    expect(frame.stopped).toBe(true);
+  });
+
+  it("cancels the grace stop when the page reopens within the window", async () => {
+    const h = await createHarness({ approved: [intentPlugin("intent-page")] });
+    await launchAll(h);
+    await readyFromPage(h, "intent-page");
+
+    h.lifecycle.surfaceLeft("intent-page", "page:report");
+    await advance(INTENT_IDLE_STOP_MS - 1_000);
+    h.lifecycle.surfaceReached("intent-page", "page:report");
+    await advance(INTENT_IDLE_STOP_MS * 4);
+
+    expect(h.lifecycle.state("intent-page")?.status).toBe("ready");
+    expect(h.framesFor("intent-page")).toHaveLength(1);
+  });
+
+  it("delays the grace stop while a Command run is in flight", async () => {
+    let answerCommand: () => void = () => undefined;
+    const h = await createHarness({
+      approved: [intentPlugin("intent-page")],
+      configureFrame: (frame) => {
+        frame.hostRequestAnswer = async (method) => {
+          if (method !== "command.run") return "pong";
+          await new Promise<void>((resolve) => {
+            answerCommand = resolve;
+          });
+          return null;
+        };
+      },
+    });
+    await launchAll(h);
+    await readyFromPage(h, "intent-page");
+
+    const run = h.lifecycle
+      .runtime("intent-page")
+      ?.broker.request("command.run", { command: "open", context: {} });
+    h.lifecycle.surfaceLeft("intent-page", "page:report");
+    await advance(INTENT_IDLE_STOP_MS * 3);
+    expect(h.lifecycle.state("intent-page")?.status).toBe("ready");
+
+    answerCommand();
+    await run;
+    await advance(INTENT_IDLE_STOP_MS - 500);
+    expect(h.lifecycle.state("intent-page")?.status).toBe("ready");
+
+    await advance(1_000);
+    expect(h.lifecycle.state("intent-page")).toEqual({
+      status: "stopped",
+      reason: "idle",
+      refusal: null,
+    });
+  });
+
+  it("delays the grace stop while a Plugin call is still being answered", async () => {
+    let finishCall: () => void = () => undefined;
+    const h = await createHarness({
+      approved: [intentPlugin("intent-page")],
+      handlers: () =>
+        ({
+          "notifications.show": () =>
+            new Promise((resolve) => {
+              finishCall = () => resolve(null);
+            }),
+        }) as never,
+    });
+    await launchAll(h);
+    await readyFromPage(h, "intent-page");
+    const frame = h.framesFor("intent-page")[0];
+
+    h.lifecycle.surfaceLeft("intent-page", "page:report");
+    const call = frame.call("notifications.show", { variant: "info", message: "hi" });
+    await advance(INTENT_IDLE_STOP_MS * 3);
+    expect(h.lifecycle.state("intent-page")?.status).toBe("ready");
+
+    finishCall();
+    await call;
+    await advance(INTENT_IDLE_STOP_MS + 500);
+    expect(h.lifecycle.state("intent-page")?.status).toBe("stopped");
+  });
+
+  it("stops an intent Plugin warmed only by intent after the grace window", async () => {
+    const h = await createHarness({ approved: [intentPlugin("intent-page")] });
+    await launchAll(h);
+
+    h.lifecycle.intend("intent-page");
+    await advanceUntil(
+      () => h.lifecycle.state("intent-page")?.status === "ready",
+      "intent-page ready from intent"
+    );
+    await advance(INTENT_IDLE_STOP_MS - 500);
+    expect(h.lifecycle.state("intent-page")?.status).toBe("ready");
+
+    await advance(1_000);
+    expect(h.lifecycle.state("intent-page")?.status).toBe("stopped");
+  });
+
+  it("stops silently: no stop toast copy, no restart, and a reopen warms it again", async () => {
+    const stopMessage = vi.fn(() => null);
+    const h = await createHarness({ approved: [intentPlugin("intent-page")], stopMessage });
+    await launchAll(h);
+    await readyFromPage(h, "intent-page");
+
+    h.lifecycle.surfaceLeft("intent-page", "page:report");
+    await advance(INTENT_IDLE_STOP_MS + 1_000);
+    expect(stopMessage).toHaveBeenCalledWith("intent-page", "idle");
+    expect(h.lifecycle.state("intent-page")?.status).toBe("stopped");
+
+    await advance(RESTART_DELAY_MS * 10);
+    expect(h.lifecycle.state("intent-page")?.status).toBe("stopped");
+    expect(h.framesFor("intent-page")).toHaveLength(1);
+
+    await readyFromPage(h, "intent-page");
+    expect(h.framesFor("intent-page")).toHaveLength(2);
+    expect(h.lifecycle.state("intent-page")).toEqual({ status: "ready", startReason: "warmStart" });
+  });
+
+  it("leaves a surface Plugin on the five-minute idle window after its page closes", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("surface-page", { lifecycle: "on-demand", ...pagePluginOverrides() })],
+    });
+    await launchAll(h);
+    await readyFromPage(h, "surface-page");
+
+    h.lifecycle.surfaceLeft("surface-page", "page:report");
+    await advance(INTENT_IDLE_STOP_MS + 1_000);
+    expect(h.lifecycle.state("surface-page")?.status).toBe("ready");
+
+    await advance(IDLE_STOP_MS - INTENT_IDLE_STOP_MS - 2_000);
+    expect(h.lifecycle.state("surface-page")?.status).toBe("ready");
+
+    await advance(2_000);
+    expect(h.lifecycle.state("surface-page")?.status).toBe("stopped");
   });
 });
