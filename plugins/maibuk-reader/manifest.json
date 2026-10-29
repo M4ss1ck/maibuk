@@ -1,0 +1,114 @@
+{
+  "manifestVersion": 1,
+  "id": "maibuk-reader",
+  "name": "Reader",
+  "description": "Reads PDF, EPUB, MOBI, AZW3, FB2, and CBZ files from your device beside your writing, and remembers where you were.",
+  "author": "Maibuk",
+  "version": "0.1.0",
+  "apiVersion": "^0.1.9",
+  "entry": "index.js",
+  "platforms": ["desktop", "web"],
+  "lifecycle": "on-demand",
+  "customUi": true,
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": ["files:pick"],
+    "optional": []
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "openReader",
+        "label": "Open Reader",
+        "contexts": ["global"],
+        "navigates": true
+      },
+      {
+        "id": "openFile",
+        "label": "Open file…",
+        "contexts": ["global"]
+      },
+      {
+        "id": "openDocument",
+        "label": "Open Document",
+        "contexts": ["reader"],
+        "navigates": true
+      },
+      {
+        "id": "nextPage",
+        "label": "Next page",
+        "contexts": ["document"]
+      },
+      {
+        "id": "previousPage",
+        "label": "Previous page",
+        "contexts": ["document"]
+      },
+      {
+        "id": "firstPage",
+        "label": "First page",
+        "contexts": ["document"]
+      },
+      {
+        "id": "lastPage",
+        "label": "Last page",
+        "contexts": ["document"]
+      },
+      {
+        "id": "findInDocument",
+        "label": "Find in Document",
+        "contexts": ["document"]
+      },
+      {
+        "id": "toggleContents",
+        "label": "Toggle contents",
+        "contexts": ["document"]
+      },
+      {
+        "id": "zoomIn",
+        "label": "Zoom in",
+        "contexts": ["document"]
+      },
+      {
+        "id": "zoomOut",
+        "label": "Zoom out",
+        "contexts": ["document"]
+      },
+      {
+        "id": "fitWidth",
+        "label": "Fit width",
+        "contexts": ["document"]
+      },
+      {
+        "id": "fitPage",
+        "label": "Fit page",
+        "contexts": ["document"]
+      },
+      {
+        "id": "increaseFontSize",
+        "label": "Increase font size",
+        "contexts": ["document"]
+      },
+      {
+        "id": "decreaseFontSize",
+        "label": "Decrease font size",
+        "contexts": ["document"]
+      },
+      {
+        "id": "backToShelf",
+        "label": "Back to Shelf",
+        "contexts": ["document"]
+      }
+    ],
+    "pages": [
+      { "id": "reader", "title": "Reader", "command": "openReader" },
+      {
+        "id": "document",
+        "title": "Reading",
+        "command": "openDocument",
+        "frame": "assets/ui/reader.html"
+      }
+    ],
+    "sidebarEntries": [{ "page": "reader", "icon": "book-open-text" }]
+  }
+}

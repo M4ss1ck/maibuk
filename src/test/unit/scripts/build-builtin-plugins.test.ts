@@ -123,7 +123,7 @@ describe("buildBuiltInPlugins()", () => {
     const shipped = JSON.parse(readFileSync(join(REPO_ROOT, "plugins/builtins.json"), "utf8")) as {
       plugins: string[];
     };
-    expect(shipped.plugins).toEqual(["maibuk-echoes", "maibuk-mcp"]);
+    expect(shipped.plugins).toEqual(["maibuk-echoes", "maibuk-mcp", "maibuk-reader"]);
 
     await buildBuiltInPlugins({
       sourceRoot: join(REPO_ROOT, "plugins"),
@@ -132,12 +132,15 @@ describe("buildBuiltInPlugins()", () => {
       target: "web",
     });
 
-    // maibuk-mcp lists only "desktop", so the web build ships Echoes alone.
+    // maibuk-mcp lists only "desktop", so the web build ships Echoes and Reader.
     const names = readdirSync(outRoot);
-    expect(names.sort()).toEqual(["index.json", "maibuk-echoes"]);
+    expect(names.sort()).toEqual(["index.json", "maibuk-echoes", "maibuk-reader"]);
     expect(names).not.toContain("sample-builtin");
     expect(names).not.toContain("remote-ui");
-    expect(readIndex(outRoot).plugins.map((plugin) => plugin.id)).toEqual(["maibuk-echoes"]);
+    expect(readIndex(outRoot).plugins.map((plugin) => plugin.id)).toEqual([
+      "maibuk-echoes",
+      "maibuk-reader",
+    ]);
   });
 });
 

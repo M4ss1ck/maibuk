@@ -1,0 +1,20 @@
+{
+  "page.shelf": "Estante",
+  "shelf.openFile": "Abrir archivo…",
+  "shelf.emptyTitle": "Tu estante está vacío",
+  "shelf.emptyDescription": "Lector abre archivos PDF, EPUB, MOBI, AZW3, FB2 y CBZ de tu dispositivo para que puedas leer junto a lo que escribes. Los archivos se quedan donde están; Lector nunca los copia a la Biblioteca.",
+  "shelf.open": "Abrir",
+  "shelf.remove": "Quitar del estante",
+  "shelf.locate": "Localizar de nuevo…",
+  "shelf.reopen": "Reabrir",
+  "shelf.status.missing": "Documento perdido",
+  "shelf.status.needsPermission": "Falta permiso",
+  "shelf.status.unreadable": "No se puede abrir este archivo",
+  "shelf.lastRead": "Última lectura {{when}}",
+  "shelf.progress.page": "pág. {{page}} de {{count}}",
+  "shelf.progress.percent": "{{percent}}%",
+  "shelf.locate.mismatch": "Ese archivo es otro documento. Lector mantuvo el documento perdido en tu estante.",
+  "shelf.loading": "Cargando tu estante…",
+  "shelf.openFailed": "Lector no puede abrir ese archivo.",
+  "shelf.reopenFailed": "El navegador no dio acceso a este archivo."
+}

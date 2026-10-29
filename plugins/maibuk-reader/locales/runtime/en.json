@@ -1,0 +1,20 @@
+{
+  "page.shelf": "Shelf",
+  "shelf.openFile": "Open file…",
+  "shelf.emptyTitle": "Your Shelf is empty",
+  "shelf.emptyDescription": "Reader opens PDF, EPUB, MOBI, AZW3, FB2, and CBZ files from your device, so you can read beside your writing. Files stay where they are; Reader never copies them into the Library.",
+  "shelf.open": "Open",
+  "shelf.remove": "Remove from Shelf",
+  "shelf.locate": "Locate again…",
+  "shelf.reopen": "Reopen",
+  "shelf.status.missing": "Missing Document",
+  "shelf.status.needsPermission": "Needs permission",
+  "shelf.status.unreadable": "Can't open this file",
+  "shelf.lastRead": "Last read {{when}}",
+  "shelf.progress.page": "p. {{page}} of {{count}}",
+  "shelf.progress.percent": "{{percent}}%",
+  "shelf.locate.mismatch": "That file is a different Document. Reader kept the Missing Document on your Shelf.",
+  "shelf.loading": "Loading your Shelf…",
+  "shelf.openFailed": "Reader can't open that file.",
+  "shelf.reopenFailed": "The browser didn't give access to this file."
+}
