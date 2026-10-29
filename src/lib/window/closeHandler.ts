@@ -1,14 +1,13 @@
 import { IS_DESKTOP } from "@/lib/platform";
 import { useSettingsStore } from "@/features/settings/store";
-import { metricsService } from "@/lib/metrics/MetricsService";
-import { deactivateTutorialDatabase } from "@/features/tutorial/library-switch";
+import { runShutdown } from "@/lib/window/shutdown";
 
 let unlisten: (() => void) | null = null;
 
 // The single window-close handler. Installed once at app startup (independent
 // of metrics initialization) so close-to-tray works on a fresh launch and when
 // metrics are disabled. When close-to-tray is on the window is hidden to the
-// tray; otherwise metrics are flushed best-effort and the process exits.
+// tray; otherwise the shutdown routine runs and the process exits.
 export async function installWindowCloseHandler(): Promise<void> {
   if (
     !IS_DESKTOP ||
@@ -27,23 +26,7 @@ export async function installWindowCloseHandler(): Promise<void> {
         await win.hide();
         return;
       }
-      // Closing mid-Tutorial: switch back first, so the close-time work below
-      // lands in the author's Library. The Tutorial Library is in memory
-      // and goes with the process.
-      deactivateTutorialDatabase();
-      try {
-        metricsService.endSession();
-        await Promise.race([
-          metricsService.flushNow(),
-          new Promise<void>((resolve) => setTimeout(resolve, 200)),
-        ]);
-      } finally {
-        // exit() terminates the process cleanly even with the tray icon
-        // present; do not destroy() first or this context tears down before
-        // exit can run.
-        const { exit } = await import("@tauri-apps/plugin-process");
-        await exit(0);
-      }
+      await runShutdown("exit");
     });
   } catch {
     // Not running inside a Tauri webview; nothing to install.
