@@ -14,6 +14,7 @@ import { cycleDictationLanguage } from "@/features/dictation/language";
 import { useDictationStore } from "@/features/dictation/store";
 import { useCommandPaletteStore } from "@/features/command-palette";
 import { useReleaseStore } from "@/features/releases/store";
+import { useUpdateStore } from "@/features/update/store";
 import { useThemeStore, getCycledTheme } from "@/features/theme";
 import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
@@ -27,6 +28,9 @@ export function GlobalShortcuts() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
+  const bundleType = useUpdateStore((state) => state.bundleType);
+  const hasNewerRelease = useReleaseStore((state) => state.newerReleases.length > 0);
+  const updatePossible = bundleType !== "unknown" && hasNewerRelease;
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showShortcutEditor, setShowShortcutEditor] = useState(false);
   const theme = useThemeStore((state) => state.theme);
@@ -200,6 +204,18 @@ export function GlobalShortcuts() {
     {
       id: "global.openReleaseNotes",
       onTrigger: () => useReleaseStore.getState().openNotes(),
+    },
+    {
+      id: "global.updateMaibuk",
+      enabled: updatePossible,
+      onTrigger: () => {
+        const { state, start } = useUpdateStore.getState();
+        if (state.phase === "idle" || state.phase === "failed") {
+          const newest = useReleaseStore.getState().newerReleases[0];
+          if (newest) void start(newest.number);
+        }
+        useReleaseStore.getState().openNotes();
+      },
     },
     {
       id: "global.openPluginsSettings",

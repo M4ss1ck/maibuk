@@ -295,6 +295,11 @@ export const COMMANDS = {
     defaults: [],
     keywordsKey: "shortcuts.keywords.openReleaseNotes",
   },
+  "global.updateMaibuk": {
+    labelKey: "update.command",
+    contexts: ["global"],
+    defaults: [],
+  },
   "global.openPluginsSettings": {
     labelKey: "plugins.openSettings",
     contexts: ["global"],

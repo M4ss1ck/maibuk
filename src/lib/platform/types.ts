@@ -66,6 +66,45 @@ export interface OSAdapter {
   locale(): Promise<string | null>;
 }
 
+/** The install format of this build; `unknown` for Arch, the web, and anything the updater does not own. */
+export type BundleType = "appimage" | "deb" | "rpm" | "unknown";
+
+export type UpdateFailureReason =
+  | "offline"
+  | "cancelled-auth"
+  | "not-writable"
+  | "bad-signature"
+  | "no-asset"
+  | "other";
+
+/** What an Update rejects with; the store maps it to the localized message. */
+export class UpdateError extends Error {
+  readonly reason: UpdateFailureReason;
+  readonly cause: unknown;
+
+  constructor(reason: UpdateFailureReason, cause?: unknown) {
+    super(`Update failed: ${reason}`);
+    this.name = "UpdateError";
+    this.reason = reason;
+    this.cause = cause;
+  }
+}
+
+export type UpdateProgressEvent =
+  | { kind: "started"; total?: number }
+  | { kind: "progress"; bytes: number }
+  | { kind: "finished" };
+
+export interface UpdaterAdapter {
+  bundleType(): Promise<BundleType>;
+  /** The newest Release the updater feed lists for this install; null when none is newer. Rejects with UpdateError. */
+  check(): Promise<{ version: string } | null>;
+  /** Download what `check()` found and install it. Rejects with UpdateError. */
+  downloadAndInstall(onProgress: (event: UpdateProgressEvent) => void): Promise<void>;
+  /** Start the installed Release in place of this process. */
+  restart(): Promise<void>;
+}
+
 export interface ClipboardAdapter {
   /** The clipboard's plain text; `""` when it holds none. */
   readText(): Promise<string>;

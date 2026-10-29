@@ -2152,7 +2152,7 @@
     "badge": "Maibuk {{release}}, Novedades",
     "badgeWithUpdate": "Maibuk {{release}}, Novedades, hay una actualización disponible",
     "new": "Nuevo",
-    "download": "Descargar {{release}}",
+    "downloadPage": "Página de descarga",
     "olderReleases": "Las versiones anteriores están en GitHub",
     "notesRegion": "Notas de la versión",
     "sections": {
@@ -2163,6 +2163,29 @@
       "fixed": "Corregido",
       "other": "Otros",
       "security": "Seguridad"
+    }
+  },
+  "update": {
+    "action": "Actualizar a {{release}}",
+    "command": "Actualizar Maibuk",
+    "checking": "Buscando la actualización…",
+    "downloading": "Descargando {{release}}",
+    "progressLabel": "Descarga de la actualización",
+    "progress": "{{percent}}% descargado",
+    "badgeProgress": "{{percent}}%",
+    "badgeReady": "Reiniciar",
+    "installed": "{{release}} está instalada. Se ejecutará la próxima vez que abras Maibuk.",
+    "restartNow": "Reiniciar ahora",
+    "later": "Más tarde",
+    "restarting": "Reiniciando…",
+    "retry": "Reintentar",
+    "errors": {
+      "offline": "No se pudo descargar la actualización. Revisa tu conexión e inténtalo de nuevo, o usa la página de descarga.",
+      "cancelled-auth": "La actualización no se instaló porque no se dio la contraseña de administrador. No cambió nada. Inténtalo de nuevo, o usa la página de descarga.",
+      "not-writable": "Maibuk no puede escribir en la carpeta desde la que se ejecuta. Usa la página de descarga para instalar esta versión a mano.",
+      "bad-signature": "La descarga no superó la comprobación de firma, así que no se instaló. Inténtalo de nuevo, o usa la página de descarga.",
+      "no-asset": "Esta versión no tiene actualización para tu instalación. Usa la página de descarga.",
+      "other": "La actualización falló. Inténtalo de nuevo, o usa la página de descarga."
     }
   },
   "plugins": {

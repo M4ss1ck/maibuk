@@ -2147,7 +2147,7 @@
     "badge": "Maibuk {{release}}, What's new",
     "badgeWithUpdate": "Maibuk {{release}}, What's new, an update is available",
     "new": "New",
-    "download": "Download {{release}}",
+    "downloadPage": "Download page",
     "olderReleases": "Older Releases are on GitHub",
     "notesRegion": "Release Notes",
     "sections": {
@@ -2158,6 +2158,29 @@
       "fixed": "Fixed",
       "other": "Other",
       "security": "Security"
+    }
+  },
+  "update": {
+    "action": "Update to {{release}}",
+    "command": "Update Maibuk",
+    "checking": "Checking for the update…",
+    "downloading": "Downloading {{release}}",
+    "progressLabel": "Update download",
+    "progress": "{{percent}}% downloaded",
+    "badgeProgress": "{{percent}}%",
+    "badgeReady": "Restart",
+    "installed": "{{release}} is installed. It runs the next time Maibuk starts.",
+    "restartNow": "Restart now",
+    "later": "Later",
+    "restarting": "Restarting…",
+    "retry": "Retry",
+    "errors": {
+      "offline": "The update could not be downloaded. Check your connection and try again, or use the download page.",
+      "cancelled-auth": "The update was not installed because the administrator password was not given. Nothing changed. Try again, or use the download page.",
+      "not-writable": "Maibuk cannot write to the folder it runs from. Use the download page to install this Release by hand.",
+      "bad-signature": "The download did not pass its signature check, so it was not installed. Try again, or use the download page.",
+      "no-asset": "This Release has no update for your install. Use the download page.",
+      "other": "The update failed. Try again, or use the download page."
     }
   },
   "plugins": {

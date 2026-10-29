@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { APP_VERSION } from "@/constants";
 import { useReleaseStore } from "@/features/releases/store";
+import { updateProgressPercent } from "@/features/update/progress";
+import { useUpdateStore } from "@/features/update/store";
 
 interface ReleaseBadgeProps {
   /** `sidebar` sits in the navigation footer; `about` sits on the Settings wordmark. */
@@ -13,14 +15,26 @@ const VARIANT_CLASS = {
   about: "px-2.5 py-0.5 text-lg text-foreground",
 } as const;
 
-/** The opaque "New" chip, shared by the badge and the newer Releases in the dialog. */
+/**
+ * The opaque "New" chip, shared by the badge and the newer Releases in the
+ * dialog. While an Update downloads it shows the percent; once installed it
+ * reads as ready to restart.
+ */
 export function NewReleaseChip({ className = "" }: { className?: string }) {
   const { t } = useTranslation();
+  const state = useUpdateStore((store) => store.state);
+  const percent = updateProgressPercent(state);
+  const label =
+    state.phase === "downloading" && percent !== null
+      ? t("update.badgeProgress", { percent: Math.floor(percent) })
+      : state.phase === "installed"
+        ? t("update.badgeReady")
+        : t("releases.new");
   return (
     <span
       className={`inline-flex items-center rounded-full border border-update-border bg-update-bg px-1.5 text-[0.6875rem] leading-4 font-semibold uppercase tracking-wide text-update-text ${className}`}
     >
-      {t("releases.new")}
+      {label}
     </span>
   );
 }
