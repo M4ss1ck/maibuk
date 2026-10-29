@@ -186,15 +186,6 @@ test("open, turn 20 pages, search, leave, and settle the heap: PDF and EPUB", as
   await goHome(page);
   await page.waitForTimeout(LEAVE_SETTLE_MS);
   const afterLeaveHeapBytes = await heapAfterGc(page);
-  // TEMPORARY (InjectedScript check): a heap snapshot after the settled GC. Removed after the check.
-  if (process.env.READER_BENCH_SNAPSHOT) {
-    const session = await page.context().newCDPSession(page);
-    const chunks: string[] = [];
-    session.on("HeapProfiler.addHeapSnapshotChunk", (event: { chunk: string }) => chunks.push(event.chunk));
-    await session.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false });
-    writeFileSync(process.env.READER_BENCH_SNAPSHOT, chunks.join(""));
-    await session.detach();
-  }
 
   const longTasks = await page.evaluate(
     () => (window as unknown as { __readerLongTasks?: unknown[] }).__readerLongTasks ?? []
