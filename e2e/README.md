@@ -211,6 +211,12 @@ the reason, when:
 - any e2e file other than `e2e/support/storage.ts` and `e2e/support/fault.ts`
   touches IndexedDB, localStorage, or sessionStorage (`storage-outside-support`).
 
+The guard scans `e2e/specs/**` only. The Reader bench lanes (`e2e/reader-bench/`,
+like `e2e/frames/`) are measurements and may use `evaluate`, `fill`, and `press`;
+the file-picker stub (`e2e/support/file-picker.ts`) uses `addInitScript` because a
+native file dialog has no keyboard path. CODING_STANDARDS.md "E2E" records both
+exemptions. Their specs still drive Reader by keyboard.
+
 The guard's own tests (`e2e/guards/coverage.test.ts`, `node:test`) run next;
 each feeds it one bad fixture and expects the named rejection.
 

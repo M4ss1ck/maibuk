@@ -22,6 +22,13 @@ import { benchOut, focusDocument, openReader, pageIndicator } from "./support";
 const PDF = "large-document.pdf";
 const PDF_PAGES = 96;
 const MODE = process.env.READER_BENCH_SPIKE_MODE;
+// The runner (`pnpm bench:reader --spike`) names this file and sets the mode for
+// each pass. Without a mode the spec fails at load rather than skipping silently.
+if (MODE !== "nested" && MODE !== "inline") {
+  throw new Error(
+    "Run the spike with `pnpm bench:reader --spike`, which sets READER_BENCH_SPIKE_MODE"
+  );
+}
 
 /** Installed in the Plugin Worker: a 5 ms tick that records its lateness while armed. */
 const INSTALL_PROBE = () => {
@@ -35,7 +42,6 @@ const INSTALL_PROBE = () => {
 };
 
 test.describe("threading spike", () => {
-  test.skip(MODE === undefined, "run through `pnpm bench:reader --spike`");
   test.use({
     plugins: ["maibuk-reader"],
     pluginApprovals: [{ pluginId: "maibuk-reader", granted: ["files:pick"] }],

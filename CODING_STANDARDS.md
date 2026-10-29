@@ -40,6 +40,10 @@ Every new or modified UI feature ships keyboard-operable and screen-reader-corre
 
 Why this is a hard gate: this codebase has shipped UI whose ARIA attributes and `tabIndex` wiring looked correct while the widget was inoperable by keyboard, and attribute-level tests stayed green. Attributes are not accessibility; behavior is.
 
+Documented exemptions:
+
+- **Frame plugins** (ADR 0021, `docs/plugins/frame-ui.md`): a Frame runs no host code, so React Aria cannot reach it. A Frame Plugin implements roving focus by hand, and the host does not verify its accessibility.
+
 ## Code conventions
 
 ### Single source of truth
@@ -354,6 +358,11 @@ Playwright never runs in CI.
 The frame-rate lane (`pnpm bench:frames`, `e2e/frames/`) is a measurement, not
 a spec: its drivers use the wheel and mouse drags where the measured gesture
 is a pointer one, and the keyboard contract below does not apply to it.
+
+Two more exemptions sit beside it, each limited to the files named:
+
+- **Reader bench lanes** (`e2e/reader-bench/`, like `e2e/frames/`) are measurements, so they may use `evaluate`, `fill`, and `press` to measure. Their specs still drive Reader by keyboard.
+- **File picker stub** (`e2e/support/file-picker.ts`): no keyboard path can choose a file in a native dialog, so the stub installs a File System Access stand-in with `addInitScript`. Specs call it through `installFilePicker` and never call `addInitScript` themselves.
 
 Specs live in `e2e/specs/`. The suite drives the production web build in
 Chromium and WebKit, runs locally, and is invisible to `pnpm test`,

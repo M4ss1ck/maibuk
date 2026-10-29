@@ -20,7 +20,7 @@ import {
 } from "@/plugin-sdk";
 import type { FrameCommandId } from "./frame-protocol";
 import { translate } from "./i18n";
-import { createReaderLibrary } from "./library";
+import { createShelfService } from "./library";
 import { createReaderSession, type ReaderSession } from "./session";
 import { SHELF_PAGE_ID, createShelfPage } from "./shelf-page";
 import type { ShelfEntry } from "./shelf";
@@ -93,7 +93,7 @@ interface ReaderRuntime {
 
 /** Wires the client to the Shelf page, the document Frame, and the Commands. */
 export function startReader(client: PluginClient, serve: ReaderServe): void {
-  const library = createReaderLibrary(client);
+  const library = createShelfService(client);
   const runtime: ReaderRuntime = {
     currentDocumentId: null,
     currentEntry: null,
@@ -158,7 +158,7 @@ function isFrameCommand(id: string): id is FrameCommandId {
 
 function handleHostRequest(
   client: PluginClient,
-  library: ReturnType<typeof createReaderLibrary>,
+  library: ReturnType<typeof createShelfService>,
   runtime: ReaderRuntime,
   method: string,
   params: unknown
@@ -177,7 +177,7 @@ function handleHostRequest(
  */
 async function runReaderCommand(
   client: PluginClient,
-  library: ReturnType<typeof createReaderLibrary>,
+  library: ReturnType<typeof createShelfService>,
   runtime: ReaderRuntime,
   params: unknown
 ): Promise<null> {

@@ -14,51 +14,10 @@
  * seam, so the orchestrator never reaches into a platform store directly.
  */
 
+import type { PluginFileGrant, PluginFileGrantStore, PluginFileStat } from "@/lib/platform/types";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
-/** What `files.pick` returns and `files.list` lists: a live grant, named and sized. */
-export interface PluginFileGrant {
-  grant: string;
-  name: string;
-  size: number;
-}
-
-/** What `files.stat` reads without opening the file's bytes. */
-export interface PluginFileStat {
-  name: string;
-  size: number;
-  /** Milliseconds since the Unix epoch. */
-  modified: number;
-}
-
-export interface PluginFileGrantStore {
-  /**
-   * Shows the host's file dialog filtered to `extensions`, returning the picked
-   * file's grant, or null when the author cancelled. Picking a file this Plugin
-   * already holds a grant for returns the same grant id.
-   */
-  pick(pluginId: string, extensions: readonly string[]): Promise<PluginFileGrant | null>;
-  /**
-   * Reads `length` bytes from `offset`. A range past the end returns the bytes
-   * that exist: shorter than asked, empty at or past the end of the file.
-   */
-  read(pluginId: string, grant: string, offset: number, length: number): Promise<ArrayBuffer>;
-  /** The grant's name, size, and last-modified time; cheap enough for a Shelf. */
-  stat(pluginId: string, grant: string): Promise<PluginFileStat>;
-  /**
-   * Asks the browser for read access again, inside a user action. Desktop
-   * always answers true; the web store asks the author's browser.
-   */
-  requestAccess(pluginId: string, grant: string): Promise<boolean>;
-  /** Ends the grant. */
-  release(pluginId: string, grant: string): Promise<void>;
-  /** Every live grant the Plugin holds on this device. */
-  list(pluginId: string): Promise<PluginFileGrant[]>;
-  /** Ends every grant the Plugin holds, and no other Plugin's. */
-  clearPlugin(pluginId: string): Promise<void>;
-  /** Ends every File Grant on this device. */
-  clearAll(): Promise<void>;
-}
+export type { PluginFileGrant, PluginFileGrantStore, PluginFileStat } from "@/lib/platform/types";
 
 let installedStore: PluginFileGrantStore | null = null;
 

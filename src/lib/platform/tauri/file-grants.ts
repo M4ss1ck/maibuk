@@ -7,11 +7,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import type {
-  PluginFileGrant,
-  PluginFileGrantStore,
-  PluginFileStat,
-} from "@/features/plugins/file-grants";
+import type { PluginFileGrant, PluginFileGrantStore, PluginFileStat } from "@/lib/platform/types";
 import { PluginApiError, type PluginApiErrorCode } from "@/plugin-sdk/protocol";
 
 /** The stable prefixes the Rust commands open their messages with. */

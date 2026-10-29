@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FILE_READ_MAX_BYTES, createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
-import { createReaderLibrary } from "./library";
+import { createShelfService } from "./library";
 import { createReaderSession, type ReaderSession } from "./session";
 import { SHELF_KEY, positionKey, type DocumentFormat, type ShelfEntry } from "./shelf";
 import { readerManifest, shelfEntry } from "./test-support";
@@ -56,7 +56,7 @@ interface Harness {
   host: ReturnType<typeof createTestHost>;
   storage: Map<string, unknown>;
   client: ReturnType<typeof createPluginClient>;
-  library: ReturnType<typeof createReaderLibrary>;
+  library: ReturnType<typeof createShelfService>;
   session: ReaderSession;
   /** Every message the Frame end received, in order. */
   messages: Record<string, unknown>[];
@@ -78,7 +78,7 @@ function setup(
   const storage = options.storage ?? new Map<string, unknown>();
   const host = createTestHost({ manifest: readerManifest(), storage });
   const client = createPluginClient(host.port);
-  const library = createReaderLibrary(client);
+  const library = createShelfService(client);
   const channel = new MessageChannel();
   /** @type {Record<string, unknown>[]} */
   const messages: Record<string, unknown>[] = [];

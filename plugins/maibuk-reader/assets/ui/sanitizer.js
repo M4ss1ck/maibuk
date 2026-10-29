@@ -135,7 +135,7 @@
       .replace(/@import\s+(?:url\(\s*)?["']?([^"')\s]+)["']?\s*\)?[^;]*;?/gi, (match, url) =>
         isExternal(url) || isScriptUrl(url) ? "" : match
       )
-      .replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/gi, (match, quote, url) =>
+      .replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/gi, (match, _quote, url) =>
         isExternal(url) || isScriptUrl(url) ? 'url("")' : match
       );
   }
@@ -327,7 +327,7 @@
     ].join("\n");
   }
 
-  // biome-ignore lint/suspicious/noAssignInExpressions: the Frame reads this global, there is no module system.
+  // The Frame reads this global; there is no module system to export it.
   /** @type {any} */ (globalThis).ReaderSanitizer = {
     FORBID_TAGS,
     ALLOWED_URI_REGEXP,

@@ -12,30 +12,24 @@
  * breaking a Plugin's pick.
  */
 
-import type {
-  PluginFileGrant,
-  PluginFileGrantStore,
-  PluginFileStat,
-} from "@/features/plugins/file-grants";
+import type { PluginFileGrant, PluginFileGrantStore, PluginFileStat } from "@/lib/platform/types";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
-/** The IndexedDB database and object store holding the persisted handles. */
 const DB_NAME = "maibuk-plugin-file-grants";
 const STORE_NAME = "grants";
 
-/** What the browser answers about read access; asking again is a `requestPermission`. */
+// The browser owns this answer; `requestPermission` is the only way to change it.
 type GrantPermission = "denied" | "granted" | "prompt";
 
-/** The slice of `FileSystemFileHandle` this store uses (no `@types` package). */
-interface GrantFileHandle {
+// Only the slice this store uses: the project has no @types package for the File System Access API.
+interface StoredFileGrant {
   readonly name: string;
   getFile(): Promise<File>;
-  isSameEntry(other: GrantFileHandle): Promise<boolean>;
+  isSameEntry(other: StoredFileGrant): Promise<boolean>;
   queryPermission?(descriptor: { mode: "read" }): Promise<GrantPermission>;
   requestPermission?(descriptor: { mode: "read" }): Promise<GrantPermission>;
 }
 
-/** The options the store passes to the browser's picker. */
 interface OpenFilePickerOptions {
   multiple: boolean;
   excludeAcceptAllOption: boolean;
@@ -45,8 +39,8 @@ interface OpenFilePickerOptions {
   }[];
 }
 
-/** `window.showOpenFilePicker`, which the DOM types do not declare. */
-type ShowOpenFilePicker = (options: OpenFilePickerOptions) => Promise<GrantFileHandle[]>;
+// The DOM typings do not declare window.showOpenFilePicker.
+type ShowOpenFilePicker = (options: OpenFilePickerOptions) => Promise<StoredFileGrant[]>;
 
 /** The extra arguments tests substitute; the app passes none. */
 export interface WebPluginFileGrantDeps {
@@ -60,15 +54,14 @@ export interface WebPluginFileGrantDeps {
   randomId?: () => string;
 }
 
-/** A grant as IndexedDB keeps it: the handle is the grant. */
 interface PersistedGrant {
   pluginId: string;
   grant: string;
   name: string;
-  handle: GrantFileHandle;
+  handle: StoredFileGrant;
 }
 
-/** A grant for this session only: the picked bytes, with no handle to keep. */
+// A session grant holds the File itself, since there is no handle to persist.
 interface SessionGrant {
   pluginId: string;
   grant: string;
@@ -83,6 +76,13 @@ function fileMissing(): PluginApiError {
   });
 }
 
+function internalError(): PluginApiError {
+  return new PluginApiError({
+    code: "internal-error",
+    message: "The File Grant could not be removed from this device",
+  });
+}
+
 function needsPermission(): PluginApiError {
   return new PluginApiError({
     code: "file-needs-permission",
@@ -90,30 +90,26 @@ function needsPermission(): PluginApiError {
   });
 }
 
-/** `name` on an error or DOMException, without assuming which one was thrown. */
+// DOMException is not an Error in every browser, so read `name` structurally.
 function errorName(error: unknown): string {
   return typeof error === "object" && error !== null && "name" in error
     ? String((error as { name: unknown }).name)
     : "";
 }
 
-/** One grant's IndexedDB key: the Plugin id can never collide with another's. */
+// The NUL separator keeps one Plugin's id from ever matching another's grant.
 function grantKey(pluginId: string, grant: string): string {
   return `${pluginId}\u0000${grant}`;
 }
 
-/** The picker `window` carries, or null wherever the API is missing. */
 function windowPicker(): ShowOpenFilePicker | null {
   const picker = (globalThis as { showOpenFilePicker?: unknown }).showOpenFilePicker;
   return typeof picker === "function" ? (picker as ShowOpenFilePicker).bind(globalThis) : null;
 }
 
-/**
- * The fallback picker: a hidden file input filtered to `extensions`, removed as
- * soon as it settles. Browsers without the File System Access API still fire
- * `cancel` on dismissal; one that does not only reveals a cancel by focus
- * coming back with no file chosen.
- */
+// Browsers without the File System Access API still fire `cancel` on dismissal.
+// One that does not only reveals a cancel by focus coming back with no file chosen,
+// which is why the focus listener settles the pick as well.
 function pickWithFileInput(extensions: readonly string[]): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
@@ -164,7 +160,7 @@ export function createWebPluginFileGrantStore(
   const randomId = deps.randomId ?? (() => crypto.randomUUID());
   const pickWithInput = deps.pickWithInput ?? pickWithFileInput;
 
-  /** The IndexedDB factory right now, so a test can swap it per store. */
+  // Read per call, so a test can swap the factory for each store.
   function factory(): IDBFactory | undefined {
     return deps.indexedDB ?? globalThis.indexedDB;
   }
@@ -183,7 +179,6 @@ export function createWebPluginFileGrantStore(
     });
   }
 
-  /** One request's result; the caller closes the connection it opened. */
   async function request<T>(
     mode: IDBTransactionMode,
     run: (store: IDBObjectStore) => IDBRequest<T>
@@ -200,7 +195,6 @@ export function createWebPluginFileGrantStore(
     }
   }
 
-  /** Runs a write, answering whether it landed; a failure leaves the session copy. */
   async function write(run: (store: IDBObjectStore) => void): Promise<boolean> {
     try {
       const db = await openDatabase();
@@ -221,7 +215,7 @@ export function createWebPluginFileGrantStore(
     }
   }
 
-  /** Every record the Plugin holds; unreadable storage reads as none. */
+  // Unreadable storage reads as no records.
   async function recordsOf(pluginId: string): Promise<PersistedGrant[]> {
     try {
       const all = await request<unknown[]>("readonly", (store) => store.getAll());
@@ -239,10 +233,10 @@ export function createWebPluginFileGrantStore(
     return records.find((record) => record.grant === grant) ?? null;
   }
 
-  /** The Plugin's grant for the same file entry, so a re-pick keeps one grant. */
+  // A re-pick of the same file entry returns the grant already held.
   async function findSameEntry(
     pluginId: string,
-    handle: GrantFileHandle
+    handle: StoredFileGrant
   ): Promise<PersistedGrant | null> {
     for (const record of await recordsOf(pluginId)) {
       try {
@@ -254,8 +248,7 @@ export function createWebPluginFileGrantStore(
     return null;
   }
 
-  /** The file's size, or 0 when the browser will not hand the file over. */
-  async function fileSize(handle: GrantFileHandle): Promise<number> {
+  async function fileSize(handle: StoredFileGrant): Promise<number> {
     try {
       return (await handle.getFile()).size;
     } catch {
@@ -263,8 +256,8 @@ export function createWebPluginFileGrantStore(
     }
   }
 
-  /** A grant's size without prompting the author: 0 while access is not granted. */
-  async function permittedSize(handle: GrantFileHandle): Promise<number> {
+  // Listing never prompts, so a grant the browser has not granted reports size 0.
+  async function permittedSize(handle: StoredFileGrant): Promise<number> {
     if (typeof handle.queryPermission === "function") {
       try {
         if ((await handle.queryPermission({ mode: "read" })) !== "granted") return 0;
@@ -275,8 +268,7 @@ export function createWebPluginFileGrantStore(
     return fileSize(handle);
   }
 
-  /** The handle's file, refusing the two ways a browser withholds it. */
-  async function fileFromHandle(handle: GrantFileHandle): Promise<File> {
+  async function fileFromHandle(handle: StoredFileGrant): Promise<File> {
     if (typeof handle.queryPermission === "function") {
       let permission: GrantPermission = "granted";
       try {
@@ -293,7 +285,6 @@ export function createWebPluginFileGrantStore(
     }
   }
 
-  /** The file behind a grant: the session copy first, else the persisted handle. */
   async function fileOf(pluginId: string, grant: string): Promise<File> {
     const sessionGrant = session.get(grantKey(pluginId, grant));
     if (sessionGrant) return sessionGrant.file;
@@ -302,11 +293,11 @@ export function createWebPluginFileGrantStore(
     return fileFromHandle(record.handle);
   }
 
-  /** Keeps a grant the session can serve after a handle could not be persisted. */
+  // The picked handle could not be persisted, so the session keeps the File it gave.
   async function rememberSessionFile(
     pluginId: string,
     grant: string,
-    handle: GrantFileHandle
+    handle: StoredFileGrant
   ): Promise<void> {
     try {
       const file = await handle.getFile();
@@ -321,7 +312,7 @@ export function createWebPluginFileGrantStore(
     extensions: readonly string[],
     showOpenFilePicker: ShowOpenFilePicker
   ): Promise<PluginFileGrant | null> {
-    let handles: GrantFileHandle[];
+    let handles: StoredFileGrant[];
     try {
       handles = await showOpenFilePicker({
         multiple: false,
@@ -414,10 +405,14 @@ export function createWebPluginFileGrantStore(
     },
 
     async release(pluginId, grant): Promise<void> {
-      session.delete(grantKey(pluginId, grant));
-      await write((store) => {
-        store.delete(grantKey(pluginId, grant));
+      const key = grantKey(pluginId, grant);
+      if (!session.has(key) && !(await findRecord(pluginId, grant))) throw fileMissing();
+      // The session copy goes even when the removal fails, so reads stop at once.
+      session.delete(key);
+      const removed = await write((store) => {
+        store.delete(key);
       });
+      if (!removed) throw internalError();
     },
 
     async list(pluginId): Promise<PluginFileGrant[]> {

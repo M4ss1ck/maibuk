@@ -222,11 +222,3 @@ describe("the MOBI-family headers", () => {
     expect(u32be(bytes, u32be(bytes, 78) + 244)).toBe(0xffffffff);
   });
 });
-
-describe.skip("pdf.js's own core parsing the fixtures", () => {
-  it("runs in Node when a legacy build is vendored", () => {
-    // Skipped: `vendor/pdfjs` carries pdfjs-dist's browser build only, and its
-    // fake Worker cannot resolve its worker module in Node. See
-    // `fixtures/README.md`.
-  });
-});

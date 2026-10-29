@@ -14,13 +14,13 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { ui, type PluginClient } from "@/plugin-sdk";
 import { format, translate } from "./i18n";
-import type { ReaderLibrary } from "./library";
+import type { ShelfService } from "./library";
 import { progressSummary, relativeTimestamp, type ShelfEntry, type ShelfProgress } from "./shelf";
 
 /** What the runtime gives the page: the client, the Shelf service, and the open handoff. */
 export interface ShelfPageDeps {
   client: PluginClient;
-  library: ReaderLibrary;
+  library: ShelfService;
   onOpenDocument(entry: ShelfEntry): void;
 }
 

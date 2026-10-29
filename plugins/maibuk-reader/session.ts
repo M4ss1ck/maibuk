@@ -21,7 +21,7 @@
 
 import { FILE_READ_MAX_BYTES, type PluginClient } from "@/plugin-sdk";
 import type { PluginApiErrorCode } from "@/plugin-sdk";
-import type { ReaderLibrary } from "./library";
+import type { ShelfService } from "./library";
 import {
   foliateSource,
   purifySource,
@@ -63,7 +63,7 @@ export type SessionClient = Pick<PluginClient, "files" | "storage">;
 /** What the runtime gives one mounted Frame. */
 export interface ReaderSessionDeps {
   client: SessionClient;
-  library: ReaderLibrary;
+  library: ShelfService;
   /** The Document to open, or null when the Frame mounted with nothing open. */
   entry: ShelfEntry | null;
   language: string;

@@ -243,17 +243,17 @@
   /** @type {((password: string) => void) | null} */
   let passwordCallback = null;
 
-  /* Books: foliate's parsers, the archive, and the three views. */
+  /* Documents: foliate's parsers, the archive, and the three views. */
   /** @type {any} */
   let foliate = null;
   /** @type {any} */
   let purify = null;
   /** @type {any} */
-  let book = null;
+  let currentDocument = null;
   /** @type {"pdf" | "flow" | "fixed" | "comic"} */
   let mode = "pdf";
   /** @type {string} */
-  let bookFormat = "";
+  let documentFormat = "";
   /** @type {any} */
   let flow = null;
   /** @type {FrameZipEntry[]} */
@@ -412,9 +412,9 @@
     return nodes;
   }
 
-  /** Whether any Document is open, PDF or book. */
+  /** Whether any Document is open, PDF or document. */
   function hasDocument() {
-    return Boolean(pdfDoc || book);
+    return Boolean(pdfDoc || currentDocument);
   }
 
   /** Whether the current Document turns whole pages rather than columns. */
@@ -550,7 +550,7 @@
       return;
     }
     if (message.foliate) {
-      await openBook(message.foliate, position, entry.format);
+      await openDocument(message.foliate, position, entry.format);
       return;
     }
     fail("unsupported", t("errorUnsupported"));
@@ -564,7 +564,7 @@
     outline = null;
     pageLabels = null;
     mode = "pdf";
-    bookFormat = "";
+    documentFormat = "";
     search.query = "";
     search.matches = [];
     search.index = -1;
@@ -745,7 +745,7 @@
     return url;
   }
 
-  /* Books: archive, parsers, Flowing and Page views ----------------------- */
+  /* Documents: archive, parsers, Flowing and Page views ----------------------- */
 
   const sanitizer = /** @type {any} */ (globalThis).ReaderSanitizer;
   const FB2_MAX_BYTES = 20 * 1024 * 1024;
@@ -760,14 +760,13 @@
     ".jxl",
     ".avif",
   ];
-  const BOOK_EXTENSIONS = /\.(?:xhtml|html?|xml|css)$/i;
 
-  /** Why a book could not be opened. */
-  class BookError extends Error {
+  /** Why a document could not be opened. */
+  class DocumentError extends Error {
     /** @param {"drm" | "corrupt" | "too-large"} code @param {string} message */
     constructor(code, message) {
       super(message);
-      this.name = "BookError";
+      this.name = "DocumentError";
       this.code = code;
     }
   }
@@ -833,7 +832,7 @@
   /** @param {string} name @returns {Promise<Uint8Array>} */
   async function zipBytes(name) {
     const data = await requestZipEntry(name, "bytes");
-    if (!(data && data.buffer)) throw new BookError("corrupt", `The archive has no ${name}`);
+    if (!(data && data.buffer)) throw new DocumentError("corrupt", `The archive has no ${name}`);
     return new Uint8Array(data.buffer);
   }
 
@@ -894,7 +893,7 @@
     objectUrls.clear();
   }
 
-  /* Opening books --------------------------------------------------------- */
+  /* Opening documents --------------------------------------------------------- */
 
   /**
    * Opens one non-PDF Document and picks its view: Flowing for reflowable text,
@@ -903,38 +902,39 @@
    * @param {ReadingPosition | null} saved
    * @param {string} format
    */
-  async function openBook(resources, saved, format) {
+  async function openDocument(resources, saved, format) {
     try {
       foliate = await importFoliate(resources.source);
       purify = purifyFrom(await importPurify(resources.purify));
-      bookFormat = format;
+      documentFormat = format;
       if (format === "epub" || format === "cbz") await openZip();
 
       if (format === "epub") {
-        book = new foliate.EPUB(zipLoader());
-        await book.init();
+        currentDocument = new foliate.EPUB(zipLoader());
+        await currentDocument.init();
       } else if (format === "cbz") {
         openComic();
       } else if (format === "fb2") {
-        if (fileSize > FB2_MAX_BYTES) throw new BookError("too-large", "This file is too large");
+        if (fileSize > FB2_MAX_BYTES)
+          throw new DocumentError("too-large", "This file is too large");
         const bytes = await requestBytes(0, fileSize);
-        book = await foliate.makeFB2(new Blob([bytes], { type: "application/xml" }));
+        currentDocument = await foliate.makeFB2(new Blob([bytes], { type: "application/xml" }));
       } else if (format === "mobi" || format === "azw3") {
         await checkMobiDrm();
         const mobi = new foliate.MOBI({ unzlib: foliate.unzlibSync });
-        book = await mobi.open(mobiFile());
+        currentDocument = await mobi.open(mobiFile());
       } else {
         fail("unsupported", t("errorUnsupported"));
         return;
       }
 
-      if (destroyed || !book) return;
-      outline = bookOutline(book.toc);
+      if (destroyed || !currentDocument) return;
+      outline = documentOutline(currentDocument.toc);
       renderContents();
       stage.hidden = false;
       messageElement.hidden = true;
       passwordForm.hidden = true;
-      const fixed = format === "cbz" || book.rendition?.layout === "pre-paginated";
+      const fixed = format === "cbz" || currentDocument.rendition?.layout === "pre-paginated";
       if (format === "cbz") {
         mode = "comic";
         pageIndex = saved && saved.kind === "page" ? Math.max(0, Math.floor(saved.page)) : 0;
@@ -945,21 +945,21 @@
         mode = "fixed";
         pageIndex = saved && saved.kind === "page" ? Math.max(0, Math.floor(saved.page)) : 0;
         zoomSetting = saved && typeof saved.zoom !== "undefined" ? saved.zoom : settings.pdfFit;
-        pageIndex = clamp(pageIndex, 0, Math.max(0, book.sections.length - 1));
+        pageIndex = clamp(pageIndex, 0, Math.max(0, currentDocument.sections.length - 1));
         await renderFixedPage();
       } else {
         mode = "flow";
         const start = flowStart(saved);
         await loadFlowSection(start.index, start.page, start.anchor);
       }
-      void sendBookMeta();
+      void sendDocumentMeta();
     } catch (error) {
-      if (!destroyed) failBook(error);
+      if (!destroyed) failDocument(error);
     }
   }
 
   /** Maps an open failure to the message the author sees and the Worker stores. */
-  function failBook(error) {
+  function failDocument(error) {
     const code =
       isErrorLike(error) && typeof (/** @type {any} */ (error).code) === "string"
         ? /** @type {any} */ (error).code
@@ -977,22 +977,22 @@
 
   /** Refuses a MOBI or AZW3 whose PalmDOC header carries an encryption flag. */
   async function checkMobiDrm() {
-    if (fileSize < 100) throw new BookError("corrupt", "This file is too small");
+    if (fileSize < 100) throw new DocumentError("corrupt", "This file is too small");
     let head = await requestBytes(0, Math.min(fileSize, 100));
-    if (ascii(head, 60, 8) !== "BOOKMOBI") throw new BookError("corrupt", "Not a MOBI file");
+    if (ascii(head, 60, 8) !== "BOOKMOBI") throw new DocumentError("corrupt", "Not a MOBI file");
     const record = u32be(head, 78);
     const flagOffset = record + 12;
     if (flagOffset + 2 > head.length) {
       head = await requestBytes(0, Math.min(fileSize, flagOffset + 2));
     }
     if (u16be(head, flagOffset) !== 0)
-      throw new BookError("drm", "This Document is protected by DRM");
+      throw new DocumentError("drm", "This Document is protected by DRM");
   }
 
   /** A File-like object whose `slice` reads ranges through the Worker. */
   function mobiFile() {
     return {
-      name: entry ? entry.title : "book.mobi",
+      name: entry ? entry.title : "document.mobi",
       size: fileSize,
       /** @param {number} start @param {number} [end] */
       slice(start, end) {
@@ -1008,7 +1008,7 @@
     };
   }
 
-  /** A CBZ as a minimal book: one section per image, sorted naturally. */
+  /** A CBZ as a minimal document: one section per image, sorted naturally. */
   function openComic() {
     const collator = new Intl.Collator(undefined, { numeric: true });
     comicFiles = zipEntries
@@ -1017,8 +1017,8 @@
         IMAGE_EXTENSIONS.some((extension) => name.toLowerCase().endsWith(extension))
       )
       .sort(collator.compare);
-    if (comicFiles.length === 0) throw new BookError("corrupt", "This archive has no images");
-    book = {
+    if (comicFiles.length === 0) throw new DocumentError("corrupt", "This archive has no images");
+    currentDocument = {
       metadata: { title: entry ? entry.title : "" },
       sections: comicFiles.map((name) => ({ id: name })),
       toc: comicFiles.map((name) => ({ label: name, href: name })),
@@ -1030,12 +1030,12 @@
   }
 
   /** @param {any[] | undefined} items @returns {any[]} */
-  function bookOutline(items) {
+  function documentOutline(items) {
     if (!Array.isArray(items)) return [];
     return items.map((item) => ({
       title: typeof item.label === "string" ? item.label : "",
       dest: item.href,
-      items: bookOutline(item.subitems || item.items),
+      items: documentOutline(item.subitems || item.items),
     }));
   }
 
@@ -1075,8 +1075,10 @@
     const body = doc.body || doc.querySelector("body") || doc.documentElement;
 
     const host = document.createElement("div");
-    host.className = "reader-book";
-    host.dataset.section = String(book && book.sections ? book.sections.indexOf(section) : 0);
+    host.className = "reader-document";
+    host.dataset.section = String(
+      currentDocument && currentDocument.sections ? currentDocument.sections.indexOf(section) : 0
+    );
     const shadow = host.attachShadow({ mode: "open" });
     const style = document.createElement("style");
     style.textContent = sanitizer.readingCss(settings, { dark: isDark() });
@@ -1132,8 +1134,8 @@
    * @param {((doc: Document) => Range | null) | null} [anchor]
    */
   async function loadFlowSection(index, targetPage, anchor) {
-    if (!book) return;
-    const section = book.sections[index];
+    if (!currentDocument) return;
+    const section = currentDocument.sections[index];
     if (!section) return;
     const generation = ++viewGeneration;
     revokeObjectUrls();
@@ -1213,7 +1215,7 @@
       schedulePosition();
       return;
     }
-    if (flow.index + 1 < book.sections.length) {
+    if (flow.index + 1 < currentDocument.sections.length) {
       void loadFlowSection(flow.index + 1, 0);
       schedulePosition();
     }
@@ -1253,7 +1255,7 @@
 
   /** The CFI of the first character on the current Flowing page. */
   function flowCfi() {
-    if (!foliate || !flow || bookFormat !== "epub") return null;
+    if (!foliate || !flow || documentFormat !== "epub") return null;
     const base = flow.sectionCfi || (foliate.CFI ? foliate.CFI.fake.fromIndex(flow.index) : null);
     if (!base) return null;
     const range = rangeForFlowPage();
@@ -1332,9 +1334,14 @@
 
   /** The Reading Position a Flowing Document resumes at. */
   function flowStart(saved) {
-    if (saved && saved.kind === "cfi" && book && typeof book.resolveCFI === "function") {
+    if (
+      saved &&
+      saved.kind === "cfi" &&
+      currentDocument &&
+      typeof currentDocument.resolveCFI === "function"
+    ) {
       try {
-        const resolved = book.resolveCFI(saved.cfi);
+        const resolved = currentDocument.resolveCFI(saved.cfi);
         if (resolved && typeof resolved.index === "number" && resolved.index >= 0) {
           return { index: resolved.index, page: 0, anchor: resolved.anchor };
         }
@@ -1344,7 +1351,7 @@
     }
     if (saved && saved.kind === "section") {
       return {
-        index: clamp(Math.floor(saved.index), 0, Math.max(0, book.sections.length - 1)),
+        index: clamp(Math.floor(saved.index), 0, Math.max(0, currentDocument.sections.length - 1)),
         page: 0,
       };
     }
@@ -1353,12 +1360,12 @@
 
   /** Re-paginates the current section after a typography change, keeping the CFI. */
   async function repaginateFlow(cfi, sectionIndex, page) {
-    if (!book) return;
+    if (!currentDocument) return;
     let index = typeof sectionIndex === "number" ? sectionIndex : 0;
     let anchor = null;
-    if (cfi && typeof book.resolveCFI === "function") {
+    if (cfi && typeof currentDocument.resolveCFI === "function") {
       try {
-        const resolved = book.resolveCFI(cfi);
+        const resolved = currentDocument.resolveCFI(cfi);
         if (resolved && typeof resolved.index === "number" && resolved.index >= 0) {
           index = resolved.index;
           anchor = resolved.anchor;
@@ -1389,7 +1396,7 @@
 
   /* Fixed-layout pages and comics ----------------------------------------- */
 
-  /** The `width`/`height` a fixed-layout section declares, or a book default. */
+  /** The `width`/`height` a fixed-layout section declares, or a document default. */
   function fixedViewport(doc) {
     const meta = doc.querySelector('meta[name="viewport"]');
     const content = meta ? meta.getAttribute("content") || "" : "";
@@ -1412,8 +1419,8 @@
   }
 
   async function renderFixedPage() {
-    if (!book) return;
-    const section = book.sections[pageIndex];
+    if (!currentDocument) return;
+    const section = currentDocument.sections[pageIndex];
     if (!section) return;
     const generation = ++viewGeneration;
     revokeObjectUrls();
@@ -1450,14 +1457,14 @@
   }
 
   async function renderComicPage() {
-    if (!book) return;
+    if (!currentDocument) return;
     const generation = ++viewGeneration;
     const index = pageIndex;
     let url = null;
     try {
       url = await comicUrl(index);
     } catch (error) {
-      if (!destroyed && generation === viewGeneration) failBook(error);
+      if (!destroyed && generation === viewGeneration) failDocument(error);
       return;
     }
     if (destroyed || generation !== viewGeneration || index !== pageIndex || url === null) return;
@@ -1529,7 +1536,7 @@
     comicCache.clear();
   }
 
-  /* Book metadata and covers ---------------------------------------------- */
+  /* Document metadata and covers ---------------------------------------------- */
 
   /** A metadata value as plain text: a string, a language map, or contributors. */
   function textOf(value) {
@@ -1548,19 +1555,19 @@
     return "";
   }
 
-  async function sendBookMeta() {
-    if (metaSent || !book) return;
+  async function sendDocumentMeta() {
+    if (metaSent || !currentDocument) return;
     metaSent = true;
-    const metadata = book.metadata || {};
+    const metadata = currentDocument.metadata || {};
     /** @type {{ kind: "meta", title?: string, author?: string, pageCount?: number, coverDataUrl?: string }} */
     const message = { kind: "meta" };
     const title = textOf(metadata.title);
     const author = textOf(metadata.author);
     if (title !== "") message.title = title;
     if (author !== "") message.author = author;
-    if (isPageMode()) message.pageCount = book.sections.length;
+    if (isPageMode()) message.pageCount = currentDocument.sections.length;
     try {
-      const cover = await bookCover();
+      const cover = await documentCover();
       if (cover !== null) message.coverDataUrl = cover;
     } catch {
       /* A cover is optional. */
@@ -1569,15 +1576,15 @@
   }
 
   /** The cover image as a small JPEG data URL, or null. */
-  async function bookCover() {
-    if (!book) return null;
+  async function documentCover() {
+    if (!currentDocument) return null;
     let blob = null;
     try {
-      if (bookFormat === "cbz") {
+      if (documentFormat === "cbz") {
         const bytes = await zipBytes(comicFiles[0]);
         blob = new Blob([bytes], { type: sanitizer.mediaTypeFor(comicFiles[0]) });
-      } else if (typeof book.getCover === "function") {
-        blob = await book.getCover();
+      } else if (typeof currentDocument.getCover === "function") {
+        blob = await currentDocument.getCover();
       }
     } catch {
       return null;
@@ -1650,7 +1657,7 @@
 
   /** @param {string} query */
   async function runFlowSearch(query) {
-    if (!book || !foliate) return;
+    if (!currentDocument || !foliate) return;
     const generation = ++search.generation;
     search.query = query;
     search.matches = [];
@@ -1658,9 +1665,9 @@
     search.running = true;
     if (searchStatus) searchStatus.textContent = "";
     let sliceStart = nowMs();
-    for (let index = 0; index < book.sections.length; index += 1) {
+    for (let index = 0; index < currentDocument.sections.length; index += 1) {
       if (generation !== search.generation || destroyed) return;
-      const section = book.sections[index];
+      const section = currentDocument.sections[index];
       if (section.linear === "no") continue;
       let text = "";
       try {
@@ -1699,7 +1706,7 @@
 
   /** @param {{ section: number, offset: number }} match */
   async function showFlowMatch(match) {
-    if (!book) return;
+    if (!currentDocument) return;
     if (!flow || flow.index !== match.section) {
       await loadFlowSection(match.section, 0);
     }
@@ -1776,10 +1783,10 @@
       });
       return;
     }
-    if (book) {
+    if (currentDocument) {
       pageIndicator.textContent = t("pageOf", {
         page: pageIndex + 1,
-        count: book.sections.length,
+        count: currentDocument.sections.length,
       });
     }
   }
@@ -1909,14 +1916,14 @@
     clearComicCache();
     for (const pending of pendingZip.values()) pending.reject(new Error("Reader closed"));
     pendingZip.clear();
-    if (book && typeof book.destroy === "function") {
+    if (currentDocument && typeof currentDocument.destroy === "function") {
       try {
-        book.destroy();
+        currentDocument.destroy();
       } catch {
         /* Already gone. */
       }
     }
-    book = null;
+    currentDocument = null;
     flow = null;
     comicFiles = [];
     zipEntries = [];
@@ -1986,8 +1993,8 @@
       updateSearchStatus();
       return;
     }
-    if (!book || mode === "flow") return;
-    const next = clamp(Math.floor(index), 0, Math.max(0, book.sections.length - 1));
+    if (!currentDocument || mode === "flow") return;
+    const next = clamp(Math.floor(index), 0, Math.max(0, currentDocument.sections.length - 1));
     if (next === pageIndex) return;
     pageIndex = next;
     updateIndicator();
@@ -2059,7 +2066,7 @@
         progress: { fraction },
       };
     }
-    if (book) {
+    if (currentDocument) {
       return {
         kind: "position",
         position: {
@@ -2068,7 +2075,7 @@
           zoom:
             typeof zoomSetting === "number" ? Math.round(zoomSetting * 1000) / 1000 : zoomSetting,
         },
-        progress: { page: pageIndex + 1, pageCount: book.sections.length },
+        progress: { page: pageIndex + 1, pageCount: currentDocument.sections.length },
       };
     }
     return {
@@ -2090,8 +2097,8 @@
 
   /** How far through the whole Flowing Document the author is, from 0 to 1. */
   function flowFraction() {
-    if (!flow || !book) return 0;
-    const total = Math.max(1, book.sections.length);
+    if (!flow || !currentDocument) return 0;
+    const total = Math.max(1, currentDocument.sections.length);
     return clamp((flow.index + flowPageFraction()) / total, 0, 1);
   }
 
@@ -2284,10 +2291,13 @@
       element.focus();
       return;
     }
-    if (!book) return;
+    if (!currentDocument) return;
     let target = null;
     try {
-      target = typeof book.resolveHref === "function" ? book.resolveHref(String(item.dest)) : null;
+      target =
+        typeof currentDocument.resolveHref === "function"
+          ? currentDocument.resolveHref(String(item.dest))
+          : null;
     } catch {
       target = null;
     }
@@ -2390,7 +2400,7 @@
 
   /** @param {string} query */
   async function runSearch(query) {
-    if (mode === "flow" && book) {
+    if (mode === "flow" && currentDocument) {
       await runFlowSearch(query);
       return;
     }
@@ -2573,8 +2583,9 @@
         return;
       case "lastPage":
         if (pdfDoc) goToPage(pdfDoc.numPages - 1);
-        else if (mode === "flow" && book) void goToFlowSection(book.sections.length - 1);
-        else if (book) goToPage(book.sections.length - 1);
+        else if (mode === "flow" && currentDocument)
+          void goToFlowSection(currentDocument.sections.length - 1);
+        else if (currentDocument) goToPage(currentDocument.sections.length - 1);
         return;
       case "findInDocument":
         openSearch();
@@ -2660,8 +2671,9 @@
       case "End":
         event.preventDefault();
         if (pdfDoc) goToPage(pdfDoc.numPages - 1);
-        else if (mode === "flow" && book) void goToFlowSection(book.sections.length - 1);
-        else if (book) goToPage(book.sections.length - 1);
+        else if (mode === "flow" && currentDocument)
+          void goToFlowSection(currentDocument.sections.length - 1);
+        else if (currentDocument) goToPage(currentDocument.sections.length - 1);
         return;
       case "+":
       case "=":

@@ -8,7 +8,7 @@
 import { createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { describe, expect, it } from "vitest";
-import { createReaderLibrary, type ReaderClient } from "./library";
+import { createShelfService, type ReaderClient } from "./library";
 import { SHELF_KEY, positionKey, fingerprint, type ShelfEntry } from "./shelf";
 import { pdfBytes, readerManifest, shelfEntry } from "./test-support";
 
@@ -20,7 +20,7 @@ function setup() {
     host,
     storage,
     client,
-    library: createReaderLibrary(client),
+    library: createShelfService(client),
   };
 }
 
@@ -107,13 +107,49 @@ describe("openFileFlow()", () => {
         list: async () => [],
       },
     } as unknown as ReaderClient;
-    const library = createReaderLibrary(client);
+    const library = createShelfService(client);
     const entry = await library.openFileFlow();
     expect(entry?.format).toBe("epub");
     expect(reads).toEqual([
       { offset: 0, length: 65_536 },
       { offset: 134_464, length: 65_536 },
     ]);
+  });
+
+  it("adds a zero-byte file without asking the host for a zero-length read", async () => {
+    const { host, storage, library } = setup();
+    try {
+      host.files.queuePick({ name: "Empty.pdf", bytes: new Uint8Array(0) });
+      const entry = await library.openFileFlow();
+      expect(entry).toMatchObject({ title: "Empty", format: "pdf", state: "ok" });
+      expect(storage.get(SHELF_KEY)).toHaveLength(1);
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("issues no reads for a zero-byte file and fingerprints empty head and tail", async () => {
+    const map = new Map<string, unknown>();
+    const reads: Array<{ offset: number; length: number }> = [];
+    const client = {
+      storage: fakeStorage(map),
+      files: {
+        pick: async () => ({ grant: "g1", name: "Empty.pdf", size: 0 }),
+        read: async ({ offset, length }: { offset: number; length: number }) => {
+          reads.push({ offset, length });
+          return new ArrayBuffer(0);
+        },
+        stat: async () => ({ name: "Empty.pdf", size: 0, modified: 0 }),
+        requestAccess: async () => true,
+        release: async () => null,
+        list: async () => [],
+      },
+    } as unknown as ReaderClient;
+
+    const entry = await createShelfService(client).openFileFlow();
+
+    expect(reads).toEqual([]);
+    expect(entry?.fingerprint).toBe(await fingerprint(0, new Uint8Array(0), new Uint8Array(0)));
   });
 
   it("releases the picked grant when the format is unknown", async () => {
@@ -133,7 +169,7 @@ describe("openFileFlow()", () => {
         list: async () => [],
       },
     } as unknown as ReaderClient;
-    const library = createReaderLibrary(client);
+    const library = createShelfService(client);
     await expect(library.openFileFlow()).rejects.toThrow();
     expect(released).toEqual(["g1"]);
   });
@@ -159,7 +195,7 @@ describe("openFileFlow()", () => {
         list: async () => [],
       },
     } as unknown as ReaderClient;
-    const library = createReaderLibrary(client);
+    const library = createShelfService(client);
     const entry = await library.openFileFlow();
     expect(entry?.grant).toBe("new-grant");
     expect(released).toEqual(["old-grant"]);
@@ -197,7 +233,7 @@ describe("refreshStates()", () => {
         list: async () => [],
       },
     } as unknown as ReaderClient;
-    const shelf = await createReaderLibrary(client).refreshStates();
+    const shelf = await createShelfService(client).refreshStates();
     expect(shelf[0].state).toBe("needs-permission");
   });
 
@@ -217,7 +253,7 @@ describe("refreshStates()", () => {
         list: async () => [],
       },
     } as unknown as ReaderClient;
-    const shelf = await createReaderLibrary(client).refreshStates();
+    const shelf = await createShelfService(client).refreshStates();
     expect(shelf[0]).toMatchObject({ state: "unreadable", reason: "corrupt" });
   });
 });
@@ -289,7 +325,7 @@ describe("locateAgain()", () => {
     const { host } = setup();
     try {
       const client = createPluginClient(host.port);
-      const library = createReaderLibrary(client);
+      const library = createShelfService(client);
       host.files.queuePick({ name: "Dune.pdf", bytes: pdfBytes() });
       const entry = await library.openFileFlow();
       host.files.queuePick(null);
@@ -322,7 +358,7 @@ describe("locateAgain()", () => {
         list: async () => [],
       },
     } as unknown as ReaderClient;
-    const library = createReaderLibrary(client);
+    const library = createShelfService(client);
     const result = await library.locateAgain("doc-1");
     expect(result).toEqual({ ok: false, reason: "fingerprint-mismatch" });
     expect(released).toEqual(["new-grant"]);
@@ -349,7 +385,7 @@ describe("locateAgain()", () => {
         list: async () => [],
       },
     } as unknown as ReaderClient;
-    const library = createReaderLibrary(client);
+    const library = createShelfService(client);
     const result = await library.locateAgain("doc-1");
     expect(result).toEqual({ ok: false, reason: "fingerprint-mismatch" });
     expect(released).toEqual([]);
@@ -376,7 +412,7 @@ describe("locateAgain()", () => {
         list: async () => [],
       },
     } as unknown as ReaderClient;
-    const library = createReaderLibrary(client);
+    const library = createShelfService(client);
     const result = await library.locateAgain("doc-1");
     expect(result.ok).toBe(true);
     expect(released).toEqual(["old-grant"]);
@@ -399,7 +435,7 @@ describe("reopen()", () => {
         list: async () => [],
       },
     } as unknown as ReaderClient;
-    const library = createReaderLibrary(client);
+    const library = createShelfService(client);
 
     await expect(library.reopen("doc-1")).resolves.toBe(false);
     expect((map.get(SHELF_KEY) as ShelfEntry[])[0].state).toBe("needs-permission");

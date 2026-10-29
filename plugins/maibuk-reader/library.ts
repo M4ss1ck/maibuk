@@ -66,6 +66,11 @@ async function fingerprintBytes(
   grant: string,
   size: number
 ): Promise<{ head: Uint8Array; print: string }> {
+  // A zero-byte file has no head or tail to read, and the host rejects a zero-length read.
+  if (size === 0) {
+    const empty = new Uint8Array(0);
+    return { head: empty, print: await fingerprint(0, empty, empty) };
+  }
   const window = Math.min(FINGERPRINT_WINDOW, size);
   const head = new Uint8Array(await client.files.read({ grant, offset: 0, length: window }));
   const tailOffset = Math.max(0, size - FINGERPRINT_WINDOW);
@@ -76,7 +81,7 @@ async function fingerprintBytes(
 }
 
 /** What the Shelf service exposes to the page and the Commands. */
-export interface ReaderLibrary {
+export interface ShelfService {
   loadShelf(): Promise<ShelfEntry[]>;
   saveShelf(shelf: readonly ShelfEntry[]): Promise<void>;
   loadSettings(): Promise<ReaderSettings>;
@@ -93,8 +98,8 @@ export interface ReaderLibrary {
   reopen(id: string): Promise<boolean>;
 }
 
-export function createReaderLibrary(client: ReaderClient): ReaderLibrary {
-  const library: ReaderLibrary = {
+export function createShelfService(client: ReaderClient): ShelfService {
+  const library: ShelfService = {
     async loadShelf(): Promise<ShelfEntry[]> {
       try {
         return sortShelf(parseShelf(await client.storage.get({ key: SHELF_KEY })));

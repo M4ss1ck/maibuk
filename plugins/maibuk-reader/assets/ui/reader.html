@@ -15,6 +15,7 @@
 
       /* `hidden` has to win over the `display` rules the Frame's panels set. */
       [hidden] {
+        /* biome-ignore lint/complexity/noImportantStyles: the id-selector panel rules (#search-bar, #password-form) outrank [hidden] without it */
         display: none !important;
       }
 
@@ -27,8 +28,8 @@
         margin: 0;
         display: flex;
         flex-direction: column;
-        background: var(--maibuk-color-background, #ffffff);
-        color: var(--maibuk-color-foreground, #1a1a1a);
+        background: var(--maibuk-color-background);
+        color: var(--maibuk-color-foreground);
         font-family: var(--maibuk-font-sans, system-ui, sans-serif);
         overflow: hidden;
       }
@@ -39,8 +40,8 @@
         flex-wrap: wrap;
         gap: 0.5rem;
         padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid var(--maibuk-color-border, #d4d4d4);
-        background: var(--maibuk-color-card, #f5f5f5);
+        border-bottom: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-card);
       }
 
       .spacer {
@@ -51,20 +52,20 @@
         font: inherit;
         padding: 0.35rem 0.65rem;
         border-radius: 0.5rem;
-        border: 1px solid var(--maibuk-color-border, #d4d4d4);
-        background: var(--maibuk-color-secondary, #ffffff);
-        color: var(--maibuk-color-foreground, #1a1a1a);
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-secondary);
+        color: var(--maibuk-color-foreground);
         cursor: pointer;
       }
 
       button:hover {
-        background: var(--maibuk-color-muted, #ececec);
+        background: var(--maibuk-color-muted);
       }
 
       button:focus-visible,
       [role="treeitem"]:focus-visible,
       input:focus-visible {
-        outline: 2px solid var(--maibuk-color-primary, #2563eb);
+        outline: 2px solid var(--maibuk-color-primary);
         outline-offset: 2px;
       }
 
@@ -72,7 +73,7 @@
       #zoom-level,
       #search-status {
         font-variant-numeric: tabular-nums;
-        color: var(--maibuk-color-muted-foreground, #555555);
+        color: var(--maibuk-color-muted-foreground);
         white-space: nowrap;
       }
 
@@ -81,8 +82,8 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.4rem 0.75rem;
-        border-bottom: 1px solid var(--maibuk-color-border, #d4d4d4);
-        background: var(--maibuk-color-card, #f5f5f5);
+        border-bottom: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-card);
       }
 
       #search-input {
@@ -91,9 +92,9 @@
         font: inherit;
         padding: 0.35rem 0.5rem;
         border-radius: 0.4rem;
-        border: 1px solid var(--maibuk-color-border, #d4d4d4);
-        background: var(--maibuk-color-background, #ffffff);
-        color: var(--maibuk-color-foreground, #1a1a1a);
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-background);
+        color: var(--maibuk-color-foreground);
       }
 
       #body {
@@ -107,8 +108,8 @@
         max-width: 40vw;
         overflow: auto;
         padding: 0.75rem;
-        border-right: 1px solid var(--maibuk-color-border, #d4d4d4);
-        background: var(--maibuk-color-card, #f5f5f5);
+        border-right: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-card);
       }
 
       #contents h2 {
@@ -134,7 +135,7 @@
       }
 
       [role="treeitem"]:hover {
-        background: var(--maibuk-color-muted, #ececec);
+        background: var(--maibuk-color-muted);
       }
 
       #viewer {
@@ -146,13 +147,13 @@
         align-items: flex-start;
         justify-content: center;
         padding: 1rem;
-        background: var(--maibuk-color-muted, #ececec);
+        background: var(--maibuk-color-muted);
       }
 
       #stage {
         position: relative;
         flex: 0 0 auto;
-        background: var(--maibuk-color-background, #ffffff);
+        background: var(--maibuk-color-background);
         box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
       }
 
@@ -176,7 +177,7 @@
       }
 
       .reader-search-hit {
-        background: var(--maibuk-color-warning-bg, #fde68a);
+        background: var(--maibuk-color-warning-bg);
         color: inherit;
         border-radius: 2px;
       }
@@ -184,13 +185,13 @@
       #message {
         margin: 2rem auto;
         max-width: 34rem;
-        color: var(--maibuk-color-muted-foreground, #555555);
+        color: var(--maibuk-color-muted-foreground);
         text-align: center;
         line-height: 1.5;
       }
 
       #message[data-error="true"] {
-        color: var(--maibuk-color-error-text, #991b1b);
+        color: var(--maibuk-color-error-text);
       }
 
       #password-form {
@@ -201,8 +202,8 @@
         width: min(22rem, 100%);
         padding: 1.25rem;
         border-radius: 0.75rem;
-        border: 1px solid var(--maibuk-color-border, #d4d4d4);
-        background: var(--maibuk-color-card, #f5f5f5);
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-card);
       }
 
       #password-form h2 {
@@ -214,14 +215,14 @@
         font: inherit;
         padding: 0.45rem 0.55rem;
         border-radius: 0.4rem;
-        border: 1px solid var(--maibuk-color-border, #d4d4d4);
-        background: var(--maibuk-color-background, #ffffff);
-        color: var(--maibuk-color-foreground, #1a1a1a);
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-background);
+        color: var(--maibuk-color-foreground);
       }
 
       #password-error {
         margin: 0;
-        color: var(--maibuk-color-error-text, #991b1b);
+        color: var(--maibuk-color-error-text);
       }
     </style>
   </head>

@@ -6,7 +6,7 @@
  * pick: the grant falls back to the session.
  */
 import "fake-indexeddb/auto";
-import { IDBFactory } from "fake-indexeddb";
+import { IDBDatabase, IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginFileGrant, PluginFileGrantStore } from "@/features/plugins/file-grants";
 import { createWebPluginFileGrantStore } from "@/lib/platform/web/file-grants";
@@ -362,5 +362,83 @@ describe("createWebPluginFileGrantStore()", () => {
     const next = createWebPluginFileGrantStore({ indexedDB, randomId: sequentialIds() });
     await expect(next.list("reader")).resolves.toEqual([]);
     await expect(next.list("dictionary")).resolves.toEqual([]);
+  });
+
+  it("reports an unknown File Grant as missing on release", async () => {
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.release("reader", "unknown")).rejects.toMatchObject({
+      code: "file-missing",
+    });
+  });
+
+  it("refuses to release another Plugin's grant and keeps it for its owner", async () => {
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      showOpenFilePicker: pickerFor([new TestHandle({ name: "reader.pdf", bytes: "one" })]),
+      randomId: sequentialIds(),
+    });
+    const picked = await pickGrant(store, "reader");
+
+    await expect(store.release("dictionary", picked.grant)).rejects.toMatchObject({
+      code: "file-missing",
+    });
+    await expect(store.list("reader")).resolves.toEqual([picked]);
+  });
+
+  it("drops the session copy and reports internal-error when IndexedDB cannot remove a session grant", async () => {
+    const broken = {
+      open: () => {
+        throw new Error("IndexedDB is blocked");
+      },
+    } as unknown as IDBFactory;
+    const store = createWebPluginFileGrantStore({
+      indexedDB: broken,
+      showOpenFilePicker: pickerFor([new TestHandle({ name: "book.pdf", bytes: "hello" })]),
+      randomId: sequentialIds(),
+    });
+    const picked = await pickGrant(store);
+
+    await expect(store.release("reader", picked.grant)).rejects.toMatchObject({
+      code: "internal-error",
+    });
+    await expect(store.read("reader", picked.grant, 0, 5)).rejects.toMatchObject({
+      code: "file-missing",
+    });
+  });
+
+  it("reports internal-error when IndexedDB refuses to remove a persisted grant", async () => {
+    const indexedDB = new IDBFactory();
+    const store = createWebPluginFileGrantStore({
+      indexedDB,
+      showOpenFilePicker: pickerFor([new TestHandle({ name: "book.pdf", bytes: "hello" })]),
+      randomId: sequentialIds(),
+    });
+    const picked = await pickGrant(store);
+    // Reads still work; only the removal's readwrite transaction fails.
+    const realTransaction = IDBDatabase.prototype.transaction;
+    const refuse = vi.spyOn(IDBDatabase.prototype, "transaction").mockImplementation(function (
+      this: IDBDatabase,
+      names,
+      mode,
+      options
+    ) {
+      if (mode === "readwrite") {
+        throw new DOMException("The quota has been exceeded", "QuotaExceededError");
+      }
+      return realTransaction.call(this, names, mode, options);
+    });
+
+    try {
+      await expect(store.release("reader", picked.grant)).rejects.toMatchObject({
+        code: "internal-error",
+      });
+    } finally {
+      refuse.mockRestore();
+    }
+    await expect(store.list("reader")).resolves.toEqual([picked]);
   });
 });
