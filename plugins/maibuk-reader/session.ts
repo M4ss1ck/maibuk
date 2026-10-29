@@ -211,6 +211,12 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   let pdfPort: MessagePort | null = null;
   let archive: ZipArchive | null = null;
   let openingArchive: Promise<ZipArchive> | null = null;
+  /**
+   * Reading Position saves run one after another, latest last, so two saves
+   * never read and write the Shelf row at the same time and lose one update.
+   * `back` awaits the tail so the Shelf draws the Position it just left.
+   */
+  let pendingPosition: Promise<void> = Promise.resolve();
 
   function post(message: unknown, transfer?: Transferable[]): void {
     if (disposed) return;
@@ -479,6 +485,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
 
   async function handleBack(): Promise<void> {
     try {
+      await pendingPosition;
       await deps.navigateToShelf();
     } finally {
       dispose();
@@ -506,7 +513,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
         void applySettings(message);
         return;
       case "position":
-        void savePosition(message);
+        pendingPosition = pendingPosition.then(() => savePosition(message));
         return;
       case "meta":
         void applyMeta(message);

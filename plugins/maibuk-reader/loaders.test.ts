@@ -88,19 +88,21 @@ describe("vendored source strings", () => {
     expect(source.length).toBeGreaterThan(1_000_000);
     expect(source.startsWith(PDFJS_BANNER)).toBe(true);
     expect(source).toContain(PDFJS_VERSION);
+    // A classic Worker cannot parse the module's `export` or `import.meta`;
+    // `classicPdfCoreSource` removes both.
+    expect(source).not.toMatch(/\bexport\s*\{/);
+    expect(source).not.toContain("import.meta");
     core.dispose();
   });
 
-  it("starts the core from a bootstrap module that imports it by blob: URL", () => {
+  it("starts the core from a classic bootstrap that importScripts it by blob: URL", () => {
     stubWorkerGlobals();
     const core = startPdfCore();
     const [, bootstrapBlob] = blobs;
     expect(bootstrapBlob.options?.type).toBe("text/javascript");
     const [bootstrap] = bootstrapBlob.parts;
-    expect(bootstrap).toContain(
-      `import { WorkerMessageHandler } from ${JSON.stringify(CORE_URL)};`
-    );
-    expect(bootstrap).toContain("WorkerMessageHandler.initializeFromPort(port)");
+    expect(bootstrap).toContain(`importScripts(${JSON.stringify(CORE_URL)});`);
+    expect(bootstrap).toContain("self.pdfjsWorker.WorkerMessageHandler.initializeFromPort(port)");
     expect(bootstrap).toContain("port.start()");
     core.dispose();
   });
@@ -128,13 +130,15 @@ describe("vendored source strings", () => {
 });
 
 describe("startPdfCore", () => {
-  it("starts a module Worker from the bootstrap's blob: URL", () => {
+  it("starts a classic Worker from the bootstrap's blob: URL", () => {
     stubWorkerGlobals();
     const core = startPdfCore();
     expect(workers).toHaveLength(1);
     expect(core.worker).toBe(workers[0]);
     expect(workers[0].url).toBe(BOOTSTRAP_URL);
-    expect(workers[0].options).toEqual({ type: "module" });
+    // A module Worker cannot fetch its script from a `blob:` URL in the
+    // sandbox's opaque origin, so the Worker must be classic.
+    expect(workers[0].options).toBeUndefined();
     core.dispose();
   });
 

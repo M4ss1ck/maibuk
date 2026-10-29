@@ -44,32 +44,46 @@ export interface PdfCore {
 }
 
 /**
+ * pdf.js ships its core as an ES module, but a module Worker cannot start from
+ * a `blob:` URL inside the Plugin Worker: the Worker is created from a `blob:`
+ * URL in the sandbox frame's opaque origin, and Chromium refuses a module
+ * Worker's script fetch from there (it fails to load with no error text), while
+ * a classic Worker loads the same URL. The core reaches its own handler through
+ * `globalThis.pdfjsWorker`, so only its two module-only constructs have to go:
+ * the trailing `export{…}` (a classic script cannot export) and `import.meta`
+ * (a syntax error there), which only computes a base URL the wasm decoder glue
+ * then ignores.
+ */
+export function classicPdfCoreSource(source: string): string {
+  return source
+    .replace(/\bexport\s*\{[^}]*\}\s*;?\s*$/, "")
+    .replace(/\bimport\.meta\.url\b/g, "self.location.href");
+}
+
+/**
  * Starts pdf.js's core in a nested Worker of the Plugin Worker. The sandbox
- * allows `worker-src blob:`, so both the core module and a tiny bootstrap that
- * imports it travel as Blobs. The bootstrap gives the core a MessagePort the
- * Plugin Worker transfers, instead of letting the core listen on its own
+ * allows `worker-src blob:`, so both the core and a tiny classic bootstrap that
+ * `importScripts` it travel as Blobs. The bootstrap gives the core a MessagePort
+ * the Plugin Worker transfers, instead of letting the core listen on its own
  * global: the Frame needs a port of its own to talk to the core.
- *
- * The bootstrap is a module Worker so it can `import` the core's `blob:` URL.
- * `pdf.worker.min.mjs` also self-initializes on `self`; that handler ignores
- * messages aimed at the port, so both the automatic handler and the one the
- * bootstrap installs can coexist harmlessly.
  */
 export function startPdfCore(): PdfCore {
-  const coreUrl = URL.createObjectURL(new Blob([pdfWorker], { type: "text/javascript" }));
+  const coreUrl = URL.createObjectURL(
+    new Blob([classicPdfCoreSource(pdfWorker)], { type: "text/javascript" })
+  );
   const bootstrap = [
-    `import { WorkerMessageHandler } from ${JSON.stringify(coreUrl)};`,
+    `importScripts(${JSON.stringify(coreUrl)});`,
     "self.onmessage = (event) => {",
     "  const data = event.data;",
     '  if (!data || typeof data !== "object" || data.kind !== "maibuk:pdf-port") return;',
     "  const port = data.port;",
     "  if (!port) return;",
-    "  WorkerMessageHandler.initializeFromPort(port);",
+    "  self.pdfjsWorker.WorkerMessageHandler.initializeFromPort(port);",
     "  port.start();",
     "};",
   ].join("\n");
   const bootstrapUrl = URL.createObjectURL(new Blob([bootstrap], { type: "text/javascript" }));
-  const worker = new Worker(bootstrapUrl, { type: "module" });
+  const worker = new Worker(bootstrapUrl);
   return {
     worker,
     dispose() {

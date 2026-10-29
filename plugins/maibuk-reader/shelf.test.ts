@@ -34,6 +34,25 @@ function bookMobiBytes(): Uint8Array {
   return bytes;
 }
 
+/**
+ * Removes `crypto.subtle` and returns the undo. The Plugin Worker has a `crypto`
+ * without it (a `blob:` Worker is not a secure context); jsdom keeps `subtle` as
+ * a getter on the prototype, so removing the own property alone would leave it
+ * reachable.
+ */
+function withoutSubtle(): () => void {
+  const crypto = globalThis.crypto as unknown as Record<string, unknown>;
+  const prototype = Object.getPrototypeOf(crypto) as Record<string, unknown>;
+  const own = Object.getOwnPropertyDescriptor(crypto, "subtle");
+  const inherited = Object.getOwnPropertyDescriptor(prototype, "subtle");
+  delete crypto.subtle;
+  delete prototype.subtle;
+  return () => {
+    if (own !== undefined) Object.defineProperty(crypto, "subtle", own);
+    if (inherited !== undefined) Object.defineProperty(prototype, "subtle", inherited);
+  };
+}
+
 describe("formatFromName()", () => {
   it("reads every supported extension, case-insensitively, and treats azw as azw3", () => {
     expect(formatFromName("Dune.pdf")).toBe("pdf");
@@ -117,6 +136,21 @@ describe("fingerprint()", () => {
     const head = encoder.encode("head");
     const tail = encoder.encode("tail");
     expect(await fingerprint(9, head, tail)).not.toBe(await fingerprint(8, head, tail));
+  });
+
+  it("still fingerprints where crypto.subtle is undefined, as in the Plugin Worker", async () => {
+    const head = encoder.encode("head");
+    const tail = encoder.encode("tail");
+    const expected = await fingerprint(8, head, tail);
+
+    const restore = withoutSubtle();
+    try {
+      expect(globalThis.crypto.subtle).toBeUndefined();
+      expect(await fingerprint(8, head, tail)).toBe(expected);
+    } finally {
+      restore();
+    }
+    expect(globalThis.crypto.subtle).toBeDefined();
   });
 });
 

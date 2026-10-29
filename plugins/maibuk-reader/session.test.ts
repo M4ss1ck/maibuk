@@ -67,7 +67,12 @@ interface Harness {
 }
 
 function setup(
-  options: { entry?: ShelfEntry | null; language?: string; storage?: Map<string, unknown> } = {}
+  options: {
+    entry?: ShelfEntry | null;
+    language?: string;
+    storage?: Map<string, unknown>;
+    navigateToShelf?: () => Promise<void> | void;
+  } = {}
 ): Harness {
   const storage = options.storage ?? new Map<string, unknown>();
   const host = createTestHost({ manifest: readerManifest(), storage });
@@ -79,7 +84,7 @@ function setup(
   channel.port2.onmessage = (event: MessageEvent) => {
     messages.push(event.data as Record<string, unknown>);
   };
-  const navigateToShelf = vi.fn(async () => {});
+  const navigateToShelf = vi.fn(options.navigateToShelf ?? (async () => {}));
   const session = createReaderSession({
     client,
     library,
@@ -501,6 +506,35 @@ describe("commands", () => {
 });
 
 describe("back", () => {
+  it("saves a pending Reading Position before leaving for the Shelf", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1", lastReadAt: 1_000 });
+    const storage = new Map<string, unknown>([[SHELF_KEY, [entry]]]);
+    const harness = setup({
+      entry,
+      storage,
+      // The Shelf draws whatever storage holds when the session navigates.
+      navigateToShelf: () => {
+        expect(storage.get(positionKey("doc-1"))).toEqual({ kind: "page", page: 4, zoom: 1 });
+        expect((storage.get(SHELF_KEY) as ShelfEntry[])[0].progress).toEqual({
+          page: 4,
+          pageCount: 12,
+        });
+      },
+    });
+    try {
+      await opened(harness);
+      harness.send({
+        kind: "position",
+        position: { kind: "page", page: 4, zoom: 1 },
+        progress: { page: 4, pageCount: 12 },
+      });
+      harness.send({ kind: "back" });
+      await vi.waitFor(() => expect(harness.navigateToShelf).toHaveBeenCalledTimes(1));
+    } finally {
+      harness.stop();
+    }
+  });
+
   it("leaves for the Shelf and stops the nested pdf.js Worker", async () => {
     const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
     const harness = setup({ entry });

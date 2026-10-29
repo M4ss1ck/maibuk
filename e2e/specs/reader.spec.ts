@@ -14,7 +14,7 @@
 
 import type { FrameLocator, Page } from "@playwright/test";
 import { chooseNextFile, installFilePicker, setFileMissing } from "../support/file-picker";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { runPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
@@ -55,7 +55,10 @@ async function openReader(page: Page): Promise<void> {
 
 /** Leaves the Plugin page for the Library, so the next mount starts fresh. */
 async function goHome(page: Page): Promise<void> {
-  await tabTo(page, navOption(page, "Books"), { max: 60 });
+  // The Primary navigation is a roving-focus listbox: only its active option is
+  // in the tab order, so move from wherever focus is to Books with the arrow.
+  await tabTo(page, navOption(page, "Reader"), { max: 60 });
+  await pressUntilFocused(page, "ArrowUp", navOption(page, "Books"), { max: 20 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/$/);
 }
@@ -78,6 +81,15 @@ async function focusDocument(page: Page): Promise<FrameLocator> {
 /** Pages forward `count` times inside the Frame. */
 async function pageForward(page: Page, count: number): Promise<void> {
   for (let i = 0; i < count; i++) await page.keyboard.press("ArrowRight");
+}
+
+/**
+ * Runs a palette Command from the host. The Frame keeps keyboard focus while it
+ * is mounted, so focus leaves it first or F1 would open nothing.
+ */
+async function runHostCommand(page: Page, label: string): Promise<void> {
+  await leaveFrame(page, frameElement(page));
+  await runPaletteCommand(page, label);
 }
 
 test.use({
@@ -112,18 +124,21 @@ test.describe("Reader", () => {
       // host's keyboard, and both leave the indicator on the same page.
       await pageForward(page, 1);
       await expect(pageIndicator(page)).toContainText("2 of 12");
-      await runPaletteCommand(page, "Next page");
+      await runHostCommand(page, "Next page");
       await expect(pageIndicator(page)).toContainText("3 of 12");
-      await runPaletteCommand(page, "Previous page");
+      await runHostCommand(page, "Previous page");
       await expect(pageIndicator(page)).toContainText("2 of 12");
+      // The host palette hands focus back to the host, so re-enter the Frame
+      // before the arrow keys page inside it.
+      await focusDocument(page);
       await pageForward(page, 2);
       await expect(pageIndicator(page)).toContainText("4 of 12");
 
-      await runPaletteCommand(page, "Find in Document");
+      await runHostCommand(page, "Find in Document");
       await expect(frame.getByRole("searchbox")).toBeVisible();
       await page.keyboard.press("Escape");
 
-      await runPaletteCommand(page, "Toggle contents");
+      await runHostCommand(page, "Toggle contents");
       await expect(frame.getByRole("tree")).toBeVisible();
       await page.keyboard.press("Escape");
 
@@ -131,13 +146,13 @@ test.describe("Reader", () => {
       // though Reader ships them unbound; the Frame's own zoom readout moves.
       const zoom = frame.locator("#zoom-level");
       const before = await zoom.textContent();
-      await runPaletteCommand(page, "Zoom in");
+      await runHostCommand(page, "Zoom in");
       await expect(zoom).not.toHaveText(before ?? "");
-      await runPaletteCommand(page, "Zoom out");
-      await runPaletteCommand(page, "Fit width");
-      await runPaletteCommand(page, "Fit page");
+      await runHostCommand(page, "Zoom out");
+      await runHostCommand(page, "Fit width");
+      await runHostCommand(page, "Fit page");
 
-      await runPaletteCommand(page, "Back to Shelf");
+      await runHostCommand(page, "Back to Shelf");
       await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
       await expect(page.getByText("p. 4 of 12", { exact: true })).toBeVisible();
 
@@ -148,9 +163,9 @@ test.describe("Reader", () => {
 
       // Last page and first page round-trip the same Position from the host.
       await focusDocument(page);
-      await runPaletteCommand(page, "Last page");
+      await runHostCommand(page, "Last page");
       await expect(pageIndicator(page)).toContainText("12 of 12");
-      await runPaletteCommand(page, "First page");
+      await runHostCommand(page, "First page");
       await expect(pageIndicator(page)).toContainText("1 of 12");
     }
   );
@@ -168,7 +183,7 @@ test.describe("Reader", () => {
       await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
 
       const frame = await focusDocument(page);
-      await expect(frame.getByText("One", { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(frame.getByRole("heading", { name: "One" })).toBeVisible({ timeout: 30_000 });
       await pageForward(page, 2);
 
       // The spot is whichever of the two chapters' text is on screen; the

@@ -9,6 +9,8 @@
  * (`library.ts`) and the page read the same names.
  */
 
+import { sha256Hex } from "./sha256";
+
 /** The formats Reader opens. `azw` is Kindle's older extension for AZW3. */
 export type DocumentFormat = "pdf" | "epub" | "mobi" | "azw3" | "fb2" | "cbz";
 
@@ -135,17 +137,15 @@ export function sniffFormat(firstBytes: Uint8Array, name: string): DocumentForma
   return formatFromName(name);
 }
 
-function toHex(buffer: ArrayBuffer): string {
-  let hex = "";
-  for (const byte of new Uint8Array(buffer)) hex += byte.toString(16).padStart(2, "0");
-  return hex;
-}
-
 /**
  * The Fingerprint that identifies a file across picks: `${size}:` plus the hex
  * SHA-256 over the first and last 64 KB, read by two `files.read` calls. Two
  * picks of the same untouched file agree; an edit that changes either end does
  * not.
+ *
+ * It hashes through `sha256.ts` rather than `crypto.subtle`: the Plugin Worker
+ * runs from a `blob:` URL, which is not a secure context, so `crypto.subtle` is
+ * undefined there and every Open file used to fail.
  */
 export async function fingerprint(
   size: number,
@@ -155,8 +155,7 @@ export async function fingerprint(
   const joined = new Uint8Array(head.length + tail.length);
   joined.set(head, 0);
   joined.set(tail, head.length);
-  const digest = await crypto.subtle.digest("SHA-256", joined);
-  return `${size}:${toHex(digest)}`;
+  return `${size}:${sha256Hex(joined)}`;
 }
 
 /** The Shelf, most recently read first. */
