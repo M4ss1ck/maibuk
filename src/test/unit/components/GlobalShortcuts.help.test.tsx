@@ -150,6 +150,7 @@ describe("GlobalShortcuts", () => {
       "global.toggleAlwaysOnTop",
       "global.toggleShortcutHints",
       "global.toggleTheme",
+      "global.updateMaibuk",
     ]);
   });
 
