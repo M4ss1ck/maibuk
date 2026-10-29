@@ -48,7 +48,7 @@ vi.mock("@/lib/platform/detect", async (importOriginal) => ({
 }));
 
 const stubLifecycle = {
-  installed: () => [{ pluginId: "sample" }],
+  installed: () => [{ pluginId: "sample", manifest: {} }],
   state: (pluginId: string) =>
     pluginId === "sample"
       ? lifecycleStatus === "ready"
@@ -94,7 +94,8 @@ function registerSample(): void {
     }
   );
   const parsed = readPluginManifest(folder);
-  if (!parsed.ok) throw new Error(`fixture manifest is invalid: ${JSON.stringify(parsed.problems)}`);
+  if (!parsed.ok)
+    throw new Error(`fixture manifest is invalid: ${JSON.stringify(parsed.problems)}`);
   cleanups.push(registerPluginContributions({ manifest: parsed.manifest, folder }));
 }
 
@@ -125,7 +126,8 @@ function registerFourWays(): void {
     }
   );
   const parsed = readPluginManifest(folder);
-  if (!parsed.ok) throw new Error(`fixture manifest is invalid: ${JSON.stringify(parsed.problems)}`);
+  if (!parsed.ok)
+    throw new Error(`fixture manifest is invalid: ${JSON.stringify(parsed.problems)}`);
   cleanups.push(registerPluginContributions({ manifest: parsed.manifest, folder }));
 }
 

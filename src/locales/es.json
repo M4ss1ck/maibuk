@@ -2238,6 +2238,8 @@
       "editorWriteDetail": "Escribir, dar formato y reemplazar texto en el editor que tengas abierto.",
       "clipboard": "Usar el portapapeles",
       "clipboardDetail": "Leer y escribir en tu portapapeles cuando copies o pegues.",
+      "filesPick": "Abrir archivos que elijas",
+      "filesPickDetail": "Leer solo los archivos que elijas en el selector de archivos de Maibuk. Maibuk conserva el acceso en este dispositivo y nunca los copia en tu Biblioteca.",
       "serve": "Responder a solicitudes de aplicaciones de este equipo",
       "serveDetail": "Las aplicaciones de este equipo pueden enviar solicitudes a este Plugin mientras está activo. Solo en escritorio."
     },

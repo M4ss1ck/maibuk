@@ -65,10 +65,21 @@ export async function pluginFileDigests(
 
 /** The folder's pinned `h1:` hash. */
 export async function hashPluginDirectory(files: readonly PluginFolderFile[]): Promise<string> {
+  return hashPluginDigests(files, await pluginFileDigests(files));
+}
+
+/**
+ * The folder's `h1:` hash from per-file digests the caller already computed
+ * from the same `files`, so a start hashes the bytes once (one SHA-256 pass)
+ * and reuses the result instead of re-reading them for each check.
+ */
+export async function hashPluginDigests(
+  files: readonly PluginFolderFile[],
+  digests: ReadonlyMap<string, string>
+): Promise<string> {
   for (const file of files) {
     if (file.path.includes("\n")) throw new PluginDirectoryHashError(file.path);
   }
-  const digests = await pluginFileDigests(files);
   let summary = "";
   for (const [path, digest] of digests) {
     summary += `${digest}  ${path}\n`;

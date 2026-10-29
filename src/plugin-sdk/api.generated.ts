@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.8";
+export const PLUGIN_API_VERSION = "0.1.9";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -47,6 +47,12 @@ export const PLUGIN_API_METHODS = [
   "storage.set",
   "storage.delete",
   "storage.keys",
+  "files.pick",
+  "files.read",
+  "files.stat",
+  "files.requestAccess",
+  "files.release",
+  "files.list",
 ] as const;
 
 export type PluginApiMethodId = (typeof PLUGIN_API_METHODS)[number];
@@ -675,6 +681,64 @@ export interface PluginApiMethods {
     input: Record<string, never>;
     output: string[];
   };
+  /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
+  "files.pick": {
+    input: {
+      /** Lowercase extensions without a dot, such as pdf or epub. */
+      extensions: string[];
+      /** Only one file at a time for now. */
+      multiple?: false;
+    };
+    output: {
+      grant: string;
+      name: string;
+      size: number;
+    } | null;
+  };
+  /** Reads a byte range from a File Grant. A range past the end of the file returns the bytes that exist: shorter than asked, and empty at or past the end. Refused with file-missing when the file is gone or unreadable, or file-needs-permission on the web when the browser must ask the author again. */
+  "files.read": {
+    input: {
+      grant: string;
+      offset: number;
+      length: number;
+    };
+    output: ArrayBuffer;
+  };
+  /** Reads a File Grant's name, size, and last-modified time without reading its bytes, so a Plugin can mark a missing file. */
+  "files.stat": {
+    input: {
+      grant: string;
+    };
+    output: {
+      name: string;
+      size: number;
+      /** Milliseconds since the Unix epoch. */
+      modified: number;
+    };
+  };
+  /** Asks for read access to a File Grant again, inside the author's click or Command run. On the web the browser asks the author; on desktop it always returns true. */
+  "files.requestAccess": {
+    input: {
+      grant: string;
+    };
+    output: boolean;
+  };
+  /** Ends a File Grant. The author's file itself is never deleted or changed. */
+  "files.release": {
+    input: {
+      grant: string;
+    };
+    output: null;
+  };
+  /** Lists this Plugin's live File Grants on this device. */
+  "files.list": {
+    input: Record<string, never>;
+    output: {
+      grant: string;
+      name: string;
+      size: number;
+    }[];
+  };
 }
 
 export const PLUGIN_API_EVENT_IDS = [
@@ -851,5 +915,19 @@ export interface PluginApi {
     delete(params: PluginApiMethods["storage.delete"]["input"]): Promise<PluginApiMethods["storage.delete"]["output"]>;
     /** Lists every key in this Plugin's storage. */
     keys(params?: PluginApiMethods["storage.keys"]["input"]): Promise<PluginApiMethods["storage.keys"]["output"]>;
+  };
+  files: {
+    /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
+    pick(params: PluginApiMethods["files.pick"]["input"]): Promise<PluginApiMethods["files.pick"]["output"]>;
+    /** Reads a byte range from a File Grant. A range past the end of the file returns the bytes that exist: shorter than asked, and empty at or past the end. Refused with file-missing when the file is gone or unreadable, or file-needs-permission on the web when the browser must ask the author again. */
+    read(params: PluginApiMethods["files.read"]["input"]): Promise<PluginApiMethods["files.read"]["output"]>;
+    /** Reads a File Grant's name, size, and last-modified time without reading its bytes, so a Plugin can mark a missing file. */
+    stat(params: PluginApiMethods["files.stat"]["input"]): Promise<PluginApiMethods["files.stat"]["output"]>;
+    /** Asks for read access to a File Grant again, inside the author's click or Command run. On the web the browser asks the author; on desktop it always returns true. */
+    requestAccess(params: PluginApiMethods["files.requestAccess"]["input"]): Promise<PluginApiMethods["files.requestAccess"]["output"]>;
+    /** Ends a File Grant. The author's file itself is never deleted or changed. */
+    release(params: PluginApiMethods["files.release"]["input"]): Promise<PluginApiMethods["files.release"]["output"]>;
+    /** Lists this Plugin's live File Grants on this device. */
+    list(params?: PluginApiMethods["files.list"]["input"]): Promise<PluginApiMethods["files.list"]["output"]>;
   };
 }

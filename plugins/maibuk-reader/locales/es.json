@@ -1,0 +1,22 @@
+{
+  "name": "Lector",
+  "description": "Lee archivos PDF, EPUB, MOBI, AZW3, FB2 y CBZ de tu dispositivo junto a lo que escribes, y recuerda por dónde ibas.",
+  "commands.openReader.label": "Abrir Lector",
+  "commands.openFile.label": "Abrir archivo…",
+  "commands.openDocument.label": "Abrir documento",
+  "commands.nextPage.label": "Página siguiente",
+  "commands.previousPage.label": "Página anterior",
+  "commands.firstPage.label": "Primera página",
+  "commands.lastPage.label": "Última página",
+  "commands.findInDocument.label": "Buscar en el documento",
+  "commands.toggleContents.label": "Mostrar u ocultar contenido",
+  "commands.zoomIn.label": "Acercar",
+  "commands.zoomOut.label": "Alejar",
+  "commands.fitWidth.label": "Ajustar al ancho",
+  "commands.fitPage.label": "Ajustar a la página",
+  "commands.increaseFontSize.label": "Aumentar tamaño de letra",
+  "commands.decreaseFontSize.label": "Reducir tamaño de letra",
+  "commands.backToShelf.label": "Volver al estante",
+  "pages.reader.title": "Lector",
+  "pages.document.title": "Lectura"
+}

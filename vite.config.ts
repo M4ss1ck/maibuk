@@ -318,6 +318,10 @@ export default defineConfig(() => ({
         "src/features/plugins/network.ts",
         "src/lib/platform/web/secrets.ts",
         "src/lib/platform/tauri/secrets.ts",
+        // Plugin File Grants (ADR 0036, #653)
+        "src/features/plugins/file-grants.ts",
+        "src/lib/platform/web/file-grants.ts",
+        "src/lib/platform/tauri/file-grants.ts",
         "src/lib/platform/web/network.ts",
         "src/lib/platform/tauri/network.ts",
         "src/lib/platform/web/clipboard.ts",

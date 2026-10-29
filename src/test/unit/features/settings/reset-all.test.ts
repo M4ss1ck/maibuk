@@ -24,6 +24,10 @@ import {
   usePluginManagementStore,
 } from "@/features/plugins/management";
 import {
+  createMemoryPluginFileGrantStore,
+  registerPluginFileGrantStore,
+} from "@/features/plugins/file-grants";
+import {
   createMemoryPluginSecretStore,
   registerPluginSecretStore,
 } from "@/features/plugins/secret-store";
@@ -180,6 +184,7 @@ afterEach(() => {
   resetPluginLifecycleForTests();
   resetPluginContributionsForTests();
   registerPluginSecretStore(null);
+  registerPluginFileGrantStore(null);
   usePluginManagementStore.setState({ plugins: {}, notifications: [] });
   localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
   useSettingsStore.setState({ appFontSize: 16, pluginDevelopmentMode: false });
@@ -199,9 +204,11 @@ describe("resetAllSettings", () => {
     useShortcutSettingsStore.getState().setCommandVoicePhrases(voiceId, "en", ["custom phrase"]);
 
     const clearCredentials = vi.fn(async () => {});
+    const clearFileGrants = vi.fn(async () => {});
 
     await resetAllSettings({
       clearCredentials,
+      clearFileGrants,
       // Mirror the refreshed entries into the app's management singleton, as
       // the default refresh would.
       refreshPlugins: async () => {
@@ -220,6 +227,8 @@ describe("resetAllSettings", () => {
 
     // Credentials are deleted through the injectable hook.
     expect(clearCredentials).toHaveBeenCalledTimes(1);
+    // So are File Grants.
+    expect(clearFileGrants).toHaveBeenCalledTimes(1);
 
     // The third-party approval is cleared and the Plugin is stopped.
     expect(getPluginApproval(TRACER)).toBeNull();
@@ -259,6 +268,23 @@ describe("resetAllSettings", () => {
     // The store the app registered holds nothing after the reset.
     await expect(keyring.listNames(TRACER)).resolves.toEqual([]);
     await expect(keyring.listNames(GUIDE)).resolves.toEqual([]);
+  });
+
+  it("ends every File Grant through the registered store", async () => {
+    const grants = createMemoryPluginFileGrantStore([
+      { pluginId: TRACER, name: "a.pdf", bytes: new Uint8Array([1]) },
+      { pluginId: GUIDE, name: "b.pdf", bytes: new Uint8Array([2]) },
+    ]);
+    registerPluginFileGrantStore(grants);
+    await expect(grants.list(TRACER)).resolves.toHaveLength(1);
+
+    await resetAllSettings({
+      stopPlugins: () => {},
+      refreshPlugins: async () => {},
+    });
+
+    await expect(grants.list(TRACER)).resolves.toEqual([]);
+    await expect(grants.list(GUIDE)).resolves.toEqual([]);
   });
 
   it("erases every user-modified Plugin category while Plugin Library data stays", async () => {

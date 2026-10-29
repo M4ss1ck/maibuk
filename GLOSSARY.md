@@ -601,7 +601,7 @@ One kind of access a Plugin declares, such as reading the Library or reaching a 
 _Avoid_: grant, scope, capability (Tauri's word in code)
 
 **File Grant**:
-Maibuk's leave for one Plugin to read again, on this device, a file the author picked for it. The Plugin never learns where the file lives. A File Grant is not part of the Library, so Backups and Sync never carry it; it ends when the Plugin lets it go, when the Plugin is removed, or when the author revokes the Plugin Permission that let the Plugin ask for files.
+Maibuk's leave for one Plugin to read again, on this device, a file the author picked for it. The Plugin never learns where the file lives. A File Grant is not part of the Library, so Backups and Sync never carry it; it ends when the Plugin lets it go, when the Plugin is removed, when the author revokes the Plugin Permission that let the Plugin ask for files, or when the author runs Reset settings.
 _Avoid_: file handle, file path, file permission, bookmark
 
 **Plugin Endpoint**:

@@ -33,9 +33,9 @@ const commandId = "plugin.sample.tag" as const;
 const request = vi.fn(async () => null);
 
 const lifecycle = {
-  installed: () => [{ pluginId: "sample" }],
+  installed: () => [{ pluginId: "sample", manifest: {} }],
   state: () => ({ status: "ready", startReason: "launch" }),
-  runtime: () => ({ broker: { request }, stop: vi.fn() } as unknown as PluginRuntime),
+  runtime: () => ({ broker: { request }, stop: vi.fn() }) as unknown as PluginRuntime,
 } as unknown as PluginLifecycle;
 
 function registerSample(): void {
@@ -47,14 +47,20 @@ function registerSample(): void {
       platforms: ["desktop"],
       contributes: {
         commands: [
-          { id: "tag", label: "Tag chapter", contexts: ["global", "chapterItem"], targets: ["chapter"] },
+          {
+            id: "tag",
+            label: "Tag chapter",
+            contexts: ["global", "chapterItem"],
+            targets: ["chapter"],
+          },
         ],
         itemMenuEntries: [{ command: "tag" }],
       },
     }
   );
   const parsed = readPluginManifest(folder);
-  if (!parsed.ok) throw new Error(`fixture manifest is invalid: ${JSON.stringify(parsed.problems)}`);
+  if (!parsed.ok)
+    throw new Error(`fixture manifest is invalid: ${JSON.stringify(parsed.problems)}`);
   cleanups.push(registerPluginContributions({ manifest: parsed.manifest, folder }));
 }
 

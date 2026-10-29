@@ -99,6 +99,8 @@ export function Layout() {
     shortcut?: CommandId;
     /** Why its Plugin stopped: the entry is marked, named, and tooltipped with it. */
     stoppedReason?: string;
+    /** The author showed intent for this entry (hover, focus, or press): a warm-on-intent Plugin starts. */
+    onIntent?: () => void;
   };
   // Core destinations first; the pinned tail (Metrics, Settings) is appended
   // after the Plugin entries below, so it always renders last.
@@ -160,6 +162,7 @@ export function Layout() {
         stopped === null
           ? undefined
           : pluginStoppedReasonText(stopped.reason, entry.displayName, asPluginTranslate(t)),
+      onIntent: () => pluginLifecycle?.intend(entry.pluginId),
     };
   });
   // The core destinations and the Plugin entries share one scrolling section.
@@ -185,6 +188,9 @@ export function Layout() {
           }
           data-tutorial={mobile ? undefined : NAV_TUTORIAL_ANCHORS[item.id]}
           onAction={closeMobileMenu}
+          onHoverStart={item.onIntent ? () => item.onIntent?.() : undefined}
+          onFocus={item.onIntent ? () => item.onIntent?.() : undefined}
+          onPressStart={item.onIntent ? () => item.onIntent?.() : undefined}
           className={({ isFocusVisible }) =>
             `flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
               isCurrent ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground"

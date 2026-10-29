@@ -31,6 +31,10 @@
  *     best-effort pass. Every other engine keeps `out-of-memory` or `crashed`.
  *   - A check whose setup throws (the runtime never produced an observation) is
  *     `unmeasured`, never a fail: the run could not tell.
+ *   - The File Grant rows (#653) pass when `files.read` returned the seeded
+ *     file's mid-file range whole and its past-EOF read short, `files.stat`
+ *     named and sized that file, and `files.release` ended the grant. A
+ *     disagreement fails with every drifted field named.
  */
 
 import {
@@ -39,9 +43,15 @@ import {
   escapeCheckId,
 } from "@/features/plugins/conformance/commands";
 import {
+  CONFORMANCE_FILE,
+  CONFORMANCE_FILE_RANGE,
+  CONFORMANCE_FILE_TAIL,
+} from "@/features/plugins/conformance/file-grants";
+import {
   type CommandObservation,
   type ConformanceCheck,
   type ConformanceSeam,
+  type FileGrantObservation,
   T8_ALLOCATION_CAP_MB,
 } from "@/features/plugins/conformance/types";
 
@@ -53,6 +63,9 @@ export const T7_CHECK_ID = "T7-hang";
 export const T8_CHECK_ID = "T8-oom";
 /** The tight-loop allocation Command's own check (D1's `escape-<name>` shape). */
 export const ESCAPE_ALLOCATE_CHECK_ID = "escape-allocate";
+
+/** The File Grant rows (#653): read ranges, stat, and release over one seeded file. */
+export const FILE_GRANTS_CHECK_ID = "files-read-stat-release";
 
 /** T7's only acceptable stop: the heartbeat missed until the Plugin was closed. */
 export const T7_STOP_REASON = "unresponsive";
@@ -190,9 +203,44 @@ function escapeCheck(
 }
 
 /**
+ * The File Grant rows agree with the file that was seeded: the mid-file range
+ * came back whole, the past-EOF read came back short rather than padded, the
+ * stat named and sized that file, and release ended the grant. A disagreement
+ * names every field that drifted, so a failing lane reads without a diff.
+ */
+function fileGrantsCheck(observation: FileGrantObservation): ConformanceCheck {
+  const expectedSize = CONFORMANCE_FILE.bytes.length;
+  const problems: string[] = [];
+  if (observation.stat.name !== CONFORMANCE_FILE.name) {
+    problems.push(`stat named ${observation.stat.name}, expected ${CONFORMANCE_FILE.name}`);
+  }
+  if (observation.stat.size !== expectedSize) {
+    problems.push(`stat sized ${observation.stat.size}, expected ${expectedSize}`);
+  }
+  if (observation.stat.modified !== CONFORMANCE_FILE.modified) {
+    problems.push(
+      `stat modified ${observation.stat.modified}, expected ${CONFORMANCE_FILE.modified}`
+    );
+  }
+  if (observation.range !== CONFORMANCE_FILE_RANGE.hex) {
+    problems.push(`the range read ${observation.range}, expected ${CONFORMANCE_FILE_RANGE.hex}`);
+  }
+  if (observation.tail !== CONFORMANCE_FILE_TAIL.hex) {
+    problems.push(
+      `the past-EOF read ${observation.tail}, expected the short ${CONFORMANCE_FILE_TAIL.hex}`
+    );
+  }
+  if (observation.liveAfterRelease) problems.push("release left the grant listed");
+  return problems.length > 0
+    ? fail(FILE_GRANTS_CHECK_ID, problems.join("; "))
+    : pass(FILE_GRANTS_CHECK_ID, "read ranges, stat, and release agree with the seeded file");
+}
+
+/**
  * Runs every check, in schema order (T2 frame, T2 worker, the fixture Commands,
- * T7, the tight allocation, T8), and hands each result to `onCheck` as soon as
- * it is known, so the route can POST `/progress` before the run ends.
+ * T7, the tight allocation, T8, the File Grant rows), and hands each result to
+ * `onCheck` as soon as it is known, so the route can POST `/progress` before the
+ * run ends.
  */
 export interface RunConformanceOptions {
   /**
@@ -303,6 +351,12 @@ export async function runConformanceChecks(
           )
         : fail(T8_CHECK_ID, `stopped with an unexpected reason; ${facts} and the host answered`);
     })
+  );
+
+  await record(
+    await measure(FILE_GRANTS_CHECK_ID, async () =>
+      fileGrantsCheck(await seam.probeFileGrants())
+    )
   );
 
   return checks;

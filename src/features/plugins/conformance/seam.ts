@@ -25,18 +25,27 @@ import { ThreadMessagePort } from "@quilted/threads";
 
 import { savePluginApproval } from "@/features/plugins/approvals";
 import { loadFixtureHealthy, loadFixtureHostile } from "@/features/plugins/conformance/fixture";
+import {
+  CONFORMANCE_FILE,
+  CONFORMANCE_FILE_RANGE,
+  CONFORMANCE_FILE_TAIL,
+  FILE_GRANT_PROBE_PLUGIN_ID,
+  toHex,
+} from "@/features/plugins/conformance/file-grants";
 import { waitForReasonWithinGrace } from "@/features/plugins/conformance/oom-grace";
 import {
   type CommandObservation,
   type ConformanceEngine,
   type ConformancePlatform,
   type ConformanceSeam,
+  type FileGrantObservation,
   type IpcObservation,
   type OomObservation,
   type QuickJsTimings,
   type StopObservation,
   T8_ALLOCATION_CAP_MB,
 } from "@/features/plugins/conformance/types";
+import { createMemoryPluginFileGrantStore } from "@/features/plugins/file-grants";
 import { createPluginLifecycle, HEARTBEAT_INTERVAL_MS } from "@/features/plugins/lifecycle";
 import { QUICKJS_ENGINE_ENABLED } from "@/features/plugins/quickjs/engine-flag";
 import { openPluginUiMount } from "@/features/plugins/remote-ui/mount";
@@ -600,6 +609,41 @@ export async function createRuntimeSeam(
     return { stopped: false, reason: "none", allocatedMb };
   }
 
+  /**
+   * The File Grant rows (#653) over the memory store the app falls back to:
+   * seed one known file under a Plugin id no real Plugin has, so the probe
+   * neither reads nor disturbs an author's own grants, then read a mid-file
+   * range, read one that runs past the end, stat the grant, and release it.
+   */
+  async function probeFileGrants(): Promise<FileGrantObservation> {
+    const store = createMemoryPluginFileGrantStore([
+      { pluginId: FILE_GRANT_PROBE_PLUGIN_ID, ...CONFORMANCE_FILE },
+    ]);
+    const [grant] = await store.list(FILE_GRANT_PROBE_PLUGIN_ID);
+    if (!grant) throw new Error("the memory File Grant store seeded no file");
+    const stat = await store.stat(FILE_GRANT_PROBE_PLUGIN_ID, grant.grant);
+    const range = await store.read(
+      FILE_GRANT_PROBE_PLUGIN_ID,
+      grant.grant,
+      CONFORMANCE_FILE_RANGE.offset,
+      CONFORMANCE_FILE_RANGE.length
+    );
+    const tail = await store.read(
+      FILE_GRANT_PROBE_PLUGIN_ID,
+      grant.grant,
+      CONFORMANCE_FILE_TAIL.offset,
+      CONFORMANCE_FILE_TAIL.length
+    );
+    await store.release(FILE_GRANT_PROBE_PLUGIN_ID, grant.grant);
+    const liveAfterRelease = (await store.list(FILE_GRANT_PROBE_PLUGIN_ID)).length > 0;
+    return {
+      stat,
+      range: toHex(new Uint8Array(range)),
+      tail: toHex(new Uint8Array(tail)),
+      liveAfterRelease,
+    };
+  }
+
   async function probeFrameIpc(): Promise<IpcObservation> {
     return new Promise<IpcObservation>((resolve, reject) => {
       let iframe: HTMLIFrameElement;
@@ -669,6 +713,7 @@ export async function createRuntimeSeam(
     probeHang: () => terminal("escapeBusyLoop"),
     probeAllocate: () => terminal("escapeAllocate"),
     probeOom,
+    probeFileGrants,
     heartbeat,
     leaks,
     dispose() {

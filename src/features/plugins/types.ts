@@ -11,6 +11,7 @@ import type { BookStatus } from "@/features/books/types";
 import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import type { Language } from "@/features/settings/types";
 import type { PluginStopMessageReason } from "@/features/plugins/stop-messages";
+import type { MemoryPluginFileGrantFile, PluginFileGrant } from "@/features/plugins/file-grants";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { EndpointRequest, PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
@@ -165,6 +166,12 @@ export interface PluginStartOptions {
   folder: PluginFolder;
   /** The `h1:` value the author pinned when approving the Plugin. */
   pinnedHash: string;
+  /**
+   * The folder's `h1:` hash, when the caller already computed it from these
+   * same bytes (the lifecycle's review gate does); startPlugin compares this
+   * instead of hashing the folder again. Omitted, it hashes the folder itself.
+   */
+  knownHash?: string;
   /**
    * Why this activation happened (#400, #445); the host announces it on the
    * Plugin's port as the init message. Omitted when a test starts a Plugin
@@ -710,8 +717,14 @@ export interface PluginLifecycle {
   launchScanned(): boolean;
   /** Runs when the launch scan settles, whether it registered Plugins or nothing. Returns unsubscribe. */
   onLaunchScanned(listener: () => void): () => void;
-  /** A surface became reachable: an on-demand Plugin warm-starts. */
+  /** A surface became reachable: an on-demand Plugin warm-starts (an intent Plugin only from its page). */
   surfaceReached(pluginId: string, surface: string): void;
+  /**
+   * The author showed intent for a warm-on-intent Plugin (hover, focus, or
+   * press on its sidebar entry): it warm-starts if stopped. A no-op for any
+   * other Plugin, which warms from its surfaces alone.
+   */
+  intend(pluginId: string): void;
   /** A surface is gone; the idle window starts when the last one goes. */
   surfaceLeft(pluginId: string, surface: string): void;
   /** Starts an installed Plugin now (enable, Restart, or a bulk reason). */
@@ -808,6 +821,12 @@ export interface TestHostOptions {
   /** The clipboard text `clipboard.readText` serves; defaults to empty. */
   clipboard?: string;
   /**
+   * Files to seed this Plugin's File Grant store with (#653). Each is already
+   * granted, so `files.list` returns it and `files.pick` gives it back with the
+   * same grant id; the bytes stay in memory, so a test opens no real dialog.
+   */
+  files?: readonly MemoryPluginFileGrantFile[];
+  /**
    * Makes `library.books.checkpoint` reject with `internal-error` carrying
    * this message (#591): proves a Plugin refuses its write when no Checkpoint
    * could be taken, without touching any other Library row.
@@ -899,11 +918,27 @@ export interface TestEndpointStream {
   close(): void;
 }
 
+/**
+ * The File Grants a test host holds for its Plugin (#653), over the memory
+ * store the app registers. A test seeds files with `TestHostOptions.files`,
+ * queues what the next `files.pick` returns, and reads what is left.
+ */
+export interface TestHostFiles {
+  /** Queues the file the Plugin's next `files.pick` returns; null means the author cancelled. */
+  queuePick(file: MemoryPluginFileGrantFile | null): void;
+  /** Makes the file behind a grant unreadable: `files.read` and `files.stat` refuse `file-missing`. */
+  setMissing(grant: string): void;
+  /** The live File Grants the host holds for this Plugin right now. */
+  grants(): Promise<PluginFileGrant[]>;
+}
+
 export interface TestHost {
   /** The Plugin-side port: hand it to the Plugin's setup. */
   port: MessagePort;
   /** The real broker over the in-process channel. */
   broker: PluginBroker;
+  /** The File Grants the host holds for the Plugin, and the test hooks that drive them. */
+  files: TestHostFiles;
   /** The activation start reason the host delivers to the Plugin. */
   startReason: PluginStartReason;
   /** The manifest, with any `locale` overrides already applied. */
@@ -1114,6 +1149,12 @@ export interface PluginApiRow<
   effect: PluginApiEffect;
   /** Refused with `library-unavailable` while the Library cannot be read or written. */
   requiresLibrary?: boolean;
+  /**
+   * True when the call needs the author's own action: it is refused with
+   * `user-action-required` unless the author's click, key press, or Command run
+   * caused it.
+   */
+  requiresUserAction?: true;
   /** At most one accepted call per this many milliseconds, per Plugin. */
   minIntervalMs?: number;
 }
@@ -1321,6 +1362,12 @@ export interface PluginBrokerOptions {
    * current value to send.
    */
   eventSnapshot?: (event: string) => unknown;
+  /**
+   * Whether the page has a live user activation right now, read for a
+   * `requiresUserAction` row. Defaults to `navigator.userActivation.isActive`,
+   * which is false outside a click, key press, or tap.
+   */
+  hasUserActivation?: () => boolean;
   onStop?: (reason: PluginStopReason) => void;
   /** Observes a call arriving from the Plugin (the on-demand idle window resets on activity). */
   onCall?: (method: string) => void;
@@ -1384,6 +1431,13 @@ export interface PluginBroker {
    * 404, or throwing (answered 500), reaches the sink as that answer.
    */
   requestEndpoint(request: EndpointRequest, sink: PluginEndpointSink): void;
+  /**
+   * True while the host still waits on this Plugin: a host request other than
+   * the heartbeat is unanswered, an Endpoint answer is streaming, or a Plugin
+   * call has not finished. An intent Plugin is not stopped while this holds
+   * (ADR 0019, amendment 2026-10-29).
+   */
+  hasOpenWork(): boolean;
   /**
    * Delivers an event if the Plugin subscribed to it and still holds its
    * Plugin Permission. Returns whether it was sent. Throws when the payload

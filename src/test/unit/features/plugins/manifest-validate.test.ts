@@ -374,6 +374,32 @@ describe("validateManifestValue: platforms, lifecycle, language, dataVersion, cu
     );
   });
 
+  it("accepts the surface and intent warm start, and refuses any other value", () => {
+    for (const warmStart of ["surface", "intent"]) {
+      const result = validateManifestValue(
+        baseManifestWith((m) => {
+          m.lifecycle = "on-demand";
+          m.warmStart = warmStart;
+        })
+      );
+      expect(result.ok).toBe(true);
+    }
+    expectProblem(
+      problemsFor((m) => (m.warmStart = "sometimes")),
+      "warmStart"
+    );
+  });
+
+  it("refuses warmStart intent on a persistent Plugin, which starts with the app anyway", () => {
+    expectProblem(
+      problemsFor((m) => {
+        m.lifecycle = "persistent";
+        m.warmStart = "intent";
+      }),
+      "warmStart"
+    );
+  });
+
   it("refuses an unknown defaultLanguage", () => {
     expectProblem(
       problemsFor((m) => (m.defaultLanguage = "fr")),
@@ -585,6 +611,7 @@ describe("validateManifestValue: permissions", () => {
       "clipboard",
       "process",
       "serve",
+      "files:pick",
     ]) {
       const result = validateManifestValue(
         baseManifestWith((m) => (m.permissions = { required: [permission], optional: [] }))
@@ -596,9 +623,7 @@ describe("validateManifestValue: permissions", () => {
   it("names serve in the permission list, for a Plugin that answers Endpoint requests", () => {
     expect(PLUGIN_PERMISSION_NAMES).toContain("serve");
     const result = validateManifestValue(
-      baseManifestWith(
-        (m) => (m.permissions = { required: ["library:read"], optional: ["serve"] })
-      )
+      baseManifestWith((m) => (m.permissions = { required: ["library:read"], optional: ["serve"] }))
     );
     expect(result.ok, JSON.stringify(result)).toBe(true);
   });
@@ -1262,8 +1287,7 @@ describe("validateManifestValue: inline icon elements (#531)", () => {
     ).toBe(true);
     expectProblem(
       problemsFor(
-        (m) =>
-          (m.contributes.toolbarButtons[0].icon = inline([...at, ["path", { d: "M0 0" }]]))
+        (m) => (m.contributes.toolbarButtons[0].icon = inline([...at, ["path", { d: "M0 0" }]]))
       ),
       "contributes.toolbarButtons[0].icon",
       new RegExp(`${MAX_INLINE_ICON_ELEMENTS}`, "u")
@@ -1273,7 +1297,9 @@ describe("validateManifestValue: inline icon elements (#531)", () => {
   it("refuses an empty element list and a non-string attribute value", () => {
     // Zod reports structural errors at the exact field, so the path starts at the icon.
     for (const elements of [[], [["circle", { r: 3 }]]]) {
-      const problems = problemsFor((m) => (m.contributes.toolbarButtons[0].icon = inline(elements)));
+      const problems = problemsFor(
+        (m) => (m.contributes.toolbarButtons[0].icon = inline(elements))
+      );
       expect(problems.some((p) => p.path.startsWith("contributes.toolbarButtons[0].icon"))).toBe(
         true
       );
@@ -1282,9 +1308,7 @@ describe("validateManifestValue: inline icon elements (#531)", () => {
 
   it("refuses an inline icon on a sidebar entry too", () => {
     expectProblem(
-      problemsFor(
-        (m) => (m.contributes.sidebarEntries[0].icon = inline([["script", {}]]))
-      ),
+      problemsFor((m) => (m.contributes.sidebarEntries[0].icon = inline([["script", {}]]))),
       "contributes.sidebarEntries[0].icon",
       /"script"/u
     );

@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   PluginDirectoryHashError,
+  hashPluginDigests,
   hashPluginDirectory,
   pluginFileDigests,
 } from "@/features/plugins/directory-hash";
@@ -75,5 +76,21 @@ describe("hashPluginDirectory()", () => {
     expect(refusal.code).toBe(expectedNewline.refusal.code);
     expect(refusal.message).toBe(expectedNewline.refusal.message);
     expect(refusal.path).toBe("data/a\nb.txt");
+  });
+});
+
+describe("hashPluginDigests()", () => {
+  it("matches the folder hash computed from the same bytes, so a start hashes once", async () => {
+    const files = readFolderFiles(FIXTURE_DIR);
+    const digests = await pluginFileDigests(files);
+    await expect(hashPluginDigests(files, digests)).resolves.toBe(expected.hash);
+  });
+
+  it("still refuses a path with a newline", async () => {
+    const files = [{ path: "bad\npath.js", bytes: new Uint8Array([1]) }];
+    const digests = await pluginFileDigests(files);
+    await expect(hashPluginDigests(files, digests)).rejects.toBeInstanceOf(
+      PluginDirectoryHashError
+    );
   });
 });

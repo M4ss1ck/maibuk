@@ -62,7 +62,7 @@ export const CONTRIBUTION_LIMITS = {
 
 const LUCIDE_ICON_NAMES_SET: ReadonlySet<string> = new Set(LUCIDE_ICON_NAMES);
 
-/** The nine exact Plugin Permission strings; `network:<host>` is the tenth. */
+/** The ten exact Plugin Permission strings; `network:<host>` is the eleventh. */
 export const PLUGIN_PERMISSION_NAMES = [
   "library:read",
   "library:write",
@@ -73,6 +73,7 @@ export const PLUGIN_PERMISSION_NAMES = [
   "clipboard",
   "process",
   "serve",
+  "files:pick",
 ] as const;
 
 const PERMISSION_NAMES: ReadonlySet<string> = new Set(PLUGIN_PERMISSION_NAMES);
@@ -337,6 +338,9 @@ function collectProblems(
   const add: AddProblem = (path, message) => {
     problems.push({ path, message });
   };
+  if (manifest.warmStart === "intent" && manifest.lifecycle !== "on-demand") {
+    add("warmStart", 'warmStart: "intent" applies only to an on-demand Plugin');
+  }
 
   const required = manifest.permissions.required;
   const optional = manifest.permissions.optional;

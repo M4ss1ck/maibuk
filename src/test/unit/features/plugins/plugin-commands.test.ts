@@ -4,6 +4,7 @@ import {
   pluginPageCommandBindings,
   pluginPageCommands,
   runPluginCommand,
+  runPluginCommandWarm,
   type PluginItemTarget,
 } from "@/features/plugins/commands";
 import {
@@ -42,7 +43,12 @@ const source = pluginFolder(
         { id: "stamp", label: "Stamp", contexts: ["global", "chapterItem"], targets: ["chapter"] },
         // An editor-context Command: its Default Shortcut must fire while the
         // author types in the focused editor (#451).
-        { id: "highlight", label: "Toggle highlights", contexts: ["editor"], defaults: [["Alt+F7"]] },
+        {
+          id: "highlight",
+          label: "Toggle highlights",
+          contexts: ["editor"],
+          defaults: [["Alt+F7"]],
+        },
       ],
       pages: [{ id: "report", title: "Report", command: "open" }],
       itemMenuEntries: [{ command: "tag" }],
@@ -118,7 +124,10 @@ describe("pluginPageCommandBindings", () => {
 describe("pluginCommandBindings", () => {
   it("navigates a page's Command and disables an unready Plugin's worker Command", () => {
     const navigate = vi.fn();
-    const bindings = pluginCommandBindings(stubLifecycle({ status: "stopped", reason: null, refusal: null }, null), navigate);
+    const bindings = pluginCommandBindings(
+      stubLifecycle({ status: "stopped", reason: null, refusal: null }, null),
+      navigate
+    );
 
     const open = bindings.find((binding) => binding.id === "plugin.sample.open");
     expect(open?.enabled).toBe(true);
@@ -350,5 +359,115 @@ describe("runPluginCommand", () => {
       id: "tag",
       target: { kind: "chapter", id: "A" },
     });
+  });
+});
+
+/**
+ * A warm-on-intent Plugin (ADR 0019 amendment, 2026-10-29): its targetless
+ * Command is enabled while the Plugin is stopped, and running it warm-starts
+ * the Plugin first, then sends `command.run` once it is ready.
+ */
+describe("warm on intent", () => {
+  const intentSource = pluginFolder(
+    {},
+    {
+      id: "intent-sample",
+      name: "Intent sample",
+      platforms: ["desktop"],
+      lifecycle: "on-demand",
+      warmStart: "intent",
+      contributes: {
+        commands: [{ id: "openFile", label: "Open file", contexts: ["global"] }],
+      },
+    }
+  );
+  const intentParsed = readPluginManifest(intentSource);
+  if (!intentParsed.ok) throw new Error("fixture manifest is invalid");
+  const intentManifest = intentParsed.manifest;
+
+  let unregisterIntent: (() => void) | null = null;
+
+  beforeEach(() => {
+    unregisterIntent = registerPluginContributions({
+      manifest: intentManifest,
+      folder: intentSource,
+    });
+  });
+
+  afterEach(() => {
+    unregisterIntent?.();
+    unregisterIntent = null;
+  });
+
+  /** A lifecycle whose Plugin is stopped until `start` runs, then ready with a broker. */
+  function intentLifecycle(startOk = true) {
+    const request = vi.fn(async () => null);
+    const runtime = { broker: { request }, stop: vi.fn() } as unknown as PluginRuntime;
+    let started = false;
+    const start = vi.fn(async () => {
+      if (!startOk) return { ok: false as const, refusal: { code: "not-installed" as const } };
+      started = true;
+      return { ok: true as const, startReason: "warmStart" as const };
+    });
+    const lifecycle = {
+      installed: () => [
+        {
+          pluginId: "intent-sample",
+          approval: { pluginId: "intent-sample", pinnedHash: "h1:x", granted: [] },
+          folder: intentSource,
+          manifest: intentManifest,
+        },
+      ],
+      state: (): PluginLifecycleState =>
+        started
+          ? { status: "ready", startReason: "warmStart" }
+          : { status: "stopped", reason: null, refusal: null },
+      runtime: () => (started ? runtime : null),
+      start,
+    } as unknown as PluginLifecycle;
+    return { lifecycle, request, start };
+  }
+
+  it("enables the Command while the Plugin is stopped", () => {
+    const { lifecycle } = intentLifecycle();
+    const binding = pluginCommandBindings(lifecycle, vi.fn()).find(
+      (candidate) => candidate.id === ("plugin.intent-sample.openFile" as PluginCommandId)
+    );
+    expect(binding?.enabled).toBe(true);
+  });
+
+  it("warm-starts the Plugin when its Command is triggered, then sends command.run", async () => {
+    const { lifecycle, request, start } = intentLifecycle();
+    const binding = pluginCommandBindings(lifecycle, vi.fn()).find(
+      (candidate) => candidate.id === ("plugin.intent-sample.openFile" as PluginCommandId)
+    );
+
+    binding?.onTrigger();
+    await vi.waitFor(() => expect(request).toHaveBeenCalledWith("command.run", { id: "openFile" }));
+
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledWith("intent-sample", "warmStart");
+    expect(start.mock.invocationCallOrder[0]).toBeLessThan(request.mock.invocationCallOrder[0]);
+  });
+
+  it("runs the Command without a second start when the Plugin is already ready", async () => {
+    const { lifecycle, request, start } = intentLifecycle();
+    await start();
+    start.mockClear();
+
+    const outcome = await runPluginCommandWarm(lifecycle, "intent-sample", "openFile");
+
+    expect(outcome).toBe("ran");
+    expect(start).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledWith("command.run", { id: "openFile" });
+  });
+
+  it("reports unavailable and sends nothing when the warm start is refused", async () => {
+    const { lifecycle, request } = intentLifecycle(false);
+
+    const outcome = await runPluginCommandWarm(lifecycle, "intent-sample", "openFile");
+
+    expect(outcome).toBe("unavailable");
+    expect(request).not.toHaveBeenCalled();
   });
 });

@@ -2233,6 +2233,8 @@
       "editorWriteDetail": "Type, format, and replace text in the editor you have open.",
       "clipboard": "Use the clipboard",
       "clipboardDetail": "Read from and write to your clipboard when you copy or paste.",
+      "filesPick": "Open files you pick",
+      "filesPickDetail": "Read only the files you choose in Maibuk's file dialog. Maibuk keeps access on this device and never copies them into your Library.",
       "serve": "Answer requests from apps on this computer",
       "serveDetail": "Apps on this computer can send requests to this Plugin while it runs. Desktop only."
     },

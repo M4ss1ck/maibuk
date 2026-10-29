@@ -1,9 +1,10 @@
 /**
  * Plain-language copy for one Plugin Permission (#442). The prototype's
  * dictionary (PR #410, map section 3) covers `library:read`, `editor:read`,
- * `editor:decorate`, `secrets`, `network:<host>`, and `process`; the three
- * remaining names (`library:write`, `editor:write`, `clipboard`) carry
- * authored copy in the same voice, flagged as new in the PR.
+ * `editor:decorate`, `secrets`, `network:<host>`, and `process`; the
+ * remaining names (`library:write`, `editor:write`, `clipboard`, `serve`) carry
+ * authored copy in the same voice, flagged as new in the PR. `files:pick` is
+ * the File Grants capability (ADR 0036).
  */
 
 /** A translation function narrowed to the keys and options this module uses. */
@@ -20,6 +21,7 @@ const PERMISSION_COPY_KEYS: Record<string, string> = {
   clipboard: "clipboard",
   process: "process",
   serve: "serve",
+  "files:pick": "filesPick",
 };
 
 /** The title and detail of one Plugin Permission, in the author's language. */

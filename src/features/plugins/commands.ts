@@ -102,6 +102,25 @@ export async function runPluginCommand(
   return "ran";
 }
 
+/**
+ * Runs a Command of a warm-on-intent Plugin (ADR 0019, 2026-10-29). Running the
+ * Command is the intent, so a stopped Plugin warm-starts first and the Command
+ * goes out once it is ready. A Plugin whose start is refused has no broker to
+ * run through, so the outcome is `unavailable`.
+ */
+export async function runPluginCommandWarm(
+  lifecycle: PluginLifecycle,
+  pluginId: string,
+  localId: string,
+  options: { target?: PluginItemTarget; readTarget?: () => PluginItemTarget | null } = {}
+): Promise<PluginCommandOutcome> {
+  if (lifecycle.state(pluginId)?.status !== "ready") {
+    const started = await lifecycle.start(pluginId, "warmStart");
+    if (!started.ok) return "unavailable";
+  }
+  return runPluginCommand(lifecycle, pluginId, localId, options);
+}
+
 const ITEM_COMMAND_CONTEXTS = new Set<string>(["chapterItem", "noteItem", "canvasNode"]);
 
 /**
@@ -114,6 +133,19 @@ const ITEM_COMMAND_CONTEXTS = new Set<string>(["chapterItem", "noteItem", "canva
  */
 function isItemOnlyContext(contexts: readonly string[]): boolean {
   return contexts.length > 0 && contexts.every((context) => ITEM_COMMAND_CONTEXTS.has(context));
+}
+
+/** Runs a Command through the warm start an intent Plugin needs, or the ready broker otherwise. */
+function runCommandFor(
+  lifecycle: PluginLifecycle,
+  pluginId: string,
+  localId: string,
+  onIntent: boolean,
+  options: { target?: PluginItemTarget; readTarget?: () => PluginItemTarget | null } = {}
+): Promise<PluginCommandOutcome> {
+  return onIntent
+    ? runPluginCommandWarm(lifecycle, pluginId, localId, options)
+    : runPluginCommand(lifecycle, pluginId, localId, options);
 }
 
 /**
@@ -141,6 +173,11 @@ export function pluginCommandBindings(
   const bindings: PluginCommandBinding[] = [];
   for (const installed of lifecycle.installed()) {
     const ready = lifecycle.state(installed.pluginId)?.status === "ready";
+    // A warm-on-intent Plugin's Commands are enabled while it is stopped: running
+    // one warm-starts it (`runPluginCommandWarm`). Its enablement is otherwise
+    // the same rule as every other Plugin's.
+    const onIntent = installed.manifest.warmStart === "intent";
+    const reachable = ready || onIntent;
     for (const command of getPluginCommands(installed.pluginId)) {
       if (command.pageId !== undefined) {
         const route = pluginPageRoute(installed.pluginId, command.pageId);
@@ -164,23 +201,25 @@ export function pluginCommandBindings(
         );
         bindings.push({
           id: command.id,
-          enabled: ready && resolvePluginTarget(targets, readContext()) !== null,
+          enabled: reachable && resolvePluginTarget(targets, readContext()) !== null,
           deferToOtherSource: hasItemContext,
           allowInInput,
           onTrigger: () => {
             const target = resolvePluginTarget(targets, readContext());
             if (target === null) return;
-            void runPluginCommand(lifecycle, installed.pluginId, command.localId, { target });
+            void runCommandFor(lifecycle, installed.pluginId, command.localId, onIntent, {
+              target,
+            });
           },
         });
         continue;
       }
       bindings.push({
         id: command.id,
-        enabled: ready && !hasTargets,
+        enabled: reachable && !hasTargets,
         allowInInput,
         onTrigger: () => {
-          void runPluginCommand(lifecycle, installed.pluginId, command.localId);
+          void runCommandFor(lifecycle, installed.pluginId, command.localId, onIntent);
         },
       });
     }

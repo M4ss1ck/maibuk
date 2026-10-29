@@ -1,0 +1,22 @@
+{
+  "name": "Reader",
+  "description": "Reads PDF, EPUB, MOBI, AZW3, FB2, and CBZ files from your device beside your writing, and remembers where you were.",
+  "commands.openReader.label": "Open Reader",
+  "commands.openFile.label": "Open file…",
+  "commands.openDocument.label": "Open Document",
+  "commands.nextPage.label": "Next page",
+  "commands.previousPage.label": "Previous page",
+  "commands.firstPage.label": "First page",
+  "commands.lastPage.label": "Last page",
+  "commands.findInDocument.label": "Find in Document",
+  "commands.toggleContents.label": "Toggle contents",
+  "commands.zoomIn.label": "Zoom in",
+  "commands.zoomOut.label": "Zoom out",
+  "commands.fitWidth.label": "Fit width",
+  "commands.fitPage.label": "Fit page",
+  "commands.increaseFontSize.label": "Increase font size",
+  "commands.decreaseFontSize.label": "Decrease font size",
+  "commands.backToShelf.label": "Back to Shelf",
+  "pages.reader.title": "Reader",
+  "pages.document.title": "Reading"
+}

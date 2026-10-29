@@ -73,6 +73,21 @@ const loadPlugins = async () => {
   } else {
     registerPluginSecretStore(createMemoryPluginSecretStore());
   }
+  // A File Grant store is always present too. The memory store keeps grants for
+  // this session; the desktop and web builds register their own device-local
+  // store, which keeps the file's handle outside the Library (ADR 0036).
+  const { createMemoryPluginFileGrantStore, registerPluginFileGrantStore } = await import(
+    "@/features/plugins/file-grants"
+  );
+  if (IS_DESKTOP) {
+    const { createTauriPluginFileGrantStore } = await import("@/lib/platform/tauri/file-grants");
+    registerPluginFileGrantStore(createTauriPluginFileGrantStore());
+  } else if (IS_WEB) {
+    const { createWebPluginFileGrantStore } = await import("@/lib/platform/web/file-grants");
+    registerPluginFileGrantStore(createWebPluginFileGrantStore());
+  } else {
+    registerPluginFileGrantStore(createMemoryPluginFileGrantStore());
+  }
   if (BENCH_DRIVER_ENABLED) {
     const { preparePluginsBench } = await import("@/features/plugins/bench");
     await preparePluginsBench();

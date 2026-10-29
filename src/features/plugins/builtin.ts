@@ -98,6 +98,24 @@ function readE2EBuiltIns(): BuiltInPlugin[] {
   if (typeof localStorage === "undefined") return [];
   const raw = localStorage.getItem(E2E_BUILTIN_PLUGINS_STORAGE_KEY);
   if (raw === null) return [];
+  return decodeE2EBuiltIns(raw);
+}
+
+/**
+ * The E2E seed read once per page load, like the shipped index: the launch asks
+ * for the list several times (the sync, the scan), and the seed carries every
+ * shipped byte as base64, so decoding it per call costs a Plugin's start-up
+ * time again (issue #653, gate 1). The seed is written before the app boots, so
+ * one load always sees the seed the spec wrote.
+ */
+let e2eSeedOnce: Promise<BuiltInPlugin[]> | null = null;
+
+function e2eSeedOnceList(): Promise<BuiltInPlugin[]> {
+  e2eSeedOnce ??= Promise.resolve(readE2EBuiltIns());
+  return e2eSeedOnce;
+}
+
+function decodeE2EBuiltIns(raw: string): BuiltInPlugin[] {
   try {
     const parsed = JSON.parse(raw) as { plugins?: unknown };
     if (!Array.isArray(parsed.plugins)) return [];
@@ -241,7 +259,7 @@ export function createBuiltInPluginSource(
     async list(): Promise<BuiltInPlugin[]> {
       // The E2E lane's device-local seed, compiled in only there; every shipped
       // build takes the fetch path below.
-      if (import.meta.env.VITE_E2E_BUILTIN_SEED === "1") return readE2EBuiltIns();
+      if (import.meta.env.VITE_E2E_BUILTIN_SEED === "1") return e2eSeedOnceList();
       return shippedBuiltInsOnce(fetchImpl);
     },
   };

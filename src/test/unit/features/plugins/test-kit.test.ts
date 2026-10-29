@@ -1861,3 +1861,87 @@ describe("createTestHost() Library writes", () => {
     }
   });
 });
+
+describe("createTestHost() File Grants", () => {
+  // ASCII on purpose: a test reads the range back as text.
+  const BYTES = new TextEncoder().encode("Maibuk reads a picked file in ranges, never by path.");
+  const FILE = { name: "chapter.txt", bytes: BYTES, modified: 1_700_000_000_000 };
+
+  function filesManifest(): PluginManifest {
+    return { ...fixtureManifest(), permissions: { required: ["files:pick"], optional: [] } };
+  }
+
+  it("picks a queued file, reads a range, stats it, and releases it", async () => {
+    const host = createTestHost({ manifest: filesManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      host.files.queuePick(FILE);
+
+      // The kit counts a pick as the author's own action, so the row accepts it.
+      const picked = await client.files.pick({ extensions: ["txt"] });
+      if (picked === null) throw new Error("the pick resolved to null");
+      expect(picked).toEqual({ grant: expect.any(String), name: FILE.name, size: BYTES.length });
+      await expect(host.files.grants()).resolves.toEqual([picked]);
+
+      const range = await client.files.read({ grant: picked.grant, offset: 7, length: 5 });
+      // The bytes cross the port by transfer, so they arrive as an ArrayBuffer.
+      expect(Object.prototype.toString.call(range)).toBe("[object ArrayBuffer]");
+      expect([...new Uint8Array(range)]).toEqual([...BYTES.subarray(7, 12)]);
+
+      await expect(client.files.stat({ grant: picked.grant })).resolves.toEqual({
+        name: FILE.name,
+        size: BYTES.length,
+        modified: FILE.modified,
+      });
+
+      await expect(client.files.release({ grant: picked.grant })).resolves.toBeNull();
+      await expect(host.files.grants()).resolves.toEqual([]);
+      await expect(
+        client.files.read({ grant: picked.grant, offset: 0, length: 1 })
+      ).rejects.toMatchObject({ code: "file-missing" });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("seeds the store with the files a test hands it, and makes one missing", async () => {
+    const host = createTestHost({ manifest: filesManifest(), files: [FILE] });
+    try {
+      const client = createPluginClient(host.port);
+      const [seeded] = await host.files.grants();
+      expect(seeded).toEqual({ grant: expect.any(String), name: FILE.name, size: BYTES.length });
+      const head = await client.files.read({ grant: seeded.grant, offset: 0, length: 4 });
+      expect([...new Uint8Array(head)]).toEqual([...BYTES.subarray(0, 4)]);
+
+      host.files.setMissing(seeded.grant);
+
+      await expect(
+        client.files.read({ grant: seeded.grant, offset: 0, length: 4 })
+      ).rejects.toMatchObject({ code: "file-missing" });
+      await expect(client.files.stat({ grant: seeded.grant })).rejects.toMatchObject({
+        code: "file-missing",
+      });
+    } finally {
+      host.stop();
+    }
+  });
+
+  it("refuses files.pick with permission-denied while the grant is not held", async () => {
+    const host = createTestHost({
+      manifest: { ...fixtureManifest(), permissions: { required: [], optional: ["files:pick"] } },
+      permissions: [],
+    });
+    try {
+      const client = createPluginClient(host.port);
+      host.files.queuePick(FILE);
+
+      await expect(client.files.pick({ extensions: ["txt"] })).rejects.toMatchObject({
+        code: "permission-denied",
+        permission: "files:pick",
+      });
+      await expect(host.files.grants()).resolves.toEqual([]);
+    } finally {
+      host.stop();
+    }
+  });
+});

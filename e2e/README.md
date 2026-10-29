@@ -211,6 +211,12 @@ the reason, when:
 - any e2e file other than `e2e/support/storage.ts` and `e2e/support/fault.ts`
   touches IndexedDB, localStorage, or sessionStorage (`storage-outside-support`).
 
+The guard scans `e2e/specs/**` only. The Reader bench lanes (`e2e/reader-bench/`,
+like `e2e/frames/`) are measurements and may use `evaluate`, `fill`, and `press`;
+the file-picker stub (`e2e/support/file-picker.ts`) uses `addInitScript` because a
+native file dialog has no keyboard path. CODING_STANDARDS.md "E2E" records both
+exemptions. Their specs still drive Reader by keyboard.
+
 The guard's own tests (`e2e/guards/coverage.test.ts`, `node:test`) run next;
 each feeds it one bad fixture and expects the named rejection.
 
@@ -638,6 +644,113 @@ rerunning:
 ```bash
 node scripts/plugins-bench-budget.mjs .bench/plugins-chromium.json
 ```
+
+## Reader performance lane
+
+`pnpm bench:reader` checks that Reader (`plugins/maibuk-reader/`, issue #653)
+costs the app nothing it can measure, and that reading does not stall it. It
+sits beside the other periodic lanes (`bench:frames`, `bench:plugins`): run it
+before a release and whenever Reader's loaders, its Frame, or its Worker
+bridge move. It never runs in CI. Every gate is relative to the same build with
+Reader disabled or unused, so the numbers are deltas and ratios.
+
+The gates (`scripts/reader-bench-budget.mjs`):
+
+1. **Idle start-up and heap.** Reader disabled against enabled-never-opened,
+   measured the way `bench:plugin-start` and the Plugins bench measure: two
+   warm-up starts thrown away, then 20 samples (`--samples`). A start runs from the page load to the Books nav (and the
+   Reader nav too when enabled, so the launch scan is inside it). The heap is
+   read after a forced GC on that page. The gate is that the median delta is
+   within `max(5% of the disabled median, 20 ms)` for start-up and
+   `max(5%, 1 MiB)` for the heap, the noise rule the Plugins bench uses.
+2. **No jank.** No Reader long task over 50 ms while opening, turning 20
+   pages, and searching a 50 MB PDF and a 320-section EPUB. The bench installs
+   `PerformanceObserver('longtask')` in the top frame before any app code
+   (`addInitScript`). Attribution: an entry whose attribution names an
+   `iframe` container is the Reader Frame's work, because the bench checks
+   the page has exactly one iframe while a Document is open; an entry
+   attributed to the host window that overlaps one of the bench's action
+   windows is the host's Reader code (the broker, the Shelf, the port bridge,
+   which the bench does nothing else during); any other host task is reported
+   and not gated. A Worker's work never appears as a long task, which is the
+   point of the Worker. The raw entries are kept in the report.
+3. **Memory returns, relative to a control visit.** Reader's growth is judged
+   against a control, not against the pre-open heap. The control
+   (`e2e/reader-bench/control.bench.ts`) is its own page load with Reader
+   disabled: baseline heap, an in-app visit to Settings and back to the Library,
+   30 s, then the heap. Reader (`document.bench.ts`) is a separate page load with
+   Reader enabled and never opened: baseline heap, open and read, leave, 30 s,
+   the heap. Reader-attributable growth is
+   `(readerAfter - readerBaseline) - (controlAfter - controlBaseline)`, clamped
+   at 0, and the gate is that it is at most 10% of `readerBaseline`
+   (`readerGrowthBytes` in `scripts/reader-bench-budget.mjs`). The report prints
+   both raw ratios beside the gate.
+
+   Why not "at most 110% of the baseline": a control visit alone ends at 1.12x
+   its own baseline (measured with Reader disabled, a Settings visit), so no
+   page passes a 1.10x gate, Reader or not. The 0.12x is what an in-app visit
+   leaves behind on this build, and the control absorbs it. Reader's raw ratio
+   was 1.23x (19.04 to 23.46 MiB) before this gate. About 0.31 MiB of that is a
+   second copy of Playwright's InjectedScript, created because the bench drives
+   the Reader Frame through `frameLocator`; it is harness memory, not product.
+   The bench disposes the handles it holds (the `waitForFunction` results in
+   `waitFrameChange`). The InjectedScript copy lives in the Frame's own context,
+   which Playwright owns; the control never drives a Frame, so the gate does not
+   subtract that copy. The open follow-up for the remaining product memory outside this gate is
+   [#655](https://github.com/M4ss1ck/maibuk/issues/655): an es-module-lexer
+   WebAssembly memory of 11 MiB that the JS-heap gate cannot see.
+
+   The heap is read after a forced GC through the page's CDP session
+   (`HeapProfiler.collectGarbage`, `Runtime.getHeapUsage`), so Chromium only.
+4. **Editor untouched.** The editor typing scenario of `bench:frames` runs
+   once before the reading session and once after it. The gate is the
+   after-run's own frame budget verdict; the before-run is printed beside it.
+
+Recorded, not gated: the start-up to the Books nav alone, disabled and enabled,
+so a start-up failure says whether the time is Reader's launch scan (the Reader
+nav appears only after it) or the app's own first paint. Then the first page (Enter to the Frame's page indicator
+showing page 1) and the page turn (key press to the indicator changing,
+nearest-rank median and p95). Both include the Playwright round trip, so
+they measure what a reader feels, not the Frame alone.
+
+The fixtures are generated at bench time by the same generators as the
+committed fixtures (`plugins/maibuk-reader/scripts/generate-fixtures.mjs`,
+`buildLargePdf`, `buildLargeEpub`) into a temporary folder that is removed
+after the run. Nothing large is committed. The PDF is 96 pages with an
+uncompressed 420x420 RGB image each (51 MB); the EPUB has 320 sections. The
+file picker double serves the PDF by route (`served: true` in
+`e2e/support/file-picker.ts`), so its bytes never become a base64 decode on
+the main thread.
+
+```bash
+pnpm bench:reader                  # Chromium's headless mode, the full lane (default)
+pnpm bench:reader --headed         # a headed window; keyboard focus can stall in it
+pnpm bench:reader --reuse-build    # serve the last E2E build (run build:plugins first)
+pnpm bench:reader --samples 40     # more start-up samples (default 20)
+pnpm bench:reader --spike          # the threading spike (below), not the gates
+```
+
+The lane runs headless by default, the same as the E2E suite whose reader
+spec it reuses: in a headed window the Tab key stopped reaching the Frame
+during the document run, so headed numbers would measure the window manager,
+not Reader.
+
+It writes `.bench/reader.json` (the report) and prints the gate and trace
+tables. The command exits 0 when every gate holds, 1 when a gate fails, and 2
+when a measurement could not be taken (a missing prerequisite, a harness
+failure, a Playwright failure). Re-check a saved report without rerunning:
+
+```bash
+node scripts/reader-bench-budget.mjs .bench/reader.json
+```
+
+**Threading spike.** `pnpm bench:reader --spike` parses the same 50 MB PDF
+twice: once with pdf.js core inline in the Plugin Worker (the flag
+`__maibukDebugPdfCoreInline` is set in the Plugin Worker by the bench, never by
+the app) and once in the nested Worker that ships. It samples how late a 5 ms
+timer in the Plugin Worker runs during the open, and writes
+`.bench/reader-spike.json`. The results are recorded in
+`plugins/maibuk-reader/vendor/README.md` under "Threading spike".
 
 ## MCP Server Agent eval
 

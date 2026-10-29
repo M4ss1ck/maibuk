@@ -30,6 +30,9 @@ const { setPluginNavigator } = await import("@/features/plugins/navigation");
 const { createMemoryPluginSecretStore, registerPluginSecretStore } = await import(
   "@/features/plugins/secret-store"
 );
+const { createMemoryPluginFileGrantStore, registerPluginFileGrantStore } = await import(
+  "@/features/plugins/file-grants"
+);
 
 const context = { pluginId: "tracer" };
 
@@ -346,6 +349,70 @@ describe("createPluginHandlers(): clipboard", () => {
       code: "internal-error",
     });
     await expect(write({ text: "x" }, context)).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "internal-error",
+    });
+  });
+});
+
+describe("createPluginHandlers(): File Grants", () => {
+  const BYTES = new Uint8Array([1, 2, 3, 4, 5]);
+  let store: ReturnType<typeof createMemoryPluginFileGrantStore>;
+
+  beforeEach(() => {
+    store = createMemoryPluginFileGrantStore([{ pluginId: "tracer", name: "a.pdf", bytes: BYTES }]);
+    registerPluginFileGrantStore(store);
+  });
+
+  afterEach(() => {
+    registerPluginFileGrantStore(null);
+  });
+
+  it("delegates every files.* row to the registered store, scoped to the caller", async () => {
+    const handlers = createPluginHandlers(PLUGIN_MANIFEST);
+    const pick = handlers["files.pick"];
+    const read = handlers["files.read"];
+    const stat = handlers["files.stat"];
+    const requestAccess = handlers["files.requestAccess"];
+    const release = handlers["files.release"];
+    const list = handlers["files.list"];
+    if (!pick || !read || !stat || !requestAccess || !release || !list) {
+      throw new Error("files rows are not wired");
+    }
+
+    await expect(list({}, context)).resolves.toMatchObject([{ name: "a.pdf", size: 5 }]);
+    const [grant] = await store.list("tracer");
+    await expect(stat({ grant: grant.grant }, context)).resolves.toMatchObject({ name: "a.pdf" });
+    await expect(requestAccess({ grant: grant.grant }, context)).resolves.toBe(true);
+    const bytes = await read({ grant: grant.grant, offset: 1, length: 3 }, context);
+    expect(bytes).toBeInstanceOf(ArrayBuffer);
+    expect([...new Uint8Array(bytes)]).toEqual([2, 3, 4]);
+
+    store.queuePick("tracer", null);
+    await expect(pick({ extensions: ["pdf"] }, context)).resolves.toBeNull();
+
+    await expect(release({ grant: grant.grant }, context)).resolves.toBeNull();
+    await expect(list({}, context)).resolves.toEqual([]);
+  });
+
+  it("keeps each Plugin's grants out of another Plugin's reach", async () => {
+    const handlers = createPluginHandlers(PLUGIN_MANIFEST);
+    const read = handlers["files.read"];
+    const list = handlers["files.list"];
+    if (!read || !list) throw new Error("files rows are not wired");
+    const [grant] = await store.list("tracer");
+
+    await expect(read({ grant: grant.grant, offset: 0, length: 1 }, { pluginId: "other" })).rejects
+      .toMatchObject({ name: "PluginApiError", code: "file-missing" });
+    await expect(list({}, { pluginId: "other" })).resolves.toEqual([]);
+  });
+
+  it("refuses with internal-error when no File Grant store is registered", async () => {
+    registerPluginFileGrantStore(null);
+    const list = createPluginHandlers(PLUGIN_MANIFEST)["files.list"];
+    if (!list) throw new Error("files.list is not wired");
+
+    await expect(list({}, context)).rejects.toMatchObject({
       name: "PluginApiError",
       code: "internal-error",
     });

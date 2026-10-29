@@ -97,6 +97,16 @@ import type { CommandId } from "@/lib/shortcut-registry";
  * GlobalShortcuts (so never on /embed); renders only while open, and the index
  * is prepared once per open, never per keystroke.
  */
+/**
+ * Hands focus back to the element that opened the palette once a chosen
+ * Command is about to run. A palette reopened in the meantime owns focus now,
+ * so focusing the old opener would pull it out of the new dialog.
+ */
+export function restoreOpenerFocus(opener: HTMLElement | null): void {
+  if (useCommandPaletteStore.getState().isOpen) return;
+  if (opener?.isConnected) opener.focus();
+}
+
 export function CommandPalette() {
   const isOpen = useCommandPaletteStore((state) => state.isOpen);
   if (!isOpen) return null;
@@ -680,7 +690,7 @@ function OpenCommandPalette() {
           if (useModalStore.getState().modalIds.length === 0) break;
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
-        if (opener && opener.isConnected) opener.focus();
+        restoreOpenerFocus(opener);
         // Item bindings re-register once focus is back inside the item.
         for (let attempt = 0; attempt < 10; attempt++) {
           if (commandState(id) !== "hidden") break;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ESCAPE_ALLOCATE_CHECK_ID,
+  FILE_GRANTS_CHECK_ID,
   RENDERER_DIED_DETAIL,
   T2_FRAME_CHECK_ID,
   T2_WORKER_CHECK_ID,
@@ -17,11 +18,17 @@ import {
   type ConformanceEscape,
   escapeCheckId,
 } from "@/features/plugins/conformance/commands";
+import {
+  CONFORMANCE_FILE,
+  CONFORMANCE_FILE_RANGE,
+  CONFORMANCE_FILE_TAIL,
+} from "@/features/plugins/conformance/file-grants";
 import type {
   CommandObservation,
   CommandOutcome,
   ConformanceCheck,
   ConformanceSeam,
+  FileGrantObservation,
 } from "@/features/plugins/conformance/types";
 
 /** The first Command whose safe outcome is a typed refusal. */
@@ -54,6 +61,18 @@ function observationFor(command: string): CommandObservation {
     : { outcome: { kind: "escaped", detail: "unknown command" } };
 }
 
+/** The observation a working File Grant store reports over the seeded file. */
+const FILE_GRANT_OBSERVATION: FileGrantObservation = {
+  stat: {
+    name: CONFORMANCE_FILE.name,
+    size: CONFORMANCE_FILE.bytes.length,
+    modified: CONFORMANCE_FILE.modified,
+  },
+  range: CONFORMANCE_FILE_RANGE.hex,
+  tail: CONFORMANCE_FILE_TAIL.hex,
+  liveAfterRelease: false,
+};
+
 /** The seam the runner sees, with every check passing unless overridden. */
 function makeSeam(overrides: Partial<ConformanceSeam> = {}): ConformanceSeam {
   return {
@@ -70,6 +89,7 @@ function makeSeam(overrides: Partial<ConformanceSeam> = {}): ConformanceSeam {
       allocatedMb: 2_048,
       neighbourAlive: true,
     }),
+    probeFileGrants: async () => FILE_GRANT_OBSERVATION,
     heartbeat: async () => true,
     leaks: async () => 0,
     ...overrides,
@@ -484,6 +504,61 @@ describe("runConformanceChecks T8 under the Android QuickJS engine (#516)", () =
   });
 });
 
+describe("runConformanceChecks File Grants", () => {
+  it("passes when read, stat, and release agree with the seeded file", async () => {
+    const checks = await runConformanceChecks(makeSeam());
+    const check = byId(checks, FILE_GRANTS_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(check.detail).toContain("agree");
+  });
+
+  it("fails when the past-EOF read is padded to the requested length", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeFileGrants: async () => ({
+          ...FILE_GRANT_OBSERVATION,
+          tail: `${CONFORMANCE_FILE_TAIL.hex}0000`,
+        }),
+      })
+    );
+    const check = byId(checks, FILE_GRANTS_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toContain("past-EOF");
+    expect(check.detail).toContain(CONFORMANCE_FILE_TAIL.hex);
+  });
+
+  it("fails when release left the grant listed", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeFileGrants: async () => ({ ...FILE_GRANT_OBSERVATION, liveAfterRelease: true }),
+      })
+    );
+    const check = byId(checks, FILE_GRANTS_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toBe("release left the grant listed");
+  });
+
+  it("names every field that drifted from the seeded file", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeFileGrants: async () => ({
+          stat: { name: "other.txt", size: 1, modified: 0 },
+          range: "00",
+          tail: "00",
+          liveAfterRelease: false,
+        }),
+      })
+    );
+    const check = byId(checks, FILE_GRANTS_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toContain("stat named other.txt");
+    expect(check.detail).toContain(`stat sized 1, expected ${CONFORMANCE_FILE.bytes.length}`);
+    expect(check.detail).toContain("stat modified 0");
+    expect(check.detail).toContain("the range read 00");
+    expect(check.detail).toContain("the past-EOF read 00");
+  });
+});
+
 describe("runConformanceChecks reporting", () => {
   it("hands every check to onCheck in run order, before returning", async () => {
     const streamed: string[] = [];
@@ -492,7 +567,7 @@ describe("runConformanceChecks reporting", () => {
     });
     expect(streamed).toEqual(checks.map((check) => check.id));
     expect(streamed[0]).toBe(T2_FRAME_CHECK_ID);
-    expect(streamed.at(-1)).toBe(T8_CHECK_ID);
+    expect(streamed.at(-1)).toBe(FILE_GRANTS_CHECK_ID);
   });
 });
 

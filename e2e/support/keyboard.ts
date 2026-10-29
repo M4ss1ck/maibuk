@@ -47,6 +47,31 @@ export async function isFocusWithin(region: Locator): Promise<boolean> {
   return region.evaluate((el) => el.contains(document.activeElement)).catch(() => false);
 }
 
+/**
+ * Presses Shift+Tab until focus leaves `frameElement` for the host page. A Frame
+ * keeps keyboard focus while it is mounted, so a host Command (the palette) must
+ * be reached from the host after the Frame has handed focus back.
+ */
+export async function leaveFrame(
+  page: Page,
+  frameElement: Locator,
+  { max = 20 }: { max?: number } = {}
+): Promise<void> {
+  const visited: string[] = [];
+  for (let i = 0; i < max; i++) {
+    if (!(await isFrameFocused(frameElement))) return;
+    await page.keyboard.press("Shift+Tab");
+    visited.push(await describeFocus(page));
+  }
+  if (!(await isFrameFocused(frameElement))) return;
+  throw new Error(`Shift+Tab never left the Frame. Visited:\n  ${visited.join("\n  ")}`);
+}
+
+/** Whether focus sits on the Frame element itself (inside its document). */
+async function isFrameFocused(frameElement: Locator): Promise<boolean> {
+  return frameElement.evaluate((el) => el === document.activeElement).catch(() => false);
+}
+
 /** Focus lands on `region` or inside it; retries like any expect. */
 export async function expectFocusWithin(region: Locator): Promise<void> {
   await expect.poll(() => isFocusWithin(region), { message: `focus within ${region}` }).toBe(true);

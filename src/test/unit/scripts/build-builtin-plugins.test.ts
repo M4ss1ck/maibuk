@@ -123,7 +123,7 @@ describe("buildBuiltInPlugins()", () => {
     const shipped = JSON.parse(readFileSync(join(REPO_ROOT, "plugins/builtins.json"), "utf8")) as {
       plugins: string[];
     };
-    expect(shipped.plugins).toEqual(["maibuk-echoes", "maibuk-mcp"]);
+    expect(shipped.plugins).toEqual(["maibuk-echoes", "maibuk-mcp", "maibuk-reader"]);
 
     await buildBuiltInPlugins({
       sourceRoot: join(REPO_ROOT, "plugins"),
@@ -132,12 +132,15 @@ describe("buildBuiltInPlugins()", () => {
       target: "web",
     });
 
-    // maibuk-mcp lists only "desktop", so the web build ships Echoes alone.
+    // maibuk-mcp lists only "desktop", so the web build ships Echoes and Reader.
     const names = readdirSync(outRoot);
-    expect(names.sort()).toEqual(["index.json", "maibuk-echoes"]);
+    expect(names.sort()).toEqual(["index.json", "maibuk-echoes", "maibuk-reader"]);
     expect(names).not.toContain("sample-builtin");
     expect(names).not.toContain("remote-ui");
-    expect(readIndex(outRoot).plugins.map((plugin) => plugin.id)).toEqual(["maibuk-echoes"]);
+    expect(readIndex(outRoot).plugins.map((plugin) => plugin.id)).toEqual([
+      "maibuk-echoes",
+      "maibuk-reader",
+    ]);
   });
 });
 
@@ -177,9 +180,13 @@ describe("checkBundleSize()", () => {
     expect(plain).toMatchObject({ id: "desktop-only", limitBytes: 10, ok: false });
   });
 
-  it("gives maibuk-mcp the only raised budget", () => {
-    // The MCP SDK plus zod alone exceed the 150 KB default.
-    expect(BUNDLE_SIZE_LIMIT_OVERRIDES).toEqual({ "maibuk-mcp": 240 * 1024 });
+  it("gives maibuk-mcp and maibuk-reader the raised budgets", () => {
+    // The MCP SDK plus zod alone exceed the 150 KB default, and Reader carries
+    // pdf.js and the foliate-js parsers as raw source strings.
+    expect(BUNDLE_SIZE_LIMIT_OVERRIDES).toEqual({
+      "maibuk-mcp": 240 * 1024,
+      "maibuk-reader": 700 * 1024,
+    });
   });
 });
 

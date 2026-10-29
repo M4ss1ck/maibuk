@@ -21,6 +21,7 @@ function fakeRuntime(): Pick<PluginRuntime, "broker" | "manifest" | "files" | "s
       requestEndpoint: () => {},
       emit: () => false,
       stop: () => {},
+      hasOpenWork: () => false,
       stopped: false,
     },
     manifest: { customUi: false } as unknown as PluginManifest,

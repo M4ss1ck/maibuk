@@ -22,6 +22,9 @@ export const PLUGIN_API_ERROR_CODES = [
   "message-too-large",
   "network-error",
   "internal-error",
+  "user-action-required",
+  "file-missing",
+  "file-needs-permission",
 ] as const;
 
 export type PluginApiErrorCode = (typeof PLUGIN_API_ERROR_CODES)[number];
@@ -41,6 +44,13 @@ export function isPluginApiErrorCode(value: unknown): value is PluginApiErrorCod
 
 /** Largest Plugin to host message, in UTF-8 bytes (the broker decodes on the main thread). */
 export const PLUGIN_MESSAGE_MAX_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Largest byte range `files.read` returns in one call: below the message cap
+ * with room for the reply envelope, so a read never trips the broker's size
+ * check (ADR 0036).
+ */
+export const FILE_READ_MAX_BYTES = PLUGIN_MESSAGE_MAX_BYTES - 64 * 1024;
 
 /**
  * Largest streamed body chunk, serialized, in UTF-8 bytes (keeps typing smooth

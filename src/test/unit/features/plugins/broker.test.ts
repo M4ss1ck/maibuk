@@ -7,6 +7,10 @@ import {
   createPluginBroker,
 } from "@/features/plugins/broker";
 import { pluginFetch } from "@/features/plugins/network";
+import {
+  type MemoryPluginFileGrantStore,
+  createMemoryPluginFileGrantStore,
+} from "@/features/plugins/file-grants";
 import { createMemoryPluginSecretStore } from "@/features/plugins/secret-store";
 import type {
   PluginApiHandlers,
@@ -16,6 +20,7 @@ import type {
 import { createPluginClient } from "@/plugin-sdk";
 import {
   type HostToPluginMessage,
+  FILE_READ_MAX_BYTES,
   PLUGIN_MESSAGE_MAX_BYTES,
   PLUGIN_STREAM_CHUNK_MAX_BYTES,
   PluginApiError,
@@ -1281,5 +1286,261 @@ describe("streamed bodies", () => {
     release();
     expect((await ended)?.code).toBe("plugin-stopped");
     expect(received).toEqual(["first"]);
+  });
+});
+
+describe("File Grants (ADR 0036)", () => {
+  const FILE = { name: "a.pdf", bytes: new Uint8Array([1, 2, 3, 4, 5]) };
+
+  /** The six `files.*` handlers over one in-memory store, in the broker's shape. */
+  function fileHandlers(store: MemoryPluginFileGrantStore): PluginApiHandlers {
+    return {
+      "files.pick": ({ extensions }, { pluginId }) => store.pick(pluginId, extensions),
+      "files.read": ({ grant, offset, length }, { pluginId }) =>
+        store.read(pluginId, grant, offset, length),
+      "files.stat": ({ grant }, { pluginId }) => store.stat(pluginId, grant),
+      "files.requestAccess": ({ grant }, { pluginId }) => store.requestAccess(pluginId, grant),
+      "files.release": async ({ grant }, { pluginId }) => {
+        await store.release(pluginId, grant);
+        return null;
+      },
+      "files.list": (_params, { pluginId }) => store.list(pluginId),
+    };
+  }
+
+  /** Holds one `command.run` in flight: the author's Command is running. */
+  function holdCommandRun(client: ReturnType<typeof setup>["client"]) {
+    let reached: () => void = () => {};
+    let settle: (error?: Error) => void = () => {};
+    const arrived = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    client.onHostRequest(
+      () =>
+        new Promise<null>((resolve, reject) => {
+          reached();
+          settle = (error) => (error ? reject(error) : resolve(null));
+        })
+    );
+    return { arrived, finish: () => settle() };
+  }
+
+  it("refuses every files.* without files:pick", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    const { client } = setup({
+      declared: ["files:pick"],
+      grantedAtStart: [],
+      handlers: fileHandlers(store),
+    });
+
+    const calls = [
+      () => client.files.pick({ extensions: ["pdf"] }),
+      () => client.files.read({ grant: "g", offset: 0, length: 1 }),
+      () => client.files.stat({ grant: "g" }),
+      () => client.files.requestAccess({ grant: "g" }),
+      () => client.files.release({ grant: "g" }),
+      () => client.files.list(),
+    ];
+    for (const call of calls) {
+      const error = await refusal(call());
+      expect(error.code).toBe("permission-denied");
+      expect(error.permission).toBe("files:pick");
+    }
+  });
+
+  it("refuses files.pick with user-action-required outside the author's action", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    const { client } = setup({
+      declared: ["files:pick"],
+      hasUserActivation: () => false,
+      handlers: fileHandlers(store),
+    });
+    store.queuePick("fixture", FILE);
+
+    const error = await refusal(client.files.pick({ extensions: ["pdf"] }));
+
+    expect(error.code).toBe("user-action-required");
+    await expect(client.files.list()).resolves.toEqual([]);
+  });
+
+  it("accepts files.pick inside the author's click", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    const { client } = setup({
+      declared: ["files:pick"],
+      hasUserActivation: () => true,
+      handlers: fileHandlers(store),
+    });
+    store.queuePick("fixture", FILE);
+
+    await expect(client.files.pick({ extensions: ["pdf"] })).resolves.toMatchObject({
+      name: "a.pdf",
+      size: 5,
+    });
+  });
+
+  it("accepts files.pick while the Plugin answers a Command run", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    const { broker, client } = setup({
+      declared: ["files:pick"],
+      hasUserActivation: () => false,
+      handlers: fileHandlers(store),
+    });
+    store.queuePick("fixture", FILE);
+    const { arrived, finish } = holdCommandRun(client);
+    const run = broker.request("command.run", { id: "openFile" });
+    await arrived;
+
+    await expect(client.files.pick({ extensions: ["pdf"] })).resolves.toMatchObject({
+      name: "a.pdf",
+    });
+
+    finish();
+    await expect(run).resolves.toBeNull();
+  });
+
+  it("refuses files.requestAccess outside the author's action too", async () => {
+    const store = createMemoryPluginFileGrantStore([{ pluginId: "fixture", ...FILE }]);
+    const { client } = setup({
+      declared: ["files:pick"],
+      hasUserActivation: () => false,
+      handlers: fileHandlers(store),
+    });
+    const [grant] = await store.list("fixture");
+
+    const error = await refusal(client.files.requestAccess({ grant: grant.grant }));
+
+    expect(error.code).toBe("user-action-required");
+  });
+
+  it("refuses a negative offset, a zero length, and a range over the cap", async () => {
+    const store = createMemoryPluginFileGrantStore([{ pluginId: "fixture", ...FILE }]);
+    const { client } = setup({ declared: ["files:pick"], handlers: fileHandlers(store) });
+    const [grant] = await store.list("fixture");
+
+    for (const input of [
+      { grant: grant.grant, offset: -1, length: 1 },
+      { grant: grant.grant, offset: 0, length: 0 },
+      { grant: grant.grant, offset: 0, length: FILE_READ_MAX_BYTES + 1 },
+    ]) {
+      const error = await refusal(client.files.read(input));
+      expect(error.code, JSON.stringify(input)).toBe("invalid-params");
+    }
+  });
+
+  it("reads a range as a transferred ArrayBuffer, short and empty past the end", async () => {
+    const store = createMemoryPluginFileGrantStore([{ pluginId: "fixture", ...FILE }]);
+    const { client } = setup({ declared: ["files:pick"], handlers: fileHandlers(store) });
+    const [grant] = await store.list("fixture");
+
+    const three = await client.files.read({ grant: grant.grant, offset: 1, length: 10 });
+    // The bytes cross the port by transfer, so they arrive as an ArrayBuffer
+    // (not a view or a copied JSON shape).
+    expect(Object.prototype.toString.call(three)).toBe("[object ArrayBuffer]");
+    expect(three.byteLength).toBe(4);
+    expect([...new Uint8Array(three)]).toEqual([2, 3, 4, 5]);
+
+    const empty = await client.files.read({ grant: grant.grant, offset: 5, length: 10 });
+    expect(Object.prototype.toString.call(empty)).toBe("[object ArrayBuffer]");
+    expect(empty.byteLength).toBe(0);
+  });
+
+  it("scopes grant ids by Plugin: another Plugin's grant is file-missing", async () => {
+    const store = createMemoryPluginFileGrantStore([{ pluginId: "alpha", ...FILE }]);
+    const [alphaGrant] = await store.list("alpha");
+    const handlers = fileHandlers(store);
+    const alpha = setup({ pluginId: "alpha", declared: ["files:pick"], handlers });
+    const beta = setup({ pluginId: "beta", declared: ["files:pick"], handlers });
+
+    await expect(alpha.client.files.stat({ grant: alphaGrant.grant })).resolves.toMatchObject({
+      name: "a.pdf",
+    });
+    const error = await refusal(
+      beta.client.files.read({ grant: alphaGrant.grant, offset: 0, length: 1 })
+    );
+    expect(error.code).toBe("file-missing");
+  });
+
+  it("ends a grant on release", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    store.queuePick("fixture", FILE);
+    const { client } = setup({
+      declared: ["files:pick"],
+      hasUserActivation: () => true,
+      handlers: fileHandlers(store),
+    });
+    const picked = await client.files.pick({ extensions: ["pdf"] });
+    if (!picked) throw new Error("the pick resolved to null");
+
+    await expect(client.files.release({ grant: picked.grant })).resolves.toBeNull();
+
+    await expect(client.files.list()).resolves.toEqual([]);
+    const error = await refusal(
+      client.files.read({ grant: picked.grant, offset: 0, length: 1 })
+    );
+    expect(error.code).toBe("file-missing");
+  });
+});
+
+describe("open work", () => {
+  it("reports no open work on a fresh broker", () => {
+    const { broker } = setup();
+    expect(broker.hasOpenWork()).toBe(false);
+  });
+
+  it("ignores the heartbeat: an unanswered health check is not open work", async () => {
+    const { broker, client } = setup();
+    client.onHostRequest(() => new Promise<null>(() => {}));
+    const beat = broker.request("health.check", {});
+    expect(broker.hasOpenWork()).toBe(false);
+    broker.stop("requested");
+    await expect(beat).rejects.toBeTruthy();
+  });
+
+  it("reports a host request as open work until the Plugin answers it", async () => {
+    const { broker, client } = setup();
+    let settle: () => void = () => {};
+    let reached: () => void = () => {};
+    const arrived = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    client.onHostRequest(
+      () =>
+        new Promise<null>((resolve) => {
+          reached();
+          settle = () => resolve(null);
+        })
+    );
+    const run = broker.request("command.run", { id: "nextEcho" });
+    await arrived;
+    expect(broker.hasOpenWork()).toBe(true);
+
+    settle();
+    await run;
+    expect(broker.hasOpenWork()).toBe(false);
+  });
+
+  it("reports a Plugin call as open work until its handler finishes", async () => {
+    let release: () => void = () => {};
+    let entered: () => void = () => {};
+    const handlerEntered = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const { broker, client } = setup({
+      handlers: {
+        "storage.keys": () => {
+          entered();
+          return new Promise<string[]>((resolve) => {
+            release = () => resolve(["a"]);
+          });
+        },
+      },
+    });
+    const keys = client.storage.keys();
+    await handlerEntered;
+    expect(broker.hasOpenWork()).toBe(true);
+
+    release();
+    await keys;
+    expect(broker.hasOpenWork()).toBe(false);
   });
 });

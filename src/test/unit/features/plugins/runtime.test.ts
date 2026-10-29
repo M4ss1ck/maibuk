@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { startPlugin } from "@/features/plugins/runtime";
-import {
-  fakePluginFrame,
-  pluginFolder,
-} from "@/test/support/plugin-fixtures";
+import { fakePluginFrame, pluginFolder } from "@/test/support/plugin-fixtures";
 import type { PluginFolder } from "@/features/plugins/types";
 
 async function start(
@@ -20,6 +17,28 @@ async function start(
 }
 
 describe("startPlugin()", () => {
+  it("compares the folder against a hash the caller already computed, instead of hashing again", async () => {
+    const folder = pluginFolder({});
+    const createFrame = vi.fn(() => fakePluginFrame());
+    const pinnedHash = await hashPluginDirectory(folder.files);
+
+    // A wrong known hash is what the comparison sees: the folder is not hashed a second time.
+    const refused = await startPlugin({
+      folder,
+      pinnedHash,
+      knownHash: "h1:known-but-wrong",
+      createFrame,
+    });
+    expect(refused).toMatchObject({
+      ok: false,
+      refusal: { code: "hash-mismatch", actual: "h1:known-but-wrong" },
+    });
+    expect(createFrame).not.toHaveBeenCalled();
+
+    const accepted = await startPlugin({ folder, pinnedHash, knownHash: pinnedHash, createFrame });
+    expect(accepted.ok).toBe(true);
+  });
+
   it("refuses a folder changed after pinning before any frame or Worker exists", async () => {
     const folder = pluginFolder({});
     const createFrame = vi.fn(() => fakePluginFrame());

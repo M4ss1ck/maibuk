@@ -15,10 +15,12 @@
  * Plugin Permissions; `secrets.*` writes the calling
  * Plugin's credentials through the registered store; `network.fetch` fetches
  * on a granted host and streams the body, injecting a named secret into a
- * declared header; `clipboard.*` reads and writes the platform clipboard; and
+ * declared header; `clipboard.*` reads and writes the platform clipboard;
+ * `files.*` picks, reads, and releases File Grants through the registered
+ * store (ADR 0036); and
  * `toolbar.setPressed` sets one of the Plugin's Toggle Buttons on or off.
  * The broker already enforces each row's Plugin Permission, input schema,
- * Library availability, and rate limit, so a handler only does its work.
+ * Library availability, user action, and rate limit, so a handler only does its work.
  */
 
 import { toast } from "@/components/ui/Toast";
@@ -32,6 +34,10 @@ import {
   setPluginEditorHighlights,
 } from "@/features/plugins/editor-host";
 import { endpointUrlFor } from "@/features/plugins/endpoint";
+import {
+  getPluginFileGrantStore,
+  type PluginFileGrantStore,
+} from "@/features/plugins/file-grants";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
   checkpointPluginBook,
@@ -81,6 +87,21 @@ function pluginSecretStore(): PluginSecretStore {
     throw new PluginApiError({
       code: "internal-error",
       message: "No Plugin secret store is registered in Maibuk",
+    });
+  }
+  return store;
+}
+
+/**
+ * The registered File Grant store. The app always registers one, so without it
+ * a `files.*` call is a host failure, not a call the Plugin can retry.
+ */
+function pluginFileGrantStore(): PluginFileGrantStore {
+  const store = getPluginFileGrantStore();
+  if (!store) {
+    throw new PluginApiError({
+      code: "internal-error",
+      message: "No Plugin File Grant store is registered in Maibuk",
     });
   }
   return store;
@@ -213,5 +234,19 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     "clipboard.readText": () => runClipboard("read", (clipboard) => clipboard.readText()),
     "clipboard.writeText": ({ text }) =>
       runClipboard("written", (clipboard) => clipboard.writeText(text)).then(() => null),
+    // File Grant rows resolve through the store; `async` also makes a missing
+    // store a rejected promise, the way every other host failure arrives.
+    "files.pick": async ({ extensions }, { pluginId }) =>
+      pluginFileGrantStore().pick(pluginId, extensions),
+    "files.read": async ({ grant, offset, length }, { pluginId }) =>
+      pluginFileGrantStore().read(pluginId, grant, offset, length),
+    "files.stat": async ({ grant }, { pluginId }) => pluginFileGrantStore().stat(pluginId, grant),
+    "files.requestAccess": async ({ grant }, { pluginId }) =>
+      pluginFileGrantStore().requestAccess(pluginId, grant),
+    "files.release": async ({ grant }, { pluginId }) => {
+      await pluginFileGrantStore().release(pluginId, grant);
+      return null;
+    },
+    "files.list": async (_params, { pluginId }) => pluginFileGrantStore().list(pluginId),
   };
 }

@@ -97,6 +97,22 @@ export interface StopObservation {
 }
 
 /**
+ * What the File Grant probe observed (#653): the seeded file's `files.stat`,
+ * the hex bytes two `files.read` ranges returned, and whether `files.release`
+ * left the grant listed. Every field is a fact; `checks.ts` compares them with
+ * the seeded file's own bytes.
+ */
+export interface FileGrantObservation {
+  stat: { name: string; size: number; modified: number };
+  /** The mid-file range's bytes, as lowercase hex. */
+  range: string;
+  /** The past-EOF read's bytes, as lowercase hex: shorter than asked, never padded. */
+  tail: string;
+  /** Whether the grant was still listed after `files.release`. */
+  liveAfterRelease: boolean;
+}
+
+/**
  * T8's allocation cap (MB). A Worker that reaches it unstopped, with the host
  * still answering, has shown the engine sets no per-Worker memory limit below
  * the cap; the lane stops there rather than take the test machine to its limit.
@@ -150,6 +166,12 @@ export interface ConformanceSeam {
   probeAllocate(): Promise<StopObservation>;
   /** T8: the yielding allocation, resolved once the Plugin stopped or the budget ran out. */
   probeOom(): Promise<OomObservation>;
+  /**
+   * The File Grant rows (#653) over a seeded memory store: what `files.read`
+   * returned for a mid-file range and for a past-EOF read, what `files.stat`
+   * reported, and whether `files.release` ended the grant.
+   */
+  probeFileGrants(): Promise<FileGrantObservation>;
   /** A host heartbeat posted after T8; false when the renderer no longer answers. */
   heartbeat(): Promise<boolean>;
   /**

@@ -126,7 +126,10 @@ contains the SDK from `src/plugin-sdk`, so the gate covers the SDK plus the
 Plugin together. A Built-in whose weight is mostly a third-party runtime may
 carry a higher per-Plugin budget in `scripts/build-builtin-plugins.ts`
 (`BUNDLE_SIZE_LIMIT_OVERRIDES`): maibuk-mcp gets 240 KB because the MCP SDK plus
-zod alone exceed 150 KB gzip.
+zod alone exceed 150 KB gzip, and maibuk-reader gets 700 KB because it carries
+pdf.js's core worker and display module and the foliate-js parsers as raw source
+strings under `plugins/maibuk-reader/vendor/` (about 653 KB gzip on their own),
+evaluated only when a Document opens.
 
 ## Plugins in their own repository
 

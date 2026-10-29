@@ -74,6 +74,9 @@ export const THROTTLE_GAP_MS = (CALL_BURST / CALL_RATE_PER_SECOND) * 1000;
  */
 export const ENDPOINT_ANSWER_DEADLINE_MS = 35_000;
 
+/** The heartbeat's host request: it runs every beat, so it is never open work. */
+const HEALTH_CHECK_METHOD = "health.check";
+
 // The SDK writes `kind`, `id`, then `method` or `event` first, so a refused
 // message can be answered, with the method named, without decoding it.
 const MESSAGE_HEAD =
@@ -193,6 +196,14 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   const now = options.now ?? (() => performance.now());
   const isLibraryAvailable = options.isLibraryAvailable ?? (() => true);
   const trackLibraryWork = options.trackLibraryWork ?? (<T,>(work: Promise<T>) => work);
+  const hasUserActivation =
+    options.hasUserActivation ??
+    (() =>
+      (
+        globalThis as {
+          navigator?: { userActivation?: { isActive?: unknown } };
+        }
+      ).navigator?.userActivation?.isActive === true);
   const rows = new Map((options.table ?? PLUGIN_API_TABLE).map((row) => [row.id, row]));
   const events = new Map((options.events ?? PLUGIN_API_EVENTS).map((row) => [row.id, row]));
   const reserved: readonly string[] = PLUGIN_API_RESERVED_NAMESPACES;
@@ -223,6 +234,8 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   const inFlightCommandRuns = new Map<number, number>();
   /** Endpoint requests whose answer has not finished, by host request id. */
   const endpoints = new Map<number, OpenEndpoint>();
+  /** Plugin calls whose handler (and any streamed body) has not finished. */
+  let openCalls = 0;
 
   function hasRecentCommandRun(): boolean {
     const time = now();
@@ -232,8 +245,16 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     return false;
   }
 
-  function post(message: HostToPluginMessage) {
-    if (!stopped) port.postMessage(message);
+  function hasOpenWork(): boolean {
+    if (openCalls > 0 || endpoints.size > 0) return true;
+    for (const method of pendingMethods.values()) {
+      if (method !== HEALTH_CHECK_METHOD) return true;
+    }
+    return false;
+  }
+
+  function post(message: HostToPluginMessage, transfer?: Transferable[]) {
+    if (!stopped) port.postMessage(message, transfer);
   }
 
   function fail(id: number, error: PluginApiErrorData) {
@@ -482,6 +503,17 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       fail(id, refusal("library-unavailable", "The Library is not available", { method }));
       return;
     }
+    if (row.requiresUserAction && !hasRecentCommandRun() && !hasUserActivation()) {
+      fail(
+        id,
+        refusal(
+          "user-action-required",
+          `${method} needs the author's click, key press, or Command run`,
+          { method }
+        )
+      );
+      return;
+    }
     // While the host awaits this Plugin's own `command.run`, a call with a
     // `minIntervalMs` is answering the author: accept it, and leave
     // `lastAcceptedAt` alone so solicited announcements do not consume the
@@ -532,6 +564,12 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       }
       post({ kind: "result", id, ok: true, result: outcome.result });
       await streamBody(row, id, outcome.body);
+      return;
+    }
+    if (outcome instanceof ArrayBuffer) {
+      // `files.read` hands its bytes over rather than copying them, so a large
+      // range crosses the port once.
+      post({ kind: "result", id, ok: true, result: outcome }, [outcome]);
       return;
     }
     post({ kind: "result", id, ok: true, result: outcome });
@@ -675,7 +713,10 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     if (record.kind === "chunk" || record.kind === "end") return;
     if (typeof record.id !== "number") return;
     if (record.kind === "call" && typeof record.method === "string") {
-      void handleCall(record.id, record.method, record.params);
+      openCalls += 1;
+      void handleCall(record.id, record.method, record.params).finally(() => {
+        openCalls -= 1;
+      });
     } else if (
       (record.kind === "subscribe" || record.kind === "unsubscribe") &&
       typeof record.event === "string"
@@ -734,6 +775,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       return true;
     },
     stop,
+    hasOpenWork,
     get stopped() {
       return stopped;
     },
