@@ -172,6 +172,7 @@ interface Frame {
   cleanups: (() => void)[];
   open(options?: OpenOptions): void;
   shadowText(): string;
+  shadowHits(): HTMLElement[];
 }
 
 /** Loads the Frame's markup, sanitizer, script, and stubs, with a fixture port. */
@@ -220,6 +221,11 @@ function loadFrame(name: string, options: OpenOptions = {}): Frame {
       const shadow = host && (host as HTMLElement).shadowRoot;
       return shadow ? shadow.textContent || "" : "";
     },
+    shadowHits() {
+      const host = document.getElementById("stage")?.firstElementChild as HTMLElement | null;
+      const shadow = host?.shadowRoot;
+      return shadow ? Array.from(shadow.querySelectorAll<HTMLElement>(".reader-search-hit")) : [];
+    },
   };
   return frame;
 }
@@ -229,6 +235,13 @@ function el(id: string): HTMLElement {
   const element = document.getElementById(id);
   if (element === null) throw new Error(`missing #${id}`);
   return element;
+}
+
+/** The indexes of the marks the Frame has flagged as the current match. */
+function currentHitIndexes(current: Frame): number[] {
+  return current
+    .shadowHits()
+    .flatMap((hit, index) => (hit.classList.contains("is-current") ? [index] : []));
 }
 
 let frame: Frame | null = null;
@@ -344,9 +357,59 @@ describe("Flowing view", () => {
     expect(slices.length).toBeGreaterThan(0);
     expect(frame.shadowText()).toContain("The spice must flow");
   });
+
+  it("marks the current match and moves it with Next and Previous", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 3 in this section"));
+    const user = userEvent.setup();
+    await user.keyboard("{Control>}f{/Control}");
+    await user.type(el("search-input"), "spice");
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(el("search-status").textContent).toBe("1 of 3"));
+    // Section one reads "The spice must flow", "Spice is life ... The spice is
+    // the desert.": three marks, and only the first is current.
+    expect(frame.shadowHits().map((hit) => hit.textContent)).toEqual(["spice", "Spice", "spice"]);
+    expect(currentHitIndexes(frame)).toEqual([0]);
+
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(el("search-status").textContent).toBe("2 of 3"));
+    expect(currentHitIndexes(frame)).toEqual([1]);
+    expect(frame.shadowHits()[1]?.textContent).toBe("Spice");
+
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    await vi.waitFor(() => expect(el("search-status").textContent).toBe("1 of 3"));
+    expect(currentHitIndexes(frame)).toEqual([0]);
+
+    await user.click(el("search-next"));
+    await vi.waitFor(() => expect(el("search-status").textContent).toBe("2 of 3"));
+    expect(currentHitIndexes(frame)).toEqual([1]);
+
+    await user.click(el("search-previous"));
+    await vi.waitFor(() => expect(el("search-status").textContent).toBe("1 of 3"));
+    expect(currentHitIndexes(frame)).toEqual([0]);
+  });
+
+  it("leaves no native text selection after search, Next, and paging", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 3 in this section"));
+    const user = userEvent.setup();
+    await user.keyboard("{Control>}f{/Control}");
+    await user.type(el("search-input"), "spice");
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(el("search-status").textContent).toBe("1 of 3"));
+    await user.click(el("search-next"));
+    await vi.waitFor(() => expect(el("search-status").textContent).toBe("2 of 3"));
+    await user.keyboard("{ArrowRight}");
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("2 of 3 in this section"));
+
+    const selection = window.getSelection();
+    expect(selection === null || selection.rangeCount === 0 || selection.isCollapsed).toBe(true);
+  });
 });
 
-describe("book markup", () => {
+describe("Document markup", () => {
   it("never runs an inline script or handler from a section", async () => {
     delete (globalThis as Record<string, unknown>).__readerScriptRan;
     delete (globalThis as Record<string, unknown>).__readerHandlerRan;
@@ -467,7 +530,7 @@ describe("the other reflowable formats", () => {
   });
 });
 
-describe("refusing an unreadable book", () => {
+describe("refusing an unreadable Document", () => {
   it("reports a corrupt EPUB as damaged", async () => {
     frame = loadFrame("corrupt.epub");
     frame.open();

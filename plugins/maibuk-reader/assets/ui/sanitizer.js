@@ -324,6 +324,7 @@
       ".reader-flow img, .reader-flow svg, .reader-flow video { max-width: 100%; height: auto; }",
       ".reader-flow a { color: inherit; text-decoration: underline; }",
       ".reader-flow .reader-search-hit { background: var(--maibuk-color-warning-bg, #fde68a); color: inherit; }",
+      ".reader-flow .reader-search-hit.is-current { background: var(--maibuk-color-primary, #3b82f6); color: var(--maibuk-color-primary-foreground, #000000); }",
     ].join("\n");
   }
 

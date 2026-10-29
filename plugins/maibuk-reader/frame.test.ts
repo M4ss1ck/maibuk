@@ -112,7 +112,16 @@ function createPdfStub(options: StubOptions = {}) {
 
   class StubTextLayer {
     constructor(readonly options: Record<string, unknown>) {}
-    async render() {}
+    /** Like pdf.js, one span per text item, so search marks have text to land in. */
+    async render() {
+      const source = this.options.textContentSource as { items: { str: string }[] };
+      const container = this.options.container as HTMLElement;
+      for (const item of source.items) {
+        const span = document.createElement("span");
+        span.textContent = item.str;
+        container.append(span);
+      }
+    }
   }
 
   class PasswordException extends Error {
@@ -409,6 +418,69 @@ describe("search", () => {
     await user.keyboard("{Enter}");
     await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("3 of 4"));
     expect(el("search-status").textContent).toBe("1 of 1");
+  });
+
+  it("marks the current match in the text layer and moves it match by match", async () => {
+    const stub = createPdfStub({
+      pages: 4,
+      text: (page) => {
+        if (page === 1) return "spice and spice";
+        if (page === 3) return "the spice must flow";
+        return `Page ${page}`;
+      },
+    });
+    frame = loadFrame(stub);
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 4"));
+
+    const user = userEvent.setup();
+    await user.keyboard("{Control>}f{/Control}");
+    await user.type(el("search-input"), "spice");
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(el("search-status").textContent).toBe("1 of 3"));
+    // Page 1 holds two matches; the first is current and page 3 waits its turn.
+    const marks = () => Array.from(el("stage").querySelectorAll<HTMLElement>(".reader-search-hit"));
+    const current = () =>
+      marks().flatMap((mark, index) => (mark.classList.contains("is-current") ? [index] : []));
+    await vi.waitFor(() => expect(current()).toEqual([0]));
+    expect(marks()).toHaveLength(2);
+
+    await user.click(el("search-next"));
+    await vi.waitFor(() => expect(current()).toEqual([1]));
+    expect(el("search-status").textContent).toBe("2 of 3");
+    expect(el("page-indicator").textContent).toBe("1 of 4");
+
+    await user.click(el("search-next"));
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("3 of 4"));
+    await vi.waitFor(() => expect(current()).toEqual([0]));
+    expect(el("search-status").textContent).toBe("3 of 3");
+
+    await user.click(el("search-previous"));
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 4"));
+    await vi.waitFor(() => expect(current()).toEqual([1]));
+    expect(el("search-status").textContent).toBe("2 of 3");
+  });
+
+  it("leaves no native text selection after search, Next, and paging", async () => {
+    const stub = createPdfStub({
+      pages: 4,
+      text: (page) => (page === 3 ? "the spice must flow" : `Page ${page}`),
+    });
+    frame = loadFrame(stub);
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 4"));
+
+    const user = userEvent.setup();
+    await user.keyboard("{Control>}f{/Control}");
+    await user.type(el("search-input"), "spice");
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("3 of 4"));
+    await user.click(el("search-next"));
+    await user.keyboard("{ArrowLeft}");
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("2 of 4"));
+
+    const selection = window.getSelection();
+    expect(selection === null || selection.rangeCount === 0 || selection.isCollapsed).toBe(true);
   });
 });
 

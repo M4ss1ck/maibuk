@@ -1713,8 +1713,36 @@
     if (flow && flow.index === match.section) {
       applyFlowPage(pageForCharOffset(flow.doc, match.offset));
       highlightFlow();
+      revealFlowHit();
       schedulePosition();
     }
+  }
+
+  /**
+   * The character offset of the current match when it lies in the section on
+   * screen, or -1. Offsets count the same text nodes `highlightFlow` walks.
+   */
+  function currentFlowOffset() {
+    if (!flow || search.index < 0) return -1;
+    const match = search.matches[search.index];
+    return match && match.section === flow.index ? match.offset : -1;
+  }
+
+  /**
+   * Turns to the Flowing page that holds the current mark. The estimate in
+   * `pageForCharOffset` is by character count, which images and headings skew,
+   * so the mark's own column decides. Columns are measured only when there is
+   * layout to measure.
+   */
+  function revealFlowHit() {
+    if (!flow) return;
+    const hit = flow.shadow.querySelector(".reader-search-hit.is-current");
+    const columns = flow.columns.getBoundingClientRect();
+    if (!hit || columns.width === 0) return;
+    const column = hit.getBoundingClientRect().left - columns.left;
+    const stride = flow.pageWidth + flow.gap;
+    const page = clamp(Math.floor(column / stride), 0, Math.max(0, flow.pages - 1));
+    if (page !== flow.pageIndex) applyFlowPage(page);
   }
 
   /** @param {boolean} backwards */
@@ -1730,17 +1758,25 @@
     clearFlowHighlights();
     if (!flow || search.query === "") return;
     const needle = search.query.toLocaleLowerCase();
+    const current = currentFlowOffset();
+    // `base` is the section offset where the node starts, the same count the
+    // search's match offsets use.
+    let base = 0;
     for (const node of textNodes(flow.content)) {
       const text = node.nodeValue || "";
       const haystack = text.toLocaleLowerCase();
       let index = haystack.indexOf(needle);
-      if (index === -1) continue;
+      if (index === -1) {
+        base += text.length;
+        continue;
+      }
       const fragment = document.createDocumentFragment();
       let last = 0;
       while (index !== -1) {
         fragment.append(text.slice(last, index));
         const mark = document.createElement("mark");
-        mark.className = "reader-search-hit";
+        mark.className =
+          base + index === current ? "reader-search-hit is-current" : "reader-search-hit";
         mark.textContent = text.slice(index, index + needle.length);
         fragment.append(mark);
         last = index + needle.length;
@@ -1748,6 +1784,7 @@
       }
       fragment.append(text.slice(last));
       node.parentNode?.replaceChild(fragment, node);
+      base += text.length;
     }
   }
 
@@ -1856,7 +1893,7 @@
       } catch {
         /* A page without a text layer is still readable. */
       }
-      highlightText(textLayer, search.query);
+      paintPdfMatches(textLayer, index);
       /** @type {RenderedPage} */
       const rendered = { index, canvas, textLayer, page, scale };
       pageCache.set(index, rendered);
@@ -1876,6 +1913,7 @@
     if (zoomLevel)
       zoomLevel.textContent = t("zoomLevel", { percent: Math.round(rendered.scale * 100) });
     updateIndicator();
+    revealPdfMatch();
   }
 
   function renderNeighbors() {
@@ -2355,8 +2393,15 @@
     if (restoreFocus !== false) findToggle.focus();
   }
 
-  /** @param {HTMLElement} container @param {string} query */
-  function highlightText(container, query) {
+  /**
+   * Marks each match of `query` in the text under `container`. The `current`
+   * ordinal, counted in document order across the container, gets the
+   * `is-current` class as well.
+   * @param {HTMLElement} container
+   * @param {string} query
+   * @param {number} [current]
+   */
+  function highlightText(container, query, current = -1) {
     if (!query) return;
     const needle = query.toLocaleLowerCase();
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
@@ -2367,6 +2412,7 @@
         nodes.push(/** @type {Text} */ (walker.currentNode));
       }
     }
+    let ordinal = 0;
     for (const node of nodes) {
       const text = node.nodeValue || "";
       const haystack = text.toLocaleLowerCase();
@@ -2377,9 +2423,10 @@
       while (index !== -1) {
         fragment.append(text.slice(last, index));
         const mark = document.createElement("span");
-        mark.className = "reader-search-hit";
+        mark.className = ordinal === current ? "reader-search-hit is-current" : "reader-search-hit";
         mark.textContent = text.slice(index, index + needle.length);
         fragment.append(mark);
+        ordinal += 1;
         last = index + needle.length;
         index = haystack.indexOf(needle, last);
       }
@@ -2388,14 +2435,66 @@
     }
   }
 
-  function clearHighlights() {
-    for (const hit of Array.from(document.querySelectorAll(".reader-search-hit"))) {
+  /** @param {ParentNode} root */
+  function unwrapHits(root) {
+    for (const hit of Array.from(root.querySelectorAll(".reader-search-hit"))) {
       const parent = hit.parentNode;
       if (!parent) continue;
       parent.replaceChild(document.createTextNode(hit.textContent || ""), hit);
       parent.normalize();
     }
+  }
+
+  function clearHighlights() {
+    unwrapHits(document);
     clearFlowHighlights();
+  }
+
+  /** Every Page view match is one occurrence; `search.index` counts them all. */
+  function pdfMatchTotal() {
+    let total = 0;
+    for (const match of search.matches) total += match.count;
+    return total;
+  }
+
+  /**
+   * The page an occurrence sits on, and its place among that page's matches.
+   * @param {number} index
+   * @returns {{ page: number, ordinal: number } | null}
+   */
+  function pdfMatchAt(index) {
+    let first = 0;
+    for (const match of search.matches) {
+      if (index < first + match.count) return { page: match.page, ordinal: index - first };
+      first += match.count;
+    }
+    return null;
+  }
+
+  /**
+   * Repaints one page's marks for the current query, flagging the current
+   * occurrence when it sits on this page.
+   * @param {HTMLElement} container
+   * @param {number} index
+   */
+  function paintPdfMatches(container, index) {
+    unwrapHits(container);
+    const at = search.index >= 0 ? pdfMatchAt(search.index) : null;
+    highlightText(container, search.query, at && at.page === index ? at.ordinal : -1);
+  }
+
+  /** Repaints every rendered page, then brings the current mark into view. */
+  function repaintPdfMatches() {
+    for (const [index, rendered] of pageCache) paintPdfMatches(rendered.textLayer, index);
+    revealPdfMatch();
+  }
+
+  /** Scrolls the shown page's current mark into view, if it has one. */
+  function revealPdfMatch() {
+    const hit = stage.querySelector(".reader-search-hit.is-current");
+    if (hit && typeof hit.scrollIntoView === "function") {
+      hit.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
   }
 
   /** @param {string} query */
@@ -2435,8 +2534,7 @@
     search.index = 0;
     updateSearchStatus();
     goToPage(search.matches[0].page);
-    const rendered = pageCache.get(search.matches[0].page);
-    if (rendered) highlightText(rendered.textLayer, search.query);
+    repaintPdfMatches();
   }
 
   /** @param {boolean} backwards */
@@ -2460,10 +2558,13 @@
       stepFlowMatch(backwards);
       return;
     }
-    const length = search.matches.length;
+    const length = pdfMatchTotal();
+    if (length === 0) return;
     search.index = (search.index + (backwards ? -1 : 1) + length) % length;
     updateSearchStatus();
-    goToPage(search.matches[search.index].page);
+    const at = pdfMatchAt(search.index);
+    if (at) goToPage(at.page);
+    repaintPdfMatches();
   }
 
   function updateSearchStatus() {
@@ -2474,6 +2575,8 @@
       }
       return;
     }
+    // A search still running has no current match yet.
+    if (search.index < 0) return;
     if (mode === "flow") {
       searchStatus.textContent = t("searchMatches", {
         current: search.index + 1,
@@ -2481,13 +2584,10 @@
       });
       return;
     }
-    let total = 0;
-    let before = 0;
-    for (let index = 0; index < search.matches.length; index += 1) {
-      total += search.matches[index].count;
-      if (index < search.index) before += search.matches[index].count;
-    }
-    searchStatus.textContent = t("searchMatches", { current: before + 1, total });
+    searchStatus.textContent = t("searchMatches", {
+      current: search.index + 1,
+      total: pdfMatchTotal(),
+    });
   }
 
   /* Password and errors --------------------------------------------------- */
