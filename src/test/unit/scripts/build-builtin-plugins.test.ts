@@ -180,9 +180,13 @@ describe("checkBundleSize()", () => {
     expect(plain).toMatchObject({ id: "desktop-only", limitBytes: 10, ok: false });
   });
 
-  it("gives maibuk-mcp the only raised budget", () => {
-    // The MCP SDK plus zod alone exceed the 150 KB default.
-    expect(BUNDLE_SIZE_LIMIT_OVERRIDES).toEqual({ "maibuk-mcp": 240 * 1024 });
+  it("gives maibuk-mcp and maibuk-reader the raised budgets", () => {
+    // The MCP SDK plus zod alone exceed the 150 KB default, and Reader carries
+    // pdf.js and the foliate-js parsers as raw source strings.
+    expect(BUNDLE_SIZE_LIMIT_OVERRIDES).toEqual({
+      "maibuk-mcp": 240 * 1024,
+      "maibuk-reader": 700 * 1024,
+    });
   });
 });
 

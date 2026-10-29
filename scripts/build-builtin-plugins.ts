@@ -47,10 +47,16 @@ export const BUNDLE_SIZE_LIMIT_BYTES = 150 * 1024;
 /**
  * A per-Built-in budget above the default, keyed by Plugin id. Only a Plugin
  * whose weight is mostly a third-party runtime needs one: maibuk-mcp carries
- * the MCP SDK plus zod, which alone exceed 150 KB gzip.
+ * the MCP SDK plus zod, which alone exceed 150 KB gzip, and maibuk-reader
+ * carries pdf.js and the foliate-js parsers as raw source strings.
  */
 export const BUNDLE_SIZE_LIMIT_OVERRIDES: Readonly<Record<string, number>> = {
   "maibuk-mcp": 240 * 1024,
+  // Reader carries pdf.js's core worker and display module and the foliate-js
+  // parsers as raw source strings (plugins/maibuk-reader/loaders.ts, vendored
+  // under plugins/maibuk-reader/vendor/): about 653 KB gzip on their own, and
+  // 668,642 bytes with the Plugin and SDK. Rounded up to the next 50 KB.
+  "maibuk-reader": 700 * 1024,
 };
 
 export interface BuildBuiltInPluginsOptions {
