@@ -54,7 +54,7 @@ import {
   getPluginLifecycle,
   setPluginLifecycleInstance,
 } from "@/features/plugins/lifecycle-instance";
-import { scanApprovedPlugins, syncBuiltInPlugins } from "@/features/plugins/launch";
+import { launchReads, scanApprovedPlugins, syncBuiltInPlugins } from "@/features/plugins/launch";
 import { usePluginManagementStore } from "@/features/plugins/management";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
 import { reviewPluginCopy } from "@/features/plugins/review";
@@ -888,15 +888,18 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         // app update, so it is never mis-shown as Modified (#444). It never
         // throws, so a failure leaves the launch working with whatever is
         // installed.
+        // One read view for both steps: the sync's read of an enabled Built-in
+        // folder serves the scan too (issue #653, gate 1).
+        const directory = launchReads(options.directory ?? (await getPluginDirectory()));
         await syncBuiltInPlugins({
-          directory: options.directory,
+          directory,
           builtInSource,
         });
         if (disposed) return;
         // The scan reads the Plugin Directory only, so it never waits for the
         // Library or a sync: contributions register within seconds of launch.
         const scan = await scanApprovedPlugins({
-          directory: options.directory,
+          directory,
           builtInSource,
         });
         if (disposed) return;

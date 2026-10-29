@@ -250,6 +250,15 @@ export interface FrameBackMessage {
   kind: "back";
 }
 
+/**
+ * The Frame is going away without a Back (the page was hidden: the author left
+ * Reader by the sidebar). The Worker releases what the Document holds, since
+ * nothing else tells it the Frame is gone.
+ */
+export interface FrameClosedMessage {
+  kind: "closed";
+}
+
 /** The Frame could not open the Document; the Worker marks it unreadable. */
 export interface FrameLoadErrorMessage {
   kind: "load-error";
@@ -286,6 +295,7 @@ export type FrameToWorkerMessage =
   | FramePositionMessage
   | FrameMetaMessage
   | FrameBackMessage
+  | FrameClosedMessage
   | FrameLoadErrorMessage
   | FrameZipListRequest
   | FrameZipEntryRequest

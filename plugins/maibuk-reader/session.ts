@@ -70,6 +70,8 @@ export interface ReaderSessionDeps {
   port: MessagePort;
   /** Leaves the reading surface; the runtime opens the Shelf page. */
   navigateToShelf(): Promise<void> | void;
+  /** Called once when the session stops, so the runtime forgets the Frame. */
+  onDispose?(): void;
 }
 
 /** A session the runtime can address for the life of one mounted Frame. */
@@ -524,6 +526,9 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       case "back":
         void handleBack();
         return;
+      case "closed":
+        dispose();
+        return;
       default:
         return;
     }
@@ -532,6 +537,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   function dispose(): void {
     if (disposed) return;
     disposed = true;
+    deps.onDispose?.();
     archive = null;
     openingArchive = null;
     if (pdfPort !== null) {

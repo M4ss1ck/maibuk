@@ -124,6 +124,9 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
       navigateToShelf: async () => {
         await client.navigation.openPage({ pageId: SHELF_PAGE_ID });
       },
+      onDispose: () => {
+        runtime.sessions.delete(frame.id);
+      },
     });
     runtime.sessions.set(frame.id, session);
     session.start();

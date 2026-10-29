@@ -2721,6 +2721,8 @@
   function onPageHide() {
     flushPosition();
     destroyDocument();
+    // Gone without a Back: the Worker releases the pdf.js core it holds for us.
+    post({ kind: "closed" });
   }
 
   function onResize() {

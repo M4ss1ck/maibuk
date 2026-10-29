@@ -334,6 +334,20 @@ describe("leaving", () => {
     });
   });
 
+  it("tells the Worker the Frame closed when the page is hidden, without asking to leave", async () => {
+    const stub = createPdfStub();
+    frame = loadFrame(stub);
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+
+    window.dispatchEvent(new Event("pagehide"));
+
+    await vi.waitFor(() => {
+      expect(frame?.port.messages.filter((message) => message.kind === "closed")).toHaveLength(1);
+    });
+    expect(frame?.port.messages.some((message) => message.kind === "back")).toBe(false);
+  });
+
   it("flushes the Reading Position before it asks to leave", async () => {
     const stub = createPdfStub();
     frame = loadFrame(stub);

@@ -31,12 +31,47 @@ import type {
   BuiltInPlugin,
   BuiltInPluginSource,
   InstalledPlugin,
+  PluginFolder,
+  PluginFolderFile,
   PluginLaunchRefusal,
   PluginScanOptions,
   PluginScanResult,
 } from "@/features/plugins/types";
 import { getPluginDirectory } from "@/lib/platform";
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
+
+/**
+ * One launch's view of the Plugin Directory: a folder is read once however many
+ * steps of the launch ask for it. The sync reads each Built-in folder to judge
+ * it, and the scan reads the enabled ones again to parse them, so an enabled
+ * Built-in's bundle (megabytes) was read twice before its Plugin could show.
+ * A write (`replaceFolder`) drops that folder's read, so the scan never sees
+ * the bytes the sync replaced, and a failed read is not kept: the next step
+ * reads again. The view lives for one launch; the store reads the directory
+ * directly afterwards.
+ */
+export function launchReads(directory: PluginDirectoryAdapter): PluginDirectoryAdapter {
+  const reads = new Map<string, Promise<PluginFolder | null>>();
+  return {
+    ...directory,
+    readFolder(name: string): Promise<PluginFolder | null> {
+      const cached = reads.get(name);
+      if (cached !== undefined) return cached;
+      const read = directory.readFolder(name);
+      reads.set(name, read);
+      read.catch(() => {
+        if (reads.get(name) === read) reads.delete(name);
+      });
+      return read;
+    },
+    replaceFolder: directory.replaceFolder
+      ? async (name: string, files: readonly PluginFolderFile[]): Promise<boolean> => {
+          reads.delete(name);
+          return directory.replaceFolder!(name, files);
+        }
+      : undefined,
+  };
+}
 
 export async function scanApprovedPlugins(
   options: PluginScanOptions = {}

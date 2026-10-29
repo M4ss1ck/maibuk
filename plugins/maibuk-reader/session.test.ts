@@ -72,6 +72,7 @@ function setup(
     language?: string;
     storage?: Map<string, unknown>;
     navigateToShelf?: () => Promise<void> | void;
+    onDispose?: () => void;
   } = {}
 ): Harness {
   const storage = options.storage ?? new Map<string, unknown>();
@@ -92,6 +93,7 @@ function setup(
     language: options.language ?? "en",
     port: channel.port1,
     navigateToShelf,
+    onDispose: options.onDispose,
   });
   session.start();
   return {
@@ -547,6 +549,41 @@ describe("back", () => {
       expect(workers[0].terminate).toHaveBeenCalledTimes(1);
       harness.session.command("nextPage");
       expect(harness.messages.some((message) => message.kind === "command")).toBe(false);
+    } finally {
+      harness.stop();
+    }
+  });
+
+  it("releases the Frame's pdf.js core and tells the runtime when the Frame closes", async () => {
+    // Leaving by the sidebar removes the Frame without a Back: the Worker never
+    // hears from it, so the Frame's own "closed" message must release the core.
+    const onDispose = vi.fn();
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const harness = setup({ entry, onDispose });
+    try {
+      await opened(harness);
+      expect(workers).toHaveLength(1);
+      harness.send({ kind: "closed" });
+      await vi.waitFor(() => expect(harness.session.disposed).toBe(true));
+      expect(workers[0].terminate).toHaveBeenCalledTimes(1);
+      expect(onDispose).toHaveBeenCalledTimes(1);
+      expect(harness.navigateToShelf).not.toHaveBeenCalled();
+    } finally {
+      harness.stop();
+    }
+  });
+
+  it("releases once when Back and then the Frame's close both arrive", async () => {
+    const onDispose = vi.fn();
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const harness = setup({ entry, onDispose });
+    try {
+      await opened(harness);
+      harness.send({ kind: "back" });
+      await vi.waitFor(() => expect(harness.session.disposed).toBe(true));
+      harness.send({ kind: "closed" });
+      expect(workers[0].terminate).toHaveBeenCalledTimes(1);
+      expect(onDispose).toHaveBeenCalledTimes(1);
     } finally {
       harness.stop();
     }
