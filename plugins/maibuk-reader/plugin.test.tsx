@@ -106,6 +106,13 @@ describe("Reader Shelf", () => {
       const surface = open.closest("[data-plugin-ui]");
       expect(surface?.querySelector("style")?.textContent).toMatch(/display:\s*grid/);
       expect(surface?.querySelector("ul li")).toContainElement(open);
+      // The cover is a button too, named by the title, and opens the Document.
+      const cover = surface?.querySelector("li > button:first-child") as HTMLElement;
+      expect(cover).not.toBeNull();
+      await userEvent.setup().click(cover);
+      await waitFor(() =>
+        expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-reader", pageId: "document" }])
+      );
       page.unmount();
     } finally {
       host.stop();
