@@ -52,6 +52,7 @@ export const DEP_SCAN_ENTRIES = [
   "src/lib/spellcheck/spellcheck.worker.ts",
   "src/lib/db/sql-export.worker.ts",
   "src/features/sync/sync-codec.worker.ts",
+  "src/features/plugins/modules.worker.ts",
 ];
 
 /**
