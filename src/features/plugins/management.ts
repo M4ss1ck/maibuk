@@ -576,7 +576,14 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
       if (!read.ok) return;
       // Every module the entry reaches must be present: a missing entry or a
       // missing import is a partial build.
-      const plan = await planPluginModules(second.files, read.manifest.entry);
+      let plan: Awaited<ReturnType<typeof planPluginModules>>;
+      try {
+        plan = await planPluginModules(second.files, read.manifest.entry);
+      } catch {
+        // A planning Worker that failed proves nothing about the build; the
+        // previous one keeps running.
+        return;
+      }
       if (!plan.ok) return;
       const digests = await pluginFileDigests(second.files);
       const locales = await readFolderLocales(second, read.manifest);

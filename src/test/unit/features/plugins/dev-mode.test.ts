@@ -16,6 +16,7 @@ import { resetPluginContributionsForTests } from "@/features/plugins/contributio
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { createPluginLifecycle } from "@/features/plugins/lifecycle";
 import { createPluginManagementStore } from "@/features/plugins/management";
+import * as pluginModules from "@/features/plugins/modules";
 import * as pluginStorage from "@/features/plugins/storage";
 import type {
   PluginFolder,
@@ -265,6 +266,26 @@ describe("Plugin development mode: partial build", () => {
     expect(h.frames).toHaveLength(1);
     expect(getPluginApproval(ID)?.pinnedHash).toBe(pinned);
     expect(h.lifecycle.state(ID)?.status).toBe("ready");
+  });
+
+  it("keeps the previous build when the module-plan Worker fails (#655)", async () => {
+    const h = await setup();
+    await h.lifecycle.launch();
+    await h.store.getState().refresh();
+    const pinned = getPluginApproval(ID)?.pinnedHash;
+
+    const plan = vi
+      .spyOn(pluginModules, "planPluginModules")
+      .mockRejectedValueOnce(new Error("plugin module-plan worker failed: worker error"));
+    h.dir.setFolder(pluginFolder({ "index.js": "export const a = 2;" }, { id: ID, name: ID }));
+
+    await fireChange(h);
+
+    expect(plan).toHaveBeenCalled();
+    expect(h.frames).toHaveLength(1);
+    expect(getPluginApproval(ID)?.pinnedHash).toBe(pinned);
+    expect(h.lifecycle.state(ID)?.status).toBe("ready");
+    plan.mockRestore();
   });
 
   it("keeps the previous build when the manifest is invalid", async () => {

@@ -335,6 +335,7 @@ export default defineConfig(() => ({
         "src/features/plugins/api-codegen.ts",
         "src/features/plugins/broker.ts",
         "src/features/plugins/directory-hash.ts",
+        "src/features/plugins/module-plan.ts",
         "src/features/plugins/modules.ts",
         "src/features/plugins/sandbox.ts",
         "src/features/plugins/runtime.ts",
