@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { planPluginModules } from "@/features/plugins/modules";
 import { computePluginModulePlan } from "@/features/plugins/module-plan";
 import type { PluginModulePlanRequest } from "@/features/plugins/module-plan";
@@ -12,7 +12,13 @@ class DataCloneError extends Error {
   }
 }
 
-type Behavior = "plan" | "worker-error" | "unexpected-message" | "error-reply" | "message-error";
+type Behavior =
+  | "plan"
+  | "worker-error"
+  | "worker-error-event"
+  | "unexpected-message"
+  | "error-reply"
+  | "message-error";
 
 // Protocol-correct fake: it receives a structured clone of the request (as a
 // real Worker does), runs the real computePluginModulePlan on it, and replies
@@ -50,6 +56,9 @@ class FakeModuleWorker {
       }
       case "worker-error":
         this.onerror?.(new Event("error"));
+        return;
+      case "worker-error-event":
+        this.onerror?.(new ErrorEvent("error", { message: "SyntaxError in modules.worker" }));
         return;
       case "unexpected-message":
         this.onmessage?.({ data: { type: "ack" } } as MessageEvent);
@@ -116,6 +125,15 @@ describe("planPluginModules() through the module Worker", () => {
     expect(worker.terminated).toBe(true);
   });
 
+  it("keeps a real ErrorEvent's message in the rejection", async () => {
+    const { worker, promise } = run("worker-error-event");
+
+    await expect(promise).rejects.toThrow(
+      "plugin module-plan worker failed: SyntaxError in modules.worker"
+    );
+    expect(worker.terminated).toBe(true);
+  });
+
   it("rejects and terminates on an unexpected message", async () => {
     const { worker, promise } = run("unexpected-message");
 
@@ -166,5 +184,47 @@ describe("planPluginModules() through the module Worker", () => {
     // postMessage(message) with no transfer list: a single argument.
     expect(worker.posted[0]).toHaveLength(1);
     expect(worker.posted[0][0]).toMatchObject({ type: "plan", entry: "index.js" });
+  });
+});
+
+// Drives the real Worker entry with a stubbed `self`, so the protocol the fake
+// above speaks is pinned to what modules.worker.ts actually posts.
+describe("modules.worker.ts entry", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  async function loadWorker() {
+    const scope = {
+      postMessage: vi.fn(),
+      onmessage: null as ((event: MessageEvent) => void) | null,
+    };
+    vi.stubGlobal("self", scope);
+    vi.resetModules();
+    await import("@/features/plugins/modules.worker");
+    return scope;
+  }
+
+  it("replies with the plan for a plan request", async () => {
+    const scope = await loadWorker();
+    const files = sourceFolder(OK_SOURCE).files;
+    scope.onmessage?.({ data: { type: "plan", files, entry: "index.js" } } as MessageEvent);
+
+    await vi.waitFor(() => expect(scope.postMessage).toHaveBeenCalledTimes(1));
+    expect(scope.postMessage).toHaveBeenCalledWith({
+      type: "result",
+      plan: await computePluginModulePlan(files, "index.js"),
+    });
+  });
+
+  it("replies with an error to an unknown request instead of staying silent", async () => {
+    const scope = await loadWorker();
+    scope.onmessage?.({ data: { type: "ack" } } as MessageEvent);
+
+    expect(scope.postMessage).toHaveBeenCalledWith({
+      type: "error",
+      message: "Unknown module-plan request",
+    });
   });
 });

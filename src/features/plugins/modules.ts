@@ -55,7 +55,12 @@ async function planViaWorker(
       };
       // A failed Worker rejects; it never falls back to the main thread.
       active.onerror = (event: Event | string) => {
-        const detail = typeof event === "string" ? event : "worker error";
+        const detail =
+          typeof event === "string"
+            ? event
+            : event instanceof ErrorEvent && event.message
+              ? event.message
+              : "worker error";
         reject(new Error(`plugin module-plan worker failed: ${detail}`));
       };
       active.onmessageerror = () => {

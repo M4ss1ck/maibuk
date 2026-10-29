@@ -15,7 +15,12 @@ const scope = self as unknown as {
 
 scope.onmessage = (event: MessageEvent<PluginModulePlanRequest>) => {
   const message = event.data;
-  if (message.type !== "plan") return;
+  // An unknown request gets an error reply, so the caller never waits on a
+  // message the Worker ignored.
+  if (message?.type !== "plan") {
+    scope.postMessage({ type: "error", message: "Unknown module-plan request" });
+    return;
+  }
 
   computePluginModulePlan(message.files, message.entry).then(
     (plan) => scope.postMessage({ type: "result", plan }),
