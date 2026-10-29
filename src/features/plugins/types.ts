@@ -11,6 +11,7 @@ import type { BookStatus } from "@/features/books/types";
 import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import type { Language } from "@/features/settings/types";
 import type { PluginStopMessageReason } from "@/features/plugins/stop-messages";
+import type { MemoryPluginFileGrantFile, PluginFileGrant } from "@/features/plugins/file-grants";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { EndpointRequest, PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
@@ -808,6 +809,12 @@ export interface TestHostOptions {
   /** The clipboard text `clipboard.readText` serves; defaults to empty. */
   clipboard?: string;
   /**
+   * Files to seed this Plugin's File Grant store with (#653). Each is already
+   * granted, so `files.list` returns it and `files.pick` gives it back with the
+   * same grant id; the bytes stay in memory, so a test opens no real dialog.
+   */
+  files?: readonly MemoryPluginFileGrantFile[];
+  /**
    * Makes `library.books.checkpoint` reject with `internal-error` carrying
    * this message (#591): proves a Plugin refuses its write when no Checkpoint
    * could be taken, without touching any other Library row.
@@ -899,11 +906,27 @@ export interface TestEndpointStream {
   close(): void;
 }
 
+/**
+ * The File Grants a test host holds for its Plugin (#653), over the memory
+ * store the app registers. A test seeds files with `TestHostOptions.files`,
+ * queues what the next `files.pick` returns, and reads what is left.
+ */
+export interface TestHostFiles {
+  /** Queues the file the Plugin's next `files.pick` returns; null means the author cancelled. */
+  queuePick(file: MemoryPluginFileGrantFile | null): void;
+  /** Makes the file behind a grant unreadable: `files.read` and `files.stat` refuse `file-missing`. */
+  setMissing(grant: string): void;
+  /** The live File Grants the host holds for this Plugin right now. */
+  grants(): Promise<PluginFileGrant[]>;
+}
+
 export interface TestHost {
   /** The Plugin-side port: hand it to the Plugin's setup. */
   port: MessagePort;
   /** The real broker over the in-process channel. */
   broker: PluginBroker;
+  /** The File Grants the host holds for the Plugin, and the test hooks that drive them. */
+  files: TestHostFiles;
   /** The activation start reason the host delivers to the Plugin. */
   startReason: PluginStartReason;
   /** The manifest, with any `locale` overrides already applied. */

@@ -43,8 +43,8 @@ export const EXCLUSIONS: Exclusion[] = [
     kind: "term",
     items: ["File Grant"],
     reason:
-      "Decided, not built (ADR 0036, #653): no Plugin can ask for files yet; the implementation replaces this exclusion with a row",
-    owner: "#653",
+      "The Reader Built-in Plugin that picks files is not built yet (#653): the capability ships in the Plugin API, and the shelf workflow that names it lands with the Reader UI in e2e/specs/reader.spec.ts, whose row will replace this exclusion",
+    owner: "#653 reader E2E",
   },
   {
     kind: "term",

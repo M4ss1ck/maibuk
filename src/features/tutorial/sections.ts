@@ -230,7 +230,7 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Plugin Directory": "decided, not built (ADR 0020); there is no Plugin in the app to point at",
   "Plugin Permission": "decided, not built (ADR 0019); there is no Plugin in the app to point at",
   "Plugin Command": "decided, not built (ADR 0022); there is no Plugin in the app to point at",
-  "File Grant": "decided, not built (ADR 0036, #653); the Tutorial Library has no Plugin to point at",
+  "File Grant": "a Plugin capability; the Tutorial Library ships no Plugin that picks files",
   "Plugin Endpoint":
     "desktop-only plumbing for Agents, not an author workflow: the local address a serving Plugin answers on, and no step can point at a socket",
   "Toggle Button":

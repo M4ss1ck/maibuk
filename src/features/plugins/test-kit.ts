@@ -25,6 +25,7 @@ import {
   dispatchEndpointRequest,
   endpointUrlFor,
 } from "@/features/plugins/endpoint";
+import { createMemoryPluginFileGrantStore } from "@/features/plugins/file-grants";
 import { assertToggleButton } from "@/features/plugins/handlers";
 import { fragmentToHtml, htmlToPlainText } from "@/features/plugins/library";
 import {
@@ -401,6 +402,14 @@ export function createTestHost(options: TestHostOptions): TestHost {
     },
   };
 
+  // The File Grants (#653) a Plugin test drives: the memory store the app
+  // registers, seeded with the test's files for this Plugin. Every `files.*`
+  // row below reads and writes it, so a test seeds a file, picks one, and reads
+  // the bytes back, never opening a dialog.
+  const fileGrants = createMemoryPluginFileGrantStore(
+    (options.files ?? []).map((file) => ({ pluginId: options.manifest.id, ...file }))
+  );
+
   const networkHandler: PluginApiHandlers = testFetch
     ? {
         "network.fetch": (params, { pluginId }) =>
@@ -735,6 +744,20 @@ export function createTestHost(options: TestHostOptions): TestHost {
       clipboard = text;
       return null;
     },
+    // File Grant rows (#653) read and write the memory store seeded above, the
+    // same `PluginFileGrantStore` seam the app's handlers use; `files.pick` is a
+    // user action here because the kit runs the Plugin's Commands and clicks
+    // synthetically (`hasUserActivation` below).
+    "files.pick": ({ extensions }) => fileGrants.pick(options.manifest.id, extensions),
+    "files.read": ({ grant, offset, length }) =>
+      fileGrants.read(options.manifest.id, grant, offset, length),
+    "files.stat": ({ grant }) => fileGrants.stat(options.manifest.id, grant),
+    "files.requestAccess": ({ grant }) => fileGrants.requestAccess(options.manifest.id, grant),
+    "files.release": async ({ grant }) => {
+      await fileGrants.release(options.manifest.id, grant);
+      return null;
+    },
+    "files.list": () => fileGrants.list(options.manifest.id),
     "navigation.openEntity": ({ entity, reveal }) => {
       navigations.push(reveal === undefined ? { entity } : { entity, reveal });
       return null;
@@ -763,6 +786,10 @@ export function createTestHost(options: TestHostOptions): TestHost {
     granted: () => granted,
     handlers,
     isLibraryAvailable: () => libraryAvailable,
+    // Every call this host serves answers a Command run or a click the test
+    // made, so the rows that need one (`files.pick`, `files.requestAccess`)
+    // are accepted rather than refused `user-action-required`.
+    hasUserActivation: () => true,
     eventSnapshot: (event) => {
       if (event === "language.changed") return { language };
       if (event === "endpoint.addressChanged") {
@@ -1050,6 +1077,17 @@ export function createTestHost(options: TestHostOptions): TestHost {
     },
     setClipboard(next) {
       clipboard = next;
+    },
+    files: {
+      queuePick(file) {
+        fileGrants.queuePick(options.manifest.id, file);
+      },
+      setMissing(grant) {
+        fileGrants.setMissing(grant);
+      },
+      grants() {
+        return fileGrants.list(options.manifest.id);
+      },
     },
     setGranted(permissions) {
       const next = new Set(permissions);
