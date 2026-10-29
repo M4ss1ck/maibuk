@@ -38,6 +38,10 @@ const workers: RecordedWorker[] = [];
 /** Every Blob handed to `URL.createObjectURL`. */
 const blobs: RecordedBlob[] = [];
 
+/** The `blob:` URL `startPdfCore` gives each Blob, in creation order. */
+const CORE_URL = "blob:pdfjs-core";
+const BOOTSTRAP_URL = "blob:pdfjs-bootstrap";
+
 /** Stubs the Worker, Blob, and object-URL globals `startPdfCore` needs. */
 function stubWorkerGlobals(): {
   createObjectURL: ReturnType<typeof vi.fn>;
@@ -47,7 +51,7 @@ function stubWorkerGlobals(): {
   blobs.length = 0;
   const createObjectURL = vi.fn((blob: RecordedBlob) => {
     blobs.push(blob);
-    return "blob:pdfjs-core";
+    return blobs.length === 1 ? CORE_URL : BOOTSTRAP_URL;
   });
   const revokeObjectURL = vi.fn();
   vi.stubGlobal("Blob", RecordedBlob);
@@ -71,13 +75,27 @@ describe("vendored source strings", () => {
   it("carries the pdf.js core worker, banner and version intact", () => {
     const { createObjectURL } = stubWorkerGlobals();
     const core = startPdfCore();
-    expect(createObjectURL).toHaveBeenCalledTimes(1);
-    const [blob] = blobs;
-    expect(blob.options?.type).toBe("text/javascript");
-    const [source] = blob.parts;
+    expect(createObjectURL).toHaveBeenCalledTimes(2);
+    const [coreBlob] = blobs;
+    expect(coreBlob.options?.type).toBe("text/javascript");
+    const [source] = coreBlob.parts;
     expect(source.length).toBeGreaterThan(1_000_000);
     expect(source.startsWith(PDFJS_BANNER)).toBe(true);
     expect(source).toContain(PDFJS_VERSION);
+    core.dispose();
+  });
+
+  it("starts the core from a bootstrap module that imports it by blob: URL", () => {
+    stubWorkerGlobals();
+    const core = startPdfCore();
+    const [, bootstrapBlob] = blobs;
+    expect(bootstrapBlob.options?.type).toBe("text/javascript");
+    const [bootstrap] = bootstrapBlob.parts;
+    expect(bootstrap).toContain(
+      `import { WorkerMessageHandler } from ${JSON.stringify(CORE_URL)};`
+    );
+    expect(bootstrap).toContain("WorkerMessageHandler.initializeFromPort(port)");
+    expect(bootstrap).toContain("port.start()");
     core.dispose();
   });
 
@@ -95,23 +113,24 @@ describe("vendored source strings", () => {
 });
 
 describe("startPdfCore", () => {
-  it("starts a module Worker from a blob: URL of the worker source", () => {
+  it("starts a module Worker from the bootstrap's blob: URL", () => {
     stubWorkerGlobals();
     const core = startPdfCore();
     expect(workers).toHaveLength(1);
     expect(core.worker).toBe(workers[0]);
-    expect(workers[0].url).toBe("blob:pdfjs-core");
+    expect(workers[0].url).toBe(BOOTSTRAP_URL);
     expect(workers[0].options).toEqual({ type: "module" });
     core.dispose();
   });
 
-  it("terminates the Worker and releases the blob: URL on dispose", () => {
+  it("terminates the Worker and releases both blob: URLs on dispose", () => {
     const { revokeObjectURL } = stubWorkerGlobals();
     const core = startPdfCore();
     expect(workers[0].terminate).not.toHaveBeenCalled();
     core.dispose();
     expect(workers[0].terminate).toHaveBeenCalledTimes(1);
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:pdfjs-core");
+    expect(revokeObjectURL).toHaveBeenCalledWith(CORE_URL);
+    expect(revokeObjectURL).toHaveBeenCalledWith(BOOTSTRAP_URL);
   });
 });
 

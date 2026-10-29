@@ -4,9 +4,11 @@
  * can drive the same logic over the polyfill-free Remote UI entry the test kit
  * uses, without loading the Worker's Remote DOM polyfill into jsdom.
  *
- * This unit builds the Shelf only: opening a Document stores `currentDocumentId`
- * in memory and opens the Frame page, which shows its title until the reading
- * surface lands. Imports only `@/plugin-sdk` and this Plugin's files.
+ * This unit builds the Shelf and owns the document Frame handoff: opening a
+ * Document stores `currentDocumentId` in memory, opens the Frame page, and
+ * creates one session per mounted Frame. The session answers the Frame's reads,
+ * saves its Reading Position, and receives the reading Commands. Imports only
+ * `@/plugin-sdk` and this Plugin's files.
  */
 
 import type { ComponentType } from "react";
@@ -16,8 +18,10 @@ import {
   type PluginClient,
   type PluginFrame,
 } from "@/plugin-sdk";
+import type { FrameCommandId } from "./frame-protocol";
 import { translate } from "./i18n";
 import { createReaderLibrary } from "./library";
+import { createReaderSession, type ReaderSession } from "./session";
 import { SHELF_PAGE_ID, createShelfPage } from "./shelf-page";
 import type { ShelfEntry } from "./shelf";
 
@@ -46,7 +50,7 @@ export const DECREASE_FONT_SIZE = "decreaseFontSize";
 export const BACK_TO_SHELF = "backToShelf";
 
 /** The Commands the Frame handles itself, forwarded while it is open. */
-const FRAME_COMMANDS: ReadonlySet<string> = new Set([
+const FRAME_COMMANDS: ReadonlySet<FrameCommandId> = new Set<FrameCommandId>([
   NEXT_PAGE,
   PREVIOUS_PAGE,
   FIRST_PAGE,
@@ -57,8 +61,7 @@ const FRAME_COMMANDS: ReadonlySet<string> = new Set([
   ZOOM_OUT,
   FIT_WIDTH,
   FIT_PAGE,
-  INCREASE_FONT_SIZE,
-  DECREASE_FONT_SIZE,
+  BACK_TO_SHELF,
 ]);
 
 /**
@@ -80,8 +83,8 @@ interface ReaderRuntime {
   currentDocumentId: string | null;
   /** The row the open Frame draws its title from. */
   currentEntry: ShelfEntry | null;
-  /** Every mounted Frame's port, by the host's frame id. */
-  frames: Map<string, MessagePort>;
+  /** Every mounted Frame's session, by the host's frame id. */
+  sessions: Map<string, ReaderSession>;
   /** The app language the Frame should draw its own chrome in. */
   language: string;
 }
@@ -92,7 +95,7 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
   const runtime: ReaderRuntime = {
     currentDocumentId: null,
     currentEntry: null,
-    frames: new Map(),
+    sessions: new Map(),
     language: "en",
   };
 
@@ -105,39 +108,29 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
   void client
     .on("language.changed", (payload) => {
       runtime.language = payload.language;
-      broadcast(runtime, { kind: "language", language: payload.language });
+      for (const session of runtime.sessions.values()) session.setLanguage(payload.language);
     })
     .catch(() => {});
 
-  /** The Frame's own title, language, and later the reading surface's seed. */
-  function sendOpen(port: MessagePort): void {
-    port.postMessage({
-      kind: "open",
-      entry: runtime.currentEntry,
-      documentId: runtime.currentDocumentId,
-      language: runtime.language,
-    });
-  }
-
   client.onFrame((frame: PluginFrame) => {
-    runtime.frames.set(frame.id, frame.port);
-    frame.port.onmessage = (event: MessageEvent) => {
-      const data = event.data as { kind?: unknown } | null;
-      if (data === null || typeof data !== "object") return;
-      if (data.kind === "ready") sendOpen(frame.port);
-      if (data.kind === "back") {
-        void client.navigation.openPage({ pageId: SHELF_PAGE_ID });
-      }
-    };
-    frame.port.start();
+    const session = createReaderSession({
+      client,
+      library,
+      entry: runtime.currentEntry,
+      language: runtime.language,
+      port: frame.port,
+      navigateToShelf: async () => {
+        await client.navigation.openPage({ pageId: SHELF_PAGE_ID });
+      },
+    });
+    runtime.sessions.set(frame.id, session);
+    session.start();
   });
 
   function openDocument(entry: ShelfEntry): void {
     runtime.currentEntry = entry;
     runtime.currentDocumentId = entry.id;
-    for (const port of runtime.frames.values()) {
-      port.postMessage({ kind: "open", entry, documentId: entry.id, language: runtime.language });
-    }
+    for (const session of runtime.sessions.values()) session.setEntry(entry);
     void client.navigation.openPage({ pageId: DOCUMENT_PAGE_ID });
   }
 
@@ -150,8 +143,12 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
 }
 
 /** Posts `message` to every mounted Frame. */
-function broadcast(runtime: ReaderRuntime, message: unknown): void {
-  for (const port of runtime.frames.values()) port.postMessage(message);
+function broadcastCommand(runtime: ReaderRuntime, id: FrameCommandId): void {
+  for (const session of runtime.sessions.values()) session.command(id);
+}
+
+function isFrameCommand(id: string): id is FrameCommandId {
+  return (FRAME_COMMANDS as ReadonlySet<string>).has(id);
 }
 
 function handleHostRequest(
@@ -196,14 +193,7 @@ async function runReaderCommand(
       if (entry !== null) {
         runtime.currentEntry = entry;
         runtime.currentDocumentId = entry.id;
-        for (const port of runtime.frames.values()) {
-          port.postMessage({
-            kind: "open",
-            entry,
-            documentId: entry.id,
-            language: runtime.language,
-          });
-        }
+        for (const session of runtime.sessions.values()) session.setEntry(entry);
         await client.navigation.openPage({ pageId: DOCUMENT_PAGE_ID });
       }
     } catch {
@@ -214,12 +204,12 @@ async function runReaderCommand(
     }
     return null;
   }
-  if (id === BACK_TO_SHELF) {
-    await client.navigation.openPage({ pageId: SHELF_PAGE_ID });
-    return null;
-  }
-  if (FRAME_COMMANDS.has(id)) {
-    broadcast(runtime, { kind: "command", command: id });
+  if (isFrameCommand(id)) {
+    if (runtime.sessions.size === 0 && id === BACK_TO_SHELF) {
+      await client.navigation.openPage({ pageId: SHELF_PAGE_ID });
+      return null;
+    }
+    broadcastCommand(runtime, id);
   }
   return null;
 }

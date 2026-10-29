@@ -6,8 +6,9 @@
  * raw source string, evaluated only when a Document of its format opens:
  *
  * - pdf.js core (`pdf.worker.min.mjs`): {@link startPdfCore} starts a nested
- *   Worker from a `blob:` of the source. The Plugin Worker owns it and bridges
- *   its port to the Frame, so a long parse never blocks the broker.
+ *   module Worker from a `blob:` bootstrap that imports the core's `blob:` URL.
+ *   The Plugin Worker owns it and transfers a MessagePort to it, bridging that
+ *   port to the Frame so a long parse never blocks the broker.
  * - pdf.js display (`pdf.min.mjs`) and the text-layer CSS: {@link pdfDisplaySource}
  *   and {@link pdfViewerCss} hand the strings to the Frame over the port, which
  *   imports them from a `blob:` URL (the Frame CSP allows `blob:` scripts).
@@ -29,25 +30,49 @@ import pdfViewerStyles from "./vendor/pdfjs/pdf_viewer.css.txt?raw";
 
 /** A started pdf.js core Worker and the way to give its resources back. */
 export interface PdfCore {
-  /** The nested Worker running `pdf.worker.min.mjs`; bridge its port to the Frame. */
+  /**
+   * The nested Worker running the pdf.js core. Post it one
+   * `{ kind: "maibuk:pdf-port", port }` message (transferred) to give the core
+   * the MessagePort the Frame holds the other end of.
+   */
   worker: Worker;
-  /** Terminates the Worker and releases the `blob:` URL. */
+  /** Terminates the Worker and releases every `blob:` URL it created. */
   dispose(): void;
 }
 
 /**
  * Starts pdf.js's core in a nested Worker of the Plugin Worker. The sandbox
- * allows `worker-src blob:`, so the source travels as a Blob rather than as a
- * relative module the Worker global could not resolve.
+ * allows `worker-src blob:`, so both the core module and a tiny bootstrap that
+ * imports it travel as Blobs. The bootstrap gives the core a MessagePort the
+ * Plugin Worker transfers, instead of letting the core listen on its own
+ * global: the Frame needs a port of its own to talk to the core.
+ *
+ * The bootstrap is a module Worker so it can `import` the core's `blob:` URL.
+ * `pdf.worker.min.mjs` also self-initializes on `self`; that handler ignores
+ * messages aimed at the port, so both the automatic handler and the one the
+ * bootstrap installs can coexist harmlessly.
  */
 export function startPdfCore(): PdfCore {
-  const url = URL.createObjectURL(new Blob([pdfWorker], { type: "text/javascript" }));
-  const worker = new Worker(url, { type: "module" });
+  const coreUrl = URL.createObjectURL(new Blob([pdfWorker], { type: "text/javascript" }));
+  const bootstrap = [
+    `import { WorkerMessageHandler } from ${JSON.stringify(coreUrl)};`,
+    "self.onmessage = (event) => {",
+    "  const data = event.data;",
+    '  if (!data || typeof data !== "object" || data.kind !== "maibuk:pdf-port") return;',
+    "  const port = data.port;",
+    "  if (!port) return;",
+    "  WorkerMessageHandler.initializeFromPort(port);",
+    "  port.start();",
+    "};",
+  ].join("\n");
+  const bootstrapUrl = URL.createObjectURL(new Blob([bootstrap], { type: "text/javascript" }));
+  const worker = new Worker(bootstrapUrl, { type: "module" });
   return {
     worker,
     dispose() {
       worker.terminate();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(bootstrapUrl);
+      URL.revokeObjectURL(coreUrl);
     },
   };
 }

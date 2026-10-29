@@ -13,28 +13,43 @@
         box-sizing: border-box;
       }
 
+      /* `hidden` has to win over the `display` rules the Frame's panels set. */
+      [hidden] {
+        display: none !important;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
       body {
         margin: 0;
-        min-height: 100vh;
         display: flex;
         flex-direction: column;
         background: var(--maibuk-color-background, #ffffff);
         color: var(--maibuk-color-foreground, #1a1a1a);
         font-family: var(--maibuk-font-sans, system-ui, sans-serif);
+        overflow: hidden;
       }
 
       header {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
-        padding: 0.75rem 1rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
         border-bottom: 1px solid var(--maibuk-color-border, #d4d4d4);
         background: var(--maibuk-color-card, #f5f5f5);
       }
 
+      .spacer {
+        flex: 1;
+      }
+
       button {
         font: inherit;
-        padding: 0.4rem 0.75rem;
+        padding: 0.35rem 0.65rem;
         border-radius: 0.5rem;
         border: 1px solid var(--maibuk-color-border, #d4d4d4);
         background: var(--maibuk-color-secondary, #ffffff);
@@ -46,43 +61,214 @@
         background: var(--maibuk-color-muted, #ececec);
       }
 
-      button:focus-visible {
+      button:focus-visible,
+      [role="treeitem"]:focus-visible,
+      input:focus-visible {
         outline: 2px solid var(--maibuk-color-primary, #2563eb);
         outline-offset: 2px;
       }
 
-      main {
+      #page-indicator,
+      #zoom-level,
+      #search-status {
+        font-variant-numeric: tabular-nums;
+        color: var(--maibuk-color-muted-foreground, #555555);
+        white-space: nowrap;
+      }
+
+      #search-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.75rem;
+        border-bottom: 1px solid var(--maibuk-color-border, #d4d4d4);
+        background: var(--maibuk-color-card, #f5f5f5);
+      }
+
+      #search-input {
+        flex: 1;
+        min-width: 8rem;
+        font: inherit;
+        padding: 0.35rem 0.5rem;
+        border-radius: 0.4rem;
+        border: 1px solid var(--maibuk-color-border, #d4d4d4);
+        background: var(--maibuk-color-background, #ffffff);
+        color: var(--maibuk-color-foreground, #1a1a1a);
+      }
+
+      #body {
         flex: 1;
         display: flex;
-        flex-direction: column;
-        align-items: center;
+        min-height: 0;
+      }
+
+      #contents {
+        width: 18rem;
+        max-width: 40vw;
+        overflow: auto;
+        padding: 0.75rem;
+        border-right: 1px solid var(--maibuk-color-border, #d4d4d4);
+        background: var(--maibuk-color-card, #f5f5f5);
+      }
+
+      #contents h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1rem;
+      }
+
+      #contents-tree ul {
+        list-style: none;
+        margin: 0;
+        padding-left: 0.9rem;
+      }
+
+      #contents-tree > ul {
+        padding-left: 0;
+      }
+
+      [role="treeitem"] {
+        padding: 0.25rem 0.35rem;
+        border-radius: 0.35rem;
+        cursor: pointer;
+        outline-offset: -1px;
+      }
+
+      [role="treeitem"]:hover {
+        background: var(--maibuk-color-muted, #ececec);
+      }
+
+      #viewer {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        overflow: auto;
+        display: flex;
+        align-items: flex-start;
         justify-content: center;
-        gap: 0.5rem;
-        padding: 2rem 1rem;
-        text-align: center;
+        padding: 1rem;
+        background: var(--maibuk-color-muted, #ececec);
       }
 
-      h1 {
-        margin: 0;
-        font-family: var(--maibuk-font-serif, Georgia, serif);
-        font-size: 1.75rem;
-        font-weight: 600;
+      #stage {
+        position: relative;
+        flex: 0 0 auto;
+        background: var(--maibuk-color-background, #ffffff);
+        box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
       }
 
-      p {
-        margin: 0;
+      #stage canvas {
+        display: block;
+        background: #ffffff;
+      }
+
+      /* pdf.js puts the selectable text over the canvas; the viewer CSS that
+         travels with the display source carries the rest of the text-layer rules. */
+      #text-layer {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        line-height: 1;
+        text-align: initial;
+        text-size-adjust: none;
+        transform-origin: 0 0;
+        opacity: 1;
+        z-index: 2;
+      }
+
+      .reader-search-hit {
+        background: var(--maibuk-color-warning-bg, #fde68a);
+        color: inherit;
+        border-radius: 2px;
+      }
+
+      #message {
+        margin: 2rem auto;
+        max-width: 34rem;
         color: var(--maibuk-color-muted-foreground, #555555);
+        text-align: center;
+        line-height: 1.5;
+      }
+
+      #message[data-error="true"] {
+        color: var(--maibuk-color-error-text, #991b1b);
+      }
+
+      #password-form {
+        margin: 3rem auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        width: min(22rem, 100%);
+        padding: 1.25rem;
+        border-radius: 0.75rem;
+        border: 1px solid var(--maibuk-color-border, #d4d4d4);
+        background: var(--maibuk-color-card, #f5f5f5);
+      }
+
+      #password-form h2 {
+        margin: 0;
+        font-size: 1.1rem;
+      }
+
+      #password-input {
+        font: inherit;
+        padding: 0.45rem 0.55rem;
+        border-radius: 0.4rem;
+        border: 1px solid var(--maibuk-color-border, #d4d4d4);
+        background: var(--maibuk-color-background, #ffffff);
+        color: var(--maibuk-color-foreground, #1a1a1a);
+      }
+
+      #password-error {
+        margin: 0;
+        color: var(--maibuk-color-error-text, #991b1b);
       }
     </style>
   </head>
   <body>
     <header>
       <button id="back" type="button">Back to Shelf</button>
+      <button id="contents-toggle" type="button" aria-expanded="false">Contents</button>
+      <button id="find-toggle" type="button">Find</button>
+      <div class="spacer"></div>
+      <button id="zoom-out" type="button">Zoom out</button>
+      <span id="zoom-level">100%</span>
+      <button id="zoom-in" type="button">Zoom in</button>
+      <button id="fit-width" type="button">Fit width</button>
+      <button id="fit-page" type="button">Fit page</button>
+      <span id="page-indicator" aria-live="polite"></span>
     </header>
-    <main>
-      <h1 id="title">Reader</h1>
-      <p id="note">The reading surface arrives in a later update.</p>
-    </main>
+
+    <div id="search-bar" hidden>
+      <input id="search-input" type="search" autocomplete="off" />
+      <span id="search-status" aria-live="polite"></span>
+      <button id="search-previous" type="button">Previous match</button>
+      <button id="search-next" type="button">Next match</button>
+      <button id="search-close" type="button">Close search</button>
+    </div>
+
+    <div id="body">
+      <aside id="contents" hidden aria-labelledby="contents-title">
+        <h2 id="contents-title">Contents</h2>
+        <div id="contents-tree" role="tree"></div>
+      </aside>
+
+      <main id="viewer">
+        <div id="stage" hidden>
+          <canvas id="page"></canvas>
+          <div id="text-layer" class="textLayer"></div>
+        </div>
+        <p id="message" hidden></p>
+        <form id="password-form" hidden>
+          <h2 id="password-title">This PDF is password-protected</h2>
+          <label for="password-input" id="password-label">Password</label>
+          <input id="password-input" type="password" autocomplete="off" />
+          <p id="password-error" hidden></p>
+          <button id="password-submit" type="submit">Open</button>
+        </form>
+      </main>
+    </div>
+
     <script src="reader.js"></script>
   </body>
 </html>
