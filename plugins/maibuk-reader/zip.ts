@@ -189,8 +189,7 @@ export async function openZip(read: RangedRead, size: number): Promise<ZipArchiv
       if (header.length < LOCAL_HEADER_SIZE || u32(header, 0) !== LOCAL_SIGNATURE) {
         throw new ZipError("corrupt", `This archive's entry ${name} is malformed`);
       }
-      const dataStart =
-        entry.offset + LOCAL_HEADER_SIZE + u16(header, 26) + u16(header, 28);
+      const dataStart = entry.offset + LOCAL_HEADER_SIZE + u16(header, 26) + u16(header, 28);
       const compressed = await read(dataStart, entry.compressedSize);
       if (compressed.length < entry.compressedSize) {
         throw new ZipError("corrupt", `This archive's entry ${name} is truncated`);
@@ -210,7 +209,10 @@ export async function openZip(read: RangedRead, size: number): Promise<ZipArchiv
   };
 
   const encryption = entries.find((entry) => entry.name === "META-INF/encryption.xml");
-  if (encryption !== undefined && protectsContent(UTF8.decode(await archive.read(encryption.name)))) {
+  if (
+    encryption !== undefined &&
+    protectsContent(UTF8.decode(await archive.read(encryption.name)))
+  ) {
     throw new ZipError("drm", "This Document is protected by DRM");
   }
   return archive;

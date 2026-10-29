@@ -374,18 +374,18 @@
     return typeof value === "object" && value !== null;
   }
 
-  /** The uint16 at `offset`, little-endian. @param {Uint8Array} bytes @param {number} offset */
-  function u16(bytes, offset) {
-    return ((bytes[offset] ?? 0) | ((bytes[offset + 1] ?? 0) << 8)) >>> 0;
+  /** The uint16 at `offset`, big-endian (PalmDB and MOBI headers). @param {Uint8Array} bytes @param {number} offset */
+  function u16be(bytes, offset) {
+    return (((bytes[offset] ?? 0) << 8) | (bytes[offset + 1] ?? 0)) >>> 0;
   }
 
-  /** The uint32 at `offset`, little-endian. @param {Uint8Array} bytes @param {number} offset */
-  function u32(bytes, offset) {
+  /** The uint32 at `offset`, big-endian (PalmDB and MOBI headers). @param {Uint8Array} bytes @param {number} offset */
+  function u32be(bytes, offset) {
     return (
-      ((bytes[offset] ?? 0) |
-        ((bytes[offset + 1] ?? 0) << 8) |
-        ((bytes[offset + 2] ?? 0) << 16) |
-        ((bytes[offset + 3] ?? 0) << 24)) >>>
+      (((bytes[offset] ?? 0) << 24) |
+        ((bytes[offset + 1] ?? 0) << 16) |
+        ((bytes[offset + 2] ?? 0) << 8) |
+        (bytes[offset + 3] ?? 0)) >>>
       0
     );
   }
@@ -749,7 +749,17 @@
 
   const sanitizer = /** @type {any} */ (globalThis).ReaderSanitizer;
   const FB2_MAX_BYTES = 20 * 1024 * 1024;
-  const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".jxl", ".avif"];
+  const IMAGE_EXTENSIONS = [
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".webp",
+    ".svg",
+    ".jxl",
+    ".avif",
+  ];
   const BOOK_EXTENSIONS = /\.(?:xhtml|html?|xml|css)$/i;
 
   /** Why a book could not be opened. */
@@ -813,8 +823,9 @@
   /** Lists the archive once and keeps the entry table. */
   async function openZip() {
     if (zipEntries.length > 0) return;
-    const entries = await requestZipList();
-    zipEntries = Array.isArray(entries) ? entries : [];
+    const response = await requestZipList();
+    const list = response && Array.isArray(response.entries) ? response.entries : [];
+    zipEntries = list;
     zipByName.clear();
     for (const item of zipEntries) zipByName.set(item.name, item);
   }
@@ -927,15 +938,13 @@
       if (format === "cbz") {
         mode = "comic";
         pageIndex = saved && saved.kind === "page" ? Math.max(0, Math.floor(saved.page)) : 0;
-        zoomSetting =
-          saved && typeof saved.zoom !== "undefined" ? saved.zoom : settings.pdfFit;
+        zoomSetting = saved && typeof saved.zoom !== "undefined" ? saved.zoom : settings.pdfFit;
         pageIndex = clamp(pageIndex, 0, Math.max(0, comicFiles.length - 1));
         await renderComicPage();
       } else if (fixed) {
         mode = "fixed";
         pageIndex = saved && saved.kind === "page" ? Math.max(0, Math.floor(saved.page)) : 0;
-        zoomSetting =
-          saved && typeof saved.zoom !== "undefined" ? saved.zoom : settings.pdfFit;
+        zoomSetting = saved && typeof saved.zoom !== "undefined" ? saved.zoom : settings.pdfFit;
         pageIndex = clamp(pageIndex, 0, Math.max(0, book.sections.length - 1));
         await renderFixedPage();
       } else {
@@ -951,9 +960,10 @@
 
   /** Maps an open failure to the message the author sees and the Worker stores. */
   function failBook(error) {
-    const code = isErrorLike(error) && typeof /** @type {any} */ (error).code === "string"
-      ? /** @type {any} */ (error).code
-      : "";
+    const code =
+      isErrorLike(error) && typeof (/** @type {any} */ (error).code) === "string"
+        ? /** @type {any} */ (error).code
+        : "";
     if (code === "drm") {
       fail("encrypted", t("errorDrm"));
       return;
@@ -970,12 +980,13 @@
     if (fileSize < 100) throw new BookError("corrupt", "This file is too small");
     let head = await requestBytes(0, Math.min(fileSize, 100));
     if (ascii(head, 60, 8) !== "BOOKMOBI") throw new BookError("corrupt", "Not a MOBI file");
-    const record = u32(head, 78);
+    const record = u32be(head, 78);
     const flagOffset = record + 12;
     if (flagOffset + 2 > head.length) {
       head = await requestBytes(0, Math.min(fileSize, flagOffset + 2));
     }
-    if (u16(head, flagOffset) !== 0) throw new BookError("drm", "This Document is protected by DRM");
+    if (u16be(head, flagOffset) !== 0)
+      throw new BookError("drm", "This Document is protected by DRM");
   }
 
   /** A File-like object whose `slice` reads ranges through the Worker. */
@@ -1002,7 +1013,9 @@
     const collator = new Intl.Collator(undefined, { numeric: true });
     comicFiles = zipEntries
       .map((item) => item.name)
-      .filter((name) => IMAGE_EXTENSIONS.some((extension) => name.toLowerCase().endsWith(extension)))
+      .filter((name) =>
+        IMAGE_EXTENSIONS.some((extension) => name.toLowerCase().endsWith(extension))
+      )
       .sort(collator.compare);
     if (comicFiles.length === 0) throw new BookError("corrupt", "This archive has no images");
     book = {
@@ -1137,8 +1150,20 @@
     columns.append(rendered.content);
     const viewport = document.createElement("div");
     viewport.className = "reader-viewport";
+    viewport.style.width = `${geometry.width}px`;
+    viewport.style.height = `${geometry.height}px`;
+    viewport.style.overflow = "hidden";
     viewport.append(columns);
     rendered.shadow.append(viewport);
+
+    // The host must be in the rendered document before the columns are
+    // measured: an element outside it has no layout, so `scrollWidth` is 0 and
+    // every section would look like a single page.
+    stage.textContent = "";
+    stage.style.width = `${geometry.width}px`;
+    stage.style.height = `${geometry.height}px`;
+    stage.hidden = false;
+    stage.append(rendered.host);
 
     const pages = flowPageCount(columns, geometry.width, index);
     flow = {
@@ -1156,12 +1181,6 @@
       gap: FLOW_GAP,
       sectionCfi: typeof section.cfi === "string" ? section.cfi : null,
     };
-
-    stage.textContent = "";
-    stage.style.width = `${geometry.width}px`;
-    stage.style.height = `${geometry.height}px`;
-    stage.hidden = false;
-    stage.append(rendered.host);
 
     let page = typeof targetPage === "number" ? targetPage : 0;
     if (anchor) {
@@ -1324,7 +1343,10 @@
       }
     }
     if (saved && saved.kind === "section") {
-      return { index: clamp(Math.floor(saved.index), 0, Math.max(0, book.sections.length - 1)), page: 0 };
+      return {
+        index: clamp(Math.floor(saved.index), 0, Math.max(0, book.sections.length - 1)),
+        page: 0,
+      };
     }
     return { index: 0, page: 0 };
   }
@@ -1467,7 +1489,8 @@
     stage.append(image);
     updateIndicator();
     schedulePosition();
-    if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent: Math.round(currentScale * 100) });
+    if (zoomLevel)
+      zoomLevel.textContent = t("zoomLevel", { percent: Math.round(currentScale * 100) });
     prefetchComic();
     trimComicCache();
   }
@@ -1512,7 +1535,10 @@
   function textOf(value) {
     if (typeof value === "string") return value.trim();
     if (Array.isArray(value)) {
-      return value.map(textOf).filter((part) => part !== "").join(", ");
+      return value
+        .map(textOf)
+        .filter((part) => part !== "")
+        .join(", ");
     }
     if (value && typeof value === "object") {
       if ("name" in value) return textOf(/** @type {any} */ (value).name);
@@ -2039,7 +2065,8 @@
         position: {
           kind: "page",
           page: pageIndex,
-          zoom: typeof zoomSetting === "number" ? Math.round(zoomSetting * 1000) / 1000 : zoomSetting,
+          zoom:
+            typeof zoomSetting === "number" ? Math.round(zoomSetting * 1000) / 1000 : zoomSetting,
         },
         progress: { page: pageIndex + 1, pageCount: book.sections.length },
       };

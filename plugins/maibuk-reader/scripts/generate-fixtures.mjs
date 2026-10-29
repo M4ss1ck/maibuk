@@ -614,30 +614,31 @@ function buildPalmDoc({ title, text, version, encryption = 0 }) {
   const headerLength = version >= 8 ? 264 : 232;
   const titleOffset = 16 + headerLength;
 
+  // PalmDB, PalmDOC, and MOBI headers store every number big-endian.
   const record0 = Buffer.alloc(titleOffset + titleBytes.length);
-  record0.writeUInt16LE(1, 0); // PalmDOC compression: none
-  record0.writeUInt32LE(textBytes.length, 4);
-  record0.writeUInt16LE(1, 8); // one text record
-  record0.writeUInt16LE(MOBI_TEXT_RECORD_SIZE, 10);
-  record0.writeUInt16LE(encryption, 12);
+  record0.writeUInt16BE(1, 0); // PalmDOC compression: none
+  record0.writeUInt32BE(textBytes.length, 4);
+  record0.writeUInt16BE(1, 8); // one text record
+  record0.writeUInt16BE(MOBI_TEXT_RECORD_SIZE, 10);
+  record0.writeUInt16BE(encryption, 12);
 
   record0.write("MOBI", 16, "latin1");
-  record0.writeUInt32LE(headerLength, 20);
-  record0.writeUInt32LE(2, 24); // Mobipocket book
-  record0.writeUInt32LE(65001, 28); // UTF-8
-  record0.writeUInt32LE(1, 32); // unique id
-  record0.writeUInt32LE(version, 36);
-  record0.writeUInt32LE(titleOffset, 84);
-  record0.writeUInt32LE(titleBytes.length, 88);
-  record0.writeUInt32LE(0xffffffff, 108); // no resources
-  record0.writeUInt32LE(0, 128); // no EXTH
-  record0.writeUInt32LE(0, 240); // no trailing entries
-  record0.writeUInt32LE(0xffffffff, 244); // no INDX
+  record0.writeUInt32BE(headerLength, 20);
+  record0.writeUInt32BE(2, 24); // Mobipocket book
+  record0.writeUInt32BE(65001, 28); // UTF-8
+  record0.writeUInt32BE(1, 32); // unique id
+  record0.writeUInt32BE(version, 36);
+  record0.writeUInt32BE(titleOffset, 84);
+  record0.writeUInt32BE(titleBytes.length, 88);
+  record0.writeUInt32BE(0xffffffff, 108); // no resources
+  record0.writeUInt32BE(0, 128); // no EXTH
+  record0.writeUInt32BE(0, 240); // no trailing entries
+  record0.writeUInt32BE(0xffffffff, 244); // no INDX
   if (version >= 8) {
-    record0.writeUInt32LE(0xffffffff, 192); // FDST
-    record0.writeUInt32LE(0xffffffff, 248); // fragment index
-    record0.writeUInt32LE(0xffffffff, 252); // skeleton index
-    record0.writeUInt32LE(0xffffffff, 260); // guide index
+    record0.writeUInt32BE(0xffffffff, 192); // FDST
+    record0.writeUInt32BE(0xffffffff, 248); // fragment index
+    record0.writeUInt32BE(0xffffffff, 252); // skeleton index
+    record0.writeUInt32BE(0xffffffff, 260); // guide index
   }
   Buffer.from(titleBytes).copy(record0, titleOffset);
 
@@ -654,9 +655,11 @@ function buildPalmDoc({ title, text, version, encryption = 0 }) {
   pdb.write("Maibuk fixture", 0, "latin1");
   pdb.write("BOOK", 60, "latin1");
   pdb.write("MOBI", 64, "latin1");
-  pdb.writeUInt32LE(1, 68); // unique id seed
-  pdb.writeUInt16LE(records.length, 76);
-  offsets.forEach((offset, index) => pdb.writeUInt32LE(offset, 78 + index * 8));
+  pdb.writeUInt32BE(1, 68); // unique id seed
+  pdb.writeUInt16BE(records.length, 76);
+  for (const [index, offset] of offsets.entries()) {
+    pdb.writeUInt32BE(offset, 78 + index * 8);
+  }
   return Buffer.concat([pdb, ...records]);
 }
 

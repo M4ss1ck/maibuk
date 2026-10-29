@@ -33,7 +33,10 @@ interface Sanitizer {
     css: string,
     options: { base: string; assetUrl(path: string, type: string): Promise<string | null> }
   ): Promise<string>;
-  readingCss(settings: { fontSize: number; lineWidth: string }, options?: { dark?: boolean }): string;
+  readingCss(
+    settings: { fontSize: number; lineWidth: string },
+    options?: { dark?: boolean }
+  ): string;
   mediaTypeFor(path: string): string;
 }
 

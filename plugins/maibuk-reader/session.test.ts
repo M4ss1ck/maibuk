@@ -7,12 +7,14 @@
  * Worker is a stub, so nothing parses here.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FILE_READ_MAX_BYTES, createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { createReaderLibrary } from "./library";
 import { createReaderSession, type ReaderSession } from "./session";
-import { SHELF_KEY, positionKey, type ShelfEntry } from "./shelf";
+import { SHELF_KEY, positionKey, type DocumentFormat, type ShelfEntry } from "./shelf";
 import { readerManifest, shelfEntry } from "./test-support";
 
 /** The Worker the session starts for pdf.js's core, recording what it was told. */
@@ -239,6 +241,125 @@ describe("read", () => {
       harness.send({ kind: "read", id: 7, offset: 0, length: 4 });
       const answer = await messageOf(harness, "read-error");
       expect(answer).toMatchObject({ kind: "read-error", id: 7, code: "file-missing" });
+    } finally {
+      harness.stop();
+    }
+  });
+});
+
+describe("archive", () => {
+  /** A live File Grant over a committed fixture, and a Shelf row that names it. */
+  async function pickFixture(
+    harness: Harness,
+    fixture: string,
+    format: DocumentFormat = "epub"
+  ): Promise<ShelfEntry> {
+    const bytes = new Uint8Array(readFileSync(join(__dirname, "fixtures", fixture)));
+    harness.host.files.queuePick({ name: fixture, bytes });
+    const picked = await harness.client.files.pick({
+      extensions: [format],
+      multiple: false,
+    });
+    if (picked === null) throw new Error("the pick was refused");
+    return shelfEntry({
+      id: "doc-1",
+      grant: picked.grant,
+      fingerprint: `${bytes.length}:test`,
+      title: "Fixture",
+      format,
+    });
+  }
+
+  it("lists the archive's entries after opening it once", async () => {
+    const harness = setup();
+    try {
+      const entry = await pickFixture(harness, "flowing.epub");
+      harness.session.setEntry(entry);
+      await opened(harness);
+      harness.send({ kind: "zip-list", id: 1 });
+      const list = await messageOf(harness, "zip-list");
+      expect(list.id).toBe(1);
+      const entries = list.entries as { name: string; size: number }[];
+      expect(entries.map(({ name }) => name)).toEqual(
+        expect.arrayContaining([
+          "META-INF/container.xml",
+          "OEBPS/chapter1.xhtml",
+          "OEBPS/images/cover.png",
+        ])
+      );
+      const container = entries.find(({ name }) => name === "META-INF/container.xml");
+      expect(container?.size).toBeGreaterThan(0);
+    } finally {
+      harness.stop();
+    }
+  });
+
+  it("inflates a text entry and transfers a binary entry", async () => {
+    const harness = setup();
+    try {
+      const entry = await pickFixture(harness, "flowing.epub");
+      harness.session.setEntry(entry);
+      await opened(harness);
+      harness.send({
+        kind: "zip-entry",
+        id: 2,
+        name: "OEBPS/chapter1.xhtml",
+        as: "text",
+      });
+      const text = await messageOf(harness, "zip-data");
+      expect(text.id).toBe(2);
+      expect(text.text).toContain("The spice must flow");
+      expect(text.buffer).toBeUndefined();
+
+      harness.send({ kind: "zip-entry", id: 3, name: "OEBPS/images/cover.png", as: "bytes" });
+      await vi.waitFor(() =>
+        expect(harness.messages.filter((message) => message.kind === "zip-data")).toHaveLength(2)
+      );
+      const image = harness.messages.filter((message) => message.kind === "zip-data")[1];
+      expect(image.id).toBe(3);
+      expect((image.buffer as ArrayBuffer).byteLength).toBe(83);
+    } finally {
+      harness.stop();
+    }
+  });
+
+  it("answers an entry the archive does not hold with a missing zip-error", async () => {
+    const harness = setup();
+    try {
+      const entry = await pickFixture(harness, "flowing.epub");
+      harness.session.setEntry(entry);
+      await opened(harness);
+      harness.send({ kind: "zip-entry", id: 4, name: "OEBPS/nothing.xhtml", as: "text" });
+      const error = await messageOf(harness, "zip-error");
+      expect(error).toMatchObject({ kind: "zip-error", id: 4, code: "missing" });
+    } finally {
+      harness.stop();
+    }
+  });
+
+  it("answers a damaged archive with a corrupt zip-error", async () => {
+    const harness = setup();
+    try {
+      const entry = await pickFixture(harness, "corrupt.epub");
+      harness.session.setEntry(entry);
+      await opened(harness);
+      harness.send({ kind: "zip-list", id: 5 });
+      const error = await messageOf(harness, "zip-error");
+      expect(error).toMatchObject({ kind: "zip-error", id: 5, code: "corrupt" });
+    } finally {
+      harness.stop();
+    }
+  });
+
+  it("answers an archive whose content is encrypted with a drm zip-error", async () => {
+    const harness = setup();
+    try {
+      const entry = await pickFixture(harness, "encrypted.epub");
+      harness.session.setEntry(entry);
+      await opened(harness);
+      harness.send({ kind: "zip-list", id: 6 });
+      const error = await messageOf(harness, "zip-error");
+      expect(error).toMatchObject({ kind: "zip-error", id: 6, code: "drm" });
     } finally {
       harness.stop();
     }

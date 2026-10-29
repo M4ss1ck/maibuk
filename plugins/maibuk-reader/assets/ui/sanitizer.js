@@ -158,7 +158,8 @@
     for (const element of Array.from(doc.querySelectorAll("image, use"))) {
       const href = element.getAttributeNS("http://www.w3.org/1999/xlink", "href");
       if (href === null) continue;
-      if (isExternal(href) || isScriptUrl(href)) element.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
+      if (isExternal(href) || isScriptUrl(href))
+        element.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
     }
     for (const element of Array.from(doc.querySelectorAll("[style]"))) {
       const style = element.getAttribute("style");
@@ -327,7 +328,7 @@
   }
 
   // biome-ignore lint/suspicious/noAssignInExpressions: the Frame reads this global, there is no module system.
-  (/** @type {any} */ (globalThis)).ReaderSanitizer = {
+  /** @type {any} */ (globalThis).ReaderSanitizer = {
     FORBID_TAGS,
     ALLOWED_URI_REGEXP,
     LINE_WIDTHS,

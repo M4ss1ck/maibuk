@@ -162,9 +162,9 @@ describe("DRM", () => {
     expect(protectsContent(`<EncryptedData><CipherReference URI="a.woff2"/></EncryptedData>`)).toBe(
       false
     );
-    expect(protectsContent(`<EncryptedData><CipherReference URI="chapter.xhtml"/></EncryptedData>`)).toBe(
-      true
-    );
+    expect(
+      protectsContent(`<EncryptedData><CipherReference URI="chapter.xhtml"/></EncryptedData>`)
+    ).toBe(true);
     expect(protectsContent(`<EncryptedData/>`)).toBe(true);
   });
 });
