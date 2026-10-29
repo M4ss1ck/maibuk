@@ -211,6 +211,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   Release: "app metadata, not part of writing: the badge in the sidebar and Settings names it",
   "Release Notes":
     "app metadata, not part of writing; it lives in a dialog, and steps never open dialogs",
+  Update: "app metadata, not part of writing; it lives in the What's new dialog, and steps never open dialogs",
+  "Download Page": "app metadata, not part of writing; a link in the What's new dialog, and steps never open dialogs",
   "Sync Base": "internal state a sync compares against; nothing on screen shows it",
   "Version Retention":
     "runs on its own and has no control; the History size readout sits in the panel the History step already shows",

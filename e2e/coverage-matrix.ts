@@ -34,6 +34,13 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "term",
+    items: ["Update", "Download Page"],
+    reason:
+      "Both appear only when a newer published Release exists, which the web build never checks for; Update is desktop-only and not built yet (ADR 0037, #661 adds its row)",
+    owner: "Vitest ReleaseNotesDialog.test.tsx, release-check.test.ts",
+  },
+  {
+    kind: "term",
     items: ["Plugin Platforms"],
     reason:
       "A manifest field the Plugin author writes, never shown on screen; Android Plugins are not shown to users yet (#516), so no workflow reaches the term",
