@@ -86,6 +86,14 @@ const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
     manifest: "manifest.json",
     output: "maibuk-echoes",
   },
+  // Reader (#653) ships `desktop` and `web`, so the web lane can run the real
+  // source unchanged. Its reading surface is a Frame; the shelf is Remote UI.
+  {
+    source: "plugins/maibuk-reader",
+    repoSource: true,
+    manifest: "manifest.json",
+    output: "maibuk-reader",
+  },
   // MCP Server ships desktop-only; the E2E web lane runs the real source with
   // "web" added to its manifest `platforms` here, in the built copy alone. The
   // shipped `plugins/maibuk-mcp/manifest.json` is never changed.

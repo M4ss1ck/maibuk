@@ -57,7 +57,8 @@ export type PluginSeed =
   | "fixture-frame"
   | "fixture-stopped"
   | "maibuk-echoes"
-  | "maibuk-mcp";
+  | "maibuk-mcp"
+  | "maibuk-reader";
 
 /**
  * One Plugin the seed installs: a named Plugin Directory folder (`name`), the
@@ -145,6 +146,7 @@ const BUILT_PLUGIN_SEEDS: ReadonlySet<PluginSeed> = new Set([
   "fixture-stopped",
   "maibuk-echoes",
   "maibuk-mcp",
+  "maibuk-reader",
 ]);
 
 const BLANK_PATH = "/__e2e__/blank";
