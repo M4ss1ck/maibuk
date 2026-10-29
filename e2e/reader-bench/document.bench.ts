@@ -4,6 +4,9 @@
 // committed), turns 20 pages in each, searches a word in each, leaves Reader,
 // waits 30 s, and reads the heap after a forced GC.
 //
+// The memory gate is relative to a control visit (control.bench.ts): this spec's
+// heap is read as today, and the runner subtracts the control's growth.
+//
 // Long tasks: a PerformanceObserver('longtask') is installed in the top window
 // before any app code (addInitScript, top frame only). Each entry carries its
 // attribution; the runner decides which entries are Reader's (see
@@ -175,10 +178,23 @@ test("open, turn 20 pages, search, leave, and settle the heap: PDF and EPUB", as
   await page.keyboard.press("Escape");
 
   // Leave Reader for the Library, then wait the gate's 30 s before the heap read.
+  // The Frame handles are not kept: every locator here is re-resolved per use, and
+  // the waitForFunction handles are disposed in waitFrameChange. What remains is
+  // Playwright's InjectedScript in the Frame's own context, which goes with the
+  // Frame when Reader unmounts; the runner's control subtracts the rest.
   await runHostCommand(page, "Back to Shelf");
   await goHome(page);
   await page.waitForTimeout(LEAVE_SETTLE_MS);
   const afterLeaveHeapBytes = await heapAfterGc(page);
+  // TEMPORARY (InjectedScript check): a heap snapshot after the settled GC. Removed after the check.
+  if (process.env.READER_BENCH_SNAPSHOT) {
+    const session = await page.context().newCDPSession(page);
+    const chunks: string[] = [];
+    session.on("HeapProfiler.addHeapSnapshotChunk", (event: { chunk: string }) => chunks.push(event.chunk));
+    await session.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false });
+    writeFileSync(process.env.READER_BENCH_SNAPSHOT, chunks.join(""));
+    await session.detach();
+  }
 
   const longTasks = await page.evaluate(
     () => (window as unknown as { __readerLongTasks?: unknown[] }).__readerLongTasks ?? []

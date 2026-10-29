@@ -668,10 +668,34 @@ The gates (`scripts/reader-bench-budget.mjs`):
    which the bench does nothing else during); any other host task is reported
    and not gated. A Worker's work never appears as a long task, which is the
    point of the Worker. The raw entries are kept in the report.
-3. **Memory returns.** The JS heap 30 s after leaving Reader is at most 110% of
-   the heap before opening. The heap is read after a forced GC through the
-   page's CDP session (`HeapProfiler.collectGarbage`, `Runtime.getHeapUsage`),
-   so Chromium only.
+3. **Memory returns, relative to a control visit.** Reader's growth is judged
+   against a control, not against the pre-open heap. The control
+   (`e2e/reader-bench/control.bench.ts`) is its own page load with Reader
+   disabled: baseline heap, an in-app visit to Settings and back to the Library,
+   30 s, then the heap. Reader (`document.bench.ts`) is a separate page load with
+   Reader enabled and never opened: baseline heap, open and read, leave, 30 s,
+   the heap. Reader-attributable growth is
+   `(readerAfter - readerBaseline) - (controlAfter - controlBaseline)`, clamped
+   at 0, and the gate is that it is at most 10% of `readerBaseline`
+   (`readerGrowthBytes` in `scripts/reader-bench-budget.mjs`). The report prints
+   both raw ratios beside the gate.
+
+   Why not "at most 110% of the baseline": a control visit alone ends at 1.12x
+   its own baseline (measured with Reader disabled, a Settings visit), so no
+   page passes a 1.10x gate, Reader or not. The 0.12x is what an in-app visit
+   leaves behind on this build, and the control absorbs it. Reader's raw ratio
+   was 1.23x (19.04 to 23.46 MiB) before this gate. About 0.31 MiB of that is a
+   second copy of Playwright's InjectedScript, created because the bench drives
+   the Reader Frame through `frameLocator`; it is harness memory, not product.
+   The bench disposes the handles it holds (the `waitForFunction` results in
+   `waitFrameChange`). The InjectedScript copy lives in the Frame's own context,
+   which Playwright owns; the control never drives a Frame, so the gate does not
+   subtract that copy. The open follow-up for the remaining product memory outside this gate is
+   [#655](https://github.com/M4ss1ck/maibuk/issues/655): an es-module-lexer
+   WebAssembly memory of 11 MiB that the JS-heap gate cannot see.
+
+   The heap is read after a forced GC through the page's CDP session
+   (`HeapProfiler.collectGarbage`, `Runtime.getHeapUsage`), so Chromium only.
 4. **Editor untouched.** The editor typing scenario of `bench:frames` runs
    once before the reading session and once after it. The gate is the
    after-run's own frame budget verdict; the before-run is printed beside it.

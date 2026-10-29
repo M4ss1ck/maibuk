@@ -91,7 +91,7 @@ export async function indicatorText(page: Page): Promise<string> {
  */
 export async function waitFrameChange(page: Page, before: string): Promise<void> {
   const frame = await readerFrame(page);
-  await frame.waitForFunction(
+  const handle = await frame.waitForFunction(
     (previous) =>
       new Promise<boolean>((resolve) => {
         const indicator = () => document.querySelector("#page-indicator")?.textContent ?? "";
@@ -114,6 +114,10 @@ export async function waitFrameChange(page: Page, before: string): Promise<void>
     before,
     { timeout: 15_000 }
   );
+  // waitForFunction returns a handle to the page's result. The bench never reads
+  // it, so it is disposed here: a handle left alive per turn is page-side state
+  // the heap read would count against Reader.
+  await handle.dispose();
 }
 
 /** The page's `performance.now()`, the clock the long-task entries use. */

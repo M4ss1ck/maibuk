@@ -1,5 +1,5 @@
 export const LONG_TASK_MS: number;
-export const MEMORY_RATIO: number;
+export const MEMORY_GROWTH_LIMIT: number;
 export const NOISE: {
   timePercent: number;
   timeFloorMs: number;
@@ -24,6 +24,8 @@ export interface ReaderBenchReport {
     disabled?: { startupMs: number[]; booksMs?: number[]; heapBytes: number[] } | null;
     enabled?: { startupMs: number[]; booksMs?: number[]; heapBytes: number[] } | null;
   };
+  /** The control visit: Reader disabled, an in-app visit to Settings and back (same sampling). */
+  control?: { baselineHeapBytes: number; afterLeaveHeapBytes: number } | null;
   document?: {
     iframes?: { title: string | null; ariaHidden: string | null; sandbox: string | null }[];
     baselineHeapBytes: number;
@@ -50,6 +52,10 @@ export interface ReaderBenchGate {
 
 export function median(values: number[]): number;
 export function nearestRank(values: number[], p: number): number;
+export function readerGrowthBytes(
+  reader: { baselineHeapBytes: number; afterLeaveHeapBytes: number },
+  control: { baselineHeapBytes: number; afterLeaveHeapBytes: number }
+): number;
 export function isReaderIframe(frame: { title: string | null; ariaHidden: string | null }): boolean;
 export function attributeLongTasks(
   tasks: LongTaskEntry[],

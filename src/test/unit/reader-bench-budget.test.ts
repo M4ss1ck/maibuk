@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import {
   LONG_TASK_MS,
-  MEMORY_RATIO,
+  MEMORY_GROWTH_LIMIT,
   type ReaderBenchReport,
   attributeLongTasks,
   checkReaderBench,
@@ -38,6 +38,7 @@ function report(
     actions?: { startMs: number; endMs: number }[];
     baseline?: number;
     afterLeave?: number;
+    control?: { baseline: number; afterLeave: number } | null;
     typing?: Typing;
     omitDocument?: boolean;
   } = {}
@@ -53,6 +54,15 @@ function report(
         heapBytes: overrides.enabledHeap ?? [20 * MIB, 20 * MIB, 20 * MIB],
       },
     },
+    control:
+      overrides.control === undefined
+        ? { baselineHeapBytes: 19 * MIB, afterLeaveHeapBytes: 21 * MIB }
+        : overrides.control === null
+          ? null
+          : {
+              baselineHeapBytes: overrides.control.baseline,
+              afterLeaveHeapBytes: overrides.control.afterLeave,
+            },
     document: overrides.omitDocument
       ? null
       : {
@@ -92,7 +102,7 @@ describe("reader bench budget", () => {
       "idle-startup",
       "idle-heap",
       "no-jank",
-      "memory-after-leave",
+      "memory-vs-control",
       "editor-typing",
     ]);
     expect(result.gates.filter((gate) => !gate.ok)).toEqual([]);
@@ -116,18 +126,69 @@ describe("reader bench budget", () => {
     expect(result.gates.find((gate) => gate.id === "idle-heap")?.ok).toBe(false);
   });
 
-  it("fails the memory gate above the 110% ratio and passes at it", () => {
-    expect(MEMORY_RATIO).toBe(1.1);
-    expect(
-      checkReaderBench(report({ afterLeave: 22.5 * MIB })).gates.find(
-        (gate) => gate.id === "memory-after-leave"
-      )?.ok
-    ).toBe(false);
-    expect(
-      checkReaderBench(report({ afterLeave: 22 * MIB })).gates.find(
-        (gate) => gate.id === "memory-after-leave"
-      )?.ok
-    ).toBe(true);
+  it("passes the memory gate when Reader's growth over the control is within 10% of its baseline", () => {
+    // Reader: 20 -> 23 MiB (+3). Control: 19 -> 21.5 MiB (+2.5). Reader-attributable
+    // growth = 3 - 2.5 = 0.5 MiB = 2.5% of Reader's 20 MiB baseline.
+    const result = checkReaderBench(
+      report({ baseline: 20 * MIB, afterLeave: 23 * MIB, control: { baseline: 19 * MIB, afterLeave: 21.5 * MIB } })
+    );
+    const row = result.gates.find((gate) => gate.id === "memory-vs-control");
+    expect(MEMORY_GROWTH_LIMIT).toBe(0.1);
+    expect(row?.ok).toBe(true);
+    expect(row?.value).toBeCloseTo(2.5, 6);
+    expect(row?.limit).toBe(10);
+  });
+
+  it("fails the memory gate when Reader grows more than 10% of its baseline beyond the control", () => {
+    // Reader: 20 -> 23.5 MiB (+3.5). Control: 20 -> 21 MiB (+1). Growth = 2.5 MiB = 12.5%.
+    const result = checkReaderBench(
+      report({ baseline: 20 * MIB, afterLeave: 23.5 * MIB, control: { baseline: 20 * MIB, afterLeave: 21 * MIB } })
+    );
+    const row = result.gates.find((gate) => gate.id === "memory-vs-control");
+    expect(row?.ok).toBe(false);
+    expect(row?.value).toBeCloseTo(12.5, 6);
+    expect(result.ok).toBe(false);
+  });
+
+  it("passes at exactly 10% of the baseline", () => {
+    // Reader: 20 -> 22 MiB (+2). Control: 20 -> 20 MiB. Growth = 2 MiB = exactly 10%.
+    const result = checkReaderBench(
+      report({ baseline: 20 * MIB, afterLeave: 22 * MIB, control: { baseline: 20 * MIB, afterLeave: 20 * MIB } })
+    );
+    const row = result.gates.find((gate) => gate.id === "memory-vs-control");
+    expect(row?.value).toBeCloseTo(10, 6);
+    expect(row?.ok).toBe(true);
+  });
+
+  it("clamps the growth at zero when the control grows more than Reader", () => {
+    // Reader: 20 -> 21 MiB (+1). Control: 20 -> 23 MiB (+3). Raw difference -2 MiB, clamped to 0.
+    const result = checkReaderBench(
+      report({ baseline: 20 * MIB, afterLeave: 21 * MIB, control: { baseline: 20 * MIB, afterLeave: 23 * MIB } })
+    );
+    const row = result.gates.find((gate) => gate.id === "memory-vs-control");
+    expect(row?.value).toBe(0);
+    expect(row?.ok).toBe(true);
+  });
+
+  it("reports both raw ratios beside the gate", () => {
+    // Reader 19.04 -> 23.46 MiB (1.23x); control 19.04 -> 21.32 MiB (1.12x).
+    const result = checkReaderBench(
+      report({
+        baseline: 19.04 * MIB,
+        afterLeave: 23.46 * MIB,
+        control: { baseline: 19.04 * MIB, afterLeave: 21.32 * MIB },
+      })
+    );
+    const row = result.gates.find((gate) => gate.id === "memory-vs-control");
+    expect(row?.detail).toContain("reader 1.23x");
+    expect(row?.detail).toContain("control 1.12x");
+    expect(result.trace.map((entry) => entry.label)).toContain("control heap ratio after leave (x)");
+  });
+
+  it("marks the run unmeasured when the control visit is missing", () => {
+    const result = checkReaderBench(report({ control: null }));
+    expect(result.unmeasured).toContain("the control visit is missing");
+    expect(result.ok).toBe(false);
   });
 
   it("counts an iframe-attributed long task as Reader's only when every iframe is Reader's", () => {

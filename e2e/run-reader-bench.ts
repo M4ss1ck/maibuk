@@ -271,7 +271,11 @@ async function main(): Promise<number> {
     const code = await runSpecs(
       options,
       dir,
-      ["reader-bench/startup.bench.ts", "reader-bench/document.bench.ts"],
+      [
+        "reader-bench/startup.bench.ts",
+        "reader-bench/control.bench.ts",
+        "reader-bench/document.bench.ts",
+      ],
       { READER_BENCH_PDF: fixtures.pdf, READER_BENCH_EPUB: fixtures.epub },
       "e2e/playwright.reader-bench.config.ts"
     );
@@ -286,6 +290,10 @@ async function main(): Promise<number> {
       "idle-enabled.json"
     );
     const document = readJson<ReaderBenchReport["document"]>(dir, "document.json");
+    const control = readJson<{ baselineHeapBytes: number; afterLeaveHeapBytes: number }>(
+      dir,
+      "control.json"
+    );
     rmSync(dir, { recursive: true, force: true });
 
     if (code !== 0)
@@ -298,6 +306,7 @@ async function main(): Promise<number> {
       repo: git(["rev-parse", "--short", "HEAD"]),
       machine: machine(),
       idle: { disabled: idleDisabled, enabled: idleEnabled },
+      control: control ?? null,
       document: document ?? null,
       typing: { before: typingBefore, after: typingAfter },
     };

@@ -15,8 +15,11 @@ import { pathToFileURL } from "node:url";
 
 /** A long task is a main-thread task over this many milliseconds (the Long Tasks API). */
 export const LONG_TASK_MS = 50;
-/** Reader's heap after leaving may be at most this multiple of the pre-open baseline. */
-export const MEMORY_RATIO = 1.1;
+/**
+ * Reader-attributable heap growth 30 s after leaving may be at most this share
+ * of Reader's pre-open baseline (see `readerGrowthBytes`).
+ */
+export const MEMORY_GROWTH_LIMIT = 0.1;
 /**
  * The noise threshold for start-up and heap deltas, the same rule the Plugins
  * bench uses for its launch deltas (`scripts/plugins-bench-budget.mjs`): a delta
@@ -42,6 +45,20 @@ export function nearestRank(values, p) {
   if (values.length === 0) return Number.NaN;
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)];
+}
+
+/**
+ * Reader's own heap growth from before opening to 30 s after leaving, minus the
+ * control visit's growth over the same window (Reader disabled, an in-app visit
+ * to Settings and back). The control absorbs what any in-app visit leaves behind:
+ * the app's caches, and Playwright's own InjectedScript copies, which the bench
+ * creates in every frame it drives. What is left is Reader's. Clamped at zero:
+ * a control that grows more than Reader is not negative Reader memory.
+ */
+export function readerGrowthBytes(reader, control) {
+  const raw = reader.afterLeaveHeapBytes - reader.baselineHeapBytes;
+  const controlRaw = control.afterLeaveHeapBytes - control.baselineHeapBytes;
+  return Math.max(0, raw - controlRaw);
 }
 
 /**
@@ -150,6 +167,10 @@ export function checkReaderBench(report) {
   }
 
   const doc = report.document ?? null;
+  const control = report.control ?? null;
+  const controlMeasured =
+    Number.isFinite(control?.baselineHeapBytes) && Number.isFinite(control?.afterLeaveHeapBytes);
+  if (!controlMeasured) unmeasured.push("the control visit is missing");
   if (doc === null) {
     unmeasured.push("the document run is missing");
   } else {
@@ -195,18 +216,29 @@ export function checkReaderBench(report) {
 
     if (!Number.isFinite(doc.baselineHeapBytes) || !Number.isFinite(doc.afterLeaveHeapBytes)) {
       unmeasured.push("the document run has no heap readings");
-    } else {
-      const ratio = doc.afterLeaveHeapBytes / doc.baselineHeapBytes;
+    } else if (controlMeasured) {
+      // Growth as a percent of Reader's own pre-open heap. Compared in percent
+      // (not bytes) so the limit is exact: 2 MiB of 20 MiB is 10, not 10.000001.
+      const readerRatio = doc.afterLeaveHeapBytes / doc.baselineHeapBytes;
+      const controlRatio = control.afterLeaveHeapBytes / control.baselineHeapBytes;
+      const growth = readerGrowthBytes(
+        { baselineHeapBytes: doc.baselineHeapBytes, afterLeaveHeapBytes: doc.afterLeaveHeapBytes },
+        control
+      );
+      const percent = (growth / doc.baselineHeapBytes) * 100;
+      const limit = MEMORY_GROWTH_LIMIT * 100;
       gates.push(
         gate(
-          "memory-after-leave",
-          "JS heap 30 s after leaving Reader, vs before opening (ratio)",
-          ratio,
-          MEMORY_RATIO,
-          ratio <= MEMORY_RATIO,
-          `before ${(doc.baselineHeapBytes / 1048576).toFixed(2)} MiB, after ${(doc.afterLeaveHeapBytes / 1048576).toFixed(2)} MiB`
+          "memory-vs-control",
+          "JS heap 30 s after leaving Reader, growth over a control visit (% of pre-open heap)",
+          percent,
+          limit,
+          percent <= limit,
+          `reader ${readerRatio.toFixed(2)}x (before ${(doc.baselineHeapBytes / 1048576).toFixed(2)} MiB, after ${(doc.afterLeaveHeapBytes / 1048576).toFixed(2)} MiB); control ${controlRatio.toFixed(2)}x (before ${(control.baselineHeapBytes / 1048576).toFixed(2)} MiB, after ${(control.afterLeaveHeapBytes / 1048576).toFixed(2)} MiB); Reader-attributable ${(growth / 1048576).toFixed(2)} MiB`
         )
       );
+      trace.push({ label: "reader heap ratio after leave (x)", value: readerRatio });
+      trace.push({ label: "control heap ratio after leave (x)", value: controlRatio });
     }
 
     const firstPage = doc.firstPageMs ?? {};
