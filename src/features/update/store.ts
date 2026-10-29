@@ -25,6 +25,11 @@ export function setSeamUpdater(adapter: UpdaterAdapter | null): void {
 
 const resolveUpdater = async (): Promise<UpdaterAdapter> => seamUpdater ?? getUpdater();
 
+/** Whether a click on Update (or the Command) may begin one. */
+export function canStartUpdate(state: UpdatePhase): boolean {
+  return state.phase === "idle" || state.phase === "failed";
+}
+
 const IN_FLIGHT = new Set<UpdatePhase["phase"]>(["checking", "downloading", "restarting"]);
 
 export const useUpdateStore = create<UpdateState>()((set, get) => ({

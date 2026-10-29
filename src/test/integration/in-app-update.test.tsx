@@ -163,9 +163,7 @@ describe("Update flow", () => {
   it.each([
     ["offline", /Check your connection/],
     ["cancelled-auth", /administrator password/],
-    ["not-writable", /cannot write to the folder/],
     ["bad-signature", /signature check/],
-    ["no-asset", /no update for your install/],
     ["other", /The update failed/],
   ] as const)("a %s failure shows Retry and the Download Page", async (failure, message) => {
     const { user, dialog } = await renderOpen({ failure });
@@ -191,6 +189,26 @@ describe("Update flow", () => {
       /no update for your install/
     );
     expect(calls.download).toBe(0);
+  });
+
+  it.each([
+    "no-asset",
+    "not-writable",
+  ] as const)("a %s failure offers no Retry, only the Download page", async (failure) => {
+    const { user, dialog } = await renderOpen({ failure });
+    await user.click(within(dialog).getByRole("button", { name: "Update to 99.0.0" }));
+    await within(dialog).findByRole("alert");
+    expect(within(dialog).queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Download page" })).toBeVisible();
+  });
+
+  it("closes on Escape and returns focus to the badge", async () => {
+    const { user } = await renderOpen();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /^Maibuk /, hidden: true })
+    );
   });
 
   it("retries after a failure", async () => {

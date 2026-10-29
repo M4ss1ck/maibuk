@@ -2,9 +2,10 @@ import { useTranslation } from "react-i18next";
 import { Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useReleaseStore } from "@/features/releases/store";
+import type { UpdatePhase } from "@/features/update/types";
 import type { ReleaseNotes } from "@/features/releases/release-notes";
 import { updateProgressPercent } from "@/features/update/progress";
-import { useUpdateStore } from "@/features/update/store";
+import { canStartUpdate, useUpdateStore } from "@/features/update/store";
 import { openExternal } from "@/lib/platform";
 import { DOWNLOAD_PAGE } from "@/constants";
 
@@ -12,6 +13,13 @@ import { DOWNLOAD_PAGE } from "@/constants";
  * The What's new footer: the Update flow where this install can Update, and
  * the Download Page as the way out in every state (ADR 0037).
  */
+/** Retrying cannot help when the feed has no file for this install or the folder is read-only. */
+function isDeadEnd(state: UpdatePhase): boolean {
+  return (
+    state.phase === "failed" && (state.reason === "no-asset" || state.reason === "not-writable")
+  );
+}
+
 export function UpdateFooter({ release }: { release: ReleaseNotes }) {
   const { t } = useTranslation();
   const bundleType = useUpdateStore((store) => store.bundleType);
@@ -68,7 +76,7 @@ export function UpdateFooter({ release }: { release: ReleaseNotes }) {
       )}
       <div className="flex flex-wrap justify-end gap-2">
         {downloadPage}
-        {(state.phase === "idle" || state.phase === "failed") && (
+        {canStartUpdate(state) && !isDeadEnd(state) && (
           <Button variant="primary" onClick={() => void start(release.number)}>
             <RefreshCw className="size-4" aria-hidden="true" />
             {state.phase === "failed"

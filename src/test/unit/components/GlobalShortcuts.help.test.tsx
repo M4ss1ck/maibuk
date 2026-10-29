@@ -78,6 +78,10 @@ vi.mock("@/components/shortcuts/ShortcutEditorDialog", () => ({
 }));
 
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
+import { useReleaseStore } from "@/features/releases/store";
+import { useUpdateStore } from "@/features/update/store";
+
+const NEWER = { number: "99.0.0", date: "2099-01-01", sections: [] };
 
 function latestConfigs() {
   const calls = mockUseShortcuts.mock.calls;
@@ -152,6 +156,55 @@ describe("GlobalShortcuts", () => {
       "global.toggleTheme",
       "global.updateMaibuk",
     ]);
+  });
+
+  describe("Update Maibuk Command", () => {
+    const find = () =>
+      latestConfigs().find((c) => c.id === "global.updateMaibuk") as
+        | (ShortcutConfig & { enabled?: boolean })
+        | undefined;
+
+    beforeEach(() => {
+      useReleaseStore.setState({ newerReleases: [], isNotesOpen: false });
+      useUpdateStore.setState({ bundleType: "unknown", state: { phase: "idle" } });
+    });
+
+    it("is off when the install cannot Update or no newer Release exists", () => {
+      useReleaseStore.setState({ newerReleases: [NEWER] });
+      render(<GlobalShortcuts />);
+      expect(find()?.enabled).toBe(false);
+    });
+
+    it("is off with an Update-capable install and no newer Release", () => {
+      useUpdateStore.setState({ bundleType: "appimage" });
+      render(<GlobalShortcuts />);
+      expect(find()?.enabled).toBe(false);
+    });
+
+    it("starts the Update and opens What's new when possible", async () => {
+      const start = vi.fn().mockResolvedValue(undefined);
+      useUpdateStore.setState({ bundleType: "appimage", start });
+      useReleaseStore.setState({ newerReleases: [NEWER] });
+      render(<GlobalShortcuts />);
+      expect(find()?.enabled).toBe(true);
+      await act(async () => find()?.onTrigger());
+      expect(start).toHaveBeenCalledWith("99.0.0");
+      expect(useReleaseStore.getState().isNotesOpen).toBe(true);
+    });
+
+    it("only opens What's new while an Update is already running", async () => {
+      const start = vi.fn();
+      useUpdateStore.setState({
+        bundleType: "appimage",
+        start,
+        state: { phase: "downloading", received: 1 },
+      });
+      useReleaseStore.setState({ newerReleases: [NEWER] });
+      render(<GlobalShortcuts />);
+      await act(async () => find()?.onTrigger());
+      expect(start).not.toHaveBeenCalled();
+      expect(useReleaseStore.getState().isNotesOpen).toBe(true);
+    });
   });
 
   it("toggles always-on-top via shortcut only when on desktop", () => {

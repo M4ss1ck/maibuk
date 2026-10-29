@@ -14,7 +14,7 @@ import { cycleDictationLanguage } from "@/features/dictation/language";
 import { useDictationStore } from "@/features/dictation/store";
 import { useCommandPaletteStore } from "@/features/command-palette";
 import { useReleaseStore } from "@/features/releases/store";
-import { useUpdateStore } from "@/features/update/store";
+import { canStartUpdate, useUpdateStore } from "@/features/update/store";
 import { useThemeStore, getCycledTheme } from "@/features/theme";
 import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
@@ -210,7 +210,7 @@ export function GlobalShortcuts() {
       enabled: updatePossible,
       onTrigger: () => {
         const { state, start } = useUpdateStore.getState();
-        if (state.phase === "idle" || state.phase === "failed") {
+        if (canStartUpdate(state)) {
           const newest = useReleaseStore.getState().newerReleases[0];
           if (newest) void start(newest.number);
         }
