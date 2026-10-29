@@ -1,3 +1,5 @@
+import { whenBackupQueueIdle } from "@/features/backup/backup-service";
+import { useSyncStore } from "@/features/sync/store";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { deactivateTutorialDatabase } from "@/features/tutorial/library-switch";
 import { metricsService } from "@/lib/metrics/MetricsService";
@@ -26,7 +28,6 @@ function within(work: Promise<void>, ms: number): Promise<void> {
 }
 
 async function waitForSync(): Promise<void> {
-  const { useSyncStore } = await import("@/features/sync/store");
   if (useSyncStore.getState().syncStatus !== "syncing") return;
   await new Promise<void>((resolve) => {
     const unsubscribe = useSyncStore.subscribe((state) => {
@@ -41,7 +42,6 @@ const defaultSteps: ShutdownSteps = {
   leaveTutorial: deactivateTutorialDatabase,
   flushEdits: flushPendingEdits,
   async settleBackgroundWork() {
-    const { whenBackupQueueIdle } = await import("@/features/backup/backup-service");
     await Promise.all([whenBackupQueueIdle(), waitForSync()]);
   },
   async flushMetrics() {
