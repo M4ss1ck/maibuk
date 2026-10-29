@@ -5,6 +5,32 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-10-29
+
+### Added
+- Plugin integrado Reader para PDF, EPUB, MOBI, AZW3, FB2 y CBZ, con estantería de portadas en cuadrícula y permisos de archivo para archivos seleccionados
+- Filtro de notas en la barra lateral de la lista de notas
+- Desplazamiento continuo para PDF (alternador de barra de herramientas y comando), guardado como pdfLayout
+- Lectura a pantalla completa desde la barra de herramientas o F; Escape sale primero de pantalla completa
+- Paginación con rueda del ratón en los bordes de página, zoom con Ctrl+rueda, y toques y deslizamientos táctiles para paginar
+- Barra de herramientas de iconos con información sobre herramientas y botones de página anterior y siguiente
+
+### Changed
+- Los módulos de plugin se planifican en un Worker de un solo uso, liberando memoria de WebAssembly
+- El texto fluido sigue el tema en vivo sin colores oscuros incrustados al cargar
+- Los plugins bajo demanda pueden omitir el calentamiento mediante la opción de manifiesto warmStart "intent"
+- Los marcos pueden solicitar pantalla completa al host
+
+### Fixed
+- La vigilancia del directorio de plugins ignoraba los eventos de lectura, corrigiendo un bucle de recarga infinito
+- Las páginas PDF se repintan correctamente cuando se muestran de nuevo desde su mapa de bits
+- Al relanzar a la página de lectura se reabre el documento abierto
+- La paleta mantiene el foco cuando se inicia el último comando
+- La coincidencia de búsqueda actual se resalta y se mueve con Siguiente y Anterior
+- La liberación de permisos de archivo rechaza permisos desconocidos e informa fallos de escritura; los documentos de 0 bytes ya no leen un rango de longitud cero
+- Pulido del popover del filtro de notas: información sobre herramientas, teclado de lista de etiquetas, insignia e iconos de etiqueta
+- Foco del filtro de notas tras Limpiar, atajo fuera del editor y Tab cerrando listas de etiquetas
+
 ## [0.16.0] - 2026-10-24
 
 ### Added

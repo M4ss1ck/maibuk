@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-10-29
+
+### Added
+- Reader Built-in Plugin for PDF, EPUB, MOBI, AZW3, FB2, and CBZ, with a cover-grid Shelf and File Grants for picked files
+- Note Filter in the Notes list sidebar
+- Continuous scroll for PDFs (toolbar toggle and Command), saved as pdfLayout
+- Full-screen reading from the toolbar or F; Escape leaves full screen first
+- Mouse-wheel paging at page edges, Ctrl+wheel zoom, and touch taps and swipes for paging
+- Icon toolbar with tooltips and previous/next page buttons
+
+### Changed
+- Plugin modules are planned in a one-shot Worker, freeing WebAssembly memory
+- Flowing text follows the live theme with no dark colours baked in at load
+- On-demand plugins can opt out of warming via the warmStart "intent" manifest option
+- Frames can request full screen from the host
+
+### Fixed
+- Plugin Directory watch ignored read events, fixing an endless reload loop
+- PDF pages repaint correctly when shown again from their bitmap
+- Relaunching onto the Reading page reopens the open Document
+- Palette keeps focus when the last Command starts
+- Current search match is highlighted and moves with Next and Previous
+- File Grant release refuses unknown grants and reports write failures; 0-byte Documents no longer read a zero-length range
+- Note Filter popover polish: tooltips, Tag list keyboard, badge, and label icons
+- Note Filter focus after Clear, shortcut outside the editor, and Tab closing Tag lists
+
 ## [0.16.0] - 2026-10-24
 
 ### Added
