@@ -79,7 +79,12 @@ const loadPlugins = async () => {
   const { createMemoryPluginFileGrantStore, registerPluginFileGrantStore } = await import(
     "@/features/plugins/file-grants"
   );
-  registerPluginFileGrantStore(createMemoryPluginFileGrantStore());
+  if (IS_DESKTOP) {
+    const { createTauriPluginFileGrantStore } = await import("@/lib/platform/tauri/file-grants");
+    registerPluginFileGrantStore(createTauriPluginFileGrantStore());
+  } else {
+    registerPluginFileGrantStore(createMemoryPluginFileGrantStore());
+  }
   if (BENCH_DRIVER_ENABLED) {
     const { preparePluginsBench } = await import("@/features/plugins/bench");
     await preparePluginsBench();

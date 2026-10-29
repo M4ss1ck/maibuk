@@ -96,6 +96,20 @@ pub fn run() {
             plugins::endpoint::plugin_endpoint_chunk,
             #[cfg(desktop)]
             plugins::endpoint::plugin_endpoint_end,
+            #[cfg(desktop)]
+            plugins::files::plugin_files_pick,
+            #[cfg(desktop)]
+            plugins::files::plugin_files_read,
+            #[cfg(desktop)]
+            plugins::files::plugin_files_stat,
+            #[cfg(desktop)]
+            plugins::files::plugin_files_release,
+            #[cfg(desktop)]
+            plugins::files::plugin_files_list,
+            #[cfg(desktop)]
+            plugins::files::plugin_files_clear_plugin,
+            #[cfg(desktop)]
+            plugins::files::plugin_files_clear_all,
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             plugins::secrets::plugin_secret_set,
             #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -158,6 +172,21 @@ pub fn run() {
                     }
                 };
                 app.manage(endpoint);
+
+                // File Grants (ADR 0036) live in an app data file beside the
+                // other device-local Plugin records, never in the Library, so
+                // Backups and Sync do not carry them. Without an app data folder
+                // they last for this run.
+                let grants = match app.path().app_data_dir() {
+                    Ok(data) => {
+                        plugins::files::GrantStore::new(data.join(plugins::files::GRANTS_FILE))
+                    }
+                    Err(error) => {
+                        eprintln!("File Grants not kept: {error}");
+                        plugins::files::GrantStore::in_memory()
+                    }
+                };
+                app.manage(grants);
 
                 #[cfg(any(target_os = "linux", target_os = "windows"))]
                 {
