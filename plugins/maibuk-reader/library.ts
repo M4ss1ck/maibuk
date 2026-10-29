@@ -125,7 +125,14 @@ export function createReaderLibrary(client: ReaderClient): ReaderLibrary {
       const { head, print } = await fingerprintBytes(client, picked.grant, picked.size);
       const format: DocumentFormat | null =
         sniffFormat(head, picked.name) ?? formatFromName(picked.name);
-      if (format === null) throw new Error(`Reader cannot open ${picked.name}`);
+      if (format === null) {
+        try {
+          await client.files.release({ grant: picked.grant });
+        } catch {
+          // The grant may already be gone; the throw below still surfaces.
+        }
+        throw new Error(`Reader cannot open ${picked.name}`);
+      }
       const entry: ShelfEntry = {
         id: newDocumentId(),
         grant: picked.grant,
@@ -138,8 +145,16 @@ export function createReaderLibrary(client: ReaderClient): ReaderLibrary {
         state: "ok",
       };
       const shelf = await library.loadShelf();
+      const existing = shelf.find((candidate) => candidate.fingerprint === print);
       const next = upsertByFingerprint(shelf, entry);
       await library.saveShelf(next);
+      if (existing !== undefined && existing.grant !== picked.grant) {
+        try {
+          await client.files.release({ grant: existing.grant });
+        } catch {
+          // The grant may already be gone; the Shelf still keeps the new one.
+        }
+      }
       return next.find((candidate) => candidate.fingerprint === print) ?? entry;
     },
 
@@ -190,9 +205,28 @@ export function createReaderLibrary(client: ReaderClient): ReaderLibrary {
       if (picked === null) return { ok: false, reason: "cancelled" };
       const { print } = await fingerprintBytes(client, picked.grant, picked.size);
       const shelf = await library.loadShelf();
+      const missingEntry = shelf.find((candidate) => candidate.id === id);
       const result = reattach(shelf, id, print, picked.grant);
-      if (!result.ok) return { ok: false, reason: result.reason };
+      if (!result.ok) {
+        // Another Document may hold the same grant: picking its file again
+        // returns its grant id, and releasing it would break that Document.
+        if (!shelf.some((candidate) => candidate.grant === picked.grant)) {
+          try {
+            await client.files.release({ grant: picked.grant });
+          } catch {
+            // The grant may already be gone; the Missing Document stays as it was.
+          }
+        }
+        return { ok: false, reason: result.reason };
+      }
       await library.saveShelf(result.shelf);
+      if (missingEntry !== undefined && missingEntry.grant !== picked.grant) {
+        try {
+          await client.files.release({ grant: missingEntry.grant });
+        } catch {
+          // The old grant may already be gone; the reattach already saved.
+        }
+      }
       return { ok: true, entry: result.entry };
     },
 

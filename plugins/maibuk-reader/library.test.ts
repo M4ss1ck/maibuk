@@ -9,7 +9,7 @@ import { createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { describe, expect, it } from "vitest";
 import { createReaderLibrary, type ReaderClient } from "./library";
-import { SHELF_KEY, positionKey, type ShelfEntry } from "./shelf";
+import { SHELF_KEY, positionKey, fingerprint, type ShelfEntry } from "./shelf";
 import { pdfBytes, readerManifest, shelfEntry } from "./test-support";
 
 function setup() {
@@ -114,6 +114,55 @@ describe("openFileFlow()", () => {
       { offset: 0, length: 65_536 },
       { offset: 134_464, length: 65_536 },
     ]);
+  });
+
+  it("releases the picked grant when the format is unknown", async () => {
+    const released: string[] = [];
+    const map = new Map<string, unknown>();
+    const client = {
+      storage: fakeStorage(map),
+      files: {
+        pick: async () => ({ grant: "g1", name: "notes.txt", size: 0 }),
+        read: async () => new ArrayBuffer(0),
+        stat: async () => ({ name: "notes.txt", size: 0, modified: 0 }),
+        requestAccess: async () => true,
+        release: async ({ grant }: { grant: string }) => {
+          released.push(grant);
+          return null;
+        },
+        list: async () => [],
+      },
+    } as unknown as ReaderClient;
+    const library = createReaderLibrary(client);
+    await expect(library.openFileFlow()).rejects.toThrow();
+    expect(released).toEqual(["g1"]);
+  });
+
+  it("releases the old grant when upsert matches an existing entry with a differing grant", async () => {
+    const released: string[] = [];
+    const size = 0;
+    const empty = new Uint8Array(0);
+    const print = await fingerprint(size, empty, empty);
+    const map = new Map<string, unknown>();
+    map.set(SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "old-grant", fingerprint: print })]);
+    const client = {
+      storage: fakeStorage(map),
+      files: {
+        pick: async () => ({ grant: "new-grant", name: "Dune.pdf", size }),
+        read: async () => new ArrayBuffer(0),
+        stat: async () => ({ name: "Dune.pdf", size, modified: 0 }),
+        requestAccess: async () => true,
+        release: async ({ grant }: { grant: string }) => {
+          released.push(grant);
+          return null;
+        },
+        list: async () => [],
+      },
+    } as unknown as ReaderClient;
+    const library = createReaderLibrary(client);
+    const entry = await library.openFileFlow();
+    expect(entry?.grant).toBe("new-grant");
+    expect(released).toEqual(["old-grant"]);
   });
 });
 
@@ -251,6 +300,86 @@ describe("locateAgain()", () => {
     } finally {
       host.stop();
     }
+  });
+
+  it("releases the picked grant when reattach fails, unless it is the missing entry's own", async () => {
+    const released: string[] = [];
+    const map = new Map<string, unknown>();
+    map.set(SHELF_KEY, [
+      shelfEntry({ id: "doc-1", grant: "old-grant", fingerprint: "doc-1:fingerprint" }),
+    ]);
+    const client = {
+      storage: fakeStorage(map),
+      files: {
+        pick: async () => ({ grant: "new-grant", name: "Dune.pdf", size: 0 }),
+        read: async () => new ArrayBuffer(0),
+        stat: async () => ({ name: "Dune.pdf", size: 0, modified: 0 }),
+        requestAccess: async () => true,
+        release: async ({ grant }: { grant: string }) => {
+          released.push(grant);
+          return null;
+        },
+        list: async () => [],
+      },
+    } as unknown as ReaderClient;
+    const library = createReaderLibrary(client);
+    const result = await library.locateAgain("doc-1");
+    expect(result).toEqual({ ok: false, reason: "fingerprint-mismatch" });
+    expect(released).toEqual(["new-grant"]);
+  });
+
+  it("keeps the picked grant when another Document on the Shelf holds it", async () => {
+    const released: string[] = [];
+    const map = new Map<string, unknown>();
+    map.set(SHELF_KEY, [
+      shelfEntry({ id: "doc-1", grant: "old-grant", fingerprint: "doc-1:fingerprint" }),
+      shelfEntry({ id: "doc-2", grant: "other-grant", fingerprint: "doc-2:fingerprint" }),
+    ]);
+    const client = {
+      storage: fakeStorage(map),
+      files: {
+        pick: async () => ({ grant: "other-grant", name: "Other.pdf", size: 0 }),
+        read: async () => new ArrayBuffer(0),
+        stat: async () => ({ name: "Other.pdf", size: 0, modified: 0 }),
+        requestAccess: async () => true,
+        release: async ({ grant }: { grant: string }) => {
+          released.push(grant);
+          return null;
+        },
+        list: async () => [],
+      },
+    } as unknown as ReaderClient;
+    const library = createReaderLibrary(client);
+    const result = await library.locateAgain("doc-1");
+    expect(result).toEqual({ ok: false, reason: "fingerprint-mismatch" });
+    expect(released).toEqual([]);
+  });
+
+  it("releases the old grant when reattach succeeds with a differing grant", async () => {
+    const released: string[] = [];
+    const size = 0;
+    const empty = new Uint8Array(0);
+    const print = await fingerprint(size, empty, empty);
+    const map = new Map<string, unknown>();
+    map.set(SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "old-grant", fingerprint: print })]);
+    const client = {
+      storage: fakeStorage(map),
+      files: {
+        pick: async () => ({ grant: "new-grant", name: "Dune.pdf", size }),
+        read: async () => new ArrayBuffer(0),
+        stat: async () => ({ name: "Dune.pdf", size, modified: 0 }),
+        requestAccess: async () => true,
+        release: async ({ grant }: { grant: string }) => {
+          released.push(grant);
+          return null;
+        },
+        list: async () => [],
+      },
+    } as unknown as ReaderClient;
+    const library = createReaderLibrary(client);
+    const result = await library.locateAgain("doc-1");
+    expect(result.ok).toBe(true);
+    expect(released).toEqual(["old-grant"]);
   });
 });
 
