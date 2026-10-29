@@ -9,7 +9,8 @@ use std::path::{Component, Path};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use notify::{RecommendedWatcher, RecursiveMode};
+use notify::event::{AccessKind, AccessMode};
+use notify::{EventKind, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, RecommendedCache};
 
 use super::directory::is_safe_folder_name;
@@ -40,7 +41,7 @@ impl PluginWatcher {
                 return;
             };
             let mut changed: Vec<String> = Vec::new();
-            for event in events {
+            for event in events.iter().filter(|event| is_write(&event.kind)) {
                 for path in &event.paths {
                     if let Some(id) = plugin_folder_of(&watched, path) {
                         if !changed.contains(&id) {
@@ -66,6 +67,17 @@ impl PluginWatcher {
         if let Ok(mut guard) = self.inner.lock() {
             *guard = None;
         }
+    }
+}
+
+/// Whether an event is a write. inotify also reports opens and read-only
+/// closes; the reload reads the folder itself, so passing those on would
+/// reload the Plugin in a loop.
+fn is_write(kind: &EventKind) -> bool {
+    match kind {
+        EventKind::Access(AccessKind::Close(AccessMode::Write)) => true,
+        EventKind::Access(_) => false,
+        _ => true,
     }
 }
 
@@ -194,6 +206,36 @@ mod tests {
         }
         assert!(ids.contains(&"tracer".to_string()), "{ids:?}");
         assert!(ids.iter().all(|id| id == "tracer"), "{ids:?}");
+
+        watcher.unwatch();
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// Reading a Plugin's files is not a change. The reload itself reads the
+    /// folder, so a read that surfaced here would reload the Plugin forever.
+    #[test]
+    fn reading_a_plugin_file_is_not_a_change() {
+        let root = temp_dir("read");
+        let folder = root.join("tracer");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("index.js"), "export const a = 1;").unwrap();
+        let (sender, receiver) = mpsc::channel();
+        let watcher = PluginWatcher::default();
+        watcher
+            .watch(&root, move |id| {
+                let _ = sender.send(id);
+            })
+            .unwrap();
+
+        // Give the watcher a moment to register before the reads.
+        std::thread::sleep(Duration::from_millis(300));
+        for _ in 0..3 {
+            std::fs::read(folder.join("index.js")).unwrap();
+            std::fs::read_dir(&folder).unwrap().for_each(drop);
+        }
+
+        let event = receiver.recv_timeout(Duration::from_secs(1));
+        assert!(event.is_err(), "a read was reported as a change: {event:?}");
 
         watcher.unwatch();
         std::fs::remove_dir_all(&root).unwrap();
