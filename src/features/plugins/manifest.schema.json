@@ -115,6 +115,14 @@
       "description": "Required when the Plugin draws its own UI with Frame.",
       "type": "boolean"
     },
+    "warmStart": {
+      "description": "surface (the default) warm-starts an on-demand Plugin when a surface it contributes is reached, sidebar entries and Command Contexts included; intent warms it only on an intent: its page mounting, a hover, focus, or press on its sidebar entry, or running one of its Commands. Requires an on-demand lifecycle.",
+      "type": "string",
+      "enum": [
+        "surface",
+        "intent"
+      ]
+    },
     "contributes": {
       "type": "object",
       "properties": {

@@ -511,7 +511,9 @@ describe("Plugin lifecycle: launch", () => {
     const contributions = await import("@/features/plugins/contributions");
     const original = contributions.registerPluginContributions;
     const seen: string[] = [];
-    const spy = vi.spyOn(contributions, "registerPluginContributions").mockImplementation(((source: Parameters<typeof original>[0]) => {
+    const spy = vi.spyOn(contributions, "registerPluginContributions").mockImplementation(((
+      source: Parameters<typeof original>[0]
+    ) => {
       seen.push(source.manifest.id);
       if (source.manifest.id === "bad-one") throw new Error("bad contributions");
       return original(source);
@@ -526,10 +528,7 @@ describe("Plugin lifecycle: launch", () => {
       expect(h.lifecycle.installed().map((plugin) => plugin.pluginId)).toEqual(["good-two"]);
       // The surviving Plugin still warm-starts from a surface.
       h.lifecycle.surfaceReached("good-two", "page:report");
-      await advanceUntil(
-        () => h.lifecycle.state("good-two")?.status === "ready",
-        "good-two ready"
-      );
+      await advanceUntil(() => h.lifecycle.state("good-two")?.status === "ready", "good-two ready");
       expect(h.lifecycle.state("good-two")?.status).toBe("ready");
     } finally {
       spy.mockRestore();
@@ -574,10 +573,7 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
     expect(h.frameCount()).toBe(0);
 
     h.lifecycle.surfaceReached("warm-page", "page:report");
-    await advanceUntil(
-      () => h.lifecycle.state("warm-page")?.status === "ready",
-      "warm-page ready"
-    );
+    await advanceUntil(() => h.lifecycle.state("warm-page")?.status === "ready", "warm-page ready");
 
     expect(h.framesFor("warm-page")).toHaveLength(1);
     expect(h.lifecycle.state("warm-page")).toEqual({ status: "ready", startReason: "warmStart" });
@@ -595,10 +591,7 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
     h.lifecycle.surfaceReached("warm-page", "page:report");
 
     await h.lifecycle.launch();
-    await advanceUntil(
-      () => h.lifecycle.state("warm-page")?.status === "ready",
-      "warm-page ready"
-    );
+    await advanceUntil(() => h.lifecycle.state("warm-page")?.status === "ready", "warm-page ready");
 
     expect(h.framesFor("warm-page")).toHaveLength(1);
     expect(h.lifecycle.state("warm-page")).toEqual({ status: "ready", startReason: "warmStart" });
@@ -610,10 +603,7 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
     });
     await h.lifecycle.launch();
     h.lifecycle.surfaceReached("warm-page", "page:report");
-    await advanceUntil(
-      () => h.lifecycle.state("warm-page")?.status === "ready",
-      "warm-page ready"
-    );
+    await advanceUntil(() => h.lifecycle.state("warm-page")?.status === "ready", "warm-page ready");
 
     h.lifecycle.surfaceLeft("warm-page", "page:report");
     await advance(IDLE_STOP_MS - 1_000);
@@ -634,10 +624,7 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
     });
     await h.lifecycle.launch();
     h.lifecycle.surfaceReached("warm-page", "page:report");
-    await advanceUntil(
-      () => h.lifecycle.state("warm-page")?.status === "ready",
-      "warm-page ready"
-    );
+    await advanceUntil(() => h.lifecycle.state("warm-page")?.status === "ready", "warm-page ready");
     const frame = h.framesFor("warm-page")[0];
     h.lifecycle.surfaceLeft("warm-page", "page:report");
 
@@ -656,10 +643,7 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
     });
     await h.lifecycle.launch();
     h.lifecycle.surfaceReached("warm-page", "page:report");
-    await advanceUntil(
-      () => h.lifecycle.state("warm-page")?.status === "ready",
-      "warm-page ready"
-    );
+    await advanceUntil(() => h.lifecycle.state("warm-page")?.status === "ready", "warm-page ready");
     h.framesFor("warm-page")[0].signalError("boom");
     await advance(0);
     expect(h.lifecycle.state("warm-page")).toEqual({
@@ -864,8 +848,7 @@ describe("Plugin lifecycle: persistent restart-once", () => {
     // The restart's frame is created only after real async work the fake timers
     // do not control; wait for the new frame and the ready state it leads to.
     await advanceUntil(
-      () =>
-        h.framesFor("alpha").length === 2 && h.lifecycle.state("alpha")?.status === "ready",
+      () => h.framesFor("alpha").length === 2 && h.lifecycle.state("alpha")?.status === "ready",
       "alpha's automatic restart"
     );
     expect(h.framesFor("alpha")).toHaveLength(2);
@@ -1204,9 +1187,7 @@ describe("Plugin lifecycle: dataVersion gate", () => {
 describe("Plugin lifecycle: compatibility gate", () => {
   it("refuses a manifest that wants a newer Plugin API and never warm-starts it", async () => {
     const h = await createHarness({
-      approved: [
-        makePlugin("warm-page", { lifecycle: "on-demand", apiVersion: "^9.0" }),
-      ],
+      approved: [makePlugin("warm-page", { lifecycle: "on-demand", apiVersion: "^9.0" })],
       data: { "warm-page": 1 },
     });
 
@@ -1214,13 +1195,10 @@ describe("Plugin lifecycle: compatibility gate", () => {
     h.lifecycle.surfaceReached("warm-page", "page:report");
     // The start hashes the folder on the real event loop before the
     // compatibility check; wait for the refusal, not a fixed number of passes.
-    await advanceUntil(
-      () => {
-        const state = h.lifecycle.state("warm-page");
-        return state?.status === "stopped" && state.refusal !== null;
-      },
-      "the compatibility refusal"
-    );
+    await advanceUntil(() => {
+      const state = h.lifecycle.state("warm-page");
+      return state?.status === "stopped" && state.refusal !== null;
+    }, "the compatibility refusal");
 
     expect(h.frameCount()).toBe(0);
     expect(h.dataVersions.get("warm-page")).toBe(1);
@@ -1615,7 +1593,9 @@ describe("Plugin lifecycle: library and language events", () => {
     });
     // The language subscription replays the current value, then the change.
     expect(
-      events.filter((entry) => entry.event === "language.changed").map((entry) => entry.payload.language)
+      events
+        .filter((entry) => entry.event === "language.changed")
+        .map((entry) => entry.payload.language)
     ).toEqual(["en", "es"]);
   });
 
@@ -1667,9 +1647,7 @@ describe("Plugin lifecycle: library and language events", () => {
 
   it("forwards focused-editor content and focus changes to a running Plugin", async () => {
     const h = await createHarness({
-      approved: [
-        makePlugin("alpha", { permissions: { required: ["editor:read"], optional: [] } }),
-      ],
+      approved: [makePlugin("alpha", { permissions: { required: ["editor:read"], optional: [] } })],
       granted: ["editor:read"],
     });
     await launchAll(h);
@@ -1693,7 +1671,12 @@ describe("Plugin lifecycle: library and language events", () => {
     const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one</p>" });
     document.body.appendChild(editor.view.dom);
     editor.view.dom.focus();
-    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
+    registerPluginEditor({
+      id: "e1",
+      editor,
+      entity: { kind: "chapter", id: "c1" },
+      language: "en",
+    });
     await advance(0);
 
     editor.commands.insertContentAt(4, " two");
@@ -1713,9 +1696,7 @@ describe("Plugin lifecycle: library and language events", () => {
 
   it("delivers no editor signal while the Library is unavailable (the Tutorial)", async () => {
     const h = await createHarness({
-      approved: [
-        makePlugin("alpha", { permissions: { required: ["editor:read"], optional: [] } }),
-      ],
+      approved: [makePlugin("alpha", { permissions: { required: ["editor:read"], optional: [] } })],
       granted: ["editor:read"],
       isLibraryAvailable: () => false,
     });
@@ -1740,7 +1721,12 @@ describe("Plugin lifecycle: library and language events", () => {
     const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one</p>" });
     document.body.appendChild(editor.view.dom);
     editor.view.dom.focus();
-    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
+    registerPluginEditor({
+      id: "e1",
+      editor,
+      entity: { kind: "chapter", id: "c1" },
+      language: "en",
+    });
     await advance(0);
     editor.commands.insertContentAt(4, " two");
     await advance(EDITOR_CONTENT_EVENT_MS);
@@ -1752,10 +1738,18 @@ describe("Plugin lifecycle: library and language events", () => {
   it("clears a stopped Plugin's editor highlights and leaves other Plugins'", async () => {
     const h = await createHarness({ approved: [makePlugin("alpha"), makePlugin("beta")] });
     await launchAll(h);
-    const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one two</p>" });
+    const editor = new Editor({
+      extensions: createRichTextExtensions(),
+      content: "<p>one two</p>",
+    });
     document.body.appendChild(editor.view.dom);
     editor.view.dom.focus();
-    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
+    registerPluginEditor({
+      id: "e1",
+      editor,
+      entity: { kind: "chapter", id: "c1" },
+      language: "en",
+    });
 
     setPluginEditorHighlights("alpha", { kind: "info", ranges: [{ from: 0, to: 3 }] });
     setPluginEditorHighlights("beta", { kind: "warning", ranges: [{ from: 4, to: 7 }] });
@@ -1957,9 +1951,9 @@ describe("Plugin lifecycle: Tutorial entry/exit boundary", () => {
 
     available = false;
     await emitChange({ available: false, reason: "tutorial" });
-    await expect(h.framesFor("maibuk-echoes")[0].call("storage.get", { key: "k" })).rejects.toMatchObject(
-      { code: "library-unavailable" }
-    );
+    await expect(
+      h.framesFor("maibuk-echoes")[0].call("storage.get", { key: "k" })
+    ).rejects.toMatchObject({ code: "library-unavailable" });
     expect(handler).not.toHaveBeenCalled();
     // The Built-in stays alive on the same runtime, refused like any other.
     expect(runtime?.broker.stopped).toBe(false);
@@ -1993,10 +1987,18 @@ describe("Plugin lifecycle: Tutorial entry/exit boundary", () => {
     });
     await launchAll(h);
 
-    const editor = new Editor({ extensions: createRichTextExtensions(), content: "<p>one two</p>" });
+    const editor = new Editor({
+      extensions: createRichTextExtensions(),
+      content: "<p>one two</p>",
+    });
     document.body.appendChild(editor.view.dom);
     editor.view.dom.focus();
-    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
+    registerPluginEditor({
+      id: "e1",
+      editor,
+      entity: { kind: "chapter", id: "c1" },
+      language: "en",
+    });
     setPluginEditorHighlights("alpha", { kind: "info", ranges: [{ from: 0, to: 3 }] });
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
 
@@ -2014,7 +2016,12 @@ describe("Plugin lifecycle: Tutorial entry/exit boundary", () => {
       content: "<p>one two three</p>",
     });
     document.body.appendChild(later.view.dom);
-    registerPluginEditor({ id: "e2", editor: later, entity: { kind: "chapter", id: "c9" }, language: "en" });
+    registerPluginEditor({
+      id: "e2",
+      editor: later,
+      entity: { kind: "chapter", id: "c9" },
+      language: "en",
+    });
     const map = buildPlainTextMap(later.state.doc);
     expect(pmToPlainOffset(map, later.state.selection.from)).toBe(0);
 
@@ -2056,7 +2063,12 @@ describe("Plugin lifecycle: bulk Library replacement", () => {
     });
     document.body.appendChild(editor.view.dom);
     editor.view.dom.focus();
-    registerPluginEditor({ id: "e1", editor, entity: { kind: "chapter", id: "c1" }, language: "en" });
+    registerPluginEditor({
+      id: "e1",
+      editor,
+      entity: { kind: "chapter", id: "c1" },
+      language: "en",
+    });
     setPluginEditorHighlights("alpha", { kind: "info", ranges: [{ from: 0, to: 3 }] });
     expect(editor.view.dom.querySelectorAll(".plugin-highlight--info")).toHaveLength(1);
 
@@ -2208,5 +2220,134 @@ describe("Plugin lifecycle constants", () => {
     expect(HEARTBEAT_MISS_LIMIT).toBe(5);
     expect(IDLE_STOP_MS).toBe(5 * 60_000);
     expect(STARTUP_TIMEOUT_MS).toBe(10_000);
+  });
+});
+
+/**
+ * Warm on intent (ADR 0019, amendment 2026-10-29): an on-demand Plugin that
+ * declares `warmStart: "intent"` is not warmed by its sidebar entry or by a
+ * Command's Context being on screen. Only its page mounting, a sidebar intent
+ * (`intend`), or running one of its Commands warms it.
+ */
+describe("Plugin lifecycle: warm on intent", () => {
+  function intentPlugin(id: string): PluginFolder {
+    return makePlugin(id, {
+      lifecycle: "on-demand",
+      warmStart: "intent",
+      ...pagePluginOverrides(),
+    });
+  }
+
+  it("does not warm an intent Plugin at launch from its sidebar entry or a global Command", async () => {
+    const h = await createHarness({ approved: [intentPlugin("intent-page")] });
+    // The sidebar row mounts and the app shell's Command bindings reach the
+    // screen's Contexts before the scan settles: neither is intent.
+    h.lifecycle.surfaceReached("intent-page", "sidebar:report");
+    h.lifecycle.surfaceReached("intent-page", "context");
+
+    await h.lifecycle.launch();
+    await advance(0);
+    await advance(0);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.state("intent-page")).toEqual({
+      status: "stopped",
+      reason: null,
+      refusal: null,
+    });
+  });
+
+  it("does not warm an intent Plugin when its sidebar entry or a Command's Context is reached later", async () => {
+    const h = await createHarness({ approved: [intentPlugin("intent-page")] });
+    await launchAll(h);
+
+    h.lifecycle.surfaceReached("intent-page", "sidebar:report");
+    h.lifecycle.surfaceReached("intent-page", "context");
+    await advance(0);
+
+    expect(h.frameCount()).toBe(0);
+    expect(h.lifecycle.state("intent-page")?.status).toBe("stopped");
+  });
+
+  it("warms an intent Plugin on an intent (hover, focus, or click on its sidebar entry)", async () => {
+    const h = await createHarness({ approved: [intentPlugin("intent-page")] });
+    await launchAll(h);
+
+    h.lifecycle.intend("intent-page");
+    await advanceUntil(
+      () => h.lifecycle.state("intent-page")?.status === "ready",
+      "intent-page ready after intent"
+    );
+
+    expect(h.framesFor("intent-page")).toHaveLength(1);
+    expect(h.lifecycle.state("intent-page")).toEqual({ status: "ready", startReason: "warmStart" });
+  });
+
+  it("warms an intent Plugin when its page mounts", async () => {
+    const h = await createHarness({ approved: [intentPlugin("intent-page")] });
+    await launchAll(h);
+
+    h.lifecycle.surfaceReached("intent-page", "page:report");
+    await advanceUntil(
+      () => h.lifecycle.state("intent-page")?.status === "ready",
+      "intent-page ready from its page"
+    );
+
+    expect(h.lifecycle.state("intent-page")).toEqual({ status: "ready", startReason: "warmStart" });
+  });
+
+  it("stops an intent Plugin after the idle window even while its sidebar entry stays mounted", async () => {
+    const h = await createHarness({ approved: [intentPlugin("intent-page")] });
+    await launchAll(h);
+    h.lifecycle.intend("intent-page");
+    await advanceUntil(
+      () => h.lifecycle.state("intent-page")?.status === "ready",
+      "intent-page ready"
+    );
+
+    // The sidebar row stays mounted; it is not a surface that keeps the Plugin alive.
+    h.lifecycle.surfaceReached("intent-page", "sidebar:report");
+    await advance(IDLE_STOP_MS + 1_000);
+
+    expect(h.lifecycle.state("intent-page")).toEqual({
+      status: "stopped",
+      reason: "idle",
+      refusal: null,
+    });
+  });
+
+  it("keeps an intent Plugin warm while its page is on screen past the idle window", async () => {
+    const h = await createHarness({ approved: [intentPlugin("intent-page")] });
+    await launchAll(h);
+    h.lifecycle.surfaceReached("intent-page", "page:report");
+    await advanceUntil(
+      () => h.lifecycle.state("intent-page")?.status === "ready",
+      "intent-page ready"
+    );
+
+    await advance(IDLE_STOP_MS + 1_000);
+
+    expect(h.lifecycle.state("intent-page")?.status).toBe("ready");
+  });
+
+  it("leaves a default on-demand Plugin unchanged: intend does nothing and its sidebar entry still warms it", async () => {
+    const h = await createHarness({
+      approved: [makePlugin("surface-page", { lifecycle: "on-demand", ...pagePluginOverrides() })],
+    });
+    await launchAll(h);
+
+    h.lifecycle.intend("surface-page");
+    await advance(0);
+    expect(h.frameCount()).toBe(0);
+
+    h.lifecycle.surfaceReached("surface-page", "sidebar:report");
+    await advanceUntil(
+      () => h.lifecycle.state("surface-page")?.status === "ready",
+      "surface-page warmed by its sidebar entry"
+    );
+    expect(h.lifecycle.state("surface-page")).toEqual({
+      status: "ready",
+      startReason: "warmStart",
+    });
   });
 });

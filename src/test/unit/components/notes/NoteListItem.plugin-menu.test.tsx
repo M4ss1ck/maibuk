@@ -33,6 +33,7 @@ vi.mock("@/hooks/usePluginSurface", async (importOriginal) => {
 });
 
 const stubLifecycle = {
+  installed: () => [{ pluginId: "sample", manifest: {} }],
   state: (pluginId: string) =>
     pluginId === "sample"
       ? lifecycleStatus === "ready"

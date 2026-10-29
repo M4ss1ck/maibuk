@@ -84,7 +84,9 @@ const inlineIcon = strictObject({
   elements: z
     .array(z.tuple([z.string().min(1), z.record(z.string(), z.string())]))
     .min(1)
-    .describe("SVG elements on a 24x24 grid: [tag, attributes] pairs. The validator sets the allowed tags, attributes, and count."),
+    .describe(
+      "SVG elements on a 24x24 grid: [tag, attributes] pairs. The validator sets the allowed tags, attributes, and count."
+    ),
 });
 
 const icon = z
@@ -224,6 +226,12 @@ export function buildPluginManifestSchema(options: { builtIn: boolean }) {
       .boolean()
       .optional()
       .describe("Required when the Plugin draws its own UI with Frame."),
+    warmStart: z
+      .enum(["surface", "intent"])
+      .optional()
+      .describe(
+        "surface (the default) warm-starts an on-demand Plugin when a surface it contributes is reached, sidebar entries and Command Contexts included; intent warms it only on an intent: its page mounting, a hover, focus, or press on its sidebar entry, or running one of its Commands. Requires an on-demand lifecycle."
+      ),
     contributes: contributes.optional(),
     commandRenames: renames.optional(),
     rowRenames: renames.optional(),
@@ -236,7 +244,6 @@ export const pluginManifestSchema = buildPluginManifestSchema({ builtIn: false }
 
 /** The manifest schema for Built-in Plugins; only `tutorial-` stays reserved. */
 export const builtInPluginManifestSchema = buildPluginManifestSchema({ builtIn: true });
-
 
 /**
  * The JSON Schema an author's editor reads through `$schema`. It is generated

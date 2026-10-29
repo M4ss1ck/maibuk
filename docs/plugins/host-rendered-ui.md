@@ -17,11 +17,20 @@ Every Plugin ships a `manifest.json` at its root. Its required top-level fields,
 | `apiVersion` | a semver range against the Plugin API, like `^0.1` |
 | `entry` | a relative path to the Plugin's ES module entry file |
 | `platforms` | one or more of `desktop`, `web`, `android`; omitted means desktop and web, and Android runs the Plugin only when `android` is listed (see [Platforms](#platforms)) |
-| `lifecycle` | `persistent`, which starts with the app, or `on-demand`, which starts when a surface becomes reachable |
+| `lifecycle` | `persistent`, which starts with the app, or `on-demand`, which starts when a surface becomes reachable (see [Warm start](#warm-start)) |
 | `defaultLanguage` | `en` or `es` |
 | `permissions` | an object with a `required` list and an `optional` list of Plugin Permission names |
 
-The optional top-level fields are `$schema`, `minAppVersion`, `homepage`, `dataVersion`, `customUi`, `contributes`, `commandRenames`, `rowRenames`, and `buttonRenames`. The `entry` must point to a `.js` or `.mjs` ES module (src/features/plugins/manifest-validate.ts). `manifestVersion` 1 accepts only these fields plus your own `x-*` keys, so a misspelled `permisions` cannot ship a Plugin with no Plugin Permissions. The complete schema, which your editor reads through `$schema`, is src/features/plugins/manifest.schema.json.
+The optional top-level fields are `$schema`, `minAppVersion`, `homepage`, `dataVersion`, `customUi`, `warmStart`, `contributes`, `commandRenames`, `rowRenames`, and `buttonRenames`. The `entry` must point to a `.js` or `.mjs` ES module (src/features/plugins/manifest-validate.ts). `manifestVersion` 1 accepts only these fields plus your own `x-*` keys, so a misspelled `permisions` cannot ship a Plugin with no Plugin Permissions. The complete schema, which your editor reads through `$schema`, is src/features/plugins/manifest.schema.json.
+
+## Warm start
+
+An `on-demand` Plugin starts when a surface it contributes becomes reachable. `warmStart` chooses which reaches count:
+
+- `surface`, the default: a sidebar entry, a Command whose Context is on screen (a Command in the global Context is on every screen), a page, a toolbar button, or a Settings row warms the Plugin.
+- `intent`: only the Plugin's own page, or the author's intent, warms it. Hovering, focusing, or pressing its sidebar entry, or running one of its Commands, is an intent. A sidebar entry or a Command's Context on screen does nothing, so the Plugin is not started at launch just because it is listed. Its Commands and Item Menu entries stay enabled while it is stopped, and running one starts it first.
+
+`warmStart: "intent"` applies only to an `on-demand` Plugin; a `persistent` one starts with the app either way. An on-demand Plugin with `intent` stops after five minutes with no page open, whatever its sidebar entry does. The Reader Built-in uses `intent` (ADR 0019, amendment of 2026-10-29).
 
 ## Platforms
 

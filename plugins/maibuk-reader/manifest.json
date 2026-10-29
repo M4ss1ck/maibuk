@@ -9,6 +9,7 @@
   "entry": "index.js",
   "platforms": ["desktop", "web"],
   "lifecycle": "on-demand",
+  "warmStart": "intent",
   "customUi": true,
   "defaultLanguage": "en",
   "permissions": {

@@ -167,6 +167,12 @@ export interface PluginStartOptions {
   /** The `h1:` value the author pinned when approving the Plugin. */
   pinnedHash: string;
   /**
+   * The folder's `h1:` hash, when the caller already computed it from these
+   * same bytes (the lifecycle's review gate does); startPlugin compares this
+   * instead of hashing the folder again. Omitted, it hashes the folder itself.
+   */
+  knownHash?: string;
+  /**
    * Why this activation happened (#400, #445); the host announces it on the
    * Plugin's port as the init message. Omitted when a test starts a Plugin
    * directly.
@@ -711,8 +717,14 @@ export interface PluginLifecycle {
   launchScanned(): boolean;
   /** Runs when the launch scan settles, whether it registered Plugins or nothing. Returns unsubscribe. */
   onLaunchScanned(listener: () => void): () => void;
-  /** A surface became reachable: an on-demand Plugin warm-starts. */
+  /** A surface became reachable: an on-demand Plugin warm-starts (an intent Plugin only from its page). */
   surfaceReached(pluginId: string, surface: string): void;
+  /**
+   * The author showed intent for a warm-on-intent Plugin (hover, focus, or
+   * press on its sidebar entry): it warm-starts if stopped. A no-op for any
+   * other Plugin, which warms from its surfaces alone.
+   */
+  intend(pluginId: string): void;
   /** A surface is gone; the idle window starts when the last one goes. */
   surfaceLeft(pluginId: string, surface: string): void;
   /** Starts an installed Plugin now (enable, Restart, or a bulk reason). */

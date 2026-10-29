@@ -30,12 +30,18 @@ vi.mock("@/hooks/usePluginSurface", async (importOriginal) => {
   };
 });
 
+/** Plugin ids a sidebar entry declared an intent for (hover, focus, or press). */
+const intended: string[] = [];
+
 const stubLifecycle = {
   state: () => ({ status: "stopped", reason: null, refusal: null }),
   runtime: () => null,
   installed: () => [],
   surfaceReached: () => undefined,
   surfaceLeft: () => undefined,
+  intend: (pluginId: string) => {
+    intended.push(pluginId);
+  },
   launchScanned: () => true,
   onLaunchScanned: () => () => undefined,
 } as unknown as import("@/features/plugins/types").PluginLifecycle;
@@ -70,6 +76,7 @@ function registerRepro(): void {
 }
 
 afterEach(() => {
+  intended.length = 0;
   while (cleanups.length > 0) cleanups.pop()?.();
   resetPluginContributionsForTests();
   localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
@@ -181,5 +188,48 @@ describe("Plugin sidebar entry via keyboard", () => {
 
     expect(within(nav).queryByRole("option", { name: /Saved report/ })).toBeNull();
     expect(within(nav).getByRole("option", { name: /Sample report/ })).toBeInTheDocument();
+  });
+});
+
+describe("Plugin sidebar entry intent (warm on intent)", () => {
+  it("declares an intent when the entry is hovered", async () => {
+    registerSample();
+    const user = userEvent.setup();
+    renderShell();
+    const nav = screen.getByRole("listbox", { name: "Primary navigation" });
+    const entry = within(nav).getByRole("option", { name: /Sample report/ });
+
+    await user.hover(entry);
+
+    expect(intended).toContain("sample");
+  });
+
+  it("declares an intent when the entry takes keyboard focus", async () => {
+    registerSample();
+    const user = userEvent.setup();
+    renderShell();
+    const nav = screen.getByRole("listbox", { name: "Primary navigation" });
+    const entry = within(nav).getByRole("option", { name: /Sample report/ });
+    const books = within(nav).getByRole("option", { name: /^Books/ });
+    books.focus();
+
+    for (let i = 0; i < 10 && document.activeElement !== entry; i += 1) {
+      await user.keyboard("{ArrowDown}");
+    }
+
+    expect(entry).toHaveFocus();
+    expect(intended).toContain("sample");
+  });
+
+  it("declares an intent when the entry is pressed", async () => {
+    registerSample();
+    const user = userEvent.setup();
+    renderShell();
+    const nav = screen.getByRole("listbox", { name: "Primary navigation" });
+    const entry = within(nav).getByRole("option", { name: /Sample report/ });
+
+    await user.click(entry);
+
+    expect(intended).toContain("sample");
   });
 });

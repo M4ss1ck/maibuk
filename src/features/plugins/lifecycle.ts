@@ -12,6 +12,10 @@
  * then are its contributions usable. A one-second heartbeat then watches it:
  * one miss makes the Plugin unavailable, five stop it.
  *
+ * A Plugin that declares `warmStart: "intent"` is not warmed by its sidebar
+ * entry or by a Command's Context being on screen (ADR 0019, 2026-10-29): only
+ * its page, an intent (`intend`), or running one of its Commands warms it.
+ *
  * Every stop carries a reason. A persistent Plugin stopped by a limit gets one
  * automatic restart per session; an on-demand Plugin stopped by a limit is not
  * warm-started again in that session, though an explicit start still works. A
@@ -31,11 +35,15 @@ import {
 } from "@/features/sync/change-feed";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import { PLUGIN_UI_NODE_LIMIT_MARKER } from "@/plugin-sdk/ui-node-limit";
-import { clearStartupError, getPluginApproval, recordStartupError } from "@/features/plugins/approvals";
+import {
+  clearStartupError,
+  getPluginApproval,
+  recordStartupError,
+} from "@/features/plugins/approvals";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { registerPluginContributions } from "@/features/plugins/contributions";
 import { dropSeededPluginContributions } from "@/features/plugins/contributions-registry";
-import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
+import { hashPluginDigests, pluginFileDigests } from "@/features/plugins/directory-hash";
 import {
   clearPluginHighlights,
   invalidatePluginEditorWork,
@@ -63,7 +71,11 @@ import { pluginStopMessageKey } from "@/features/plugins/stop-messages";
 import { clearToolbarPressed } from "@/features/plugins/toolbar-pressed";
 import { persistPluginSidebarSnapshot } from "@/features/plugins/sidebar-snapshot";
 import { getPluginDataVersion, setPluginDataVersion } from "@/features/plugins/storage";
-import { isTutorialLibraryActive, settleAuthorLibraryWork, trackAuthorLibraryWork } from "@/features/tutorial/library-switch";
+import {
+  isTutorialLibraryActive,
+  settleAuthorLibraryWork,
+  trackAuthorLibraryWork,
+} from "@/features/tutorial/library-switch";
 import type {
   InstalledPlugin,
   PluginActivationRefusal,
@@ -345,6 +357,24 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     return set;
   }
 
+  /**
+   * Whether a reached surface warms its Plugin or keeps it warm. An intent
+   * Plugin is not warmed or kept warm by its sidebar entry or by a Command's
+   * Context being on screen: those are present at launch, not an intent. Its
+   * page and its explicit intents still count.
+   */
+  function isWarmingSurface(entry: Entry, surface: string): boolean {
+    if (entry.installed.manifest.warmStart !== "intent") return true;
+    return surface !== "context" && !surface.startsWith("sidebar:");
+  }
+
+  function hasWarmSurface(entry: Entry): boolean {
+    for (const surface of entry.surfaces) {
+      if (isWarmingSurface(entry, surface)) return true;
+    }
+    return false;
+  }
+
   function notify(entry: Entry): void {
     const change: PluginLifecycleChange = {
       pluginId: entry.installed.pluginId,
@@ -385,7 +415,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     }
     if (disposed) return;
     if (entry.installed.manifest.lifecycle !== "on-demand") return;
-    if (entry.surfaces.size > 0) return;
+    if (hasWarmSurface(entry)) return;
     if (entry.state.status !== "ready" && entry.state.status !== "unavailable") return;
     entry.idleTimer = setTimeout(() => {
       entry.idleTimer = null;
@@ -507,6 +537,20 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     }, HEARTBEAT_INTERVAL_MS);
   }
 
+  /**
+   * Starts a stopped on-demand Plugin that a reached surface or an intent
+   * warms, unless the Plugin is refused, stopped by a limit this session, or
+   * stopped on the author's request.
+   */
+  function warmStopped(entry: Entry): void {
+    if (entry.state.status !== "stopped") return;
+    if (entry.installed.manifest.lifecycle !== "on-demand") return;
+    if (entry.limitStopped || entry.state.refusal !== null || entry.state.reason === "requested") {
+      return;
+    }
+    void startEntry(entry, "warmStart");
+  }
+
   function startEntry(entry: Entry, reason: PluginStartReason): Promise<PluginActivationResult> {
     if (entry.pendingStart) return entry.pendingStart;
     const pending = runStart(entry, reason).finally(() => {
@@ -541,19 +585,22 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     // re-review (markReviewed) takes effect on the next start.
     const liveApproval = getPluginApproval(pluginId);
     let review: PluginReview | null = null;
+    // One hash pass over the folder: the review and `startPlugin` both use it.
+    let knownHash: string | undefined;
     try {
       const digests = await pluginFileDigests(folder.files);
-      const hash = await hashPluginDirectory(folder.files);
+      knownHash = await hashPluginDigests(folder.files, digests);
       review = reviewPluginCopy({
         approval: liveApproval,
         digests,
-        hash,
+        hash: knownHash,
         manifest,
       });
     } catch {
       // A folder the hash scheme refuses is reported by `startPlugin`'s own
       // check; the review cannot be computed, so the start falls through.
       review = null;
+      knownHash = undefined;
     }
     if (entry.generation !== generation) return { ok: false, refusal: { code: "not-installed" } };
     if (review !== null && review.status !== "approved") {
@@ -614,6 +661,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       result = await startPlugin({
         folder,
         pinnedHash: (liveApproval ?? entry.installed.approval).pinnedHash,
+        knownHash,
         // A Built-in id parses under the Built-in schema in `startPlugin` too.
         builtIn: entry.installed.builtIn,
         // Why this activation happened; delivered to the Worker on the init
@@ -934,7 +982,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         for (const plugin of scan.plugins) {
           if (plugin.manifest.lifecycle !== "on-demand") continue;
           const entry = entries.get(plugin.pluginId);
-          if (entry && entry.surfaces.size > 0) void startEntry(entry, "warmStart");
+          if (entry && hasWarmSurface(entry)) void startEntry(entry, "warmStart");
         }
         // Persistent Plugins start one at a time in idle time, never ahead of
         // the Library, the launch Auto Sync, or the launch Backup; on-demand
@@ -983,20 +1031,26 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       surfacesOf(pluginId).add(surface);
       const entry = entries.get(pluginId);
       if (!entry) return;
-      if (entry.idleTimer !== null) {
-        clearTimeout(entry.idleTimer);
-        entry.idleTimer = null;
+      if (hasWarmSurface(entry)) {
+        if (entry.idleTimer !== null) {
+          clearTimeout(entry.idleTimer);
+          entry.idleTimer = null;
+        }
+      } else if (entry.idleTimer === null) {
+        // A launch-time surface of an intent Plugin keeps nothing alive: its
+        // idle window runs as if it were never reached.
+        armIdle(entry);
       }
-      if (entry.state.status !== "stopped") return;
-      if (entry.installed.manifest.lifecycle !== "on-demand") return;
-      if (
-        entry.limitStopped ||
-        entry.state.refusal !== null ||
-        entry.state.reason === "requested"
-      ) {
-        return;
-      }
-      void startEntry(entry, "warmStart");
+      if (!hasWarmSurface(entry)) return;
+      warmStopped(entry);
+    },
+
+    intend(pluginId: string): void {
+      const entry = entries.get(pluginId);
+      // A surface-warmed Plugin already starts from its surfaces; an intent is
+      // a no-op for it, so existing Plugins keep their behavior.
+      if (!entry || entry.installed.manifest.warmStart !== "intent") return;
+      warmStopped(entry);
     },
 
     surfaceLeft(pluginId: string, surface: string): void {
@@ -1035,7 +1089,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       }
       // The Plugin Platforms rule (#517): a manifest that does not list this
       // device's platform never starts here, whatever the explicit enable says.
-      if (!manifestRunsOn(read.manifest.platforms as readonly string[] | undefined, directory.kind)) {
+      if (
+        !manifestRunsOn(read.manifest.platforms as readonly string[] | undefined, directory.kind)
+      ) {
         return { ok: false, refusal: { code: "not-installed" } };
       }
       const installed: InstalledPlugin = {
@@ -1071,7 +1127,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       }
       // The normal warm-start rules: an on-demand Plugin waits for a surface; a
       // persistent one starts now.
-      if (installed.manifest.lifecycle === "on-demand" && entry.surfaces.size === 0) {
+      if (installed.manifest.lifecycle === "on-demand" && !hasWarmSurface(entry)) {
         return { ok: true, startReason: reason };
       }
       return startEntry(entry, reason);

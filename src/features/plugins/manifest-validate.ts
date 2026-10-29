@@ -338,6 +338,9 @@ function collectProblems(
   const add: AddProblem = (path, message) => {
     problems.push({ path, message });
   };
+  if (manifest.warmStart === "intent" && manifest.lifecycle !== "on-demand") {
+    add("warmStart", 'warmStart: "intent" applies only to an on-demand Plugin');
+  }
 
   const required = manifest.permissions.required;
   const optional = manifest.permissions.optional;

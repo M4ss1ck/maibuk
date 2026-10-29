@@ -58,7 +58,10 @@ vi.mock("@/features/plugins/storage", () => ({
 }));
 
 const ID = "echoes";
-const PERMISSIONS: PluginManifest["permissions"] = { required: ["library:read"], optional: ["secrets"] };
+const PERMISSIONS: PluginManifest["permissions"] = {
+  required: ["library:read"],
+  optional: ["secrets"],
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -137,11 +140,15 @@ function createFakeLifecycle() {
   const lifecycle: PluginLifecycle = {
     launch: async () => {},
     installed: () => [],
+    intend: () => undefined,
     launchScanned: () => true,
     onLaunchScanned: () => () => {},
     surfaceReached: () => {},
     surfaceLeft: () => {},
-    start: async (_pluginId: string, reason: PluginStartReason) => ({ ok: true, startReason: reason }),
+    start: async (_pluginId: string, reason: PluginStartReason) => ({
+      ok: true,
+      startReason: reason,
+    }),
     install: async (_pluginId: string, reason: PluginStartReason) => ({
       ok: true,
       startReason: reason,

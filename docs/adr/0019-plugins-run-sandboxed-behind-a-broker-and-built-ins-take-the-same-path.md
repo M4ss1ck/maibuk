@@ -41,3 +41,11 @@ Considered and rejected: native QuickJS in Rust (`rquickjs`), which needs a seco
 
 #516 ships the amendment above: on Android Plugins now run in a 64 MB capped QuickJS engine inside the same sandbox Worker, so the iframe, Worker, port, broker, Permissions, and limits are unchanged and a Plugin that reaches the cap stops with the existing `out-of-memory` reason while the renderer survives.
 
+
+## Amendment: a Plugin can warm on intent, not on a listed surface (2026-10-29)
+
+An on-demand Plugin warm-started at every launch from any reachable surface, so the Reader Built-in started although its author never opened it, and its idle heap failed the #653 gates. Two surfaces were listed at launch with no intent: the sidebar entry (`sidebar:<page>`, marked by `PluginSidebarSurfaces`) and a Command whose Context is on screen (`context`, marked by `PluginCommands`). A Command in the `global` Context is on every screen, so one global Command warm-starts its Plugin on every launch. Applying warm-on-intent to the sidebar alone would not have fixed the Reader for that reason.
+
+A Plugin now declares `warmStart`: `surface` (the default, unchanged) or `intent`. An `intent` Plugin is not warmed or kept warm by its sidebar entry or a Command's Context. It warms on its page mounting, on an intent (hover, focus, or press on its sidebar entry, `lifecycle.intend`), or when one of its Commands runs (`runPluginCommandWarm`, which starts the Plugin first). Its Commands and Item Menu entries stay enabled while it is stopped. Running one warm-starts it. A stopped `intent` Plugin does not restart from a listed surface. Only `intent` Plugins change. Surface tracking is the same for every Plugin; only the warm rule reads `warmStart`.
+
+Warm-on-intent was not made global. Making `sidebar` and `context` non-warming for every on-demand Plugin would change Echoes at launch: its Item Menu entry "Find echoes" is disabled while its Plugin is stopped (`usePluginItemMenuActions`, `isDisabled: status !== "ready"`), and Echoes today is warm from its global "Open Echoes" Command. Echoes keeps `surface`; the Reader sets `"warmStart": "intent"` in `plugins/maibuk-reader/manifest.json`. The manifest field is a `"surface" | "intent"` enum; `intent` on a `persistent` Plugin is refused.

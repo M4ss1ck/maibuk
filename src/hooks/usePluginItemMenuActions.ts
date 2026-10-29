@@ -1,7 +1,11 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import type { ItemAction } from "@/components/ui";
-import { runPluginCommand, type PluginItemTarget } from "@/features/plugins/commands";
+import {
+  runPluginCommand,
+  runPluginCommandWarm,
+  type PluginItemTarget,
+} from "@/features/plugins/commands";
 import {
   currentUILanguage,
   getPluginItemMenuEntries,
@@ -61,19 +65,27 @@ export function usePluginItemMenuActions(
 
   return useCallback(
     (target: PluginItemTarget): ItemAction[] =>
-      entries.map((entry) => ({
-        id: entry.commandId,
-        label: commandLabel(entry.commandId, t, language),
-        commandId: entry.commandId,
-        isDisabled: lifecycle?.state(entry.pluginId)?.status !== "ready",
-        onAction: () => {
-          if (lifecycle) {
-            void runPluginCommand(lifecycle, entry.pluginId, entry.localId, {
-              readTarget: () => (pluginTargetIsLive(target) ? target : null),
-            });
-          }
-        },
-      })),
+      entries.map((entry) => {
+        // A warm-on-intent Plugin's entry stays enabled while stopped: running it
+        // warm-starts the Plugin (ADR 0019, 2026-10-29).
+        const onIntent =
+          lifecycle?.installed().find((plugin) => plugin.pluginId === entry.pluginId)?.manifest
+            .warmStart === "intent";
+        return {
+          id: entry.commandId,
+          label: commandLabel(entry.commandId, t, language),
+          commandId: entry.commandId,
+          isDisabled: lifecycle?.state(entry.pluginId)?.status !== "ready" && !onIntent,
+          onAction: () => {
+            if (lifecycle) {
+              const run = onIntent ? runPluginCommandWarm : runPluginCommand;
+              void run(lifecycle, entry.pluginId, entry.localId, {
+                readTarget: () => (pluginTargetIsLive(target) ? target : null),
+              });
+            }
+          },
+        };
+      }),
     [entries, lifecycle, lifecycleRevision, language, t]
   );
 }

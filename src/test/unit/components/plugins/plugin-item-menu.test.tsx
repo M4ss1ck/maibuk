@@ -17,6 +17,11 @@ const cleanups: Array<() => void> = [];
 
 let lifecycleStatus: "ready" | "stopped" = "ready";
 let brokerRequest = vi.fn(async () => null);
+let warmOnIntent = false;
+const startSpy = vi.fn(async () => {
+  lifecycleStatus = "ready";
+  return { ok: true as const, startReason: "warmStart" as const };
+});
 
 vi.mock("@/hooks/usePluginSurface", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/hooks/usePluginSurface")>();
@@ -29,6 +34,10 @@ vi.mock("@/hooks/usePluginSurface", async (importOriginal) => {
 });
 
 const stubLifecycle = {
+  installed: () => [
+    { pluginId: "sample", manifest: { warmStart: warmOnIntent ? "intent" : "surface" } },
+  ],
+  start: startSpy,
   state: (pluginId: string) =>
     pluginId === "sample"
       ? lifecycleStatus === "ready"
@@ -64,7 +73,7 @@ function registerSample(): void {
 /** Seeds the Chapter the menu item targets; the live read is the store, not a constant. */
 function seedChapters(ids: string[]): void {
   useChapterStore.setState({
-    chapters: ids.map<Chapter>((id) => ({ id } as unknown as Chapter)),
+    chapters: ids.map<Chapter>((id) => ({ id }) as unknown as Chapter),
   });
 }
 
@@ -93,6 +102,8 @@ afterEach(() => {
   resetPluginContributionsForTests();
   useChapterStore.setState({ chapters: [] });
   lifecycleStatus = "ready";
+  warmOnIntent = false;
+  startSpy.mockClear();
   brokerRequest = vi.fn(async () => null);
 });
 
@@ -142,5 +153,29 @@ describe("Plugin Item Menu entry via keyboard", () => {
     await user.keyboard("{Enter}");
 
     expect(brokerRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("Plugin Item Menu entry of a warm-on-intent Plugin", () => {
+  it("stays enabled while stopped, and running it warm-starts the Plugin before the Command", async () => {
+    registerSample();
+    seedChapters(["c1"]);
+    warmOnIntent = true;
+    lifecycleStatus = "stopped";
+    const user = userEvent.setup();
+
+    render(<MenuHarness target={{ kind: "chapter", id: "c1" }} />);
+    const entry = screen.getByRole("menuitem", { name: "Tag chapter" });
+    expect(entry).toBeEnabled();
+    entry.focus();
+    await user.keyboard("{Enter}");
+
+    await vi.waitFor(() =>
+      expect(brokerRequest).toHaveBeenCalledWith("command.run", {
+        id: "tag",
+        target: { kind: "chapter", id: "c1" },
+      })
+    );
+    expect(startSpy).toHaveBeenCalledWith("sample", "warmStart");
   });
 });

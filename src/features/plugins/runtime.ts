@@ -170,7 +170,7 @@ export async function startPlugin(options: PluginStartOptions): Promise<PluginSt
 
   let actual: string;
   try {
-    actual = await hashPluginDirectory(folder.files);
+    actual = options.knownHash ?? (await hashPluginDirectory(folder.files));
   } catch (error) {
     if (error instanceof PluginDirectoryHashError) {
       return {

@@ -110,6 +110,7 @@ function createFakeLifecycle() {
   const lifecycle: PluginLifecycle = {
     launch: async () => {},
     installed: () => [],
+    intend: () => undefined,
     launchScanned: () => true,
     onLaunchScanned: () => () => {},
     surfaceReached: () => {},
@@ -152,7 +153,9 @@ const REVIEW: PluginReview = {
 };
 
 /** A management entry for the pure filter tests. */
-function entry(overrides: Partial<PluginManagementEntry> & { name?: string } = {}): PluginManagementEntry {
+function entry(
+  overrides: Partial<PluginManagementEntry> & { name?: string } = {}
+): PluginManagementEntry {
   const { name = "Plugin", ...rest } = overrides;
   return {
     pluginId: name.toLowerCase(),
@@ -268,9 +271,7 @@ describe("Plugin management state: availability and support", () => {
   });
 
   it("marks a manifest that excludes this device unsupported and refuses to enable it", async () => {
-    const dir = makeDirectory("desktop", [
-      folderNamed("tracer", "tracer", { platforms: ["web"] }),
-    ]);
+    const dir = makeDirectory("desktop", [folderNamed("tracer", "tracer", { platforms: ["web"] })]);
     await saveApproval("tracer", false);
     const store = makeStore(dir.adapter);
 
