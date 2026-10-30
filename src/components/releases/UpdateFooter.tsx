@@ -47,7 +47,7 @@ export function UpdateFooter({ release }: { release: ReleaseNotes }) {
             {t("update.downloading", { release: release.number })}
           </p>
           <progress
-            className="h-2 w-full"
+            className="progress-update"
             aria-label={t("update.progressLabel")}
             max={percent === null ? undefined : 100}
             value={percent ?? undefined}
