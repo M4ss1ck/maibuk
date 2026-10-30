@@ -2181,7 +2181,7 @@
     "retry": "Reintentar",
     "errors": {
       "offline": "No se pudo descargar la actualización. Revisa tu conexión e inténtalo de nuevo, o usa la página de descarga.",
-      "cancelled-auth": "La actualización no se instaló porque no se dio la contraseña de administrador. No cambió nada. Inténtalo de nuevo, o usa la página de descarga.",
+      "cancelled-auth": "La actualización no se instaló: no se dio la contraseña de administrador o el sistema rechazó el paquete. Inténtalo de nuevo, o usa la página de descarga.",
       "not-writable": "Maibuk no puede escribir en la carpeta desde la que se ejecuta. Usa la página de descarga para instalar esta versión a mano.",
       "bad-signature": "La descarga no superó la comprobación de firma, así que no se instaló. Inténtalo de nuevo, o usa la página de descarga.",
       "no-asset": "Esta versión no tiene actualización para tu instalación. Usa la página de descarga.",

@@ -2176,7 +2176,7 @@
     "retry": "Retry",
     "errors": {
       "offline": "The update could not be downloaded. Check your connection and try again, or use the download page.",
-      "cancelled-auth": "The update was not installed because the administrator password was not given. Nothing changed. Try again, or use the download page.",
+      "cancelled-auth": "The update was not installed: the administrator password was not given, or the system refused the package. Try again, or use the download page.",
       "not-writable": "Maibuk cannot write to the folder it runs from. Use the download page to install this Release by hand.",
       "bad-signature": "The download did not pass its signature check, so it was not installed. Try again, or use the download page.",
       "no-asset": "This Release has no update for your install. Use the download page.",

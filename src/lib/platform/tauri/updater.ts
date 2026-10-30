@@ -11,34 +11,28 @@ import {
 const OWNED_BUNDLES: readonly BundleType[] = ["appimage", "deb", "rpm"];
 
 /**
- * The plugin rejects with bare strings. The signature and permission wording
- * comes from the plugin's own errors; anything unrecognised is `other`, which
- * the dialog words generically.
+ * The plugin rejects with its error's Display string. Each pattern matches a
+ * message tauri-plugin-updater 2.10.1 (or a crate it wraps) really produces;
+ * the table test cites the source line of every one. First match wins, so the
+ * 404 rule sits before the generic download-status rule.
  */
+const ERROR_RULES: readonly [RegExp, UpdateFailureReason][] = [
+  // Signature: minisign-verify, base64 decoding of the key or `.sig`, SignatureUtf8.
+  [/signature|minisign|^invalid (symbol|padding|last symbol|input length)/i, "bad-signature"],
+  // No file for this install, no latest.json, or a malformed feed entry.
+  [/platforms? .*(was not found|were found)|could not fetch a valid release json/i, "no-asset"],
+  [/download request failed with status: 40[34]|updater response|invalid updater binary/i, "no-asset"],
+  // deb/rpm: pkexec dismissed falls through to a sudo with no terminal.
+  [/^failed to install package$|authentication failed or was cancelled/i, "cancelled-auth"],
+  // AppImage: renaming the running file out of its folder.
+  [/permission denied \(os error 13\)|read-only file system|not on the same mount point/i, "not-writable"],
+  [/error sending request|response body|operation timed out|download request failed/i, "offline"],
+];
+
 export function classifyUpdateError(error: unknown): UpdateFailureReason {
   if (error instanceof UpdateError) return error.reason;
-  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
-  if (message.includes("signature")) return "bad-signature";
-  if (
-    message.includes("dismissed") ||
-    message.includes("cancel") ||
-    message.includes("authentication") ||
-    message.includes("not authorized")
-  ) {
-    return "cancelled-auth";
-  }
-  if (message.includes("permission denied") || message.includes("read-only")) return "not-writable";
-  if (message.includes("platform") && message.includes("not found")) return "no-asset";
-  if (
-    message.includes("error sending request") ||
-    message.includes("network") ||
-    message.includes("dns") ||
-    message.includes("connection") ||
-    message.includes("timed out")
-  ) {
-    return "offline";
-  }
-  return "other";
+  const message = (error instanceof Error ? error.message : String(error)).replace(/^`|`$/g, "");
+  return ERROR_RULES.find(([pattern]) => pattern.test(message))?.[1] ?? "other";
 }
 
 let pending: Update | null = null;
