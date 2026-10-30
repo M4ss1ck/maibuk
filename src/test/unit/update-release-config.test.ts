@@ -52,10 +52,20 @@ describe("Update release config", () => {
     expect(read("scripts/build-arch-package.sh")).toMatch(/clear-bundle-type\.mjs.*\/maibuk/);
   });
 
-  it("grants the updater to desktop only", () => {
-    const desktop = read("src-tauri/capabilities/desktop.json");
-    expect(desktop).toContain("updater:allow-check");
-    expect(desktop).toContain("updater:allow-download-and-install");
+  it("grants the updater only where the plugin is built (Linux and Windows)", () => {
+    const updater = JSON.parse(read("src-tauri/capabilities/updater.json"));
+    expect(updater.platforms).toEqual(["linux", "windows"]);
+    expect(updater.permissions).toEqual(
+      expect.arrayContaining([
+        "updater:allow-check",
+        "updater:allow-download",
+        "updater:allow-install",
+        "updater:allow-download-and-install",
+      ])
+    );
+    // tauri-build rejects a permission whose plugin is absent on the target,
+    // so the macOS-wide desktop capability must not carry it.
+    expect(read("src-tauri/capabilities/desktop.json")).not.toContain("updater");
     expect(read("src-tauri/capabilities/android.json")).not.toContain("updater");
   });
 
