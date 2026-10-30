@@ -78,6 +78,10 @@ vi.mock("@/components/shortcuts/ShortcutEditorDialog", () => ({
 }));
 
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
+import { useReleaseStore } from "@/features/releases/store";
+import { useUpdateStore } from "@/features/update/store";
+
+const NEWER = { number: "99.0.0", date: "2099-01-01", sections: [] };
 
 function latestConfigs() {
   const calls = mockUseShortcuts.mock.calls;
@@ -121,6 +125,9 @@ describe("GlobalShortcuts", () => {
   });
 
   it("binds every global shortcut under its registry id, so the help lists it", () => {
+    // Update Maibuk is bound only while an Update is possible.
+    useUpdateStore.setState({ bundleType: "appimage", state: { phase: "idle" } });
+    useReleaseStore.setState({ newerReleases: [NEWER] });
     render(<GlobalShortcuts />);
 
     const ids = latestConfigs()
@@ -150,7 +157,54 @@ describe("GlobalShortcuts", () => {
       "global.toggleAlwaysOnTop",
       "global.toggleShortcutHints",
       "global.toggleTheme",
+      "global.updateMaibuk",
     ]);
+  });
+
+  describe("Update Maibuk Command", () => {
+    const find = () => latestConfigs().find((c) => c.id === "global.updateMaibuk");
+
+    beforeEach(() => {
+      useReleaseStore.setState({ newerReleases: [], isNotesOpen: false });
+      useUpdateStore.setState({ bundleType: "unknown", state: { phase: "idle" } });
+    });
+
+    it("is not offered when the install cannot Update", () => {
+      useReleaseStore.setState({ newerReleases: [NEWER] });
+      render(<GlobalShortcuts />);
+      expect(find()).toBeUndefined();
+    });
+
+    it("is not offered with an Update-capable install and no newer Release", () => {
+      useUpdateStore.setState({ bundleType: "appimage" });
+      render(<GlobalShortcuts />);
+      expect(find()).toBeUndefined();
+    });
+
+    it("starts the Update and opens What's new when possible", async () => {
+      const start = vi.fn().mockResolvedValue(undefined);
+      useUpdateStore.setState({ bundleType: "appimage", start });
+      useReleaseStore.setState({ newerReleases: [NEWER] });
+      render(<GlobalShortcuts />);
+      expect(find()).toBeDefined();
+      await act(async () => find()?.onTrigger());
+      expect(start).toHaveBeenCalledWith("99.0.0");
+      expect(useReleaseStore.getState().isNotesOpen).toBe(true);
+    });
+
+    it("only opens What's new while an Update is already running", async () => {
+      const start = vi.fn();
+      useUpdateStore.setState({
+        bundleType: "appimage",
+        start,
+        state: { phase: "downloading", received: 1 },
+      });
+      useReleaseStore.setState({ newerReleases: [NEWER] });
+      render(<GlobalShortcuts />);
+      await act(async () => find()?.onTrigger());
+      expect(start).not.toHaveBeenCalled();
+      expect(useReleaseStore.getState().isNotesOpen).toBe(true);
+    });
   });
 
   it("toggles always-on-top via shortcut only when on desktop", () => {

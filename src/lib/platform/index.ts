@@ -10,6 +10,7 @@ import type {
   EndpointAdapter,
   PluginDirectoryAdapter,
   PluginFetchAdapter,
+  UpdaterAdapter,
 } from "@/lib/platform/types";
 
 import type { DictationPlatform, ModelFiles, RecognizerHost } from "@/features/dictation/types";
@@ -48,7 +49,12 @@ export type {
   EndpointRequestMessage,
   PluginDirectoryAdapter,
   PluginFetchAdapter,
+  UpdaterAdapter,
+  BundleType,
+  UpdateFailureReason,
+  UpdateProgressEvent,
 } from "@/lib/platform/types";
+export { UpdateError } from "@/lib/platform/types";
 
 // Database factory
 export async function createDatabase(path: string): Promise<DatabaseAdapter> {
@@ -175,6 +181,17 @@ export async function getOS(): Promise<OSAdapter> {
     const { tauriOS } = await import("@/lib/platform/tauri/os");
     return tauriOS;
   }
+}
+
+// Updater factory. Only desktop builds can Update; the web reports an unknown
+// bundle type, so no Update UI shows there (ADR 0037).
+export async function getUpdater(): Promise<UpdaterAdapter> {
+  if (!IS_DESKTOP) {
+    const { webUpdater } = await import("@/lib/platform/web/updater");
+    return webUpdater;
+  }
+  const { tauriUpdater } = await import("@/lib/platform/tauri/updater");
+  return tauriUpdater;
 }
 
 // Clipboard factory. Desktop and Android go through the clipboard-manager

@@ -30,6 +30,7 @@
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
     "process:allow-exit",
+    "process:allow-restart",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-image",

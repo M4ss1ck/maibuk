@@ -65,3 +65,4 @@ windows-native-keyring-store = "1"
 
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 keyring-core = "1"
+tauri-plugin-updater = "2.10"

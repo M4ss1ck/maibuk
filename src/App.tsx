@@ -36,6 +36,7 @@ import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
 import { installAuthKeepAlive } from "@/features/sync/auth-keep-alive";
 import { installAutoSync } from "@/features/sync/auto-sync";
 import { installReleaseCheck } from "@/features/releases/release-check";
+import { useUpdateStore } from "@/features/update/store";
 import { installViewRefresh } from "@/features/sync/view-refresh";
 import { installSearchIndex } from "@/features/search";
 import { isEmbedPath } from "@/lib/embed";
@@ -92,6 +93,7 @@ function App() {
     installViewRefresh();
     installSearchIndex();
     installReleaseCheck();
+    void useUpdateStore.getState().loadBundleType();
     if (IS_ANDROID) {
       void installAndroidBackHandler();
       void installAndroidLifecycleHandler();

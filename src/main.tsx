@@ -98,6 +98,10 @@ const loadPlugins = async () => {
     const { installEndpointSeam } = await import("@/features/plugins/endpoint-seam");
     installEndpointSeam();
   }
+  if (ENDPOINT_SEAM_ENABLED) {
+    const { installUpdateSeam } = await import("@/features/update/e2e-seam");
+    installUpdateSeam();
+  }
   if (BENCH_DRIVER_ENABLED) {
     const { runPluginsBenchDriver } = await import("@/features/plugins/bench");
     void runPluginsBenchDriver();

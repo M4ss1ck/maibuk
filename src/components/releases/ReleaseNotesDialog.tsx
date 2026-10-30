@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Download } from "lucide-react";
-import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { NewReleaseChip } from "@/components/releases/ReleaseBadge";
 import {
@@ -17,6 +15,7 @@ import type {
   ReleaseSection,
 } from "@/features/releases/release-notes";
 import { newerReleasesIn, useReleaseStore } from "@/features/releases/store";
+import { UpdateFooter } from "@/components/releases/UpdateFooter";
 import { openExternal } from "@/lib/platform";
 import { DOWNLOAD_PAGE } from "@/constants";
 
@@ -82,7 +81,10 @@ function Release({ release, isNew }: { release: ReleaseNotes; isNew: boolean }) 
   return (
     <article aria-labelledby={headingId} className="space-y-3 py-5 first:pt-0 last:pb-0">
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h3 id={headingId} className="font-serif text-xl font-semibold tabular-nums text-foreground">
+        <h3
+          id={headingId}
+          className="font-serif text-xl font-semibold tabular-nums text-foreground"
+        >
           {release.number}
         </h3>
         {isNew && <NewReleaseChip className="self-center" />}
@@ -106,7 +108,8 @@ function Release({ release, isNew }: { release: ReleaseNotes; isNew: boolean }) 
  * language's changelog file at its tag and stay English until that file
  * resolves or when it does not list them (#632). English shows until the
  * language's own file resolves, so the dialog is never empty. The footer,
- * there only when a newer Release exists, is the one download path.
+ * there only when a newer Release exists, offers the Update where this install
+ * can Update and the Download Page always.
  */
 export function ReleaseNotesDialog() {
   const { t, i18n } = useTranslation();
@@ -153,10 +156,7 @@ export function ReleaseNotesDialog() {
 
   const newer = useMemo(
     () =>
-      newerReleasesIn(
-        newerReleases,
-        localizedNewerReleases.get(releaseNotesLanguage(language))
-      ),
+      newerReleasesIn(newerReleases, localizedNewerReleases.get(releaseNotesLanguage(language))),
     [newerReleases, localizedNewerReleases, language]
   );
 
@@ -177,17 +177,7 @@ export function ReleaseNotesDialog() {
       title={t("releases.title")}
       size="lg"
       contentClassName="flex flex-col overflow-hidden p-0!"
-      footer={
-        newest ? (
-          <Button
-            variant="primary"
-            onClick={() => void openExternal(newest.url ?? DOWNLOAD_PAGE)}
-          >
-            <Download className="size-4" aria-hidden="true" />
-            {t("releases.download", { release: newest.number })}
-          </Button>
-        ) : null
-      }
+      footer={newest ? <UpdateFooter release={newest} /> : null}
     >
       <section
         aria-label={t("releases.notesRegion")}

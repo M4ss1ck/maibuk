@@ -67,6 +67,17 @@ jobs:
             exit 1
           fi
 
+      - name: Verify the updater key is the maintainer's
+        run: |
+          # The committed key is a development placeholder until the maintainer
+          # runs scripts/updater-key-wizard.sh. A Release built with it could
+          # never be updated from, so refuse to build one (ADR 0037).
+          DEV_KEY_ID=AFAAC0AFEBF4A7C3
+          if grep -Po '"pubkey":\s*"\K[^"]+' src-tauri/tauri.conf.json | base64 -d | grep -q "$DEV_KEY_ID"; then
+            echo "::error::src-tauri/tauri.conf.json still carries the development updater key. Run scripts/updater-key-wizard.sh first."
+            exit 1
+          fi
+
   quality:
     needs: prepare
     runs-on: ubuntu-latest
@@ -139,6 +150,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updater files (createUpdaterArtifacts); tauri-action then
+          # publishes latest.json with one entry per format (ADR 0037).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v${{ needs.prepare.outputs.version }}
           releaseName: "Maibuk v${{ needs.prepare.outputs.version }}"
@@ -209,6 +224,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updater files (createUpdaterArtifacts); tauri-action then
+          # publishes latest.json with one entry per format (ADR 0037).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v${{ needs.prepare.outputs.version }}
           releaseName: "Maibuk v${{ needs.prepare.outputs.version }}"

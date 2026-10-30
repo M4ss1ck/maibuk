@@ -262,6 +262,11 @@ export default defineConfig(() => ({
         "src/features/releases/compare.ts",
         "src/components/releases/ReleaseNotesDialog.tsx",
         "src/components/releases/ReleaseBadge.tsx",
+        "src/components/releases/UpdateFooter.tsx",
+        "src/features/update/store.ts",
+        "src/features/update/progress.ts",
+        "src/lib/platform/tauri/updater.ts",
+        "src/lib/window/shutdown.ts",
         // Phase 3: UI components
         "src/components/ui/Button.tsx",
         "src/components/ui/ColorPickerControl.tsx",

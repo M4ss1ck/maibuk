@@ -34,13 +34,6 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "term",
-    items: ["Update", "Download Page"],
-    reason:
-      "Both appear only when a newer published Release exists, which the web build never checks for; Update is desktop-only and not built yet (ADR 0037, #661 adds its row)",
-    owner: "Vitest ReleaseNotesDialog.test.tsx, release-check.test.ts",
-  },
-  {
-    kind: "term",
     items: ["Plugin Platforms"],
     reason:
       "A manifest field the Plugin author writes, never shown on screen; Android Plugins are not shown to users yet (#516), so no workflow reaches the term",
@@ -197,6 +190,26 @@ export const ROWS: MatrixRow[] = [
     terms: ["Release", "Release Notes"],
     shortcuts: ["global.openReleaseNotes"],
     routes: ["/", "/settings"],
+    fixture: "empty",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "shell-update",
+    area: "shell",
+    workflow:
+      "With a newer Release and a scripted Linux or Windows install, What's new offers Update to <Release>; clicking it shows a progress bar that fills, then Restart now / Later (Linux) or, on Windows, a downloaded state with Restart to update / Later, where Later drops the download and says so; the Command Palette runs Update Maibuk; an Arch or web install (unknown bundle) offers only the Download page; a failed download shows the error with Retry and the Download page; asserts: control labels, progress bar value, error text, keyboard-only; persists: no. A real install cannot run under Playwright: the spec arms a scripted adapter through the test-only seam (src/features/update/e2e-seam.ts); the store, shutdown routine, and signature paths are Vitest (in-app-update.test.tsx, shutdown.test.ts) and Rust tests",
+    edges: [
+      "Update to <Release> by keyboard, then progress, then Restart now / Later",
+      "Command Palette: Update Maibuk",
+      "Unknown bundle type: only the Download page",
+      "Failure: error text, Retry, Download page",
+      "Progress on the bar and the badge; indeterminate when the size is unknown",
+      "Windows (nsis): downloaded, then Later drops it, then Restart to update",
+    ],
+    terms: ["Update", "Download Page"],
+    shortcuts: ["global.updateMaibuk"],
+    routes: [],
     fixture: "empty",
     tags: [],
     status: "accepted",

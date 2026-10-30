@@ -131,13 +131,13 @@ describe("stackFromCargoLock()", () => {
   const cargoLock = readFileSync(CARGO_LOCK_PATH, "utf8");
 
   it("reads tauri and wry from the real Cargo.lock", () => {
-    expect(stackFromCargoLock(cargoLock)).toEqual({ tauri: "2.9.5", wry: "0.53.5" });
+    expect(stackFromCargoLock(cargoLock)).toEqual({ tauri: "2.12.4", wry: "0.57.1" });
   });
 
   it("merges a platform's WebView version", () => {
     expect(stackFromCargoLock(cargoLock, { webkitgtk: "2.52.6" })).toEqual({
-      tauri: "2.9.5",
-      wry: "0.53.5",
+      tauri: "2.12.4",
+      wry: "0.57.1",
       webkitgtk: "2.52.6",
     });
   });

@@ -6,6 +6,8 @@ mod plugins;
 mod tray;
 mod tray_host;
 mod trusted;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod updater;
 #[cfg(desktop)]
 mod window_background;
 #[cfg(desktop)]
@@ -13,6 +15,14 @@ mod window_restore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    #[cfg(all(any(target_os = "linux", target_os = "windows"), debug_assertions))]
+    updater::apply_endpoint_override(
+        context.config_mut(),
+        std::env::var("MAIBUK_UPDATER_ENDPOINT").ok(),
+    );
+
     let builder = tauri::Builder::default();
 
     #[cfg(desktop)]
@@ -59,6 +69,12 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--minimized"]),
         ));
+
+    // Update ships for the Linux and Windows NSIS builds (ADR 0037); the web,
+    // Android, and the Arch package never reach it, and the adapter reports
+    // `unknown` elsewhere.
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder
         .manage(dictation::commands::DictationState::default())
@@ -226,6 +242,6 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }

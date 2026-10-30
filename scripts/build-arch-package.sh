@@ -70,6 +70,8 @@ echo -e "${YELLOW}Preparing build context...${NC}"
 
 # Copy necessary files to temp build directory
 cp "$BINARY_PATH" "$TEMP_BUILD_DIR/maibuk"
+# The Arch package must never Update in place: pacman owns its files (ADR 0037).
+node "$SCRIPT_DIR/clear-bundle-type.mjs" "$TEMP_BUILD_DIR/maibuk"
 cp "$ICON_PATH" "$TEMP_BUILD_DIR/maibuk.png"
 cp "$DESKTOP_PATH" "$TEMP_BUILD_DIR/maibuk.desktop"
 cp "$PROJECT_ROOT/vendor/moonshine/linux-x86_64/lib/libmoonshine.so" "$TEMP_BUILD_DIR/libmoonshine.so"

@@ -120,7 +120,7 @@ describe("Release Notes dialog", () => {
     expect(within(articles[1]).getByText("Hand-written notes")).toBeInTheDocument();
     expect(within(articles[1]).queryByRole("heading", { level: 4 })).toBeNull();
 
-    const download = within(dialog).getByRole("button", { name: "releases.download:99.1.0" });
+    const download = within(dialog).getByRole("button", { name: "releases.downloadPage" });
     while (document.activeElement !== download) await user.tab();
     await user.keyboard("{Enter}");
     expect(mockOpenExternal).toHaveBeenCalledWith(NEWER[0].url);
@@ -158,6 +158,6 @@ describe("Release Notes dialog", () => {
 
     act(() => useReleaseStore.setState({ newerReleases: [NEWER[0]] }));
     expect(within(dialog).getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("99.1.0");
-    expect(within(dialog).getByRole("button", { name: "releases.download:99.1.0" })).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "releases.downloadPage" })).toBeVisible();
   });
 });

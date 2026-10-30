@@ -577,6 +577,11 @@ What changed in each Release, grouped as added, changed, and fixed. Written in E
 _UI_: en "What's new" / es "Novedades"
 _Avoid_: changelog, update log, patch notes
 
+**Update**:
+Installing a newer Release over the installed one from inside Maibuk: the author starts it, watches it download, and the new Release runs after a restart. Not the Download Page, which hands the author a file to install themselves. Built for the Linux AppImage, deb, and rpm installs, which install as soon as the download ends, and the Windows NSIS install, which installs on Restart to update; not for the Arch package or the web (ADR 0037).
+_UI_: en "Update" / es "Actualizar"
+_Avoid_: upgrade, self-update, auto-update
+
 **Download Page**:
 The GitHub page of a Release where the author picks an installer by hand; the way to a newer Release when an Update is not possible.
 _UI_: en "Download page" / es "Página de descarga"
@@ -585,11 +590,6 @@ _Avoid_: download (alone), releases page
 ## Decided, not built
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
-
-**Update**:
-Installing a newer Release over the installed one from inside Maibuk: the author starts it, watches it download, and the new Release runs after a restart. Not the Download Page, which hands the author a file to install themselves. Not for the Arch package or the web (ADR 0037).
-_UI_: en "Update" / es "Actualizar"
-_Avoid_: upgrade, self-update, auto-update
 
 **Plugin**:
 A packaged addition to Maibuk that adds its own Commands, pages, Settings rows, or buttons without changing Maibuk itself, and reaches the author's work only through the Plugin Permissions it was granted. Maibuk's own and the author's Plugins work the same way (ADR 0019).

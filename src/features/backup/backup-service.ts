@@ -39,6 +39,11 @@ import { requestSearchRebuild } from "@/features/search/rebuild";
 // create or delete.
 let backupQueue = createAsyncQueue();
 
+/** Resolves once every Backup operation queued so far has finished. */
+export function whenBackupQueueIdle(): Promise<void> {
+  return backupQueue.enqueue(async () => {});
+}
+
 export function resetBackupQueueForTests(): void {
   backupQueue = createAsyncQueue();
 }
