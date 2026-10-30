@@ -2177,6 +2177,7 @@
     "installed": "{{release}} está instalada. Se ejecutará la próxima vez que abras Maibuk.",
     "restartNow": "Reiniciar ahora",
     "later": "Más tarde",
+    "notSaved": "No se pudo guardar tu última edición, así que Maibuk no se reinició. Inténtalo de nuevo.",
     "restarting": "Reiniciando…",
     "retry": "Reintentar",
     "errors": {

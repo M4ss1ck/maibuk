@@ -229,12 +229,35 @@ describe("Update flow", () => {
     await act(async () => finish());
   });
 
-  it("stays in the installed state when the restart is refused", async () => {
-    shutdown.mockRejectedValue(new Error("disk full"));
+  it.each([
+    [
+      "en",
+      "Update to 99.0.0",
+      "Restart now",
+      /Your last edit could not be saved, so Maibuk did not restart\. Try again\./,
+    ],
+    [
+      "es",
+      "Actualizar a 99.0.0",
+      "Reiniciar ahora",
+      /No se pudo guardar tu última edición, así que Maibuk no se reinició\./,
+    ],
+  ] as const)("says why it did not restart when the edit cannot be saved (%s)", async (lng, update, label, message) => {
+    await i18n.changeLanguage(lng);
+    shutdown.mockRejectedValueOnce(new Error("disk full"));
     const { user, dialog } = await renderOpen();
-    await user.click(within(dialog).getByRole("button", { name: "Update to 99.0.0" }));
-    await user.click(await within(dialog).findByRole("button", { name: "Restart now" }));
-    expect(await within(dialog).findByRole("button", { name: "Restart now" })).toBeVisible();
+    await user.click(within(dialog).getByRole("button", { name: update }));
+    const restart = await within(dialog).findByRole("button", { name: label });
+    while (document.activeElement !== restart) await user.tab();
+    await user.keyboard("{Enter}");
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(message);
+    // The restart stays on offer, and a second try that saves restarts.
+    const again = within(dialog).getByRole("button", { name: label });
+    while (document.activeElement !== again) await user.tab();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(shutdown).toHaveBeenCalledTimes(2));
+    expect(within(dialog).queryByRole("alert")).toBeNull();
   });
 
   it("is keyboard-operable from Update to Restart now", async () => {

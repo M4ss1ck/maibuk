@@ -2172,6 +2172,7 @@
     "installed": "{{release}} is installed. It runs the next time Maibuk starts.",
     "restartNow": "Restart now",
     "later": "Later",
+    "notSaved": "Your last edit could not be saved, so Maibuk did not restart. Try again.",
     "restarting": "Restarting…",
     "retry": "Retry",
     "errors": {

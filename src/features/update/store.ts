@@ -76,7 +76,7 @@ export const useUpdateStore = create<UpdateState>()((set, get) => ({
     try {
       await runShutdown("restart");
     } catch {
-      set({ state: { phase: "installed" } });
+      set({ state: { phase: "installed", notSaved: true } });
     }
   },
 }));

@@ -64,6 +64,11 @@ export function UpdateFooter({ release }: { release: ReleaseNotes }) {
           {t("update.installed", { release: release.number })}
         </p>
       )}
+      {state.phase === "installed" && state.notSaved && (
+        <p role="alert" className="text-sm text-destructive">
+          {t("update.notSaved")}
+        </p>
+      )}
       {state.phase === "restarting" && (
         <p role="status" className="text-sm text-foreground">
           {t("update.restarting")}
