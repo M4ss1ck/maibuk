@@ -5,6 +5,27 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-10-30
+
+### Added
+- Actualizaciones dentro de la aplicación en Linux y Windows, disponibles desde Novedades y el comando Actualizar Maibuk
+- Insignia de actualización con el progreso de descarga, además de un porcentaje junto a la barra de descarga
+- Flujo de actualización de Windows que descarga y verifica el instalador, y luego ofrece Reiniciar para actualizar o Más tarde
+- Apagado unificado que aplica las ediciones pendientes y espera a las copias de seguridad y la sincronización antes de reiniciar o instalar una actualización
+
+### Changed
+- La barra de descarga de actualizaciones usa el estilo ámbar del chip New y respeta la reducción de movimiento
+- Las actualizaciones de Windows se instalan en modo pasivo para que el instalador muestre su propio progreso
+- Elegir Más tarde mantiene la actualización disponible y cierra Novedades
+- Se puede volver a abrir Novedades desde la insignia de actualización durante una descarga
+
+### Fixed
+- Los fallos de actualización usan los mensajes de error reales del actualizador y ofrecen una guía más clara para la autenticación cancelada y las instalaciones fallidas
+- Reiniciar ahora explica cuándo no se puede guardar la última edición y mantiene disponible la opción de reiniciar
+- Reintentar se oculta cuando los fallos de actualización son irrecuperables
+- Actualizar Maibuk se oculta de la Paleta de comandos cuando no es posible ninguna actualización
+- El porcentaje de descarga permanece visible junto a la barra de progreso en lugar de desplazarse fuera de la vista
+
 ## [0.17.0] - 2026-10-29
 
 ### Added

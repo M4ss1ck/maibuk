@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-10-30
+
+### Added
+- In-app updates on Linux and Windows, available from What's new and the Update Maibuk command
+- Update badge with download progress, plus a percentage beside the download bar
+- Windows update flow that downloads and verifies the installer, then offers Restart to update or Later
+- Unified shutdown that flushes pending edits and waits for Backup and Sync before restarting or installing an update
+
+### Changed
+- Update download bar uses the New chip's amber styling and respects reduced motion
+- Windows updates install in passive mode so the installer shows its own progress
+- Choosing Later keeps the update on offer and closes What's new
+- What's new can be reopened from the update badge during a download
+
+### Fixed
+- Update failures use the updater's actual error messages and provide clearer guidance for cancelled authentication and failed installs
+- Restart now explains when the last edit cannot be saved and keeps the restart option available
+- Retry is hidden for unrecoverable update failures
+- Update Maibuk is hidden from the Command Palette when no update is possible
+- Download percentage stays visible beside the progress bar instead of scrolling out of view
+
 ## [0.17.0] - 2026-10-29
 
 ### Added
