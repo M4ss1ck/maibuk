@@ -375,7 +375,7 @@ else
   warn "kept $KEY_DIR. Delete it yourself later: rm -f $KEY_FILE $PUB_FILE && rmdir $KEY_DIR"
 fi
 say "Next, yours to run:"
-step "Commit only $CONF on a branch off main: git switch -c <name> origin/main, then commit and open a PR."
+step "Commit only $CONF on the branch you ran this on (the Update task branch), not on a new branch off main: until Update merges, main has no plugins.updater block for the key."
 step "Release builds: the two secrets are set, so the release workflow signs with them. Nothing else to do."
 step "Local signed builds: export both before pnpm tauri build, from the password manager:"
 note "    export TAURI_SIGNING_PRIVATE_KEY=\"\$(cat /path/to/saved/key)\""
