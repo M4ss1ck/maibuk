@@ -5,6 +5,7 @@
 // Vitest and Rust tests.
 
 import type { Locator, Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { tabTo } from "../support/keyboard";
 import { expectActiveOption } from "../support/palette";
 import { expect, test } from "../support/test";
@@ -41,6 +42,7 @@ test.describe("Update @wf:shell-update", () => {
     await press(page, inDialog(page, `Update to ${RELEASE}`));
 
     await expect(dialog(page).getByText(`${RELEASE} is installed`)).toBeVisible();
+    await capture(page, "update-installed", { around: [dialog(page)] });
     await expect(inDialog(page, "Restart now")).toBeVisible();
     await expect(inDialog(page, "Download page")).toBeVisible();
 
@@ -92,5 +94,54 @@ test.describe("Update @wf:shell-update", () => {
     await expect(dialog(page).getByRole("alert")).toContainText("signature check");
     await expect(inDialog(page, "Retry")).toBeVisible();
     await expect(inDialog(page, "Download page")).toBeVisible();
+  });
+
+  test("Progress shows on the bar and the badge, sized or not", async ({ page }) => {
+    await arm(page, { steps: 4, stepMs: 1500 });
+    await openWhatsNew(page);
+    await press(page, inDialog(page, `Update to ${RELEASE}`));
+    const bar = dialog(page).getByRole("progressbar", { name: "Update download" });
+    await expect(bar).toHaveAttribute("value", /^(25|50)$/);
+    await capture(page, "update-progress", { around: [dialog(page)] });
+
+    await page.keyboard.press("Escape");
+    await expect(badge(page)).toContainText(/\d+%/);
+    await capture(page, "update-badge-progress", { around: [badge(page)] });
+  });
+
+  test("Unknown size shows an indeterminate bar", async ({ page }) => {
+    await arm(page, { unknownSize: true, steps: 4, stepMs: 1500 });
+    await openWhatsNew(page);
+    await press(page, inDialog(page, `Update to ${RELEASE}`));
+    const bar = dialog(page).getByRole("progressbar", { name: "Update download" });
+    await expect(bar).toBeVisible();
+    await expect(bar).not.toHaveAttribute("value");
+    await capture(page, "update-progress-indeterminate", { around: [dialog(page)] });
+  });
+
+  test("Windows: Update downloads, then Restart to update / Later drops it", async ({ page }) => {
+    await arm(page, { bundleType: "nsis" });
+    await openWhatsNew(page);
+
+    await press(page, inDialog(page, `Update to ${RELEASE}`));
+    await expect(
+      dialog(page).getByText(`${RELEASE} is downloaded. Restart Maibuk to install it.`)
+    ).toBeVisible();
+    await expect(inDialog(page, "Restart to update")).toBeVisible();
+    await expect(badge(page)).toContainText("Restart");
+    await capture(page, "update-downloaded-windows", { around: [dialog(page)] });
+
+    await press(page, inDialog(page, "Later"));
+    await expect(dialog(page)).toBeHidden();
+    await expect(badge(page)).toBeFocused();
+    await expect(page.getByText(/The downloaded update was discarded/)).toBeVisible();
+
+    // Offered again: Update, then Restart to update runs the shutdown routine
+    // and hands over to the installer (a no-op in the web build).
+    await page.keyboard.press("Enter");
+    await expect(dialog(page)).toBeVisible();
+    await press(page, inDialog(page, `Update to ${RELEASE}`));
+    await press(page, inDialog(page, "Restart to update"));
+    await expect(dialog(page).getByRole("status")).toContainText("Restarting");
   });
 });

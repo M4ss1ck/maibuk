@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { toast } from "@/components/ui/Toast";
 import { useReleaseStore } from "@/features/releases/store";
 import type { UpdatePhase } from "@/features/update/types";
 import type { ReleaseNotes } from "@/features/releases/release-notes";
@@ -26,6 +27,7 @@ export function UpdateFooter({ release }: { release: ReleaseNotes }) {
   const state = useUpdateStore((store) => store.state);
   const start = useUpdateStore((store) => store.start);
   const restart = useUpdateStore((store) => store.restart);
+  const discardDownload = useUpdateStore((store) => store.discardDownload);
   const closeNotes = useReleaseStore((store) => store.closeNotes);
 
   const canUpdate = bundleType !== "unknown";
@@ -64,7 +66,12 @@ export function UpdateFooter({ release }: { release: ReleaseNotes }) {
           {t("update.installed", { release: release.number })}
         </p>
       )}
-      {state.phase === "installed" && state.notSaved && (
+      {state.phase === "downloaded" && (
+        <p role="status" className="text-sm text-foreground">
+          {t("update.downloaded", { release: release.number })}
+        </p>
+      )}
+      {(state.phase === "installed" || state.phase === "downloaded") && state.notSaved && (
         <p role="alert" className="text-sm text-destructive">
           {t("update.notSaved")}
         </p>
@@ -101,6 +108,23 @@ export function UpdateFooter({ release }: { release: ReleaseNotes }) {
             </Button>
             <Button variant="primary" onClick={() => void restart()}>
               {t("update.restartNow")}
+            </Button>
+          </>
+        )}
+        {state.phase === "downloaded" && (
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void discardDownload();
+                closeNotes();
+                toast.info(t("update.discarded"));
+              }}
+            >
+              {t("update.later")}
+            </Button>
+            <Button variant="primary" onClick={() => void restart()}>
+              {t("update.restartToUpdate")}
             </Button>
           </>
         )}

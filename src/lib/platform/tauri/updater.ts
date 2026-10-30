@@ -1,13 +1,14 @@
 import { getBundleType } from "@tauri-apps/api/app";
-import { check, type Update } from "@tauri-apps/plugin-updater";
+import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import {
   UpdateError,
   type BundleType,
   type UpdateFailureReason,
+  type UpdateProgressEvent,
   type UpdaterAdapter,
 } from "@/lib/platform/types";
 
-const OWNED_BUNDLES: readonly BundleType[] = ["appimage", "deb", "rpm"];
+const OWNED_BUNDLES: readonly BundleType[] = ["appimage", "deb", "rpm", "nsis"];
 
 /**
  * The plugin rejects with its error's Display string. Each pattern matches a
@@ -20,11 +21,17 @@ const ERROR_RULES: readonly [RegExp, UpdateFailureReason][] = [
   [/signature|minisign|^invalid (symbol|padding|last symbol|input length)/i, "bad-signature"],
   // No file for this install, no latest.json, or a malformed feed entry.
   [/platforms? .*(was not found|were found)|could not fetch a valid release json/i, "no-asset"],
-  [/download request failed with status: 40[34]|updater response|invalid updater binary/i, "no-asset"],
+  [
+    /download request failed with status: (404|410)|updater response|invalid updater binary/i,
+    "no-asset",
+  ],
   // deb/rpm: pkexec dismissed falls through to a sudo with no terminal.
   [/^failed to install package$|authentication failed or was cancelled/i, "cancelled-auth"],
   // AppImage: renaming the running file out of its folder.
-  [/permission denied \(os error 13\)|read-only file system|not on the same mount point/i, "not-writable"],
+  [
+    /permission denied \(os error 13\)|read-only file system|not on the same mount point/i,
+    "not-writable",
+  ],
   [/error sending request|response body|operation timed out|download request failed/i, "offline"],
 ];
 
@@ -34,7 +41,30 @@ export function classifyUpdateError(error: unknown): UpdateFailureReason {
   return ERROR_RULES.find(([pattern]) => pattern.test(message))?.[1] ?? "other";
 }
 
+// What `check()` found. On Windows it also holds the downloaded installer
+// bytes (in Rust) between `download()` and `install()`; `close()` drops them.
 let pending: Update | null = null;
+
+function toProgress(onProgress: (event: UpdateProgressEvent) => void) {
+  return (event: DownloadEvent) => {
+    if (event.event === "Started") {
+      onProgress({ kind: "started", total: event.data.contentLength });
+    } else if (event.event === "Progress") {
+      onProgress({ kind: "progress", bytes: event.data.chunkLength });
+    } else {
+      onProgress({ kind: "finished" });
+    }
+  };
+}
+
+async function run(work: (update: Update) => Promise<void>): Promise<void> {
+  if (!pending) throw new UpdateError("no-asset");
+  try {
+    await work(pending);
+  } catch (error) {
+    throw new UpdateError(classifyUpdateError(error), error);
+  }
+}
 
 export const tauriUpdater: UpdaterAdapter = {
   async bundleType() {
@@ -55,20 +85,14 @@ export const tauriUpdater: UpdaterAdapter = {
       throw new UpdateError(classifyUpdateError(error), error);
     }
   },
-  async downloadAndInstall(onProgress) {
-    if (!pending) throw new UpdateError("no-asset");
-    try {
-      await pending.downloadAndInstall((event) => {
-        if (event.event === "Started") {
-          onProgress({ kind: "started", total: event.data.contentLength });
-        } else if (event.event === "Progress") {
-          onProgress({ kind: "progress", bytes: event.data.chunkLength });
-        } else {
-          onProgress({ kind: "finished" });
-        }
-      });
-    } catch (error) {
-      throw new UpdateError(classifyUpdateError(error), error);
-    }
+  downloadAndInstall: (onProgress) =>
+    run((update) => update.downloadAndInstall(toProgress(onProgress))),
+  download: (onProgress) => run((update) => update.download(toProgress(onProgress))),
+  // On success the NSIS installer quits this process, so this never resolves.
+  install: () => run((update) => update.install()),
+  async close() {
+    const update = pending;
+    pending = null;
+    await update?.close();
   },
 };

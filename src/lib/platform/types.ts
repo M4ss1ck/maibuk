@@ -67,7 +67,7 @@ export interface OSAdapter {
 }
 
 /** The install format of this build; `unknown` for Arch, the web, and anything the updater does not own. */
-export type BundleType = "appimage" | "deb" | "rpm" | "unknown";
+export type BundleType = "appimage" | "deb" | "rpm" | "nsis" | "unknown";
 
 export type UpdateFailureReason =
   | "offline"
@@ -99,8 +99,14 @@ export interface UpdaterAdapter {
   bundleType(): Promise<BundleType>;
   /** The newest Release the updater feed lists for this install; null when none is newer. Rejects with UpdateError. */
   check(): Promise<{ version: string } | null>;
-  /** Download what `check()` found and install it. Rejects with UpdateError. */
+  /** Linux: download what `check()` found and install it. Rejects with UpdateError. */
   downloadAndInstall(onProgress: (event: UpdateProgressEvent) => void): Promise<void>;
+  /** Windows: download and verify what `check()` found, and hold it for `install()`. Rejects with UpdateError. */
+  download(onProgress: (event: UpdateProgressEvent) => void): Promise<void>;
+  /** Windows: run the held installer, which quits the app and relaunches it. Rejects with UpdateError. */
+  install(): Promise<void>;
+  /** Drops the held download, if any (Windows Later). */
+  close(): Promise<void>;
 }
 
 export interface ClipboardAdapter {

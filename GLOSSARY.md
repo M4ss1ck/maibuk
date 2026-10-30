@@ -578,7 +578,7 @@ _UI_: en "What's new" / es "Novedades"
 _Avoid_: changelog, update log, patch notes
 
 **Update**:
-Installing a newer Release over the installed one from inside Maibuk: the author starts it, watches it download, and the new Release runs after a restart. Not the Download Page, which hands the author a file to install themselves. Built for the Linux AppImage, deb, and rpm installs; not for the Arch package or the web (ADR 0037).
+Installing a newer Release over the installed one from inside Maibuk: the author starts it, watches it download, and the new Release runs after a restart. Not the Download Page, which hands the author a file to install themselves. Built for the Linux AppImage, deb, and rpm installs, which install as soon as the download ends, and the Windows NSIS install, which installs on Restart to update; not for the Arch package or the web (ADR 0037).
 _UI_: en "Update" / es "Actualizar"
 _Avoid_: upgrade, self-update, auto-update
 

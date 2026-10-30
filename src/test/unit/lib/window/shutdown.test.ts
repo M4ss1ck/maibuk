@@ -3,11 +3,9 @@ import { runShutdown, type ShutdownSteps } from "@/lib/window/shutdown";
 
 function steps(overrides: Partial<ShutdownSteps> = {}): ShutdownSteps & { order: string[] } {
   const order: string[] = [];
-  const record =
-    (name: string) =>
-    async (): Promise<void> => {
-      order.push(name);
-    };
+  const record = (name: string) => async (): Promise<void> => {
+    order.push(name);
+  };
   return {
     order,
     leaveTutorial: () => void order.push("tutorial"),
@@ -16,6 +14,7 @@ function steps(overrides: Partial<ShutdownSteps> = {}): ShutdownSteps & { order:
     flushMetrics: record("metrics"),
     exit: async () => void order.push("exit"),
     restart: async () => void order.push("restart"),
+    install: async () => void order.push("install"),
     settleLimitMs: 20,
     ...overrides,
   };
@@ -32,6 +31,18 @@ describe("runShutdown", () => {
     const s = steps();
     await runShutdown("restart", s);
     expect(s.order).toEqual(["tutorial", "flush", "settle", "metrics", "restart"]);
+  });
+
+  it("runs the downloaded installer last in install mode (Windows Restart to update)", async () => {
+    const s = steps();
+    await runShutdown("install", s);
+    expect(s.order).toEqual(["tutorial", "flush", "settle", "metrics", "install"]);
+  });
+
+  it("does not install when an edit cannot be saved, so the app keeps running", async () => {
+    const s = steps({ flushEdits: async () => Promise.reject(new Error("disk full")) });
+    await expect(runShutdown("install", s)).rejects.toThrow("disk full");
+    expect(s.order).toEqual(["tutorial"]);
   });
 
   it("still exits when a running Backup never settles", async () => {

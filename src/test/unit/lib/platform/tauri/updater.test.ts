@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UpdateError, type UpdateFailureReason } from "@/lib/platform/types";
 
-vi.mock("@tauri-apps/api/app", () => ({ getBundleType: vi.fn() }));
-vi.mock("@tauri-apps/plugin-updater", () => ({ check: vi.fn() }));
+const { mockGetBundleType, mockCheck } = vi.hoisted(() => ({
+  mockGetBundleType: vi.fn(),
+  mockCheck: vi.fn(),
+}));
+vi.mock("@tauri-apps/api/app", () => ({ getBundleType: mockGetBundleType }));
+vi.mock("@tauri-apps/plugin-updater", () => ({ check: mockCheck }));
 
-const { classifyUpdateError } = await import("@/lib/platform/tauri/updater");
+const { classifyUpdateError, tauriUpdater } = await import("@/lib/platform/tauri/updater");
 
 // The plugin rejects with its Error's Display string (error.rs:96, serialize_str
 // of to_string()). Every message below is copied from the crate versions in
@@ -54,6 +58,12 @@ const CASES: [message: string, reason: UpdateFailureReason, source: string][] = 
     "`Download request failed with status: 404 Not Found`",
     "no-asset",
     "updater.rs:691: the feed names a file the Release lacks",
+  ],
+  ["`Download request failed with status: 410 Gone`", "no-asset", "updater.rs:691"],
+  [
+    "`Download request failed with status: 403 Forbidden`",
+    "offline",
+    "updater.rs:691: refused, not missing, so Retry stays",
   ],
   [
     "the `url` field was not set on the updater response",
@@ -126,5 +136,92 @@ describe("classifyUpdateError", () => {
 
   it("keeps the reason of an UpdateError", () => {
     expect(classifyUpdateError(new UpdateError("no-asset"))).toBe("no-asset");
+  });
+});
+
+describe("tauriUpdater", () => {
+  type Event = { event: string; data?: Record<string, number> };
+  type Handler = (event: Event) => void;
+  function fakeUpdate(overrides: Record<string, unknown> = {}) {
+    const events: Event[] = [
+      { event: "Started", data: { contentLength: 300 } },
+      { event: "Progress", data: { chunkLength: 100 } },
+      { event: "Finished" },
+    ];
+    return {
+      version: "99.0.0",
+      download: vi.fn(async (on: Handler) => events.forEach(on)),
+      downloadAndInstall: vi.fn(async (on: Handler) => events.forEach(on)),
+      install: vi.fn(async () => {}),
+      close: vi.fn(async () => {}),
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    await tauriUpdater.close();
+    mockCheck.mockReset();
+  });
+
+  it.each([
+    ["nsis", "nsis"],
+    ["appimage", "appimage"],
+    ["deb", "deb"],
+    ["rpm", "rpm"],
+    ["msi", "unknown"],
+    ["app", "unknown"],
+  ])("reports a %s bundle as %s", async (raw, expected) => {
+    mockGetBundleType.mockResolvedValueOnce(raw);
+    expect(await tauriUpdater.bundleType()).toBe(expected);
+  });
+
+  it("reports unknown when the marker is cleared (Arch)", async () => {
+    mockGetBundleType.mockRejectedValueOnce(new Error("no bundle type"));
+    expect(await tauriUpdater.bundleType()).toBe("unknown");
+  });
+
+  it("downloads on Windows without installing, and reports progress", async () => {
+    const update = fakeUpdate();
+    mockCheck.mockResolvedValueOnce(update);
+    await tauriUpdater.check();
+    const progress: unknown[] = [];
+    await tauriUpdater.download((event) => progress.push(event));
+    expect(progress).toEqual([
+      { kind: "started", total: 300 },
+      { kind: "progress", bytes: 100 },
+      { kind: "finished" },
+    ]);
+    expect(update.install).not.toHaveBeenCalled();
+    await tauriUpdater.install();
+    expect(update.install).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps a failed install to its reason", async () => {
+    mockCheck.mockResolvedValueOnce(
+      fakeUpdate({ install: vi.fn().mockRejectedValue("invalid updater binary format") })
+    );
+    await tauriUpdater.check();
+    await tauriUpdater.download(() => {});
+    await expect(tauriUpdater.install()).rejects.toMatchObject({ reason: "no-asset" });
+  });
+
+  it("close drops the download, so nothing is left to install", async () => {
+    const update = fakeUpdate();
+    mockCheck.mockResolvedValueOnce(update);
+    await tauriUpdater.check();
+    await tauriUpdater.download(() => {});
+    await tauriUpdater.close();
+    expect(update.close).toHaveBeenCalledTimes(1);
+    await expect(tauriUpdater.install()).rejects.toMatchObject({ reason: "no-asset" });
+  });
+
+  it("maps a failed check, and a Linux download-and-install", async () => {
+    mockCheck.mockRejectedValueOnce("error sending request for url (https://example.com)");
+    await expect(tauriUpdater.check()).rejects.toMatchObject({ reason: "offline" });
+    const update = fakeUpdate();
+    mockCheck.mockResolvedValueOnce(update);
+    expect(await tauriUpdater.check()).toEqual({ version: "99.0.0" });
+    await tauriUpdater.downloadAndInstall(() => {});
+    expect(update.downloadAndInstall).toHaveBeenCalledTimes(1);
   });
 });

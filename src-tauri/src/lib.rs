@@ -6,7 +6,7 @@ mod plugins;
 mod tray;
 mod tray_host;
 mod trusted;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 mod updater;
 #[cfg(desktop)]
 mod window_background;
@@ -17,7 +17,7 @@ mod window_restore;
 pub fn run() {
     #[allow(unused_mut)]
     let mut context = tauri::generate_context!();
-    #[cfg(all(target_os = "linux", debug_assertions))]
+    #[cfg(all(any(target_os = "linux", target_os = "windows"), debug_assertions))]
     updater::apply_endpoint_override(
         context.config_mut(),
         std::env::var("MAIBUK_UPDATER_ENDPOINT").ok(),
@@ -70,9 +70,10 @@ pub fn run() {
             Some(vec!["--minimized"]),
         ));
 
-    // Update ships for the Linux builds only (ADR 0037); the web and Arch
-    // package never reach it, and the adapter reports `unknown` elsewhere.
-    #[cfg(target_os = "linux")]
+    // Update ships for the Linux and Windows NSIS builds (ADR 0037); the web,
+    // Android, and the Arch package never reach it, and the adapter reports
+    // `unknown` elsewhere.
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder

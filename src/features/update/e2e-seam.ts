@@ -12,15 +12,23 @@
 
 import { useReleaseStore } from "@/features/releases/store";
 import { setSeamUpdater, useUpdateStore } from "@/features/update/store";
-import { UpdateError, type BundleType, type UpdateFailureReason } from "@/lib/platform/types";
+import {
+  UpdateError,
+  type BundleType,
+  type UpdateFailureReason,
+  type UpdaterAdapter,
+} from "@/lib/platform/types";
 
 export interface UpdateSeamScript {
   bundleType: BundleType;
   /** The newer Release the Release check would have found. */
   release: string;
-  /** Total bytes the scripted download reports; the bar fills in `steps` steps. */
+  /** Total bytes the scripted download reports; the bar fills in `steps` steps of `stepMs`. */
   total?: number;
   steps?: number;
+  stepMs?: number;
+  /** Report no size, so the bar is indeterminate. */
+  unknownSize?: boolean;
   failure?: UpdateFailureReason;
 }
 
@@ -31,19 +39,24 @@ declare global {
 }
 
 async function arm(script: UpdateSeamScript): Promise<void> {
-  const { total = 100, steps = 4 } = script;
+  const { total = 100, steps = 4, stepMs = 20 } = script;
+  const download: UpdaterAdapter["download"] = async (onProgress) => {
+    onProgress({ kind: "started", total: script.unknownSize ? undefined : total });
+    for (let step = 0; step < steps; step++) {
+      onProgress({ kind: "progress", bytes: total / steps });
+      await new Promise((resolve) => setTimeout(resolve, stepMs));
+    }
+    onProgress({ kind: "finished" });
+    if (script.failure) throw new UpdateError(script.failure);
+  };
   setSeamUpdater({
     bundleType: async () => script.bundleType,
     check: async () => ({ version: script.release }),
-    downloadAndInstall: async (onProgress) => {
-      onProgress({ kind: "started", total });
-      for (let step = 0; step < steps; step++) {
-        onProgress({ kind: "progress", bytes: total / steps });
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      }
-      onProgress({ kind: "finished" });
-      if (script.failure) throw new UpdateError(script.failure);
-    },
+    downloadAndInstall: download,
+    download,
+    // A real NSIS install quits the app; the web build stays on "Restarting".
+    install: async () => {},
+    close: async () => {},
   });
   useReleaseStore.getState().setNewerReleases([
     {

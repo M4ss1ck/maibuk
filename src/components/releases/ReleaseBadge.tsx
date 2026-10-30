@@ -17,8 +17,8 @@ const VARIANT_CLASS = {
 
 /**
  * The opaque "New" chip, shared by the badge and the newer Releases in the
- * dialog. While an Update downloads it shows the percent; once installed it
- * reads as ready to restart.
+ * dialog. While an Update downloads it shows the percent; once installed (or,
+ * on Windows, downloaded) it reads as ready to restart.
  */
 export function NewReleaseChip({ className = "" }: { className?: string }) {
   const { t } = useTranslation();
@@ -27,7 +27,7 @@ export function NewReleaseChip({ className = "" }: { className?: string }) {
   const label =
     state.phase === "downloading" && percent !== null
       ? t("update.badgeProgress", { percent: Math.floor(percent) })
-      : state.phase === "installed"
+      : state.phase === "installed" || state.phase === "downloaded"
         ? t("update.badgeReady")
         : t("releases.new");
   return (

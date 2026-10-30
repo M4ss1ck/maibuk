@@ -4,7 +4,8 @@ import { flushPendingEdits } from "@/features/sync/pending-edits";
 import { deactivateTutorialDatabase } from "@/features/tutorial/library-switch";
 import { metricsService } from "@/lib/metrics/MetricsService";
 
-export type ShutdownMode = "exit" | "restart";
+/** `install` is Windows Restart to update: the installer quits and relaunches the app. */
+export type ShutdownMode = "exit" | "restart" | "install";
 
 export interface ShutdownSteps {
   leaveTutorial(): void;
@@ -14,6 +15,8 @@ export interface ShutdownSteps {
   flushMetrics(): Promise<void>;
   exit(): Promise<void>;
   restart(): Promise<void>;
+  /** Runs the downloaded installer; the caller supplies it (the Update store's adapter). */
+  install(): Promise<void>;
   settleLimitMs: number;
 }
 
@@ -58,31 +61,37 @@ const defaultSteps: ShutdownSteps = {
     const { relaunch } = await import("@tauri-apps/plugin-process");
     await relaunch();
   },
+  async install() {
+    throw new Error("No downloaded Update to install");
+  },
   settleLimitMs: SETTLE_LIMIT_MS,
 };
 
 /**
- * The one way the app ends: window close (close-to-tray off), Restart now.
+ * The one way the app ends: window close (close-to-tray off), Restart now,
+ * and Restart to update.
  * Leaves the Tutorial Library first so the work below lands in the author's
  * Library, Flushes the open Edit Session, gives a running Backup or Sync a
- * bounded moment, Flushes metrics, then exits or restarts.
+ * bounded moment, Flushes metrics, then exits, restarts, or installs.
  *
- * On close, a Flush that fails does not trap the window open. On restart it
- * stops everything, so the author keeps writing in the editor that still holds
- * the text.
+ * On close, a Flush that fails does not trap the window open. On restart and
+ * install it stops everything, so the author keeps writing in the editor that
+ * still holds the text.
  */
 export async function runShutdown(
   mode: ShutdownMode,
-  steps: ShutdownSteps = defaultSteps
+  overrides: Partial<ShutdownSteps> = {}
 ): Promise<void> {
+  const steps = { ...defaultSteps, ...overrides };
   steps.leaveTutorial();
   try {
     await steps.flushEdits();
   } catch (error) {
-    if (mode === "restart") throw error;
+    if (mode !== "exit") throw error;
     console.warn("Edit Session not saved before exit", error);
   }
   await within(steps.settleBackgroundWork(), steps.settleLimitMs);
   await within(steps.flushMetrics(), METRICS_LIMIT_MS);
-  await (mode === "restart" ? steps.restart() : steps.exit());
+  if (mode === "install") await steps.install();
+  else await (mode === "restart" ? steps.restart() : steps.exit());
 }

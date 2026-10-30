@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "@/i18n";
 import { ReleaseBadge } from "@/components/releases/ReleaseBadge";
 import { ReleaseNotesDialog } from "@/components/releases/ReleaseNotesDialog";
+import { ToastViewport } from "@/components/ui/Toast";
 import { APP_VERSION } from "@/constants";
 import type { ReleaseNotes } from "@/features/releases/release-notes";
 import { useReleaseStore } from "@/features/releases/store";
@@ -46,10 +47,18 @@ interface Script {
   failure?: UpdateFailureReason;
   /** Holds the download open until called. */
   gate?: Promise<void>;
+  /** Windows: what `install()` rejects with. */
+  installFailure?: UpdateFailureReason;
 }
 
 function script(options: Script = {}) {
-  const calls = { check: 0, download: 0 };
+  const calls = { check: 0, download: 0, install: 0, close: 0 };
+  const download = async (onProgress: (event: UpdateProgressEvent) => void) => {
+    calls.download++;
+    for (const event of options.events ?? []) onProgress(event);
+    await options.gate;
+    if (options.failure) throw new UpdateError(options.failure);
+  };
   const adapter: UpdaterAdapter = {
     bundleType: async () => options.bundle ?? "appimage",
     check: async () => {
@@ -57,11 +66,14 @@ function script(options: Script = {}) {
       const version = options.feedVersion === undefined ? "99.0.0" : options.feedVersion;
       return version ? { version } : null;
     },
-    downloadAndInstall: async (onProgress) => {
-      calls.download++;
-      for (const event of options.events ?? []) onProgress(event);
-      await options.gate;
-      if (options.failure) throw new UpdateError(options.failure);
+    downloadAndInstall: download,
+    download,
+    install: async () => {
+      calls.install++;
+      if (options.installFailure) throw new UpdateError(options.installFailure);
+    },
+    close: async () => {
+      calls.close++;
     },
   };
   fake.current = adapter;
@@ -280,5 +292,122 @@ describe("Update flow", () => {
     expect(screen.getByRole("button", { name: /Novedades/, hidden: true })).toHaveTextContent(
       APP_VERSION
     );
+  });
+});
+
+describe("Update flow on Windows (NSIS)", () => {
+  /** The shutdown routine, standing in for the real one: it runs the install step it is handed. */
+  function runShutdownStep() {
+    shutdown.mockImplementation(async (_mode: string, steps?: { install?: () => Promise<void> }) =>
+      steps?.install?.()
+    );
+  }
+
+  async function focusAndPress(
+    user: ReturnType<typeof userEvent.setup>,
+    target: HTMLElement,
+    key = "{Enter}"
+  ) {
+    while (document.activeElement !== target) await user.tab();
+    await user.keyboard(key);
+  }
+
+  it("downloads with progress, then Restart to update runs the shutdown routine and installs", async () => {
+    runShutdownStep();
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => (finish = resolve));
+    const { user, dialog, calls } = await renderOpen({
+      bundle: "nsis",
+      gate,
+      events: [
+        { kind: "started", total: 400 },
+        { kind: "progress", bytes: 100 },
+      ],
+    });
+
+    await focusAndPress(user, within(dialog).getByRole("button", { name: "Update to 99.0.0" }));
+    const bar = await within(dialog).findByRole("progressbar", { name: "Update download" });
+    expect(bar).toHaveAttribute("value", "25");
+    await act(async () => finish());
+
+    expect(
+      await within(dialog).findByText("99.0.0 is downloaded. Restart Maibuk to install it.")
+    ).toBeVisible();
+    // Nothing installs until the author asks: the installer quits the app.
+    expect(calls.install).toBe(0);
+    expect(screen.getByRole("button", { name: /^Maibuk /, hidden: true })).toHaveTextContent(
+      "Restart"
+    );
+
+    await focusAndPress(user, within(dialog).getByRole("button", { name: "Restart to update" }));
+    await waitFor(() => expect(calls.install).toBe(1));
+    expect(shutdown).toHaveBeenCalledWith(
+      "install",
+      expect.objectContaining({ install: expect.any(Function) })
+    );
+    expect(calls.close).toBe(0);
+  });
+
+  it("Later drops the download, closes What's new, and says the Update stays on offer", async () => {
+    render(<ToastViewport />);
+    const { user, dialog, calls } = await renderOpen({ bundle: "nsis" });
+    await focusAndPress(user, within(dialog).getByRole("button", { name: "Update to 99.0.0" }));
+    await focusAndPress(user, await within(dialog).findByRole("button", { name: "Later" }));
+
+    expect(calls.close).toBe(1);
+    expect(calls.install).toBe(0);
+    expect(shutdown).not.toHaveBeenCalled();
+    expect(await screen.findByText(/The downloaded update was discarded/)).toBeVisible();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const badge = screen.getByRole("button", { name: /^Maibuk /, hidden: true });
+    expect(document.activeElement).toBe(badge);
+
+    // Reopened, What's new offers the Update again.
+    await user.keyboard("{Enter}");
+    const reopened = await screen.findByRole("dialog", { name: i18n.t("releases.title") });
+    expect(within(reopened).getByRole("button", { name: "Update to 99.0.0" })).toBeVisible();
+  });
+
+  it("a failed install shows the error with Retry, and the app keeps running", async () => {
+    runShutdownStep();
+    const { user, dialog } = await renderOpen({ bundle: "nsis", installFailure: "other" });
+    await focusAndPress(user, within(dialog).getByRole("button", { name: "Update to 99.0.0" }));
+    await focusAndPress(
+      user,
+      await within(dialog).findByRole("button", { name: "Restart to update" })
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(/The update failed/);
+    expect(within(dialog).getByRole("button", { name: "Retry" })).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Download page" })).toBeVisible();
+  });
+
+  it("does not install when the edit cannot be saved, and says so", async () => {
+    shutdown.mockRejectedValueOnce(new Error("disk full"));
+    const { user, dialog, calls } = await renderOpen({ bundle: "nsis" });
+    await focusAndPress(user, within(dialog).getByRole("button", { name: "Update to 99.0.0" }));
+    await focusAndPress(
+      user,
+      await within(dialog).findByRole("button", { name: "Restart to update" })
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      /Your last edit could not be saved/
+    );
+    expect(calls.install).toBe(0);
+    expect(within(dialog).getByRole("button", { name: "Restart to update" })).toBeVisible();
+  });
+
+  it("reads in Spanish", async () => {
+    await i18n.changeLanguage("es");
+    render(<ToastViewport />);
+    const { user, dialog } = await renderOpen({ bundle: "nsis" });
+    await focusAndPress(user, within(dialog).getByRole("button", { name: "Actualizar a 99.0.0" }));
+    expect(
+      await within(dialog).findByText("99.0.0 está descargada. Reinicia Maibuk para instalarla.")
+    ).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Reiniciar para actualizar" })).toBeVisible();
+    await focusAndPress(user, within(dialog).getByRole("button", { name: "Más tarde" }));
+    expect(await screen.findByText(/Se descartó la actualización descargada/)).toBeVisible();
   });
 });

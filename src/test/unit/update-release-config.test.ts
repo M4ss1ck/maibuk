@@ -82,11 +82,25 @@ describe("Update release config", () => {
     expect(read("src-tauri/capabilities/android.json")).not.toContain("updater");
   });
 
+  it("installs Windows Updates in passive mode, so the installer shows its own progress", () => {
+    expect(tauriConf.plugins.updater.windows).toEqual({ installMode: "passive" });
+  });
+
+  it("builds and registers the updater plugin on Linux and Windows", () => {
+    const linuxAndWindows = 'cfg(any(target_os = "linux", target_os = "windows"))';
+    const cargo = read("src-tauri/Cargo.toml");
+    const section = cargo.slice(cargo.indexOf(`[target.'${linuxAndWindows}'.dependencies]`));
+    expect(section.split(/\n\[/)[0]).toMatch(/^tauri-plugin-updater = /m);
+    expect(read("src-tauri/src/lib.rs")).toContain(
+      `#[${linuxAndWindows}]\n    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());`
+    );
+  });
+
   it("compiles the endpoint override out of release builds", () => {
     const source = read("src-tauri/src/updater.rs");
     expect(source).toMatch(/#\[cfg\(debug_assertions\)\]\s*pub fn apply_endpoint_override/);
     expect(read("src-tauri/src/lib.rs")).toMatch(
-      /#\[cfg\(all\(target_os = "linux", debug_assertions\)\)\]\s*updater::apply_endpoint_override/
+      /#\[cfg\(all\(any\(target_os = "linux", target_os = "windows"\), debug_assertions\)\)\]\s*updater::apply_endpoint_override/
     );
     expect(read("src-tauri/src/lib.rs").match(/MAIBUK_UPDATER_ENDPOINT/g)).toHaveLength(1);
   });
