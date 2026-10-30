@@ -23,6 +23,14 @@ function fakeBinary(sixth: string, constants: string[] = CONSTANTS): Buffer {
   ]);
 }
 
+/**
+ * A synthetic binary with only the value marker: newer compilers (rustc 1.99 in
+ * CI) inline the five comparison constants, so the full strings are gone.
+ */
+function singleMarkerBinary(value: string): Buffer {
+  return Buffer.concat([filler(64, 1), marker(value), filler(96, 3)]);
+}
+
 /** Offset of the sixth marker's suffix bytes in a buffer built by fakeBinary. */
 function sixthSuffixOffset(buffer: Buffer): number {
   const at = buffer.lastIndexOf(Buffer.from(PREFIX, "latin1"));
@@ -75,18 +83,23 @@ describe("clearBundleType", () => {
   it("throws on zero markers and leaves the buffer untouched", () => {
     const buffer = filler(256, 9);
     const before = Buffer.from(buffer);
-    expect(() => clearBundleType(buffer)).toThrow(/expected 6 bundle type markers.*found 0/);
+    expect(() => clearBundleType(buffer)).toThrow(/expected 1 or 6 bundle type markers.*found 0/);
     expect(buffer.equals(before)).toBe(true);
+  });
+
+  it("throws on two markers", () => {
+    const buffer = Buffer.concat([singleMarkerBinary("DEB"), marker("UNK")]);
+    expect(() => clearBundleType(buffer)).toThrow(/expected 1 or 6 bundle type markers.*found 2/);
   });
 
   it("throws on five markers", () => {
     const buffer = fakeBinary("DEB", CONSTANTS.slice(0, 4));
-    expect(() => clearBundleType(buffer)).toThrow(/expected 6 bundle type markers.*found 5/);
+    expect(() => clearBundleType(buffer)).toThrow(/expected 1 or 6 bundle type markers.*found 5/);
   });
 
   it("throws on seven markers", () => {
     const buffer = Buffer.concat([fakeBinary("DEB"), marker("UNK")]);
-    expect(() => clearBundleType(buffer)).toThrow(/expected 6 bundle type markers.*found 7/);
+    expect(() => clearBundleType(buffer)).toThrow(/expected 1 or 6 bundle type markers.*found 7/);
   });
 
   it("throws when the first five markers are out of order and does not patch", () => {
@@ -99,10 +112,41 @@ describe("clearBundleType", () => {
 
   it("throws when a marker has no 3-letter suffix", () => {
     const buffer = Buffer.concat([fakeBinary("DEB"), Buffer.from(`${PREFIX}X1`, "latin1")]);
-    expect(() => clearBundleType(buffer)).toThrow(/expected 6 bundle type markers.*found 7/);
+    expect(() => clearBundleType(buffer)).toThrow(/expected 1 or 6 bundle type markers.*found 7/);
 
     const sixthBad = fakeBinary("D1B");
     expect(() => clearBundleType(sixthBad)).toThrow(/marker 6 has no 3-letter suffix/);
+  });
+});
+
+describe("clearBundleType with the constants compiled away", () => {
+  it.each(["DEB", "RPM", "APP", "MSI", "NSS"])("resets a lone %s marker to UNK", (was) => {
+    const before = singleMarkerBinary(was);
+    const buffer = Buffer.from(before);
+    const result = clearBundleType(buffer);
+
+    expect(result).toEqual({ changed: true, was });
+    expect(buffer.equals(singleMarkerBinary("UNK"))).toBe(true);
+  });
+
+  it("is a no-op when the lone marker already reads UNK", () => {
+    const before = singleMarkerBinary("UNK");
+    const buffer = Buffer.from(before);
+
+    expect(clearBundleType(buffer)).toEqual({ changed: false, was: "UNK" });
+    expect(buffer.equals(before)).toBe(true);
+  });
+
+  it("throws on a lone marker with an unknown bundle type and does not patch", () => {
+    const buffer = singleMarkerBinary("XYZ");
+    const before = Buffer.from(buffer);
+    expect(() => clearBundleType(buffer)).toThrow(/lone marker has an unknown bundle type: XYZ/);
+    expect(buffer.equals(before)).toBe(true);
+  });
+
+  it("throws when the lone marker has no 3-letter suffix", () => {
+    const buffer = Buffer.concat([filler(64, 1), Buffer.from(`${PREFIX}D1B`, "latin1")]);
+    expect(() => clearBundleType(buffer)).toThrow(/marker 1 has no 3-letter suffix/);
   });
 });
 
@@ -137,7 +181,7 @@ describe("clear-bundle-type CLI", () => {
     const run = spawnSync(process.execPath, [SCRIPT, path], { encoding: "utf8" });
 
     expect(run.status).toBe(1);
-    expect(run.stderr).toContain("expected 6 bundle type markers");
+    expect(run.stderr).toContain("expected 1 or 6 bundle type markers");
     expect(readFileSync(path).equals(original)).toBe(true);
   });
 });

@@ -66,7 +66,7 @@ source "$CREDENTIALS"
 [[ -n "$MAIBUK_ANDROID_KEYSTORE_PASSWORD" ]] || fail "keystore password is empty"
 
 rm -rf "$JNI_LIBS_DIR"
-pnpm tauri android build --apk true --aab false --split-per-abi --target aarch64 x86_64
+pnpm tauri android build --apk --split-per-abi --target aarch64 x86_64
 
 SIGNED_APKS=()
 for pair in "${FLAVOR_ABIS[@]}"; do

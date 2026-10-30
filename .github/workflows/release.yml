@@ -195,6 +195,17 @@ jobs:
             lld \
             libappindicator3-dev
 
+      # Tauri 2.12's NSIS template includes Win/RestartManager.nsh, which
+      # Ubuntu's nsis 3.08 does not ship. Take it from the NSIS 3.13 zip Tauri
+      # itself pins (same URL and SHA1 as tauri-bundler's NSIS_URL/NSIS_SHA1).
+      - name: Add the NSIS headers Tauri's installer needs
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/nsis.zip" \
+            https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip
+          echo "db14f8af2ea346b786c6ae19343f61aaf5e09b8e  $RUNNER_TEMP/nsis.zip" | sha1sum -c -
+          unzip -q -j "$RUNNER_TEMP/nsis.zip" nsis-3.13/Include/Win/RestartManager.nsh -d "$RUNNER_TEMP"
+          sudo install -m 644 "$RUNNER_TEMP/RestartManager.nsh" /usr/share/nsis/Include/Win/RestartManager.nsh
+
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:

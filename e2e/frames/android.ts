@@ -244,7 +244,7 @@ export async function attachWebView(device: AndroidDevice): Promise<AndroidSessi
   } catch {
     await pw.close();
     throw new PrerequisiteMissing(
-      `no debuggable WebView in ${ANDROID_PACKAGE}: install a debug build (pnpm tauri android build --debug --apk true)`
+      `no debuggable WebView in ${ANDROID_PACKAGE}: install a debug build (pnpm tauri android build --debug --apk)`
     );
   }
   const page = await webView.page();
