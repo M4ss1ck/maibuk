@@ -200,6 +200,7 @@ afterEach(async () => {
   await awaitSearchIndexRebuild();
   resetSearchIndexForTests();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("Library Search index write hooks", () => {
@@ -783,6 +784,11 @@ describe("Library Search rebuild without FTS triggers (#639)", () => {
   });
 
   it("restores the triggers and the index after a mid-way failure", async () => {
+    // Ranking breaks ties on `updated_at` in whole seconds, and the rebuild
+    // restamps every row with its own time. With a running clock the result
+    // order depended on whether the test crossed a second boundary.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-30T04:00:00Z"));
     const book = await createBookRow({ title: "Midway Novel", authorName: "Author" }, "local");
     await seedChapter(book.id, "<p>alpha midway omega</p>");
     await createNoteRow({ title: "Midway note", content: "<p>midway note body</p>" }, "local");
