@@ -65,7 +65,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFGQUFDMEFGRUJGNEE3QzMKUldURHAvVHJyOENxcjRyejlkYUFSV3B3UDFXOFlHZzFwSmlINDhnZkpweFMzK296ekI1OHR3ZVIK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNCNTg1RTE1NDk1MTU0MTYKUldRV1ZGRkpGVjVZTzNITWNrUHdYSXhXTDZseWdWaEhhMFNCWkNuWWtaNTJXZ3pEVlFiQ2FGcFoK",
       "endpoints": ["https://github.com/M4ss1ck/maibuk/releases/latest/download/latest.json"],
       "windows": { "installMode": "passive" }
     },
