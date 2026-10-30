@@ -22,6 +22,17 @@ function job(name: string): string {
   return next < 0 ? release.slice(start) : release.slice(start, start + 1 + next);
 }
 
+/** The job's tauri-action step, comment lines removed: only that step's env signs the build. */
+function tauriActionStep(name: string): string {
+  const steps = job(name).split(/\n(?= {6}- )/);
+  const step = steps.find((text) => /\n\s+uses: tauri-apps\/tauri-action@/.test(text));
+  expect(step, `${name} has no tauri-action step`).toBeDefined();
+  return (step ?? "")
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("#"))
+    .join("\n");
+}
+
 describe("Update release config", () => {
   it("carries a minisign public key and the latest-Release feed", () => {
     const { pubkey, endpoints } = tauriConf.plugins.updater;
@@ -38,9 +49,11 @@ describe("Update release config", () => {
   });
 
   it.each(["build-linux", "build-windows"])("%s signs with the updater secrets", (name) => {
-    const text = job(name);
-    for (const name of ["TAURI_SIGNING_PRIVATE_KEY", "TAURI_SIGNING_PRIVATE_KEY_PASSWORD"]) {
-      expect(text).toContain(`${name}: \${{ secrets.${name} }}`);
+    const env = tauriActionStep(name).match(/\n {8}env:\n((?: {10}.*\n)+)/)?.[1] ?? "";
+    for (const secret of ["TAURI_SIGNING_PRIVATE_KEY", "TAURI_SIGNING_PRIVATE_KEY_PASSWORD"]) {
+      expect(env, `${name}'s tauri-action env lacks ${secret}`).toMatch(
+        new RegExp(`^ {10}${secret}: \\$\\{\\{ secrets\\.${secret} \\}\\}$`, "m")
+      );
     }
   });
 
