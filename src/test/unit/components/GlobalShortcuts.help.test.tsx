@@ -125,6 +125,9 @@ describe("GlobalShortcuts", () => {
   });
 
   it("binds every global shortcut under its registry id, so the help lists it", () => {
+    // Update Maibuk is bound only while an Update is possible.
+    useUpdateStore.setState({ bundleType: "appimage", state: { phase: "idle" } });
+    useReleaseStore.setState({ newerReleases: [NEWER] });
     render(<GlobalShortcuts />);
 
     const ids = latestConfigs()
@@ -159,26 +162,23 @@ describe("GlobalShortcuts", () => {
   });
 
   describe("Update Maibuk Command", () => {
-    const find = () =>
-      latestConfigs().find((c) => c.id === "global.updateMaibuk") as
-        | (ShortcutConfig & { enabled?: boolean })
-        | undefined;
+    const find = () => latestConfigs().find((c) => c.id === "global.updateMaibuk");
 
     beforeEach(() => {
       useReleaseStore.setState({ newerReleases: [], isNotesOpen: false });
       useUpdateStore.setState({ bundleType: "unknown", state: { phase: "idle" } });
     });
 
-    it("is off when the install cannot Update or no newer Release exists", () => {
+    it("is not offered when the install cannot Update", () => {
       useReleaseStore.setState({ newerReleases: [NEWER] });
       render(<GlobalShortcuts />);
-      expect(find()?.enabled).toBe(false);
+      expect(find()).toBeUndefined();
     });
 
-    it("is off with an Update-capable install and no newer Release", () => {
+    it("is not offered with an Update-capable install and no newer Release", () => {
       useUpdateStore.setState({ bundleType: "appimage" });
       render(<GlobalShortcuts />);
-      expect(find()?.enabled).toBe(false);
+      expect(find()).toBeUndefined();
     });
 
     it("starts the Update and opens What's new when possible", async () => {
@@ -186,7 +186,7 @@ describe("GlobalShortcuts", () => {
       useUpdateStore.setState({ bundleType: "appimage", start });
       useReleaseStore.setState({ newerReleases: [NEWER] });
       render(<GlobalShortcuts />);
-      expect(find()?.enabled).toBe(true);
+      expect(find()).toBeDefined();
       await act(async () => find()?.onTrigger());
       expect(start).toHaveBeenCalledWith("99.0.0");
       expect(useReleaseStore.getState().isNotesOpen).toBe(true);

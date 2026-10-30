@@ -205,18 +205,23 @@ export function GlobalShortcuts() {
       id: "global.openReleaseNotes",
       onTrigger: () => useReleaseStore.getState().openNotes(),
     },
-    {
-      id: "global.updateMaibuk",
-      enabled: updatePossible,
-      onTrigger: () => {
-        const { state, start } = useUpdateStore.getState();
-        if (canStartUpdate(state)) {
-          const newest = useReleaseStore.getState().newerReleases[0];
-          if (newest) void start(newest.number);
-        }
-        useReleaseStore.getState().openNotes();
-      },
-    },
+    // Registered only when an Update is possible, so the Command Palette
+    // hides it rather than listing it disabled (#661).
+    ...(updatePossible
+      ? [
+          {
+            id: "global.updateMaibuk" as const,
+            onTrigger: () => {
+              const { state, start } = useUpdateStore.getState();
+              if (canStartUpdate(state)) {
+                const newest = useReleaseStore.getState().newerReleases[0];
+                if (newest) void start(newest.number);
+              }
+              useReleaseStore.getState().openNotes();
+            },
+          },
+        ]
+      : []),
     {
       id: "global.openPluginsSettings",
       onTrigger: () => {

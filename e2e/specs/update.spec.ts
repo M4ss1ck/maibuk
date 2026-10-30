@@ -128,8 +128,14 @@ test.describe("Update @wf:shell-update", () => {
       dialog(page).getByText(`${RELEASE} is downloaded. Restart Maibuk to install it.`)
     ).toBeVisible();
     await expect(inDialog(page, "Restart to update")).toBeVisible();
-    await expect(badge(page)).toContainText("Restart");
     await capture(page, "update-downloaded-windows", { around: [dialog(page)] });
+
+    // Closed, the badge reads as ready to restart; Enter on it reopens What's new.
+    await page.keyboard.press("Escape");
+    await expect(badge(page)).toBeFocused();
+    await expect(badge(page)).toContainText("Restart");
+    await page.keyboard.press("Enter");
+    await expect(dialog(page)).toBeVisible();
 
     await press(page, inDialog(page, "Later"));
     await expect(dialog(page)).toBeHidden();
