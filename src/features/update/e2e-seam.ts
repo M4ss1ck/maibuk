@@ -44,7 +44,6 @@ async function arm(script: UpdateSeamScript): Promise<void> {
       onProgress({ kind: "finished" });
       if (script.failure) throw new UpdateError(script.failure);
     },
-    restart: async () => {},
   });
   useReleaseStore.getState().setNewerReleases([
     {

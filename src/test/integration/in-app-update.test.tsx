@@ -63,7 +63,6 @@ function script(options: Script = {}) {
       await options.gate;
       if (options.failure) throw new UpdateError(options.failure);
     },
-    restart: async () => {},
   };
   fake.current = adapter;
   return calls;

@@ -101,8 +101,6 @@ export interface UpdaterAdapter {
   check(): Promise<{ version: string } | null>;
   /** Download what `check()` found and install it. Rejects with UpdateError. */
   downloadAndInstall(onProgress: (event: UpdateProgressEvent) => void): Promise<void>;
-  /** Start the installed Release in place of this process. */
-  restart(): Promise<void>;
 }
 
 export interface ClipboardAdapter {

@@ -10,5 +10,4 @@ export const webUpdater: UpdaterAdapter = {
     return null;
   },
   async downloadAndInstall() {},
-  async restart() {},
 };
