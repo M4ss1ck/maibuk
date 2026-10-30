@@ -45,9 +45,15 @@ export function UpdateFooter({ release }: { release: ReleaseNotes }) {
     <div className="flex w-full flex-col gap-3">
       {state.phase === "downloading" && (
         <div className="space-y-1">
-          <p className="text-sm text-foreground">
-            {t("update.downloading", { release: release.number })}
-          </p>
+          <div className="flex items-baseline justify-between gap-2 text-sm text-foreground">
+            <p>{t("update.downloading", { release: release.number })}</p>
+            {/* Visible percent; the status line below announces it in 25% steps. */}
+            {percent !== null && (
+              <span aria-hidden="true" className="tabular-nums text-muted-foreground">
+                {t("update.badgeProgress", { percent: Math.floor(percent) })}
+              </span>
+            )}
+          </div>
           <progress
             className="progress-update"
             aria-label={t("update.progressLabel")}

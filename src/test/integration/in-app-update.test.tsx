@@ -122,11 +122,21 @@ describe("Update flow", () => {
     const bar = await within(dialog).findByRole("progressbar", { name: "Update download" });
     expect(bar).toHaveAttribute("value", "25");
     expect(within(dialog).getByRole("status")).toHaveTextContent("25% downloaded");
+    // The footer shows the percent beside the bar, not only on the Release's chip.
+    expect(within(bar.parentElement as HTMLElement).getByText("25%")).toBeVisible();
     // The badge shows the same progress while the dialog is closed.
     act(() => useReleaseStore.getState().closeNotes());
     expect(await screen.findByRole("button", { name: /^Maibuk /, hidden: true })).toHaveTextContent(
       "25%"
     );
+    // Clicking the badge mid-download reopens What's new on the live progress.
+    await user.click(screen.getByRole("button", { name: /^Maibuk /, hidden: true }));
+    const live = screen.getByRole("dialog", { name: i18n.t("releases.title") });
+    expect(within(live).getByRole("progressbar", { name: "Update download" })).toHaveAttribute(
+      "value",
+      "25"
+    );
+    act(() => useReleaseStore.getState().closeNotes());
 
     await act(async () => finish());
     await user.click(screen.getByRole("button", { name: /^Maibuk /, hidden: true }));

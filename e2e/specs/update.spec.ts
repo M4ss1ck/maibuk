@@ -38,6 +38,8 @@ test.describe("Update @wf:shell-update", () => {
   test("Update by keyboard shows progress, then Restart now / Later", async ({ page }) => {
     await arm(page);
     await openWhatsNew(page);
+    await expect(inDialog(page, `Update to ${RELEASE}`)).toBeVisible();
+    await capture(page, "update-offer", { around: [dialog(page)] });
 
     await press(page, inDialog(page, `Update to ${RELEASE}`));
 
@@ -92,6 +94,7 @@ test.describe("Update @wf:shell-update", () => {
     await press(page, inDialog(page, `Update to ${RELEASE}`));
 
     await expect(dialog(page).getByRole("alert")).toContainText("signature check");
+    await capture(page, "update-failed", { around: [dialog(page)] });
     await expect(inDialog(page, "Retry")).toBeVisible();
     await expect(inDialog(page, "Download page")).toBeVisible();
   });
