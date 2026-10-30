@@ -65,6 +65,23 @@ describe("Update release config", () => {
     expect(read("scripts/build-arch-package.sh")).toMatch(/clear-bundle-type\.mjs.*\/maibuk/);
   });
 
+  it("gives the Windows cross-build the NSIS header Tauri's installer includes", () => {
+    // Ubuntu's nsis 3.08 lacks Win/RestartManager.nsh, which Tauri 2.12's
+    // template includes; makensis aborts without it.
+    const windows = job("build-windows");
+    const install = windows.indexOf("Win/RestartManager.nsh");
+    expect(install, "build-windows does not install RestartManager.nsh").toBeGreaterThan(-1);
+    expect(install).toBeLessThan(windows.indexOf("uses: tauri-apps/tauri-action@"));
+    expect(windows).toContain("nsis-3.13/nsis-3.13.zip");
+    expect(windows).toMatch(/sha1sum -c/);
+  });
+
+  it("passes the Android bundle flags as plain switches (tauri-cli 2.12)", () => {
+    const build = read("scripts/build-android-release.sh");
+    expect(build).toMatch(/^pnpm tauri android build --apk --split-per-abi /m);
+    expect(build).not.toMatch(/--(apk|aab) (true|false)/);
+  });
+
   it("grants the updater only where the plugin is built (Linux and Windows)", () => {
     const updater = JSON.parse(read("src-tauri/capabilities/updater.json"));
     expect(updater.platforms).toEqual(["linux", "windows"]);

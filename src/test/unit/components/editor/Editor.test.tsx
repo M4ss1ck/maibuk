@@ -770,6 +770,32 @@ describe("Editor", () => {
     expect(focusCalls.some((args) => args.length === 0)).toBe(false);
   });
 
+  it("cancels the code block's copied-reset timer when the editor unmounts", async () => {
+    // A timer left pending fires setState after the test environment is torn
+    // down, and Vitest fails the run with "window is not defined".
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+    const { unmount } = render(
+      <Editor content={"<pre><code>copy me</code></pre>"} onUpdate={vi.fn()} />
+    );
+    const copyButton = await screen.findByRole("button", { name: "editor.copyCode" });
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await userEvent.click(copyButton);
+      await screen.findByRole("button", { name: "editor.copied" });
+      unmount();
+      // TipTap defers its own editor destroy by 1ms; let that one run.
+      vi.advanceTimersByTime(1);
+
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("updates a code block language from the hover control", async () => {
     const onUpdate = vi.fn();
 

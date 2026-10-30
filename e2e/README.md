@@ -380,7 +380,7 @@ judges:
 - `android`: `dumpsys gfxinfo com.massick.maibuk framestats` (IntendedVsync to
   FrameCompleted, flagged rows dropped), with the refresh period from
   SurfaceFlinger. The lane drives the app's WebView over CDP, so it needs a
-  debug build (`pnpm tauri android build --debug --apk true`), and one device
+  debug build (`pnpm tauri android build --debug --apk`), and one device
   or `ANDROID_SERIAL`. It swaps a seed Library into the install before each
   scenario, so it only measures a test install: the first time, the Library
   there must hold no Books, Chapters, Notes, or Canvases, and the lane then
