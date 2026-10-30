@@ -18,6 +18,13 @@ export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
     setLanguageDraft(language);
   }, [language]);
 
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    },
+    []
+  );
+
   useEffect(() => {
     if (!isEditingLanguage) return;
     languageInputRef.current?.focus();
