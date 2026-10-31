@@ -8,6 +8,7 @@ import {
   stat,
 } from "@tauri-apps/plugin-fs";
 import { appConfigDir, join } from "@tauri-apps/api/path";
+import { invoke } from "@tauri-apps/api/core";
 import type { DirEntry } from "@tauri-apps/plugin-fs";
 import type {
   BackupAdapter,
@@ -148,6 +149,9 @@ class TauriBackupAdapter implements BackupAdapter {
 
     const meta = await buildMetaFromSql(sqlPath, safeFilename, sql, sizeBytes);
     await writeTextFile(metaPath(sqlPath), JSON.stringify(meta));
+    // The tray's Backups line (#668) re-measures now rather than within the
+    // minute. A build without a tray has no such command; the Backup stands.
+    void invoke("refresh_tray_storage").catch(() => {});
   }
 
   async listBackups(): Promise<BackupEntry[]> {

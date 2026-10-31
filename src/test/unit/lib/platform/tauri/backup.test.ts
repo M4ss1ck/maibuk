@@ -9,6 +9,7 @@ const mockMkdir = vi.hoisted(() => vi.fn());
 const mockStat = vi.hoisted(() => vi.fn());
 const mockAppConfigDir = vi.hoisted(() => vi.fn());
 const mockJoin = vi.hoisted(() => vi.fn());
+const mockInvoke = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
   readTextFile: mockReadTextFile,
@@ -24,6 +25,8 @@ vi.mock("@tauri-apps/api/path", () => ({
   appConfigDir: mockAppConfigDir,
   join: mockJoin,
 }));
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
 
 const { createTauriBackup, resolveTauriBackupDir } = await import("@/lib/platform/tauri/backup");
 
@@ -42,6 +45,28 @@ describe("TauriBackupAdapter", () => {
     mockWriteTextFile.mockResolvedValue(undefined);
     mockWriteFile.mockResolvedValue(undefined);
     mockStat.mockResolvedValue({ size: 12, mtime: "2026-03-15T14:30:00.000Z" });
+    mockInvoke.mockResolvedValue(undefined);
+  });
+
+  it("re-measures the tray's storage once a Backup is written", async () => {
+    const adapter = await createTauriBackup("/safe/backups");
+
+    await adapter.saveBackup("maibuk-backup-manual-2026-03-15T14-30-00.sql", new Uint8Array(3));
+
+    expect(mockInvoke).toHaveBeenCalledWith("refresh_tray_storage");
+  });
+
+  it("keeps a Backup when the tray cannot be refreshed, and skips the refresh when the write fails", async () => {
+    const adapter = await createTauriBackup("/safe/backups");
+    const filename = "maibuk-backup-manual-2026-03-15T14-30-00.sql";
+    mockInvoke.mockRejectedValue(new Error("command refresh_tray_storage not found"));
+
+    await expect(adapter.saveBackup(filename, new Uint8Array(3))).resolves.toBeUndefined();
+
+    mockInvoke.mockClear();
+    mockWriteTextFile.mockRejectedValue(new Error("disk full"));
+    await expect(adapter.saveBackup(filename, new Uint8Array(3))).rejects.toThrow("disk full");
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("joins the default backup directory safely when appConfigDir has no trailing slash", async () => {

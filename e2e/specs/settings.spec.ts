@@ -91,6 +91,26 @@ test.describe("Settings theme @wf:settings-theme", () => {
   });
 });
 
+test.describe("Settings tray Resource Usage @wf:settings-tray-resource-usage", () => {
+  test("the web build offers no Resource Usage toggle in Settings or the Command Palette", async ({
+    page,
+  }) => {
+    const label = "Show resource usage in tray";
+    await openSettings(page);
+    await expect(page.getByRole("switch", { name: label })).toHaveCount(0);
+    await expect(page.getByText(label, { exact: true })).toHaveCount(0);
+
+    await page.keyboard.press("F1");
+    const palette = page.getByRole("dialog", { name: "Command palette" });
+    await expect(palette).toBeVisible();
+    await page.keyboard.type(label);
+    // The empty state proves the query ran before the absence is asserted.
+    await expect(palette.getByText("No results", { exact: true })).toBeVisible();
+    await expect(palette.getByRole("option", { name: label, exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+  });
+});
+
 test.describe("Settings primary colour @wf:settings-primary-color", () => {
   test("keyboard changes the accent and persists it", async ({ page }) => {
     await openSettings(page);

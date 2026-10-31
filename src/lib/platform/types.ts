@@ -308,3 +308,37 @@ export type {
   PluginFolder,
   PluginFolderFile,
 } from "@/features/plugins/types";
+
+/**
+ * The tray menu's lines in the app language. Each usage line is a template
+ * with a `{value}` placeholder that Rust fills with the number it formats.
+ */
+export interface TrayLabels {
+  show: string;
+  quit: string;
+  cpu: string;
+  ram: string;
+  storage: string;
+  app: string;
+  data: string;
+  backups: string;
+  plugins: string;
+  /** Shown in place of a number that could not be read. */
+  unknown: string;
+  decimalSeparator: string;
+}
+
+/** CPU, RAM, and the storage total, each a whole line worded like the tray. */
+export interface ResourceUsageSummary {
+  cpu: string;
+  ram: string;
+  storage: string;
+}
+
+/** What `configure_tray` sends to Rust (src-tauri/src/resource_usage/mod.rs). */
+export interface TrayConfig {
+  labels: TrayLabels;
+  resourceUsage: boolean;
+  /** The resolved Backup Directory, so the Backups line follows a custom one. */
+  backupDirectory: string | null;
+}

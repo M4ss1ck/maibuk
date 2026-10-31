@@ -2190,6 +2190,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "settings-tray-resource-usage",
+    area: "settings",
+    workflow:
+      "Resource Usage is desktop-only (#668): on the web build neither Settings nor the Command Palette (F1, type the label) offers Show resource usage in tray; asserts: no switch, no palette option. The desktop toggle is proven by WindowSection.test.tsx and the tray lines by the Rust resource_usage tests, since the tray is outside any webview",
+    edges: [],
+    terms: ["Resource Usage"],
+    shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "settings-primary-color",
     area: "settings",
     workflow: "Primary color picker by keyboard; asserts: CSS var value; persists: yes",

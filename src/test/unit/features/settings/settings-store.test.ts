@@ -318,6 +318,14 @@ describe("useSettingsStore", () => {
     expect(useSettingsStore.getState().closeToTray).toBe(true);
   });
 
+  it("keeps Resource Usage out of the tray until the author turns it on", () => {
+    expect(useSettingsStore.getState().trayResourceUsage).toBe(false);
+    useSettingsStore.getState().setTrayResourceUsage(true);
+    expect(useSettingsStore.getState().trayResourceUsage).toBe(true);
+    useSettingsStore.getState().resetSettings();
+    expect(useSettingsStore.getState().trayResourceUsage).toBe(false);
+  });
+
   it("setLaunchOnStartup updates state and calls the platform helper", () => {
     applyLaunchOnStartup.mockClear();
     useSettingsStore.getState().setLaunchOnStartup(true);

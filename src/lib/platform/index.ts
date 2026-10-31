@@ -11,6 +11,8 @@ import type {
   PluginDirectoryAdapter,
   PluginFetchAdapter,
   UpdaterAdapter,
+  TrayConfig,
+  ResourceUsageSummary,
 } from "@/lib/platform/types";
 
 import type { DictationPlatform, ModelFiles, RecognizerHost } from "@/features/dictation/types";
@@ -53,6 +55,9 @@ export type {
   BundleType,
   UpdateFailureReason,
   UpdateProgressEvent,
+  TrayConfig,
+  TrayLabels,
+  ResourceUsageSummary,
 } from "@/lib/platform/types";
 export { UpdateError } from "@/lib/platform/types";
 
@@ -132,6 +137,43 @@ export async function setTraySyncing(syncing: boolean): Promise<void> {
   }
   const { invoke } = await import("@tauri-apps/api/core");
   await invoke("set_tray_syncing", { syncing });
+}
+
+// The tray menu's labels and Resource Usage (#668). Settings live in the
+// webview, so Rust learns them only through this call. No-op on web; on a
+// desktop build without a tray the command does not exist and the call
+// rejects, which the caller ignores.
+export async function configureTray(config: TrayConfig): Promise<void> {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("configure_tray", { config });
+}
+
+// The Resource Usage totals Rust last measured, or null while it is off or
+// outside the desktop app.
+export async function getResourceUsageSummary(): Promise<ResourceUsageSummary | null> {
+  if (!isDesktopRuntime()) {
+    return null;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<ResourceUsageSummary | null>("resource_usage_summary");
+}
+
+// Calls `listener` with each new set of totals Rust pushes. Resolves the
+// unlisten; never fires outside the desktop app.
+export async function onResourceUsageSummary(
+  listener: (summary: ResourceUsageSummary) => void
+): Promise<() => void> {
+  if (!isDesktopRuntime()) {
+    return () => {};
+  }
+  const { listen } = await import("@tauri-apps/api/event");
+  // SUMMARY_EVENT in src-tauri/src/resource_usage/mod.rs.
+  return listen<ResourceUsageSummary>("resource-usage://changed", (event) =>
+    listener(event.payload)
+  );
 }
 
 // Tell the desktop shell the color the page paints, so the next launch opens

@@ -1,35 +1,37 @@
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 use tauri::{
-    menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle,
+    AppHandle, Manager,
 };
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
+use crate::resource_usage::{ResourceUsage, QUIT_ID, SHOW_ID};
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 use crate::window_restore::show_main_window;
 
+/// Builds the tray with the labels and Resource Usage the frontend last sent
+/// through `configure_tray`, or English with no usage lines before that.
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "Show Maibuk", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let usage = app.state::<ResourceUsage>();
+    let menu = usage.menu(app, usage.is_running())?;
 
     TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "show" => show_main_window(app),
-            "quit" => {
+            SHOW_ID => show_main_window(app),
+            QUIT_ID => {
                 // Quit bypasses the window close event the plugin saves on;
                 // persist the latest window state explicitly first.
                 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
-                let _ = app.save_window_state(
-                    StateFlags::all().difference(StateFlags::VISIBLE),
-                );
+                let _ = app.save_window_state(StateFlags::all().difference(StateFlags::VISIBLE));
                 app.exit(0);
             }
-            _ => {}
+            id => {
+                app.state::<ResourceUsage>().open(app, id);
+            }
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {

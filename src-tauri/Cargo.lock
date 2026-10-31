@@ -2968,6 +2968,7 @@ dependencies = [
  "tokio",
  "ureq",
  "windows-native-keyring-store",
+ "windows-sys 0.61.2",
  "zip 9.0.1",
 ]
 

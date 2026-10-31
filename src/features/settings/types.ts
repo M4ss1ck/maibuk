@@ -160,6 +160,8 @@ export interface Settings {
   alwaysOnTop: boolean;
   launchOnStartup: boolean;
   closeToTray: boolean;
+  // Resource Usage in the tray (#668): desktop only, off by default.
+  trayResourceUsage: boolean;
   language: Language;
   spellCheckEnabled: boolean;
   customDictionary: string[];

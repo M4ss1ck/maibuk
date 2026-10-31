@@ -16,5 +16,12 @@ export const WINDOW_SECTION = {
       descriptionKey: "settings.closeToTrayDescription",
       platforms: ["desktop"],
     },
+    {
+      id: "trayResourceUsage",
+      labelKey: "settings.trayResourceUsage",
+      descriptionKey: "settings.trayResourceUsageDescription",
+      keywordsKey: "settings.keywords.trayResourceUsage",
+      platforms: ["desktop"],
+    },
   ],
 } as const satisfies SettingsSectionDef;

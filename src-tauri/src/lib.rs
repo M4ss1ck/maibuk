@@ -3,6 +3,8 @@ mod backup;
 mod dictation;
 mod library_db;
 mod plugins;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod resource_usage;
 mod tray;
 mod tray_host;
 mod trusted;
@@ -80,6 +82,12 @@ pub fn run() {
         .manage(dictation::commands::DictationState::default())
         .invoke_handler(tauri::generate_handler![
             tray::set_tray_syncing,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            resource_usage::configure_tray,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            resource_usage::refresh_tray_storage,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            resource_usage::resource_usage_summary,
             #[cfg(desktop)]
             window_background::set_window_background,
             android_exit::exit_app,
@@ -206,6 +214,7 @@ pub fn run() {
 
                 #[cfg(any(target_os = "linux", target_os = "windows"))]
                 {
+                    app.manage(resource_usage::ResourceUsage::default());
                     let handle = app.handle().clone();
                     tray_host::when_ready(move || {
                         if let Err(error) = tray::setup_tray(&handle) {

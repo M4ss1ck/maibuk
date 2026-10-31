@@ -417,7 +417,10 @@ pub async fn add_plugin_from_zip<R: Runtime>(
     options.read(true);
     let file = app.fs().open(picked, options).map_err(|e| e.to_string())?;
     let root = directory::ensure(&app)?;
-    Ok(Some(install_reader(&root, file)?))
+    let installed = install_reader(&root, file)?;
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    crate::resource_usage::refresh_storage(&app);
+    Ok(Some(installed))
 }
 
 /// Open the native folder picker for a Plugin folder and copy it in. Resolves
@@ -441,7 +444,10 @@ pub async fn add_plugin_from_folder<R: Runtime>(
     };
     let source = picked.into_path().map_err(|e| e.to_string())?;
     let root = directory::ensure(&app)?;
-    Ok(Some(install_folder(&source, &root)?))
+    let installed = install_folder(&source, &root)?;
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    crate::resource_usage::refresh_storage(&app);
+    Ok(Some(installed))
 }
 
 /// Removes a Plugin folder and every file in it. Resolves to `true` when the
