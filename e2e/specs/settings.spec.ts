@@ -60,6 +60,27 @@ test.describe("Settings theme @wf:settings-theme", () => {
     await expect(page.locator("html")).not.toHaveClass(/dark/);
   });
 
+  // Issue #671: the browser draws scrollbars and native controls from
+  // color-scheme, so it must follow the theme, live and without a reload.
+  test("scrollbars and native controls follow the theme live", async ({ page }) => {
+    await openSettings(page);
+    await capture(page, "settings-scrollbars");
+    const theme = settingsMain(page).getByRole("group", { name: "Theme" });
+    const button = (name: string) => theme.getByRole("button", { name, exact: true });
+    const html = page.locator("html");
+
+    await expect(html).toHaveCSS("color-scheme", "light");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(html).toHaveCSS("color-scheme", "dark");
+
+    await tabTo(page, button("Light"));
+    await page.keyboard.press("Enter");
+    await expect(html).toHaveCSS("color-scheme", "light");
+    await tabTo(page, button("Dark"));
+    await page.keyboard.press("Enter");
+    await expect(html).toHaveCSS("color-scheme", "dark");
+  });
+
   test("native-only Window and Always-on-top settings are absent on web", async ({ page }) => {
     await openSettings(page);
     for (const name of ["Launch on startup", "Close to tray", "Always on top", "Window"]) {

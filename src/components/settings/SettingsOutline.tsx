@@ -190,7 +190,7 @@ export function SettingsOutline({ present, selection, onJump }: SettingsOutlineP
         // inserting a scrollbar must not move the entries sideways.
         <div
           ref={scrollerRef}
-          className="relative mt-4 min-h-0 overflow-y-scroll scrollbar-themed border-l border-border"
+          className="relative mt-4 min-h-0 overflow-y-scroll border-l border-border"
         >
           <div
             ref={markerRef}

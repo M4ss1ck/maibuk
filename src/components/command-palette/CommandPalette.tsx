@@ -811,7 +811,7 @@ function OpenCommandPalette() {
           <Virtualizer layout={ListLayout} layoutOptions={layoutOptions}>
             <ListBox
               aria-label={t("commandPalette.resultsLabel")}
-              className="scrollbar-themed max-h-[min(60dvh,26rem)] min-h-0 pointer-coarse:max-h-[70dvh] overflow-y-auto outline-none"
+              className="max-h-[min(60dvh,26rem)] min-h-0 pointer-coarse:max-h-[70dvh] overflow-y-auto outline-none"
             >
               {renderedSections}
             </ListBox>
