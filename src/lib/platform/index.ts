@@ -12,6 +12,7 @@ import type {
   PluginFetchAdapter,
   UpdaterAdapter,
   TrayConfig,
+  ResourceUsageSummary,
 } from "@/lib/platform/types";
 
 import type { DictationPlatform, ModelFiles, RecognizerHost } from "@/features/dictation/types";
@@ -56,6 +57,7 @@ export type {
   UpdateProgressEvent,
   TrayConfig,
   TrayLabels,
+  ResourceUsageSummary,
 } from "@/lib/platform/types";
 export { UpdateError } from "@/lib/platform/types";
 
@@ -156,6 +158,30 @@ export async function refreshTrayStorage(): Promise<void> {
   }
   const { invoke } = await import("@tauri-apps/api/core");
   await invoke("refresh_tray_storage");
+}
+
+// The Resource Usage totals Rust last measured, or null while it is off or
+// outside the desktop app.
+export async function getResourceUsageSummary(): Promise<ResourceUsageSummary | null> {
+  if (!isDesktopRuntime()) {
+    return null;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<ResourceUsageSummary | null>("resource_usage_summary");
+}
+
+// Calls `listener` with each new set of totals Rust pushes. Resolves the
+// unlisten; never fires outside the desktop app.
+export async function onResourceUsageSummary(
+  listener: (summary: ResourceUsageSummary) => void
+): Promise<() => void> {
+  if (!isDesktopRuntime()) {
+    return () => {};
+  }
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<ResourceUsageSummary>("resource-usage://changed", (event) =>
+    listener(event.payload)
+  );
 }
 
 // Tell the desktop shell the color the page paints, so the next launch opens

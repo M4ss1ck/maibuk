@@ -328,6 +328,13 @@ export interface TrayLabels {
   decimalSeparator: string;
 }
 
+/** CPU, RAM, and the storage total, each a whole line worded like the tray. */
+export interface ResourceUsageSummary {
+  cpu: string;
+  ram: string;
+  storage: string;
+}
+
 /** What `configure_tray` sends to Rust (src-tauri/src/resource_usage/mod.rs). */
 export interface TrayConfig {
   labels: TrayLabels;

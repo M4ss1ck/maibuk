@@ -19,9 +19,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::{AppHandle, Manager, Runtime, Wry};
+use tauri::{AppHandle, Emitter, Manager, Runtime, Wry};
 
 use format::Labels;
 
@@ -30,6 +30,9 @@ const PROCESS_INTERVAL: Duration = Duration::from_secs(2);
 /// fills well inside a second of the toggle turning on.
 const FIRST_PROCESS_INTERVAL: Duration = Duration::from_millis(500);
 const STORAGE_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Carries a `Summary` to Settings → Window each time the numbers change.
+pub const SUMMARY_EVENT: &str = "resource-usage://changed";
 
 pub const SHOW_ID: &str = "show";
 pub const QUIT_ID: &str = "quit";
@@ -132,8 +135,17 @@ struct Run {
     storage: Arc<Signal>,
 }
 
+/// The three totals Settings shows under the switch, worded like the tray.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Summary {
+    pub cpu: String,
+    pub ram: String,
+    pub storage: String,
+}
+
 #[derive(Default)]
 struct Shared {
+    app: Mutex<Option<AppHandle<Wry>>>,
     labels: Mutex<Labels>,
     backup_directory: Mutex<Option<PathBuf>>,
     values: Mutex<Values>,
@@ -148,6 +160,7 @@ pub struct ResourceUsage(Arc<Shared>);
 
 impl ResourceUsage {
     pub fn configure(&self, app: &AppHandle<Wry>, config: TrayConfig) -> tauri::Result<()> {
+        *self.0.app.lock().unwrap() = Some(app.clone());
         *self.0.labels.lock().unwrap() = config.labels;
         let backup_directory = config
             .backup_directory
@@ -178,6 +191,10 @@ impl ResourceUsage {
         }
         let enabled = run.is_some();
         drop(run);
+        // Settings rewords its line now rather than at the next sample.
+        if let Some(summary) = self.summary() {
+            let _ = app.emit(SUMMARY_EVENT, summary);
+        }
 
         if let Some(tray) = app.tray_by_id("main") {
             tray.set_menu(Some(self.menu(app, enabled)?))?;
@@ -237,6 +254,20 @@ impl ResourceUsage {
 
     pub fn is_running(&self) -> bool {
         self.0.run.lock().unwrap().is_some()
+    }
+
+    /// The current totals, or `None` while Resource Usage is off.
+    pub fn summary(&self) -> Option<Summary> {
+        if !self.is_running() {
+            return None;
+        }
+        let values = *self.0.values.lock().unwrap();
+        let text = texts(&self.0.labels.lock().unwrap(), &values);
+        Some(Summary {
+            cpu: text.cpu,
+            ram: text.ram,
+            storage: text.total,
+        })
     }
 
     /// Re-walk storage now, when the lines are showing.
@@ -322,6 +353,17 @@ impl ResourceUsage {
             *values
         };
         let text = texts(&self.0.labels.lock().unwrap(), &values);
+        let app = self.0.app.lock().unwrap().clone();
+        if let Some(app) = app {
+            let _ = app.emit(
+                SUMMARY_EVENT,
+                Summary {
+                    cpu: text.cpu.clone(),
+                    ram: text.ram.clone(),
+                    storage: text.total.clone(),
+                },
+            );
+        }
         // set_text waits on the main thread, so no lock is held across it.
         let Some(lines) = self.0.lines.lock().unwrap().clone() else {
             return;
@@ -463,6 +505,12 @@ pub async fn configure_tray(
     config: TrayConfig,
 ) -> Result<(), String> {
     state.configure(&app, config).map_err(|e| e.to_string())
+}
+
+/// The totals Settings shows under the switch; `None` while off.
+#[tauri::command]
+pub fn resource_usage_summary(state: tauri::State<'_, ResourceUsage>) -> Option<Summary> {
+    state.summary()
 }
 
 /// Re-walk storage after the frontend wrote a Backup. No-op while off.

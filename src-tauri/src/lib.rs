@@ -86,6 +86,8 @@ pub fn run() {
             resource_usage::configure_tray,
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             resource_usage::refresh_tray_storage,
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            resource_usage::resource_usage_summary,
             #[cfg(desktop)]
             window_background::set_window_background,
             android_exit::exit_app,
