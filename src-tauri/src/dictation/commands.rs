@@ -175,7 +175,10 @@ mod imp {
         })
         .await;
         state.cancels.lock().unwrap().remove(&id);
-        result.map_err(|e| DictationError::new(ErrorCode::DownloadFailed, e.to_string()))?
+        let result =
+            result.map_err(|e| DictationError::new(ErrorCode::DownloadFailed, e.to_string()))?;
+        crate::resource_usage::refresh_storage(&app);
+        result
     }
 
     #[tauri::command]

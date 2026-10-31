@@ -816,6 +816,8 @@
     "launchOnStartupDescription": "Inicia Maibuk en la bandeja del sistema al iniciar sesión, listo para abrirse al instante",
     "closeToTray": "Minimizar a la bandeja",
     "closeToTrayDescription": "Ocultar en la bandeja del sistema en lugar de cerrar la aplicación",
+    "trayResourceUsage": "Mostrar uso de recursos en la bandeja",
+    "trayResourceUsageDescription": "Muestra en el menú de la bandeja del sistema el tiempo de procesador, la memoria y el espacio en disco que usa Maibuk",
     "editor": "Editor",
     "spellCheck": "Corrector ortográfico",
     "spellCheckDescription": "Subraya errores mientras escribes",
@@ -969,6 +971,14 @@
       "promptMarkdownDescription": "Al pegar texto Markdown, preguntar si convertirlo a contenido con formato."
     },
     "keywords": {
+      "trayResourceUsage": [
+        "CPU",
+        "RAM",
+        "memoria",
+        "almacenamiento",
+        "espacio en disco",
+        "procesador"
+      ],
       "theme": ["oscuro", "claro", "modo", "apariencia", "sistema"],
       "primaryColor": ["acento", "color"],
       "appFontSize": ["zoom", "tamaño de texto"],
@@ -2164,6 +2174,18 @@
       "other": "Otros",
       "security": "Seguridad"
     }
+  },
+  "tray": {
+    "show": "Mostrar Maibuk",
+    "quit": "Salir",
+    "cpu": "CPU {{value}}",
+    "ram": "RAM {{value}}",
+    "storage": "Almacenamiento {{value}}",
+    "app": "Aplicación {{value}}",
+    "data": "Datos {{value}}",
+    "backups": "Copias de seguridad {{value}}",
+    "plugins": "Plugins {{value}}",
+    "unknown": "—"
   },
   "update": {
     "action": "Actualizar a {{release}}",

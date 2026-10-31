@@ -11,6 +11,7 @@ import type {
   PluginDirectoryAdapter,
   PluginFetchAdapter,
   UpdaterAdapter,
+  TrayConfig,
 } from "@/lib/platform/types";
 
 import type { DictationPlatform, ModelFiles, RecognizerHost } from "@/features/dictation/types";
@@ -53,6 +54,8 @@ export type {
   BundleType,
   UpdateFailureReason,
   UpdateProgressEvent,
+  TrayConfig,
+  TrayLabels,
 } from "@/lib/platform/types";
 export { UpdateError } from "@/lib/platform/types";
 
@@ -132,6 +135,27 @@ export async function setTraySyncing(syncing: boolean): Promise<void> {
   }
   const { invoke } = await import("@tauri-apps/api/core");
   await invoke("set_tray_syncing", { syncing });
+}
+
+// The tray menu's labels and Resource Usage (#668). Settings live in the
+// webview, so Rust learns them only through this call. No-op on web; on a
+// desktop build without a tray the command does not exist and the call
+// rejects, which the caller ignores.
+export async function configureTray(config: TrayConfig): Promise<void> {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("configure_tray", { config });
+}
+
+// Re-measure the tray's storage lines after a write the tray cannot see.
+export async function refreshTrayStorage(): Promise<void> {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("refresh_tray_storage");
 }
 
 // Tell the desktop shell the color the page paints, so the next launch opens

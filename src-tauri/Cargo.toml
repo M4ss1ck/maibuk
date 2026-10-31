@@ -62,6 +62,14 @@ dbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust", 
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-native-keyring-store = "1"
+# Resource Usage (#668): the process table with each process's private working
+# set, and the machine's CPU times and RAM. Already in the lock via tauri.
+windows-sys = { version = "0.61", features = [
+  "Wdk_System_SystemInformation",
+  "Win32_Foundation",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+] }
 
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 keyring-core = "1"

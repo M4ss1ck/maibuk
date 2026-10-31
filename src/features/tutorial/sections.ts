@@ -221,6 +221,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
     "app metadata, not part of writing; it lives in the What's new dialog, and steps never open dialogs",
   "Download Page":
     "app metadata, not part of writing; a link in the What's new dialog, and steps never open dialogs",
+  "Resource Usage":
+    "desktop-only and off by default; the numbers live in the system tray, outside the app window no step can point at",
   "Sync Base": "internal state a sync compares against; nothing on screen shows it",
   "Version Retention":
     "runs on its own and has no control; the History size readout sits in the panel the History step already shows",

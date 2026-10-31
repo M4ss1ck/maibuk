@@ -587,6 +587,11 @@ The GitHub page of a Release where the author picks an installer by hand; the wa
 _UI_: en "Download page" / es "Página de descarga"
 _Avoid_: download (alone), releases page
 
+**Resource Usage**:
+How much processor time, memory, and disk space Maibuk itself takes on this device, not the whole machine's load. Shown in the tray on desktop when the author turns it on.
+_UI_: en "Show resource usage in tray" / es "Mostrar uso de recursos en la bandeja"
+_Avoid_: stats, metrics (reserved for writing data), system usage
+
 ## Decided, not built
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.

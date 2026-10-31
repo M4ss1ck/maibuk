@@ -33,6 +33,7 @@ import { scheduleDailyBackup } from "@/features/backup/lifecycle";
 import { scheduleVersionStorageUpgrade } from "@/features/versions/upgrade";
 import { installDictationFieldTracker } from "@/features/dictation/field-target";
 import { installTraySyncIndicator } from "@/features/sync/trayIndicator";
+import { installTrayMenu } from "@/lib/window/trayMenu";
 import { installAuthKeepAlive } from "@/features/sync/auth-keep-alive";
 import { installAutoSync } from "@/features/sync/auto-sync";
 import { installReleaseCheck } from "@/features/releases/release-check";
@@ -102,6 +103,7 @@ function App() {
     void installWindowCloseHandler();
     void installAlwaysOnTopReapply();
     installTraySyncIndicator();
+    installTrayMenu();
   }, [embedMode]);
 
   if (embedMode) {

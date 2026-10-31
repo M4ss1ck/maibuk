@@ -91,6 +91,7 @@ interface SettingsStore extends Settings {
   setAlwaysOnTop: (enabled: boolean) => void;
   setLaunchOnStartup: (enabled: boolean) => void;
   setCloseToTray: (enabled: boolean) => void;
+  setTrayResourceUsage: (enabled: boolean) => void;
   setPluginDevelopmentMode: (enabled: boolean) => void;
   /** Returns every setting to its shipped default; Reset settings (#442). */
   resetSettings: () => void;
@@ -183,6 +184,7 @@ const defaultSettings: Settings = {
   alwaysOnTop: false,
   launchOnStartup: false,
   closeToTray: false,
+  trayResourceUsage: false,
   pluginDevelopmentMode: false,
   language: (i18n.language as Language) || "en",
   spellCheckEnabled: true,
@@ -339,6 +341,7 @@ export const useSettingsStore = create<SettingsStore>()(
         });
       },
       setCloseToTray: (closeToTray) => set({ closeToTray }),
+      setTrayResourceUsage: (trayResourceUsage) => set({ trayResourceUsage }),
       setPluginDevelopmentMode: (pluginDevelopmentMode) => set({ pluginDevelopmentMode }),
       // Reset settings (#442, plan decision 7): every setting returns to its
       // shipped default — the toolbar layout included — and the app language

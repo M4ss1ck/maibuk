@@ -594,6 +594,7 @@ describe("Settings page", () => {
 
     expect(screen.queryByText("settings.launchOnStartup")).not.toBeInTheDocument();
     expect(screen.queryByText("settings.closeToTray")).not.toBeInTheDocument();
+    expect(screen.queryByText("settings.trayResourceUsage")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("switch", { name: "settings.toggleAlwaysOnTop" })
     ).not.toBeInTheDocument();

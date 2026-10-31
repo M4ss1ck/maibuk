@@ -816,6 +816,8 @@
     "launchOnStartupDescription": "Start Maibuk in the system tray when you log in, ready to open instantly",
     "closeToTray": "Close to tray",
     "closeToTrayDescription": "Hide to the system tray instead of quitting when you close the window",
+    "trayResourceUsage": "Show resource usage in tray",
+    "trayResourceUsageDescription": "List the processor time, memory, and disk space Maibuk itself uses in the system tray menu",
     "editor": "Editor",
     "spellCheck": "Spell check",
     "spellCheckDescription": "Underline misspellings as you type",
@@ -969,6 +971,7 @@
       "promptMarkdownDescription": "When you paste Markdown text, ask whether to convert it to formatted content."
     },
     "keywords": {
+      "trayResourceUsage": ["CPU", "RAM", "memory", "storage", "disk space", "processor"],
       "theme": ["dark", "light", "mode", "appearance", "system"],
       "primaryColor": ["accent", "color"],
       "appFontSize": ["zoom", "text size"],
@@ -2159,6 +2162,18 @@
       "other": "Other",
       "security": "Security"
     }
+  },
+  "tray": {
+    "show": "Show Maibuk",
+    "quit": "Quit",
+    "cpu": "CPU {{value}}",
+    "ram": "RAM {{value}}",
+    "storage": "Storage {{value}}",
+    "app": "App {{value}}",
+    "data": "Data {{value}}",
+    "backups": "Backups {{value}}",
+    "plugins": "Plugins {{value}}",
+    "unknown": "—"
   },
   "update": {
     "action": "Update to {{release}}",

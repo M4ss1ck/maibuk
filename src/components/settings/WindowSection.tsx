@@ -7,7 +7,14 @@ import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/Setti
 
 export function WindowSection() {
   const { t } = useTranslation();
-  const { launchOnStartup, closeToTray, setLaunchOnStartup, setCloseToTray } = useSettings();
+  const {
+    launchOnStartup,
+    closeToTray,
+    trayResourceUsage,
+    setLaunchOnStartup,
+    setCloseToTray,
+    setTrayResourceUsage,
+  } = useSettings();
 
   if (!IS_DESKTOP || isMac()) return null;
 
@@ -27,6 +34,14 @@ export function WindowSection() {
 
       <SettingRow id="closeToTray" className={SETTINGS_ROW_CLASS}>
         <Switch checked={closeToTray} onChange={setCloseToTray} label={t("settings.closeToTray")} />
+      </SettingRow>
+
+      <SettingRow id="trayResourceUsage" className={SETTINGS_ROW_CLASS}>
+        <Switch
+          checked={trayResourceUsage}
+          onChange={setTrayResourceUsage}
+          label={t("settings.trayResourceUsage")}
+        />
       </SettingRow>
     </SettingsSection>
   );
