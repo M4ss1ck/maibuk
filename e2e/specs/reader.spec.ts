@@ -58,14 +58,28 @@ async function openReader(page: Page): Promise<void> {
 async function goHome(page: Page): Promise<void> {
   // The Primary navigation is a roving-focus listbox: only its active option is
   // in the tab order, so move from wherever focus is to Books with the arrow.
-  await tabTo(page, navOption(page, "Reader"), { max: 60 });
+  // The sidebar comes before the page, so walk back to it: Firefox's Tab does
+  // not wrap from the page's last control to the document's start.
+  await tabTo(page, navOption(page, "Reader"), { max: 60, backwards: true });
   await pressUntilFocused(page, "ArrowUp", navOption(page, "Books"), { max: 20 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/$/);
 }
 
-/** Opens the Document whose row is on the Shelf. */
-async function openFromShelf(page: Page): Promise<void> {
+/**
+ * Opens the Document whose row is on the Shelf. Pass `fromAbove` when focus was
+ * lost inside the card (its focused button unmounted): Firefox then resumes
+ * Tab and Shift+Tab from the removed button's slot, which skips an "Open" drawn
+ * in that slot both ways. Walking back to "Open file…" above the card first
+ * gives every engine the same starting point.
+ */
+async function openFromShelf(page: Page, { fromAbove = false } = {}): Promise<void> {
+  if (fromAbove) {
+    await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), {
+      max: 60,
+      backwards: true,
+    });
+  }
   await tabTo(page, page.getByRole("button", { name: "Open", exact: true }), { max: 60 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
@@ -273,7 +287,8 @@ test.describe("Reader", () => {
     await expect(page.getByText("Missing Document", { exact: true })).toHaveCount(0);
     await expect(page.getByText("p. 4 of 12", { exact: true })).toBeVisible();
 
-    await openFromShelf(page);
+    // "Locate again…" unmounts with focus on it, and "Open" takes its slot.
+    await openFromShelf(page, { fromAbove: true });
     await expect(pageIndicator(page)).toContainText("4 of 12", { timeout: 30_000 });
   });
 
