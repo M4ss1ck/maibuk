@@ -151,15 +151,6 @@ export async function configureTray(config: TrayConfig): Promise<void> {
   await invoke("configure_tray", { config });
 }
 
-// Re-measure the tray's storage lines after a write the tray cannot see.
-export async function refreshTrayStorage(): Promise<void> {
-  if (!isDesktopRuntime()) {
-    return;
-  }
-  const { invoke } = await import("@tauri-apps/api/core");
-  await invoke("refresh_tray_storage");
-}
-
 // The Resource Usage totals Rust last measured, or null while it is off or
 // outside the desktop app.
 export async function getResourceUsageSummary(): Promise<ResourceUsageSummary | null> {
@@ -179,6 +170,7 @@ export async function onResourceUsageSummary(
     return () => {};
   }
   const { listen } = await import("@tauri-apps/api/event");
+  // SUMMARY_EVENT in src-tauri/src/resource_usage/mod.rs.
   return listen<ResourceUsageSummary>("resource-usage://changed", (event) =>
     listener(event.payload)
   );

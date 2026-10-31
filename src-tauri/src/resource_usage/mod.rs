@@ -15,7 +15,7 @@ pub mod format;
 mod process;
 mod storage;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
@@ -61,6 +61,9 @@ struct Values {
     /// Unknown until a whole walk has ended, so the first walk never shows
     /// a partial sum as the total.
     total: Option<u64>,
+    /// Which run these belong to. A sample read by a run that has since been
+    /// stopped is dropped under this lock, so it can never land in a later run.
+    run: u64,
 }
 
 #[derive(Clone)]
@@ -99,10 +102,6 @@ impl Signal {
         self.state.lock().unwrap().0 = true;
         self.changed.notify_all();
     }
-
-    fn stopped(&self) -> bool {
-        self.state.lock().unwrap().0
-    }
 }
 
 /// Runs `work` now, then again every `interval` (or `first_interval` after
@@ -135,6 +134,13 @@ struct Run {
     storage: Arc<Signal>,
 }
 
+impl Run {
+    fn stop(&self) {
+        self.process.stop();
+        self.storage.stop();
+    }
+}
+
 /// The three totals Settings shows under the switch, worded like the tray.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Summary {
@@ -145,6 +151,9 @@ pub struct Summary {
 
 #[derive(Default)]
 struct Shared {
+    /// Held for a whole `configure`, so two calls can never interleave and
+    /// leave a menu showing whose items no sample updates.
+    configuring: Mutex<()>,
     app: Mutex<Option<AppHandle<Wry>>>,
     labels: Mutex<Labels>,
     backup_directory: Mutex<Option<PathBuf>>,
@@ -160,11 +169,12 @@ pub struct ResourceUsage(Arc<Shared>);
 
 impl ResourceUsage {
     pub fn configure(&self, app: &AppHandle<Wry>, config: TrayConfig) -> tauri::Result<()> {
+        let _configuring = self.0.configuring.lock().unwrap();
         *self.0.app.lock().unwrap() = Some(app.clone());
         *self.0.labels.lock().unwrap() = config.labels;
         let backup_directory = config
             .backup_directory
-            .and_then(|path| crate::trusted::validate_directory(&path).ok());
+            .and_then(|sent| trusted_backup_directory(app, &sent));
         let backups_moved = {
             let mut current = self.0.backup_directory.lock().unwrap();
             let moved = *current != backup_directory;
@@ -177,10 +187,13 @@ impl ResourceUsage {
             (true, false) => *run = Some(self.start(app)),
             (false, true) => {
                 if let Some(run) = run.take() {
-                    run.process.stop();
-                    run.storage.stop();
+                    run.stop();
                 }
-                *self.0.values.lock().unwrap() = Values::default();
+                let mut values = self.0.values.lock().unwrap();
+                *values = Values {
+                    run: values.run + 1,
+                    ..Values::default()
+                };
             }
             (true, true) if backups_moved => {
                 if let Some(run) = run.as_ref() {
@@ -249,6 +262,10 @@ impl ResourceUsage {
             ],
         )?;
         *self.0.lines.lock().unwrap() = Some(lines);
+        // A sample that landed while these items were built went to the old
+        // ones (or nowhere); show the latest values on the new ones.
+        let latest = *self.0.values.lock().unwrap();
+        self.show(&latest);
         Ok(menu)
     }
 
@@ -262,12 +279,7 @@ impl ResourceUsage {
             return None;
         }
         let values = *self.0.values.lock().unwrap();
-        let text = texts(&self.0.labels.lock().unwrap(), &values);
-        Some(Summary {
-            cpu: text.cpu,
-            ram: text.ram,
-            storage: text.total,
-        })
+        Some(texts(&self.0.labels.lock().unwrap(), &values).summary())
     }
 
     /// Re-walk storage now, when the lines are showing.
@@ -303,6 +315,11 @@ impl ResourceUsage {
             process: Arc::default(),
             storage: Arc::default(),
         };
+        let generation = {
+            let mut values = self.0.values.lock().unwrap();
+            values.run += 1;
+            values.run
+        };
 
         let this = self.clone();
         let root = std::process::id();
@@ -312,10 +329,10 @@ impl ResourceUsage {
             Arc::clone(&run.process),
             FIRST_PROCESS_INTERVAL,
             PROCESS_INTERVAL,
-            move |signal| {
+            move |_| {
                 let sample = process::sample(root);
                 let cpu = meter.share(&sample);
-                this.publish(signal, |values| {
+                this.publish(generation, |values| {
                     values.cpu = cpu;
                     values.ram = sample.memory();
                 });
@@ -329,40 +346,38 @@ impl ResourceUsage {
             Arc::clone(&run.storage),
             STORAGE_INTERVAL,
             STORAGE_INTERVAL,
-            move |signal| {
+            move |_| {
                 let mut total = 0;
                 storage::measure_each(&this.storage_roots(&app), |line, size| {
                     total += size.unwrap_or(0);
-                    this.publish(signal, |values| values.storage[line] = size);
+                    this.publish(generation, |values| values.storage[line] = size);
                 });
-                this.publish(signal, |values| values.total = Some(total));
+                this.publish(generation, |values| values.total = Some(total));
             },
         );
         run
     }
 
-    /// Records new values and shows them, unless the run was stopped while
-    /// they were being read.
-    fn publish(&self, signal: &Signal, update: impl FnOnce(&mut Values)) {
-        if signal.stopped() {
-            return;
-        }
+    /// Records new values and shows them, unless the run that read them has
+    /// been stopped since.
+    fn publish(&self, generation: u64, update: impl FnOnce(&mut Values)) {
         let values = {
             let mut values = self.0.values.lock().unwrap();
+            if values.run != generation {
+                return;
+            }
             update(&mut values);
             *values
         };
-        let text = texts(&self.0.labels.lock().unwrap(), &values);
+        self.show(&values);
+    }
+
+    /// Pushes `values` to Settings and to the tray's lines.
+    fn show(&self, values: &Values) {
+        let text = texts(&self.0.labels.lock().unwrap(), values);
         let app = self.0.app.lock().unwrap().clone();
         if let Some(app) = app {
-            let _ = app.emit(
-                SUMMARY_EVENT,
-                Summary {
-                    cpu: text.cpu.clone(),
-                    ram: text.ram.clone(),
-                    storage: text.total.clone(),
-                },
-            );
+            let _ = app.emit(SUMMARY_EVENT, text.summary());
         }
         // set_text waits on the main thread, so no lock is held across it.
         let Some(lines) = self.0.lines.lock().unwrap().clone() else {
@@ -443,6 +458,25 @@ fn install_roots_of(
         .collect()
 }
 
+/// The Backup Directory the frontend sent, if it is one Rust already trusts:
+/// the default, or the folder the author approved through native UI (ADR
+/// 0010). Anything else would let a script have any folder measured.
+fn trusted_backup_directory(app: &AppHandle<Wry>, sent: &str) -> Option<PathBuf> {
+    let config = app.path().app_config_dir().ok()?;
+    let approved =
+        crate::backup::approval_dir(&config).and_then(|dir| crate::backup::read_approval(&dir));
+    accepted_backup_directory(sent, &config.join("backups"), approved.as_deref())
+}
+
+fn accepted_backup_directory(
+    sent: &str,
+    default: &Path,
+    approved: Option<&Path>,
+) -> Option<PathBuf> {
+    let path = crate::trusted::validate_directory(sent).ok()?;
+    (path == default || Some(path.as_path()) == approved).then_some(path)
+}
+
 fn install_folder<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
     match appimage() {
         Some(appimage) => appimage.parent().map(PathBuf::from),
@@ -464,6 +498,16 @@ struct Texts {
     ram: String,
     total: String,
     storage: [String; 4],
+}
+
+impl Texts {
+    fn summary(&self) -> Summary {
+        Summary {
+            cpu: self.cpu.clone(),
+            ram: self.ram.clone(),
+            storage: self.total.clone(),
+        }
+    }
 }
 
 fn texts(labels: &Labels, values: &Values) -> Texts {
@@ -650,6 +694,38 @@ mod tests {
     }
 
     #[test]
+    fn a_sample_from_a_stopped_run_never_lands_in_the_next_one() {
+        let usage = ResourceUsage::default();
+        usage.0.values.lock().unwrap().run = 2;
+        usage.publish(1, |values| values.total = Some(999));
+        assert_eq!(
+            usage.0.values.lock().unwrap().total,
+            None,
+            "run 1 was stopped"
+        );
+        usage.publish(2, |values| values.total = Some(7));
+        assert_eq!(usage.0.values.lock().unwrap().total, Some(7));
+    }
+
+    #[test]
+    fn only_the_default_or_approved_backup_directory_is_measured() {
+        let default = Path::new("/home/a/.config/com.massick.maibuk/backups");
+        let approved = Path::new("/mnt/backups");
+        let accepted = |sent| accepted_backup_directory(sent, default, Some(approved));
+        assert_eq!(accepted("/mnt/backups"), Some(approved.to_path_buf()));
+        assert_eq!(
+            accepted(default.to_str().unwrap()),
+            Some(default.to_path_buf())
+        );
+        assert_eq!(accepted("/home/a/.ssh"), None, "a folder no one approved");
+        assert_eq!(accepted("relative/backups"), None);
+        assert_eq!(
+            accepted_backup_directory("/mnt/backups", default, None),
+            None
+        );
+    }
+
+    #[test]
     fn the_total_is_unknown_until_a_whole_walk_ends() {
         const MB: u64 = 1024 * 1024;
         let mid_walk = Values {
@@ -657,6 +733,7 @@ mod tests {
             ram: Some((412 * MB, 0.026)),
             storage: [Some(98 * MB), None, None, None],
             total: None,
+            run: 1,
         };
         let text = texts(&Labels::default(), &mid_walk);
         assert_eq!(

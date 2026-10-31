@@ -38,9 +38,11 @@ pub fn measure_each(lines: &[Vec<PathBuf>], mut on_line: impl FnMut(usize, Optio
     }
 }
 
-/// Each distinct root with the line that owns it. A root identical to an
-/// earlier one belongs to the earlier line; a root inside another root of the
-/// same line is already counted by that walk.
+/// Each distinct root with the line that owns it. A root named by two lines
+/// belongs to the later one, the narrower name for it (a Backup Directory set
+/// to a Data folder is the Backups line, and Data goes without it, as with a
+/// nested one); a root inside another root of the same line is already
+/// counted by that walk.
 fn assign_roots(lines: &[Vec<PathBuf>]) -> Vec<(usize, PathBuf)> {
     let mut owned: Vec<(usize, PathBuf)> = Vec::new();
     for (line, roots) in lines.iter().enumerate() {
@@ -48,10 +50,10 @@ fn assign_roots(lines: &[Vec<PathBuf>]) -> Vec<(usize, PathBuf)> {
             // Compare real locations, so a root reached through a symlink still
             // nests where it really lives. A missing root keeps its own path.
             let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.clone());
-            if owned.iter().any(|(_, other)| *other == root) {
-                continue;
+            match owned.iter_mut().find(|(_, other)| *other == root) {
+                Some(existing) => existing.0 = line,
+                None => owned.push((line, root)),
             }
-            owned.push((line, root));
         }
     }
     owned
@@ -188,12 +190,12 @@ mod tests {
     }
 
     #[test]
-    fn an_identical_root_on_two_lines_belongs_to_the_first() {
+    fn an_identical_root_on_two_lines_belongs_to_the_later_one() {
         let tmp = TempDir::new("identical");
         let shared = tmp.dir("shared");
         tmp.file("shared/x", 10);
         let sizes = measure(&[vec![shared.clone()], vec![shared.clone()]]);
-        assert_eq!(sizes, [Some(10), None]);
+        assert_eq!(sizes, [None, Some(10)]);
     }
 
     #[test]
