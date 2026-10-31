@@ -427,3 +427,25 @@ Confirmed from the Tauri shell on this machine (WebKitGTK, `AppleWebKit/605.1.15
 Against section 7's bars, measured: first partial 0.34 to 0.64 s p50 (Tiny Spanish is the exception at 0.84 to 0.88 s), final line 33 to 260 ms p50, zero main-thread long tasks while typing, native memory 155 MB (Tiny es) to 477 MB (Small en) peak RSS, web +512 to +890 MB. Spanish WER on Andy's recordings, fillers, Android, and Windows remain unmeasured.
 
 What production code needs out of this: own the worker, vendor the release WASM, bundle the two Linux `.so` files with an `$ORIGIN` rpath, add `libasound2-dev` as a Linux build dependency, guard the null `lines` pointer `moonshine_transcribe_stream` returns when there are no lines, and add a Spanish punctuation and truecasing pass before v1.
+
+## Candidate models (issue #663, 2026-10-31)
+
+Phase 1 measured the shortlist against Moonshine Small on the phrase lane (107 en, 106 es clips) and the control clips, through sherpa-onnx 1.13.8's Python package on the Linux laptop's CPU, 2 threads. Runner and commands: `scripts/dictation-conformance/README.md`, "Candidate models". The English clips are non-native speech, so only the comparison with Moonshine on the same clips means anything.
+
+| Model | Lang | Hit rate | Misheard prose | Names | Pause-to-text / first partial | Peak RSS | Bar |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Moonshine Small (baseline) | en | 30% | 0 | 11% | first partial 0.44 s p50 | 477 MB | |
+| Moonshine Small (baseline) | es | 94% | 0 | 5% | first partial 0.45 s p50 | | |
+| Canary 180M Flash int8 | en | 38% | 0 | 11% | 202 ms p50, 660 ms max on Moonshine's lines | 473 to 762 MB | **pass** |
+| Canary 180M Flash int8 | es | 82% | 0 | 16% | 522 ms p50, 3.3 s max | 650 MB | fail: hit rate |
+| Nemotron 3.5 streaming 160 ms int8 | en | 13% | 0 | 11% | first partial 0.47 s p50 | 1,000 MB | fail: hit rate |
+| Nemotron 3.5 streaming 160 ms int8 | es | 48% | 0 | 16% | first partial 0.91 s p50 | 993 MB | fail: hit rate, first partial 0.4 s behind |
+| Parakeet TDT 0.6B v3 Redux | both | | | | | | not loadable |
+
+- **Redux** does not load: `OfflineRecognizer.from_transducer(model_type="nemo_transducer")` stops at `'vocab_size' does not exist in the metadata`. The onnx-asr export carries no sherpa metadata and ships decoder and joiner as one `decoder_joint`. Per the issue, it is dropped, not converted.
+- **Nemotron** drops words and short phrases ("Pulsar dos" → "Pulsar", "Ir a notas" → nothing) with or without endpointing, with 1 s or 3 s of tail padding, and with the stream `language` option set (`es` moves it from 44% to 48%). On its own `test_wavs/es.wav` it writes lowercase text with no punctuation, so the "Spanish casing and punctuation" that kept it on the shortlist does not show in this int8 export.
+- **Canary's Spanish hit rate depends on how lines are cut**: 76% whole clip, 82% with Silero at 0.5 s, 72% at 0.3 s. None reaches Moonshine's 94%. An energy gate split on the click at each clip's start and Canary wrote "um" on it, failing the clip; Silero does not.
+- **Canary's English**: 38% at 0.5 s, 42% at 0.3 s, 43% whole clip, all above Moonshine's 30%. On the `two_cities` control Silero finds no pause at 0.5 s or 0.3 s and returns one 44 s line, decoded in 8.9 s. On the 13 lines Moonshine Small cut from the same clip, decoding takes 202 ms p50 and 660 ms max. An offline engine in the app therefore needs a line cut that does not wait for a pause in continuous reading: a maximum line length, or a VAD tuned like Moonshine's.
+- Measured peak RSS includes the Python process; Canary's int8 files are 207 MB.
+
+Result against the bar: Canary 180M Flash passes for English only; nothing passes for Spanish.
