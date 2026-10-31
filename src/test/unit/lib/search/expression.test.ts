@@ -51,12 +51,12 @@ describe("findMatchRanges with a literal query", () => {
   });
 
   it("matches Elena and Eléna in either direction", () => {
-    expect(textOf("Eléna walked in", findMatchRanges("Eléna walked in", "ELENA", literal()))).toEqual(
-      ["Eléna"]
-    );
-    expect(textOf("Elena walked in", findMatchRanges("Elena walked in", "eléna", literal()))).toEqual(
-      ["Elena"]
-    );
+    expect(
+      textOf("Eléna walked in", findMatchRanges("Eléna walked in", "ELENA", literal()))
+    ).toEqual(["Eléna"]);
+    expect(
+      textOf("Elena walked in", findMatchRanges("Elena walked in", "eléna", literal()))
+    ).toEqual(["Elena"]);
   });
 
   it("matches naïve from naive and back", () => {
@@ -83,18 +83,18 @@ describe("findMatchRanges with a literal query", () => {
   });
 
   it("keeps Whole word working on the folded text", () => {
-    expect(findMatchRanges("cancionero canta la canción", "cancion", literal({ wholeWord: true }))).toEqual([
-      { start: 20, end: 27 },
-    ]);
+    expect(
+      findMatchRanges("cancionero canta la canción", "cancion", literal({ wholeWord: true }))
+    ).toEqual([{ start: 20, end: 27 }]);
   });
 
   it("keeps Match case working: case-sensitive but still accent-insensitive", () => {
     // Off: case folds too.
     expect(findMatchRanges("Eléna walked in", "ELENA", literal())).toHaveLength(1);
     // On: the case must match exactly, the accent still folds.
-    expect(
-      findMatchRanges("Eléna walked in", "ELENA", literal({ caseSensitive: true }))
-    ).toEqual([]);
+    expect(findMatchRanges("Eléna walked in", "ELENA", literal({ caseSensitive: true }))).toEqual(
+      []
+    );
     expect(
       textOf(
         "ELÉNA walked in",

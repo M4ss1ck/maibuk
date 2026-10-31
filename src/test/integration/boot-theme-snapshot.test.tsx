@@ -124,9 +124,7 @@ describe("boot theme snapshot", () => {
     color = "#1c1917";
     act(() => handler?.());
 
-    await vi.waitFor(() =>
-      expect(mockSetWindowBackground).toHaveBeenLastCalledWith("#1c1917")
-    );
+    await vi.waitFor(() => expect(mockSetWindowBackground).toHaveBeenLastCalledWith("#1c1917"));
     computed.mockRestore();
   });
 });

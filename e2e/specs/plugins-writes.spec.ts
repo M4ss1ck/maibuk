@@ -83,9 +83,7 @@ test.describe("Plugin writes @wf:plugins-writes @sandbox", () => {
     test.use({
       library: "oneBookThreeChapters",
       plugins: ["fixture-everything"],
-      pluginApprovals: [
-        { pluginId: "fixture-everything", granted: [...REQUIRED_PERMISSIONS] },
-      ],
+      pluginApprovals: [{ pluginId: "fixture-everything", granted: [...REQUIRED_PERMISSIONS] }],
     });
 
     test("reaches the open editor and keeps every line", async ({ page }) => {
@@ -152,9 +150,7 @@ test.describe("Plugin writes @wf:plugins-writes @sandbox", () => {
       library: "oneBookThreeChapters",
       plugins: ["fixture-everything"],
       // The record the approval flow writes: required granted, optional off.
-      pluginApprovals: [
-        { pluginId: "fixture-everything", granted: [...REQUIRED_PERMISSIONS] },
-      ],
+      pluginApprovals: [{ pluginId: "fixture-everything", granted: [...REQUIRED_PERMISSIONS] }],
     });
 
     test("is refused and changes nothing", async ({ page }) => {
@@ -166,7 +162,9 @@ test.describe("Plugin writes @wf:plugins-writes @sandbox", () => {
       await runPaletteCommand(page, "Insert greeting");
       // The refused call is reported, and the editor is left as it was.
       await expect(
-        page.getByRole("status").filter({ hasText: "Fixture insert greeting refused: permission-denied" })
+        page
+          .getByRole("status")
+          .filter({ hasText: "Fixture insert greeting refused: permission-denied" })
       ).toBeVisible({ timeout: 5_000 });
       await expect(text).not.toContainText("Hello from the Plugin");
       await expect(text).toContainText("The author wrote an ending.");

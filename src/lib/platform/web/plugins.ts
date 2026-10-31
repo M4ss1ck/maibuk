@@ -147,9 +147,11 @@ function preparePlugin(entries: readonly RawEntry[]): { id: string; files: Plugi
   if (entries.length > MAX_ENTRIES) throw new Error("The Plugin has too many files");
   const seen = new Set<string>();
   for (const entry of entries) {
-    if (!isSafeEntryPath(entry.path)) throw new Error(`The Plugin has an unsafe path: ${entry.path}`);
+    if (!isSafeEntryPath(entry.path))
+      throw new Error(`The Plugin has an unsafe path: ${entry.path}`);
     const folded = entry.path.toLowerCase();
-    if (seen.has(folded)) throw new Error(`The Plugin has two files with the same path: ${entry.path}`);
+    if (seen.has(folded))
+      throw new Error(`The Plugin has two files with the same path: ${entry.path}`);
     seen.add(folded);
   }
 
@@ -373,7 +375,10 @@ export function createWebPluginDirectory(root?: FileSystemDirectoryHandle): Plug
         throw new Error("The Plugin .zip could not be read");
       }
       if (violation !== null) throw new Error(violation);
-      const entries: RawEntry[] = Object.entries(unzipped).map(([path, bytes]) => ({ path, bytes }));
+      const entries: RawEntry[] = Object.entries(unzipped).map(([path, bytes]) => ({
+        path,
+        bytes,
+      }));
       const { id, files } = preparePlugin(entries);
       await installPluginFolder(base, id, files);
       return id;

@@ -210,8 +210,7 @@ function pageKeeps(item: PaletteItem, query: PaletteQuery): boolean {
       // The Chapters page narrows to the open Book's Chapters in the Book
       // Editor; outside it there is no open Book, so it lists every Chapter.
       return (
-        item.kind === "chapter" &&
-        (query.openBookId == null || item.bookId === query.openBookId)
+        item.kind === "chapter" && (query.openBookId == null || item.bookId === query.openBookId)
       );
   }
 }
@@ -397,7 +396,9 @@ export function searchPalette(index: PaletteIndex, query: PaletteQuery): Palette
       if (results.length > 0) sections.push({ id: "recent", results });
       const shown = new Set(results.map((result) => result.item.key));
       const commandsMode = query.mode === "commands";
-      const suggestedKeys = commandsMode ? PALETTE_SUGGESTED_COMMAND_KEYS : PALETTE_SUGGESTED_PAGE_KEYS;
+      const suggestedKeys = commandsMode
+        ? PALETTE_SUGGESTED_COMMAND_KEYS
+        : PALETTE_SUGGESTED_PAGE_KEYS;
       const suggested: PaletteResult[] = [];
       for (const key of suggestedKeys) {
         if (results.length + suggested.length >= PALETTE_EMPTY_ROOT_LIMIT) break;

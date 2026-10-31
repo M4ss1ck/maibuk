@@ -178,9 +178,7 @@ describe("fetchLocalizedReleaseNotes()", () => {
     const notes = await fetchLocalizedReleaseNotes("es-ES", "v9.0.0", fetchImpl);
 
     const url = localizedReleaseNotesUrl("v9.0.0", "es");
-    expect(url).toBe(
-      "https://raw.githubusercontent.com/M4ss1ck/maibuk/v9.0.0/CHANGELOG.es.md"
-    );
+    expect(url).toBe("https://raw.githubusercontent.com/M4ss1ck/maibuk/v9.0.0/CHANGELOG.es.md");
     expect(fetchImpl).toHaveBeenCalledWith(url);
     expect(notes.get("9.0.0")?.sections).toEqual([
       { kind: "fixed", items: [[{ kind: "text", text: "Corrige algo" }]] },
@@ -312,9 +310,7 @@ describe("newerReleasesIn()", () => {
   };
 
   it("replaces the notes a language has and keeps that Release's page", () => {
-    const localized = new Map([
-      ["9.0.0", { number: "9.0.0", date: "2026-10-05", sections: [] }],
-    ]);
+    const localized = new Map([["9.0.0", { number: "9.0.0", date: "2026-10-05", sections: [] }]]);
     expect(newerReleasesIn([english, other], localized)).toEqual([
       { ...english, sections: [] },
       other,
@@ -352,9 +348,7 @@ describe("installReleaseCheck()", () => {
    */
   function nextCheckStored(): Promise<void> {
     const before = useReleaseStore.getState().newerReleases;
-    return vi.waitFor(() =>
-      expect(useReleaseStore.getState().newerReleases).not.toBe(before)
-    );
+    return vi.waitFor(() => expect(useReleaseStore.getState().newerReleases).not.toBe(before));
   }
 
   it("never checks on the web build", () => {

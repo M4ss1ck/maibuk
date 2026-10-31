@@ -47,13 +47,7 @@ function MainPage() {
 /** The Settings row body the suite mounts and drives by keyboard. */
 function ThresholdRow() {
   const [on, setOn] = useState(false);
-  return (
-    <ui.Switch
-      label="Threshold"
-      isSelected={on}
-      onChange={(event) => setOn(event.detail)}
-    />
-  );
+  return <ui.Switch label="Threshold" isSelected={on} onChange={(event) => setOn(event.detail)} />;
 }
 
 /**

@@ -37,7 +37,7 @@ Each line is a completion requirement. The rule in full is in `CODING_STANDARDS.
 - **Keyboard test gate**: those paths are proven by `user-event` key presses that assert behavior, never by checking attributes. [Keyboard and accessibility test gate]
 - **E2E suite**: new interactive UI has a row in `e2e/coverage-matrix.ts` and a spec tagged `@wf:<row-id>` that passes locally; a Plugin sandbox, broker, or renderer change runs the local `@sandbox` lane (`CODING_STANDARDS.md` "E2E"). Playwright never runs in CI. [E2E]
 - **Strings**: every user-visible string goes through i18n, with keys in both `src/locales/en.json` and `src/locales/es.json`. [i18n]
-- **Gates**: `pnpm lint`, `pnpm typecheck`, and `pnpm test:guards` pass, beside any narrowed test run. Vitest does not check types. [Linting and formatting]
+- **Gates**: `pnpm lint` (zero Biome errors, warnings, infos, and unformatted files), `pnpm typecheck`, `pnpm check:deprecated` (no `@deprecated` APIs), and `pnpm test:guards` pass, beside any narrowed test run. Vitest does not check types. [Linting and formatting]
 
 ## Where new files go
 
@@ -64,7 +64,8 @@ pnpm test:run         # Tests once
 pnpm test:coverage    # Coverage report with thresholds
 pnpm typecheck        # tsc over src/, test files included
 pnpm test:guards      # tests that read the repo from disk (seconds)
-pnpm lint             # Biome
+pnpm lint             # Biome lint + format, zero findings (pnpm lint:fix fixes)
+pnpm check:deprecated # no @deprecated APIs (CI, ~8s)
 pnpm test:e2e         # Playwright, local only (e2e/README.md)
 pnpm build:web        # Web static build
 pnpm plugin:check <path>  # Plugin tooling for a Plugin in its own repo (plugins/README.md)

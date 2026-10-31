@@ -1444,8 +1444,9 @@ describe("createTestHost() Library writes", () => {
         ["c1", "c2", "c3", "absent"],
         ["c1", "c2", "c2"],
       ]) {
-        await expect(client.library.chapters.reorder({ bookId: "b1", chapterIds })).rejects
-          .toMatchObject({ code: "invalid-params" });
+        await expect(
+          client.library.chapters.reorder({ bookId: "b1", chapterIds })
+        ).rejects.toMatchObject({ code: "invalid-params" });
       }
       await expect(
         client.library.chapters.reorder({ bookId: "absent", chapterIds: ["c1", "c2", "c3"] })
@@ -1564,8 +1565,9 @@ describe("createTestHost() Library writes", () => {
     });
     try {
       const client = createPluginClient(host.port);
-      await expect(client.library.books.update({ bookId: "b1", title: "Dune Messiah" })).resolves
-        .toBeNull();
+      await expect(
+        client.library.books.update({ bookId: "b1", title: "Dune Messiah" })
+      ).resolves.toBeNull();
       expect(book.title).toBe("Dune Messiah");
 
       await expect(
@@ -1609,14 +1611,17 @@ describe("createTestHost() Library writes", () => {
       expect(host.checkpoints).toHaveLength(1);
 
       await client.library.chapters.update({ chapterId: "c1", status: "revised" });
-      await expect(client.library.books.checkpoint({ bookId: "b1", label: "After" })).resolves
-        .toMatchObject({ versionId: expect.any(String) });
+      await expect(
+        client.library.books.checkpoint({ bookId: "b1", label: "After" })
+      ).resolves.toMatchObject({ versionId: expect.any(String) });
       await client.library.chapters.reorder({ bookId: "b1", chapterIds: ["c2", "c1", "c3"] });
-      await expect(client.library.books.checkpoint({ bookId: "b1", label: "After" })).resolves
-        .toMatchObject({ versionId: expect.any(String) });
+      await expect(
+        client.library.books.checkpoint({ bookId: "b1", label: "After" })
+      ).resolves.toMatchObject({ versionId: expect.any(String) });
       await client.library.chapters.delete({ chapterId: "c3" });
-      await expect(client.library.books.checkpoint({ bookId: "b1", label: "After" })).resolves
-        .toMatchObject({ versionId: expect.any(String) });
+      await expect(
+        client.library.books.checkpoint({ bookId: "b1", label: "After" })
+      ).resolves.toMatchObject({ versionId: expect.any(String) });
     } finally {
       host.stop();
     }

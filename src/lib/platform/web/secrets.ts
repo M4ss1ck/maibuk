@@ -99,9 +99,7 @@ function writeRemembered(storage: Storage, ids: string[]): void {
  * Plugin's values also persist in `storage` and load back into memory when a
  * new store is created over the same storage.
  */
-export function createWebPluginSecretStore(
-  storage: Storage = localStorage
-): WebPluginSecretStore {
+export function createWebPluginSecretStore(storage: Storage = localStorage): WebPluginSecretStore {
   const memory = new Map<string, Map<string, string>>();
   const remembered = new Set<string>(readRemembered(storage));
 

@@ -10,10 +10,7 @@
 
 import { useCallback, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  useInstalledPluginLifecycle,
-  usePluginLifecycleRevision,
-} from "@/hooks/usePluginSurface";
+import { useInstalledPluginLifecycle, usePluginLifecycleRevision } from "@/hooks/usePluginSurface";
 import { pluginRunKey } from "@/components/plugins/plugin-run-key";
 import { PluginRemoteUiSurface } from "@/features/plugins/remote-ui/surface";
 import { usePluginRemoteUi } from "@/features/plugins/remote-ui/use-plugin-remote-ui";

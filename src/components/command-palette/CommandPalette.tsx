@@ -69,10 +69,7 @@ import type {
   SearchResult,
 } from "@/features/search/types";
 import { searchLibrary as searchLibraryIndex } from "@/features/search";
-import {
-  isSearchIndexRebuilding,
-  subscribeSearchIndexStatus,
-} from "@/features/search/rebuild";
+import { isSearchIndexRebuilding, subscribeSearchIndexStatus } from "@/features/search/rebuild";
 import { getDatabase } from "@/lib/db";
 import { useDebouncedCallback } from "@/hooks/useAutoSave";
 import type { SettingsRowId } from "@/components/settings/settings-sections";
@@ -295,10 +292,7 @@ function OpenCommandPalette() {
   const [textError, setTextError] = useState<string | null>(null);
   const [textCapped, setTextCapped] = useState(false);
   const [indexing, setIndexing] = useState<boolean>(() => isSearchIndexRebuilding());
-  useEffect(
-    () => subscribeSearchIndexStatus(() => setIndexing(isSearchIndexRebuilding())),
-    []
-  );
+  useEffect(() => subscribeSearchIndexStatus(() => setIndexing(isSearchIndexRebuilding())), []);
   const searchSeqRef = useRef(0);
   const runTextSearch = useCallback(
     async (args: {
@@ -556,7 +550,8 @@ function OpenCommandPalette() {
     // instead of closing it.
     if (event.key === "Backspace" && page === "root" && query === PALETTE_COMMAND_PREFIX) {
       const input = inputRef.current;
-      const caretAfterPrefix = input !== null && input.selectionStart === 1 && input.selectionEnd === 1;
+      const caretAfterPrefix =
+        input !== null && input.selectionStart === 1 && input.selectionEnd === 1;
       if (caretAfterPrefix) {
         event.preventDefault();
         changeQuery("");
@@ -763,9 +758,7 @@ function OpenCommandPalette() {
               onKeyDown={handleSearchEscapeCapture}
               placeholder={t("commandPalette.placeholder")}
               className={`h-8 w-full rounded-md border border-primary bg-background pl-2 text-sm text-foreground outline-none placeholder:text-muted-foreground pointer-coarse:h-11 [&::-webkit-search-cancel-button]:hidden ${
-                libraryField
-                  ? `${queryEmpty ? "pr-56" : "pr-24"} pointer-coarse:pr-36`
-                  : "pr-2"
+                libraryField ? `${queryEmpty ? "pr-56" : "pr-24"} pointer-coarse:pr-36` : "pr-2"
               }`}
             />
             {libraryField && (
@@ -825,14 +818,11 @@ function OpenCommandPalette() {
             {t("commandPalette.textInvalidRegex")}: {textError}
           </p>
         )}
-        {mode === "library" &&
-          searchText.trim() !== "" &&
-          textError === null &&
-          textCapped && (
-            <p className="px-3 pb-3 pt-1 text-sm text-muted-foreground">
-              {t("commandPalette.textRefine")}
-            </p>
-          )}
+        {mode === "library" && searchText.trim() !== "" && textError === null && textCapped && (
+          <p className="px-3 pb-3 pt-1 text-sm text-muted-foreground">
+            {t("commandPalette.textRefine")}
+          </p>
+        )}
         {mode === "library" && indexing && (
           <p className="px-3 pb-3 pt-1 text-xs text-muted-foreground">
             {t("commandPalette.textIndexing")}

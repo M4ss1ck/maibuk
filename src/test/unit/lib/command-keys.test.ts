@@ -30,14 +30,17 @@ describe("pressRunsCommand", () => {
       },
     });
     expect(pressRunsCommand(press("c", { ctrlKey: true }), "symbolItem.copy")).toBe(false);
-    expect(
-      pressRunsCommand(press("K", { ctrlKey: true, shiftKey: true }), "symbolItem.copy")
-    ).toBe(true);
+    expect(pressRunsCommand(press("K", { ctrlKey: true, shiftKey: true }), "symbolItem.copy")).toBe(
+      true
+    );
   });
 
   it("never matches a removed Shortcut or a press during composition", () => {
     useShortcutSettingsStore.setState({
-      shortcuts: { ...structuredClone(DEFAULT_SHORTCUT_SETTINGS), custom: { "symbolItem.copy": [] } },
+      shortcuts: {
+        ...structuredClone(DEFAULT_SHORTCUT_SETTINGS),
+        custom: { "symbolItem.copy": [] },
+      },
     });
     expect(pressRunsCommand(press("c", { ctrlKey: true }), "symbolItem.copy")).toBe(false);
 

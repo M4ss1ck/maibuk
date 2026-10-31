@@ -91,9 +91,7 @@ describe("createTauriPluginDirectory()", () => {
     expect(mockInvoke).toHaveBeenCalledWith("watch_plugin_directory");
     expect(mockListen).toHaveBeenCalledWith("plugins://changed", expect.any(Function));
 
-    const callback = mockListen.mock.calls[0][1] as (event: {
-      payload: { id: string };
-    }) => void;
+    const callback = mockListen.mock.calls[0][1] as (event: { payload: { id: string } }) => void;
     callback({ payload: { id: "tracer" } });
     expect(seen).toEqual(["tracer"]);
 

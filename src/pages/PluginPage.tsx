@@ -70,9 +70,7 @@ export function PluginPage() {
   const title = page?.title ?? savedEntry?.title ?? t("plugins.page.notFoundTitle");
   const name = page?.displayName ?? savedEntry?.displayName ?? pluginId;
   const showPanel =
-    scanned &&
-    (page !== undefined || savedEntry !== undefined) &&
-    (stopped !== null || retrying);
+    scanned && (page !== undefined || savedEntry !== undefined) && (stopped !== null || retrying);
   // When the panel goes (the retried Plugin is ready), its focused button goes
   // with it: keep focus on the page instead of dropping it to the document.
   const hadPanel = useRef(showPanel);
@@ -93,9 +91,7 @@ export function PluginPage() {
         <h1 data-route-heading className="text-xl font-semibold tracking-tight">
           {t("plugins.page.loadingTitle")}
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {t("plugins.page.loadingDescription")}
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{t("plugins.page.loadingDescription")}</p>
       </div>
     );
   }
@@ -118,9 +114,7 @@ export function PluginPage() {
         tabIndex={-1}
         data-route-heading
         className={
-          hideTitle
-            ? "sr-only"
-            : "text-xl font-semibold tracking-tight mb-6 outline-none shrink-0"
+          hideTitle ? "sr-only" : "text-xl font-semibold tracking-tight mb-6 outline-none shrink-0"
         }
       >
         {title}
@@ -139,7 +133,9 @@ export function PluginPage() {
           onTryAgain={tryAgain}
         />
       ) : page === undefined ? (
-        <p className="mt-2 text-sm text-muted-foreground">{t("plugins.page.notFoundDescription")}</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {t("plugins.page.notFoundDescription")}
+        </p>
       ) : page.frame !== undefined ? (
         // A page whose contribution declares `frame` is a whole-page Frame
         // (#454, D2): the sandboxed surface replaces the Remote UI tree.

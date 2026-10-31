@@ -330,7 +330,9 @@ describe("webdriverFramePage", () => {
 
   describe("isUnsupportedAction", () => {
     it("is true only for the driver refusing an input it does not implement", () => {
-      expect(isUnsupportedAction(new WebDriverError(500, "unsupported operation", "wheel"))).toBe(true);
+      expect(isUnsupportedAction(new WebDriverError(500, "unsupported operation", "wheel"))).toBe(
+        true
+      );
       expect(isUnsupportedAction(new WebDriverError(404, "unknown command", "x"))).toBe(true);
       expect(isUnsupportedAction(new WebDriverError(404, "no such element", "x"))).toBe(false);
       expect(isUnsupportedAction(new Error("unsupported operation"))).toBe(false);

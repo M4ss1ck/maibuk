@@ -16,7 +16,11 @@ function windowsRecord(overrides: Partial<WindowsFrameRecord> = {}): WindowsFram
   const checks: WindowsFrameCheck[] = [
     { id: "frame-no-network", status: "pass", detail: "no request from the Frame" },
     { id: "frame-no-tauri-ipc", status: "pass", detail: "no __TAURI_INTERNALS__ in the Frame" },
-    { id: "frame-no-host-dom", status: "pass", detail: "cross-origin access to the host DOM throws" },
+    {
+      id: "frame-no-host-dom",
+      status: "pass",
+      detail: "cross-origin access to the host DOM throws",
+    },
     { id: "frame-theme-tokens", status: "pass", detail: "a theme switch updated --maibuk-*" },
     { id: "frame-notice-visible", status: "pass", detail: "the custom-UI notice is visible" },
     { id: "frame-keyboard", status: "pass", detail: "Tab reached the Frame" },

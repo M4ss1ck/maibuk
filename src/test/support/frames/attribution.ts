@@ -4,10 +4,7 @@
 // original file, line, and function a maintainer can open.
 
 import { SourceMapConsumer } from "source-map-js";
-import type {
-  InputSample,
-  LongAnimationFrame,
-} from "@/test/support/frames/frame-report";
+import type { InputSample, LongAnimationFrame } from "@/test/support/frames/frame-report";
 
 /** Reads a file of the served build by its path (`assets/index-abc.js`), or null. */
 export type BuildReader = (path: string) => string | null;
@@ -42,7 +39,9 @@ export function resolveLongFrameSources(
       const map = bundle === null ? null : read(`${path}.map`);
       consumers.set(
         path,
-        bundle !== null && map !== null ? { bundle, map: new SourceMapConsumer(JSON.parse(map)) } : null
+        bundle !== null && map !== null
+          ? { bundle, map: new SourceMapConsumer(JSON.parse(map)) }
+          : null
       );
     }
     return consumers.get(path) ?? null;

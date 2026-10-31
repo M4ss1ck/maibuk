@@ -286,9 +286,7 @@ describe("Plugin management: changed files", () => {
 
     await h.store.getState().markReviewed("tracer");
 
-    expect(getPluginApproval("tracer")?.pinnedHash).toBe(
-      await hashPluginDirectory(h.folder.files)
-    );
+    expect(getPluginApproval("tracer")?.pinnedHash).toBe(await hashPluginDirectory(h.folder.files));
     expect(h.store.getState().plugins.tracer.review.status).toBe("approved");
     expect(h.frames).toHaveLength(1);
     expect(h.lifecycle.state("tracer")?.status).toBe("ready");

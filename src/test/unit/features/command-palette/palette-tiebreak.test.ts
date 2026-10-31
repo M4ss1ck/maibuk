@@ -12,7 +12,12 @@ describe("palette-index tie-breaking", () => {
     const collator = new Intl.Collator(undefined, { sensitivity: "base" });
     expect(collator.compare("abc", "abd")).toBeLessThan(0);
     const index = preparePaletteIndex(items);
-    const sections = searchPalette(index, { mode: "commands", query: "ab", page: "root", recent: [] });
+    const sections = searchPalette(index, {
+      mode: "commands",
+      query: "ab",
+      page: "root",
+      recent: [],
+    });
     expect(sections).toHaveLength(1);
     const results = sections[0].results;
     expect(results).toHaveLength(3);

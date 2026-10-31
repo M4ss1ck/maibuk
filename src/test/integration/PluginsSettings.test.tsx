@@ -245,8 +245,7 @@ describe("Plugins Settings section", () => {
     const user = userEvent.setup();
     renderSettings();
 
-    const rowIn = () =>
-      document.querySelector('[data-settings-row="plugin.echoes.threshold"]');
+    const rowIn = () => document.querySelector('[data-settings-row="plugin.echoes.threshold"]');
 
     // The accordion starts closed: its row is mounted but hidden, so it can
     // animate open.

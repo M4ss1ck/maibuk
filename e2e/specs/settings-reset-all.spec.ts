@@ -23,7 +23,8 @@ const ran = (page: Page) =>
   page.getByRole("status").filter({ hasText: "approvals fixture running" });
 /** The Development mode switch: a changed setting the reset must return to default. */
 const devMode = (page: Page) => page.getByRole("switch", { name: "Development mode" });
-const pluginRow = (page: Page) => page.getByRole("button", { name: new RegExp(`^${ROW_NAME} v\\d`) });
+const pluginRow = (page: Page) =>
+  page.getByRole("button", { name: new RegExp(`^${ROW_NAME} v\\d`) });
 /** The Plugin card's enable switch, whose state the reset changes. */
 const enableSwitch = (page: Page) =>
   page.getByRole("switch", { name: `Enable ${ROW_NAME}`, exact: true });
@@ -134,7 +135,9 @@ test.describe("Reset settings @wf:settings-reset-all", () => {
     await page.keyboard.press("Enter");
     const confirmDialog = page.getByRole("alertdialog", { name: "Reset all settings?" });
     await expect(confirmDialog).toBeVisible();
-    await tabTo(page, confirmDialog.getByRole("button", { name: CONFIRM, exact: true }), { max: 8 });
+    await tabTo(page, confirmDialog.getByRole("button", { name: CONFIRM, exact: true }), {
+      max: 8,
+    });
     await page.keyboard.press("Enter");
     await expect(confirmDialog).toBeHidden();
 

@@ -11,10 +11,7 @@
  * it runs ahead of is the store's own `refresh()`.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  PLUGIN_APPROVALS_STORAGE_KEY,
-  getPluginApproval,
-} from "@/features/plugins/approvals";
+import { PLUGIN_APPROVALS_STORAGE_KEY, getPluginApproval } from "@/features/plugins/approvals";
 import { resetPluginContributionsForTests } from "@/features/plugins/contributions";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { PLUGIN_KNOWN_STORAGE_KEY, saveKnownPlugin } from "@/features/plugins/known";
@@ -134,7 +131,10 @@ describe("syncBuiltInPlugins(): install a missing Built-in", () => {
     });
     // Pre-granted: every declared Plugin Permission, still listed and revocable.
     expect(approval?.granted).toEqual(["library:read", "secrets"]);
-    expect(approval?.approvedPermissions).toEqual({ required: ["library:read"], optional: ["secrets"] });
+    expect(approval?.approvedPermissions).toEqual({
+      required: ["library:read"],
+      optional: ["secrets"],
+    });
     expect(info).toEqual([TRACE(1, 0, 0)]);
 
     // The store's first classification finds it installed and approved.

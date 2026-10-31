@@ -146,7 +146,7 @@ describe("isBuiltInPlugin()", () => {
     const maibukRoot = tempRoot("maibuk checkout ");
     const pluginRoot = join(maibukRoot, "plugins", dir);
     mkdirSync(pluginRoot, { recursive: true });
-    writeFileSync(pluginRoot + "/manifest.json", `${JSON.stringify({ id })}\n`);
+    writeFileSync(join(pluginRoot, "manifest.json"), `${JSON.stringify({ id })}\n`);
     return { maibukRoot, pluginRoot };
   }
 
@@ -160,7 +160,10 @@ describe("isBuiltInPlugin()", () => {
     const maibukRoot = tempRoot("maibuk checkout elsewhere ");
     const pluginRoot = join(tempRoot("third party plugin "), "maibuk-echoes");
     mkdirSync(pluginRoot, { recursive: true });
-    writeFileSync(pluginRoot + "/manifest.json", `${JSON.stringify({ id: "maibuk-echoes" })}\n`);
+    writeFileSync(
+      join(pluginRoot, "manifest.json"),
+      `${JSON.stringify({ id: "maibuk-echoes" })}\n`
+    );
 
     expect(isBuiltInPlugin(pluginRoot, maibukRoot)).toBe(false);
   });

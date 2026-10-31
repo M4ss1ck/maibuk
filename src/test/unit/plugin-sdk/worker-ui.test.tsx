@@ -10,16 +10,9 @@
  * DOM polyfill, which replaces the DOM globals with its own.
  */
 import { PLUGIN_UI_BATCH_MS, frameBatch, servePluginUi } from "@/plugin-sdk/worker-ui";
-import {
-  countRemoteNode,
-  createMountBudget,
-  renderingWithin,
-} from "@/plugin-sdk/ui-node-budget";
+import { countRemoteNode, createMountBudget, renderingWithin } from "@/plugin-sdk/ui-node-budget";
 import { PLUGIN_ERROR_MESSAGE } from "@/plugin-sdk/protocol";
-import {
-  PLUGIN_UI_NODE_LIMIT,
-  PLUGIN_UI_NODE_LIMIT_MARKER,
-} from "@/plugin-sdk/ui-node-limit";
+import { PLUGIN_UI_NODE_LIMIT, PLUGIN_UI_NODE_LIMIT_MARKER } from "@/plugin-sdk/ui-node-limit";
 import { servePluginUi as serveSharedPluginUi, splitMutationRecords } from "@/plugin-sdk/ui-serve";
 import { ui } from "@/plugin-sdk/ui";
 import {
@@ -84,7 +77,8 @@ function createValidatedHost() {
   new ThreadMessagePort(channel.port1, {
     exports: {
       mutate: (records: readonly RemoteMutationRecord[]) => connection.mutate(records),
-      call: (id: string, method: string, ...args: unknown[]) => connection.call(id, method, ...args),
+      call: (id: string, method: string, ...args: unknown[]) =>
+        connection.call(id, method, ...args),
     },
   });
   channel.port1.start();
@@ -202,9 +196,9 @@ describe("servePluginUi", () => {
 
     await vi.waitFor(() => {
       expect(host.violations).toEqual([]);
-      expect(
-        elements(host.receiver).filter((node) => node.element === "maibuk-text")
-      ).toHaveLength(rows);
+      expect(elements(host.receiver).filter((node) => node.element === "maibuk-text")).toHaveLength(
+        rows
+      );
     });
   });
 
@@ -268,7 +262,13 @@ describe("servePluginUi", () => {
     function HintPage() {
       const [hint, update] = useState<string | undefined>("Pick one");
       setHint = update;
-      return <ui.Select label="Book" options={[]} {...(hint === undefined ? {} : { description: hint })} />;
+      return (
+        <ui.Select
+          label="Book"
+          options={[]}
+          {...(hint === undefined ? {} : { description: hint })}
+        />
+      );
     }
     servePluginUi(client.client, { pages: { main: HintPage } });
     client.request("ui.mount", { surface: "main#1", page: "main", port: host.port });
@@ -343,7 +343,11 @@ describe("servePluginUi", () => {
         <>
           <ui.Collection label="Echoes" selectionMode="none">
             {Array.from({ length: rows }, (_, i) => (
-              <ui.CollectionRow key={`${book}-${i}`} id={`${book}-${i}`} label={`${book} row ${i}`} />
+              <ui.CollectionRow
+                key={`${book}-${i}`}
+                id={`${book}-${i}`}
+                label={`${book} row ${i}`}
+              />
             ))}
           </ui.Collection>
           <ui.View>{book === "a" ? <ui.Text>Computing</ui.Text> : null}</ui.View>
@@ -373,7 +377,11 @@ describe("servePluginUi", () => {
       const [opens, setOpens] = useState(0);
       return (
         <>
-          <ui.Modal title="Details" isOpen={false} onOpenChange={() => setOpens((count) => count + 1)}>
+          <ui.Modal
+            title="Details"
+            isOpen={false}
+            onOpenChange={() => setOpens((count) => count + 1)}
+          >
             <ui.Text>Modal body</ui.Text>
           </ui.Modal>
           <ui.Text>{`opens:${opens}`}</ui.Text>

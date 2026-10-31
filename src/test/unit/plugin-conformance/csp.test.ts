@@ -45,11 +45,15 @@ describe("conformanceConfigOverride()", () => {
   });
 
   it("keeps the repository's null CSP null", () => {
-    expect(conformanceConfigOverride({ app: { security: { csp: null } } }).app.security.csp).toBeNull();
+    expect(
+      conformanceConfigOverride({ app: { security: { csp: null } } }).app.security.csp
+    ).toBeNull();
   });
 
   it("extends a string CSP with the collector", () => {
-    const override = conformanceConfigOverride({ app: { security: { csp: "default-src 'self'" } } });
+    const override = conformanceConfigOverride({
+      app: { security: { csp: "default-src 'self'" } },
+    });
     expect(override.app.security.csp).toBe(
       `default-src 'self'; connect-src 'self' ${CONFORMANCE_COLLECTOR_ORIGIN}`
     );

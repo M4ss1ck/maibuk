@@ -80,323 +80,312 @@ async function openChapter(page: Page, title: string): Promise<void> {
   await page.keyboard.press("ControlOrMeta+End");
 }
 
-test.describe(
-  "Echoes editor Commands @wf:plugins-echoes-editor @sc:plugin.maibuk-echoes.toggleHighlights @sc:plugin.maibuk-echoes.nextEcho @sc:plugin.maibuk-echoes.previousEcho",
-  () => {
-    test.describe("Chapter editor", () => {
-      test.use({
-        library: "echoesBook",
-        plugins: ["maibuk-echoes"],
-        pluginApprovals: [{ pluginId: "maibuk-echoes", granted: [...REQUIRED_PERMISSIONS] }],
-        builtInPlugins: [{ id: "maibuk-echoes" }],
-      });
-
-      test("its Default Shortcut toggles labelled highlights off and on", async ({ page }) => {
-        await openChapter(page, ECHO_CHAPTER);
-        await expect(marks(page)).toHaveCount(0);
-
-        await page.keyboard.press("Alt+F7");
-        // One mark per occurrence of a nearby echo; the first is the first
-        // "harbor", labelled by the distance to the next one.
-        await expect(marks(page)).toHaveCount(ECHO_COUNT);
-        await expect(marks(page).first()).toHaveAccessibleDescription(
-          "harbor, repeated 4 words later"
-        );
-
-        await page.keyboard.press("Alt+F7");
-        await expect(marks(page)).toHaveCount(0);
-      });
-
-      test("the first toggle after a cold start paints highlights and presses the button", async ({
-        page,
-      }) => {
-        // Nothing was toggled before this: the first Alt+F7 is the cold-start
-        // toggle, which must paint (#529), not reset itself off.
-        await openChapter(page, ECHO_CHAPTER);
-        await expect(marks(page)).toHaveCount(0);
-        await page.keyboard.press("Alt+F7");
-        await expect(marks(page)).toHaveCount(ECHO_COUNT);
-        await expect(marks(page).first()).toHaveAccessibleDescription(
-          "harbor, repeated 4 words later"
-        );
-      });
-
-      test("Next and Previous move the caret, announce, and wrap at both ends", async ({
-        page,
-      }) => {
-        await openChapter(page, ECHO_CHAPTER);
-        await page.keyboard.press("Alt+F7");
-        await expect(marks(page)).toHaveCount(ECHO_COUNT);
-
-        // The caret started at the end, so the first Next enters at Echo 1.
-        await page.keyboard.press("Alt+F8");
-        await expect(toast(page, "Echo 1 of 12: harbor, repeated 4 words later")).toBeVisible();
-        await expect.poll(async () => (await caretText(page)).startsWith("harbor")).toBe(true);
-
-        // Previous from the first wraps to the last.
-        await page.keyboard.press("Alt+Shift+F8");
-        await expect(toast(page, "Echo 12 of 12: night, repeated 6 words earlier")).toBeVisible();
-        await expect.poll(async () => (await caretText(page)).startsWith("night")).toBe(true);
-
-        // Next from the last wraps back to the first.
-        await page.keyboard.press("Alt+F8");
-        await expect(toast(page, "Echo 1 of 12: harbor, repeated 4 words later")).toBeVisible();
-        await expect.poll(async () => (await caretText(page)).startsWith("harbor")).toBe(true);
-      });
-
-      test("with highlights off, Next announces they are off and moves nothing", async ({
-        page,
-      }) => {
-        await openChapter(page, ECHO_CHAPTER);
-        await page.keyboard.press("Alt+F7");
-        await expect(marks(page)).toHaveCount(ECHO_COUNT);
-        await page.keyboard.press("Alt+F7");
-        await expect(marks(page)).toHaveCount(0);
-
-        // Highlights off is the first announcement here, so it is not throttled.
-        const before = await caretText(page);
-        await page.keyboard.press("Alt+F8");
-        await expect(toast(page, "Echo highlights are off")).toBeVisible();
-        await expect(marks(page)).toHaveCount(0);
-        await expect.poll(async () => caretText(page)).toBe(before);
-      });
-
-      test("with Color highlights by echo on, each Echo paints in its own color", async ({
-        page,
-      }) => {
-        // Turn the switch on in Settings, as an author does, before the Chapter opens.
-        await page.goto("/settings");
-        await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
-        const accordion = page.getByRole("button", { name: "Echoes" });
-        await expect(accordion).toBeVisible({ timeout: 20_000 });
-        await tabTo(page, accordion, { max: 250 });
-        await page.keyboard.press("Enter");
-        const colorSwitch = page.getByRole("switch", {
-          name: "Color highlights by echo",
-          exact: true,
-        });
-        await expect(colorSwitch).toBeVisible({ timeout: 15_000 });
-        await expect(colorSwitch).not.toBeChecked();
-        await tabTo(page, colorSwitch);
-        await page.keyboard.press("Space");
-        await expect(colorSwitch).toBeChecked();
-        // Leave Settings through the sidebar before the Chapter opens.
-        await tabTo(page, navOption(page, "Books"), { max: 80 });
-        await page.keyboard.press("Enter");
-        await expect(page.getByRole("grid", { name: "Books" })).toBeVisible({ timeout: 20_000 });
-
-        await openChapter(page, ECHO_CHAPTER);
-        await page.keyboard.press("Alt+F7");
-        await expect(marks(page)).toHaveCount(ECHO_COUNT);
-        await capture(page, "echo-colors-on");
-
-        // "harbor" (first in the Chapter) and "night" (last) each keep one Echo
-        // color across every occurrence; the underline carries it, the text does not.
-        const harbor = page.locator("role=mark").filter({ hasText: /^harbor$/ });
-        await expect(harbor).toHaveCount(4);
-        for (const mark of await harbor.all()) {
-          await expect(mark).toHaveCSS("text-decoration-color", "rgb(185, 133, 70)");
-        }
-        const night = page.locator("role=mark").filter({ hasText: /^night$/ });
-        await expect(night.first()).toHaveCSS("text-decoration-color", "rgb(169, 41, 255)");
-      });
-
-      test("the editor toolbar button toggles the same highlights", async ({ page }) => {
-        // The toolbar's Start lane clips its trailing entries when collapsed,
-        // and the Plugin's button is appended there: expand it, like an author.
-        await seedSettings(page, { toolbarExpanded: true });
-        await openChapter(page, ECHO_CHAPTER);
-
-        const toolbar = page.getByRole("toolbar", { name: "Toolbar" });
-        const button = toolbar.getByRole("button", { name: "Toggle echo highlights", exact: true });
-        await expect(button).toBeEnabled();
-
-        // Leave the editor for the Chapter list, then Tab until the toolbar has
-        // focus and arrow onto the Plugin's button (a roving group).
-        await page.keyboard.press("Escape");
-        await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
-        for (let i = 0; i < 40; i++) {
-          if (await isFocusWithin(toolbar)) break;
-          await page.keyboard.press("Tab");
-        }
-        await pressUntilFocused(page, "ArrowRight", button, { max: 200 });
-        await expect(button).toBeFocused();
-
-        // It is a Toggle Button: it shows on while the highlights are on.
-        await expect(marks(page)).toHaveCount(0);
-        await expect(button).toHaveAttribute("aria-pressed", "false");
-        await page.keyboard.press("Enter");
-        await expect(marks(page)).toHaveCount(ECHO_COUNT);
-        await expect(
-          toolbar.getByRole("button", { name: "Toggle echo highlights", pressed: true })
-        ).toBeVisible();
-        await page.keyboard.press("Enter");
-        await expect(marks(page)).toHaveCount(0);
-        await expect(
-          toolbar.getByRole("button", { name: "Toggle echo highlights", pressed: false })
-        ).toBeVisible();
-      });
+test.describe("Echoes editor Commands @wf:plugins-echoes-editor @sc:plugin.maibuk-echoes.toggleHighlights @sc:plugin.maibuk-echoes.nextEcho @sc:plugin.maibuk-echoes.previousEcho", () => {
+  test.describe("Chapter editor", () => {
+    test.use({
+      library: "echoesBook",
+      plugins: ["maibuk-echoes"],
+      pluginApprovals: [{ pluginId: "maibuk-echoes", granted: [...REQUIRED_PERMISSIONS] }],
+      builtInPlugins: [{ id: "maibuk-echoes" }],
     });
 
-    test.describe("Chapter editor, caret never placed", () => {
-      test.use({
-        library: "echoesBook",
-        plugins: ["maibuk-echoes"],
-        pluginApprovals: [{ pluginId: "maibuk-echoes", granted: [...REQUIRED_PERMISSIONS] }],
-        builtInPlugins: [{ id: "maibuk-echoes" }],
-      });
+    test("its Default Shortcut toggles labelled highlights off and on", async ({ page }) => {
+      await openChapter(page, ECHO_CHAPTER);
+      await expect(marks(page)).toHaveCount(0);
 
-      test("toggles from its Shortcut straight from the Chapter list", async ({ page }) => {
-        await page.goto("/");
-        await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
-        const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
-        await page.keyboard.press("1");
-        await expect(card).toBeFocused();
-        await page.keyboard.press("Enter");
-        await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
+      await page.keyboard.press("Alt+F7");
+      // One mark per occurrence of a nearby echo; the first is the first
+      // "harbor", labelled by the distance to the next one.
+      await expect(marks(page)).toHaveCount(ECHO_COUNT);
+      await expect(marks(page).first()).toHaveAccessibleDescription(
+        "harbor, repeated 4 words later"
+      );
 
-        const grid = page.getByRole("grid", { name: "Chapters" });
-        const row = grid.getByRole("row", { name: ECHO_CHAPTER });
-        await page.keyboard.press("Escape");
-        await tabTo(page, grid.getByRole("row", { selected: true }));
-        await pressUntilFocused(page, "ArrowUp", row);
-        await page.keyboard.press("Enter");
-        const text = page.getByRole("textbox", { name: `Text of ${ECHO_CHAPTER}` });
-        await expect(text).toBeVisible();
-        // Back in the Chapter list: the editor on screen never had the caret.
-        await page.keyboard.press("Escape");
-        await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
-
-        await page.keyboard.press("Alt+F7");
-        await expect(marks(page)).toHaveCount(ECHO_COUNT);
-      });
+      await page.keyboard.press("Alt+F7");
+      await expect(marks(page)).toHaveCount(0);
     });
 
-    test.describe("Note editor", () => {
-      test.use({
-        library: "notesWithLinksAndTags",
-        plugins: ["maibuk-echoes"],
-        pluginApprovals: [{ pluginId: "maibuk-echoes", granted: [...REQUIRED_PERMISSIONS] }],
-        builtInPlugins: [{ id: "maibuk-echoes" }],
+    test("the first toggle after a cold start paints highlights and presses the button", async ({
+      page,
+    }) => {
+      // Nothing was toggled before this: the first Alt+F7 is the cold-start
+      // toggle, which must paint (#529), not reset itself off.
+      await openChapter(page, ECHO_CHAPTER);
+      await expect(marks(page)).toHaveCount(0);
+      await page.keyboard.press("Alt+F7");
+      await expect(marks(page)).toHaveCount(ECHO_COUNT);
+      await expect(marks(page).first()).toHaveAccessibleDescription(
+        "harbor, repeated 4 words later"
+      );
+    });
+
+    test("Next and Previous move the caret, announce, and wrap at both ends", async ({ page }) => {
+      await openChapter(page, ECHO_CHAPTER);
+      await page.keyboard.press("Alt+F7");
+      await expect(marks(page)).toHaveCount(ECHO_COUNT);
+
+      // The caret started at the end, so the first Next enters at Echo 1.
+      await page.keyboard.press("Alt+F8");
+      await expect(toast(page, "Echo 1 of 12: harbor, repeated 4 words later")).toBeVisible();
+      await expect.poll(async () => (await caretText(page)).startsWith("harbor")).toBe(true);
+
+      // Previous from the first wraps to the last.
+      await page.keyboard.press("Alt+Shift+F8");
+      await expect(toast(page, "Echo 12 of 12: night, repeated 6 words earlier")).toBeVisible();
+      await expect.poll(async () => (await caretText(page)).startsWith("night")).toBe(true);
+
+      // Next from the last wraps back to the first.
+      await page.keyboard.press("Alt+F8");
+      await expect(toast(page, "Echo 1 of 12: harbor, repeated 4 words later")).toBeVisible();
+      await expect.poll(async () => (await caretText(page)).startsWith("harbor")).toBe(true);
+    });
+
+    test("with highlights off, Next announces they are off and moves nothing", async ({ page }) => {
+      await openChapter(page, ECHO_CHAPTER);
+      await page.keyboard.press("Alt+F7");
+      await expect(marks(page)).toHaveCount(ECHO_COUNT);
+      await page.keyboard.press("Alt+F7");
+      await expect(marks(page)).toHaveCount(0);
+
+      // Highlights off is the first announcement here, so it is not throttled.
+      const before = await caretText(page);
+      await page.keyboard.press("Alt+F8");
+      await expect(toast(page, "Echo highlights are off")).toBeVisible();
+      await expect(marks(page)).toHaveCount(0);
+      await expect.poll(async () => caretText(page)).toBe(before);
+    });
+
+    test("with Color highlights by echo on, each Echo paints in its own color", async ({
+      page,
+    }) => {
+      // Turn the switch on in Settings, as an author does, before the Chapter opens.
+      await page.goto("/settings");
+      await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+      const accordion = page.getByRole("button", { name: "Echoes" });
+      await expect(accordion).toBeVisible({ timeout: 20_000 });
+      await tabTo(page, accordion, { max: 250 });
+      await page.keyboard.press("Enter");
+      const colorSwitch = page.getByRole("switch", {
+        name: "Color highlights by echo",
+        exact: true,
       });
+      await expect(colorSwitch).toBeVisible({ timeout: 15_000 });
+      await expect(colorSwitch).not.toBeChecked();
+      await tabTo(page, colorSwitch);
+      await page.keyboard.press("Space");
+      await expect(colorSwitch).toBeChecked();
+      // Leave Settings through the sidebar before the Chapter opens.
+      await tabTo(page, navOption(page, "Books"), { max: 80 });
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("grid", { name: "Books" })).toBeVisible({ timeout: 20_000 });
 
-      test("a Note editor toggles highlights for its own content", async ({ page }) => {
-        await page.goto("/notes");
-        await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
+      await openChapter(page, ECHO_CHAPTER);
+      await page.keyboard.press("Alt+F7");
+      await expect(marks(page)).toHaveCount(ECHO_COUNT);
+      await capture(page, "echo-colors-on");
 
-        const grid = page.getByRole("grid", { name: "Notes" });
-        const card = grid.getByRole("row", { name: new RegExp(SEED_NOTES.keeperLog) });
-        await expect(card).toHaveCount(1);
-        await tabTo(page, grid.getByRole("row").first(), { max: 40 });
-        await page.keyboard.press("Home");
-        await pressUntilFocused(page, "ArrowRight", card, { max: 10 });
-        await page.keyboard.press("Enter");
-        await expect(page).toHaveURL(/\/notes\/.+/);
-
-        const text = page.getByRole("textbox", { name: "Text", exact: true });
-        await tabTo(page, text, { max: 80 });
-        await expect(text).toBeFocused();
-        // Type a nearby echo, then toggle highlights on the Note's own text.
-        await page.keyboard.press("ControlOrMeta+End");
-        await page.keyboard.press("Enter");
-        await page.keyboard.type("The door opened. The door closed.");
-        await expect(marks(page)).toHaveCount(0);
-
-        await page.keyboard.press("Alt+F7");
-        await expect(marks(page)).toHaveCount(2);
-        await expect(marks(page).first()).toHaveAccessibleDescription(
-          "door, repeated 3 words later"
-        );
-      });
-
-      /** Opens Tide Tables from the Notes grid, leaving the caret out of its text. */
-      async function openTideTables(page: Page): Promise<void> {
-        await page.goto("/notes");
-        await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
-        const grid = page.getByRole("grid", { name: "Notes" });
-        const card = grid.getByRole("row", { name: new RegExp(SEED_NOTES.tideTables) });
-        await expect(card).toHaveCount(1);
-        await tabTo(page, grid.getByRole("row").first(), { max: 40 });
-        await page.keyboard.press("Home");
-        await pressUntilFocused(page, "ArrowRight", card, { max: 10 });
-        await page.keyboard.press("Enter");
-        await expect(page).toHaveURL(/\/notes\/.+/);
-        await expect(page.getByRole("textbox", { name: "Text", exact: true })).toBeVisible();
-        await expect(page.getByRole("textbox", { name: "Text", exact: true })).not.toBeFocused();
+      // "harbor" (first in the Chapter) and "night" (last) each keep one Echo
+      // color across every occurrence; the underline carries it, the text does not.
+      const harbor = page.locator("role=mark").filter({ hasText: /^harbor$/ });
+      await expect(harbor).toHaveCount(4);
+      for (const mark of await harbor.all()) {
+        await expect(mark).toHaveCSS("text-decoration-color", "rgb(185, 133, 70)");
       }
-
-      // "High water at six. Low water at noon.": "water" is one nearby echo.
-      const WATER = /^water, repeated \d+ words later$/;
-
-      test("an existing Note toggles from its Shortcut before the caret is placed", async ({
-        page,
-      }) => {
-        await openTideTables(page);
-        await expect(marks(page)).toHaveCount(0);
-
-        await page.keyboard.press("Alt+F7");
-        await expect(marks(page)).toHaveCount(2);
-        await expect(marks(page).first()).toHaveAccessibleDescription(WATER);
-      });
-
-      test("an existing Note toggles from the toolbar button before the caret is placed", async ({
-        page,
-      }) => {
-        await seedSettings(page, { toolbarExpanded: true });
-        await openTideTables(page);
-        const text = page.getByRole("textbox", { name: "Text", exact: true });
-        const toolbar = page.getByRole("toolbar", { name: "Toolbar" });
-        const button = toolbar.getByRole("button", { name: "Toggle echo highlights", exact: true });
-        await expect(button).toBeEnabled();
-
-        for (let i = 0; i < 80; i++) {
-          if (await isFocusWithin(toolbar)) break;
-          await page.keyboard.press("Tab");
-          // Tab into the text would place the caret; this test is about never doing so.
-          await expect(text).not.toBeFocused();
-        }
-        await pressUntilFocused(page, "ArrowRight", button, { max: 200 });
-        await page.keyboard.press("Enter");
-
-        // Soft, so a base without the fix still reaches the capture; a soft
-        // failure still fails the test.
-        await expect.soft(marks(page)).toHaveCount(2);
-        await capture(page, "echoes-note-no-caret");
-        await expect(marks(page)).toHaveCount(2);
-        await expect(marks(page).first()).toHaveAccessibleDescription(WATER);
-        await expect(
-          toolbar.getByRole("button", { name: "Toggle echo highlights", pressed: true })
-        ).toBeVisible();
-      });
+      const night = page.locator("role=mark").filter({ hasText: /^night$/ });
+      await expect(night.first()).toHaveCSS("text-decoration-color", "rgb(169, 41, 255)");
     });
 
-    test.describe("Ephemeral", () => {
-      test.use({
-        plugins: ["maibuk-echoes"],
-        pluginApprovals: [{ pluginId: "maibuk-echoes", granted: [...REQUIRED_PERMISSIONS] }],
-        builtInPlugins: [{ id: "maibuk-echoes" }],
-      });
+    test("the editor toolbar button toggles the same highlights", async ({ page }) => {
+      // The toolbar's Start lane clips its trailing entries when collapsed,
+      // and the Plugin's button is appended there: expand it, like an author.
+      await seedSettings(page, { toolbarExpanded: true });
+      await openChapter(page, ECHO_CHAPTER);
 
-      test("the Ephemeral toggles highlights in its Spell Check language", async ({ page }) => {
-        await page.goto("/ephemeral");
-        await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
-        const text = page.getByRole("textbox", { name: "Text", exact: true });
-        await tabTo(page, text, { max: 40 });
-        // English, the app's (and so the Ephemeral's Spell Check) language.
-        await page.keyboard.type("The door opened. The door closed.");
-        await expect(marks(page)).toHaveCount(0);
+      const toolbar = page.getByRole("toolbar", { name: "Toolbar" });
+      const button = toolbar.getByRole("button", { name: "Toggle echo highlights", exact: true });
+      await expect(button).toBeEnabled();
 
-        await page.keyboard.press("Alt+F7");
-        await expect.soft(marks(page)).toHaveCount(2);
-        await capture(page, "echoes-ephemeral");
-        await expect(marks(page)).toHaveCount(2);
-        await expect(marks(page).first()).toHaveAccessibleDescription(
-          "door, repeated 3 words later"
-        );
+      // Leave the editor for the Chapter list, then Tab until the toolbar has
+      // focus and arrow onto the Plugin's button (a roving group).
+      await page.keyboard.press("Escape");
+      await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
+      for (let i = 0; i < 40; i++) {
+        if (await isFocusWithin(toolbar)) break;
+        await page.keyboard.press("Tab");
+      }
+      await pressUntilFocused(page, "ArrowRight", button, { max: 200 });
+      await expect(button).toBeFocused();
 
-        await page.keyboard.press("Alt+F7");
-        await expect(marks(page)).toHaveCount(0);
-      });
+      // It is a Toggle Button: it shows on while the highlights are on.
+      await expect(marks(page)).toHaveCount(0);
+      await expect(button).toHaveAttribute("aria-pressed", "false");
+      await page.keyboard.press("Enter");
+      await expect(marks(page)).toHaveCount(ECHO_COUNT);
+      await expect(
+        toolbar.getByRole("button", { name: "Toggle echo highlights", pressed: true })
+      ).toBeVisible();
+      await page.keyboard.press("Enter");
+      await expect(marks(page)).toHaveCount(0);
+      await expect(
+        toolbar.getByRole("button", { name: "Toggle echo highlights", pressed: false })
+      ).toBeVisible();
     });
-  }
-);
+  });
+
+  test.describe("Chapter editor, caret never placed", () => {
+    test.use({
+      library: "echoesBook",
+      plugins: ["maibuk-echoes"],
+      pluginApprovals: [{ pluginId: "maibuk-echoes", granted: [...REQUIRED_PERMISSIONS] }],
+      builtInPlugins: [{ id: "maibuk-echoes" }],
+    });
+
+    test("toggles from its Shortcut straight from the Chapter list", async ({ page }) => {
+      await page.goto("/");
+      await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
+      const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
+      await page.keyboard.press("1");
+      await expect(card).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
+
+      const grid = page.getByRole("grid", { name: "Chapters" });
+      const row = grid.getByRole("row", { name: ECHO_CHAPTER });
+      await page.keyboard.press("Escape");
+      await tabTo(page, grid.getByRole("row", { selected: true }));
+      await pressUntilFocused(page, "ArrowUp", row);
+      await page.keyboard.press("Enter");
+      const text = page.getByRole("textbox", { name: `Text of ${ECHO_CHAPTER}` });
+      await expect(text).toBeVisible();
+      // Back in the Chapter list: the editor on screen never had the caret.
+      await page.keyboard.press("Escape");
+      await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
+
+      await page.keyboard.press("Alt+F7");
+      await expect(marks(page)).toHaveCount(ECHO_COUNT);
+    });
+  });
+
+  test.describe("Note editor", () => {
+    test.use({
+      library: "notesWithLinksAndTags",
+      plugins: ["maibuk-echoes"],
+      pluginApprovals: [{ pluginId: "maibuk-echoes", granted: [...REQUIRED_PERMISSIONS] }],
+      builtInPlugins: [{ id: "maibuk-echoes" }],
+    });
+
+    test("a Note editor toggles highlights for its own content", async ({ page }) => {
+      await page.goto("/notes");
+      await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
+
+      const grid = page.getByRole("grid", { name: "Notes" });
+      const card = grid.getByRole("row", { name: new RegExp(SEED_NOTES.keeperLog) });
+      await expect(card).toHaveCount(1);
+      await tabTo(page, grid.getByRole("row").first(), { max: 40 });
+      await page.keyboard.press("Home");
+      await pressUntilFocused(page, "ArrowRight", card, { max: 10 });
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(/\/notes\/.+/);
+
+      const text = page.getByRole("textbox", { name: "Text", exact: true });
+      await tabTo(page, text, { max: 80 });
+      await expect(text).toBeFocused();
+      // Type a nearby echo, then toggle highlights on the Note's own text.
+      await page.keyboard.press("ControlOrMeta+End");
+      await page.keyboard.press("Enter");
+      await page.keyboard.type("The door opened. The door closed.");
+      await expect(marks(page)).toHaveCount(0);
+
+      await page.keyboard.press("Alt+F7");
+      await expect(marks(page)).toHaveCount(2);
+      await expect(marks(page).first()).toHaveAccessibleDescription("door, repeated 3 words later");
+    });
+
+    /** Opens Tide Tables from the Notes grid, leaving the caret out of its text. */
+    async function openTideTables(page: Page): Promise<void> {
+      await page.goto("/notes");
+      await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
+      const grid = page.getByRole("grid", { name: "Notes" });
+      const card = grid.getByRole("row", { name: new RegExp(SEED_NOTES.tideTables) });
+      await expect(card).toHaveCount(1);
+      await tabTo(page, grid.getByRole("row").first(), { max: 40 });
+      await page.keyboard.press("Home");
+      await pressUntilFocused(page, "ArrowRight", card, { max: 10 });
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(/\/notes\/.+/);
+      await expect(page.getByRole("textbox", { name: "Text", exact: true })).toBeVisible();
+      await expect(page.getByRole("textbox", { name: "Text", exact: true })).not.toBeFocused();
+    }
+
+    // "High water at six. Low water at noon.": "water" is one nearby echo.
+    const WATER = /^water, repeated \d+ words later$/;
+
+    test("an existing Note toggles from its Shortcut before the caret is placed", async ({
+      page,
+    }) => {
+      await openTideTables(page);
+      await expect(marks(page)).toHaveCount(0);
+
+      await page.keyboard.press("Alt+F7");
+      await expect(marks(page)).toHaveCount(2);
+      await expect(marks(page).first()).toHaveAccessibleDescription(WATER);
+    });
+
+    test("an existing Note toggles from the toolbar button before the caret is placed", async ({
+      page,
+    }) => {
+      await seedSettings(page, { toolbarExpanded: true });
+      await openTideTables(page);
+      const text = page.getByRole("textbox", { name: "Text", exact: true });
+      const toolbar = page.getByRole("toolbar", { name: "Toolbar" });
+      const button = toolbar.getByRole("button", { name: "Toggle echo highlights", exact: true });
+      await expect(button).toBeEnabled();
+
+      for (let i = 0; i < 80; i++) {
+        if (await isFocusWithin(toolbar)) break;
+        await page.keyboard.press("Tab");
+        // Tab into the text would place the caret; this test is about never doing so.
+        await expect(text).not.toBeFocused();
+      }
+      await pressUntilFocused(page, "ArrowRight", button, { max: 200 });
+      await page.keyboard.press("Enter");
+
+      // Soft, so a base without the fix still reaches the capture; a soft
+      // failure still fails the test.
+      await expect.soft(marks(page)).toHaveCount(2);
+      await capture(page, "echoes-note-no-caret");
+      await expect(marks(page)).toHaveCount(2);
+      await expect(marks(page).first()).toHaveAccessibleDescription(WATER);
+      await expect(
+        toolbar.getByRole("button", { name: "Toggle echo highlights", pressed: true })
+      ).toBeVisible();
+    });
+  });
+
+  test.describe("Ephemeral", () => {
+    test.use({
+      plugins: ["maibuk-echoes"],
+      pluginApprovals: [{ pluginId: "maibuk-echoes", granted: [...REQUIRED_PERMISSIONS] }],
+      builtInPlugins: [{ id: "maibuk-echoes" }],
+    });
+
+    test("the Ephemeral toggles highlights in its Spell Check language", async ({ page }) => {
+      await page.goto("/ephemeral");
+      await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 60_000 });
+      const text = page.getByRole("textbox", { name: "Text", exact: true });
+      await tabTo(page, text, { max: 40 });
+      // English, the app's (and so the Ephemeral's Spell Check) language.
+      await page.keyboard.type("The door opened. The door closed.");
+      await expect(marks(page)).toHaveCount(0);
+
+      await page.keyboard.press("Alt+F7");
+      await expect.soft(marks(page)).toHaveCount(2);
+      await capture(page, "echoes-ephemeral");
+      await expect(marks(page)).toHaveCount(2);
+      await expect(marks(page).first()).toHaveAccessibleDescription("door, repeated 3 words later");
+
+      await page.keyboard.press("Alt+F7");
+      await expect(marks(page)).toHaveCount(0);
+    });
+  });
+});

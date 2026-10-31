@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { Check, Minus } from "lucide-react";
-import { Checkbox as AriaCheckbox } from "react-aria-components/Checkbox";
+import { CheckboxButton, CheckboxField } from "react-aria-components/Checkbox";
 
 interface CheckboxProps {
   checked: boolean;
@@ -25,7 +25,9 @@ export function Checkbox({
   inputRef,
 }: CheckboxProps) {
   return (
-    <AriaCheckbox
+    // The field's wrapper div is `display: contents`, so the button label
+    // keeps the inline layout the deprecated single-element Checkbox had.
+    <CheckboxField
       inputRef={inputRef}
       id={id}
       isSelected={checked}
@@ -33,31 +35,35 @@ export function Checkbox({
       onChange={onChange}
       isDisabled={disabled}
       aria-label={label}
-      className={({ isDisabled }) =>
-        `inline-flex items-center justify-center align-middle ${
-          isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
-        } ${className}`
-      }
+      className="contents"
     >
-      {({ isSelected, isIndeterminate, isFocusVisible }) => {
-        const filled = isSelected || isIndeterminate;
-        return (
-          <span
-            aria-hidden="true"
-            className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors pointer-coarse:size-5 ${
-              filled
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-muted-foreground bg-card"
-            } ${isFocusVisible ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
-          >
-            {isIndeterminate ? (
-              <Minus className="size-3" strokeWidth={3} />
-            ) : isSelected ? (
-              <Check className="size-3" strokeWidth={3} />
-            ) : null}
-          </span>
-        );
-      }}
-    </AriaCheckbox>
+      <CheckboxButton
+        className={({ isDisabled }) =>
+          `inline-flex items-center justify-center align-middle ${
+            isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+          } ${className}`
+        }
+      >
+        {({ isSelected, isIndeterminate, isFocusVisible }) => {
+          const filled = isSelected || isIndeterminate;
+          return (
+            <span
+              aria-hidden="true"
+              className={`flex size-4 shrink-0 items-center justify-center rounded border transition-colors pointer-coarse:size-5 ${
+                filled
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-muted-foreground bg-card"
+              } ${isFocusVisible ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+            >
+              {isIndeterminate ? (
+                <Minus className="size-3" strokeWidth={3} />
+              ) : isSelected ? (
+                <Check className="size-3" strokeWidth={3} />
+              ) : null}
+            </span>
+          );
+        }}
+      </CheckboxButton>
+    </CheckboxField>
   );
 }

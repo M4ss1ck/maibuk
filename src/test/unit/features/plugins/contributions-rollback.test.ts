@@ -26,9 +26,7 @@ let toolbarCalls = 0;
 let passing = Number.POSITIVE_INFINITY;
 
 vi.mock("@/features/settings/toolbar-config", async (importOriginal) => {
-  const mod = await importOriginal<
-    typeof import("@/features/settings/toolbar-config")
-  >();
+  const mod = await importOriginal<typeof import("@/features/settings/toolbar-config")>();
   return {
     ...mod,
     registerToolbarButtons: ((

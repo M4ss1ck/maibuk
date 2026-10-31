@@ -100,7 +100,7 @@ const dateFrom = formatDate(epochMs - 180 * dayMs);
 const dateTo = formatDate(epochMs - 90 * dayMs);
 
 export const NOTES_FILTER_BENCH_CASES: readonly { name: string; criteria: NoteFilterCriteria }[] = [
-  { name: 'exclude: task', criteria: { excludeTags: ["task"] } },
+  { name: "exclude: task", criteria: { excludeTags: ["task"] } },
   { name: "include: idea+draft", criteria: { tags: ["idea", "draft"] } },
   { name: "exclude: task+todo+done", criteria: { excludeTags: ["task", "todo", "done"] } },
   { name: "date range: 90 days", criteria: { dateFrom, dateTo } },

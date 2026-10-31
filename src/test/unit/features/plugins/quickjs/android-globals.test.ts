@@ -79,7 +79,23 @@ describe("QUICKJS_ANDROID_GLOBALS", () => {
 });
 
 const WORKER_CONSOLE_METHODS = [
-  "assert", "clear", "count", "countReset", "debug", "dir", "dirxml", "error",
-  "group", "groupCollapsed", "groupEnd", "info", "log", "table", "time",
-  "timeEnd", "timeLog", "trace", "warn",
+  "assert",
+  "clear",
+  "count",
+  "countReset",
+  "debug",
+  "dir",
+  "dirxml",
+  "error",
+  "group",
+  "groupCollapsed",
+  "groupEnd",
+  "info",
+  "log",
+  "table",
+  "time",
+  "timeEnd",
+  "timeLog",
+  "trace",
+  "warn",
 ];

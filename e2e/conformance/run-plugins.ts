@@ -84,13 +84,17 @@ function git(args: string[]): string {
 function warnOnGate(cargoLockText: string): void {
   const resultsPath = resolve(root, CONFORMANCE_RESULTS_PATH);
   if (!existsSync(resultsPath)) {
-    console.log(`[conformance] no recorded results yet (${CONFORMANCE_RESULTS_PATH}); nothing to gate against`);
+    console.log(
+      `[conformance] no recorded results yet (${CONFORMANCE_RESULTS_PATH}); nothing to gate against`
+    );
     return;
   }
   const results = JSON.parse(readFileSync(resultsPath, "utf8"));
   const { ok, problems } = checkConformanceGate(cargoLockText, results);
   if (ok) return;
-  console.warn("[conformance] Cargo.lock differs from the recorded results (a rerun will refresh it):");
+  console.warn(
+    "[conformance] Cargo.lock differs from the recorded results (a rerun will refresh it):"
+  );
   for (const problem of problems) console.warn(`[conformance]   ${problem}`);
 }
 
@@ -254,7 +258,12 @@ async function main(): Promise<void> {
   mkdirSync(outDir, { recursive: true });
   const runDir: RunDir = {
     dir: resolve(root, "e2e/.output/conformance", String(startedAt)),
-    configPath: resolve(root, "e2e/.output/conformance", String(startedAt), "tauri.conformance.json"),
+    configPath: resolve(
+      root,
+      "e2e/.output/conformance",
+      String(startedAt),
+      "tauri.conformance.json"
+    ),
   };
   mkdirSync(runDir.dir, { recursive: true });
 
@@ -285,7 +294,9 @@ async function main(): Promise<void> {
   }
   if (platforms.length === 0) refuse("no platform is available to measure");
 
-  console.log(`[conformance] building the fixture-hostile Plugin for ${CONFORMANCE_COLLECTOR_BASE_URL}`);
+  console.log(
+    `[conformance] building the fixture-hostile Plugin for ${CONFORMANCE_COLLECTOR_BASE_URL}`
+  );
   await buildPluginFixtures({ origin: CONFORMANCE_COLLECTOR_BASE_URL });
 
   const resultsPath = resolve(root, CONFORMANCE_RESULTS_PATH);
@@ -310,7 +321,13 @@ async function main(): Promise<void> {
 
       if (options.record) {
         if (canRecord(result.outcome)) {
-          results = mergePlatformRun(results, platform, result.run, result.stack, new Date().toISOString());
+          results = mergePlatformRun(
+            results,
+            platform,
+            result.run,
+            result.stack,
+            new Date().toISOString()
+          );
           writeFileSync(resultsPath, `${JSON.stringify(results, null, 2)}\n`);
           console.log(
             `[conformance] recorded ${platform} (exit ${result.outcome.exitCode}) into ${CONFORMANCE_RESULTS_PATH}`
@@ -334,7 +351,9 @@ async function main(): Promise<void> {
   await collector.close();
 
   console.log(`\n${formatConformanceTable(summaries)}`);
-  console.log(`[conformance] repo ${git(["rev-parse", "--short", "HEAD"]) || "unknown"}; app ${readAppVersion()}`);
+  console.log(
+    `[conformance] repo ${git(["rev-parse", "--short", "HEAD"]) || "unknown"}; app ${readAppVersion()}`
+  );
   wallClock(startedAt);
   process.exit(laneExitCode(summaries));
 }

@@ -7,7 +7,10 @@ import {
   resetChangeFeedForTests,
   type Change,
 } from "@/features/sync/change-feed";
-import { registerPendingEditsFlush, resetPendingEditsForTests } from "@/features/sync/pending-edits";
+import {
+  registerPendingEditsFlush,
+  resetPendingEditsForTests,
+} from "@/features/sync/pending-edits";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
 const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
@@ -258,7 +261,9 @@ describe("Plugin Library writes", () => {
   });
 
   it("refuses a Tutorial Library id without writing", async () => {
-    await expect(updatePluginChapterContent("tutorial-chapter", { text: "x" })).rejects.toMatchObject({
+    await expect(
+      updatePluginChapterContent("tutorial-chapter", { text: "x" })
+    ).rejects.toMatchObject({
       name: "PluginApiError",
       code: "library-unavailable",
     });

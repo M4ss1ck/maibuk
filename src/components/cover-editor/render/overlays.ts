@@ -1,4 +1,4 @@
-import { type FabricObject, Line, Rect } from "fabric";
+import { type FabricObject, Polyline, Rect } from "fabric";
 import type { CoverDoc } from "@/features/covers/scene/schema";
 
 const GUIDE_COLOR = "#e94560";
@@ -36,10 +36,18 @@ export function buildOverlays(doc: CoverDoc): FabricObject[] {
 
 /** A full-length snap guide line (vertical at x, or horizontal at y). */
 export function buildGuideLine(orientation: "v" | "h", pos: number, doc: CoverDoc): FabricObject {
-  const coords: [number, number, number, number] =
-    orientation === "v" ? [pos, 0, pos, doc.height] : [0, pos, doc.width, pos];
+  const points =
+    orientation === "v"
+      ? [
+          { x: pos, y: 0 },
+          { x: pos, y: doc.height },
+        ]
+      : [
+          { x: 0, y: pos },
+          { x: doc.width, y: pos },
+        ];
   return markHelper(
-    new Line(coords, {
+    new Polyline(points, {
       stroke: GUIDE_COLOR,
       strokeWidth: 1,
       strokeUniform: true,

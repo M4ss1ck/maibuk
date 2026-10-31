@@ -27,6 +27,15 @@ describe("CI workflow", () => {
     expect(checks).not.toMatch(/needs:/);
   });
 
+  // `pnpm lint` fails on Biome warnings, infos, and unformatted files, and the
+  // deprecation gate needs the compiler API, so both live in the fast job (#670).
+  it("runs the strict lint and the deprecation gate in the fast job", () => {
+    const checks = job("checks");
+    expect(checks).toContain("run: pnpm lint");
+    expect(checks).toContain("run: pnpm check:deprecated");
+    expect(packageJson.scripts.lint).toBe("node scripts/lint.mjs");
+  });
+
   // The e2e project has its own tsconfig, outside the root one: without this
   // step a broken e2e config or spec type only fails a local run, because
   // Playwright never runs in CI (issue #472).
@@ -36,6 +45,7 @@ describe("CI workflow", () => {
 
   it("shards the suite and enforces the coverage thresholds only on the merged report", () => {
     const tests = job("tests");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: asserts the literal GitHub Actions expression in ci.yml.
     expect(tests).toContain("--shard=${{ matrix.shard }}/");
     expect(tests).toContain("--reporter=blob");
     for (const metric of ["lines", "functions", "statements", "branches"]) {

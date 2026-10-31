@@ -130,9 +130,7 @@ describe("settings runtime rows (issue #429)", () => {
 
   it("matches a Plugin card name case- and accent-insensitively", () => {
     const translate = (key: string) => key;
-    const pluginCards = [
-      { id: pluginCardRowId("echoes"), label: "Ecos", description: "" },
-    ];
+    const pluginCards = [{ id: pluginCardRowId("echoes"), label: "Ecos", description: "" }];
     const outline = buildOutline(SETTINGS_SECTIONS, {
       present: ["plugins"],
       platform: "web",
@@ -210,9 +208,7 @@ describe("pluginCardEntries()", () => {
     expect(cards.at(-1)?.description).toBe("");
 
     // A Plugin's own locale names its card in that language.
-    const spanish = pluginCardEntries("es").find(
-      (card) => card.id === pluginCardRowId("local")
-    );
+    const spanish = pluginCardEntries("es").find((card) => card.id === pluginCardRowId("local"));
     expect(spanish?.label).toBe("Localizado");
     expect(spanish?.description).toBe("Descripción");
   });

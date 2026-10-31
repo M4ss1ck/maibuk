@@ -1,6 +1,9 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { releaseNotesFile, compareReleaseNotesParity } from "@/features/releases/release-notes-parity";
+import {
+  releaseNotesFile,
+  compareReleaseNotesParity,
+} from "@/features/releases/release-notes-parity";
 import { parseChangelog } from "@/features/releases/release-notes";
 
 const SOURCE = [

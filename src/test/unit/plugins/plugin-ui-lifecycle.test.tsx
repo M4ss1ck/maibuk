@@ -80,9 +80,7 @@ describe("usePluginRemoteUi", () => {
 
   it("disposes the receiver on unmount", () => {
     const runtime = fakeRuntime();
-    const { result, unmount } = renderHook(() =>
-      usePluginRemoteUi(runtime, "page.one", () => {})
-    );
+    const { result, unmount } = renderHook(() => usePluginRemoteUi(runtime, "page.one", () => {}));
     const ui = result.current.ui;
     expect(ui).not.toBeNull();
     unmount();

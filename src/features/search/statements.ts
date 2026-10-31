@@ -35,9 +35,7 @@ const BLOCKS_PER_INSERT = 200;
  * save wrote mid-pass instead of failing its unique key, and the rebuild's
  * sweep re-reads that saved item before the FTS rebuild.
  */
-export function rebuildSearchRowsStatements(
-  items: readonly SearchItemText[]
-): AtomicStatement[] {
+export function rebuildSearchRowsStatements(items: readonly SearchItemText[]): AtomicStatement[] {
   const rows: (string | number | null)[][] = [];
   for (const item of items) {
     for (const block of item.blocks) {

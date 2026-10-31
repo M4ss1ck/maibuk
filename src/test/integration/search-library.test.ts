@@ -199,9 +199,9 @@ describe("searchLibrary matching", () => {
     const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
     await seedChapter(book.id, "<p>La canción del faro</p>");
 
-    await expect(
-      search({ query: "cancion", regex: true, kinds: ["chapter"] })
-    ).resolves.toEqual(expect.objectContaining({ results: [] }));
+    await expect(search({ query: "cancion", regex: true, kinds: ["chapter"] })).resolves.toEqual(
+      expect.objectContaining({ results: [] })
+    );
     const found = await search({ query: "canci.n", regex: true, kinds: ["chapter"] });
     expect(found.results).toHaveLength(1);
   });
@@ -560,7 +560,12 @@ describe("searchLibrary agrees with the shared expression", () => {
       options: { wholeWord: true },
     },
     { name: "Regex", query: "[a-z]\\d", text: "a1 b2 c3", options: { regex: true } },
-    { name: "accent-insensitive literal", query: "cancion", text: "La canción del faro", options: {} },
+    {
+      name: "accent-insensitive literal",
+      query: "cancion",
+      text: "La canción del faro",
+      options: {},
+    },
     {
       name: "accent-insensitive literal, reversed",
       query: "canción",

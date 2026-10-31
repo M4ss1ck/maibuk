@@ -26,17 +26,18 @@ const DESKTOP: PluginHostPlatform = "desktop";
 const ANDROID: PluginHostPlatform = "android";
 
 describe("native lane fixture Plugins list their platforms", () => {
-  it.each(["fixture-hostile", "fixture-healthy", "fixture-bench"])(
-    "%s runs on the Linux desktop kind (webkitgtk lane)",
-    (folder) => {
-      expect(manifestRunsOn(loadManifest(folder).platforms, DESKTOP)).toBe(true);
-    }
-  );
+  it.each([
+    "fixture-hostile",
+    "fixture-healthy",
+    "fixture-bench",
+  ])("%s runs on the Linux desktop kind (webkitgtk lane)", (folder) => {
+    expect(manifestRunsOn(loadManifest(folder).platforms, DESKTOP)).toBe(true);
+  });
 
-  it.each(["fixture-hostile", "fixture-healthy"])(
-    "%s runs on the Android kind (conformance:plugins --platform android)",
-    (folder) => {
-      expect(manifestRunsOn(loadManifest(folder).platforms, ANDROID)).toBe(true);
-    }
-  );
+  it.each([
+    "fixture-hostile",
+    "fixture-healthy",
+  ])("%s runs on the Android kind (conformance:plugins --platform android)", (folder) => {
+    expect(manifestRunsOn(loadManifest(folder).platforms, ANDROID)).toBe(true);
+  });
 });

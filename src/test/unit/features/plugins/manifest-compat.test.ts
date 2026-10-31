@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { checkPluginCompatibility, diffPluginPermissions } from "@/features/plugins/manifest-compat";
+import {
+  checkPluginCompatibility,
+  diffPluginPermissions,
+} from "@/features/plugins/manifest-compat";
 import { validateManifestValue } from "@/features/plugins/manifest-validate";
 import type { PluginHostVersions, PluginManifest } from "@/features/plugins/types";
 

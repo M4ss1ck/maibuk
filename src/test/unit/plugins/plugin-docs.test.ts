@@ -57,7 +57,6 @@ function docFilePaths(): string[] {
   return [...inDocs, ...EXTRA_DOCS.map((doc) => join(root, doc))];
 }
 
-
 /** A command path resolves at the repo root or inside templates/plugin/. */
 function commandPathExists(commandPath: string): boolean {
   return (
@@ -209,7 +208,16 @@ describe("Plugin authoring docs", () => {
     expect(packaging).toMatch(/a minor is breaking/);
     expect(packaging).toMatch(/\^0\.1\.1/);
     expect(packaging).toMatch(/\]\(\.\.\/adr\/0029-[^)]+\.md\)/);
-    expect(existsSync(join(root, "docs", "adr", "0029-before-1-0-a-plugin-api-patch-is-additive-and-a-minor-is-breaking.md"))).toBe(true);
+    expect(
+      existsSync(
+        join(
+          root,
+          "docs",
+          "adr",
+          "0029-before-1-0-a-plugin-api-patch-is-additive-and-a-minor-is-breaking.md"
+        )
+      )
+    ).toBe(true);
   });
 
   it("ships every required page", () => {

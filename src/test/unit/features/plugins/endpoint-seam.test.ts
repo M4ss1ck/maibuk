@@ -84,12 +84,7 @@ describe("dispatchSeamEndpointRequest", () => {
   it("returns a whole answer's status, headers and text", async () => {
     serve(
       servingRuntime((sink) => {
-        sink.respond(
-          201,
-          [["x-tag", "a"]],
-          bytesToBase64(new TextEncoder().encode("pong")),
-          false
-        );
+        sink.respond(201, [["x-tag", "a"]], bytesToBase64(new TextEncoder().encode("pong")), false);
       })
     );
 

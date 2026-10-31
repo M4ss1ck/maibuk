@@ -34,12 +34,11 @@ const NEWER_ENGLISH: ReleaseNotes = {
   number: "99.1.0",
   date: "2099-01-02",
   url: "https://github.com/M4ss1ck/maibuk/releases/tag/v99.1.0",
-  sections: [
-    { kind: "fixed", items: [[{ kind: "text", text: "Fix the sidebar flicker" }]] },
-  ],
+  sections: [{ kind: "fixed", items: [[{ kind: "text", text: "Fix the sidebar flicker" }]] }],
 };
 
-const SPANISH_FILE = "## [99.1.0] - 2099-01-02\n\n### Fixed\n- Corrige el parpadeo de la barra lateral\n";
+const SPANISH_FILE =
+  "## [99.1.0] - 2099-01-02\n\n### Fixed\n- Corrige el parpadeo de la barra lateral\n";
 
 interface FetchLog {
   fetchImpl: typeof fetch;
@@ -207,7 +206,9 @@ describe("Newer Releases in the app language", () => {
     await checkForNewerReleases(fetchImpl);
     const dialog = renderOpenDialog(useReleaseStore.getState().newerReleases);
 
-    expect(await within(article(dialog, "99.1.0")).findByText(ENGLISH_NEWER_BULLET)).toBeInTheDocument();
+    expect(
+      await within(article(dialog, "99.1.0")).findByText(ENGLISH_NEWER_BULLET)
+    ).toBeInTheDocument();
 
     await act(async () => {
       await i18n.changeLanguage("es");
@@ -216,7 +217,9 @@ describe("Newer Releases in the app language", () => {
     expect(
       await within(article(dialog, "99.1.0")).findByText(SPANISH_NEWER_BULLET)
     ).toBeInTheDocument();
-    expect(within(article(dialog, "99.1.0")).queryByText(ENGLISH_NEWER_BULLET)).not.toBeInTheDocument();
+    expect(
+      within(article(dialog, "99.1.0")).queryByText(ENGLISH_NEWER_BULLET)
+    ).not.toBeInTheDocument();
     expect(urls.filter((url) => url === RELEASES_URL)).toHaveLength(1);
     expect(urls.filter((url) => url === CHANGELOG_ES)).toHaveLength(1);
   });
@@ -226,7 +229,9 @@ describe("Newer Releases in the app language", () => {
     await checkForNewerReleases(fetchImpl);
     const dialog = renderOpenDialog(useReleaseStore.getState().newerReleases);
 
-    expect(await within(article(dialog, "99.1.0")).findByText(ENGLISH_NEWER_BULLET)).toBeInTheDocument();
+    expect(
+      await within(article(dialog, "99.1.0")).findByText(ENGLISH_NEWER_BULLET)
+    ).toBeInTheDocument();
     expect(urls).toEqual([RELEASES_URL]);
   });
 });

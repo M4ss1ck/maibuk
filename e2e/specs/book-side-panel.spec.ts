@@ -103,7 +103,9 @@ test.describe("Book side panel tabs @wf:sidepanel-open-tabs", () => {
 });
 
 test.describe("Book side panel keyboard resize @wf:sidepanel-resize", () => {
-  test("arrows resize the panel from the separator, Escape leaves it, and the width persists", async ({ page }) => {
+  test("arrows resize the panel from the separator, Escape leaves it, and the width persists", async ({
+    page,
+  }) => {
     await openPanel(page);
     const handle = resizeHandle(page);
 

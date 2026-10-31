@@ -16,7 +16,11 @@
 // still count: as one frame a slot longer than the dropped run.
 // The refresh interval is the compositor's own BeginFrame spacing.
 
-import { FrameReportRefused, type FrameSample, percentile } from "@/test/support/frames/frame-report";
+import {
+  FrameReportRefused,
+  type FrameSample,
+  percentile,
+} from "@/test/support/frames/frame-report";
 
 export interface TraceEvent {
   name: string;

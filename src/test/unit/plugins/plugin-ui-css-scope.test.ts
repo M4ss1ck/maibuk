@@ -67,9 +67,9 @@ describe("scopePluginCss", () => {
   });
 
   it("drops @import so a stylesheet cannot pull in a network or host resource", () => {
-    expect(scopePluginCss('@import url("https://example.com/x.css"); .a { color: red }', SCOPE)).toBe(
-      `${SCOPE} .a { color: red }`
-    );
+    expect(
+      scopePluginCss('@import url("https://example.com/x.css"); .a { color: red }', SCOPE)
+    ).toBe(`${SCOPE} .a { color: red }`);
   });
 
   it("drops @keyframes so an animation name stays global and untouched", () => {
@@ -160,7 +160,7 @@ describe("scopePluginCss", () => {
     it("returns an empty string when the stylesheet does not parse", () => {
       expect(scopePluginCss(".a { color: red", SCOPE)).toBe("");
       expect(scopePluginCss(".a { color: red } } .b { color: blue }", SCOPE)).toBe("");
-      expect(scopePluginCss('/* unclosed', SCOPE)).toBe("");
+      expect(scopePluginCss("/* unclosed", SCOPE)).toBe("");
     });
 
     it("keeps :root, html, and body inert by prefixing them under the surface", () => {
@@ -174,7 +174,9 @@ describe("scopePluginCss", () => {
     });
 
     it("scopes :has() as a descendant query", () => {
-      expect(scopePluginCss(":has(p) { color: red }", SCOPE)).toBe(`${SCOPE} :has(p) { color: red }`);
+      expect(scopePluginCss(":has(p) { color: red }", SCOPE)).toBe(
+        `${SCOPE} :has(p) { color: red }`
+      );
     });
 
     it("drops a nesting selector, which would refer to a parent the surface never provided", () => {
@@ -262,9 +264,7 @@ describe("everySelectorScoped (#484)", () => {
   });
 
   it("passes every part of a scoped list selector", () => {
-    expect(
-      everySelectorScoped([{ selectorText: `${S} .x:not(.a, .b), ${S} .y` }], S)
-    ).toBe(true);
+    expect(everySelectorScoped([{ selectorText: `${S} .x:not(.a, .b), ${S} .y` }], S)).toBe(true);
   });
 
   it("recurses into a grouping rule's nested style rules", () => {
@@ -345,7 +345,9 @@ describe("scopePluginCss onDrop reasons (#484)", () => {
   it("reports the whole sheet dropped by layer 1", () => {
     const reasons: string[] = [];
     expect(
-      scopePluginCss('.a{b:"x\n} body{display:none} .z{c:"}', SCOPE, (reason) => reasons.push(reason))
+      scopePluginCss('.a{b:"x\n} body{display:none} .z{c:"}', SCOPE, (reason) =>
+        reasons.push(reason)
+      )
     ).toBe("");
     expect(reasons).toHaveLength(1);
     expect(reasons[0]).toContain("line break");
@@ -359,7 +361,9 @@ describe("scopePluginCss onDrop reasons (#484)", () => {
 
   it("reports nothing for a rule it scopes cleanly", () => {
     const reasons: string[] = [];
-    expect(scopePluginCss(".a{b:c}", SCOPE, (reason) => reasons.push(reason))).toBe(`${SCOPE} .a{b:c}`);
+    expect(scopePluginCss(".a{b:c}", SCOPE, (reason) => reasons.push(reason))).toBe(
+      `${SCOPE} .a{b:c}`
+    );
     expect(reasons).toEqual([]);
   });
 });

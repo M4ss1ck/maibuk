@@ -45,7 +45,9 @@ describe("WebLibraryGate", () => {
     await user.keyboard("{Enter}");
 
     expect(await screen.findByText("the app")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Maibuk is open in another tab" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Maibuk is open in another tab" })
+    ).not.toBeInTheDocument();
     expect(open).toHaveBeenCalledTimes(2);
   });
 
@@ -67,9 +69,7 @@ describe("WebLibraryGate", () => {
       await screen.findByRole("heading", { name: "Maibuk is open in another tab" })
     ).toBeInTheDocument();
     expect(screen.queryByText("the app")).not.toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Try again" })).toHaveFocus()
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Try again" })).toHaveFocus());
   });
 
   it("shows the app with no notice when the Library is on OPFS", async () => {

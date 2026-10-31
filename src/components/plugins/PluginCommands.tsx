@@ -72,9 +72,11 @@ export function PluginCommands() {
   const bindings = useMemo(() => {
     if (!lifecycle) return [];
     const active = activeRouteContexts(pathname);
-    return pluginCommandBindings(lifecycle, (route) => navigate(route), () => itemContextRef.current).filter(
-      (binding) => getCommand(binding.id).contexts.some((context) => active.has(context))
-    );
+    return pluginCommandBindings(
+      lifecycle,
+      (route) => navigate(route),
+      () => itemContextRef.current
+    ).filter((binding) => getCommand(binding.id).contexts.some((context) => active.has(context)));
   }, [lifecycle, pathname, navigate, revision, lifecycleRevision, itemContext]);
 
   useShortcuts(bindings);

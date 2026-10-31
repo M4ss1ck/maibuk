@@ -51,7 +51,12 @@ function makeWindow(): Harness {
   return { win, listeners, posted };
 }
 
-function dispatch(harness: Harness, data: unknown, ports: MessagePort[] = [], source?: unknown): void {
+function dispatch(
+  harness: Harness,
+  data: unknown,
+  ports: MessagePort[] = [],
+  source?: unknown
+): void {
   const event = { source: source ?? harness.win, data, ports } as unknown as MessageEvent;
   for (const listener of harness.listeners) listener(event);
 }
@@ -74,7 +79,11 @@ beforeEach(() => {
       return url;
     },
   });
-  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: () => {} });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    writable: true,
+    value: () => {},
+  });
 });
 
 describe("frameShim()", () => {

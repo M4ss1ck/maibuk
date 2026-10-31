@@ -123,9 +123,7 @@ describe("createTauriPluginFileGrantStore()", () => {
 
     expect(error).toBeInstanceOf(PluginApiError);
     expect((error as PluginApiError).code).toBe("file-missing");
-    expect((error as PluginApiError).message).toBe(
-      "the file behind this File Grant is gone"
-    );
+    expect((error as PluginApiError).message).toBe("the file behind this File Grant is gone");
   });
 
   it("turns an invalid-params refusal into a PluginApiError with the invalid-params code", async () => {

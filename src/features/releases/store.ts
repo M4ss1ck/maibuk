@@ -22,8 +22,7 @@ export const useReleaseStore = create<ReleaseState>()((set) => ({
   isNotesOpen: false,
   // A new list is new notes: what a language answered for the old one is not
   // this list's notes, and the check reads them again for the current language.
-  setNewerReleases: (newerReleases) =>
-    set({ newerReleases, localizedNewerReleases: new Map() }),
+  setNewerReleases: (newerReleases) => set({ newerReleases, localizedNewerReleases: new Map() }),
   setLocalizedNewerReleases: (locale, notes) =>
     set((state) => {
       const localizedNewerReleases = new Map(state.localizedNewerReleases);

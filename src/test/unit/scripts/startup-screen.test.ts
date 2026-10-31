@@ -234,9 +234,9 @@ describe("renderStartupScreen()", () => {
 describe("window_background.rs", () => {
   /** One `Color(r, g, b, a)` literal, as the `#rrggbb` the stylesheet uses. */
   function rustColor(name: "LIGHT" | "DARK"): string {
-    const match = new RegExp(
-      `const ${name}: Color = Color\\((\\d+), (\\d+), (\\d+), \\d+\\)`
-    ).exec(RUST_WINDOW_BACKGROUND);
+    const match = new RegExp(`const ${name}: Color = Color\\((\\d+), (\\d+), (\\d+), \\d+\\)`).exec(
+      RUST_WINDOW_BACKGROUND
+    );
     if (!match) throw new Error(`no ${name} Color literal in window_background.rs`);
     return `#${match
       .slice(1, 4)

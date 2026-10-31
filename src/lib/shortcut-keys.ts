@@ -232,6 +232,7 @@ export function isIgnoredKeyEvent(
   event: Pick<KeyboardEvent, "key" | "isComposing" | "keyCode">
 ): boolean {
   if (event.isComposing) return true;
+  // deprecated-api: Safari's IME-commit Enter has isComposing false; keyCode 229 is its only tell.
   if (event.keyCode === 229) return true;
   return DEAD_KEYS.has(event.key.toLowerCase());
 }

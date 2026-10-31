@@ -28,7 +28,8 @@ afterEach(async () => {
 
 function sourceOf(folder: PluginFolder): { manifest: PluginManifest; folder: PluginFolder } {
   const result = readPluginManifest(folder);
-  if (!result.ok) throw new Error(`fixture manifest is invalid: ${JSON.stringify(result.problems)}`);
+  if (!result.ok)
+    throw new Error(`fixture manifest is invalid: ${JSON.stringify(result.problems)}`);
   return { manifest: result.manifest, folder };
 }
 
@@ -185,8 +186,14 @@ describe("registerPluginContributions", () => {
 
   it("orders owners Maibuk first, then by display name, then id", () => {
     const rows = { settingsRows: [{ id: "a", label: "A" }] };
-    const zebra = pluginFolder({}, { id: "zebra", name: "Zebra", platforms: ["desktop"], contributes: rows });
-    const alpha = pluginFolder({}, { id: "alpha", name: "Alpha", platforms: ["desktop"], contributes: rows });
+    const zebra = pluginFolder(
+      {},
+      { id: "zebra", name: "Zebra", platforms: ["desktop"], contributes: rows }
+    );
+    const alpha = pluginFolder(
+      {},
+      { id: "alpha", name: "Alpha", platforms: ["desktop"], contributes: rows }
+    );
     const builtIn = pluginFolder(
       {},
       { id: "maibuk", name: "Zulu", platforms: ["desktop"], contributes: rows }

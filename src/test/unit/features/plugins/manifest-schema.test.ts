@@ -111,6 +111,8 @@ describe("toolbar button Toggle Button flag", () => {
   });
 
   it("rejects a non-boolean toggle", () => {
-    expect(pluginManifestSchema.safeParse(withToolbarButton({ toggle: "yes" })).success).toBe(false);
+    expect(pluginManifestSchema.safeParse(withToolbarButton({ toggle: "yes" })).success).toBe(
+      false
+    );
   });
 });

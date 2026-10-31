@@ -32,9 +32,7 @@ async function chooseFromSelect(
 }
 
 const outlineTree = (page: Page, name: string) =>
-  page
-    .getByRole("navigation", { name })
-    .getByRole("treegrid", { name });
+  page.getByRole("navigation", { name }).getByRole("treegrid", { name });
 const outlineEntry = (page: Page, navName: string, entryName: string) =>
   outlineTree(page, navName).getByRole("row", { name: new RegExp(`^${entryName}(, current)?$`) });
 
@@ -51,12 +49,9 @@ test.describe("Settings Plugins empty state @wf:settings-plugins", () => {
       backwards: true,
       max: 6,
     });
-    await pressUntilFocused(
-      page,
-      "ArrowDown",
-      outlineEntry(page, "Settings sections", "Plugins"),
-      { max: 20 }
-    );
+    await pressUntilFocused(page, "ArrowDown", outlineEntry(page, "Settings sections", "Plugins"), {
+      max: 20,
+    });
     await page.keyboard.press("Enter");
     await expect(main.getByRole("heading", { name: "Plugins" })).toBeFocused();
 

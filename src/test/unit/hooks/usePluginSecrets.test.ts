@@ -6,10 +6,7 @@
  */
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  registerPluginSecretStore,
-  type PluginSecretStore,
-} from "@/features/plugins/secret-store";
+import { registerPluginSecretStore, type PluginSecretStore } from "@/features/plugins/secret-store";
 import { usePluginSecrets } from "@/hooks/usePluginSecrets";
 
 /** A Plugin secret store whose overrides stand in for the registered one. */
@@ -48,18 +45,14 @@ describe("usePluginSecrets()", () => {
     expect(result.current.remembered).toBe(false);
 
     // The store registers after the first render, as it does on the web build.
-    registerPluginSecretStore(
-      store({ isRemembered: () => true, setRemembered: async () => {} })
-    );
+    registerPluginSecretStore(store({ isRemembered: () => true, setRemembered: async () => {} }));
     rerender({ active: true });
 
     await waitFor(() => expect(result.current.remembered).toBe(true));
   });
 
   it("reflects a remembered Plugin on the first render when the store is present", () => {
-    registerPluginSecretStore(
-      store({ isRemembered: () => true, setRemembered: async () => {} })
-    );
+    registerPluginSecretStore(store({ isRemembered: () => true, setRemembered: async () => {} }));
     const { result } = renderHook(() => usePluginSecrets("tracer"));
     expect(result.current.remembered).toBe(true);
   });

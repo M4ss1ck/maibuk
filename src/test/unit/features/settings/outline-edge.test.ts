@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  OUTLINE_EDGE_SAMPLES,
-  cubicBezier,
-  edgeKeyframes,
-} from "@/features/settings/outline-edge";
+import { OUTLINE_EDGE_SAMPLES, cubicBezier, edgeKeyframes } from "@/features/settings/outline-edge";
 
 const linear = cubicBezier(0, 0, 1, 1);
 const easeIn = cubicBezier(0.4, 0, 1, 1);
@@ -74,9 +70,7 @@ describe("edgeKeyframes()", () => {
       edgeKeyframes(naturals, 0, 80, easeOut),
     ]) {
       for (const frame of frames) {
-        const partial = frame.heights.filter(
-          (height, i) => height > 0 && height < naturals[i]
-        );
+        const partial = frame.heights.filter((height, i) => height > 0 && height < naturals[i]);
         expect(partial.length).toBeLessThanOrEqual(1);
       }
     }
@@ -142,8 +136,7 @@ describe("edgeKeyframes() boundary keyframes", () => {
       const frames = edgeKeyframes(naturals, from, to, ease);
       for (let i = 1; i < frames.length; i++) {
         const changed = frames[i].heights.filter(
-          (height, row) =>
-            Math.abs(height - frames[i - 1].heights[row]) > 1e-9
+          (height, row) => Math.abs(height - frames[i - 1].heights[row]) > 1e-9
         );
         expect(changed.length).toBeLessThanOrEqual(1);
       }
@@ -168,14 +161,10 @@ describe("edgeKeyframes() boundary keyframes", () => {
       const high = Math.max(from, to);
       for (const boundary of boundaries) {
         if (boundary <= low || boundary >= high) continue;
-        const crossing = frames.find(
-          (frame) => Math.abs(edgeOf(frame) - boundary) < 1e-6
-        );
+        const crossing = frames.find((frame) => Math.abs(edgeOf(frame) - boundary) < 1e-6);
         expect(crossing).toBeDefined();
         // On a boundary, some prefix of rows is full and the rest are empty.
-        const full = crossing!.heights.filter(
-          (height) => Math.abs(height - 20) < 1e-6
-        ).length;
+        const full = crossing!.heights.filter((height) => Math.abs(height - 20) < 1e-6).length;
         crossing!.heights.forEach((height, row) => {
           expect(height).toBeCloseTo(row < full ? 20 : 0, 6);
         });

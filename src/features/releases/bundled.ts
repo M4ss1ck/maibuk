@@ -44,9 +44,7 @@ export function releaseNotesLanguage(language: string | undefined): string {
  * its file is still loading. English, and a language with no file, is ready
  * from the start, so the dialog can read it synchronously on its first render.
  */
-export function cachedBundledReleaseNotes(
-  language: string
-): readonly ReleaseNotes[] | undefined {
+export function cachedBundledReleaseNotes(language: string): readonly ReleaseNotes[] | undefined {
   const locale = releaseNotesLanguage(language);
   if (locale === "en" || !LOADERS.has(locale)) return BUNDLED_RELEASES;
   return PARSED.get(locale);

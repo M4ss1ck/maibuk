@@ -13,7 +13,6 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
-
 vi.mock("@/features/settings/store", async () => {
   const { DEFAULT_SHORTCUT_SETTINGS } =
     await vi.importActual<typeof import("@/lib/shortcut-resolve")>("@/lib/shortcut-resolve");

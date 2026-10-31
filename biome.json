@@ -11,6 +11,7 @@
       "!!**/dist",
       "!!**/node_modules",
       "!!**/src/features/symbols/data",
+      "!src/plugin-sdk/api.generated.ts",
       "!!plugins/*/vendor",
       "!!templates"
     ]

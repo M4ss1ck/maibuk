@@ -7,7 +7,11 @@
 // never. Android is judged on the same checks (T1 to T8) as Linux (#517); the
 // engine records the engine's own version (`mergeRunEngine`), never the app version.
 
-import { RENDERER_DIED_DETAIL, T7_CHECK_ID, T8_CHECK_ID } from "@/features/plugins/conformance/checks";
+import {
+  RENDERER_DIED_DETAIL,
+  T7_CHECK_ID,
+  T8_CHECK_ID,
+} from "@/features/plugins/conformance/checks";
 import type {
   ConformanceCheck,
   ConformanceEngine,
@@ -104,7 +108,10 @@ export function classifyRun(
   if (options.processDied && settled.has(T7_CHECK_ID) && !settled.has(T8_CHECK_ID)) {
     return {
       kind: "renderer-died",
-      checks: [...state.progress, { id: T8_CHECK_ID, status: "fail", detail: RENDERER_DIED_DETAIL }],
+      checks: [
+        ...state.progress,
+        { id: T8_CHECK_ID, status: "fail", detail: RENDERER_DIED_DETAIL },
+      ],
     };
   }
   return { kind: "incomplete" };
@@ -127,7 +134,11 @@ export function finalizeRun(
   if (completion.kind === "renderer-died") {
     return { checks: completion.checks, exitCode, note: `renderer died during ${T8_CHECK_ID}` };
   }
-  return { checks: completion.checks, exitCode, note: exitCode === 0 ? "all checks passed" : "check failed" };
+  return {
+    checks: completion.checks,
+    exitCode,
+    note: exitCode === 0 ? "all checks passed" : "check failed",
+  };
 }
 
 /**
@@ -201,7 +212,10 @@ export function buildPlatformRun(input: {
 }
 
 /** A fresh results file with no platforms recorded yet. */
-export function emptyResultsFile(recordedAt: string, stack: ConformanceStack): ConformanceResultsFile {
+export function emptyResultsFile(
+  recordedAt: string,
+  stack: ConformanceStack
+): ConformanceResultsFile {
   return { schema: CONFORMANCE_RESULTS_SCHEMA, recordedAt, stack, platforms: {} };
 }
 

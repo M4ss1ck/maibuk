@@ -38,9 +38,7 @@ export function setup(port, options = {}) {
         // round trip as a toast so the spec can see the target travel intact.
         const params = message.params || {};
         const target = params.target ? ` on ${params.target.kind}` : "";
-        port.postMessage(
-          JSON.stringify({ kind: "reply", id: message.id, ok: true, result: null })
-        );
+        port.postMessage(JSON.stringify({ kind: "reply", id: message.id, ok: true, result: null }));
         port.postMessage(
           JSON.stringify({
             kind: "call",
@@ -84,7 +82,11 @@ async function report(port, fetchImpl, id) {
   );
 }
 
-if (typeof self !== "undefined" && typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope) {
+if (
+  typeof self !== "undefined" &&
+  typeof WorkerGlobalScope !== "undefined" &&
+  self instanceof WorkerGlobalScope
+) {
   self.onmessage = (event) => {
     const port = event.ports && event.ports[0];
     if (!port) return;

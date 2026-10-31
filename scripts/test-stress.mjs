@@ -39,7 +39,6 @@ export function parseStressArgs(argv, cores = availableParallelism()) {
 export function failedTests(output) {
   const lines = new Set();
   for (const raw of output.split("\n")) {
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI color codes
     const line = raw.replace(/\x1b\[[0-9;]*m/g, "").trim();
     if (line.startsWith("FAIL ") && line.includes(" > ")) lines.add(line.slice(5).trim());
   }

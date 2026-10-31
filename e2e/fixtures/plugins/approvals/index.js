@@ -38,7 +38,13 @@ function drawKeptRow(mountPort) {
     [
       MUTATION_TYPE_INSERT_CHILD,
       ROOT_ID,
-      { id: "kept-1", type: NODE_TYPE_ELEMENT, element: "maibuk-switch", properties: {}, children: [] },
+      {
+        id: "kept-1",
+        type: NODE_TYPE_ELEMENT,
+        element: "maibuk-switch",
+        properties: {},
+        children: [],
+      },
       0,
     ],
     [MUTATION_TYPE_UPDATE_PROPERTY, "kept-1", "label", "Approvals kept data"],

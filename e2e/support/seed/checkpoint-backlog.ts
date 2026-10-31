@@ -57,13 +57,11 @@ export async function checkpointBacklog(): Promise<void> {
     // The one Named Version, a day after the backlog.
     const named = `<p>Tide table for day ${CHECKPOINT_BACKLOG.autoCheckpoints + 1}: spring edition.</p>`;
     await updateChapterRow(chapter.id, { content: named }, "local");
-    await useVersionStore
-      .getState()
-      .createVersion({
-        bookId: book.id,
-        name: CHECKPOINT_BACKLOG.namedVersion,
-        triggerType: "manual",
-      });
+    await useVersionStore.getState().createVersion({
+      bookId: book.id,
+      name: CHECKPOINT_BACKLOG.namedVersion,
+      triggerType: "manual",
+    });
   } finally {
     Date.now = realNow;
   }

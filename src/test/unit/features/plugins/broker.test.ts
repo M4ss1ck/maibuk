@@ -189,9 +189,9 @@ describe("Plugin Permission checks", () => {
     expect(
       (await refusal(client.network.fetch({ url: "https://evil-example.com/" }))).permission
     ).toBe("network:evil-example.com");
-    expect((await refusal(client.network.fetch({ url: "https://notexample.com/" }))).permission).toBe(
-      "network:notexample.com"
-    );
+    expect(
+      (await refusal(client.network.fetch({ url: "https://notexample.com/" }))).permission
+    ).toBe("network:notexample.com");
   });
 
   it("refuses a fetch to a declared network host that is not granted", async () => {
@@ -331,11 +331,8 @@ describe("Editor write Plugin Permissions", () => {
       "permission-denied"
     );
     expect(
-      (
-        await refusal(
-          client.editor.replace({ range: { from: 0, to: 1 }, content: { text: "x" } })
-        )
-      ).code
+      (await refusal(client.editor.replace({ range: { from: 0, to: 1 }, content: { text: "x" } })))
+        .code
     ).toBe("permission-denied");
   });
 });
@@ -645,7 +642,9 @@ describe("Command run exemption", () => {
 
   it("still refuses an unsolicited second notification within the window", async () => {
     const { client } = setup();
-    await expect(client.notifications.show({ variant: "info", message: "one" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "one" })).resolves.toBe(
+      null
+    );
     const error = await refusal(client.notifications.show({ variant: "info", message: "two" }));
     expect(error.code).toBe("rate-limited");
   });
@@ -656,8 +655,12 @@ describe("Command run exemption", () => {
     const run = broker.request("command.run", { id: "nextEcho" });
     await arrived;
 
-    await expect(client.notifications.show({ variant: "info", message: "one" })).resolves.toBe(null);
-    await expect(client.notifications.show({ variant: "info", message: "two" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "one" })).resolves.toBe(
+      null
+    );
+    await expect(client.notifications.show({ variant: "info", message: "two" })).resolves.toBe(
+      null
+    );
 
     finish();
     await expect(run).resolves.toBeNull();
@@ -665,18 +668,26 @@ describe("Command run exemption", () => {
 
   it("applies the limit again once the Command run settles", async () => {
     const { broker, client } = setup();
-    await expect(client.notifications.show({ variant: "info", message: "own" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "own" })).resolves.toBe(
+      null
+    );
     const { arrived, finish } = holdRun(client);
     const run = broker.request("command.run", { id: "nextEcho" });
     await arrived;
     // The solicited announcements come through the exemption and do not reset
     // the unsolicited slot, so the first unsolicited call still owns it.
-    await expect(client.notifications.show({ variant: "info", message: "step 1" })).resolves.toBe(null);
-    await expect(client.notifications.show({ variant: "info", message: "step 2" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "step 1" })).resolves.toBe(
+      null
+    );
+    await expect(client.notifications.show({ variant: "info", message: "step 2" })).resolves.toBe(
+      null
+    );
     finish();
     await expect(run).resolves.toBeNull();
 
-    const error = await refusal(client.notifications.show({ variant: "info", message: "own again" }));
+    const error = await refusal(
+      client.notifications.show({ variant: "info", message: "own again" })
+    );
     expect(error.code).toBe("rate-limited");
   });
 
@@ -685,10 +696,14 @@ describe("Command run exemption", () => {
     const { arrived, finish } = holdRun(client);
     const run = broker.request("command.run", { id: "nextEcho" });
     await arrived;
-    await expect(client.notifications.show({ variant: "info", message: "step" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "step" })).resolves.toBe(
+      null
+    );
 
     advance(COMMAND_RUN_EXEMPTION_MS);
-    await expect(client.notifications.show({ variant: "info", message: "own" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "own" })).resolves.toBe(
+      null
+    );
     const error = await refusal(client.notifications.show({ variant: "info", message: "spam" }));
     expect(error.code).toBe("rate-limited");
 
@@ -698,15 +713,21 @@ describe("Command run exemption", () => {
 
   it("releases the exemption when the Command run fails", async () => {
     const { broker, client } = setup();
-    await expect(client.notifications.show({ variant: "info", message: "own" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "own" })).resolves.toBe(
+      null
+    );
     const { arrived, fail } = holdRun(client);
     const run = refusal(broker.request("command.run", { id: "nextEcho" }));
     await arrived;
-    await expect(client.notifications.show({ variant: "info", message: "step" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "step" })).resolves.toBe(
+      null
+    );
     fail();
     expect((await run).code).toBe("internal-error");
 
-    const error = await refusal(client.notifications.show({ variant: "info", message: "own again" }));
+    const error = await refusal(
+      client.notifications.show({ variant: "info", message: "own again" })
+    );
     expect(error.code).toBe("rate-limited");
   });
 
@@ -715,7 +736,9 @@ describe("Command run exemption", () => {
     const { arrived } = holdRun(client);
     const run = refusal(broker.request("command.run", { id: "nextEcho" }));
     await arrived;
-    await expect(client.notifications.show({ variant: "info", message: "step" })).resolves.toBe(null);
+    await expect(client.notifications.show({ variant: "info", message: "step" })).resolves.toBe(
+      null
+    );
 
     broker.stop("requested");
     expect((await run).code).toBe("plugin-stopped");
@@ -1079,10 +1102,7 @@ describe("streamed bodies", () => {
     for (const text of texts) yield { text };
   }
 
-  function stream(
-    client: ReturnType<typeof setup>["client"],
-    url = "https://api.example.com/sse"
-  ) {
+  function stream(client: ReturnType<typeof setup>["client"], url = "https://api.example.com/sse") {
     const received: string[] = [];
     const ended = new Promise<PluginApiError | undefined>((resolve) => {
       void client.network.fetch(
@@ -1098,7 +1118,11 @@ describe("streamed bodies", () => {
       declared: ["network:api.example.com"],
       handlers: {
         "network.fetch": async () => ({
-          result: { status: 200, statusText: "OK", headers: { "content-type": "text/event-stream" } },
+          result: {
+            status: 200,
+            statusText: "OK",
+            headers: { "content-type": "text/event-stream" },
+          },
           body: chunks("data: a\n\n", "data: b\n\n"),
         }),
       },
@@ -1474,9 +1498,7 @@ describe("File Grants (ADR 0036)", () => {
     await expect(client.files.release({ grant: picked.grant })).resolves.toBeNull();
 
     await expect(client.files.list()).resolves.toEqual([]);
-    const error = await refusal(
-      client.files.read({ grant: picked.grant, offset: 0, length: 1 })
-    );
+    const error = await refusal(client.files.read({ grant: picked.grant, offset: 0, length: 1 }));
     expect(error.code).toBe("file-missing");
   });
 });

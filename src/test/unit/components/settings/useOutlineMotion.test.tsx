@@ -302,9 +302,7 @@ describe("Settings outline motion", () => {
       const offset = folding[0].keyframes[i].offset ?? 0;
       expect(cutAt(folding, offset)).toBeLessThanOrEqual(1);
     }
-    const anyCut = folding[0].keyframes.some(
-      (frame) => cutAt(folding, frame.offset ?? 0) === 1
-    );
+    const anyCut = folding[0].keyframes.some((frame) => cutAt(folding, frame.offset ?? 0) === 1);
     expect(anyCut).toBe(true);
   });
 
@@ -333,9 +331,7 @@ describe("Settings outline motion", () => {
     expect(reversing.map((call) => call.key)).toEqual(aRows);
     // Each reversal starts where that row painted, and the starting heights sum
     // to the space the section occupied: the edge never jumps.
-    const starts = reversing.map((call) =>
-      Number.parseFloat(String(call.keyframes[0].height))
-    );
+    const starts = reversing.map((call) => Number.parseFloat(String(call.keyframes[0].height)));
     expect(starts.reduce((total, height) => total + height, 0)).toBeCloseTo(paintedSum, 6);
     expect(reversing.every(onlyHeight)).toBe(true);
     expect(folding.every((call) => call.animation.cancelled)).toBe(true);
@@ -408,10 +404,7 @@ describe("Settings outline motion", () => {
     // The edge never jumps: the fold starts at the space the grow had reached.
     const bRows = growing.length;
     const starts = folding.map((call) => Number.parseFloat(startHeight(call) ?? "0"));
-    expect(starts.reduce((total, height) => total + height, 0)).toBeCloseTo(
-      (bRows * half),
-      6
-    );
+    expect(starts.reduce((total, height) => total + height, 0)).toBeCloseTo(bRows * half, 6);
     // About's rows are still not on screen: this fold has to end first.
     expect(rowsOf("about")).toEqual([]);
 

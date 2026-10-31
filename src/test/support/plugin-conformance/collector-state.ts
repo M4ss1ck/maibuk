@@ -11,9 +11,7 @@
 // the only thing that should stop them (D4). A CORS preflight (`OPTIONS`) is the
 // browser's own, never the Plugin's, so it is never a leak.
 
-import {
-  CONFORMANCE_COLLECTOR_PATHS,
-} from "@/features/plugins/conformance/reporter";
+import { CONFORMANCE_COLLECTOR_PATHS } from "@/features/plugins/conformance/reporter";
 import type {
   ConformanceCheck,
   ConformanceEngine,

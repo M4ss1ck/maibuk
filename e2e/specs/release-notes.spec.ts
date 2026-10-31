@@ -35,7 +35,9 @@ test.describe("Release Notes @wf:shell-release-notes", () => {
     await tabTo(page, badge(page).first(), { max: 30 });
     await page.keyboard.press("Enter");
     await expectNotesOpen(page);
-    await expect(notes(page).getByRole("heading", { name: "Added", level: 4 }).first()).toBeVisible();
+    await expect(
+      notes(page).getByRole("heading", { name: "Added", level: 4 }).first()
+    ).toBeVisible();
     await capture(page, "release-notes");
 
     await expectTabContained(page, dialog(page));

@@ -147,10 +147,7 @@ export async function createNoteRow(
         note.contentUpdatedAt,
       ],
     },
-    ...noteSearchStatements(
-      { id: note.id, bookId: note.bookId, content: note.content },
-      now
-    ),
+    ...noteSearchStatements({ id: note.id, bookId: note.bookId, content: note.content }, now),
   ]);
 
   let stored: Note | null = null;
@@ -160,10 +157,7 @@ export async function createNoteRow(
     stored = null;
   }
   // A read-back failure after the durable write still emits below.
-  await emitChange(
-    { entity: "note", id, origin, kind: "content" },
-    viewMeta
-  );
+  await emitChange({ entity: "note", id, origin, kind: "content" }, viewMeta);
   return stored ?? note;
 }
 
@@ -270,10 +264,7 @@ export async function deleteNoteRow(
     deleteSearchItemStatement("note", id),
   ]);
   await db.execute("DELETE FROM links WHERE source_id = ?", [id]).catch(() => {});
-  await emitChange(
-    { entity: "note", id, origin, kind: "content" },
-    viewMeta
-  );
+  await emitChange({ entity: "note", id, origin, kind: "content" }, viewMeta);
 }
 
 /**
@@ -327,10 +318,7 @@ export async function reorderNoteRows(
       affected = result.rowsAffected ?? 0;
     } catch (error) {
       for (const id of persistedIds) {
-        await emitChange(
-          { entity: "note", id, origin, kind: "metadata" },
-          viewMeta
-        );
+        await emitChange({ entity: "note", id, origin, kind: "metadata" }, viewMeta);
       }
       throw error;
     }
@@ -338,10 +326,7 @@ export async function reorderNoteRows(
   }
 
   for (const id of persistedIds) {
-    await emitChange(
-      { entity: "note", id, origin, kind: "metadata" },
-      viewMeta
-    );
+    await emitChange({ entity: "note", id, origin, kind: "metadata" }, viewMeta);
   }
 }
 
@@ -423,10 +408,7 @@ export async function applyNoteSnapshotData(
       ],
     },
     // A synced or restored Note is searchable exactly like a local save.
-    ...noteSearchStatements(
-      { id: note.id, bookId: note.bookId, content: note.content },
-      now
-    ),
+    ...noteSearchStatements({ id: note.id, bookId: note.bookId, content: note.content }, now),
   ]);
 
   // Capture this apply's stored result before the emission's awaits: a later

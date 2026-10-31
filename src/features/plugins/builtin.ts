@@ -153,7 +153,14 @@ function decodeE2EBuiltIns(record: unknown): BuiltInPlugin[] {
   if (!Array.isArray(plugins)) return [];
   return plugins.flatMap((entry) =>
     isSeed(entry)
-      ? [{ id: entry.id, manifest: entry.manifest, hash: entry.hash, files: seedFiles(entry.files) }]
+      ? [
+          {
+            id: entry.id,
+            manifest: entry.manifest,
+            hash: entry.hash,
+            files: seedFiles(entry.files),
+          },
+        ]
       : []
   );
 }

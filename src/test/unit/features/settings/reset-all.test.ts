@@ -429,7 +429,7 @@ describe("resetAllSettings", () => {
       await resetAllSettings({
         stopPlugins: () => {},
         refreshPlugins: async () => {},
-        });
+      });
 
       // The reset erased the grant; the broker re-reads it and refuses the call.
       const remaining = getPluginApproval(PLUGIN_MANIFEST.id)?.granted ?? [];

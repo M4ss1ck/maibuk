@@ -1,3 +1,4 @@
+import { capture } from "../support/capture";
 import type { Page } from "@playwright/test";
 import { expectTabContained, pressUntilFocused, tabTo } from "../support/keyboard";
 import { tamperBackupChecksums } from "../support/fault";
@@ -118,6 +119,8 @@ test.describe("Select and delete Backups @wf:backup-select-delete", () => {
     await page.keyboard.press("Space");
     await expect(firstRowCheckbox).toBeChecked();
     await expect(statusText(page)).toHaveText("1 item is selected");
+    // A checked, a focused, and an unchecked Checkbox beside the Items per page Select.
+    await capture(page, "backup-row-checkboxes");
 
     const selectAll = page.getByRole("checkbox", { name: "Select all backups on this page" });
     await tabTo(page, selectAll, { max: 6, backwards: true });

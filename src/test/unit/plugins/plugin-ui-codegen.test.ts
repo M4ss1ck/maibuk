@@ -26,9 +26,7 @@ describe("generated Plugin UI reference", () => {
   it("ui-reference.md is exactly what the generator emits (run pnpm generate:plugin-ui)", () => {
     const path = join(process.cwd(), "docs/plugins/ui-reference.md");
     const committed = readFileSync(path, "utf8");
-    expect(committed, "run pnpm generate:plugin-ui").toBe(
-      renderPluginUiReference(PLUGIN_UI_TABLE)
-    );
+    expect(committed, "run pnpm generate:plugin-ui").toBe(renderPluginUiReference(PLUGIN_UI_TABLE));
   });
 
   it("gives every table tag its own section, in table order", () => {

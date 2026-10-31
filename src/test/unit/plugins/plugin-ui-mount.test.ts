@@ -2,10 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPluginBroker } from "@/features/plugins/broker";
 import { openPluginUiMount } from "@/features/plugins/remote-ui";
 import { createPluginClient } from "@/plugin-sdk";
-import {
-  PLUGIN_UI_MOUNT_REQUEST,
-  PLUGIN_UI_UNMOUNT_REQUEST,
-} from "@/plugin-sdk/protocol";
+import { PLUGIN_UI_MOUNT_REQUEST, PLUGIN_UI_UNMOUNT_REQUEST } from "@/plugin-sdk/protocol";
 
 const channels: MessageChannel[] = [];
 

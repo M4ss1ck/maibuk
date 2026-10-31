@@ -243,10 +243,7 @@ describe("deep-link bridge", () => {
     // delivered; early records any delivery that happened while the gate was closed.
     await vi.waitFor(() => expect(handler).toHaveBeenLastCalledWith(["maibuk://note/witness"]));
     expect(early).toEqual([]);
-    expect(handler.mock.calls).toEqual([
-      [["maibuk://note/warmB"]],
-      [["maibuk://note/witness"]],
-    ]);
+    expect(handler.mock.calls).toEqual([[["maibuk://note/warmB"]], [["maibuk://note/witness"]]]);
   });
 
   it("unconsumed bootstrap is delivered via queue when gate released without getDeepLinkBootstrap", async () => {
@@ -259,9 +256,7 @@ describe("deep-link bridge", () => {
     // Bootstrap has settled but was never consumed; the gate is still closed.
     expect(handler).not.toHaveBeenCalled();
     releaseDeepLinkQueue();
-    await vi.waitFor(() =>
-      expect(handler).toHaveBeenCalledWith(["maibuk://note/coldUnconsumed"])
-    );
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledWith(["maibuk://note/coldUnconsumed"]));
     // Second release must not deliver the bootstrap again. The witness batch is
     // sent after it, so the exact call list shows nothing was redelivered.
     handler.mockClear();

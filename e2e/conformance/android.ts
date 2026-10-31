@@ -9,11 +9,7 @@ import { type Dirent, createWriteStream, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
-import {
-  ANDROID_PACKAGE,
-  type AndroidDevice,
-  PrerequisiteMissing,
-} from "../frames/android";
+import { ANDROID_PACKAGE, type AndroidDevice, PrerequisiteMissing } from "../frames/android";
 import { tauriAndroidTarget } from "@/test/support/plugin-conformance";
 import { CONFORMANCE_COLLECTOR_PORT } from "./collector";
 import type { RunningApp, RunDir } from "./types";
@@ -87,7 +83,8 @@ export function findDebugApk(root: string): string | null {
     for (const entry of entries) {
       const path = join(dir, entry.name);
       if (entry.isDirectory()) stack.push(path);
-      else if (entry.name.endsWith(".apk") && path.split(/[\\/]/).includes("debug")) found.push(path);
+      else if (entry.name.endsWith(".apk") && path.split(/[\\/]/).includes("debug"))
+        found.push(path);
     }
   }
   found.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
@@ -149,11 +146,9 @@ export async function launchAndroidApp(options: {
       await device.shell(["am", "force-stop", ANDROID_PACKAGE]).catch(() => "");
       logcat.kill("SIGTERM");
       log.end();
-      await adb(device.serial, [
-        "reverse",
-        "--remove",
-        `tcp:${CONFORMANCE_COLLECTOR_PORT}`,
-      ]).catch(() => "");
+      await adb(device.serial, ["reverse", "--remove", `tcp:${CONFORMANCE_COLLECTOR_PORT}`]).catch(
+        () => ""
+      );
     },
   };
 }

@@ -123,7 +123,11 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
         values: ["row", "column"],
         description: "Main axis; defaults to `column`.",
       },
-      gap: { kind: "enum", values: ["none", "sm", "md", "lg"], description: "Space between children." },
+      gap: {
+        kind: "enum",
+        values: ["none", "sm", "md", "lg"],
+        description: "Space between children.",
+      },
       align: { kind: "enum", values: ["start", "center", "end", "stretch"] },
       justify: { kind: "enum", values: ["start", "center", "end", "between"] },
       wrap: { kind: "boolean" },
@@ -190,7 +194,11 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     summary: "A Lucide icon, named.",
     props: {
       name: { kind: "string", required: true, maxLength: 64, description: "A Lucide icon name." },
-      label: { kind: "string", maxLength: 256, description: "Accessible name; decorative when omitted." },
+      label: {
+        kind: "string",
+        maxLength: 256,
+        description: "Accessible name; decorative when omitted.",
+      },
       size: { kind: "enum", values: ["sm", "md", "lg"] },
       tone: { kind: "enum", values: ["default", "muted", "danger", "success", "primary"] },
     },
@@ -205,7 +213,13 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     interactive: false,
     summary: "An image from a data URL.",
     props: {
-      src: { kind: "string", required: true, maxLength: 2_000_000, format: "data-url", description: "A `data:` URL." },
+      src: {
+        kind: "string",
+        required: true,
+        maxLength: 2_000_000,
+        format: "data-url",
+        description: "A `data:` URL.",
+      },
       alt: { kind: "string", required: true, maxLength: 512 },
       width: { kind: "number", minimum: 1, maximum: 4096 },
       height: { kind: "number", minimum: 1, maximum: 4096 },
@@ -277,8 +291,18 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       autoFocus: { kind: "boolean" },
     },
     events: [
-      { prop: "onInput", event: "input", detail: "string", description: "Fires on every keystroke with the new value." },
-      { prop: "onChange", event: "change", detail: "string", description: "Fires when the value is committed." },
+      {
+        prop: "onInput",
+        event: "input",
+        detail: "string",
+        description: "Fires on every keystroke with the new value.",
+      },
+      {
+        prop: "onChange",
+        event: "change",
+        detail: "string",
+        description: "Fires when the value is committed.",
+      },
     ],
     methods: [],
   },
@@ -435,7 +459,12 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       errorMessage: { kind: "string", maxLength: 1024 },
     },
     events: [
-      { prop: "onChange", event: "change", detail: "keys", description: "Fires with the selected values." },
+      {
+        prop: "onChange",
+        event: "change",
+        detail: "keys",
+        description: "Fires with the selected values.",
+      },
     ],
     methods: [],
   },
@@ -554,8 +583,16 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     interactive: true,
     summary: "A collapsible section with a heading and a panel.",
     props: {
-      label: { kind: "string", required: true, maxLength: 512, description: "The heading that toggles it." },
-      isExpanded: { kind: "boolean", description: "Whether the panel is visible; defaults to collapsed." },
+      label: {
+        kind: "string",
+        required: true,
+        maxLength: 512,
+        description: "The heading that toggles it.",
+      },
+      isExpanded: {
+        kind: "boolean",
+        description: "Whether the panel is visible; defaults to collapsed.",
+      },
       isDisabled: { kind: "boolean" },
       children: { kind: "node" },
     },
@@ -577,7 +614,12 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     interactive: true,
     summary: "A keyboard-navigable list of rows, with optional selection.",
     props: {
-      label: { kind: "string", required: true, maxLength: 512, description: "Accessible name of the list." },
+      label: {
+        kind: "string",
+        required: true,
+        maxLength: 512,
+        description: "Accessible name of the list.",
+      },
       selectionMode: {
         kind: "enum",
         values: ["none", "single", "multiple"],
@@ -605,9 +647,22 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     summary: "One row of a `Collection`, with an optional Item Menu and expanded panel.",
     props: {
       id: { kind: "string", required: true, maxLength: 512, description: "Stable row identity." },
-      label: { kind: "string", required: true, maxLength: 512, description: "The row's primary text. It keeps its width; the description truncates first." },
-      description: { kind: "string", maxLength: 1024, description: "Secondary text. When the label or description is cut off, hovering or focusing the row shows both in full; an expanded row shows it wrapped." },
-      isExpandable: { kind: "boolean", description: "Shows a toggle that reveals the row's panel." },
+      label: {
+        kind: "string",
+        required: true,
+        maxLength: 512,
+        description: "The row's primary text. It keeps its width; the description truncates first.",
+      },
+      description: {
+        kind: "string",
+        maxLength: 1024,
+        description:
+          "Secondary text. When the label or description is cut off, hovering or focusing the row shows both in full; an expanded row shows it wrapped.",
+      },
+      isExpandable: {
+        kind: "boolean",
+        description: "Shows a toggle that reveals the row's panel.",
+      },
       isExpanded: { kind: "boolean" },
       isDisabled: { kind: "boolean" },
       menuItems: {
@@ -641,7 +696,12 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     interactive: false,
     summary: "A read-only table; children are `TableRow` elements.",
     props: {
-      label: { kind: "string", required: true, maxLength: 512, description: "Accessible name of the table." },
+      label: {
+        kind: "string",
+        required: true,
+        maxLength: 512,
+        description: "Accessible name of the table.",
+      },
       columns: {
         kind: "options",
         required: true,
@@ -687,7 +747,8 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
         maximum: Number.MAX_SAFE_INTEGER,
         integer: true,
         internal: true,
-        description: "How many open changes the host has delivered; the host treats a newer value as the Plugin's answer.",
+        description:
+          "How many open changes the host has delivered; the host treats a newer value as the Plugin's answer.",
       },
       children: { kind: "node" },
     },
@@ -711,8 +772,16 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     props: {
       title: { kind: "string", required: true, maxLength: 512 },
       description: { kind: "string", maxLength: 1024 },
-      confirmLabel: { kind: "string", maxLength: 512, description: "Defaults to the localized Confirm." },
-      cancelLabel: { kind: "string", maxLength: 512, description: "Defaults to the localized Cancel." },
+      confirmLabel: {
+        kind: "string",
+        maxLength: 512,
+        description: "Defaults to the localized Confirm.",
+      },
+      cancelLabel: {
+        kind: "string",
+        maxLength: 512,
+        description: "Defaults to the localized Cancel.",
+      },
       isDestructive: { kind: "boolean", description: "Styles the confirm action as destructive." },
       isOpen: { kind: "boolean" },
       openSeq: {
@@ -721,12 +790,18 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
         maximum: Number.MAX_SAFE_INTEGER,
         integer: true,
         internal: true,
-        description: "How many open changes the host has delivered; the host treats a newer value as the Plugin's answer.",
+        description:
+          "How many open changes the host has delivered; the host treats a newer value as the Plugin's answer.",
       },
     },
     events: [
       { prop: "onConfirm", event: "confirm", detail: "none" },
-      { prop: "onOpenChange", event: "openchange", detail: "boolean", description: REOPEN_CONTRACT },
+      {
+        prop: "onOpenChange",
+        event: "openchange",
+        detail: "boolean",
+        description: REOPEN_CONTRACT,
+      },
     ],
     methods: [],
   },
@@ -738,8 +813,17 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
     interactive: true,
     summary: "A trigger button that opens a small panel anchored to it.",
     props: {
-      label: { kind: "string", required: true, maxLength: 512, description: "The trigger's accessible name." },
-      icon: { kind: "string", maxLength: 64, description: "An optional Lucide icon name for the trigger." },
+      label: {
+        kind: "string",
+        required: true,
+        maxLength: 512,
+        description: "The trigger's accessible name.",
+      },
+      icon: {
+        kind: "string",
+        maxLength: 64,
+        description: "An optional Lucide icon name for the trigger.",
+      },
       isOpen: { kind: "boolean" },
       openSeq: {
         kind: "number",
@@ -747,12 +831,18 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
         maximum: Number.MAX_SAFE_INTEGER,
         integer: true,
         internal: true,
-        description: "How many open changes the host has delivered; the host treats a newer value as the Plugin's answer.",
+        description:
+          "How many open changes the host has delivered; the host treats a newer value as the Plugin's answer.",
       },
       children: { kind: "node" },
     },
     events: [
-      { prop: "onOpenChange", event: "openchange", detail: "boolean", description: REOPEN_CONTRACT },
+      {
+        prop: "onOpenChange",
+        event: "openchange",
+        detail: "boolean",
+        description: REOPEN_CONTRACT,
+      },
     ],
     methods: [],
   },

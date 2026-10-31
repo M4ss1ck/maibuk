@@ -485,4 +485,3 @@ describe("Dictation bar size", () => {
     expect(screen.queryByRole("radiogroup", { name: "Dictation bar size" })).toBeNull();
   });
 });
-

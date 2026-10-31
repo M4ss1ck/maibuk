@@ -150,9 +150,9 @@ function groupMatches(
     // accents on both sides, a Regex runs against the text as written.
     const ranges = options.regex
       ? matchRanges(regex, row.text)
-      : (folded !== null
+      : folded !== null
         ? matchFoldedRanges(folded, row.text)
-        : findMatchRanges(row.text, term, options));
+        : findMatchRanges(row.text, term, options);
     if (ranges.length === 0) continue;
 
     const key = `${row.item_kind}:${row.item_id}`;

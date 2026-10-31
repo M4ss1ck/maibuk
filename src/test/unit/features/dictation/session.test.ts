@@ -1050,7 +1050,13 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     expect(session.getSnapshot().status).toBe("listening");
 
     resolveRun?.("ran");
-    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "voice_command", id: "global.gotoNotes", polarity: null }));
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command",
+        id: "global.gotoNotes",
+        polarity: null,
+      })
+    );
     // The window already closed at focus: the timer never starts. Time passes
     // past the hand-off wait, then a later line must still route live into the
     // new editor. That commit is the witness that the Session kept listening.
@@ -1073,7 +1079,13 @@ describe("Dictation Session navigation hand-off (#320)", () => {
 
     resolveRun?.("ran");
     // The hand-off timer is armed right after this notice is announced.
-    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "voice_command", id: "global.gotoNotes", polarity: null }));
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command",
+        id: "global.gotoNotes",
+        polarity: null,
+      })
+    );
     vi.advanceTimersByTime(HANDOFF_LIMIT_MS);
     await vi.waitFor(() => expect(notices).toContainEqual({ kind: "handoff_no_editor" }));
     expect(copied).toContain("hello");
@@ -1193,7 +1205,13 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     session.register({ ...fakeTarget("new"), scratch: newScratch, resetScratch: newReset });
     session.focus("new");
     resolveRun?.("ran");
-    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "voice_command", id: "global.gotoNotes", polarity: null }));
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command",
+        id: "global.gotoNotes",
+        polarity: null,
+      })
+    );
 
     // "scratch that" after the hand-off reaches only the new editor, whose
     // history was reset when it took the caret.
@@ -1218,7 +1236,13 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     // The run's outcome is announced, then the Session finds the hand-off gone
     // (the stop dropped it) and returns before arming any timer: the notice is
     // the witness that the decision was made, so the negatives below are real.
-    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "voice_command", id: "global.gotoNotes", polarity: null }));
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command",
+        id: "global.gotoNotes",
+        polarity: null,
+      })
+    );
     expect(copied).not.toContain("hello");
     expect(notices).not.toContainEqual({ kind: "handoff_no_editor" });
   });
@@ -1234,7 +1258,13 @@ describe("Dictation Session navigation hand-off (#320)", () => {
     host.emit({ type: "final", text: "hello", latencyMs: 5 });
     resolveRun?.("ran");
     // The hand-off timer is armed right after this notice is announced.
-    await vi.waitFor(() => expect(notices).toContainEqual({ kind: "voice_command", id: "global.gotoNotes", polarity: null }));
+    await vi.waitFor(() =>
+      expect(notices).toContainEqual({
+        kind: "voice_command",
+        id: "global.gotoNotes",
+        polarity: null,
+      })
+    );
     vi.advanceTimersByTime(HANDOFF_LIMIT_MS);
     expect(target.commits).toEqual(["hello"]);
     expect(session.getSnapshot().status).toBe("listening");

@@ -1189,9 +1189,7 @@ export const PLUGIN_FILTER_CATEGORIES = [
 ] as const satisfies readonly PluginFilterCategory[];
 
 /** Every category an entry belongs to; categories overlap. */
-export function pluginFilterCategories(
-  entry: PluginManagementEntry
-): PluginFilterCategory[] {
+export function pluginFilterCategories(entry: PluginManagementEntry): PluginFilterCategory[] {
   const categories: PluginFilterCategory[] = [];
   if (entry.installed) categories.push("installed");
   if (entry.available) categories.push("available");

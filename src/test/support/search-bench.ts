@@ -10,11 +10,7 @@
 // MemoryDatabaseAdapter the web build uses. The desktop engine is Node's
 // built-in SQLite (3.51 native, the version the app ships against), wrapped in
 // the minimal adapter below — deliberately only here, never in `src/lib`.
-import type {
-  DatabaseSync as NodeDatabaseSync,
-  SQLInputValue,
-  StatementSync,
-} from "node:sqlite";
+import type { DatabaseSync as NodeDatabaseSync, SQLInputValue, StatementSync } from "node:sqlite";
 import type { AtomicStatement, DatabaseAdapter } from "@/lib/platform/types";
 import { runAtomic } from "@/lib/db/atomic";
 import { createMemoryDatabase } from "@/lib/db/memory-database";
@@ -346,7 +342,17 @@ export async function seedSearchBench(
         sql: `INSERT INTO books
           (id, title, subtitle, author_name, description, language, created_at, updated_at, content_updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [id, title, subtitle, "Bench Author", description, "en", SEEDED_AT, SEEDED_AT, SEEDED_AT],
+        params: [
+          id,
+          title,
+          subtitle,
+          "Bench Author",
+          description,
+          "en",
+          SEEDED_AT,
+          SEEDED_AT,
+          SEEDED_AT,
+        ],
       },
       ...bookSearchStatements({ id, title, subtitle, description }, SEEDED_AT),
     ]);
@@ -408,7 +414,15 @@ export async function seedSearchBench(
         sql: `INSERT INTO canvases
           (id, title, doc, pinned, "order", created_at, updated_at, content_updated_at)
           VALUES (?, ?, ?, 0, ?, ?, ?, ?)`,
-        params: [id, `Bench Canvas ${canvas + 1}`, JSON.stringify(doc), canvas, SEEDED_AT, SEEDED_AT, SEEDED_AT],
+        params: [
+          id,
+          `Bench Canvas ${canvas + 1}`,
+          JSON.stringify(doc),
+          canvas,
+          SEEDED_AT,
+          SEEDED_AT,
+          SEEDED_AT,
+        ],
       },
       ...canvasSearchStatements({ id, doc }, SEEDED_AT),
     ]);
@@ -510,9 +524,7 @@ export class NodeSqliteDatabaseAdapter implements DatabaseAdapter {
   async select<T>(sql: string, params?: unknown[]): Promise<T> {
     const statement = this.statement(sql);
     const rows =
-      params && params.length > 0
-        ? statement.all(...(params as SQLInputValue[]))
-        : statement.all();
+      params && params.length > 0 ? statement.all(...(params as SQLInputValue[])) : statement.all();
     return rows as T;
   }
 

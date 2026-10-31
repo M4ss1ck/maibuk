@@ -48,9 +48,9 @@ describe("waitOutcome", () => {
   });
 
   it("never first-contact-times-out once any request arrived", () => {
-    expect(
-      waitOutcome({ ...base, requests: 1, elapsedMs: FIRST_CONTACT_TIMEOUT_MS * 2 })
-    ).toEqual({ kind: "continue" });
+    expect(waitOutcome({ ...base, requests: 1, elapsedMs: FIRST_CONTACT_TIMEOUT_MS * 2 })).toEqual({
+      kind: "continue",
+    });
   });
 
   it("stops with deadline once the overall budget is spent, after contact", () => {

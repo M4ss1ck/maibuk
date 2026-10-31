@@ -67,7 +67,6 @@ vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
 
-
 import { Layout } from "@/components/Layout";
 import { APP_VERSION } from "@/constants";
 import {
@@ -491,7 +490,9 @@ describe("Layout", () => {
     const handle = container.querySelector(".cursor-col-resize");
     expect(handle).not.toBeNull();
 
-    const sidebar = screen.getByRole("complementary", { name: translations.en["panes.navSidebar"] });
+    const sidebar = screen.getByRole("complementary", {
+      name: translations.en["panes.navSidebar"],
+    });
     const before = useSettingsStore.getState().mainSidebarWidth;
 
     fireEvent.pointerDown(handle as Element, { clientX: 100 });
@@ -548,7 +549,9 @@ describe("Layout", () => {
     await user.tab();
     expect(handle).toHaveFocus();
     // The Tooltip wrapper still opens on focus.
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(translations.en["nav.resizeSidebar"]);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      translations.en["nav.resizeSidebar"]
+    );
 
     await user.keyboard("{ArrowRight}{Escape}");
     expect(before).toHaveFocus();

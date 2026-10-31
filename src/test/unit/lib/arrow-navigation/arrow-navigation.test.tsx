@@ -990,13 +990,29 @@ function VirtualGridFixture({
           Sidebar action
         </button>
       </section>
-      <section data-focus-pane="gallery" tabIndex={-1} aria-label="Gallery" data-rect="200 0 400 800">
+      <section
+        data-focus-pane="gallery"
+        tabIndex={-1}
+        aria-label="Gallery"
+        data-rect="200 0 400 800"
+      >
         {/* biome-ignore lint/a11y/useSemanticElements: a 2D grid of divs, as the gallery renders it. */}
-        <div role="grid" data-layout="grid" aria-label="Books" aria-rowcount={count} data-rect="200 0 400 800">
+        <div
+          role="grid"
+          data-layout="grid"
+          aria-label="Books"
+          aria-rowcount={count}
+          data-rect="200 0 400 800"
+        >
           {rows}
         </div>
       </section>
-      <section data-focus-pane="editor" tabIndex={-1} aria-label="Editor" data-rect="400 0 1000 800">
+      <section
+        data-focus-pane="editor"
+        tabIndex={-1}
+        aria-label="Editor"
+        data-rect="400 0 1000 800"
+      >
         <button type="button" data-rect="410 10 450 40">
           Editor action
         </button>

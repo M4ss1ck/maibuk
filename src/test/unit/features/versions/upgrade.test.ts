@@ -469,7 +469,17 @@ describe("scheduleVersionStorageUpgrade", () => {
     await testDb.execute(
       `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at, synced_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, "book-1", "Kept", JSON.stringify(makeSnapshot("book-1")), 2000, `chk-${id}`, "manual", NOW - 2 * DAY, null]
+      [
+        id,
+        "book-1",
+        "Kept",
+        JSON.stringify(makeSnapshot("book-1")),
+        2000,
+        `chk-${id}`,
+        "manual",
+        NOW - 2 * DAY,
+        null,
+      ]
     );
   }
 

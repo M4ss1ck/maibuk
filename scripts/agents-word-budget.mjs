@@ -28,7 +28,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   } else {
     console.error(
       `${path}: ${words} words, over the ${budget}-word budget by ${words - budget}. ` +
-        "Move reference material to CODING_STANDARDS.md or docs/agents/ and leave a pointer (see its \"Updating AGENTS.md\")."
+        'Move reference material to CODING_STANDARDS.md or docs/agents/ and leave a pointer (see its "Updating AGENTS.md").'
     );
     process.exit(1);
   }

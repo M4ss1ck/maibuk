@@ -62,7 +62,10 @@ describe("applyCollectorRequest()", () => {
   });
 
   it("records the engine and the whole result", () => {
-    const result = { engine: { name: "tauri-webkitgtk", version: "1", userAgent: "UA" }, checks: [PASS] };
+    const result = {
+      engine: { name: "tauri-webkitgtk", version: "1", userAgent: "UA" },
+      checks: [PASS],
+    };
     const state = fold([{ method: "POST", path: "/result", body: result }]);
     expect(state.result).toEqual(result);
     expect(state.engine).toEqual(result.engine);
@@ -123,7 +126,11 @@ describe("applyCollectorRequest()", () => {
   it("does not count the reporter's own contract traffic as leaks", () => {
     const state = fold([
       { method: "POST", path: "/progress", body: PASS },
-      { method: "POST", path: "/result", body: { engine: { name: "w", version: "1", userAgent: "u" }, checks: [PASS] } },
+      {
+        method: "POST",
+        path: "/result",
+        body: { engine: { name: "w", version: "1", userAgent: "u" }, checks: [PASS] },
+      },
       { method: "POST", path: "/done" },
       { method: "POST", path: "/heartbeat" },
       { method: "GET", path: "/leaks" },
@@ -134,12 +141,20 @@ describe("applyCollectorRequest()", () => {
   });
 
   it("answers 404 for an off-contract request", () => {
-    const { reply } = applyCollectorRequest(initialCollectorState(), { method: "GET", path: "/nope" });
+    const { reply } = applyCollectorRequest(initialCollectorState(), {
+      method: "GET",
+      path: "/nope",
+    });
     expect(reply.status).toBe(404);
   });
 
   it("answers 204 to the contract POSTs and to a preflight", () => {
-    expect(applyCollectorRequest(initialCollectorState(), { method: "POST", path: "/done" }).reply.status).toBe(204);
-    expect(applyCollectorRequest(initialCollectorState(), { method: "OPTIONS", path: "/result" }).reply.status).toBe(204);
+    expect(
+      applyCollectorRequest(initialCollectorState(), { method: "POST", path: "/done" }).reply.status
+    ).toBe(204);
+    expect(
+      applyCollectorRequest(initialCollectorState(), { method: "OPTIONS", path: "/result" }).reply
+        .status
+    ).toBe(204);
   });
 });

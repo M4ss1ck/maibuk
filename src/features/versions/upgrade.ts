@@ -119,7 +119,10 @@ function runUpgrade(): void {
   upgradeRequested = false;
   currentUpgrade = upgradeVersionStorage()
     .catch((error: unknown) => {
-      console.warn("[versions] upgrade failed; it runs again next launch or after a Restore", error);
+      console.warn(
+        "[versions] upgrade failed; it runs again next launch or after a Restore",
+        error
+      );
       // Until a safety Backup succeeds, history is neither pruned nor synced;
       // the author has to know, or the Library stays large without a sign.
       if (error instanceof UpgradeBackupError) toast.error(i18n.t("versions.upgradeBackupFailed"));

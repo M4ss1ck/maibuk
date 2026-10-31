@@ -9,11 +9,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import {
-  externalAliases,
-  SDK_PACKAGE,
-  TEST_KIT_PACKAGE,
-} from "../../../scripts/plugin/config";
+import { externalAliases, SDK_PACKAGE, TEST_KIT_PACKAGE } from "../../../scripts/plugin/config";
 import { scriptNames } from "./plugin-docs";
 
 /** The repo-relative prefixes an inline-code reference can name. */
@@ -51,7 +47,6 @@ export function skillFrontmatter(markdown: string): SkillFrontmatter {
   const description = /^description:\s*(.*)$/m.exec(body)?.[1]?.trim() ?? "";
   return { name, description };
 }
-
 
 /**
  * The SDK's public subpath names, read from the aliases `scripts/plugin/config`
@@ -97,7 +92,9 @@ export function skillReferenceProblems(markdown: string, repoRoot: string): stri
 
   for (const [, name] of markdown.matchAll(PNPM_COMMAND)) {
     if (!scripts.has(name)) {
-      problems.push(`pnpm ${name} is not a script in package.json or templates/plugin/package.json`);
+      problems.push(
+        `pnpm ${name} is not a script in package.json or templates/plugin/package.json`
+      );
     }
   }
 

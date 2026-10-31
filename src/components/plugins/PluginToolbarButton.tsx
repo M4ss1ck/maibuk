@@ -75,7 +75,8 @@ export function PluginToolbarButton({
     command.contexts.length > 0 &&
     command.contexts.every((context) => context === "editor");
   const hasTargets = (targets?.length ?? 0) > 0;
-  const target = hasTargets && targets !== undefined ? resolvePluginTarget(targets, itemContext) : null;
+  const target =
+    hasTargets && targets !== undefined ? resolvePluginTarget(targets, itemContext) : null;
   const icon = iconSize === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
 
   return (

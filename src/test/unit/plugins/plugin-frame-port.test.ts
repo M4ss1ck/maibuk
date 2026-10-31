@@ -9,13 +9,12 @@
 // message on the same port first (a port delivers in order).
 
 import { describe, expect, it, vi } from "vitest";
-import {
-  PLUGIN_FRAME_MESSAGE,
-  createPluginClient,
-  type PluginFrame,
-} from "@/plugin-sdk";
+import { PLUGIN_FRAME_MESSAGE, createPluginClient, type PluginFrame } from "@/plugin-sdk";
 
-function frameEnvelope(frameId: string, src: string): { message: unknown; transfer: MessagePort[] } {
+function frameEnvelope(
+  frameId: string,
+  src: string
+): { message: unknown; transfer: MessagePort[] } {
   return {
     message: { kind: PLUGIN_FRAME_MESSAGE.kind, frameId, src },
     transfer: [new MessageChannel().port1],

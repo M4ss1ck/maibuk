@@ -18,7 +18,12 @@ import {
   type ShortcutContext,
 } from "@/lib/shortcut-registry";
 import { normalizeShortcut } from "@/lib/shortcut-keys";
-import { defaultShortcuts, effectiveShortcuts, findConflicts, findDefaultConflicts } from "@/lib/shortcut-resolve";
+import {
+  defaultShortcuts,
+  effectiveShortcuts,
+  findConflicts,
+  findDefaultConflicts,
+} from "@/lib/shortcut-resolve";
 
 function lookup(messages: unknown, key: string): unknown {
   return key.split(".").reduce<unknown>((node, part) => {

@@ -34,10 +34,7 @@ import {
   setPluginEditorHighlights,
 } from "@/features/plugins/editor-host";
 import { endpointUrlFor } from "@/features/plugins/endpoint";
-import {
-  getPluginFileGrantStore,
-  type PluginFileGrantStore,
-} from "@/features/plugins/file-grants";
+import { getPluginFileGrantStore, type PluginFileGrantStore } from "@/features/plugins/file-grants";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
   checkpointPluginBook,

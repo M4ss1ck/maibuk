@@ -95,9 +95,7 @@ function validateManifestFile(manifestPath: string, builtIn: boolean): PluginMan
   const validation = parsePluginManifest(manifestText, { builtIn });
   if (!validation.ok) {
     const problems = validation.problems
-      .map(
-        (problem) => `${problem.path === "" ? "<manifest>" : problem.path}: ${problem.message}`
-      )
+      .map((problem) => `${problem.path === "" ? "<manifest>" : problem.path}: ${problem.message}`)
       .join("; ");
     throw new Error(`${manifestPath} is not a valid Plugin manifest: ${problems}`);
   }

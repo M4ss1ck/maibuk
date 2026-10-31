@@ -292,7 +292,9 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
     // The web build has no socket, so until the seam binds an address the page
     // says there is none.
     await expect(
-      page.getByText("The Plugin Endpoint is not available, so there is no address to connect to yet.")
+      page.getByText(
+        "The Plugin Endpoint is not available, so there is no address to connect to yet."
+      )
     ).toBeVisible();
     await bindAddress(page, ADDRESS_PORT);
     await capture(page, "mcp-page-snippets");
@@ -371,9 +373,9 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
     // The Activity log names the write, with none of the author's text in it.
     // It lives on the Plugin page, so it is read before leaving for the Book.
     const activity = page.getByRole("table", { name: "Activity log" });
-    await expect(
-      activity.getByRole("cell", { name: "edit_chapter", exact: true })
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(activity.getByRole("cell", { name: "edit_chapter", exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(activity.getByRole("cell", { name: APPENDED })).toHaveCount(0);
 
     // The whole Library change is visible: the Chapter opens with the text the

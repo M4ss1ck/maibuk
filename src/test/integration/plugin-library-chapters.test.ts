@@ -308,7 +308,12 @@ describe("library.chapters.update (#588)", () => {
       content: "<p>Stored</p>",
     });
     expect(await readChapters("book-1")).toEqual([
-      expect.objectContaining({ id: "ch-1", title: "Prologue", chapterType: "prologue", status: "revised" }),
+      expect.objectContaining({
+        id: "ch-1",
+        title: "Prologue",
+        chapterType: "prologue",
+        status: "revised",
+      }),
     ]);
 
     // An omitted field keeps what the row holds.
@@ -376,9 +381,7 @@ describe("library.chapters.reorder (#588)", () => {
   });
 
   it("refuses an unknown Book", async () => {
-    await expect(
-      reorderChapters({ bookId: "absent", chapterIds: [] })
-    ).rejects.toMatchObject({
+    await expect(reorderChapters({ bookId: "absent", chapterIds: [] })).rejects.toMatchObject({
       name: "PluginApiError",
       code: "invalid-params",
       message: "Book absent does not exist",
@@ -413,7 +416,10 @@ describe("library.chapters.delete (#588)", () => {
 describe("Chapter writes refuse when an open editor cannot save (#588)", () => {
   type LibraryClient = ReturnType<typeof connectLibraryWritePlugin>["client"];
   const cases: [string, (client: LibraryClient) => Promise<unknown>][] = [
-    ["library.chapters.create", (client) => client.library.chapters.create({ bookId: "book-1", title: "New" })],
+    [
+      "library.chapters.create",
+      (client) => client.library.chapters.create({ bookId: "book-1", title: "New" }),
+    ],
     ["library.chapters.delete", (client) => client.library.chapters.delete({ chapterId: "ch-1" })],
     [
       "library.chapters.reorder",
@@ -559,9 +565,7 @@ describe("a Plugin Chapter delete is the author's Delete path (#588)", () => {
 
   it("leaves exactly the state the author delete leaves, as sync reads it", async () => {
     const viaPlugin = await observeDelete(() => deleteChapter("ch-1"));
-    const viaAuthor = await observeDelete(() =>
-      useChapterStore.getState().deleteChapter("ch-1")
-    );
+    const viaAuthor = await observeDelete(() => useChapterStore.getState().deleteChapter("ch-1"));
 
     // The deletion the other devices will pull: the Chapter is gone from the
     // Book's snapshot, so its checksum moved.

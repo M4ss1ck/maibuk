@@ -390,11 +390,7 @@ describe("Plugin Library writes reach the open view", () => {
         expect(await chapterContent("ch-1")).toBe("<p>Original</p>");
 
         await expect(
-          writeChapterContent(
-            "ch-1",
-            { html: "<p>Original</p><p>Agent</p>" },
-            stale?.updatedAt
-          )
+          writeChapterContent("ch-1", { html: "<p>Original</p><p>Agent</p>" }, stale?.updatedAt)
         ).rejects.toMatchObject({ name: "PluginApiError", code: "conflict" });
 
         // The flush ran before the refusal, so the row holds the author's typing,
@@ -874,9 +870,7 @@ describe("Plugin Checkpoints through the handlers (#588)", () => {
   });
 
   it("refuses an unknown Book", async () => {
-    await expect(
-      writeCheckpoint({ bookId: "absent", label: "Nowhere" })
-    ).rejects.toMatchObject({
+    await expect(writeCheckpoint({ bookId: "absent", label: "Nowhere" })).rejects.toMatchObject({
       name: "PluginApiError",
       code: "invalid-params",
       message: "Book absent does not exist",
@@ -932,7 +926,8 @@ describe("Book writes refuse when an open editor cannot save (#588)", () => {
   const cases: [string, (client: LibraryClient) => Promise<unknown>][] = [
     [
       "library.books.update",
-      (client) => client.library.books.update({ bookId: "book-1", title: "Changed", genre: "Fantasy" }),
+      (client) =>
+        client.library.books.update({ bookId: "book-1", title: "Changed", genre: "Fantasy" }),
     ],
     [
       "library.books.checkpoint",

@@ -770,7 +770,9 @@ test.describe("footnotes on a phone @wf:editor-footnote", () => {
     // The side panel is a dialog here, which hides the text from assistive
     // technology (aria-hidden), so the text is found with includeHidden.
     await expect(
-      page.getByRole("textbox", { name: /^Text of /, includeHidden: true }).locator("sup.footnote-ref")
+      page
+        .getByRole("textbox", { name: /^Text of /, includeHidden: true })
+        .locator("sup.footnote-ref")
     ).toHaveText(["1"]);
   });
 });

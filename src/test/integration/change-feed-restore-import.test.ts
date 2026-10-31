@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
-import { isEntityChange, onChange, resetChangeFeedForTests, type Change } from "@/features/sync/change-feed";
+import {
+  isEntityChange,
+  onChange,
+  resetChangeFeedForTests,
+  type Change,
+} from "@/features/sync/change-feed";
 import { installViewRefresh, resetViewRefreshForTests } from "@/features/sync/view-refresh";
 import type { BookSnapshot } from "@/features/sync/types";
 

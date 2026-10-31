@@ -144,7 +144,8 @@ describe("a Stopped Plugin's page", () => {
     await h.launch();
     renderPage();
     await advanceUntil(
-      () => h.lifecycle.state("alpha")?.status === "stopped" && screen.queryByRole("alert") !== null,
+      () =>
+        h.lifecycle.state("alpha")?.status === "stopped" && screen.queryByRole("alert") !== null,
       "the review refusal"
     );
 
@@ -192,7 +193,9 @@ describe("a Stopped Plugin's page", () => {
       await advance(HEARTBEAT_INTERVAL_MS);
     }
 
-    expect(screen.getByText("Word Stats is not responding. Waiting for it to answer…")).toBeInTheDocument();
+    expect(
+      screen.getByText("Word Stats is not responding. Waiting for it to answer…")
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 

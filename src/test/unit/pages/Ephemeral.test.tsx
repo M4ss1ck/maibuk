@@ -4,13 +4,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Ephemeral } from "@/pages/Ephemeral";
 import { useEphemeralStore } from "@/features/ephemeral";
 
-const { mockNavigate, mockCreateNote, mockSetAlwaysOnTop, platformState, editorProps } = vi.hoisted(() => ({
-  editorProps: [] as Array<Record<string, unknown>>,
-  mockNavigate: vi.fn(),
-  mockCreateNote: vi.fn(),
-  mockSetAlwaysOnTop: vi.fn(),
-  platformState: { isDesktop: false },
-}));
+const { mockNavigate, mockCreateNote, mockSetAlwaysOnTop, platformState, editorProps } = vi.hoisted(
+  () => ({
+    editorProps: [] as Array<Record<string, unknown>>,
+    mockNavigate: vi.fn(),
+    mockCreateNote: vi.fn(),
+    mockSetAlwaysOnTop: vi.fn(),
+    platformState: { isDesktop: false },
+  })
+);
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),

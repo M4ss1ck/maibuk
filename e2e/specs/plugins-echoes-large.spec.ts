@@ -74,7 +74,9 @@ test.describe("Echoes report on a large Book @wf:plugins-echoes", () => {
     start = Date.now();
     await page.keyboard.press("ArrowLeft");
     tabTimings.push(await msUntilOptions(page, 200));
-    console.log(`[echoes-large] expand ${timings.expand} collapse ${timings.collapse} tab ${tabTimings}`);
+    console.log(
+      `[echoes-large] expand ${timings.expand} collapse ${timings.collapse} tab ${tabTimings}`
+    );
 
     // Show more adds the next page by keyboard.
     const more = page.getByRole("button", { name: /^Show 200 more/ });

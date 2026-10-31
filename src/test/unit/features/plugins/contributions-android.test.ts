@@ -51,23 +51,26 @@ afterEach(async () => {
 
 describe("registerPluginContributions on Android", () => {
   it("registers nothing for a manifest that does not list android (#517)", () => {
-    const folder = pluginFolder({}, {
-      id: "sample",
-      name: "Sample",
-      platforms: ["web", "desktop"],
-      lifecycle: "persistent",
-      contributes: {
-        commands: [
-          { id: "open", label: "Open report", contexts: ["global"], navigates: true },
-          { id: "report", label: "Report", contexts: ["global"], targets: ["chapter"] },
-        ],
-        pages: [{ id: "report", title: "Report", command: "open" }],
-        sidebarEntries: [{ page: "report", icon: "book-open" }],
-        settingsRows: [{ id: "threshold", label: "Threshold" }],
-        toolbarButtons: [{ id: "reportButton", command: "report", icon: "book-open" }],
-        itemMenuEntries: [{ command: "report" }],
-      },
-    });
+    const folder = pluginFolder(
+      {},
+      {
+        id: "sample",
+        name: "Sample",
+        platforms: ["web", "desktop"],
+        lifecycle: "persistent",
+        contributes: {
+          commands: [
+            { id: "open", label: "Open report", contexts: ["global"], navigates: true },
+            { id: "report", label: "Report", contexts: ["global"], targets: ["chapter"] },
+          ],
+          pages: [{ id: "report", title: "Report", command: "open" }],
+          sidebarEntries: [{ page: "report", icon: "book-open" }],
+          settingsRows: [{ id: "threshold", label: "Threshold" }],
+          toolbarButtons: [{ id: "reportButton", command: "report", icon: "book-open" }],
+          itemMenuEntries: [{ command: "report" }],
+        },
+      }
+    );
     const read = readPluginManifest(folder);
     if (!read.ok) throw new Error(`fixture manifest is invalid: ${JSON.stringify(read.problems)}`);
 
@@ -84,16 +87,19 @@ describe("registerPluginContributions on Android", () => {
   });
 
   it("registers a manifest that lists android as on desktop (#517)", () => {
-    const folder = pluginFolder({}, {
-      id: "sample",
-      name: "Sample",
-      platforms: ["web", "desktop", "android"],
-      lifecycle: "persistent",
-      contributes: {
-        commands: [{ id: "open", label: "Open report", contexts: ["global"], navigates: true }],
-        pages: [{ id: "report", title: "Report", command: "open" }],
-      },
-    });
+    const folder = pluginFolder(
+      {},
+      {
+        id: "sample",
+        name: "Sample",
+        platforms: ["web", "desktop", "android"],
+        lifecycle: "persistent",
+        contributes: {
+          commands: [{ id: "open", label: "Open report", contexts: ["global"], navigates: true }],
+          pages: [{ id: "report", title: "Report", command: "open" }],
+        },
+      }
+    );
     const read = readPluginManifest(folder);
     if (!read.ok) throw new Error(`fixture manifest is invalid: ${JSON.stringify(read.problems)}`);
 

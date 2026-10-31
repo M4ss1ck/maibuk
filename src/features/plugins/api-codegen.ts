@@ -72,9 +72,7 @@ function needsParens(type: string): boolean {
  * array of it needs parens where the string heuristic stays silent.
  */
 function isUnionSchema(schema: JsonSchema): boolean {
-  return (
-    Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf) || Array.isArray(schema.type)
-  );
+  return Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf) || Array.isArray(schema.type);
 }
 
 function objectType(schema: JsonSchema, indent: string): string {
@@ -182,9 +180,7 @@ function renderClientNode(node: NamespaceNode, indent: string): string {
       const row = child.row;
       const method = `PluginApiMethods[${JSON.stringify(row.id)}]`;
       const optional = hasRequiredInput(row) ? "" : "?";
-      const listener = row.chunk
-        ? `, listener?: PluginStreamListener<${method}["chunk"]>`
-        : "";
+      const listener = row.chunk ? `, listener?: PluginStreamListener<${method}["chunk"]>` : "";
       lines.push(
         `${docComment(row.description, indent)}${indent}${name}(params${optional}: ${method}["input"]${listener}): Promise<${method}["output"]>;`
       );

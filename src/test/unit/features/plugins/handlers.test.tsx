@@ -2,10 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { ToastViewport } from "@/components/ui/Toast";
 import { createPluginHandlers } from "@/features/plugins/handlers";
-import {
-  clearToolbarPressed,
-  isToolbarPressed,
-} from "@/features/plugins/toolbar-pressed";
+import { clearToolbarPressed, isToolbarPressed } from "@/features/plugins/toolbar-pressed";
 import type { PluginManifest } from "@/features/plugins/types";
 import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
 import { PluginApiError } from "@/plugin-sdk/protocol";

@@ -2,10 +2,7 @@ import { create } from "zustand";
 import { commandStates } from "@/lib/command-runner";
 import type { CommandId } from "@/lib/shortcut-registry";
 import { isTutorialRunInProgress } from "@/features/tutorial/library-switch";
-import {
-  PALETTE_COMMAND_PREFIX,
-  type PaletteMode,
-} from "@/features/command-palette/palette-index";
+import { PALETTE_COMMAND_PREFIX, type PaletteMode } from "@/features/command-palette/palette-index";
 
 export type PaletteCommandState = "runnable" | "disabled";
 

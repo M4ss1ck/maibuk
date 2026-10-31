@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { defaultWholeLinePhrases } from "@/features/dictation/voice-commands";
-import {
-  SEARCH_SWITCHES_STORAGE_KEY,
-  useSearchSwitchesStore,
-} from "@/features/search/switches";
+import { SEARCH_SWITCHES_STORAGE_KEY, useSearchSwitchesStore } from "@/features/search/switches";
 
 beforeEach(() => {
   localStorage.clear();

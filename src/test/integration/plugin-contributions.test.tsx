@@ -115,10 +115,7 @@ describe("a launched Plugin's contributions", () => {
 
   it.each([
     ["Command", () => expect(isCommandId("plugin.sample.open")).toBe(true)],
-    [
-      "page",
-      () => expect(getPluginPages().map((page) => page.localId)).toEqual(["report"]),
-    ],
+    ["page", () => expect(getPluginPages().map((page) => page.localId)).toEqual(["report"])],
     [
       "sidebar entry",
       () =>
@@ -128,8 +125,7 @@ describe("a launched Plugin's contributions", () => {
     ],
     [
       "Settings row",
-      () =>
-        expect(getPluginSettingsOwners().map((owner) => owner.pluginId)).toContain("sample"),
+      () => expect(getPluginSettingsOwners().map((owner) => owner.pluginId)).toContain("sample"),
     ],
     [
       "toolbar button",
@@ -179,9 +175,9 @@ describe("a launched Plugin's contributions", () => {
     // Disabling removes the surfaces but keeps the author's preferences for return.
     expect(isCommandId("plugin.sample.refresh")).toBe(false);
     expect(isLiveToolbarEntry("plugin.sample.reportButton")).toBe(false);
-    expect(
-      useShortcutSettingsStore.getState().shortcuts.custom["plugin.sample.refresh"]
-    ).toEqual([["Mod", "Alt", "r"]]);
+    expect(useShortcutSettingsStore.getState().shortcuts.custom["plugin.sample.refresh"]).toEqual([
+      ["Mod", "Alt", "r"],
+    ]);
     // The toolbar arrangement retains the absent Plugin's button id.
     expect(resolveStoredToolbarButtonId("plugin.sample.reportButton")).toBe(
       "plugin.sample.reportButton"

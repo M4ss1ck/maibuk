@@ -136,7 +136,7 @@ import {
 function NoteEditorHarness({
   onSave,
 }: {
-  onSave: (input: UpdateNoteInput) => Promise<Note | null | void>;
+  onSave: (input: UpdateNoteInput) => Promise<Note | null> | Promise<void>;
 }) {
   const note = useNoteStore((state) => state.currentNote);
   if (!note) return null;

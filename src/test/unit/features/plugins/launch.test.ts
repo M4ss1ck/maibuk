@@ -134,14 +134,15 @@ describe("scanApprovedPlugins()", () => {
   });
 
   it("skips an approved Plugin that does not list android on android (#517)", async () => {
-    const folder = pluginFolder(
-      {},
-      { lifecycle: "on-demand", platforms: ["web", "desktop"] }
-    );
+    const folder = pluginFolder({}, { lifecycle: "on-demand", platforms: ["web", "desktop"] });
     await approve(folder);
 
     const result = await scanApprovedPlugins({
-      directory: { kind: "android", listFolders: async () => [folder.name], readFolder: async () => folder },
+      directory: {
+        kind: "android",
+        listFolders: async () => [folder.name],
+        readFolder: async () => folder,
+      },
     });
 
     // Not scanned, so no contribution registers and no Worker is queued.
