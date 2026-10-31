@@ -19,6 +19,7 @@ import {
   createFrameElement,
   FRAME_FULLSCREEN_MESSAGE,
   FRAME_FULLSCREEN_STATE_MESSAGE,
+  FRAME_HOST_FOCUS_MESSAGE,
   FRAME_READY_MESSAGE,
   FRAME_THEME_MESSAGE,
 } from "@/features/plugins/frame";
@@ -144,9 +145,20 @@ export function PluginFrame({
     };
     window.addEventListener("message", onMessage);
 
+    // Focus landing on a host control tells the Frame to drop its own focused
+    // element, which Firefox would otherwise restore on the next Tab in and
+    // trap Shift+Tab inside. The window losing focus is no host `focusin`, so
+    // nothing is sent then and a Frame field keeps focus across an app switch.
+    const onHostFocus = (event: FocusEvent) => {
+      if (event.target === iframe) return;
+      iframe.contentWindow?.postMessage({ kind: FRAME_HOST_FOCUS_MESSAGE.kind }, "*");
+    };
+    document.addEventListener("focusin", onHostFocus);
+
     return () => {
       iframe.removeEventListener("load", onLoad);
       window.removeEventListener("message", onMessage);
+      document.removeEventListener("focusin", onHostFocus);
       channel?.port1.close();
       channel?.port2.close();
       iframe.remove();

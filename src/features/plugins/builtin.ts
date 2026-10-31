@@ -19,9 +19,9 @@
  * The E2E lane needs a Built-in to prove the Keep my copy / Update available
  * rows, and to prove a Reinstall or Replace writes the shipped copy, and it
  * drives the production web build, so it seeds this one seam: a device-local
- * list the seed writes before the app boots. The seam exists only
+ * list the seed writes into IndexedDB before the app boots. The seam exists only
  * in the E2E lane's build: `VITE_E2E_BUILTIN_SEED` is set by e2e/run-steps.mjs
- * alone, so every shipped build compiles the read away and no localStorage a
+ * alone, so every shipped build compiles the read away and no storage a
  * user or page writes can mark a folder Built-in (and so pre-granted). The seed
  * carries the seeded folder's own bytes, so a Reinstall writes a real shipped
  * copy; a shipped build never reads any of it, so it can never write Plugin code
@@ -38,16 +38,21 @@ import type {
 } from "@/features/plugins/types";
 
 /**
- * The localStorage key the E2E seed writes the Built-in list under. Exported so
- * `e2e/support/storage.ts` writes exactly what this reads; no shipped path
- * writes it.
+ * The IndexedDB database the E2E seed writes the Built-in list into: one store,
+ * one record. Exported so `e2e/support/storage.ts` writes exactly what this
+ * reads; no shipped path writes it. It is IndexedDB, not localStorage, because
+ * the seed carries every shipped byte: Reader's are 3 MB, past WebKit's
+ * localStorage quota, which charges a non-Latin-1 string two bytes a character.
  */
-export const E2E_BUILTIN_PLUGINS_STORAGE_KEY = "maibuk-e2e-built-in-plugins";
+export const E2E_BUILTIN_PLUGINS_DB = "maibuk-e2e-built-in-plugins";
+/** The one object store, and the key of the one record in it. */
+export const E2E_BUILTIN_PLUGINS_STORE = "seed";
+export const E2E_BUILTIN_PLUGINS_RECORD = "list";
 
-/** One seeded file of the Built-in's shipped copy, `base64` of its bytes. */
+/** One seeded file of the Built-in's shipped copy, its bytes stored as-is. */
 interface E2EBuiltInFile {
   path: string;
-  base64: string;
+  bytes: Uint8Array;
 }
 
 /** One Built-in the E2E seed injects: identity, manifest, shipped hash, and bytes. */
@@ -70,15 +75,16 @@ function isSeed(value: unknown): value is E2EBuiltInSeed {
   );
 }
 
-/** Decodes one seeded file's base64 into the bytes a replace writes. */
+/** One seeded file as the bytes a replace writes, or null when it does not fit. */
 function seedFile(entry: E2EBuiltInFile): PluginFolderFile | null {
-  if (typeof entry.path !== "string" || typeof entry.base64 !== "string") return null;
-  const binary = atob(entry.base64);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return { path: entry.path, bytes };
+  // `isView`, not `instanceof`: a structured clone may hand back another
+  // realm's Uint8Array.
+  const { path, bytes } = entry;
+  if (typeof path !== "string" || !ArrayBuffer.isView(bytes)) return null;
+  return { path, bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) };
 }
 
-/** The seeded shipped bytes, or none when the seed carries no files. */
+/** The seeded shipped files, or none when the seed carries no files. */
 function seedFiles(files: unknown): PluginFolderFile[] {
   if (!Array.isArray(files)) return [];
   return files.flatMap((entry) => {
@@ -91,42 +97,65 @@ function seedFiles(files: unknown): PluginFolderFile[] {
 /**
  * The E2E seed's Built-in list, or none. Only the E2E lane's build defines
  * `VITE_E2E_BUILTIN_SEED`, so a shipped build always lists none regardless of
- * any localStorage a user could write.
+ * any IndexedDB a user could write.
  */
-function readE2EBuiltIns(): BuiltInPlugin[] {
+async function readE2EBuiltIns(): Promise<BuiltInPlugin[]> {
   if (import.meta.env.VITE_E2E_BUILTIN_SEED !== "1") return [];
-  if (typeof localStorage === "undefined") return [];
-  const raw = localStorage.getItem(E2E_BUILTIN_PLUGINS_STORAGE_KEY);
-  if (raw === null) return [];
-  return decodeE2EBuiltIns(raw);
+  if (typeof indexedDB === "undefined") return [];
+  try {
+    return decodeE2EBuiltIns(await readE2ESeedRecord());
+  } catch {
+    return [];
+  }
+}
+
+/** The seed record, or undefined when no spec seeded one. */
+function readE2ESeedRecord(): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open(E2E_BUILTIN_PLUGINS_DB, 1);
+    open.onupgradeneeded = () => open.result.createObjectStore(E2E_BUILTIN_PLUGINS_STORE);
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      const read = db
+        .transaction(E2E_BUILTIN_PLUGINS_STORE, "readonly")
+        .objectStore(E2E_BUILTIN_PLUGINS_STORE)
+        .get(E2E_BUILTIN_PLUGINS_RECORD);
+      read.onsuccess = () => {
+        db.close();
+        resolve(read.result);
+      };
+      read.onerror = () => {
+        db.close();
+        reject(read.error);
+      };
+    };
+  });
 }
 
 /**
  * The E2E seed read once per page load, like the shipped index: the launch asks
  * for the list several times (the sync, the scan), and the seed carries every
- * shipped byte as base64, so decoding it per call costs a Plugin's start-up
- * time again (issue #653, gate 1). The seed is written before the app boots, so
- * one load always sees the seed the spec wrote.
+ * shipped byte, so reading it per call costs a Plugin's start-up time again
+ * (issue #653, gate 1). The seed is written before the app boots, so one load
+ * always sees the seed the spec wrote.
  */
 let e2eSeedOnce: Promise<BuiltInPlugin[]> | null = null;
 
 function e2eSeedOnceList(): Promise<BuiltInPlugin[]> {
-  e2eSeedOnce ??= Promise.resolve(readE2EBuiltIns());
+  e2eSeedOnce ??= readE2EBuiltIns();
   return e2eSeedOnce;
 }
 
-function decodeE2EBuiltIns(raw: string): BuiltInPlugin[] {
-  try {
-    const parsed = JSON.parse(raw) as { plugins?: unknown };
-    if (!Array.isArray(parsed.plugins)) return [];
-    return parsed.plugins.flatMap((entry) =>
-      isSeed(entry)
-        ? [{ id: entry.id, manifest: entry.manifest, hash: entry.hash, files: seedFiles(entry.files) }]
-        : []
-    );
-  } catch {
-    return [];
-  }
+function decodeE2EBuiltIns(record: unknown): BuiltInPlugin[] {
+  if (typeof record !== "object" || record === null) return [];
+  const plugins = (record as { plugins?: unknown }).plugins;
+  if (!Array.isArray(plugins)) return [];
+  return plugins.flatMap((entry) =>
+    isSeed(entry)
+      ? [{ id: entry.id, manifest: entry.manifest, hash: entry.hash, files: seedFiles(entry.files) }]
+      : []
+  );
 }
 
 /**

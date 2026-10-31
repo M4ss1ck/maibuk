@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import "@/i18n";
 import { PluginFrame, type PluginFrameHost } from "@/components/plugins/PluginFrame";
 import {
+  FRAME_HOST_FOCUS_MESSAGE,
   FRAME_LOAD_MESSAGE,
   FRAME_READY_MESSAGE,
   FRAME_THEME_MESSAGE,
@@ -228,6 +229,57 @@ describe("PluginFrame", () => {
     expect(document.activeElement).toBe(container.querySelector("button"));
     await user.tab();
     expect(document.activeElement).toBe(iframe);
+  });
+
+  // The shim drops its focused element on this message, so Firefox cannot
+  // restore it on the next Tab in and trap Shift+Tab inside the Frame.
+  it("tells the Frame when Shift+Tab moves focus out to a host control", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <div>
+        <button type="button">Before</button>
+        <PluginFrame
+          runtime={frameHost()}
+          src="ui/index.html"
+          title="Custom report"
+          variant="embedded"
+        />
+      </div>
+    );
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+    const posted = vi.spyOn(iframe.contentWindow as Window, "postMessage");
+    await user.tab();
+    await user.tab();
+    expect(document.activeElement).toBe(iframe);
+    posted.mockClear();
+
+    await user.tab({ shift: true });
+
+    expect(document.activeElement).toBe(container.querySelector("button"));
+    expect(posted).toHaveBeenCalledWith({ kind: FRAME_HOST_FOCUS_MESSAGE.kind }, "*");
+  });
+
+  it("tells the Frame nothing when focus enters it", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <div>
+        <button type="button">Before</button>
+        <PluginFrame
+          runtime={frameHost()}
+          src="ui/index.html"
+          title="Custom report"
+          variant="embedded"
+        />
+      </div>
+    );
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+    await user.tab();
+    const posted = vi.spyOn(iframe.contentWindow as Window, "postMessage");
+
+    await user.tab();
+
+    expect(document.activeElement).toBe(iframe);
+    expect(posted).not.toHaveBeenCalledWith({ kind: FRAME_HOST_FOCUS_MESSAGE.kind }, "*");
   });
 });
 

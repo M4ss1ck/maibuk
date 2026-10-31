@@ -34,6 +34,11 @@ export const FRAME_CSP =
 export const FRAME_LOAD_MESSAGE = { kind: "frame-load" } as const;
 /** Host to Frame: a live theme-token update; the shim applies it any time. */
 export const FRAME_THEME_MESSAGE = { kind: "frame-theme" } as const;
+/**
+ * Host to Frame: focus has moved from the Frame to a host control. The shim
+ * drops the Frame's focused element (see the handler for why).
+ */
+export const FRAME_HOST_FOCUS_MESSAGE = { kind: "frame-host-focus" } as const;
 /** Frame to host: the only message the host accepts from a Frame window. */
 export const FRAME_READY_MESSAGE = { kind: "frame-ready" } as const;
 
@@ -235,6 +240,21 @@ export function frameShim(win: Window): void {
     if (!isRecord(message)) return;
     if (message.kind === "frame-theme") {
       applyTokens(message.tokens);
+      return;
+    }
+    if (message.kind === "frame-host-focus") {
+      // Firefox keeps the Frame's last focused element after focus leaves for
+      // the host, and a Tab back in restores it; from there Shift+Tab never
+      // reaches the host again, so a keyboard user is trapped in the Frame.
+      // Dropping it makes the next Tab in start at the Frame's edge, as in
+      // Chromium and WebKit. The host sends this only for a host control, never
+      // for the window losing focus, so a field keeps focus across an app
+      // switch; a Tab back in that beat the message leaves the document focused.
+      if (doc.hasFocus()) return;
+      const active = doc.activeElement as HTMLElement | null;
+      if (active !== null && active !== doc.body && typeof active.blur === "function") {
+        active.blur();
+      }
       return;
     }
     if (message.kind !== "frame-load" || loaded) return;

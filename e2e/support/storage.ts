@@ -21,13 +21,16 @@ import type { SeedName } from "./seed/libraries";
 import { REPO_ROOT, SEED_DIR } from "./seed/seeds";
 
 /**
- * The localStorage key `src/features/plugins/builtin.ts` reads (it exports the
- * same string as `E2E_BUILTIN_PLUGINS_STORAGE_KEY`). Kept as a literal here
+ * The IndexedDB database, store, and record `src/features/plugins/builtin.ts`
+ * reads the Built-in seed from (it exports the same strings as
+ * `E2E_BUILTIN_PLUGINS_DB`, `_STORE`, and `_RECORD`). Kept as literals here
  * because that module imports app code that reads `import.meta.env`, which the
  * Playwright runner does not define: importing it at module load aborts every
  * spec (the seeds avoid it the same way; see `e2e/support/seed/backups-present.ts`).
  */
-const E2E_BUILTIN_PLUGINS_STORAGE_KEY = "maibuk-e2e-built-in-plugins";
+const E2E_BUILTIN_PLUGINS_DB = "maibuk-e2e-built-in-plugins";
+const E2E_BUILTIN_PLUGINS_STORE = "seed";
+const E2E_BUILTIN_PLUGINS_RECORD = "list";
 
 /** `empty` is a fresh device: no Library in IndexedDB at all. */
 export type LibrarySeed = SeedName | "empty";
@@ -465,7 +468,7 @@ export async function prepareDevice(
       approvalsKey,
       directoryName,
       builtIns,
-      builtInsKey,
+      builtInsDb,
     }) => {
       if (dismissed) {
         const progress = {
@@ -501,7 +504,29 @@ export async function prepareDevice(
         localStorage.setItem(approvalsKey, approvals);
       }
       if (builtIns.length > 0) {
-        localStorage.setItem(builtInsKey, JSON.stringify({ version: 1, plugins: builtIns }));
+        // IndexedDB, not localStorage: the files are every shipped byte, past
+        // WebKit's localStorage quota for a Plugin the size of Reader.
+        const plugins = builtIns.map((entry) => ({
+          ...entry,
+          files: entry.files.map((file) => ({
+            path: file.path,
+            bytes: Uint8Array.from(atob(file.base64), (c) => c.charCodeAt(0)),
+          })),
+        }));
+        await new Promise<void>((resolve, reject) => {
+          const open = indexedDB.open(builtInsDb.name, 1);
+          open.onupgradeneeded = () => open.result.createObjectStore(builtInsDb.store);
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const tx = open.result.transaction(builtInsDb.store, "readwrite");
+            tx.objectStore(builtInsDb.store).put({ version: 1, plugins }, builtInsDb.record);
+            tx.oncomplete = () => {
+              open.result.close();
+              resolve();
+            };
+            tx.onerror = () => reject(tx.error);
+          };
+        });
       }
       if (bytes === null) return;
       const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0));
@@ -528,7 +553,11 @@ export async function prepareDevice(
       approvalsKey: PLUGIN_APPROVALS_STORAGE_KEY,
       directoryName: WEB_PLUGIN_DIRECTORY_NAME,
       builtIns,
-      builtInsKey: E2E_BUILTIN_PLUGINS_STORAGE_KEY,
+      builtInsDb: {
+        name: E2E_BUILTIN_PLUGINS_DB,
+        store: E2E_BUILTIN_PLUGINS_STORE,
+        record: E2E_BUILTIN_PLUGINS_RECORD,
+      },
     }
   );
   await page.unroute(`**${BLANK_PATH}`);
