@@ -277,10 +277,21 @@ def line_audio(samples, first, last):
     return samples[begin:end]
 
 
-def control_offline(rec, samples):
+def trace_lines(trace_path):
+    """Line spans from another run's control trace: each line ends at its completedAudio."""
+    spans, prev = [], 0.0
+    for entry in json.loads(Path(trace_path).read_text())["trace"]:
+        first = int(prev * SAMPLE_RATE) // VAD_FRAME
+        last = max(first, int(entry["completedAudio"] * SAMPLE_RATE) // VAD_FRAME - 1)
+        spans.append((first, last))
+        prev = entry["completedAudio"]
+    return spans
+
+
+def control_offline(rec, samples, spans):
     events, trace = [], []
     clock = 0.0
-    for first, last in vad_lines(samples):
+    for first, last in spans:
         end_of_speech_s = (last + 1) * VAD_FRAME / SAMPLE_RATE
         t0 = time.perf_counter()
         text = offline_decode(rec, line_audio(samples, first, last)).strip()
@@ -299,7 +310,7 @@ def control_offline(rec, samples):
     return events, trace
 
 
-def run_control(cand, lang, rec, vendor, run_id, load_ms):
+def run_control(cand, lang, rec, vendor, run_id, load_ms, lines_from=None):
     audio_name = CONTROL_CLIPS[lang]
     samples = read_wav(vendor / "audio" / audio_name)
     duration = len(samples) / SAMPLE_RATE
@@ -307,7 +318,8 @@ def run_control(cand, lang, rec, vendor, run_id, load_ms):
     if cand["kind"] == "online-transducer":
         events, trace = control_online(rec, samples, lang)
     else:
-        events, trace = control_offline(rec, samples)
+        spans = trace_lines(lines_from) if lines_from else vad_lines(samples)
+        events, trace = control_offline(rec, samples, spans)
     # The RecognizerHost contract ends every session with one stopped event.
     events.append({"t": round(max([duration] + [e["t"] for e in events]), 3), "type": "stopped"})
     cpu = time.process_time() - cpu0
@@ -351,6 +363,13 @@ def main(argv=None):
         type=float,
         default=0.5,
         help="offline models: seconds of non-speech that end a line (Silero VAD)",
+    )
+    parser.add_argument(
+        "--lines-from",
+        type=Path,
+        default=None,
+        help="offline control: cut lines where this trace's lines end (e.g. Moonshine Small's); "
+        "writes native-<id>-<lang>.lines.json",
     )
     parser.add_argument(
         "--whole-clip",
@@ -397,14 +416,19 @@ def main(argv=None):
         "loadMs": round(load_ms, 2),
         "clips": clips,
     }
-    label = ".whole-clip" if args.whole_clip else ("" if args.min_silence == 0.5 else f".silence-{args.min_silence:g}")
+    if args.whole_clip:
+        label = ".whole-clip"
+    elif args.lines_from:
+        label = ".lines"
+    else:
+        label = "" if args.min_silence == 0.5 else f".silence-{args.min_silence:g}"
     phrases_path = out_dir / f"phrases-{run_id}{label}.json"
     write_json(phrases_path, phrases)
 
     control = None
     control_path = out_dir / f"native-{run_id}{label}.json"
     if not args.skip_control:
-        control = run_control(cand, args.lang, rec, vendor, run_id, load_ms)
+        control = run_control(cand, args.lang, rec, vendor, run_id, load_ms, args.lines_from)
         write_json(control_path, control)
 
     rss = peak_rss_mb()
